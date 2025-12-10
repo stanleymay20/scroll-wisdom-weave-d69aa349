@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -12,14 +13,22 @@ serve(async (req) => {
   }
 
   try {
-    const { title, description, category, numChapters } = await req.json();
+    const { title, description, category, numChapters, userId } = await req.json();
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Supabase configuration is missing");
+    }
 
-    console.log(`Generating book: ${title} with ${numChapters} chapters`);
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    console.log(`Generating book: ${title} with ${numChapters} chapters for user: ${userId}`);
 
     // First, generate the book outline
     const outlinePrompt = `You are ScrollResearchGPT, an AI agent specialized in creating comprehensive book outlines.
@@ -119,12 +128,75 @@ Format your response as a JSON object with this structure:
       };
     }
 
+    // Save book to database
+    console.log("Saving book to database...");
+    const { data: book, error: bookError } = await supabase
+      .from("books")
+      .insert({
+        title: bookOutline.bookTitle || title,
+        description: bookOutline.bookDescription || description,
+        category: category,
+        total_chapters: numChapters,
+        is_published: true, // Make it visible immediately
+        is_featured: false,
+        author_ai_agent: "ScrollAuthorGPT",
+      })
+      .select()
+      .single();
+
+    if (bookError) {
+      console.error("Error saving book:", bookError);
+      throw new Error(`Failed to save book: ${bookError.message}`);
+    }
+
+    console.log("Book saved with ID:", book.id);
+
+    // Save chapters to database
+    const chaptersToInsert = bookOutline.chapters.map((chapter: any) => ({
+      book_id: book.id,
+      chapter_number: chapter.chapterNumber,
+      title: chapter.title,
+      content: `## ${chapter.title}\n\n${chapter.description}\n\n### Key Topics\n${chapter.keyTopics.map((t: string) => `- ${t}`).join('\n')}\n\n*Full chapter content is being generated...*`,
+      word_count: 0,
+      is_generated: false,
+    }));
+
+    const { error: chaptersError } = await supabase
+      .from("chapters")
+      .insert(chaptersToInsert);
+
+    if (chaptersError) {
+      console.error("Error saving chapters:", chaptersError);
+      throw new Error(`Failed to save chapters: ${chaptersError.message}`);
+    }
+
+    console.log("Chapters saved successfully");
+
+    // Add book to user's library if userId provided
+    if (userId) {
+      const { error: libraryError } = await supabase
+        .from("user_library")
+        .insert({
+          user_id: userId,
+          book_id: book.id,
+          progress_percent: 0,
+          last_read_chapter: 1,
+        });
+
+      if (libraryError) {
+        console.error("Error adding to library:", libraryError);
+        // Don't throw - book was created successfully
+      } else {
+        console.log("Book added to user library");
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Book outline generated successfully",
+        message: "Book created successfully",
+        bookId: book.id,
         outline: bookOutline,
-        note: "Chapter content generation will be handled separately due to the extensive word count requirements (8,000+ words per chapter).",
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

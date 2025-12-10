@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
@@ -12,42 +12,156 @@ import {
   Clock, 
   User,
   ChevronRight,
-  Play
+  Play,
+  Loader2
 } from "lucide-react";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 
-// Sample book data
-const SAMPLE_BOOK = {
-  id: "1",
-  title: "The Prophetic Voice: Understanding Divine Communication",
-  description: "A comprehensive exploration of prophetic utterances throughout history and their modern relevance. This work delves deep into the nature of divine communication, examining how prophets across cultures and ages have served as conduits for spiritual wisdom. Through rigorous academic analysis and scroll-aligned perspective, we explore the patterns, purposes, and power of prophetic voices throughout human history.",
-  category: "prophecy",
-  author_ai_agent: "ScrollAuthorGPT",
-  total_chapters: 12,
-  cover_image_url: null,
-  chapters: [
-    { id: "ch1", chapter_number: 1, title: "The Nature of Prophetic Communication", word_count: 8500 },
-    { id: "ch2", chapter_number: 2, title: "Historical Prophets and Their Messages", word_count: 9200 },
-    { id: "ch3", chapter_number: 3, title: "The Voice Within: Internal Prophetic Experience", word_count: 8800 },
-    { id: "ch4", chapter_number: 4, title: "Signs, Symbols, and Prophetic Language", word_count: 9100 },
-    { id: "ch5", chapter_number: 5, title: "The Prophet's Burden: Responsibility and Calling", word_count: 8600 },
-    { id: "ch6", chapter_number: 6, title: "Testing and Validating Prophetic Words", word_count: 8900 },
-    { id: "ch7", chapter_number: 7, title: "Prophetic Movements Throughout History", word_count: 9500 },
-    { id: "ch8", chapter_number: 8, title: "Modern Prophetic Voices", word_count: 8700 },
-    { id: "ch9", chapter_number: 9, title: "The Community and the Prophet", word_count: 8400 },
-    { id: "ch10", chapter_number: 10, title: "False Prophecy: Discernment and Protection", word_count: 9000 },
-    { id: "ch11", chapter_number: 11, title: "Prophetic Ethics and Boundaries", word_count: 8600 },
-    { id: "ch12", chapter_number: 12, title: "The Future of Prophetic Ministry", word_count: 9300 },
-  ],
-};
+interface BookData {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  author_ai_agent: string | null;
+  total_chapters: number | null;
+  cover_image_url: string | null;
+}
+
+interface ChapterData {
+  id: string;
+  chapter_number: number;
+  title: string;
+  word_count: number | null;
+}
 
 export default function BookDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { toast } = useToast();
+  const [book, setBook] = useState<BookData | null>(null);
+  const [chapters, setChapters] = useState<ChapterData[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
-  
-  const book = SAMPLE_BOOK; // In real app, fetch from database
-  const totalWords = book.chapters.reduce((sum, ch) => sum + ch.word_count, 0);
-  const readingTime = Math.ceil(totalWords / 200); // ~200 words per minute
+  const [user, setUser] = useState<any>(null);
+
+  useEffect(() => {
+    const fetchData = async () => {
+      setIsLoading(true);
+      
+      // Get current user
+      const { data: { user: currentUser } } = await supabase.auth.getUser();
+      setUser(currentUser);
+
+      // Fetch book
+      const { data: bookData, error: bookError } = await supabase
+        .from("books")
+        .select("*")
+        .eq("id", id)
+        .single();
+
+      if (bookError) {
+        console.error("Error fetching book:", bookError);
+        toast({
+          title: "Error",
+          description: "Book not found",
+          variant: "destructive",
+        });
+        navigate("/explore");
+        return;
+      }
+
+      setBook(bookData);
+
+      // Fetch chapters
+      const { data: chaptersData, error: chaptersError } = await supabase
+        .from("chapters")
+        .select("id, chapter_number, title, word_count")
+        .eq("book_id", id)
+        .order("chapter_number");
+
+      if (!chaptersError && chaptersData) {
+        setChapters(chaptersData);
+      }
+
+      // Check if book is in user's library
+      if (currentUser) {
+        const { data: libraryItem } = await supabase
+          .from("user_library")
+          .select("id")
+          .eq("user_id", currentUser.id)
+          .eq("book_id", id)
+          .single();
+
+        setIsSaved(!!libraryItem);
+      }
+
+      setIsLoading(false);
+    };
+
+    if (id) {
+      fetchData();
+    }
+  }, [id, navigate, toast]);
+
+  const handleSaveToLibrary = async () => {
+    if (!user) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to save books to your library",
+      });
+      navigate("/auth");
+      return;
+    }
+
+    if (isSaved) {
+      // Remove from library
+      const { error } = await supabase
+        .from("user_library")
+        .delete()
+        .eq("user_id", user.id)
+        .eq("book_id", id);
+
+      if (!error) {
+        setIsSaved(false);
+        toast({ title: "Removed from library" });
+      }
+    } else {
+      // Add to library
+      const { error } = await supabase
+        .from("user_library")
+        .insert({
+          user_id: user.id,
+          book_id: id,
+          progress_percent: 0,
+          last_read_chapter: 1,
+        });
+
+      if (!error) {
+        setIsSaved(true);
+        toast({ title: "Added to library" });
+      }
+    }
+  };
+
+  if (isLoading) {
+    return (
+      <div className="min-h-screen">
+        <Navbar />
+        <main className="pt-24 pb-16 flex items-center justify-center">
+          <Loader2 className="h-8 w-8 animate-spin text-scroll-gold" />
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
+  if (!book) {
+    return null;
+  }
+
+  const totalWords = chapters.reduce((sum, ch) => sum + (ch.word_count || 0), 0);
+  const readingTime = Math.ceil(totalWords / 200) || 1;
 
   return (
     <div className="min-h-screen">
@@ -88,18 +202,18 @@ export default function BookDetail() {
               </h1>
               
               <p className="text-muted-foreground text-lg leading-relaxed mb-6">
-                {book.description}
+                {book.description || "A comprehensive exploration of this topic."}
               </p>
 
               {/* Meta */}
               <div className="flex flex-wrap gap-6 mb-8 text-sm text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <User className="h-4 w-4 text-scroll-gold" />
-                  <span>{book.author_ai_agent}</span>
+                  <span>{book.author_ai_agent || "ScrollAuthorGPT"}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-scroll-gold" />
-                  <span>{book.total_chapters} Chapters</span>
+                  <span>{chapters.length || book.total_chapters} Chapters</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-scroll-gold" />
@@ -113,6 +227,7 @@ export default function BookDetail() {
                   variant="hero" 
                   size="lg"
                   onClick={() => navigate(`/read/${id}/1`)}
+                  disabled={chapters.length === 0}
                 >
                   <Play className="h-5 w-5 mr-2" />
                   Start Reading
@@ -120,7 +235,7 @@ export default function BookDetail() {
                 <Button 
                   variant="gold-outline" 
                   size="lg"
-                  onClick={() => setIsSaved(!isSaved)}
+                  onClick={handleSaveToLibrary}
                 >
                   <Bookmark className={`h-5 w-5 mr-2 ${isSaved ? "fill-current" : ""}`} />
                   {isSaved ? "Saved" : "Save to Library"}
@@ -141,38 +256,42 @@ export default function BookDetail() {
             <h2 className="font-display text-2xl font-bold mb-6">
               Table of Contents
             </h2>
-            <div className="space-y-3">
-              {book.chapters.map((chapter, index) => (
-                <motion.div
-                  key={chapter.id}
-                  initial={{ opacity: 0, x: -20 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  transition={{ delay: 0.1 + index * 0.05 }}
-                >
-                  <button
-                    onClick={() => navigate(`/read/${id}/${chapter.chapter_number}`)}
-                    className="w-full group"
+            {chapters.length === 0 ? (
+              <p className="text-muted-foreground">Chapters are being generated...</p>
+            ) : (
+              <div className="space-y-3">
+                {chapters.map((chapter, index) => (
+                  <motion.div
+                    key={chapter.id}
+                    initial={{ opacity: 0, x: -20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.1 + index * 0.05 }}
                   >
-                    <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-card border border-border/50 hover:border-scroll-gold/50 transition-all duration-300 hover:shadow-lg">
-                      <div className="flex items-center gap-4">
-                        <span className="w-10 h-10 rounded-lg bg-scroll-gold/10 flex items-center justify-center font-display font-bold text-scroll-gold">
-                          {chapter.chapter_number}
-                        </span>
-                        <div className="text-left">
-                          <h3 className="font-medium text-foreground group-hover:text-scroll-gold transition-colors">
-                            {chapter.title}
-                          </h3>
-                          <p className="text-sm text-muted-foreground">
-                            {chapter.word_count.toLocaleString()} words
-                          </p>
+                    <button
+                      onClick={() => navigate(`/read/${id}/${chapter.chapter_number}`)}
+                      className="w-full group"
+                    >
+                      <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-card border border-border/50 hover:border-scroll-gold/50 transition-all duration-300 hover:shadow-lg">
+                        <div className="flex items-center gap-4">
+                          <span className="w-10 h-10 rounded-lg bg-scroll-gold/10 flex items-center justify-center font-display font-bold text-scroll-gold">
+                            {chapter.chapter_number}
+                          </span>
+                          <div className="text-left">
+                            <h3 className="font-medium text-foreground group-hover:text-scroll-gold transition-colors">
+                              {chapter.title}
+                            </h3>
+                            <p className="text-sm text-muted-foreground">
+                              {(chapter.word_count || 0).toLocaleString()} words
+                            </p>
+                          </div>
                         </div>
+                        <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-scroll-gold group-hover:translate-x-1 transition-all" />
                       </div>
-                      <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-scroll-gold group-hover:translate-x-1 transition-all" />
-                    </div>
-                  </button>
-                </motion.div>
-              ))}
-            </div>
+                    </button>
+                  </motion.div>
+                ))}
+              </div>
+            )}
           </motion.div>
         </div>
       </main>
