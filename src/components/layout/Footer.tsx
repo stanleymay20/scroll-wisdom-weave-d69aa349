@@ -52,39 +52,44 @@ export function Footer() {
                   My Library
                 </Link>
               </li>
-            </ul>
+          </ul>
           </div>
 
-          {/* Categories */}
+          {/* Legal */}
           <div>
-            <h4 className="font-display font-semibold mb-4 text-foreground">Categories</h4>
+            <h4 className="font-display font-semibold mb-4 text-foreground">Legal</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link to="/explore?category=theology" className="text-muted-foreground hover:text-scroll-gold transition-colors">
-                  Theology
+                <Link to="/privacy" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+                  Privacy Policy
                 </Link>
               </li>
               <li>
-                <Link to="/explore?category=prophecy" className="text-muted-foreground hover:text-scroll-gold transition-colors">
-                  Prophecy
+                <Link to="/terms" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+                  Terms of Service
                 </Link>
               </li>
               <li>
-                <Link to="/explore?category=science" className="text-muted-foreground hover:text-scroll-gold transition-colors">
-                  Science
+                <Link to="/support" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+                  Support
                 </Link>
               </li>
               <li>
-                <Link to="/explore?category=history" className="text-muted-foreground hover:text-scroll-gold transition-colors">
-                  History
+                <Link to="/help" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+                  Help Center
                 </Link>
               </li>
             </ul>
           </div>
         </div>
 
-        <div className="border-t border-border/50 mt-8 pt-8 text-center text-sm text-muted-foreground">
+        <div className="border-t border-border/50 mt-8 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <p>© {new Date().getFullYear()} ScrollLibrary™. Scroll-aligned wisdom for the ages.</p>
+          <div className="flex items-center gap-4">
+            <Link to="/privacy" className="hover:text-scroll-gold transition-colors">Privacy</Link>
+            <Link to="/terms" className="hover:text-scroll-gold transition-colors">Terms</Link>
+            <Link to="/contact" className="hover:text-scroll-gold transition-colors">Contact</Link>
+          </div>
         </div>
       </div>
     </footer>

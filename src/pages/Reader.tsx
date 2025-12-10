@@ -10,9 +10,14 @@ import {
   Bookmark,
   X,
   Home,
-  Loader2
+  Loader2,
+  Flag,
+  Volume2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { TextToSpeechPlayer } from "@/components/audio/TextToSpeechPlayer";
+import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
+import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
 
 interface BookData {
   id: string;
@@ -33,6 +38,7 @@ export default function Reader() {
   const navigate = useNavigate();
   const [fontSize, setFontSize] = useState(18);
   const [showSettings, setShowSettings] = useState(false);
+  const [showTTS, setShowTTS] = useState(false);
   const [book, setBook] = useState<BookData | null>(null);
   const [chapter, setChapter] = useState<ChapterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -155,6 +161,14 @@ export default function Reader() {
           </div>
           
           <div className="flex items-center gap-2">
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setShowTTS(!showTTS)}
+              className={showTTS ? "text-primary" : ""}
+            >
+              <Volume2 className="h-5 w-5" />
+            </Button>
             <Button variant="ghost" size="icon">
               <Bookmark className="h-5 w-5" />
             </Button>
@@ -165,6 +179,16 @@ export default function Reader() {
             >
               <Settings className="h-5 w-5" />
             </Button>
+            <ReportContentDialog 
+              contentType="chapter" 
+              contentId={chapter?.id || ""} 
+              contentTitle={chapter?.title}
+              trigger={
+                <Button variant="ghost" size="icon">
+                  <Flag className="h-5 w-5" />
+                </Button>
+              }
+            />
             <Button 
               variant="ghost" 
               size="icon"
@@ -207,6 +231,17 @@ export default function Reader() {
         </motion.div>
       )}
 
+      {/* TTS Player */}
+      {showTTS && chapter?.content && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed top-16 left-1/2 -translate-x-1/2 z-40"
+        >
+          <TextToSpeechPlayer text={chapter.content} />
+        </motion.div>
+      )}
+
       {/* Content */}
       <main className="pt-24 pb-24">
         <article className="container mx-auto px-4 max-w-3xl">
@@ -215,6 +250,9 @@ export default function Reader() {
             animate={{ opacity: 1 }}
             transition={{ duration: 0.6 }}
           >
+            {/* AI Disclaimer */}
+            <ContentDisclaimer type="ai" className="mb-6" />
+
             <h2 className="font-display text-3xl md:text-4xl font-bold mb-2 text-gradient-gold">
               Chapter {currentChapter}
             </h2>

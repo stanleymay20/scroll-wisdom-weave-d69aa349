@@ -15,12 +15,15 @@ import {
   Loader2,
   Sparkles,
   CheckCircle2,
-  ImagePlus
+  ImagePlus,
+  Flag
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ShareDialog } from "@/components/books/ShareDialog";
 import { ExportDialog } from "@/components/books/ExportDialog";
+import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
+import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
 
 interface BookData {
   id: string;
@@ -465,7 +468,15 @@ export default function BookDetail() {
                   bookId={book.id} 
                   description={book.description || undefined} 
                 />
+                <ReportContentDialog 
+                  contentType="book" 
+                  contentId={book.id} 
+                  contentTitle={book.title}
+                />
               </div>
+
+              {/* AI Disclaimer */}
+              <ContentDisclaimer type="ai" className="mt-6" />
             </div>
           </motion.div>
 
