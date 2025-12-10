@@ -9,6 +9,7 @@ import Generate from "./pages/Generate";
 import Auth from "./pages/Auth";
 import BookDetail from "./pages/BookDetail";
 import Reader from "./pages/Reader";
+import Library from "./pages/Library";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ const App = () => (
           <Route path="/explore" element={<Explore />} />
           <Route path="/generate" element={<Generate />} />
           <Route path="/auth" element={<Auth />} />
+          <Route path="/library" element={<Library />} />
           <Route path="/book/:id" element={<BookDetail />} />
           <Route path="/read/:bookId/:chapterId" element={<Reader />} />
           <Route path="*" element={<NotFound />} />
