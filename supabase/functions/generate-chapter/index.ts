@@ -36,17 +36,32 @@ Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${bookTitle}" in
 Key topics to cover:
 ${keyTopics?.map((t: string) => `- ${t}`).join('\n') || '- Comprehensive coverage of the chapter topic'}
 
-REQUIREMENTS:
-1. Write a MINIMUM of 8,000 words (aim for 10,000-12,000 words)
-2. Use proper markdown formatting with headers (##, ###), bullet points, and emphasis
-3. Include real-world examples, case studies, and practical applications
-4. Maintain academic rigor while being accessible and engaging
-5. Structure with clear sections: Introduction, Main Content (multiple sections), Key Takeaways, Conclusion
-6. Include relevant quotes, statistics, or references where appropriate
-7. NO filler content or repetition - every paragraph must add value
-8. Write with authority and depth befitting a scholarly work
+CRITICAL REQUIREMENTS:
+1. You MUST write AT LEAST 8,000 words. This is non-negotiable. Aim for 10,000-12,000 words.
+2. Use proper markdown formatting:
+   - ## for main section headers
+   - ### for subsection headers  
+   - **bold** for emphasis
+   - Bullet points and numbered lists where appropriate
+3. Structure your chapter with these sections:
+   - Introduction (500+ words): Hook the reader, introduce the topic, preview what's coming
+   - Section 1 (1,500+ words): First major topic with examples and analysis
+   - Section 2 (1,500+ words): Second major topic with case studies
+   - Section 3 (1,500+ words): Third major topic with practical applications
+   - Section 4 (1,500+ words): Fourth major topic with deeper insights
+   - Section 5 (1,000+ words): Advanced concepts or special considerations
+   - Key Takeaways (300+ words): Summarize main points
+   - Conclusion (500+ words): Wrap up and transition to next chapter
+4. Include:
+   - Real-world examples and case studies
+   - Relevant statistics and data points
+   - Expert quotes or historical references
+   - Practical applications and actionable insights
+5. Write with academic rigor but remain accessible
+6. NO filler, NO repetition - every paragraph must add unique value
+7. This is a COMPLETE chapter - do not truncate or summarize
 
-Begin the chapter now. Write the COMPLETE chapter content.`;
+BEGIN WRITING THE FULL CHAPTER NOW:`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -55,9 +70,9 @@ Begin the chapter now. Write the COMPLETE chapter content.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-pro",
         messages: [
-          { role: "system", content: "You are ScrollAuthorGPT, an elite AI author that writes comprehensive, well-researched book chapters with depth, wisdom, and academic rigor. You write long-form content that educates and inspires." },
+          { role: "system", content: "You are ScrollAuthorGPT, an elite AI author renowned for creating comprehensive, scholarly book chapters. You ALWAYS write at least 8,000 words per chapter. You never truncate or abbreviate. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers." },
           { role: "user", content: chapterPrompt }
         ],
       }),
