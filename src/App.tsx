@@ -17,7 +17,11 @@ import About from "./pages/About";
 import Contact from "./pages/Contact";
 import Help from "./pages/Help";
 import Dashboard from "./pages/Dashboard";
+import PrivacyPolicy from "./pages/PrivacyPolicy";
+import TermsOfService from "./pages/TermsOfService";
+import ModerationDashboard from "./pages/ModerationDashboard";
 import NotFound from "./pages/NotFound";
+import { CookieConsent } from "./components/legal/CookieConsent";
 
 const queryClient = new QueryClient();
 
@@ -40,10 +44,14 @@ const App = () => (
           <Route path="/contact" element={<Contact />} />
           <Route path="/help" element={<Help />} />
           <Route path="/dashboard" element={<Dashboard />} />
+          <Route path="/privacy" element={<PrivacyPolicy />} />
+          <Route path="/terms" element={<TermsOfService />} />
+          <Route path="/moderation" element={<ModerationDashboard />} />
           <Route path="/book/:id" element={<BookDetail />} />
           <Route path="/read/:bookId/:chapterId" element={<Reader />} />
           <Route path="*" element={<NotFound />} />
         </Routes>
+        <CookieConsent />
       </BrowserRouter>
     </TooltipProvider>
   </QueryClientProvider>
