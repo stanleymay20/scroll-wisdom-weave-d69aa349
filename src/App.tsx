@@ -10,6 +10,12 @@ import Auth from "./pages/Auth";
 import BookDetail from "./pages/BookDetail";
 import Reader from "./pages/Reader";
 import Library from "./pages/Library";
+import Profile from "./pages/Profile";
+import Settings from "./pages/Settings";
+import Support from "./pages/Support";
+import About from "./pages/About";
+import Contact from "./pages/Contact";
+import Help from "./pages/Help";
 import NotFound from "./pages/NotFound";
 
 const queryClient = new QueryClient();
@@ -26,6 +32,12 @@ const App = () => (
           <Route path="/generate" element={<Generate />} />
           <Route path="/auth" element={<Auth />} />
           <Route path="/library" element={<Library />} />
+          <Route path="/profile" element={<Profile />} />
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/support" element={<Support />} />
+          <Route path="/about" element={<About />} />
+          <Route path="/contact" element={<Contact />} />
+          <Route path="/help" element={<Help />} />
           <Route path="/book/:id" element={<BookDetail />} />
           <Route path="/read/:bookId/:chapterId" element={<Reader />} />
           <Route path="*" element={<NotFound />} />

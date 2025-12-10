@@ -100,6 +100,72 @@ export type Database = {
           },
         ]
       }
+      contact_submissions: {
+        Row: {
+          created_at: string
+          email: string
+          id: string
+          message: string
+          name: string
+          status: string | null
+          subject: string
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          email: string
+          id?: string
+          message: string
+          name: string
+          status?: string | null
+          subject: string
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          email?: string
+          id?: string
+          message?: string
+          name?: string
+          status?: string | null
+          subject?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      faqs: {
+        Row: {
+          answer: string
+          category: string | null
+          created_at: string
+          id: string
+          is_published: boolean | null
+          order_index: number | null
+          question: string
+          updated_at: string
+        }
+        Insert: {
+          answer: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_published?: boolean | null
+          order_index?: number | null
+          question: string
+          updated_at?: string
+        }
+        Update: {
+          answer?: string
+          category?: string | null
+          created_at?: string
+          id?: string
+          is_published?: boolean | null
+          order_index?: number | null
+          question?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
       highlights: {
         Row: {
           chapter_id: string
@@ -137,28 +203,76 @@ export type Database = {
       }
       profiles: {
         Row: {
+          ai_voice_preference: string | null
+          animations_enabled: boolean | null
           avatar_url: string | null
+          bio: string | null
+          complexity_level: string | null
+          country: string | null
+          course_reminders: boolean | null
           created_at: string | null
+          email_updates: boolean | null
+          font_size: string | null
           full_name: string | null
           id: string
+          learning_preferences: Json | null
+          new_book_alerts: boolean | null
           plan: Database["public"]["Enums"]["user_plan"] | null
+          reader_theme: string | null
+          spiritual_strictness: string | null
+          study_speed: string | null
+          theme_preference: string | null
+          tts_enabled: boolean | null
           updated_at: string | null
+          writing_tone: string | null
         }
         Insert: {
+          ai_voice_preference?: string | null
+          animations_enabled?: boolean | null
           avatar_url?: string | null
+          bio?: string | null
+          complexity_level?: string | null
+          country?: string | null
+          course_reminders?: boolean | null
           created_at?: string | null
+          email_updates?: boolean | null
+          font_size?: string | null
           full_name?: string | null
           id: string
+          learning_preferences?: Json | null
+          new_book_alerts?: boolean | null
           plan?: Database["public"]["Enums"]["user_plan"] | null
+          reader_theme?: string | null
+          spiritual_strictness?: string | null
+          study_speed?: string | null
+          theme_preference?: string | null
+          tts_enabled?: boolean | null
           updated_at?: string | null
+          writing_tone?: string | null
         }
         Update: {
+          ai_voice_preference?: string | null
+          animations_enabled?: boolean | null
           avatar_url?: string | null
+          bio?: string | null
+          complexity_level?: string | null
+          country?: string | null
+          course_reminders?: boolean | null
           created_at?: string | null
+          email_updates?: boolean | null
+          font_size?: string | null
           full_name?: string | null
           id?: string
+          learning_preferences?: Json | null
+          new_book_alerts?: boolean | null
           plan?: Database["public"]["Enums"]["user_plan"] | null
+          reader_theme?: string | null
+          spiritual_strictness?: string | null
+          study_speed?: string | null
+          theme_preference?: string | null
+          tts_enabled?: boolean | null
           updated_at?: string | null
+          writing_tone?: string | null
         }
         Relationships: []
       }
