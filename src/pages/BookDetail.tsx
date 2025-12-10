@@ -16,8 +16,12 @@ import {
   Sparkles,
   CheckCircle2,
   ImagePlus,
-  Flag
+  Flag,
+  Globe,
+  Lock
 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Label } from "@/components/ui/label";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ShareDialog } from "@/components/books/ShareDialog";
@@ -33,6 +37,8 @@ interface BookData {
   author_ai_agent: string | null;
   total_chapters: number | null;
   cover_image_url: string | null;
+  is_published: boolean | null;
+  creator_id: string | null;
 }
 
 interface ChapterData {
@@ -57,6 +63,8 @@ export default function BookDetail() {
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
+  const [isUpdatingPublish, setIsUpdatingPublish] = useState(false);
+  const isOwner = user && book?.creator_id === user.id;
 
   useEffect(() => {
     const fetchData = async () => {
@@ -344,6 +352,39 @@ export default function BookDetail() {
     }
   };
 
+  const handleTogglePublish = async () => {
+    if (!book || !isOwner) return;
+    
+    setIsUpdatingPublish(true);
+    try {
+      const newPublishState = !book.is_published;
+      const { error } = await supabase
+        .from("books")
+        .update({ is_published: newPublishState })
+        .eq("id", book.id);
+
+      if (error) throw error;
+
+      setBook(prev => prev ? { ...prev, is_published: newPublishState } : null);
+      
+      toast({
+        title: newPublishState ? "Book published!" : "Book unpublished",
+        description: newPublishState 
+          ? "Your book is now visible in the public library." 
+          : "Your book is now private and only visible to you.",
+      });
+    } catch (error) {
+      console.error("Error updating publish status:", error);
+      toast({
+        title: "Failed to update",
+        description: "Could not change publish status. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsUpdatingPublish(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen">
@@ -411,9 +452,32 @@ export default function BookDetail() {
 
             {/* Info */}
             <div className="lg:col-span-2">
-              <span className="inline-block px-3 py-1 text-sm font-medium rounded-full bg-scroll-gold/20 text-scroll-gold border border-scroll-gold/30 mb-4 capitalize">
-                {book.category.replace(/_/g, " ")}
-              </span>
+              <div className="flex items-center gap-3 mb-4">
+                <span className="inline-block px-3 py-1 text-sm font-medium rounded-full bg-scroll-gold/20 text-scroll-gold border border-scroll-gold/30 capitalize">
+                  {book.category.replace(/_/g, " ")}
+                </span>
+                
+                {/* Visibility Badge */}
+                {isOwner && (
+                  <span className={`inline-flex items-center gap-1.5 px-3 py-1 text-sm font-medium rounded-full border ${
+                    book.is_published 
+                      ? "bg-green-500/10 text-green-500 border-green-500/30" 
+                      : "bg-muted/50 text-muted-foreground border-border"
+                  }`}>
+                    {book.is_published ? (
+                      <>
+                        <Globe className="h-3.5 w-3.5" />
+                        Public
+                      </>
+                    ) : (
+                      <>
+                        <Lock className="h-3.5 w-3.5" />
+                        Private
+                      </>
+                    )}
+                  </span>
+                )}
+              </div>
               
               <h1 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4">
                 {book.title}
@@ -474,6 +538,28 @@ export default function BookDetail() {
                   contentTitle={book.title}
                 />
               </div>
+
+              {/* Publish Toggle for Owners */}
+              {isOwner && (
+                <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50 mt-6">
+                  <div className="flex-1">
+                    <Label htmlFor="publish-toggle" className="text-foreground font-medium">
+                      Publish to Library
+                    </Label>
+                    <p className="text-sm text-muted-foreground">
+                      {book.is_published 
+                        ? "Your book is visible to everyone in the public Explore page." 
+                        : "Your book is private. Only you can see it."}
+                    </p>
+                  </div>
+                  <Switch
+                    id="publish-toggle"
+                    checked={book.is_published ?? false}
+                    onCheckedChange={handleTogglePublish}
+                    disabled={isUpdatingPublish}
+                  />
+                </div>
+              )}
 
               {/* AI Disclaimer */}
               <ContentDisclaimer type="ai" className="mt-6" />

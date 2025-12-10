@@ -138,10 +138,11 @@ Format your response as a JSON object with this structure:
         description: bookOutline.bookDescription || description,
         category: category,
         total_chapters: numChapters,
-        is_published: true,
+        is_published: false, // Private by default - creator must publish
         is_featured: false,
         author_ai_agent: "ScrollAuthorGPT",
-        cover_image_url: customCover || null, // Use custom cover if provided
+        cover_image_url: customCover || null,
+        creator_id: userId, // Track book ownership
       })
       .select()
       .single();
