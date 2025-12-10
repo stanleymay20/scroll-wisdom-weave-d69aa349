@@ -30,19 +30,27 @@ serve(async (req) => {
     console.log(`Generating cover for book: ${title} (${category})`);
 
     // Create a detailed prompt for the book cover
-    const coverPrompt = `Create a professional, elegant book cover design for a book titled "${title}". 
+    const coverPrompt = `Create a professional, elegant book cover design for ScrollLibrary™.
+
+Book Title: "${title}"
 Category: ${category.replace(/_/g, " ")}
-Description: ${description || "A scholarly work on this topic"}
+Theme: ${description || "A scholarly work on this topic"}
+
+CRITICAL REQUIREMENTS:
+- If including ANY text on the cover, use ONLY: "ScrollLibrary™" as the publisher/brand name
+- DO NOT include "Oxford", "Academic Press", "Penguin", or any other publisher names
+- The book title "${title}" can be shown on the cover
+- Include "ScrollLibrary™" as a small publisher mark at the bottom
 
 Style requirements:
-- Dark, sophisticated color palette with deep indigo/navy blues and gold accents
-- Minimalist yet striking design
-- Professional typography feel (don't include actual text, just the visual design)
-- Suitable for an academic/scholarly book
+- Dark, sophisticated color palette with deep indigo/navy blues (#1a1a2e) and gold accents (#d4af37)
+- Minimalist yet striking design with elegant typography
+- Premium, high-end aesthetic suitable for scholarly books
 - Aspect ratio: vertical book cover (3:4)
-- Premium, high-end aesthetic similar to Oxford University Press or Penguin Classics
 - Subtle textures or patterns that evoke ancient scrolls or manuscripts
-- Ultra high resolution`;
+- Gold foil effect on title text
+- Ultra high resolution, professional quality`;
+
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
