@@ -9,5 +9,8 @@ verify_jwt = false
 [functions.generate-cover]
 verify_jwt = false
 
+[functions.content-filter]
+verify_jwt = false
+
 [functions.export-book]
 verify_jwt = false
