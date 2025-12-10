@@ -133,6 +133,78 @@ export type Database = {
         }
         Relationships: []
       }
+      content_reports: {
+        Row: {
+          action_taken: string | null
+          content_id: string
+          content_type: string
+          created_at: string
+          description: string | null
+          id: string
+          reason: string
+          reporter_id: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+        }
+        Insert: {
+          action_taken?: string | null
+          content_id: string
+          content_type: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          reason: string
+          reporter_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Update: {
+          action_taken?: string | null
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          description?: string | null
+          id?: string
+          reason?: string
+          reporter_id?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+        }
+        Relationships: []
+      }
+      data_export_requests: {
+        Row: {
+          completed_at: string | null
+          download_url: string | null
+          expires_at: string | null
+          id: string
+          requested_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          completed_at?: string | null
+          download_url?: string | null
+          expires_at?: string | null
+          id?: string
+          requested_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          completed_at?: string | null
+          download_url?: string | null
+          expires_at?: string | null
+          id?: string
+          requested_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       faqs: {
         Row: {
           answer: string
@@ -200,6 +272,81 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      legal_consents: {
+        Row: {
+          consent_type: string
+          consented: boolean
+          consented_at: string
+          id: string
+          ip_address: string | null
+          user_id: string
+          version: string
+        }
+        Insert: {
+          consent_type: string
+          consented?: boolean
+          consented_at?: string
+          id?: string
+          ip_address?: string | null
+          user_id: string
+          version: string
+        }
+        Update: {
+          consent_type?: string
+          consented?: boolean
+          consented_at?: string
+          id?: string
+          ip_address?: string | null
+          user_id?: string
+          version?: string
+        }
+        Relationships: []
+      }
+      moderation_queue: {
+        Row: {
+          action: string | null
+          auto_flagged: boolean | null
+          content_id: string
+          content_type: string
+          created_at: string
+          flagged_reason: string
+          id: string
+          moderated_at: string | null
+          moderator_id: string | null
+          notes: string | null
+          severity: string
+          status: string
+        }
+        Insert: {
+          action?: string | null
+          auto_flagged?: boolean | null
+          content_id: string
+          content_type: string
+          created_at?: string
+          flagged_reason: string
+          id?: string
+          moderated_at?: string | null
+          moderator_id?: string | null
+          notes?: string | null
+          severity?: string
+          status?: string
+        }
+        Update: {
+          action?: string | null
+          auto_flagged?: boolean | null
+          content_id?: string
+          content_type?: string
+          created_at?: string
+          flagged_reason?: string
+          id?: string
+          moderated_at?: string | null
+          moderator_id?: string | null
+          notes?: string | null
+          severity?: string
+          status?: string
+        }
+        Relationships: []
       }
       profiles: {
         Row: {
@@ -276,6 +423,47 @@ export type Database = {
         }
         Relationships: []
       }
+      publishing_certificates: {
+        Row: {
+          book_id: string
+          certificate_number: string
+          id: string
+          isbn: string | null
+          issued_at: string
+          metadata: Json | null
+          rights_granted: string[] | null
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          certificate_number: string
+          id?: string
+          isbn?: string | null
+          issued_at?: string
+          metadata?: Json | null
+          rights_granted?: string[] | null
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          certificate_number?: string
+          id?: string
+          isbn?: string | null
+          issued_at?: string
+          metadata?: Json | null
+          rights_granted?: string[] | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "publishing_certificates_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       user_library: {
         Row: {
           book_id: string
@@ -311,14 +499,42 @@ export type Database = {
           },
         ]
       }
+      user_roles: {
+        Row: {
+          created_at: string
+          id: string
+          role: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          role?: Database["public"]["Enums"]["app_role"]
+          user_id?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
-      [_ in never]: never
+      has_role: {
+        Args: {
+          _role: Database["public"]["Enums"]["app_role"]
+          _user_id: string
+        }
+        Returns: boolean
+      }
     }
     Enums: {
+      app_role: "admin" | "moderator" | "user"
       book_category:
         | "theology"
         | "prophecy"
@@ -466,6 +682,7 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      app_role: ["admin", "moderator", "user"],
       book_category: [
         "theology",
         "prophecy",
