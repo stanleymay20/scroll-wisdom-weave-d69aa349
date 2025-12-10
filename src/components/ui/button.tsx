@@ -17,7 +17,7 @@ const buttonVariants = cva(
         link: "text-primary underline-offset-4 hover:underline",
         hero: "bg-gradient-gold text-primary-foreground shadow-gold hover:shadow-gold-hover transition-all duration-300",
         gold: "bg-gradient-gold text-primary-foreground shadow-gold hover:shadow-gold-hover transition-all duration-300",
-        "gold-outline": "border-2 border-gold bg-transparent text-gold hover:bg-gold/10 transition-all duration-300",
+        "gold-outline": "border-2 border-scroll-gold bg-transparent text-scroll-gold hover:bg-scroll-gold/10 transition-all duration-300",
         muted: "bg-muted text-muted-foreground hover:bg-muted/80",
       },
       size: {
@@ -32,7 +32,7 @@ const buttonVariants = cva(
       variant: "default",
       size: "default",
     },
-  },
+  } as const
 );
 
 export interface ButtonProps
