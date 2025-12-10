@@ -49,6 +49,8 @@ export default function BookDetail() {
   const [isSaved, setIsSaved] = useState(false);
   const [user, setUser] = useState<any>(null);
   const [generatingChapterId, setGeneratingChapterId] = useState<string | null>(null);
+  const [isGeneratingAll, setIsGeneratingAll] = useState(false);
+  const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
 
   useEffect(() => {
     const fetchData = async () => {
@@ -107,6 +109,30 @@ export default function BookDetail() {
     if (id) {
       fetchData();
     }
+
+    // Set up realtime subscription for chapter updates
+    const channel = supabase
+      .channel('chapter-updates')
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'chapters',
+          filter: `book_id=eq.${id}`
+        },
+        (payload) => {
+          const updatedChapter = payload.new as ChapterData;
+          setChapters(prev => prev.map(ch => 
+            ch.id === updatedChapter.id ? { ...ch, ...updatedChapter } : ch
+          ));
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, [id, navigate, toast]);
 
   const handleSaveToLibrary = async () => {
@@ -203,6 +229,71 @@ export default function BookDetail() {
     } finally {
       setGeneratingChapterId(null);
     }
+  };
+
+  const handleGenerateAllChapters = async () => {
+    if (!book) return;
+    
+    const ungeneratedChapters = chapters.filter(ch => !ch.is_generated);
+    if (ungeneratedChapters.length === 0) {
+      toast({ title: "All chapters already generated" });
+      return;
+    }
+
+    setIsGeneratingAll(true);
+    setGenerationProgress({ current: 0, total: ungeneratedChapters.length });
+
+    for (let i = 0; i < ungeneratedChapters.length; i++) {
+      const chapter = ungeneratedChapters[i];
+      setGeneratingChapterId(chapter.id);
+      setGenerationProgress({ current: i + 1, total: ungeneratedChapters.length });
+
+      try {
+        const keyTopicsMatch = chapter.content?.match(/### Key Topics\n([\s\S]*?)(?:\n\n|\*Full chapter)/);
+        const keyTopics = keyTopicsMatch 
+          ? keyTopicsMatch[1].split('\n').filter(t => t.startsWith('-')).map(t => t.replace('- ', ''))
+          : [];
+
+        const response = await supabase.functions.invoke('generate-chapter', {
+          body: {
+            chapterId: chapter.id,
+            bookTitle: book.title,
+            chapterTitle: chapter.title,
+            chapterNumber: chapter.chapter_number,
+            keyTopics,
+            category: book.category,
+          }
+        });
+
+        if (response.error || response.data?.error) {
+          throw new Error(response.error?.message || response.data?.error);
+        }
+
+        // Update local state (realtime will also update it)
+        setChapters(prev => prev.map(ch => 
+          ch.id === chapter.id 
+            ? { ...ch, is_generated: true, word_count: response.data.wordCount }
+            : ch
+        ));
+      } catch (error) {
+        console.error(`Error generating chapter ${chapter.chapter_number}:`, error);
+        toast({
+          title: `Failed to generate Chapter ${chapter.chapter_number}`,
+          description: error instanceof Error ? error.message : "Unknown error",
+          variant: "destructive",
+        });
+        // Continue with next chapter instead of stopping
+      }
+    }
+
+    setIsGeneratingAll(false);
+    setGeneratingChapterId(null);
+    setGenerationProgress({ current: 0, total: 0 });
+    
+    toast({
+      title: "Book generation complete",
+      description: "All chapters have been generated!",
+    });
   };
 
   if (isLoading) {
@@ -314,9 +405,58 @@ export default function BookDetail() {
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.2 }}
           >
-            <h2 className="font-display text-2xl font-bold mb-6">
-              Table of Contents
-            </h2>
+            <div className="flex items-center justify-between mb-6">
+              <h2 className="font-display text-2xl font-bold">
+                Table of Contents
+              </h2>
+              
+              {/* Generate All Button */}
+              {chapters.some(ch => !ch.is_generated) && (
+                <Button
+                  variant="hero"
+                  onClick={handleGenerateAllChapters}
+                  disabled={isGeneratingAll || generatingChapterId !== null}
+                >
+                  {isGeneratingAll ? (
+                    <>
+                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      Generating {generationProgress.current}/{generationProgress.total}
+                    </>
+                  ) : (
+                    <>
+                      <Sparkles className="h-4 w-4 mr-2" />
+                      Generate All Chapters
+                    </>
+                  )}
+                </Button>
+              )}
+            </div>
+
+            {/* Generation Progress Bar */}
+            {isGeneratingAll && (
+              <div className="mb-6 p-4 rounded-xl bg-gradient-card border border-scroll-gold/30">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-sm font-medium text-scroll-gold">
+                    Generating chapters...
+                  </span>
+                  <span className="text-sm text-muted-foreground">
+                    {generationProgress.current} of {generationProgress.total} complete
+                  </span>
+                </div>
+                <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
+                  <motion.div
+                    className="h-full bg-gradient-to-r from-scroll-gold to-scroll-gold-light"
+                    initial={{ width: 0 }}
+                    animate={{ width: `${(generationProgress.current / generationProgress.total) * 100}%` }}
+                    transition={{ duration: 0.5 }}
+                  />
+                </div>
+                <p className="mt-2 text-xs text-muted-foreground">
+                  Each chapter generates 8,000-12,000 words of comprehensive content. This may take a few minutes per chapter.
+                </p>
+              </div>
+            )}
+
             {chapters.length === 0 ? (
               <p className="text-muted-foreground">Chapters are being generated...</p>
             ) : (
