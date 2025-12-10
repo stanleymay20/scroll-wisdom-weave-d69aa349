@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -39,13 +40,21 @@ const CATEGORIES = [
 ];
 
 export default function Generate() {
+  const navigate = useNavigate();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [numChapters, setNumChapters] = useState("10");
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<string[]>([]);
+  const [user, setUser] = useState<any>(null);
   const { toast } = useToast();
+
+  useEffect(() => {
+    supabase.auth.getUser().then(({ data: { user } }) => {
+      setUser(user);
+    });
+  }, []);
 
   const handleGenerate = async () => {
     if (!title || !category) {
@@ -54,6 +63,15 @@ export default function Generate() {
         description: "Please provide a title and select a category.",
         variant: "destructive",
       });
+      return;
+    }
+
+    if (!user) {
+      toast({
+        title: "Sign in required",
+        description: "Please sign in to generate books.",
+      });
+      navigate("/auth");
       return;
     }
 
@@ -69,6 +87,7 @@ export default function Generate() {
           description,
           category,
           numChapters: parseInt(numChapters),
+          userId: user.id,
         },
       });
 
@@ -78,24 +97,26 @@ export default function Generate() {
         ...prev,
         "Book outline created",
         "Chapter structure defined",
-        "Generation complete!",
+        "Book saved to your library!",
       ]);
 
       toast({
-        title: "Book Generation Started",
-        description: "Your book is being generated. This may take a few minutes.",
+        title: "Book Created Successfully!",
+        description: "Your book has been added to your library.",
       });
 
-      // Reset form
-      setTitle("");
-      setDescription("");
-      setCategory("");
-      setNumChapters("10");
-    } catch (error) {
+      // Navigate to the new book
+      if (data?.bookId) {
+        setTimeout(() => {
+          navigate(`/book/${data.bookId}`);
+        }, 1500);
+      }
+
+    } catch (error: any) {
       console.error("Generation error:", error);
       toast({
         title: "Generation Failed",
-        description: "There was an error generating your book. Please try again.",
+        description: error.message || "There was an error generating your book. Please try again.",
         variant: "destructive",
       });
     } finally {
