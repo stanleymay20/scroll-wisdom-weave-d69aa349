@@ -13,7 +13,9 @@ import {
   User,
   ChevronRight,
   Play,
-  Loader2
+  Loader2,
+  Sparkles,
+  CheckCircle2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -33,6 +35,8 @@ interface ChapterData {
   chapter_number: number;
   title: string;
   word_count: number | null;
+  is_generated: boolean | null;
+  content: string | null;
 }
 
 export default function BookDetail() {
@@ -44,6 +48,7 @@ export default function BookDetail() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSaved, setIsSaved] = useState(false);
   const [user, setUser] = useState<any>(null);
+  const [generatingChapterId, setGeneratingChapterId] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -76,7 +81,7 @@ export default function BookDetail() {
       // Fetch chapters
       const { data: chaptersData, error: chaptersError } = await supabase
         .from("chapters")
-        .select("id, chapter_number, title, word_count")
+        .select("id, chapter_number, title, word_count, is_generated, content")
         .eq("book_id", id)
         .order("chapter_number");
 
@@ -141,6 +146,62 @@ export default function BookDetail() {
         setIsSaved(true);
         toast({ title: "Added to library" });
       }
+    }
+  };
+
+  const handleGenerateChapter = async (chapter: ChapterData, e: React.MouseEvent) => {
+    e.stopPropagation();
+    
+    if (!book) return;
+    
+    setGeneratingChapterId(chapter.id);
+    
+    try {
+      // Extract key topics from existing content if available
+      const keyTopicsMatch = chapter.content?.match(/### Key Topics\n([\s\S]*?)(?:\n\n|\*Full chapter)/);
+      const keyTopics = keyTopicsMatch 
+        ? keyTopicsMatch[1].split('\n').filter(t => t.startsWith('-')).map(t => t.replace('- ', ''))
+        : [];
+
+      const response = await supabase.functions.invoke('generate-chapter', {
+        body: {
+          chapterId: chapter.id,
+          bookTitle: book.title,
+          chapterTitle: chapter.title,
+          chapterNumber: chapter.chapter_number,
+          keyTopics,
+          category: book.category,
+        }
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      // Update chapter in local state
+      setChapters(prev => prev.map(ch => 
+        ch.id === chapter.id 
+          ? { ...ch, is_generated: true, word_count: response.data.wordCount }
+          : ch
+      ));
+
+      toast({
+        title: "Chapter generated",
+        description: `${chapter.title} is now ready to read!`,
+      });
+    } catch (error) {
+      console.error("Error generating chapter:", error);
+      toast({
+        title: "Generation failed",
+        description: error instanceof Error ? error.message : "Failed to generate chapter",
+        variant: "destructive",
+      });
+    } finally {
+      setGeneratingChapterId(null);
     }
   };
 
@@ -260,36 +321,68 @@ export default function BookDetail() {
               <p className="text-muted-foreground">Chapters are being generated...</p>
             ) : (
               <div className="space-y-3">
-                {chapters.map((chapter, index) => (
-                  <motion.div
-                    key={chapter.id}
-                    initial={{ opacity: 0, x: -20 }}
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: 0.1 + index * 0.05 }}
-                  >
-                    <button
-                      onClick={() => navigate(`/read/${id}/${chapter.chapter_number}`)}
-                      className="w-full group"
+                {chapters.map((chapter, index) => {
+                  const isGenerating = generatingChapterId === chapter.id;
+                  const isGenerated = chapter.is_generated;
+                  
+                  return (
+                    <motion.div
+                      key={chapter.id}
+                      initial={{ opacity: 0, x: -20 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.1 + index * 0.05 }}
                     >
                       <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-card border border-border/50 hover:border-scroll-gold/50 transition-all duration-300 hover:shadow-lg">
-                        <div className="flex items-center gap-4">
+                        <button
+                          onClick={() => isGenerated && navigate(`/read/${id}/${chapter.chapter_number}`)}
+                          className={`flex items-center gap-4 flex-1 text-left ${!isGenerated ? 'cursor-default' : 'group cursor-pointer'}`}
+                          disabled={!isGenerated}
+                        >
                           <span className="w-10 h-10 rounded-lg bg-scroll-gold/10 flex items-center justify-center font-display font-bold text-scroll-gold">
                             {chapter.chapter_number}
                           </span>
-                          <div className="text-left">
-                            <h3 className="font-medium text-foreground group-hover:text-scroll-gold transition-colors">
+                          <div>
+                            <h3 className={`font-medium text-foreground ${isGenerated ? 'group-hover:text-scroll-gold' : ''} transition-colors`}>
                               {chapter.title}
                             </h3>
                             <p className="text-sm text-muted-foreground">
-                              {(chapter.word_count || 0).toLocaleString()} words
+                              {isGenerated 
+                                ? `${(chapter.word_count || 0).toLocaleString()} words`
+                                : "Content pending generation"
+                              }
                             </p>
                           </div>
+                        </button>
+                        
+                        <div className="flex items-center gap-2">
+                          {isGenerating ? (
+                            <div className="flex items-center gap-2 text-scroll-gold">
+                              <Loader2 className="h-5 w-5 animate-spin" />
+                              <span className="text-sm">Generating...</span>
+                            </div>
+                          ) : isGenerated ? (
+                            <div className="flex items-center gap-2">
+                              <CheckCircle2 className="h-5 w-5 text-green-500" />
+                              <ChevronRight 
+                                className="h-5 w-5 text-muted-foreground group-hover:text-scroll-gold transition-all cursor-pointer"
+                                onClick={() => navigate(`/read/${id}/${chapter.chapter_number}`)}
+                              />
+                            </div>
+                          ) : (
+                            <Button
+                              variant="gold-outline"
+                              size="sm"
+                              onClick={(e) => handleGenerateChapter(chapter, e)}
+                            >
+                              <Sparkles className="h-4 w-4 mr-1" />
+                              Generate
+                            </Button>
+                          )}
                         </div>
-                        <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-scroll-gold group-hover:translate-x-1 transition-all" />
                       </div>
-                    </button>
-                  </motion.div>
-                ))}
+                    </motion.div>
+                  );
+                })}
               </div>
             )}
           </motion.div>
