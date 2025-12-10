@@ -8,8 +8,10 @@ import { Book, Loader2, Mail, Lock, User } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+type AuthMode = "login" | "signup" | "forgot-password";
+
 export default function Auth() {
-  const [isLogin, setIsLogin] = useState(true);
+  const [mode, setMode] = useState<AuthMode>("login");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [fullName, setFullName] = useState("");
@@ -18,7 +20,6 @@ export default function Auth() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if user is already logged in
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (session?.user) {
@@ -41,7 +42,7 @@ export default function Auth() {
     setIsLoading(true);
 
     try {
-      if (isLogin) {
+      if (mode === "login") {
         const { error } = await supabase.auth.signInWithPassword({
           email,
           password,
@@ -51,7 +52,7 @@ export default function Auth() {
           title: "Welcome back!",
           description: "You have successfully signed in.",
         });
-      } else {
+      } else if (mode === "signup") {
         const redirectUrl = `${window.location.origin}/`;
         const { error } = await supabase.auth.signUp({
           email,
@@ -68,6 +69,16 @@ export default function Auth() {
           title: "Account created!",
           description: "Welcome to ScrollLibrary. You can now explore the library.",
         });
+      } else if (mode === "forgot-password") {
+        const { error } = await supabase.auth.resetPasswordForEmail(email, {
+          redirectTo: `${window.location.origin}/auth?mode=reset`,
+        });
+        if (error) throw error;
+        toast({
+          title: "Reset email sent!",
+          description: "Check your email for a password reset link.",
+        });
+        setMode("login");
       }
     } catch (error: any) {
       console.error("Auth error:", error);
@@ -78,6 +89,29 @@ export default function Auth() {
       });
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const getTitle = () => {
+    switch (mode) {
+      case "login": return "Welcome back";
+      case "signup": return "Create your account";
+      case "forgot-password": return "Reset your password";
+    }
+  };
+
+  const getButtonText = () => {
+    if (isLoading) {
+      switch (mode) {
+        case "login": return "Signing in...";
+        case "signup": return "Creating account...";
+        case "forgot-password": return "Sending reset link...";
+      }
+    }
+    switch (mode) {
+      case "login": return "Sign In";
+      case "signup": return "Create Account";
+      case "forgot-password": return "Send Reset Link";
     }
   };
 
@@ -100,18 +134,17 @@ export default function Auth() {
               <Book className="h-8 w-8 text-primary-foreground" />
             </div>
           </div>
-          <h1 className="font-display text-3xl font-bold text-gradient-gold">
-            ScrollLibrary
-          </h1>
-          <p className="text-muted-foreground mt-2">
-            {isLogin ? "Welcome back" : "Create your account"}
-          </p>
-        </div>
+        <h1 className="font-display text-3xl font-bold text-gradient-gold">
+          ScrollLibrary
+        </h1>
+        <p className="text-muted-foreground mt-2">
+          {getTitle()}
+        </p>
+      </div>
 
-        {/* Form Card */}
         <div className="bg-gradient-card rounded-2xl border border-border/50 p-8 shadow-card">
           <form onSubmit={handleSubmit} className="space-y-5">
-            {!isLogin && (
+            {mode === "signup" && (
               <div className="space-y-2">
                 <Label htmlFor="fullName">Full Name</Label>
                 <div className="relative">
@@ -123,7 +156,7 @@ export default function Auth() {
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
-                    required={!isLogin}
+                    required
                   />
                 </div>
               </div>
@@ -145,22 +178,35 @@ export default function Auth() {
               </div>
             </div>
 
-            <div className="space-y-2">
-              <Label htmlFor="password">Password</Label>
-              <div className="relative">
-                <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                <Input
-                  id="password"
-                  type="password"
-                  placeholder="Enter your password"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
-                  required
-                  minLength={6}
-                />
+            {mode !== "forgot-password" && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="password">Password</Label>
+                  {mode === "login" && (
+                    <button
+                      type="button"
+                      onClick={() => setMode("forgot-password")}
+                      className="text-xs text-scroll-gold hover:underline"
+                    >
+                      Forgot password?
+                    </button>
+                  )}
+                </div>
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    id="password"
+                    type="password"
+                    placeholder="Enter your password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
+                    required
+                    minLength={6}
+                  />
+                </div>
               </div>
-            </div>
+            )}
 
             <Button
               type="submit"
@@ -171,24 +217,34 @@ export default function Auth() {
               {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  {isLogin ? "Signing in..." : "Creating account..."}
+                  {getButtonText()}
                 </>
               ) : (
-                <>{isLogin ? "Sign In" : "Create Account"}</>
+                <>{getButtonText()}</>
               )}
             </Button>
           </form>
 
-          <div className="mt-6 text-center">
-            <button
-              type="button"
-              onClick={() => setIsLogin(!isLogin)}
-              className="text-sm text-muted-foreground hover:text-scroll-gold transition-colors"
-            >
-              {isLogin
-                ? "Don't have an account? Sign up"
-                : "Already have an account? Sign in"}
-            </button>
+          <div className="mt-6 text-center space-y-2">
+            {mode === "forgot-password" ? (
+              <button
+                type="button"
+                onClick={() => setMode("login")}
+                className="text-sm text-muted-foreground hover:text-scroll-gold transition-colors"
+              >
+                ← Back to sign in
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setMode(mode === "login" ? "signup" : "login")}
+                className="text-sm text-muted-foreground hover:text-scroll-gold transition-colors"
+              >
+                {mode === "login"
+                  ? "Don't have an account? Sign up"
+                  : "Already have an account? Sign in"}
+              </button>
+            )}
           </div>
         </div>
 
