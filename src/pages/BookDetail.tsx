@@ -8,17 +8,19 @@ import {
   Book, 
   BookOpen, 
   Bookmark, 
-  Share2, 
   Clock, 
   User,
   ChevronRight,
   Play,
   Loader2,
   Sparkles,
-  CheckCircle2
+  CheckCircle2,
+  ImagePlus
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { ShareDialog } from "@/components/books/ShareDialog";
+import { ExportDialog } from "@/components/books/ExportDialog";
 
 interface BookData {
   id: string;
@@ -51,6 +53,7 @@ export default function BookDetail() {
   const [generatingChapterId, setGeneratingChapterId] = useState<string | null>(null);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
+  const [isGeneratingCover, setIsGeneratingCover] = useState(false);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -296,6 +299,48 @@ export default function BookDetail() {
     });
   };
 
+  const handleGenerateCover = async () => {
+    if (!book) return;
+    
+    setIsGeneratingCover(true);
+    
+    try {
+      const response = await supabase.functions.invoke('generate-cover', {
+        body: {
+          bookId: book.id,
+          title: book.title,
+          category: book.category,
+          description: book.description,
+        }
+      });
+
+      if (response.error) {
+        throw new Error(response.error.message);
+      }
+
+      if (response.data?.error) {
+        throw new Error(response.data.error);
+      }
+
+      // Update local state with new cover
+      setBook(prev => prev ? { ...prev, cover_image_url: response.data.coverUrl } : null);
+
+      toast({
+        title: "Cover generated!",
+        description: "Your book now has a unique AI-generated cover.",
+      });
+    } catch (error) {
+      console.error("Error generating cover:", error);
+      toast({
+        title: "Cover generation failed",
+        description: error instanceof Error ? error.message : "Failed to generate cover",
+        variant: "destructive",
+      });
+    } finally {
+      setIsGeneratingCover(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen">
@@ -328,7 +373,7 @@ export default function BookDetail() {
           >
             {/* Cover */}
             <div className="lg:col-span-1">
-              <div className="aspect-[3/4] relative rounded-xl overflow-hidden bg-gradient-to-br from-scroll-indigo to-scroll-indigo-deep border border-border/50 shadow-card">
+              <div className="aspect-[3/4] relative rounded-xl overflow-hidden bg-gradient-to-br from-scroll-indigo to-scroll-indigo-deep border border-border/50 shadow-card group">
                 {book.cover_image_url ? (
                   <img
                     src={book.cover_image_url}
@@ -336,8 +381,26 @@ export default function BookDetail() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex items-center justify-center">
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-4">
                     <Book className="h-24 w-24 text-scroll-gold/30" />
+                    <Button
+                      variant="gold-outline"
+                      size="sm"
+                      onClick={handleGenerateCover}
+                      disabled={isGeneratingCover}
+                    >
+                      {isGeneratingCover ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Generating...
+                        </>
+                      ) : (
+                        <>
+                          <ImagePlus className="h-4 w-4 mr-2" />
+                          Generate Cover
+                        </>
+                      )}
+                    </Button>
                   </div>
                 )}
               </div>
@@ -379,7 +442,7 @@ export default function BookDetail() {
                   variant="hero" 
                   size="lg"
                   onClick={() => navigate(`/read/${id}/1`)}
-                  disabled={chapters.length === 0}
+                  disabled={chapters.length === 0 || !chapters.some(ch => ch.is_generated)}
                 >
                   <Play className="h-5 w-5 mr-2" />
                   Start Reading
@@ -392,9 +455,16 @@ export default function BookDetail() {
                   <Bookmark className={`h-5 w-5 mr-2 ${isSaved ? "fill-current" : ""}`} />
                   {isSaved ? "Saved" : "Save to Library"}
                 </Button>
-                <Button variant="muted" size="lg">
-                  <Share2 className="h-5 w-5" />
-                </Button>
+                <ExportDialog 
+                  bookId={book.id} 
+                  title={book.title} 
+                  hasGeneratedChapters={chapters.some(ch => ch.is_generated)} 
+                />
+                <ShareDialog 
+                  title={book.title} 
+                  bookId={book.id} 
+                  description={book.description || undefined} 
+                />
               </div>
             </div>
           </motion.div>

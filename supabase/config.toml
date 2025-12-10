@@ -5,3 +5,9 @@ verify_jwt = false
 
 [functions.generate-chapter]
 verify_jwt = false
+
+[functions.generate-cover]
+verify_jwt = false
+
+[functions.export-book]
+verify_jwt = false
