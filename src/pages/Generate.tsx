@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
   Select,
   SelectContent,
@@ -14,7 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, BookOpen, Loader2, CheckCircle } from "lucide-react";
+import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2 } from "lucide-react";
+import { CoverUpload } from "@/components/books/CoverUpload";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -45,6 +47,8 @@ export default function Generate() {
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [numChapters, setNumChapters] = useState("10");
+  const [coverOption, setCoverOption] = useState<"ai" | "upload">("ai");
+  const [customCover, setCustomCover] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<string[]>([]);
   const [user, setUser] = useState<any>(null);
@@ -88,6 +92,7 @@ export default function Generate() {
           category,
           numChapters: parseInt(numChapters),
           userId: user.id,
+          customCover: coverOption === "upload" ? customCover : null,
         },
       });
 
@@ -219,6 +224,36 @@ export default function Generate() {
                     </SelectContent>
                   </Select>
                 </div>
+              </div>
+
+              {/* Cover Option */}
+              <div className="space-y-3">
+                <Label className="text-foreground">Book Cover</Label>
+                <RadioGroup
+                  value={coverOption}
+                  onValueChange={(v) => setCoverOption(v as "ai" | "upload")}
+                  className="flex gap-4"
+                  disabled={isGenerating}
+                >
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="ai" id="ai-cover" />
+                    <Label htmlFor="ai-cover" className="flex items-center gap-2 cursor-pointer">
+                      <Wand2 className="h-4 w-4 text-scroll-gold" />
+                      AI-Generated
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <RadioGroupItem value="upload" id="upload-cover" />
+                    <Label htmlFor="upload-cover" className="flex items-center gap-2 cursor-pointer">
+                      <Upload className="h-4 w-4 text-scroll-gold" />
+                      Upload Custom
+                    </Label>
+                  </div>
+                </RadioGroup>
+
+                {coverOption === "upload" && (
+                  <CoverUpload onCoverSelect={setCustomCover} currentCover={customCover} />
+                )}
               </div>
 
               {/* Generate Button */}

@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    const { title, description, category, numChapters, userId } = await req.json();
+    const { title, description, category, numChapters, userId, customCover } = await req.json();
     
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -29,6 +29,7 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     console.log(`Generating book: ${title} with ${numChapters} chapters for user: ${userId}`);
+    console.log(`Custom cover provided: ${!!customCover}`);
 
     // First, generate the book outline
     const outlinePrompt = `You are ScrollResearchGPT, an AI agent specialized in creating comprehensive book outlines.
@@ -137,9 +138,10 @@ Format your response as a JSON object with this structure:
         description: bookOutline.bookDescription || description,
         category: category,
         total_chapters: numChapters,
-        is_published: true, // Make it visible immediately
+        is_published: true,
         is_featured: false,
         author_ai_agent: "ScrollAuthorGPT",
+        cover_image_url: customCover || null, // Use custom cover if provided
       })
       .select()
       .single();
