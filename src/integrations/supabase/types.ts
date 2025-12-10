@@ -20,6 +20,7 @@ export type Database = {
           category: Database["public"]["Enums"]["book_category"]
           cover_image_url: string | null
           created_at: string | null
+          creator_id: string | null
           description: string | null
           id: string
           is_featured: boolean | null
@@ -33,6 +34,7 @@ export type Database = {
           category: Database["public"]["Enums"]["book_category"]
           cover_image_url?: string | null
           created_at?: string | null
+          creator_id?: string | null
           description?: string | null
           id?: string
           is_featured?: boolean | null
@@ -46,6 +48,7 @@ export type Database = {
           category?: Database["public"]["Enums"]["book_category"]
           cover_image_url?: string | null
           created_at?: string | null
+          creator_id?: string | null
           description?: string | null
           id?: string
           is_featured?: boolean | null
