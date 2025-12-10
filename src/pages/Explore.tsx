@@ -6,7 +6,7 @@ import { Footer } from "@/components/layout/Footer";
 import { BookCard } from "@/components/books/BookCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, Filter, X } from "lucide-react";
+import { Search, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 
 const CATEGORIES = [
@@ -40,66 +40,14 @@ interface Book {
   total_chapters: number | null;
 }
 
-// Sample books for demo (since we don't have real data yet)
-const SAMPLE_BOOKS: Book[] = [
-  {
-    id: "1",
-    title: "The Prophetic Voice: Understanding Divine Communication",
-    description: "A comprehensive exploration of prophetic utterances throughout history.",
-    category: "prophecy",
-    cover_image_url: null,
-    total_chapters: 12,
-  },
-  {
-    id: "2",
-    title: "Quantum Theology: Where Science Meets Spirit",
-    description: "Bridging the gap between quantum physics and theological understanding.",
-    category: "science",
-    cover_image_url: null,
-    total_chapters: 8,
-  },
-  {
-    id: "3",
-    title: "The African Renaissance: Reclaiming Heritage",
-    description: "An in-depth study of Africa's contribution to world civilization.",
-    category: "african_studies",
-    cover_image_url: null,
-    total_chapters: 15,
-  },
-  {
-    id: "4",
-    title: "Sacred Economics: Wealth and Divine Principles",
-    description: "Exploring the intersection of financial wisdom and spiritual teachings.",
-    category: "economics",
-    cover_image_url: null,
-    total_chapters: 10,
-  },
-  {
-    id: "5",
-    title: "The Art of Governance: Principles from Ancient Scrolls",
-    description: "Leadership wisdom drawn from historical and prophetic sources.",
-    category: "governance",
-    cover_image_url: null,
-    total_chapters: 9,
-  },
-  {
-    id: "6",
-    title: "Healing Through Faith: Medicine and Spirit",
-    description: "The intersection of modern medicine and spiritual healing practices.",
-    category: "medicine",
-    cover_image_url: null,
-    total_chapters: 11,
-  },
-];
-
 export default function Explore() {
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(
     searchParams.get("category") || "all"
   );
-  const [books, setBooks] = useState<Book[]>(SAMPLE_BOOKS);
-  const [isLoading, setIsLoading] = useState(false);
+  const [books, setBooks] = useState<Book[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   useEffect(() => {
     const category = searchParams.get("category");
@@ -107,6 +55,28 @@ export default function Explore() {
       setSelectedCategory(category);
     }
   }, [searchParams]);
+
+  useEffect(() => {
+    const fetchBooks = async () => {
+      setIsLoading(true);
+      try {
+        const { data, error } = await supabase
+          .from("books")
+          .select("id, title, description, category, cover_image_url, total_chapters")
+          .eq("is_published", true)
+          .order("created_at", { ascending: false });
+
+        if (error) throw error;
+        setBooks(data || []);
+      } catch (error) {
+        console.error("Error fetching books:", error);
+      } finally {
+        setIsLoading(false);
+      }
+    };
+
+    fetchBooks();
+  }, []);
 
   const filteredBooks = books.filter((book) => {
     const matchesCategory = selectedCategory === "all" || book.category === selectedCategory;
@@ -189,7 +159,11 @@ export default function Explore() {
           </motion.div>
 
           {/* Books Grid */}
-          {filteredBooks.length > 0 ? (
+          {isLoading ? (
+            <div className="flex items-center justify-center py-20">
+              <Loader2 className="h-8 w-8 animate-spin text-scroll-gold" />
+            </div>
+          ) : filteredBooks.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredBooks.map((book, index) => (
                 <BookCard
@@ -211,7 +185,9 @@ export default function Explore() {
               className="text-center py-20"
             >
               <p className="text-muted-foreground text-lg">
-                No books found. Try adjusting your search or filters.
+                {books.length === 0 
+                  ? "No books yet. Be the first to generate one!"
+                  : "No books found. Try adjusting your search or filters."}
               </p>
             </motion.div>
           )}
