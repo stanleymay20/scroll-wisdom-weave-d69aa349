@@ -14,24 +14,30 @@ serve(async (req) => {
   try {
     const { chapterId, bookTitle, chapterTitle, chapterNumber, keyTopics, category } = await req.json();
     
+    const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error("Supabase configuration is missing");
+    }
+
+    // Prefer DeepSeek for long-form content, fallback to Lovable AI
+    const useDeepSeek = !!DEEPSEEK_API_KEY;
+    
+    if (!useDeepSeek && !LOVABLE_API_KEY) {
+      throw new Error("No AI API key configured (DEEPSEEK_API_KEY or LOVABLE_API_KEY required)");
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     console.log(`Generating chapter ${chapterNumber}: ${chapterTitle} for book: ${bookTitle}`);
+    console.log(`Using AI provider: ${useDeepSeek ? 'DeepSeek' : 'Lovable AI'}`);
 
-    const chapterPrompt = `You are ScrollAuthorGPT, an elite AI author specialized in creating comprehensive, academically rigorous book chapters.
+    const chapterPrompt = `You are ScrollAuthorGPT, an elite AI author renowned for creating comprehensive, scholarly book chapters.
 
-Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${bookTitle}" in the ${category} category.
+Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${bookTitle}" in the ${category.replace(/_/g, " ")} category.
 
 Key topics to cover:
 ${keyTopics?.map((t: string) => `- ${t}`).join('\n') || '- Comprehensive coverage of the chapter topic'}
@@ -63,43 +69,86 @@ CRITICAL REQUIREMENTS:
 
 BEGIN WRITING THE FULL CHAPTER NOW:`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-pro",
-        messages: [
-          { role: "system", content: "You are ScrollAuthorGPT, an elite AI author renowned for creating comprehensive, scholarly book chapters. You ALWAYS write at least 8,000 words per chapter. You never truncate or abbreviate. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers." },
-          { role: "user", content: chapterPrompt }
-        ],
-      }),
-    });
+    let chapterContent: string;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+    if (useDeepSeek) {
+      // Use DeepSeek API for long-form content
+      console.log("Calling DeepSeek API...");
+      const response = await fetch("https://api.deepseek.com/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [
+            { 
+              role: "system", 
+              content: "You are ScrollAuthorGPT, an elite AI author renowned for creating comprehensive, scholarly book chapters. You ALWAYS write at least 8,000 words per chapter. You never truncate or abbreviate. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers." 
+            },
+            { role: "user", content: chapterPrompt }
+          ],
+          max_tokens: 16000,
+          temperature: 0.7,
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("DeepSeek API error:", response.status, errorText);
+        
+        if (response.status === 429) {
+          throw new Error("Rate limits exceeded, please try again later.");
+        }
+        if (response.status === 402 || response.status === 401) {
+          throw new Error("DeepSeek API authentication failed. Please check your API key.");
+        }
+        throw new Error(`DeepSeek API error: ${response.status}`);
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required, please add funds to your workspace." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+
+      const data = await response.json();
+      chapterContent = data.choices?.[0]?.message?.content;
+      console.log("DeepSeek response received");
+    } else {
+      // Fallback to Lovable AI
+      console.log("Calling Lovable AI...");
+      const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-pro",
+          messages: [
+            { 
+              role: "system", 
+              content: "You are ScrollAuthorGPT, an elite AI author renowned for creating comprehensive, scholarly book chapters. You ALWAYS write at least 8,000 words per chapter. You never truncate or abbreviate. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers." 
+            },
+            { role: "user", content: chapterPrompt }
+          ],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error("Lovable AI gateway error:", response.status, errorText);
+        
+        if (response.status === 429) {
+          throw new Error("Rate limits exceeded, please try again later.");
+        }
+        if (response.status === 402) {
+          throw new Error("Payment required, please add funds to your workspace.");
+        }
+        throw new Error("Failed to generate chapter content");
       }
-      throw new Error("Failed to generate chapter content");
+
+      const data = await response.json();
+      chapterContent = data.choices?.[0]?.message?.content;
+      console.log("Lovable AI response received");
     }
 
-    const data = await response.json();
-    const chapterContent = data.choices?.[0]?.message?.content;
-    
     if (!chapterContent) {
       throw new Error("No content generated");
     }
@@ -107,7 +156,7 @@ BEGIN WRITING THE FULL CHAPTER NOW:`;
     console.log(`Generated chapter content: ${chapterContent.length} characters`);
 
     // Calculate word count
-    const wordCount = chapterContent.split(/\s+/).filter((w: string) => w.length > 0).length;
+    const wordCount = chapterContent.split(/\s+/).filter((word: string) => word.length > 0).length;
     console.log(`Word count: ${wordCount}`);
 
     // Update chapter in database
@@ -131,8 +180,8 @@ BEGIN WRITING THE FULL CHAPTER NOW:`;
     return new Response(
       JSON.stringify({
         success: true,
-        message: "Chapter generated successfully",
         wordCount,
+        provider: useDeepSeek ? 'DeepSeek' : 'Lovable AI',
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
