@@ -6,7 +6,7 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, Sparkles, Crown, Zap, BookOpen, Download, Volume2, Shield, Loader2 } from "lucide-react";
+import { Check, Sparkles, Crown, Zap, BookOpen, Download, Volume2, Shield, Loader2, GraduationCap } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { SUBSCRIPTION_TIERS } from "@/lib/subscription";
@@ -41,12 +41,31 @@ const plans: Plan[] = [
       { text: "Basic reader tools", included: true },
       { text: "Low-quality PDF export only", included: true },
       { text: "Community support", included: true },
-      { text: "Unlimited chapter generation", included: false },
+      { text: "Book generation", included: false },
       { text: "AI-generated covers", included: false },
       { text: "Text-to-Speech audio", included: false },
       { text: "Commercial publishing rights", included: false },
     ],
     buttonText: "Get Started",
+    buttonVariant: "outline",
+  },
+  {
+    name: "Student",
+    description: "Discounted plan for students",
+    price: "$9",
+    period: "/month",
+    icon: GraduationCap,
+    features: [
+      { text: "Generate up to 10 books/month", included: true },
+      { text: "Up to 8,000 words per chapter", included: true },
+      { text: "PDF, EPUB, DOCX exports", included: true },
+      { text: "AI-generated covers", included: true },
+      { text: "30 minutes TTS audio/month", included: true },
+      { text: "Student verification required", included: true },
+      { text: "Commercial publishing rights", included: false },
+      { text: "Priority support", included: false },
+    ],
+    buttonText: "Student Plan",
     buttonVariant: "outline",
   },
   {
@@ -58,13 +77,13 @@ const plans: Plan[] = [
     popular: true,
     features: [
       { text: "Unlimited books", included: true },
-      { text: "Unlimited chapter generation", included: true },
-      { text: "Full export formats (PDF/EPUB/DOCX)", included: true },
+      { text: "Up to 10,000 words per chapter", included: true },
+      { text: "All export formats (PDF/EPUB/DOCX/MOBI)", included: true },
       { text: "AI-generated covers", included: true },
-      { text: "AI Text-to-Speech audio", included: true },
-      { text: "All videos and interactive content", included: true },
-      { text: "Commercial publishing rights certificate", included: true },
+      { text: "60 minutes TTS audio/month", included: true },
+      { text: "Commercial publishing rights", included: true },
       { text: "Priority support", included: true },
+      { text: "ElevenLabs premium TTS", included: false },
     ],
     buttonText: "Subscribe Now",
     buttonVariant: "hero",
@@ -77,11 +96,11 @@ const plans: Plan[] = [
     icon: Crown,
     features: [
       { text: "Everything in Premium", included: true },
-      { text: "ScrollProphetGPT deep-alignment mode", included: true },
+      { text: "Up to 20,000 words per chapter", included: true },
+      { text: "Unlimited ElevenLabs TTS", included: true },
       { text: "50-book batch generator", included: true },
-      { text: "AI Life Application Coach", included: true },
-      { text: "Audio-devotional generation", included: true },
-      { text: "Personal AI research assistant", included: true },
+      { text: "AI Research Assistant", included: true },
+      { text: "ScrollProphetGPT deep-alignment", included: true },
       { text: "White-glove publishing formatting", included: true },
       { text: "Early access to new features", included: true },
     ],
@@ -213,7 +232,7 @@ export default function Pricing() {
             </div>
 
             {/* Plans Grid */}
-            <div className="grid md:grid-cols-3 gap-6 mb-16">
+            <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
               {plans.map((plan, index) => (
                 <motion.div
                   key={plan.name}

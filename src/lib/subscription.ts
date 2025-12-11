@@ -17,6 +17,26 @@ export const SUBSCRIPTION_TIERS = {
       commercialRights: false,
       batchGeneration: false,
       prioritySupport: false,
+      elevenLabsTTS: false,
+    }
+  },
+  student: {
+    name: 'Student',
+    // TODO: Replace with actual Stripe price ID after creating product in Stripe dashboard
+    price_id: 'price_student_placeholder',
+    product_id: 'prod_student_placeholder',
+    monthlyPrice: 9,
+    features: {
+      canGenerateBooks: true,
+      maxBooksPerMonth: 10,
+      maxWordCount: 8000,
+      exportFormats: ['pdf', 'epub', 'docx'],
+      ttsMinutes: 30,
+      aiCovers: true,
+      commercialRights: false,
+      batchGeneration: false,
+      prioritySupport: false,
+      elevenLabsTTS: false,
     }
   },
   premium: {
@@ -35,6 +55,7 @@ export const SUBSCRIPTION_TIERS = {
       commercialRights: true,
       batchGeneration: false,
       prioritySupport: true,
+      elevenLabsTTS: false,
     }
   },
   prophet_tier: {
@@ -55,6 +76,7 @@ export const SUBSCRIPTION_TIERS = {
       prioritySupport: true,
       prophetMode: true,
       aiResearchAssistant: true,
+      elevenLabsTTS: true,
     }
   }
 } as const;
@@ -91,6 +113,15 @@ export function getTTSMinutes(tier: SubscriptionTier): number {
 
 export function hasCommercialRights(tier: SubscriptionTier): boolean {
   return SUBSCRIPTION_TIERS[tier].features.commercialRights;
+}
+
+export function hasElevenLabsTTS(tier: SubscriptionTier): boolean {
+  return 'elevenLabsTTS' in SUBSCRIPTION_TIERS[tier].features && 
+         SUBSCRIPTION_TIERS[tier].features.elevenLabsTTS === true;
+}
+
+export function canBatchGenerate(tier: SubscriptionTier): boolean {
+  return SUBSCRIPTION_TIERS[tier].features.batchGeneration;
 }
 
 // Word count options based on tier
