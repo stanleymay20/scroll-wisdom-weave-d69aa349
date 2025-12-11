@@ -23,25 +23,6 @@ import TermsOfService from "./pages/TermsOfService";
 import ModerationDashboard from "./pages/ModerationDashboard";
 import Pricing from "./pages/Pricing";
 import { CookieConsent } from "./components/legal/CookieConsent";
-import Index from "./pages/Index";
-import Explore from "./pages/Explore";
-import Generate from "./pages/Generate";
-import Auth from "./pages/Auth";
-import BookDetail from "./pages/BookDetail";
-import Reader from "./pages/Reader";
-import Library from "./pages/Library";
-import Profile from "./pages/Profile";
-import Settings from "./pages/Settings";
-import Support from "./pages/Support";
-import About from "./pages/About";
-import Contact from "./pages/Contact";
-import Help from "./pages/Help";
-import Dashboard from "./pages/Dashboard";
-import PrivacyPolicy from "./pages/PrivacyPolicy";
-import TermsOfService from "./pages/TermsOfService";
-import ModerationDashboard from "./pages/ModerationDashboard";
-import NotFound from "./pages/NotFound";
-import { CookieConsent } from "./components/legal/CookieConsent";
 
 const queryClient = new QueryClient();
 
