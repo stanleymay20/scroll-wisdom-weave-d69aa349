@@ -22,9 +22,8 @@ export const SUBSCRIPTION_TIERS = {
   },
   student: {
     name: 'Student',
-    // TODO: Replace with actual Stripe price ID after creating product in Stripe dashboard
-    price_id: 'price_student_placeholder',
-    product_id: 'prod_student_placeholder',
+    price_id: 'price_1SdFbTJYFIBeCvefKzHWUrcb',
+    product_id: 'prod_TaQSrotoUkTuPC',
     monthlyPrice: 9,
     features: {
       canGenerateBooks: true,
@@ -41,9 +40,8 @@ export const SUBSCRIPTION_TIERS = {
   },
   premium: {
     name: 'Premium',
-    // TODO: Replace with actual Stripe price ID after creating product in Stripe dashboard
-    price_id: 'price_premium_placeholder',
-    product_id: 'prod_premium_placeholder',
+    price_id: 'price_1SdFddJYFIBeCvefJr1ZY92E',
+    product_id: 'prod_TaQU3ILEUpbXOT',
     monthlyPrice: 19,
     features: {
       canGenerateBooks: true,
@@ -60,9 +58,8 @@ export const SUBSCRIPTION_TIERS = {
   },
   prophet_tier: {
     name: 'Prophet Tier',
-    // TODO: Replace with actual Stripe price ID after creating product in Stripe dashboard
-    price_id: 'price_prophet_placeholder',
-    product_id: 'prod_prophet_placeholder',
+    price_id: 'price_1SdFezJYFIBeCvefURsOgX3t',
+    product_id: 'prod_TaQWA7MSUntiMy',
     monthlyPrice: 49,
     features: {
       canGenerateBooks: true,
