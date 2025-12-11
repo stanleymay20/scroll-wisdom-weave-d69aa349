@@ -15,10 +15,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2 } from "lucide-react";
+import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown } from "lucide-react";
 import { CoverUpload } from "@/components/books/CoverUpload";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useSubscription } from "@/contexts/SubscriptionContext";
+import { getWordCountOptions, SUBSCRIPTION_TIERS } from "@/lib/subscription";
 
 const CATEGORIES = [
   { value: "theology", label: "Theology" },
@@ -43,22 +45,30 @@ const CATEGORIES = [
 
 export default function Generate() {
   const navigate = useNavigate();
+  const { user, tier, canGenerateBooks, isLoading: subLoading } = useSubscription();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
   const [numChapters, setNumChapters] = useState("10");
+  const [wordCount, setWordCount] = useState("4000");
+  const [language, setLanguage] = useState("en");
   const [coverOption, setCoverOption] = useState<"ai" | "upload">("ai");
   const [customCover, setCustomCover] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<string[]>([]);
-  const [user, setUser] = useState<any>(null);
   const { toast } = useToast();
 
-  useEffect(() => {
-    supabase.auth.getUser().then(({ data: { user } }) => {
-      setUser(user);
-    });
-  }, []);
+  const wordCountOptions = getWordCountOptions(tier);
+
+  const LANGUAGES = [
+    { code: "en", label: "English" },
+    { code: "fr", label: "French" },
+    { code: "de", label: "German" },
+    { code: "es", label: "Spanish" },
+    { code: "ar", label: "Arabic" },
+    { code: "sw", label: "Swahili" },
+    { code: "pt", label: "Portuguese" },
+  ];
 
   const handleGenerate = async () => {
     if (!title || !category) {
@@ -79,6 +89,16 @@ export default function Generate() {
       return;
     }
 
+    if (!canGenerateBooks) {
+      toast({
+        title: "Subscription Required",
+        description: "Please upgrade to Premium or Prophet tier to generate books.",
+        variant: "destructive",
+      });
+      navigate("/pricing");
+      return;
+    }
+
     setIsGenerating(true);
     setGenerationProgress([]);
 
@@ -91,6 +111,8 @@ export default function Generate() {
           description,
           category,
           numChapters: parseInt(numChapters),
+          wordCount: parseInt(wordCount),
+          language,
           userId: user.id,
           customCover: coverOption === "upload" ? customCover : null,
         },
@@ -129,6 +151,45 @@ export default function Generate() {
     }
   };
 
+  // Show upgrade prompt for free users
+  if (!subLoading && !canGenerateBooks && user) {
+    return (
+      <div className="min-h-screen">
+        <Navbar />
+        <main className="pt-24 pb-16">
+          <div className="container mx-auto px-4 max-w-2xl text-center">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="bg-gradient-card rounded-2xl border border-border/50 p-12"
+            >
+              <div className="bg-scroll-gold/10 p-4 rounded-full w-fit mx-auto mb-6">
+                <Lock className="h-12 w-12 text-scroll-gold" />
+              </div>
+              <h1 className="font-display text-3xl font-bold mb-4">
+                Upgrade to Generate Books
+              </h1>
+              <p className="text-muted-foreground mb-8 max-w-md mx-auto">
+                Book generation is available for Premium and Prophet tier subscribers. 
+                Unlock unlimited AI-powered book creation today.
+              </p>
+              <div className="flex flex-col sm:flex-row gap-4 justify-center">
+                <Button variant="hero" onClick={() => navigate("/pricing")}>
+                  <Crown className="h-4 w-4 mr-2" />
+                  View Plans
+                </Button>
+                <Button variant="outline" onClick={() => navigate("/explore")}>
+                  Browse Library
+                </Button>
+              </div>
+            </motion.div>
+          </div>
+        </main>
+        <Footer />
+      </div>
+    );
+  }
+
   return (
     <div className="min-h-screen">
       <Navbar />
@@ -143,6 +204,11 @@ export default function Generate() {
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-scroll-gold/10 border border-scroll-gold/30 text-scroll-gold text-sm font-medium mb-6">
               <Sparkles className="h-4 w-4" />
               AI Book Generator
+              {tier !== "free" && (
+                <span className="ml-2 text-xs bg-scroll-gold/20 px-2 py-0.5 rounded-full">
+                  {SUBSCRIPTION_TIERS[tier].name}
+                </span>
+              )}
             </div>
             <h1 className="font-display text-4xl md:text-5xl font-bold mb-4">
               Generate Your <span className="text-gradient-gold">Book</span>
@@ -192,7 +258,7 @@ export default function Generate() {
               </div>
 
               {/* Category & Chapters */}
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-foreground">Category</Label>
                   <Select value={category} onValueChange={setCategory} disabled={isGenerating}>
@@ -219,6 +285,44 @@ export default function Generate() {
                       {[6, 8, 10, 12, 15, 20, 25, 30].map((num) => (
                         <SelectItem key={num} value={num.toString()}>
                           {num} Chapters
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Word Count & Language */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <Label className="text-foreground">Words per Chapter</Label>
+                  <Select value={wordCount} onValueChange={setWordCount} disabled={isGenerating}>
+                    <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {wordCountOptions.map((count) => (
+                        <SelectItem key={count} value={count.toString()}>
+                          {count.toLocaleString()} words
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  {tier === "prophet_tier" && (
+                    <p className="text-xs text-scroll-gold">Prophet tier: Up to 20,000 words/chapter</p>
+                  )}
+                </div>
+
+                <div className="space-y-2">
+                  <Label className="text-foreground">Language</Label>
+                  <Select value={language} onValueChange={setLanguage} disabled={isGenerating}>
+                    <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {LANGUAGES.map((lang) => (
+                        <SelectItem key={lang.code} value={lang.code}>
+                          {lang.label}
                         </SelectItem>
                       ))}
                     </SelectContent>

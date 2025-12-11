@@ -7,6 +7,7 @@ import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -68,6 +69,7 @@ export function Navbar() {
           </div>
 
           <div className="hidden md:flex items-center gap-4">
+            <LanguageSwitcher />
             <Button variant="ghost" size="icon" onClick={() => navigate('/explore')}><Search className="h-5 w-5" /></Button>
             
             {user ? (
