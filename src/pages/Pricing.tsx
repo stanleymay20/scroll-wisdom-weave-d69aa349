@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
@@ -6,8 +6,11 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, Sparkles, Crown, Zap, BookOpen, Download, Volume2, Shield } from "lucide-react";
+import { Check, Sparkles, Crown, Zap, BookOpen, Download, Volume2, Shield, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useSubscription } from "@/contexts/SubscriptionContext";
+import { SUBSCRIPTION_TIERS } from "@/lib/subscription";
+import { useToast } from "@/hooks/use-toast";
 
 interface PlanFeature {
   text: string;
@@ -88,28 +91,11 @@ const plans: Plan[] = [
 ];
 
 export default function Pricing() {
-  const [user, setUser] = useState<any>(null);
-  const [currentPlan, setCurrentPlan] = useState<string>("free");
+  const { user, tier, isSubscribed, isLoading } = useSubscription();
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [portalLoading, setPortalLoading] = useState(false);
   const navigate = useNavigate();
-
-  useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    setUser(user);
-    if (user) {
-      const { data } = await supabase
-        .from("profiles")
-        .select("plan")
-        .eq("id", user.id)
-        .maybeSingle();
-      if (data?.plan) {
-        setCurrentPlan(data.plan);
-      }
-    }
-  };
+  const { toast } = useToast();
 
   const handleSelectPlan = async (planName: string) => {
     if (!user) {
@@ -117,14 +103,89 @@ export default function Pricing() {
       return;
     }
 
-    if (planName.toLowerCase() === "free") {
-      navigate("/generate");
+    const tierKey = planName.toLowerCase().replace(" ", "_") as keyof typeof SUBSCRIPTION_TIERS;
+    
+    if (tierKey === "free") {
+      navigate("/explore");
       return;
     }
 
-    // TODO: Integrate with Stripe checkout
-    // For now, show coming soon message
-    alert("Stripe integration coming soon! You'll be redirected to checkout.");
+    // Get the price ID for this tier
+    const priceId = SUBSCRIPTION_TIERS[tierKey]?.price_id;
+    if (!priceId) {
+      toast({
+        title: "Configuration Error",
+        description: "This plan is not yet configured. Please contact support.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setCheckoutLoading(planName);
+
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { priceId },
+      });
+
+      if (error) throw error;
+
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      }
+    } catch (error: any) {
+      console.error("Checkout error:", error);
+      toast({
+        title: "Checkout Failed",
+        description: error.message || "Unable to start checkout. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setCheckoutLoading(null);
+    }
+  };
+
+  const handleManageSubscription = async () => {
+    setPortalLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("customer-portal");
+
+      if (error) throw error;
+
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      }
+    } catch (error: any) {
+      console.error("Portal error:", error);
+      toast({
+        title: "Error",
+        description: error.message || "Unable to open subscription portal.",
+        variant: "destructive",
+      });
+    } finally {
+      setPortalLoading(false);
+    }
+  };
+
+  const getPlanButtonContent = (plan: Plan) => {
+    const tierKey = plan.name.toLowerCase().replace(" ", "_");
+    const isCurrentPlan = tier === tierKey;
+    const isLoadingThis = checkoutLoading === plan.name;
+
+    if (isLoadingThis) {
+      return (
+        <>
+          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+          Processing...
+        </>
+      );
+    }
+
+    if (isCurrentPlan) {
+      return "Current Plan";
+    }
+
+    return plan.buttonText;
   };
 
   return (
@@ -205,17 +266,46 @@ export default function Pricing() {
                         variant={plan.buttonVariant}
                         className="w-full mt-6"
                         onClick={() => handleSelectPlan(plan.name)}
-                        disabled={currentPlan === plan.name.toLowerCase().replace(" ", "_")}
+                        disabled={tier === plan.name.toLowerCase().replace(" ", "_") || !!checkoutLoading}
                       >
-                        {currentPlan === plan.name.toLowerCase().replace(" ", "_") 
-                          ? "Current Plan" 
-                          : plan.buttonText}
+                        {getPlanButtonContent(plan)}
                       </Button>
                     </CardContent>
                   </Card>
                 </motion.div>
               ))}
             </div>
+
+            {/* Manage Subscription */}
+            {isSubscribed && (
+              <motion.div
+                initial={{ opacity: 0, y: 20 }}
+                animate={{ opacity: 1, y: 0 }}
+                className="mb-16 text-center"
+              >
+                <Card className="bg-gradient-card border-scroll-gold/30 max-w-md mx-auto">
+                  <CardContent className="pt-6">
+                    <p className="text-muted-foreground mb-4">
+                      Manage your subscription, update payment method, or cancel anytime.
+                    </p>
+                    <Button
+                      variant="outline"
+                      onClick={handleManageSubscription}
+                      disabled={portalLoading}
+                    >
+                      {portalLoading ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Opening...
+                        </>
+                      ) : (
+                        "Manage Subscription"
+                      )}
+                    </Button>
+                  </CardContent>
+                </Card>
+              </motion.div>
+            )}
 
             {/* FAQ Section */}
             <div className="text-center">
