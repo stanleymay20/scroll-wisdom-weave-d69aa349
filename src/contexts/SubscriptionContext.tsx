@@ -58,10 +58,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setTier(detectedTier);
         setSubscriptionEnd(data.subscription_end);
         
-        // Update profile plan
+        // Update profile plan - only if it's a valid plan value for the database
+        const validPlans = ['free', 'premium', 'prophet_tier'] as const;
+        const planToSave = validPlans.includes(detectedTier as any) ? detectedTier : 'premium';
+        
         await supabase
           .from('profiles')
-          .update({ plan: detectedTier })
+          .update({ plan: planToSave as 'free' | 'premium' | 'prophet_tier' })
           .eq('id', session.user.id);
       } else {
         setTier('free');
