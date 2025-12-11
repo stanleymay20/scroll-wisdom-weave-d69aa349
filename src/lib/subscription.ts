@@ -10,7 +10,7 @@ export const SUBSCRIPTION_TIERS = {
     features: {
       canGenerateBooks: false,
       maxBooksPerMonth: 5,
-      maxWordCount: 4000,
+      maxWordCount: 2000,
       exportFormats: ['pdf_low'],
       ttsMinutes: 0,
       aiCovers: false,
@@ -28,7 +28,7 @@ export const SUBSCRIPTION_TIERS = {
     features: {
       canGenerateBooks: true,
       maxBooksPerMonth: 10,
-      maxWordCount: 8000,
+      maxWordCount: 4000,
       exportFormats: ['pdf', 'epub', 'docx'],
       ttsMinutes: 30,
       aiCovers: true,
@@ -46,7 +46,7 @@ export const SUBSCRIPTION_TIERS = {
     features: {
       canGenerateBooks: true,
       maxBooksPerMonth: -1, // unlimited
-      maxWordCount: 10000,
+      maxWordCount: 6000,
       exportFormats: ['pdf', 'epub', 'docx', 'mobi'],
       ttsMinutes: 60,
       aiCovers: true,
@@ -64,7 +64,7 @@ export const SUBSCRIPTION_TIERS = {
     features: {
       canGenerateBooks: true,
       maxBooksPerMonth: -1,
-      maxWordCount: 20000,
+      maxWordCount: 6000,
       exportFormats: ['pdf', 'epub', 'docx', 'mobi', 'kpf'],
       ttsMinutes: -1, // unlimited with ElevenLabs
       aiCovers: true,
@@ -122,8 +122,9 @@ export function canBatchGenerate(tier: SubscriptionTier): boolean {
 }
 
 // Word count options based on tier
+// Note: DeepSeek API max_tokens is 8192, so max ~6000 words per chapter
 export function getWordCountOptions(tier: SubscriptionTier): number[] {
   const maxWords = getMaxWordCount(tier);
-  const allOptions: number[] = [2000, 4000, 6000, 8000, 10000, 15000, 20000];
+  const allOptions: number[] = [2000, 3000, 4000, 5000, 6000];
   return allOptions.filter((w: number) => w <= maxWords);
 }
