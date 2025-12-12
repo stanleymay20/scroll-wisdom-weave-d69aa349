@@ -10,13 +10,16 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
+import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { 
-  Settings as SettingsIcon, Palette, Bell, Brain, Shield, 
-  Loader2, Save, Trash2, Download, Moon, Sun, Type, Volume2
+  Settings as SettingsIcon, Palette, Bell, Brain, Shield, CreditCard,
+  Loader2, Save, Trash2, Download, Moon, Sun, Type, Volume2, Crown
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useSubscription } from "@/contexts/SubscriptionContext";
+import { SUBSCRIPTION_TIERS } from "@/lib/subscription";
 
 interface SettingsData {
   theme_preference: string;
@@ -55,9 +58,24 @@ export default function Settings() {
   const [settings, setSettings] = useState<SettingsData>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [portalLoading, setPortalLoading] = useState(false);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { tier, ttsMinutesUsed, subscriptionEnd } = useSubscription();
+  const ttsLimit = SUBSCRIPTION_TIERS[tier].features.ttsMinutes;
 
+  const handleManageBilling = async () => {
+    setPortalLoading(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("customer-portal");
+      if (error) throw error;
+      if (data?.url) window.open(data.url, "_blank");
+    } catch (error: any) {
+      toast({ title: "Error", description: "Unable to open billing portal", variant: "destructive" });
+    } finally {
+      setPortalLoading(false);
+    }
+  };
   useEffect(() => {
     checkAuth();
   }, []);
@@ -183,7 +201,59 @@ export default function Settings() {
                   <Shield className="h-4 w-4 mr-2" />
                   Privacy
                 </TabsTrigger>
+                <TabsTrigger value="billing">
+                  <CreditCard className="h-4 w-4 mr-2" />
+                  Billing
+                </TabsTrigger>
               </TabsList>
+
+              {/* Billing Tab */}
+              <TabsContent value="billing" className="space-y-6">
+                <Card className="bg-gradient-card border-border/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Crown className="h-5 w-5 text-scroll-gold" />
+                      Subscription & Billing
+                    </CardTitle>
+                    <CardDescription>Manage your plan and usage</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-6">
+                    <div className="flex items-center justify-between">
+                      <div className="space-y-0.5">
+                        <Label>Current Plan</Label>
+                        <p className="text-lg font-semibold text-scroll-gold">{SUBSCRIPTION_TIERS[tier].name}</p>
+                      </div>
+                      <Button variant="outline" onClick={() => navigate("/pricing")}>
+                        {tier === 'free' ? 'Upgrade' : 'Change Plan'}
+                      </Button>
+                    </div>
+                    {subscriptionEnd && (
+                      <p className="text-sm text-muted-foreground">
+                        Renews: {new Date(subscriptionEnd).toLocaleDateString()}
+                      </p>
+                    )}
+                    <Separator className="bg-border/50" />
+                    <div className="space-y-2">
+                      <div className="flex justify-between">
+                        <Label>TTS Usage This Month</Label>
+                        <span className="text-sm text-muted-foreground">
+                          {ttsMinutesUsed} / {ttsLimit === -1 ? '∞' : ttsLimit} min
+                        </span>
+                      </div>
+                      {ttsLimit > 0 && (
+                        <Progress value={(ttsMinutesUsed / ttsLimit) * 100} className="h-2" />
+                      )}
+                    </div>
+                    <Separator className="bg-border/50" />
+                    {tier !== 'free' && (
+                      <Button variant="outline" onClick={handleManageBilling} disabled={portalLoading}>
+                        {portalLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CreditCard className="h-4 w-4 mr-2" />}
+                        Manage Billing
+                      </Button>
+                    )}
+                  </CardContent>
+                </Card>
+              </TabsContent>
 
               <TabsContent value="system" className="space-y-6">
                 <Card className="bg-gradient-card border-border/50">
