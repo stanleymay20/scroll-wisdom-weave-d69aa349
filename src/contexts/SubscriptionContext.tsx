@@ -1,7 +1,14 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { SubscriptionTier, getTierFromProductId, SUBSCRIPTION_TIERS } from '@/lib/subscription';
+import { LAUNCH_MODE, LAUNCH_MODE_CONFIG } from '@/lib/config';
 import { User } from '@supabase/supabase-js';
+
+interface DailyLimitInfo {
+  dailyBookCount: number;
+  lastBookDate: string | null;
+  canGenerateToday: boolean;
+}
 
 interface SubscriptionContextType {
   user: User | null;
@@ -12,6 +19,10 @@ interface SubscriptionContextType {
   checkSubscription: () => Promise<void>;
   canGenerateBooks: boolean;
   maxWordCount: number;
+  dailyLimitInfo: DailyLimitInfo;
+  incrementDailyBookCount: () => Promise<void>;
+  ttsMinutesUsed: number;
+  updateTTSUsage: (minutes: number) => Promise<void>;
 }
 
 const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
@@ -21,6 +32,60 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [tier, setTier] = useState<SubscriptionTier>('free');
   const [subscriptionEnd, setSubscriptionEnd] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  const [dailyLimitInfo, setDailyLimitInfo] = useState<DailyLimitInfo>({
+    dailyBookCount: 0,
+    lastBookDate: null,
+    canGenerateToday: true,
+  });
+  const [ttsMinutesUsed, setTtsMinutesUsed] = useState(0);
+
+  const checkDailyLimits = useCallback(async (userId: string) => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('daily_book_count, last_book_date')
+        .eq('id', userId)
+        .maybeSingle();
+
+      if (profile) {
+        const today = new Date().toISOString().split('T')[0];
+        const lastDate = profile.last_book_date;
+        
+        // Reset count if it's a new day
+        const count = lastDate === today ? (profile.daily_book_count || 0) : 0;
+        const canGenerate = count < LAUNCH_MODE_CONFIG.freeBookLimit;
+
+        setDailyLimitInfo({
+          dailyBookCount: count,
+          lastBookDate: lastDate,
+          canGenerateToday: canGenerate,
+        });
+      }
+    } catch (error) {
+      console.error('Error checking daily limits:', error);
+    }
+  }, []);
+
+  const checkTTSUsage = useCallback(async (userId: string) => {
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+      
+      const { data } = await supabase
+        .from('tts_usage')
+        .select('minutes_used')
+        .eq('user_id', userId)
+        .eq('month', currentMonth)
+        .maybeSingle();
+
+      if (data) {
+        setTtsMinutesUsed(data.minutes_used);
+      } else {
+        setTtsMinutesUsed(0);
+      }
+    } catch (error) {
+      console.error('Error checking TTS usage:', error);
+    }
+  }, []);
 
   const checkSubscription = useCallback(async () => {
     try {
@@ -34,6 +99,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
 
       setUser(session.user);
+      
+      // Check daily limits and TTS usage
+      await Promise.all([
+        checkDailyLimits(session.user.id),
+        checkTTSUsage(session.user.id),
+      ]);
 
       // Check subscription status via edge function
       const { data, error } = await supabase.functions.invoke('check-subscription');
@@ -58,13 +129,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setTier(detectedTier);
         setSubscriptionEnd(data.subscription_end);
         
-        // Update profile plan - only if it's a valid plan value for the database
-        const validPlans = ['free', 'premium', 'prophet_tier'] as const;
+        // Update profile plan
+        const validPlans = ['free', 'premium', 'prophet_tier', 'student'] as const;
         const planToSave = validPlans.includes(detectedTier as any) ? detectedTier : 'premium';
         
         await supabase
           .from('profiles')
-          .update({ plan: planToSave as 'free' | 'premium' | 'prophet_tier' })
+          .update({ plan: planToSave })
           .eq('id', session.user.id);
       } else {
         setTier('free');
@@ -75,7 +146,51 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, []);
+  }, [checkDailyLimits, checkTTSUsage]);
+
+  const incrementDailyBookCount = useCallback(async () => {
+    if (!user) return;
+    
+    const today = new Date().toISOString().split('T')[0];
+    const newCount = dailyLimitInfo.lastBookDate === today 
+      ? dailyLimitInfo.dailyBookCount + 1 
+      : 1;
+
+    await supabase
+      .from('profiles')
+      .update({
+        daily_book_count: newCount,
+        last_book_date: today,
+      })
+      .eq('id', user.id);
+
+    setDailyLimitInfo({
+      dailyBookCount: newCount,
+      lastBookDate: today,
+      canGenerateToday: newCount < LAUNCH_MODE_CONFIG.freeBookLimit,
+    });
+  }, [user, dailyLimitInfo]);
+
+  const updateTTSUsage = useCallback(async (minutes: number) => {
+    if (!user) return;
+
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const newTotal = ttsMinutesUsed + minutes;
+
+    // Upsert TTS usage
+    await supabase
+      .from('tts_usage')
+      .upsert({
+        user_id: user.id,
+        month: currentMonth,
+        minutes_used: newTotal,
+        updated_at: new Date().toISOString(),
+      }, {
+        onConflict: 'user_id,month',
+      });
+
+    setTtsMinutesUsed(newTotal);
+  }, [user, ttsMinutesUsed]);
 
   useEffect(() => {
     // Set up auth state listener
@@ -105,8 +220,26 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [checkSubscription]);
 
   const isSubscribed = tier !== 'free';
-  const canGenerateBooks = SUBSCRIPTION_TIERS[tier].features.canGenerateBooks;
-  const maxWordCount = SUBSCRIPTION_TIERS[tier].features.maxWordCount;
+  
+  // Can generate books logic - considers launch mode
+  const canGenerateBooks = (() => {
+    if (SUBSCRIPTION_TIERS[tier].features.canGenerateBooks) {
+      return true;
+    }
+    // In launch mode, free tier can generate with daily limit
+    if (LAUNCH_MODE && tier === 'free' && dailyLimitInfo.canGenerateToday) {
+      return true;
+    }
+    return false;
+  })();
+
+  // Max word count - respects launch mode limits
+  const maxWordCount = (() => {
+    if (LAUNCH_MODE && tier === 'free') {
+      return LAUNCH_MODE_CONFIG.freeMaxWordCount;
+    }
+    return SUBSCRIPTION_TIERS[tier].features.maxWordCount;
+  })();
 
   return (
     <SubscriptionContext.Provider value={{
@@ -118,6 +251,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       checkSubscription,
       canGenerateBooks,
       maxWordCount,
+      dailyLimitInfo,
+      incrementDailyBookCount,
+      ttsMinutesUsed,
+      updateTTSUsage,
     }}>
       {children}
     </SubscriptionContext.Provider>

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
@@ -15,13 +15,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown } from "lucide-react";
+import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown, Rocket } from "lucide-react";
 import { CoverUpload } from "@/components/books/CoverUpload";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { getWordCountOptions, SUBSCRIPTION_TIERS } from "@/lib/subscription";
-
+import { LAUNCH_MODE, LAUNCH_MODE_CONFIG } from "@/lib/config";
+import { useIsAdmin } from "@/hooks/useAdmin";
+import { LaunchBanner } from "@/components/subscription/LaunchBanner";
 const CATEGORIES = [
   { value: "theology", label: "Theology" },
   { value: "prophecy", label: "Prophecy & Scroll Studies" },
@@ -45,7 +47,16 @@ const CATEGORIES = [
 
 export default function Generate() {
   const navigate = useNavigate();
-  const { user, tier, canGenerateBooks, isLoading: subLoading } = useSubscription();
+  const { 
+    user, 
+    tier, 
+    canGenerateBooks, 
+    isLoading: subLoading,
+    dailyLimitInfo,
+    incrementDailyBookCount,
+    maxWordCount 
+  } = useSubscription();
+  const { isAdmin } = useIsAdmin();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
@@ -58,7 +69,14 @@ export default function Generate() {
   const [generationProgress, setGenerationProgress] = useState<string[]>([]);
   const { toast } = useToast();
 
-  const wordCountOptions = getWordCountOptions(tier);
+  // Get word count options based on tier and launch mode
+  const wordCountOptions = (() => {
+    if (isAdmin) return [2000, 3000, 4000, 5000, 6000];
+    if (LAUNCH_MODE && tier === 'free') {
+      return [2000, 3000, 4000].filter(w => w <= LAUNCH_MODE_CONFIG.freeMaxWordCount);
+    }
+    return getWordCountOptions(tier);
+  })();
 
   const LANGUAGES = [
     { code: "en", label: "English" },
@@ -92,7 +110,18 @@ export default function Generate() {
     if (!canGenerateBooks) {
       toast({
         title: "Subscription Required",
-        description: "Please upgrade to Premium or Prophet tier to generate books.",
+        description: "Please upgrade to generate books.",
+        variant: "destructive",
+      });
+      navigate("/pricing");
+      return;
+    }
+
+    // Check daily limit for free tier in launch mode (admin bypasses)
+    if (!isAdmin && LAUNCH_MODE && tier === 'free' && !dailyLimitInfo.canGenerateToday) {
+      toast({
+        title: "Daily Limit Reached",
+        description: `You've reached today's free generation limit (${LAUNCH_MODE_CONFIG.freeBookLimit} book/day). Upgrade to continue.`,
         variant: "destructive",
       });
       navigate("/pricing");
@@ -127,6 +156,11 @@ export default function Generate() {
         "Book saved to your library!",
       ]);
 
+      // Increment daily count for free tier in launch mode
+      if (!isAdmin && LAUNCH_MODE && tier === 'free') {
+        await incrementDailyBookCount();
+      }
+
       toast({
         title: "Book Created Successfully!",
         description: "Your book has been added to your library.",
@@ -151,8 +185,8 @@ export default function Generate() {
     }
   };
 
-  // Show upgrade prompt for free users
-  if (!subLoading && !canGenerateBooks && user) {
+  // Show upgrade prompt for free users (only if NOT in launch mode or daily limit reached)
+  if (!subLoading && !canGenerateBooks && user && !isAdmin) {
     return (
       <div className="min-h-screen">
         <Navbar />
@@ -170,7 +204,7 @@ export default function Generate() {
                 Upgrade to Generate Books
               </h1>
               <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-                Book generation is available for Premium and Prophet tier subscribers. 
+                Book generation is available for paid subscribers. 
                 Unlock unlimited AI-powered book creation today.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -193,8 +227,32 @@ export default function Generate() {
   return (
     <div className="min-h-screen">
       <Navbar />
+      <LaunchBanner />
       <main className="pt-24 pb-16">
         <div className="container mx-auto px-4 max-w-3xl">
+          {/* Launch Mode Info for Free Users */}
+          {LAUNCH_MODE && tier === 'free' && !isAdmin && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 p-4 rounded-xl bg-primary/10 border border-primary/30"
+            >
+              <div className="flex items-center gap-3">
+                <Rocket className="h-5 w-5 text-primary" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium">
+                    Free Trial: {LAUNCH_MODE_CONFIG.freeBookLimit - dailyLimitInfo.dailyBookCount} book(s) remaining today
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    Max {LAUNCH_MODE_CONFIG.freeMaxWordCount.toLocaleString()} words/chapter • Low-quality PDF only
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => navigate('/pricing')}>
+                  Upgrade
+                </Button>
+              </div>
+            </motion.div>
+          )}
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}

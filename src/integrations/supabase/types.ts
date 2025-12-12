@@ -361,10 +361,12 @@ export type Database = {
           country: string | null
           course_reminders: boolean | null
           created_at: string | null
+          daily_book_count: number | null
           email_updates: boolean | null
           font_size: string | null
           full_name: string | null
           id: string
+          last_book_date: string | null
           learning_preferences: Json | null
           new_book_alerts: boolean | null
           plan: Database["public"]["Enums"]["user_plan"] | null
@@ -373,6 +375,8 @@ export type Database = {
           study_speed: string | null
           theme_preference: string | null
           tts_enabled: boolean | null
+          tts_minutes_used: number | null
+          tts_month: string | null
           updated_at: string | null
           writing_tone: string | null
         }
@@ -385,10 +389,12 @@ export type Database = {
           country?: string | null
           course_reminders?: boolean | null
           created_at?: string | null
+          daily_book_count?: number | null
           email_updates?: boolean | null
           font_size?: string | null
           full_name?: string | null
           id: string
+          last_book_date?: string | null
           learning_preferences?: Json | null
           new_book_alerts?: boolean | null
           plan?: Database["public"]["Enums"]["user_plan"] | null
@@ -397,6 +403,8 @@ export type Database = {
           study_speed?: string | null
           theme_preference?: string | null
           tts_enabled?: boolean | null
+          tts_minutes_used?: number | null
+          tts_month?: string | null
           updated_at?: string | null
           writing_tone?: string | null
         }
@@ -409,10 +417,12 @@ export type Database = {
           country?: string | null
           course_reminders?: boolean | null
           created_at?: string | null
+          daily_book_count?: number | null
           email_updates?: boolean | null
           font_size?: string | null
           full_name?: string | null
           id?: string
+          last_book_date?: string | null
           learning_preferences?: Json | null
           new_book_alerts?: boolean | null
           plan?: Database["public"]["Enums"]["user_plan"] | null
@@ -421,6 +431,8 @@ export type Database = {
           study_speed?: string | null
           theme_preference?: string | null
           tts_enabled?: boolean | null
+          tts_minutes_used?: number | null
+          tts_month?: string | null
           updated_at?: string | null
           writing_tone?: string | null
         }
@@ -466,6 +478,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      tts_usage: {
+        Row: {
+          created_at: string | null
+          id: string
+          minutes_used: number | null
+          month: string
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          minutes_used?: number | null
+          month: string
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          minutes_used?: number | null
+          month?: string
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
       }
       user_library: {
         Row: {
@@ -557,7 +596,7 @@ export type Database = {
         | "fiction"
         | "non_fiction"
         | "poetry"
-      user_plan: "free" | "premium" | "prophet_tier"
+      user_plan: "free" | "premium" | "prophet_tier" | "student"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -706,7 +745,7 @@ export const Constants = {
         "non_fiction",
         "poetry",
       ],
-      user_plan: ["free", "premium", "prophet_tier"],
+      user_plan: ["free", "premium", "prophet_tier", "student"],
     },
   },
 } as const

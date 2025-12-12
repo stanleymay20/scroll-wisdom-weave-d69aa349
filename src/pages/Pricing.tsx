@@ -57,7 +57,7 @@ const plans: Plan[] = [
     icon: GraduationCap,
     features: [
       { text: "Generate up to 10 books/month", included: true },
-      { text: "Up to 8,000 words per chapter", included: true },
+      { text: "Up to 4,000 words per chapter", included: true },
       { text: "PDF, EPUB, DOCX exports", included: true },
       { text: "AI-generated covers", included: true },
       { text: "30 minutes TTS audio/month", included: true },
@@ -77,7 +77,7 @@ const plans: Plan[] = [
     popular: true,
     features: [
       { text: "Unlimited books", included: true },
-      { text: "Up to 10,000 words per chapter", included: true },
+      { text: "Up to 6,000 words per chapter", included: true },
       { text: "All export formats (PDF/EPUB/DOCX/MOBI)", included: true },
       { text: "AI-generated covers", included: true },
       { text: "60 minutes TTS audio/month", included: true },
@@ -96,7 +96,7 @@ const plans: Plan[] = [
     icon: Crown,
     features: [
       { text: "Everything in Premium", included: true },
-      { text: "Up to 20,000 words per chapter", included: true },
+      { text: "Up to 6,000 words per chapter", included: true },
       { text: "Unlimited ElevenLabs TTS", included: true },
       { text: "50-book batch generator", included: true },
       { text: "AI Research Assistant", included: true },
