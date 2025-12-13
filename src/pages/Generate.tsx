@@ -225,10 +225,10 @@ export default function Generate() {
   }
 
   return (
-    <div className="min-h-screen">
+    <div className="min-h-screen flex flex-col">
       <Navbar />
       <LaunchBanner />
-      <main className="pt-24 pb-16">
+      <main className="flex-1 pt-20 pb-16">
         <div className="container mx-auto px-4 max-w-3xl">
           {/* Launch Mode Info for Free Users */}
           {LAUNCH_MODE && tier === 'free' && !isAdmin && (
@@ -367,7 +367,7 @@ export default function Generate() {
                     </SelectContent>
                   </Select>
                   {tier === "prophet_tier" && (
-                    <p className="text-xs text-scroll-gold">Prophet tier: Up to 20,000 words/chapter</p>
+                    <p className="text-xs text-scroll-gold">Prophet tier: Maximum quality generation</p>
                   )}
                 </div>
 
