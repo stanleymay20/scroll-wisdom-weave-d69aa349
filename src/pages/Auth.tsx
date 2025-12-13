@@ -7,12 +7,14 @@ import { Label } from "@/components/ui/label";
 import { Book, Loader2, Mail, Lock, User, Wand2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 type AuthMode = "login" | "signup" | "forgot-password" | "magic-link" | "reset-password";
 
 export default function Auth() {
   const [searchParams] = useSearchParams();
   const initialMode = searchParams.get("mode") as AuthMode || "login";
+  const { t } = useLanguage();
   
   const [mode, setMode] = useState<AuthMode>(initialMode);
   const [email, setEmail] = useState("");
@@ -98,10 +100,10 @@ export default function Auth() {
 
   const getTitle = () => {
     switch (mode) {
-      case "login": return "Welcome back";
-      case "signup": return "Create your account";
-      case "forgot-password": return "Reset your password";
-      case "magic-link": return "Sign in with email";
+      case "login": return t('auth.welcome');
+      case "signup": return t('auth.create');
+      case "forgot-password": return t('auth.forgot');
+      case "magic-link": return t('auth.magic');
       case "reset-password": return "Set new password";
     }
   };
@@ -109,18 +111,18 @@ export default function Auth() {
   const getButtonText = () => {
     if (isLoading) {
       switch (mode) {
-        case "login": return "Signing in...";
-        case "signup": return "Creating account...";
-        case "forgot-password": return "Sending reset link...";
-        case "magic-link": return "Sending magic link...";
-        case "reset-password": return "Updating password...";
+        case "login": return t('common.loading');
+        case "signup": return t('common.loading');
+        case "forgot-password": return t('common.loading');
+        case "magic-link": return t('common.loading');
+        case "reset-password": return t('common.loading');
       }
     }
     switch (mode) {
-      case "login": return "Sign In";
-      case "signup": return "Create Account";
-      case "forgot-password": return "Send Reset Link";
-      case "magic-link": return "Send Magic Link";
+      case "login": return t('auth.signin');
+      case "signup": return t('auth.signup');
+      case "forgot-password": return t('auth.forgot');
+      case "magic-link": return t('auth.magic');
       case "reset-password": return "Update Password";
     }
   };
@@ -150,13 +152,13 @@ export default function Auth() {
           <form onSubmit={handleSubmit} className="space-y-5">
             {mode === "signup" && (
               <div className="space-y-2">
-                <Label htmlFor="fullName">Full Name</Label>
+                <Label htmlFor="fullName">{t('auth.fullname')}</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="fullName"
                     type="text"
-                    placeholder="Enter your full name"
+                    placeholder={t('auth.fullname')}
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
                     className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
@@ -168,13 +170,13 @@ export default function Auth() {
 
             {mode !== "reset-password" && (
               <div className="space-y-2">
-                <Label htmlFor="email">Email</Label>
+                <Label htmlFor="email">{t('auth.email')}</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
                     id="email"
                     type="email"
-                    placeholder="Enter your email"
+                    placeholder={t('auth.email')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
@@ -187,10 +189,10 @@ export default function Auth() {
             {(mode === "login" || mode === "signup") && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password">Password</Label>
+                  <Label htmlFor="password">{t('auth.password')}</Label>
                   {mode === "login" && (
                     <button type="button" onClick={() => setMode("forgot-password")} className="text-xs text-scroll-gold hover:underline">
-                      Forgot password?
+                      {t('auth.forgot')}
                     </button>
                   )}
                 </div>
@@ -199,7 +201,7 @@ export default function Auth() {
                   <Input
                     id="password"
                     type="password"
-                    placeholder="Enter your password"
+                    placeholder={t('auth.password')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
@@ -244,14 +246,14 @@ export default function Auth() {
               onClick={() => setMode("magic-link")}
             >
               <Wand2 className="h-4 w-4 mr-2" />
-              Sign in with Magic Link
+              {t('auth.magic')}
             </Button>
           )}
 
           <div className="mt-6 text-center space-y-2">
             {mode === "forgot-password" || mode === "magic-link" ? (
               <button type="button" onClick={() => setMode("login")} className="text-sm text-muted-foreground hover:text-scroll-gold transition-colors">
-                ← Back to sign in
+                ← {t('common.back')}
               </button>
             ) : mode !== "reset-password" && (
               <button
@@ -259,14 +261,14 @@ export default function Auth() {
                 onClick={() => setMode(mode === "login" ? "signup" : "login")}
                 className="text-sm text-muted-foreground hover:text-scroll-gold transition-colors"
               >
-                {mode === "login" ? "Don't have an account? Sign up" : "Already have an account? Sign in"}
+                {mode === "login" ? t('auth.noaccount') : t('auth.hasaccount')}
               </button>
             )}
           </div>
         </div>
 
         <div className="text-center mt-6">
-          <Button variant="ghost" onClick={() => navigate("/")}>← Back to Home</Button>
+          <Button variant="ghost" onClick={() => navigate("/")}>← {t('auth.backhome')}</Button>
         </div>
       </motion.div>
     </div>

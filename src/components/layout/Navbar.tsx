@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -15,6 +16,7 @@ export function Navbar() {
   const [profile, setProfile] = useState<any>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -62,10 +64,10 @@ export function Navbar() {
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
-            <Link to="/explore" className="text-muted-foreground hover:text-foreground transition-colors font-medium">Explore</Link>
-            <Link to="/library" className="text-muted-foreground hover:text-foreground transition-colors font-medium">My Library</Link>
-            <Link to="/generate" className="text-muted-foreground hover:text-foreground transition-colors font-medium">Generate Book</Link>
-            <Link to="/about" className="text-muted-foreground hover:text-foreground transition-colors font-medium">About</Link>
+            <Link to="/explore" className="text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.explore')}</Link>
+            <Link to="/library" className="text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.library')}</Link>
+            <Link to="/generate" className="text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
+            <Link to="/about" className="text-muted-foreground hover:text-foreground transition-colors font-medium">{t('footer.about')}</Link>
           </div>
 
           <div className="hidden md:flex items-center gap-4">
@@ -88,15 +90,15 @@ export function Navbar() {
                     <p className="text-xs text-muted-foreground">{user.email}</p>
                   </div>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate("/profile")}><User className="mr-2 h-4 w-4" />Profile</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/settings")}><Settings className="mr-2 h-4 w-4" />Settings</DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/help")}><HelpCircle className="mr-2 h-4 w-4" />Help</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/profile")}><User className="mr-2 h-4 w-4" />{t('nav.profile')}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/settings")}><Settings className="mr-2 h-4 w-4" />{t('nav.settings')}</DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => navigate("/help")}><HelpCircle className="mr-2 h-4 w-4" />{t('footer.help')}</DropdownMenuItem>
                   <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut}><LogOut className="mr-2 h-4 w-4" />Sign Out</DropdownMenuItem>
+                  <DropdownMenuItem onClick={handleSignOut}><LogOut className="mr-2 h-4 w-4" />{t('nav.signout')}</DropdownMenuItem>
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button variant="gold-outline" onClick={() => navigate('/auth')}><User className="h-4 w-4 mr-2" />Sign In</Button>
+              <Button variant="gold-outline" onClick={() => navigate('/auth')}><User className="h-4 w-4 mr-2" />{t('nav.signin')}</Button>
             )}
           </div>
 
@@ -110,19 +112,19 @@ export function Navbar() {
         {isMenuOpen && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="md:hidden border-t border-border bg-background">
             <div className="container mx-auto px-4 py-4 space-y-4">
-              <Link to="/explore" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>Explore</Link>
-              <Link to="/library" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>My Library</Link>
-              <Link to="/generate" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>Generate Book</Link>
-              <Link to="/about" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>About</Link>
-              <Link to="/help" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>Help</Link>
+              <Link to="/explore" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('nav.explore')}</Link>
+              <Link to="/library" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('nav.library')}</Link>
+              <Link to="/generate" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('nav.generate')}</Link>
+              <Link to="/about" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('footer.about')}</Link>
+              <Link to="/help" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('footer.help')}</Link>
               {user ? (
                 <>
-                  <Link to="/profile" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>Profile</Link>
-                  <Link to="/settings" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>Settings</Link>
-                  <Button variant="outline" className="w-full" onClick={() => { setIsMenuOpen(false); handleSignOut(); }}>Sign Out</Button>
+                  <Link to="/profile" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('nav.profile')}</Link>
+                  <Link to="/settings" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('nav.settings')}</Link>
+                  <Button variant="outline" className="w-full" onClick={() => { setIsMenuOpen(false); handleSignOut(); }}>{t('nav.signout')}</Button>
                 </>
               ) : (
-                <Button variant="gold" className="w-full" onClick={() => { setIsMenuOpen(false); navigate('/auth'); }}>Sign In</Button>
+                <Button variant="gold" className="w-full" onClick={() => { setIsMenuOpen(false); navigate('/auth'); }}>{t('nav.signin')}</Button>
               )}
             </div>
           </motion.div>

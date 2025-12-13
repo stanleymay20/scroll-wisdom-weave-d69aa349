@@ -1,7 +1,10 @@
 import { Link } from "react-router-dom";
 import { Book, Github, Twitter, Mail } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 export function Footer() {
+  const { t } = useLanguage();
+
   return (
     <footer className="border-t border-border/50 bg-background/50 backdrop-blur-sm">
       <div className="container mx-auto px-4 py-12">
@@ -17,8 +20,7 @@ export function Footer() {
               </span>
             </Link>
             <p className="text-muted-foreground text-sm max-w-sm mb-4">
-              The world's first AI-powered infinite library. Generate unlimited books 
-              with scroll-aligned accuracy and academic rigor.
+              {t('footer.tagline')}
             </p>
             <div className="flex items-center gap-4">
               <a href="#" className="text-muted-foreground hover:text-scroll-gold transition-colors">
@@ -35,21 +37,21 @@ export function Footer() {
 
           {/* Quick Links */}
           <div>
-            <h4 className="font-display font-semibold mb-4 text-foreground">Library</h4>
+            <h4 className="font-display font-semibold mb-4 text-foreground">{t('footer.library')}</h4>
             <ul className="space-y-2 text-sm">
               <li>
                 <Link to="/explore" className="text-muted-foreground hover:text-scroll-gold transition-colors">
-                  Explore Books
+                  {t('nav.explore')}
                 </Link>
               </li>
               <li>
                 <Link to="/generate" className="text-muted-foreground hover:text-scroll-gold transition-colors">
-                  Generate Book
+                  {t('nav.generate')}
                 </Link>
               </li>
               <li>
                 <Link to="/library" className="text-muted-foreground hover:text-scroll-gold transition-colors">
-                  My Library
+                  {t('nav.library')}
                 </Link>
               </li>
           </ul>
@@ -57,26 +59,26 @@ export function Footer() {
 
           {/* Legal */}
           <div>
-            <h4 className="font-display font-semibold mb-4 text-foreground">Legal</h4>
+            <h4 className="font-display font-semibold mb-4 text-foreground">{t('footer.legal')}</h4>
             <ul className="space-y-2 text-sm">
               <li>
                 <Link to="/privacy" className="text-muted-foreground hover:text-scroll-gold transition-colors">
-                  Privacy Policy
+                  {t('footer.privacy')}
                 </Link>
               </li>
               <li>
                 <Link to="/terms" className="text-muted-foreground hover:text-scroll-gold transition-colors">
-                  Terms of Service
+                  {t('footer.terms')}
                 </Link>
               </li>
               <li>
                 <Link to="/support" className="text-muted-foreground hover:text-scroll-gold transition-colors">
-                  Support
+                  {t('footer.support')}
                 </Link>
               </li>
               <li>
                 <Link to="/help" className="text-muted-foreground hover:text-scroll-gold transition-colors">
-                  Help Center
+                  {t('footer.help')}
                 </Link>
               </li>
             </ul>
@@ -84,11 +86,11 @@ export function Footer() {
         </div>
 
         <div className="border-t border-border/50 mt-8 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
-          <p>© {new Date().getFullYear()} ScrollLibrary™. Scroll-aligned wisdom for the ages.</p>
+          <p>{t('footer.copyright')}</p>
           <div className="flex items-center gap-4">
-            <Link to="/privacy" className="hover:text-scroll-gold transition-colors">Privacy</Link>
-            <Link to="/terms" className="hover:text-scroll-gold transition-colors">Terms</Link>
-            <Link to="/contact" className="hover:text-scroll-gold transition-colors">Contact</Link>
+            <Link to="/privacy" className="hover:text-scroll-gold transition-colors">{t('footer.privacy')}</Link>
+            <Link to="/terms" className="hover:text-scroll-gold transition-colors">{t('footer.terms')}</Link>
+            <Link to="/contact" className="hover:text-scroll-gold transition-colors">{t('footer.contact')}</Link>
           </div>
         </div>
       </div>
