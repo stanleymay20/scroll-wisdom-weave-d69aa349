@@ -160,8 +160,11 @@ export default function Settings() {
 
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+      <div className="min-h-screen flex items-center justify-center bg-background">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-10 w-10 animate-spin text-primary" />
+          <p className="text-muted-foreground animate-pulse">Loading settings...</p>
+        </div>
       </div>
     );
   }
@@ -184,24 +187,24 @@ export default function Settings() {
             </div>
 
             <Tabs defaultValue="system" className="space-y-6">
-              <TabsList className="bg-muted/50 flex-wrap h-auto gap-1 p-1">
-                <TabsTrigger value="system">
+              <TabsList className="bg-muted/50 flex-wrap h-auto gap-1 p-1.5 w-full justify-start">
+                <TabsTrigger value="system" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   <Palette className="h-4 w-4 mr-2" />
                   System
                 </TabsTrigger>
-                <TabsTrigger value="notifications">
+                <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   <Bell className="h-4 w-4 mr-2" />
                   Notifications
                 </TabsTrigger>
-                <TabsTrigger value="ai">
+                <TabsTrigger value="ai" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   <Brain className="h-4 w-4 mr-2" />
-                  AI Preferences
+                  AI
                 </TabsTrigger>
-                <TabsTrigger value="privacy">
+                <TabsTrigger value="privacy" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   <Shield className="h-4 w-4 mr-2" />
                   Privacy
                 </TabsTrigger>
-                <TabsTrigger value="billing">
+                <TabsTrigger value="billing" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   <CreditCard className="h-4 w-4 mr-2" />
                   Billing
                 </TabsTrigger>

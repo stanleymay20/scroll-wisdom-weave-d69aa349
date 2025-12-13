@@ -71,27 +71,29 @@ export function RequiresPlan({
         className="relative cursor-pointer group"
         onClick={() => setShowModal(true)}
       >
-        <div className="opacity-50 pointer-events-none">
+        <div className="opacity-50 pointer-events-none transition-opacity group-hover:opacity-60">
           {children}
         </div>
-        <div className="absolute inset-0 flex items-center justify-center bg-background/80 backdrop-blur-sm rounded-lg opacity-0 group-hover:opacity-100 transition-opacity">
-          <div className="flex items-center gap-2 text-muted-foreground">
+        <div className="absolute inset-0 flex items-center justify-center bg-background/60 backdrop-blur-[2px] rounded-lg opacity-0 group-hover:opacity-100 transition-all duration-200">
+          <div className="flex items-center gap-2 text-primary font-medium px-4 py-2 bg-muted/80 rounded-full border border-primary/30">
             <Lock className="h-4 w-4" />
-            <span className="text-sm font-medium">
-              {SUBSCRIPTION_TIERS[requiredTier].name} required
+            <span className="text-sm">
+              Upgrade to unlock
             </span>
           </div>
         </div>
       </div>
 
       <Dialog open={showModal} onOpenChange={setShowModal}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-md bg-gradient-card border-border/50">
           <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              {tierIcons[requiredTier]}
+            <DialogTitle className="flex items-center gap-3 text-xl">
+              <div className="p-2 bg-primary/20 rounded-full text-primary">
+                {tierIcons[requiredTier]}
+              </div>
               Upgrade to {SUBSCRIPTION_TIERS[requiredTier].name}
             </DialogTitle>
-            <DialogDescription>
+            <DialogDescription className="pt-2">
               This feature requires the {SUBSCRIPTION_TIERS[requiredTier].name} plan 
               (${SUBSCRIPTION_TIERS[requiredTier].monthlyPrice}/month).
             </DialogDescription>
@@ -100,7 +102,7 @@ export function RequiresPlan({
             <Button variant="outline" onClick={() => setShowModal(false)}>
               Maybe Later
             </Button>
-            <Button onClick={() => navigate('/pricing')}>
+            <Button variant="gold" onClick={() => navigate('/pricing')}>
               View Plans
             </Button>
           </div>
