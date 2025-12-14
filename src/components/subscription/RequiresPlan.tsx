@@ -1,8 +1,7 @@
-import { ReactNode } from 'react';
+import { ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useSubscription } from '@/contexts/SubscriptionContext';
-import { useIsAdmin } from '@/hooks/useAdmin';
 import { SubscriptionTier, SUBSCRIPTION_TIERS } from '@/lib/subscription';
+import { useEntitlements } from '@/hooks/useEntitlements';
 import {
   Dialog,
   DialogContent,
@@ -12,7 +11,6 @@ import {
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Crown, Sparkles, GraduationCap, Lock } from 'lucide-react';
-import { useState } from 'react';
 
 interface RequiresPlanProps {
   tier: SubscriptionTier;
@@ -41,19 +39,29 @@ export function RequiresPlan({
   fallback,
   showUpgradeModal = true 
 }: RequiresPlanProps) {
-  const { tier: currentTier } = useSubscription();
-  const { isAdmin } = useIsAdmin();
+  const entitlements = useEntitlements();
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
 
-  // Admins bypass all tier checks
-  if (isAdmin) {
+  // ABSOLUTE PRIORITY: Admin → unrestricted access to everything
+  if (entitlements.isAdmin) {
     return <>{children}</>;
   }
 
-  const hasAccess = tierPriority[currentTier] >= tierPriority[requiredTier];
+  // ABSOLUTE PRIORITY: Prophet tier → unrestricted access to all features
+  if (entitlements.isProphet) {
+    return <>{children}</>;
+  }
+
+  // For other paid tiers, check tier priority
+  const hasAccess = tierPriority[entitlements.tier] >= tierPriority[requiredTier];
 
   if (hasAccess) {
+    return <>{children}</>;
+  }
+
+  // FAIL-SAFE: If user is paid, grant access rather than block
+  if (entitlements.isPaid) {
     return <>{children}</>;
   }
 
@@ -113,13 +121,9 @@ export function RequiresPlan({
 }
 
 export function RequiresAdmin({ children, fallback }: { children: ReactNode; fallback?: ReactNode }) {
-  const { isAdmin, isLoading } = useIsAdmin();
+  const entitlements = useEntitlements();
 
-  if (isLoading) {
-    return null;
-  }
-
-  if (!isAdmin) {
+  if (!entitlements.isAdmin) {
     return fallback ? <>{fallback}</> : null;
   }
 

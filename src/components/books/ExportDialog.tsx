@@ -24,8 +24,7 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { useSubscription } from "@/contexts/SubscriptionContext";
-import { useIsAdmin } from "@/hooks/useAdmin";
+import { useEntitlements } from "@/hooks/useEntitlements";
 
 interface ExportDialogProps {
   bookId: string;
@@ -49,11 +48,12 @@ export function ExportDialog({
   const [isbn, setIsbn] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
-  const { tier } = useSubscription();
-  const { isAdmin } = useIsAdmin();
-
-  // Check if user can export (premium features)
-  const canExport = isAdmin || tier === "premium" || tier === "prophet_tier" || tier === "student";
+  
+  // Use centralized entitlements - SINGLE SOURCE OF TRUTH
+  const entitlements = useEntitlements();
+  
+  // Admin and Prophet ALWAYS have export access
+  const canExport = entitlements.canExport;
 
   useEffect(() => {
     if (defaultAuthorName) {
@@ -281,7 +281,8 @@ export function ExportDialog({
           </p>
         )}
 
-        {!canExport && (
+        {/* Only show upgrade prompt for free users - NEVER for paid/admin/prophet */}
+        {!canExport && !entitlements.isPaid && !entitlements.isAdmin && (
           <p className="text-sm text-amber-500 flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
             Upgrade to Premium to access publishing exports

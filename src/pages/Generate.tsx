@@ -22,7 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { getWordCountOptions, SUBSCRIPTION_TIERS } from "@/lib/subscription";
 import { LAUNCH_MODE, LAUNCH_MODE_CONFIG } from "@/lib/config";
-import { useIsAdmin } from "@/hooks/useAdmin";
+import { useEntitlements } from "@/hooks/useEntitlements";
 import { LaunchBanner } from "@/components/subscription/LaunchBanner";
 const CATEGORIES = [
   { value: "theology", label: "Theology" },
@@ -56,7 +56,9 @@ export default function Generate() {
     incrementDailyBookCount,
     maxWordCount 
   } = useSubscription();
-  const { isAdmin } = useIsAdmin();
+  
+  // Use centralized entitlements - SINGLE SOURCE OF TRUTH
+  const entitlements = useEntitlements();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
@@ -71,7 +73,8 @@ export default function Generate() {
 
   // Get word count options based on tier and launch mode
   const wordCountOptions = (() => {
-    if (isAdmin) return [2000, 3000, 4000, 5000, 6000];
+    // Admin and Prophet get all word count options
+    if (entitlements.isAdmin || entitlements.isProphet) return [2000, 3000, 4000, 5000, 6000];
     if (LAUNCH_MODE && tier === 'free') {
       return [2000, 3000, 4000].filter(w => w <= LAUNCH_MODE_CONFIG.freeMaxWordCount);
     }
@@ -107,7 +110,8 @@ export default function Generate() {
       return;
     }
 
-    if (!canGenerateBooks) {
+    // Admin and Prophet ALWAYS can generate - no upgrade prompts
+    if (!entitlements.canGenerateBooks && !entitlements.isAdmin && !entitlements.isProphet) {
       toast({
         title: "Subscription Required",
         description: "Please upgrade to generate books.",
@@ -117,8 +121,8 @@ export default function Generate() {
       return;
     }
 
-    // Check daily limit for free tier in launch mode (admin bypasses)
-    if (!isAdmin && LAUNCH_MODE && tier === 'free' && !dailyLimitInfo.canGenerateToday) {
+    // Check daily limit for free tier in launch mode (admin/prophet/paid bypass)
+    if (!entitlements.isPaid && LAUNCH_MODE && tier === 'free' && !dailyLimitInfo.canGenerateToday) {
       toast({
         title: "Daily Limit Reached",
         description: `You've reached today's free generation limit (${LAUNCH_MODE_CONFIG.freeBookLimit} book/day). Upgrade to continue.`,
@@ -156,8 +160,8 @@ export default function Generate() {
         "Book saved to your library!",
       ]);
 
-      // Increment daily count for free tier in launch mode
-      if (!isAdmin && LAUNCH_MODE && tier === 'free') {
+      // Increment daily count for free tier in launch mode (paid users don't count)
+      if (!entitlements.isPaid && LAUNCH_MODE && tier === 'free') {
         await incrementDailyBookCount();
       }
 
@@ -185,8 +189,9 @@ export default function Generate() {
     }
   };
 
-  // Show upgrade prompt for free users (only if NOT in launch mode or daily limit reached)
-  if (!subLoading && !canGenerateBooks && user && !isAdmin) {
+  // Show upgrade prompt ONLY for free users who cannot generate
+  // NEVER show for admin, prophet, or any paid user
+  if (!subLoading && !canGenerateBooks && user && !entitlements.isAdmin && !entitlements.isProphet && !entitlements.isPaid) {
     return (
       <div className="min-h-screen">
         <Navbar />
@@ -230,8 +235,8 @@ export default function Generate() {
       <LaunchBanner />
       <main className="flex-1 pt-20 pb-16">
         <div className="container mx-auto px-4 max-w-3xl">
-          {/* Launch Mode Info for Free Users */}
-          {LAUNCH_MODE && tier === 'free' && !isAdmin && (
+          {/* Launch Mode Info for Free Users Only */}
+          {LAUNCH_MODE && tier === 'free' && !entitlements.isPaid && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
