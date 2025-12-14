@@ -7,9 +7,13 @@ export const LAUNCH_MODE = true;
 export const LAUNCH_MODE_CONFIG = {
   freeBookLimit: 1, // Books per day for free tier
   freeMaxWordCount: 4000, // Max words per chapter for free tier
-  freeExportFormats: ['pdf_low'] as const, // Only low-quality PDF
+  freeExportFormats: [] as const, // Free tier cannot export
   showBanner: true, // Show promotional banner
 };
+
+// Export formats (production-only, no HTML/markdown)
+export const EXPORT_FORMATS = ['pdf', 'epub', 'docx'] as const;
+export type ExportFormat = typeof EXPORT_FORMATS[number];
 
 // Feature flags
 export const FEATURES = {

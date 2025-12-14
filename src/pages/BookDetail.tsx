@@ -525,7 +525,9 @@ export default function BookDetail() {
                 <ExportDialog 
                   bookId={book.id} 
                   title={book.title} 
-                  hasGeneratedChapters={chapters.some(ch => ch.is_generated)} 
+                  hasGeneratedChapters={chapters.some(ch => ch.is_generated)}
+                  coverImageUrl={book.cover_image_url}
+                  authorName={book.author_ai_agent || undefined}
                 />
                 <ShareDialog 
                   title={book.title} 
