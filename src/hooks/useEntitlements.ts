@@ -5,8 +5,10 @@ import { SubscriptionTier } from '@/lib/subscription';
 export interface Entitlements {
   canPublish: boolean;
   canExport: boolean;
+  canDownload: boolean;
   canGenerateBooks: boolean;
   canUseAllFormats: boolean;
+  canExportAllFormats: boolean;
   hasCommercialRights: boolean;
   bypassAllLimits: boolean;
   canUseAiCovers: boolean;
@@ -18,6 +20,7 @@ export interface Entitlements {
   isProphet: boolean;
   isPremium: boolean;
   isStudent: boolean;
+  isScrollStudent: boolean;
   isPaid: boolean;
 }
 
@@ -47,8 +50,10 @@ export function useEntitlements(): Entitlements {
     return {
       canPublish: true,
       canExport: true,
+      canDownload: true,
       canGenerateBooks: true,
       canUseAllFormats: true,
+      canExportAllFormats: true,
       hasCommercialRights: true,
       bypassAllLimits: true,
       canUseAiCovers: true,
@@ -60,6 +65,7 @@ export function useEntitlements(): Entitlements {
       isProphet,
       isPremium,
       isStudent,
+      isScrollStudent: isStudent,
       isPaid: true,
     };
   }
@@ -69,8 +75,10 @@ export function useEntitlements(): Entitlements {
     return {
       canPublish: true,
       canExport: true,
+      canDownload: true,
       canGenerateBooks: true,
       canUseAllFormats: true,
+      canExportAllFormats: true,
       hasCommercialRights: true,
       bypassAllLimits: true,
       canUseAiCovers: true,
@@ -82,6 +90,7 @@ export function useEntitlements(): Entitlements {
       isProphet: true,
       isPremium: false,
       isStudent: false,
+      isScrollStudent: false,
       isPaid: true,
     };
   }
@@ -91,8 +100,10 @@ export function useEntitlements(): Entitlements {
     return {
       canPublish: true,
       canExport: true,
+      canDownload: true,
       canGenerateBooks: true,
       canUseAllFormats: true,
+      canExportAllFormats: true,
       hasCommercialRights: true,
       bypassAllLimits: false,
       canUseAiCovers: true,
@@ -104,17 +115,20 @@ export function useEntitlements(): Entitlements {
       isProphet: false,
       isPremium: true,
       isStudent: false,
+      isScrollStudent: false,
       isPaid: true,
     };
   }
 
-  // STUDENT TIER
+  // STUDENT TIER (ScrollUniversity) - Premium-equivalent access
   if (isStudent) {
     return {
       canPublish: true,
       canExport: true,
+      canDownload: true,
       canGenerateBooks: true,
       canUseAllFormats: true,
+      canExportAllFormats: true,
       hasCommercialRights: true,
       bypassAllLimits: false,
       canUseAiCovers: true,
@@ -126,6 +140,7 @@ export function useEntitlements(): Entitlements {
       isProphet: false,
       isPremium: false,
       isStudent: true,
+      isScrollStudent: true,
       isPaid: true,
     };
   }
@@ -134,8 +149,10 @@ export function useEntitlements(): Entitlements {
   return {
     canPublish: false,
     canExport: false,
+    canDownload: false,
     canGenerateBooks: false,
     canUseAllFormats: false,
+    canExportAllFormats: false,
     hasCommercialRights: false,
     bypassAllLimits: false,
     canUseAiCovers: false,
@@ -147,6 +164,7 @@ export function useEntitlements(): Entitlements {
     isProphet: false,
     isPremium: false,
     isStudent: false,
+    isScrollStudent: false,
     isPaid: false,
   };
 }
@@ -158,18 +176,54 @@ export function useEntitlements(): Entitlements {
  */
 export function hasFeatureAccess(
   entitlements: Entitlements,
-  feature: 'publish' | 'export' | 'generate' | 'allFormats' | 'commercial' | 'aiCovers' | 'tts' | 'elevenLabsTTS' | 'batch'
+  feature: 'publish' | 'export' | 'download' | 'generate' | 'allFormats' | 'commercial' | 'aiCovers' | 'tts' | 'elevenLabsTTS' | 'batch'
 ): boolean {
-  // Admin and Prophet always have access
+  // Admin and Prophet always have access - NO EXCEPTIONS
   if (entitlements.isAdmin || entitlements.isProphet) {
     return true;
   }
 
+  // Student tier (ScrollUniversity) has Premium-equivalent access
+  if (entitlements.isScrollStudent) {
+    return true;
+  }
+
+  // FAIL-SAFE: Paid users get access if resolution is uncertain
+  if (entitlements.isPaid) {
+    // For paid users, default to allowing access
+    switch (feature) {
+      case 'publish':
+        return entitlements.canPublish;
+      case 'export':
+      case 'download':
+        return entitlements.canExport || entitlements.canDownload;
+      case 'generate':
+        return entitlements.canGenerateBooks;
+      case 'allFormats':
+        return entitlements.canUseAllFormats || entitlements.canExportAllFormats;
+      case 'commercial':
+        return entitlements.hasCommercialRights;
+      case 'aiCovers':
+        return entitlements.canUseAiCovers;
+      case 'tts':
+        return entitlements.canUseTTS;
+      case 'elevenLabsTTS':
+        return entitlements.canUseElevenLabsTTS;
+      case 'batch':
+        return entitlements.canBatchGenerate;
+      default:
+        // FAIL-SAFE: Grant access to paid users for unknown features
+        return true;
+    }
+  }
+
+  // Free tier - check specific entitlements
   switch (feature) {
     case 'publish':
       return entitlements.canPublish;
     case 'export':
-      return entitlements.canExport;
+    case 'download':
+      return entitlements.canExport || entitlements.canDownload;
     case 'generate':
       return entitlements.canGenerateBooks;
     case 'allFormats':
@@ -185,7 +239,6 @@ export function hasFeatureAccess(
     case 'batch':
       return entitlements.canBatchGenerate;
     default:
-      // FAIL-SAFE: If unknown feature, grant access to paid users
-      return entitlements.isPaid;
+      return false;
   }
 }

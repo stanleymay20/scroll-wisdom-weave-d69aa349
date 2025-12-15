@@ -39,6 +39,7 @@ interface BookData {
   cover_image_url: string | null;
   is_published: boolean | null;
   creator_id: string | null;
+  language: string | null;
 }
 
 interface ChapterData {
@@ -211,6 +212,7 @@ export default function BookDetail() {
           chapterNumber: chapter.chapter_number,
           keyTopics,
           category: book.category,
+          language: book.language || 'en', // Pass book's language for consistency
         }
       });
 
@@ -276,6 +278,7 @@ export default function BookDetail() {
             chapterNumber: chapter.chapter_number,
             keyTopics,
             category: book.category,
+            language: book.language || 'en', // Pass book's language for consistency
           }
         });
 

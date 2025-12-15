@@ -23,6 +23,19 @@ serve(async (req) => {
       language = 'English'
     } = await req.json();
     
+    // Map language code to full language name if code is passed
+    const languageMap: Record<string, string> = {
+      'en': 'English',
+      'fr': 'French',
+      'de': 'German',
+      'es': 'Spanish',
+      'ar': 'Arabic',
+      'sw': 'Swahili',
+      'pt': 'Portuguese'
+    };
+    // Accept either language code or full name
+    const languageName = languageMap[language] || language;
+    
     const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -53,32 +66,39 @@ serve(async (req) => {
 
 Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${bookTitle}" in the ${category.replace(/_/g, " ")} category.
 
-IMPORTANT: Write this chapter in ${language} language.
+CRITICAL LANGUAGE REQUIREMENT - MANDATORY:
+Generate ALL content strictly in ${languageName}.
+Do NOT use English (unless ${languageName} IS English).
+Do NOT mix languages.
+Do NOT explain language choices.
+Do NOT include any text in any language other than ${languageName}.
+Every word, heading, example, and reference must be in ${languageName}.
 
 Key topics to cover:
 ${keyTopics?.map((t: string) => `- ${t}`).join('\n') || '- Comprehensive coverage of the chapter topic'}
 
 CRITICAL REQUIREMENTS:
 1. Write approximately ${targetWords} words. Aim for quality over quantity.
-2. Use proper markdown formatting:
-   - ## for main section headers
-   - ### for subsection headers  
+2. WRITE ENTIRELY IN ${languageName} - this is non-negotiable.
+3. Use proper markdown formatting:
+   - ## for main section headers (in ${languageName})
+   - ### for subsection headers (in ${languageName})
    - **bold** for emphasis
    - Bullet points and numbered lists where appropriate
-3. Structure your chapter with these sections:
+4. Structure your chapter with these sections:
    - Introduction: Hook the reader, introduce the topic
    - Main sections (3-5): Cover key topics with examples and analysis
    - Key Takeaways: Summarize main points
    - Conclusion: Wrap up and transition
-4. Include:
+5. Include:
    - Real-world examples and case studies
    - Relevant insights and practical applications
    - Expert perspectives where appropriate
-5. Write with academic rigor but remain accessible
-6. NO filler, NO repetition - every paragraph must add unique value
-7. This is a COMPLETE chapter - do not truncate or summarize
+6. Write with academic rigor but remain accessible
+7. NO filler, NO repetition - every paragraph must add unique value
+8. This is a COMPLETE chapter - do not truncate or summarize
 
-BEGIN WRITING THE FULL CHAPTER NOW:`;
+BEGIN WRITING THE FULL CHAPTER NOW IN ${languageName}:`;
 
     let chapterContent: string = "";
     let retryCount = 0;
@@ -99,7 +119,7 @@ BEGIN WRITING THE FULL CHAPTER NOW:`;
               messages: [
                 { 
                   role: "system", 
-                  content: `You are ScrollAuthorGPT, an elite AI author renowned for creating comprehensive, scholarly book chapters in ${language}. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers.` 
+                  content: `You are ScrollAuthorGPT, an elite AI author. You write EXCLUSIVELY in ${languageName}. You NEVER use any other language. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers. ALL your output must be in ${languageName} only.` 
                 },
                 { role: "user", content: chapterPrompt }
               ],
@@ -144,7 +164,7 @@ BEGIN WRITING THE FULL CHAPTER NOW:`;
               messages: [
                 { 
                   role: "system", 
-                  content: `You are ScrollAuthorGPT, an elite AI author renowned for creating comprehensive, scholarly book chapters in ${language}. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers.` 
+                  content: `You are ScrollAuthorGPT, an elite AI author. You write EXCLUSIVELY in ${languageName}. You NEVER use any other language. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers. ALL your output must be in ${languageName} only.` 
                 },
                 { role: "user", content: chapterPrompt }
               ],
