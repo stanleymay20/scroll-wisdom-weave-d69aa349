@@ -25,6 +25,7 @@ export type Database = {
           id: string
           is_featured: boolean | null
           is_published: boolean | null
+          language: string | null
           title: string
           total_chapters: number | null
           updated_at: string | null
@@ -39,6 +40,7 @@ export type Database = {
           id?: string
           is_featured?: boolean | null
           is_published?: boolean | null
+          language?: string | null
           title: string
           total_chapters?: number | null
           updated_at?: string | null
@@ -53,6 +55,7 @@ export type Database = {
           id?: string
           is_featured?: boolean | null
           is_published?: boolean | null
+          language?: string | null
           title?: string
           total_chapters?: number | null
           updated_at?: string | null

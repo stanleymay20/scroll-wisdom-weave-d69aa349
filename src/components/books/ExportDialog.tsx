@@ -52,8 +52,9 @@ export function ExportDialog({
   // Use centralized entitlements - SINGLE SOURCE OF TRUTH
   const entitlements = useEntitlements();
   
-  // Admin and Prophet ALWAYS have export access
-  const canExport = entitlements.canExport;
+  // Admin, Prophet, and ScrollStudent ALWAYS have export access - NO EXCEPTIONS
+  // Also check canDownload for explicit permission
+  const canExport = entitlements.canExport || entitlements.canDownload || entitlements.isAdmin || entitlements.isProphet || entitlements.isScrollStudent;
 
   useEffect(() => {
     if (defaultAuthorName) {

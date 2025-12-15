@@ -13,8 +13,19 @@ serve(async (req) => {
   }
 
   try {
-    const { title, description, category, numChapters, userId, customCover } = await req.json();
+    const { title, description, category, numChapters, wordCount, language = 'en', userId, customCover } = await req.json();
     
+    // Map language code to full language name
+    const languageMap: Record<string, string> = {
+      'en': 'English',
+      'fr': 'French',
+      'de': 'German',
+      'es': 'Spanish',
+      'ar': 'Arabic',
+      'sw': 'Swahili',
+      'pt': 'Portuguese'
+    };
+    const languageName = languageMap[language] || 'English';
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -29,33 +40,43 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     console.log(`Generating book: ${title} with ${numChapters} chapters for user: ${userId}`);
-    console.log(`Custom cover provided: ${!!customCover}`);
+    console.log(`Language: ${languageName}, Word count: ${wordCount}, Custom cover: ${!!customCover}`);
 
     // First, generate the book outline
     const outlinePrompt = `You are ScrollResearchGPT, an AI agent specialized in creating comprehensive book outlines.
+
+CRITICAL LANGUAGE REQUIREMENT:
+Generate ALL content strictly in ${languageName}.
+Do NOT use English (unless English is the selected language).
+Do NOT mix languages.
+Do NOT explain language choices.
+Every title, description, and topic must be in ${languageName}.
 
 Create a detailed outline for a book with the following specifications:
 - Title: ${title}
 - Description: ${description || "A comprehensive exploration of the topic"}
 - Category: ${category}
 - Number of Chapters: ${numChapters}
+- Language: ${languageName} (ALL content must be in this language)
 
 For each chapter, provide:
 1. Chapter number
-2. Chapter title
-3. Brief description (2-3 sentences)
-4. Key topics to cover (4-5 bullet points)
+2. Chapter title (in ${languageName})
+3. Brief description (2-3 sentences, in ${languageName})
+4. Key topics to cover (4-5 bullet points, in ${languageName})
 
 The book must be:
 - Academically rigorous
 - Well-structured with logical flow
 - Each chapter should naturally lead to the next
 - Rich in depth and substance
+- ENTIRELY in ${languageName}
 
 Format your response as a JSON object with this structure:
 {
   "bookTitle": "string",
   "bookDescription": "string",
+  "language": "${languageName}",
   "chapters": [
     {
       "chapterNumber": number,
@@ -143,6 +164,7 @@ Format your response as a JSON object with this structure:
         author_ai_agent: "ScrollAuthorGPT",
         cover_image_url: customCover || null,
         creator_id: userId, // Track book ownership
+        language: language, // Store language for chapter generation
       })
       .select()
       .single();
