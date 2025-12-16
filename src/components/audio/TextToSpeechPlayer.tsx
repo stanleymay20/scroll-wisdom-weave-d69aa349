@@ -76,17 +76,12 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: T
         throw new Error("No audio content received");
       }
 
-      // Create audio from base64
-      const audioBlob = new Blob(
-        [Uint8Array.from(atob(data.audioContent), c => c.charCodeAt(0))],
-        { type: "audio/mpeg" }
-      );
-      const audioUrl = URL.createObjectURL(audioBlob);
+      // Create audio from base64 using data URI (browser natively handles decoding)
+      const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
 
-      // Create and play audio
+      // Stop any existing audio
       if (audioRef.current) {
         audioRef.current.pause();
-        URL.revokeObjectURL(audioRef.current.src);
       }
 
       const audio = new Audio(audioUrl);
@@ -102,7 +97,6 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: T
         setIsPlaying(false);
         setProgress(0);
         onPlayingChange?.(false);
-        URL.revokeObjectURL(audioUrl);
       };
 
       audio.onerror = (e) => {
