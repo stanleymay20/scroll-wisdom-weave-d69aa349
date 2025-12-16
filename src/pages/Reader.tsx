@@ -1,6 +1,6 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { 
   ChevronLeft, 
@@ -12,12 +12,15 @@ import {
   Home,
   Loader2,
   Flag,
-  Volume2
+  Volume2,
+  Brain
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TextToSpeechPlayer } from "@/components/audio/TextToSpeechPlayer";
 import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
+import { CognitiveLevelSelector, COGNITIVE_LEVELS } from "@/components/reader/CognitiveLevelSelector";
+import { GuidedReadingMode, CognitiveLevelIndicator } from "@/components/reader/GuidedReadingMode";
 
 interface BookData {
   id: string;
@@ -37,12 +40,20 @@ interface ChapterData {
 export default function Reader() {
   const { bookId, chapterId } = useParams();
   const navigate = useNavigate();
+  const contentRef = useRef<HTMLDivElement>(null);
+  
   const [fontSize, setFontSize] = useState(18);
   const [showSettings, setShowSettings] = useState(false);
   const [showTTS, setShowTTS] = useState(false);
+  const [showLevelSelector, setShowLevelSelector] = useState(false);
   const [book, setBook] = useState<BookData | null>(null);
   const [chapter, setChapter] = useState<ChapterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // Cognitive level and reading progress
+  const [cognitiveLevel, setCognitiveLevel] = useState("functional");
+  const [readingProgress, setReadingProgress] = useState(0);
+  const [guidedModeActive, setGuidedModeActive] = useState(true);
   
   const currentChapter = parseInt(chapterId || "1");
 
@@ -84,10 +95,30 @@ export default function Reader() {
 
     if (bookId) {
       fetchData();
+      setReadingProgress(0); // Reset progress on chapter change
     }
   }, [bookId, currentChapter, navigate]);
 
+  // Track scroll progress
+  const handleScroll = useCallback(() => {
+    if (!contentRef.current) return;
+    
+    const element = contentRef.current;
+    const scrollTop = window.scrollY - element.offsetTop + window.innerHeight;
+    const scrollHeight = element.scrollHeight;
+    const progress = Math.min(100, Math.max(0, (scrollTop / scrollHeight) * 100));
+    
+    setReadingProgress(progress);
+  }, []);
+
+  useEffect(() => {
+    window.addEventListener("scroll", handleScroll);
+    return () => window.removeEventListener("scroll", handleScroll);
+  }, [handleScroll]);
+
   const totalChapters = book?.total_chapters || 1;
+  const wordCount = chapter?.word_count || 0;
+  const estimatedReadingTime = Math.ceil(wordCount / 200); // 200 wpm average
 
   if (isLoading) {
     return (
@@ -165,6 +196,14 @@ export default function Reader() {
             <Button 
               variant="ghost" 
               size="icon"
+              onClick={() => setShowLevelSelector(!showLevelSelector)}
+              className={showLevelSelector ? "text-primary" : ""}
+            >
+              <Brain className="h-5 w-5" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon"
               onClick={() => setShowTTS(!showTTS)}
               className={showTTS ? "text-primary" : ""}
             >
@@ -201,6 +240,19 @@ export default function Reader() {
         </div>
       </header>
 
+      {/* Guided Reading Progress Bar */}
+      {guidedModeActive && chapter?.content && (
+        <div className="fixed top-14 left-0 right-0 z-40">
+          <GuidedReadingMode
+            cognitiveLevel={cognitiveLevel}
+            currentProgress={readingProgress}
+            chapterNumber={currentChapter}
+            totalChapters={totalChapters}
+            wordCount={wordCount}
+          />
+        </div>
+      )}
+
       {/* Settings Panel */}
       {showSettings && (
         <motion.div
@@ -228,24 +280,53 @@ export default function Reader() {
                 className="w-full"
               />
             </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Guided Mode</span>
+              <Button
+                variant={guidedModeActive ? "default" : "outline"}
+                size="sm"
+                onClick={() => setGuidedModeActive(!guidedModeActive)}
+              >
+                {guidedModeActive ? "On" : "Off"}
+              </Button>
+            </div>
           </div>
         </motion.div>
       )}
+
+      {/* Cognitive Level Selector Panel */}
+      <AnimatePresence>
+        {showLevelSelector && (
+          <motion.div
+            initial={{ opacity: 0, y: -10 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -10 }}
+            className="fixed top-14 left-4 right-4 md:left-auto md:right-4 md:w-96 z-50"
+          >
+            <CognitiveLevelSelector
+              selectedLevel={cognitiveLevel}
+              onSelectLevel={setCognitiveLevel}
+              estimatedReadingTime={estimatedReadingTime}
+              onStartReading={() => setShowLevelSelector(false)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* TTS Player */}
       {showTTS && chapter?.content && (
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
-          className="fixed top-16 left-1/2 -translate-x-1/2 z-40"
+          className="fixed top-32 left-1/2 -translate-x-1/2 z-40"
         >
           <TextToSpeechPlayer text={chapter.content} language={book?.language || "en"} />
         </motion.div>
       )}
 
       {/* Content */}
-      <main className="pt-24 pb-24">
-        <article className="container mx-auto px-4 max-w-3xl">
+      <main className={`pt-${guidedModeActive ? '36' : '24'} pb-24`}>
+        <article className="container mx-auto px-4 max-w-3xl" ref={contentRef}>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -261,6 +342,13 @@ export default function Reader() {
               {chapter?.title || "Loading..."}
             </h3>
             
+            {/* Word count and time estimate */}
+            <div className="flex items-center gap-4 mb-8 text-sm text-muted-foreground">
+              <span>{wordCount.toLocaleString()} words</span>
+              <span>•</span>
+              <span>~{estimatedReadingTime} min read</span>
+            </div>
+            
             <div 
               className="reading-content text-foreground/90"
               style={{ fontSize: `${fontSize}px` }}
@@ -270,6 +358,17 @@ export default function Reader() {
           </motion.div>
         </article>
       </main>
+
+      {/* Floating Cognitive Level Indicator */}
+      {guidedModeActive && !showLevelSelector && (
+        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-30">
+          <CognitiveLevelIndicator
+            level={cognitiveLevel}
+            progress={readingProgress}
+            onClick={() => setShowLevelSelector(true)}
+          />
+        </div>
+      )}
 
       {/* Navigation Footer */}
       <footer className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-border/50">
