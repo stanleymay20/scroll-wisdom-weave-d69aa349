@@ -1,78 +1,44 @@
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Volume2, VolumeX, Play, Pause, Settings, SkipForward, SkipBack } from "lucide-react";
+import { Volume2, VolumeX, Play, Pause, Settings, Loader2, Square } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { supabase } from "@/integrations/supabase/client";
+import { useEntitlements } from "@/hooks/useEntitlements";
 
 interface TextToSpeechPlayerProps {
   text: string;
+  language?: string;
   onPlayingChange?: (playing: boolean) => void;
 }
 
-const voices = [
-  { id: "default", name: "Default" },
-  { id: "en-US-1", name: "US English (Female)" },
-  { id: "en-US-2", name: "US English (Male)" },
-  { id: "en-GB-1", name: "British English" },
+// OpenAI TTS voices
+const OPENAI_VOICES = [
+  { id: "alloy", name: "Alloy (Neutral)" },
+  { id: "echo", name: "Echo (Male)" },
+  { id: "fable", name: "Fable (British)" },
+  { id: "onyx", name: "Onyx (Deep Male)" },
+  { id: "nova", name: "Nova (Female)" },
+  { id: "shimmer", name: "Shimmer (Soft Female)" },
 ];
 
-export function TextToSpeechPlayer({ text, onPlayingChange }: TextToSpeechPlayerProps) {
+export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: TextToSpeechPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
-  const [isPaused, setIsPaused] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const [volume, setVolume] = useState(1);
-  const [rate, setRate] = useState(1);
-  const [selectedVoice, setSelectedVoice] = useState("default");
-  const [availableVoices, setAvailableVoices] = useState<SpeechSynthesisVoice[]>([]);
+  const [selectedVoice, setSelectedVoice] = useState("alloy");
   const [progress, setProgress] = useState(0);
-  const utteranceRef = useRef<SpeechSynthesisUtterance | null>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
+  
+  // Use centralized entitlements
+  const entitlements = useEntitlements();
+  const canUseTTS = entitlements.canUseTTS || entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent;
 
-  useEffect(() => {
-    const loadVoices = () => {
-      const voices = window.speechSynthesis.getVoices();
-      setAvailableVoices(voices.filter(v => v.lang.startsWith("en")));
-    };
-
-    loadVoices();
-    window.speechSynthesis.onvoiceschanged = loadVoices;
-
-    return () => {
-      window.speechSynthesis.cancel();
-    };
-  }, []);
-
-  const cleanTextForSpeech = useCallback((rawText: string): string => {
-    return rawText
-      .replace(/#{1,6}\s*/g, "") // Remove markdown headers
-      .replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1") // Remove bold/italic
-      .replace(/`[^`]+`/g, "") // Remove inline code
-      .replace(/```[\s\S]*?```/g, "") // Remove code blocks
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Convert links to just text
-      .replace(/^\s*[-*]\s+/gm, "") // Remove list markers
-      .replace(/^\s*\d+\.\s+/gm, "") // Remove numbered list markers
-      .replace(/\n{2,}/g, ". ") // Replace multiple newlines with pause
-      .replace(/\n/g, " ") // Replace single newlines with space
-      .replace(/\s{2,}/g, " ") // Normalize spaces
-      .trim();
-  }, []);
-
-  const speak = useCallback(() => {
-    if (!window.speechSynthesis) {
-      toast({
-        title: "Not supported",
-        description: "Text-to-speech is not supported in your browser",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Cancel any ongoing speech
-    window.speechSynthesis.cancel();
-
-    const cleanedText = cleanTextForSpeech(text);
-    if (!cleanedText) {
+  const generateSpeech = useCallback(async () => {
+    if (!text || text.trim().length === 0) {
       toast({
         title: "No text",
         description: "No readable text found",
@@ -81,73 +47,137 @@ export function TextToSpeechPlayer({ text, onPlayingChange }: TextToSpeechPlayer
       return;
     }
 
-    const utterance = new SpeechSynthesisUtterance(cleanedText);
-    utterance.volume = volume;
-    utterance.rate = rate;
-
-    // Set voice
-    if (selectedVoice !== "default" && availableVoices.length > 0) {
-      const voice = availableVoices.find(v => v.name.includes(selectedVoice));
-      if (voice) utterance.voice = voice;
+    // Check TTS access
+    if (!canUseTTS) {
+      toast({
+        title: "Upgrade Required",
+        description: "Text-to-speech is available on Premium and Prophet plans",
+        variant: "destructive",
+      });
+      return;
     }
 
-    utterance.onstart = () => {
-      setIsPlaying(true);
-      setIsPaused(false);
-      onPlayingChange?.(true);
-    };
+    setIsLoading(true);
 
-    utterance.onend = () => {
-      setIsPlaying(false);
-      setIsPaused(false);
-      setProgress(0);
-      onPlayingChange?.(false);
-    };
+    try {
+      const { data, error } = await supabase.functions.invoke("text-to-speech", {
+        body: { 
+          text: text.slice(0, 4096), // Limit text length
+          voice: selectedVoice,
+          language,
+        },
+      });
 
-    utterance.onerror = (event) => {
-      console.error("Speech error:", event);
-      setIsPlaying(false);
-      setIsPaused(false);
-      onPlayingChange?.(false);
-    };
+      if (error) {
+        throw new Error(error.message);
+      }
 
-    // Track progress (approximate)
-    const totalLength = cleanedText.length;
-    utterance.onboundary = (event) => {
-      setProgress((event.charIndex / totalLength) * 100);
-    };
+      if (!data?.audioContent) {
+        throw new Error("No audio content received");
+      }
 
-    utteranceRef.current = utterance;
-    window.speechSynthesis.speak(utterance);
-  }, [text, volume, rate, selectedVoice, availableVoices, cleanTextForSpeech, onPlayingChange, toast]);
+      // Create audio from base64
+      const audioBlob = new Blob(
+        [Uint8Array.from(atob(data.audioContent), c => c.charCodeAt(0))],
+        { type: "audio/mpeg" }
+      );
+      const audioUrl = URL.createObjectURL(audioBlob);
 
-  const pause = useCallback(() => {
-    window.speechSynthesis.pause();
-    setIsPaused(true);
-  }, []);
+      // Create and play audio
+      if (audioRef.current) {
+        audioRef.current.pause();
+        URL.revokeObjectURL(audioRef.current.src);
+      }
 
-  const resume = useCallback(() => {
-    window.speechSynthesis.resume();
-    setIsPaused(false);
-  }, []);
+      const audio = new Audio(audioUrl);
+      audio.volume = volume;
+      audioRef.current = audio;
+
+      audio.onplay = () => {
+        setIsPlaying(true);
+        onPlayingChange?.(true);
+      };
+
+      audio.onended = () => {
+        setIsPlaying(false);
+        setProgress(0);
+        onPlayingChange?.(false);
+        URL.revokeObjectURL(audioUrl);
+      };
+
+      audio.onerror = (e) => {
+        console.error("Audio playback error:", e);
+        setIsPlaying(false);
+        setIsLoading(false);
+        onPlayingChange?.(false);
+        toast({
+          title: "Playback error",
+          description: "Failed to play audio",
+          variant: "destructive",
+        });
+      };
+
+      audio.ontimeupdate = () => {
+        if (audio.duration) {
+          setProgress((audio.currentTime / audio.duration) * 100);
+        }
+      };
+
+      await audio.play();
+    } catch (error) {
+      console.error("TTS error:", error);
+      toast({
+        title: "TTS Failed",
+        description: error instanceof Error ? error.message : "Failed to generate speech",
+        variant: "destructive",
+      });
+    } finally {
+      setIsLoading(false);
+    }
+  }, [text, selectedVoice, language, volume, onPlayingChange, toast, canUseTTS]);
 
   const stop = useCallback(() => {
-    window.speechSynthesis.cancel();
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.currentTime = 0;
+    }
     setIsPlaying(false);
-    setIsPaused(false);
     setProgress(0);
     onPlayingChange?.(false);
   }, [onPlayingChange]);
 
   const togglePlayPause = useCallback(() => {
+    if (isLoading) return;
+    
     if (!isPlaying) {
-      speak();
-    } else if (isPaused) {
-      resume();
+      if (audioRef.current && audioRef.current.currentTime > 0) {
+        // Resume existing audio
+        audioRef.current.play();
+      } else {
+        // Generate new speech
+        generateSpeech();
+      }
     } else {
-      pause();
+      // Pause
+      if (audioRef.current) {
+        audioRef.current.pause();
+        setIsPlaying(false);
+        onPlayingChange?.(false);
+      }
     }
-  }, [isPlaying, isPaused, speak, resume, pause]);
+  }, [isPlaying, isLoading, generateSpeech, onPlayingChange]);
+
+  const handleVolumeChange = useCallback((newVolume: number) => {
+    setVolume(newVolume);
+    if (audioRef.current) {
+      audioRef.current.volume = newVolume;
+    }
+  }, []);
+
+  // Don't render if user doesn't have TTS access and not admin/prophet
+  if (!canUseTTS) {
+    return null;
+  }
 
   return (
     <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-2 border border-border/50">
@@ -157,8 +187,11 @@ export function TextToSpeechPlayer({ text, onPlayingChange }: TextToSpeechPlayer
         size="icon"
         onClick={togglePlayPause}
         className="h-8 w-8"
+        disabled={isLoading}
       >
-        {isPlaying && !isPaused ? (
+        {isLoading ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : isPlaying ? (
           <Pause className="h-4 w-4" />
         ) : (
           <Play className="h-4 w-4" />
@@ -166,19 +199,19 @@ export function TextToSpeechPlayer({ text, onPlayingChange }: TextToSpeechPlayer
       </Button>
 
       {/* Stop Button */}
-      {isPlaying && (
+      {(isPlaying || progress > 0) && (
         <Button
           variant="ghost"
           size="icon"
           onClick={stop}
           className="h-8 w-8"
         >
-          <VolumeX className="h-4 w-4" />
+          <Square className="h-4 w-4" />
         </Button>
       )}
 
       {/* Progress */}
-      {isPlaying && (
+      {(isPlaying || progress > 0) && (
         <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden max-w-24">
           <div 
             className="h-full bg-primary transition-all duration-300"
@@ -199,26 +232,19 @@ export function TextToSpeechPlayer({ text, onPlayingChange }: TextToSpeechPlayer
             <div className="space-y-2">
               <label className="text-sm font-medium">Volume</label>
               <div className="flex items-center gap-2">
-                <Volume2 className="h-4 w-4 text-muted-foreground" />
+                {volume === 0 ? (
+                  <VolumeX className="h-4 w-4 text-muted-foreground" />
+                ) : (
+                  <Volume2 className="h-4 w-4 text-muted-foreground" />
+                )}
                 <Slider
                   value={[volume * 100]}
-                  onValueChange={([v]) => setVolume(v / 100)}
+                  onValueChange={([v]) => handleVolumeChange(v / 100)}
                   max={100}
                   step={10}
                   className="flex-1"
                 />
               </div>
-            </div>
-
-            <div className="space-y-2">
-              <label className="text-sm font-medium">Speed: {rate}x</label>
-              <Slider
-                value={[rate * 100]}
-                onValueChange={([v]) => setRate(v / 100)}
-                min={50}
-                max={200}
-                step={25}
-              />
             </div>
 
             <div className="space-y-2">
@@ -228,15 +254,18 @@ export function TextToSpeechPlayer({ text, onPlayingChange }: TextToSpeechPlayer
                   <SelectValue placeholder="Select voice" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="default">System Default</SelectItem>
-                  {availableVoices.slice(0, 5).map((voice, i) => (
-                    <SelectItem key={i} value={voice.name}>
-                      {voice.name.slice(0, 25)}
+                  {OPENAI_VOICES.map((voice) => (
+                    <SelectItem key={voice.id} value={voice.id}>
+                      {voice.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
+
+            <p className="text-xs text-muted-foreground">
+              Powered by OpenAI TTS
+            </p>
           </div>
         </PopoverContent>
       </Popover>
