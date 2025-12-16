@@ -3,6 +3,7 @@ import { useIsAdmin } from './useAdmin';
 import { SubscriptionTier } from '@/lib/subscription';
 
 export interface Entitlements {
+  // Core access flags - use these, NOT tier names
   canPublish: boolean;
   canExport: boolean;
   canDownload: boolean;
@@ -13,9 +14,12 @@ export interface Entitlements {
   bypassAllLimits: boolean;
   canUseAiCovers: boolean;
   canUseTTS: boolean;
+  canUseOpenAITTS: boolean;
   canUseElevenLabsTTS: boolean;
   canBatchGenerate: boolean;
+  // Tier info (for display only, NOT for gating)
   tier: SubscriptionTier;
+  // Role flags - use these for access checks
   isAdmin: boolean;
   isProphet: boolean;
   isPremium: boolean;
@@ -45,7 +49,7 @@ export function useEntitlements(): Entitlements {
   const isStudent = tier === 'student';
   const isPaid = isProphet || isPremium || isStudent;
 
-  // ADMIN: GOD MODE - bypass everything
+  // ADMIN: GOD MODE - bypass everything, NO EXCEPTIONS
   if (isAdmin) {
     return {
       canPublish: true,
@@ -58,19 +62,20 @@ export function useEntitlements(): Entitlements {
       bypassAllLimits: true,
       canUseAiCovers: true,
       canUseTTS: true,
+      canUseOpenAITTS: true,
       canUseElevenLabsTTS: true,
       canBatchGenerate: true,
       tier,
       isAdmin: true,
-      isProphet,
-      isPremium,
-      isStudent,
-      isScrollStudent: isStudent,
+      isProphet: true, // Admin effectively has all privileges
+      isPremium: true,
+      isStudent: true,
+      isScrollStudent: true,
       isPaid: true,
     };
   }
 
-  // PROPHET TIER: Full override - all features unlocked
+  // PROPHET TIER: Full override - all features unlocked, NO EXCEPTIONS
   if (isProphet) {
     return {
       canPublish: true,
@@ -83,19 +88,20 @@ export function useEntitlements(): Entitlements {
       bypassAllLimits: true,
       canUseAiCovers: true,
       canUseTTS: true,
+      canUseOpenAITTS: true,
       canUseElevenLabsTTS: true,
       canBatchGenerate: true,
       tier,
       isAdmin: false,
       isProphet: true,
-      isPremium: false,
-      isStudent: false,
-      isScrollStudent: false,
+      isPremium: true, // Prophet includes all Premium features
+      isStudent: true,
+      isScrollStudent: true,
       isPaid: true,
     };
   }
 
-  // PREMIUM TIER
+  // PREMIUM TIER - Full export and TTS access
   if (isPremium) {
     return {
       canPublish: true,
@@ -108,6 +114,7 @@ export function useEntitlements(): Entitlements {
       bypassAllLimits: false,
       canUseAiCovers: true,
       canUseTTS: true,
+      canUseOpenAITTS: true,
       canUseElevenLabsTTS: false,
       canBatchGenerate: false,
       tier,
@@ -133,12 +140,13 @@ export function useEntitlements(): Entitlements {
       bypassAllLimits: false,
       canUseAiCovers: true,
       canUseTTS: true,
+      canUseOpenAITTS: true,
       canUseElevenLabsTTS: false,
       canBatchGenerate: false,
       tier,
       isAdmin: false,
       isProphet: false,
-      isPremium: false,
+      isPremium: true, // Student has Premium-equivalent access
       isStudent: true,
       isScrollStudent: true,
       isPaid: true,
@@ -157,6 +165,7 @@ export function useEntitlements(): Entitlements {
     bypassAllLimits: false,
     canUseAiCovers: false,
     canUseTTS: false,
+    canUseOpenAITTS: false,
     canUseElevenLabsTTS: false,
     canBatchGenerate: false,
     tier,
@@ -176,7 +185,7 @@ export function useEntitlements(): Entitlements {
  */
 export function hasFeatureAccess(
   entitlements: Entitlements,
-  feature: 'publish' | 'export' | 'download' | 'generate' | 'allFormats' | 'commercial' | 'aiCovers' | 'tts' | 'elevenLabsTTS' | 'batch'
+  feature: 'publish' | 'export' | 'download' | 'generate' | 'allFormats' | 'commercial' | 'aiCovers' | 'tts' | 'openaiTTS' | 'elevenLabsTTS' | 'batch'
 ): boolean {
   // Admin and Prophet always have access - NO EXCEPTIONS
   if (entitlements.isAdmin || entitlements.isProphet) {
@@ -206,7 +215,8 @@ export function hasFeatureAccess(
       case 'aiCovers':
         return entitlements.canUseAiCovers;
       case 'tts':
-        return entitlements.canUseTTS;
+      case 'openaiTTS':
+        return entitlements.canUseTTS || entitlements.canUseOpenAITTS;
       case 'elevenLabsTTS':
         return entitlements.canUseElevenLabsTTS;
       case 'batch':
@@ -233,7 +243,8 @@ export function hasFeatureAccess(
     case 'aiCovers':
       return entitlements.canUseAiCovers;
     case 'tts':
-      return entitlements.canUseTTS;
+    case 'openaiTTS':
+      return entitlements.canUseTTS || entitlements.canUseOpenAITTS;
     case 'elevenLabsTTS':
       return entitlements.canUseElevenLabsTTS;
     case 'batch':

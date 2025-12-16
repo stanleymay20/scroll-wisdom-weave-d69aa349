@@ -23,6 +23,7 @@ interface BookData {
   id: string;
   title: string;
   total_chapters: number | null;
+  language: string | null;
 }
 
 interface ChapterData {
@@ -52,7 +53,7 @@ export default function Reader() {
       // Fetch book
       const { data: bookData, error: bookError } = await supabase
         .from("books")
-        .select("id, title, total_chapters")
+        .select("id, title, total_chapters, language")
         .eq("id", bookId)
         .single();
 
@@ -238,7 +239,7 @@ export default function Reader() {
           animate={{ opacity: 1, y: 0 }}
           className="fixed top-16 left-1/2 -translate-x-1/2 z-40"
         >
-          <TextToSpeechPlayer text={chapter.content} />
+          <TextToSpeechPlayer text={chapter.content} language={book?.language || "en"} />
         </motion.div>
       )}
 
