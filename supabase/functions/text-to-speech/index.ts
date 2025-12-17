@@ -1,5 +1,4 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,14 +10,20 @@ const OPENAI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as c
 type OpenAIVoice = typeof OPENAI_VOICES[number];
 
 serve(async (req) => {
+  console.log("[TTS] Request received");
+  
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    const { text, voice = "alloy", language = "en" } = await req.json();
+    const body = await req.json();
+    console.log("[TTS] Request body:", { textLength: body.text?.length, voice: body.voice, language: body.language });
+    
+    const { text, voice = "alloy", language = "en" } = body;
 
     if (!text) {
+      console.error("[TTS] No text provided");
       return new Response(
         JSON.stringify({ error: "Text is required" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -53,6 +58,7 @@ serve(async (req) => {
       .trim();
 
     if (!cleanedText) {
+      console.error("[TTS] No readable text after cleaning");
       return new Response(
         JSON.stringify({ error: "No readable text found after cleaning" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -85,18 +91,26 @@ serve(async (req) => {
       const errorText = await response.text();
       console.error("[TTS] OpenAI API error:", response.status, errorText);
       return new Response(
-        JSON.stringify({ error: "Failed to generate speech. Please try again." }),
+        JSON.stringify({ error: `OpenAI TTS failed: ${response.status}` }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
     // Get audio as ArrayBuffer
     const audioBuffer = await response.arrayBuffer();
+    console.log(`[TTS] Received ${audioBuffer.byteLength} bytes of audio data`);
     
-    // Convert to base64 using Deno's encoding library (safe for large files)
-    const base64Audio = base64Encode(audioBuffer);
+    // Convert to base64 safely
+    const bytes = new Uint8Array(audioBuffer);
+    let binary = '';
+    const chunkSize = 8192;
+    for (let i = 0; i < bytes.length; i += chunkSize) {
+      const chunk = bytes.slice(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, Array.from(chunk));
+    }
+    const base64Audio = btoa(binary);
 
-    console.log(`[TTS] Successfully generated ${audioBuffer.byteLength} bytes of audio`);
+    console.log(`[TTS] Successfully generated audio, base64 length: ${base64Audio.length}`);
 
     return new Response(
       JSON.stringify({

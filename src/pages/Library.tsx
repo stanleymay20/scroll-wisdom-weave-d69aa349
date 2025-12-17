@@ -5,6 +5,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { BookCard } from "@/components/books/BookCard";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { Library as LibraryIcon, BookOpen, Plus } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -26,10 +27,28 @@ interface LibraryItem {
   books: Book;
 }
 
+const ITEMS_PER_PAGE = 12;
+
+// Skeleton loader component
+function BookCardSkeleton() {
+  return (
+    <div className="rounded-xl overflow-hidden bg-card border border-border/50">
+      <Skeleton className="aspect-[3/4] w-full" />
+      <div className="p-4 space-y-2">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-3 w-1/2" />
+      </div>
+    </div>
+  );
+}
+
 export default function Library() {
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [user, setUser] = useState<any>(null);
+  const [page, setPage] = useState(0);
+  const [hasMore, setHasMore] = useState(true);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -55,13 +74,22 @@ export default function Library() {
 
   useEffect(() => {
     if (user) {
-      fetchLibrary();
+      fetchLibrary(0, true);
     }
   }, [user]);
 
-  const fetchLibrary = async () => {
+  const fetchLibrary = async (pageNum: number, reset = false) => {
+    if (reset) {
+      setIsLoading(true);
+    } else {
+      setIsLoadingMore(true);
+    }
+
     try {
-      const { data, error } = await supabase
+      const from = pageNum * ITEMS_PER_PAGE;
+      const to = from + ITEMS_PER_PAGE - 1;
+
+      const { data, error, count } = await supabase
         .from("user_library")
         .select(`
           id,
@@ -76,11 +104,22 @@ export default function Library() {
             cover_image_url,
             total_chapters
           )
-        `)
-        .order("created_at", { ascending: false });
+        `, { count: 'exact' })
+        .order("created_at", { ascending: false })
+        .range(from, to);
 
       if (error) throw error;
-      setLibraryItems((data as any) || []);
+      
+      const newItems = (data as any) || [];
+      
+      if (reset) {
+        setLibraryItems(newItems);
+      } else {
+        setLibraryItems(prev => [...prev, ...newItems]);
+      }
+      
+      setHasMore(newItems.length === ITEMS_PER_PAGE);
+      setPage(pageNum);
     } catch (error: any) {
       console.error("Error fetching library:", error);
       toast({
@@ -90,6 +129,13 @@ export default function Library() {
       });
     } finally {
       setIsLoading(false);
+      setIsLoadingMore(false);
+    }
+  };
+
+  const loadMore = () => {
+    if (!isLoadingMore && hasMore) {
+      fetchLibrary(page + 1);
     }
   };
 
@@ -119,8 +165,11 @@ export default function Library() {
 
         {/* Library Content */}
         {isLoading ? (
-          <div className="flex items-center justify-center py-20">
-            <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-scroll-gold" />
+          // Skeleton Loaders - Show immediately while loading
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+            {Array.from({ length: 8 }).map((_, index) => (
+              <BookCardSkeleton key={index} />
+            ))}
           </div>
         ) : libraryItems.length === 0 ? (
           <motion.div
@@ -148,28 +197,48 @@ export default function Library() {
             </div>
           </motion.div>
         ) : (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
-          >
-            {libraryItems.map((item, index) => (
-              <motion.div
-                key={item.id}
-                initial={{ opacity: 0, y: 20 }}
-                animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: index * 0.05 }}
-              >
-                <BookCard
-                  id={item.books.id}
-                  title={item.books.title}
-                  category={item.books.category}
-                  coverImageUrl={item.books.cover_image_url ?? undefined}
-                  totalChapters={item.books.total_chapters ?? 0}
-                />
-              </motion.div>
-            ))}
-          </motion.div>
+          <>
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6"
+            >
+              {libraryItems.map((item, index) => (
+                <motion.div
+                  key={item.id}
+                  initial={{ opacity: 0, y: 20 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  transition={{ delay: Math.min(index * 0.03, 0.3) }}
+                >
+                  <BookCard
+                    id={item.books.id}
+                    title={item.books.title}
+                    category={item.books.category}
+                    coverImageUrl={item.books.cover_image_url ?? undefined}
+                    totalChapters={item.books.total_chapters ?? 0}
+                  />
+                </motion.div>
+              ))}
+              
+              {/* Loading more skeletons */}
+              {isLoadingMore && Array.from({ length: 4 }).map((_, index) => (
+                <BookCardSkeleton key={`loading-${index}`} />
+              ))}
+            </motion.div>
+
+            {/* Load More Button */}
+            {hasMore && !isLoadingMore && (
+              <div className="flex justify-center mt-8">
+                <Button 
+                  variant="outline" 
+                  onClick={loadMore}
+                  size="lg"
+                >
+                  Load More Books
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </main>
 
