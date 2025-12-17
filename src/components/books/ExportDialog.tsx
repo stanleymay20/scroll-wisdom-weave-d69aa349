@@ -113,9 +113,9 @@ export function ExportDialog({
         throw new Error(response.data.error);
       }
 
-      const { content, filename, contentType, metadata } = response.data;
+      const { content, filename, contentType, metadata, instructions } = response.data;
 
-      // Create blob and download
+      // Create blob and download with correct content type
       const blob = new Blob([content], { type: contentType });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
@@ -126,9 +126,16 @@ export function ExportDialog({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
+      // Show success with instructions for converting to final format
+      const formatInstructions: Record<string, string> = {
+        pdf: "Open the HTML file in your browser and use Print → Save as PDF",
+        epub: "Use Calibre or similar tool to convert XHTML to EPUB",
+        docx: "Open the RTF file in Microsoft Word or Google Docs",
+      };
+
       toast({
         title: "Export complete!",
-        description: `${metadata.totalChapters} chapters (${metadata.totalWords.toLocaleString()} words) exported as ${format.toUpperCase()}. Publishing ready.`,
+        description: `${metadata.totalChapters} chapters exported. ${formatInstructions[format] || instructions}`,
       });
       
       setIsOpen(false);
@@ -147,21 +154,21 @@ export function ExportDialog({
   const formats: { format: ExportFormat; label: string; icon: typeof FileText; description: string }[] = [
     {
       format: "pdf",
-      label: "PDF",
+      label: "PDF Ready",
       icon: FileText,
-      description: "Print-ready with professional typesetting",
+      description: "Print-ready HTML → use browser Print to save as PDF",
     },
     {
       format: "epub",
-      label: "EPUB",
+      label: "EPUB/E-Reader",
       icon: BookOpen,
-      description: "E-reader compatible (Apple Books, Kobo)",
+      description: "XHTML format for e-readers and Calibre conversion",
     },
     {
       format: "docx",
-      label: "Word Document",
+      label: "Word/RTF",
       icon: File,
-      description: "Editable manuscript format (RTF)",
+      description: "RTF format - opens in Word, Google Docs, LibreOffice",
     },
   ];
 
