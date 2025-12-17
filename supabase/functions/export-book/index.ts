@@ -99,7 +99,7 @@ serve(async (req) => {
 
     console.log(`[EXPORT] Found ${chapters.length} complete chapters to export`);
 
-    // PRODUCTION FORMATS ONLY - No HTML, no markdown for user downloads
+    // PRODUCTION FORMATS ONLY - No HTML for user downloads
     const validFormats = ['pdf', 'epub', 'docx'];
     if (!validFormats.includes(format)) {
       throw new Error(`Invalid format: ${format}. Valid formats are: ${validFormats.join(', ')}`);
@@ -112,11 +112,6 @@ serve(async (req) => {
     const publishingIdentifier = isbn && isValidISBN(isbn) ? isbn : generateSPC(bookId);
     const isISBN = isbn && isValidISBN(isbn);
 
-    // Generate content based on format
-    let content: string;
-    let contentType: string;
-    let filename: string;
-
     const totalWords = chapters.reduce((sum: number, ch: any) => sum + (ch.word_count || 0), 0);
     const exportMetadata = {
       title: book.title,
@@ -128,23 +123,32 @@ serve(async (req) => {
       year: new Date().getFullYear(),
       totalChapters: chapters.length,
       totalWords,
+      language: book.language || 'en',
     };
+
+    // Generate content based on format
+    let content: string;
+    let contentType: string;
+    let filename: string;
 
     switch (format) {
       case "pdf":
-        content = generateProductionPDF(book, chapters, exportMetadata);
+        // Generate print-ready HTML document
+        content = generatePrintReadyHTML(book, chapters, exportMetadata);
         contentType = "text/html";
-        filename = `${sanitizeFilename(book.title)}.html`;
+        filename = `${sanitizeFilename(book.title)}_PrintReady.html`;
         break;
       
       case "epub":
-        content = generateProductionEPUB(book, chapters, exportMetadata);
+        // Generate EPUB-compatible XHTML
+        content = generateEPUBContent(book, chapters, exportMetadata);
         contentType = "application/xhtml+xml";
         filename = `${sanitizeFilename(book.title)}.xhtml`;
         break;
       
       case "docx":
-        content = generateProductionDOCX(book, chapters, exportMetadata);
+        // Generate RTF (Word-compatible)
+        content = generateRTFDocument(book, chapters, exportMetadata);
         contentType = "application/rtf";
         filename = `${sanitizeFilename(book.title)}.rtf`;
         break;
@@ -163,6 +167,7 @@ serve(async (req) => {
         filename,
         metadata: exportMetadata,
         publishingReady: true,
+        instructions: getExportInstructions(format),
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -180,10 +185,22 @@ serve(async (req) => {
   }
 });
 
+function getExportInstructions(format: string): string {
+  switch (format) {
+    case 'pdf':
+      return 'Open this HTML file in your browser, then use Print (Ctrl/Cmd+P) and select "Save as PDF" for a professional PDF.';
+    case 'epub':
+      return 'This XHTML file can be opened in e-reader applications. For best results, use Calibre to convert to EPUB format.';
+    case 'docx':
+      return 'This RTF file opens directly in Microsoft Word, Google Docs, or LibreOffice Writer for editing.';
+    default:
+      return '';
+  }
+}
+
 function isValidISBN(isbn: string): boolean {
   if (!isbn) return false;
   const cleaned = isbn.replace(/[-\s]/g, "");
-  // ISBN-10 or ISBN-13 validation
   if (cleaned.length === 10) {
     let sum = 0;
     for (let i = 0; i < 9; i++) {
@@ -240,10 +257,11 @@ interface ExportMetadata {
   year: number;
   totalChapters: number;
   totalWords: number;
+  language: string;
 }
 
-// ===== PRODUCTION PDF EXPORT =====
-function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata): string {
+// ===== PRINT-READY HTML (for PDF) =====
+function generatePrintReadyHTML(book: any, chapters: any[], meta: ExportMetadata): string {
   const chaptersHtml = chapters.map((ch: any, index: number) => `
     <div class="chapter" id="chapter-${ch.chapter_number}" style="${index > 0 ? 'page-break-before: always;' : ''}">
       <div class="chapter-header">
@@ -257,7 +275,7 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
   `).join("\n");
 
   return `<!DOCTYPE html>
-<html lang="en">
+<html lang="${meta.language}">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -271,25 +289,11 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
     @page {
       size: A4;
       margin: 0.75in 0.75in 1in 0.75in;
-      
-      @top-center {
-        content: "${escapeHtml(meta.title)}";
-        font-family: 'Source Serif 4', Georgia, serif;
-        font-size: 10pt;
-        color: #666;
-      }
-      
-      @bottom-center {
-        content: counter(page);
-        font-family: 'Source Serif 4', Georgia, serif;
-        font-size: 10pt;
-        color: #333;
-      }
     }
     
-    @page :first {
-      @top-center { content: none; }
-      @bottom-center { content: none; }
+    @media print {
+      .no-print { display: none !important; }
+      body { font-size: 11pt; }
     }
     
     * {
@@ -303,11 +307,32 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
       line-height: 1.6;
       color: #1a1a1a;
       font-size: 11pt;
-      text-rendering: optimizeLegibility;
-      -webkit-font-smoothing: antialiased;
+      max-width: 8.5in;
+      margin: 0 auto;
+      padding: 20px;
     }
     
-    /* ===== COVER PAGE ===== */
+    /* Print Instructions Banner */
+    .print-instructions {
+      background: #f0f4ff;
+      border: 2px solid #4a5568;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 30px;
+      text-align: center;
+    }
+    
+    .print-instructions h3 {
+      color: #2d3748;
+      margin-bottom: 10px;
+    }
+    
+    .print-instructions p {
+      color: #4a5568;
+      font-size: 14px;
+    }
+    
+    /* Cover Page */
     .cover-page {
       page-break-after: always;
       min-height: 100vh;
@@ -327,7 +352,6 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
     }
     
     .cover-category {
-      font-family: 'Source Serif 4', sans-serif;
       font-size: 12pt;
       text-transform: uppercase;
       letter-spacing: 4px;
@@ -356,7 +380,7 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
       color: #888;
     }
     
-    /* ===== COPYRIGHT PAGE ===== */
+    /* Copyright Page */
     .copyright-page {
       page-break-after: always;
       min-height: 100vh;
@@ -370,7 +394,6 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
     
     .copyright-page p {
       margin-bottom: 12px;
-      text-align: left;
     }
     
     .copyright-page .identifier {
@@ -388,7 +411,7 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
       background: #fafafa;
     }
     
-    /* ===== TABLE OF CONTENTS ===== */
+    /* Table of Contents */
     .toc-page {
       page-break-after: always;
       padding: 60px 0;
@@ -405,7 +428,6 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
     .toc-item {
       display: flex;
       justify-content: space-between;
-      align-items: baseline;
       padding: 12px 0;
       border-bottom: 1px dotted #ccc;
     }
@@ -413,12 +435,6 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
     .toc-item a {
       color: #1a1a2e;
       text-decoration: none;
-      font-size: 12pt;
-    }
-    
-    .toc-item .page-ref {
-      color: #666;
-      font-size: 10pt;
     }
     
     .toc-summary {
@@ -428,7 +444,7 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
       font-size: 10pt;
     }
     
-    /* ===== CHAPTERS ===== */
+    /* Chapters */
     .chapter {
       padding-top: 40px;
     }
@@ -441,7 +457,6 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
     
     .chapter-label {
       display: block;
-      font-family: 'Source Serif 4', sans-serif;
       font-size: 10pt;
       text-transform: uppercase;
       letter-spacing: 3px;
@@ -454,24 +469,14 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
       font-size: 24pt;
       font-weight: 600;
       color: #1a1a2e;
-      line-height: 1.3;
     }
     
     .chapter-content {
       text-align: justify;
-      hyphens: auto;
-      -webkit-hyphens: auto;
-      orphans: 3;
-      widows: 3;
     }
     
     .chapter-content p {
       margin-bottom: 14px;
-      text-indent: 0;
-    }
-    
-    .chapter-content p + p {
-      text-indent: 1.5em;
     }
     
     .chapter-content h2 {
@@ -480,7 +485,6 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
       margin-top: 36px;
       margin-bottom: 16px;
       color: #1a1a2e;
-      page-break-after: avoid;
     }
     
     .chapter-content h3 {
@@ -488,20 +492,10 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
       font-size: 14pt;
       margin-top: 28px;
       margin-bottom: 12px;
-      color: #333;
-      page-break-after: avoid;
-    }
-    
-    .chapter-content h4 {
-      font-size: 12pt;
-      font-weight: 600;
-      margin-top: 24px;
-      margin-bottom: 10px;
-      color: #444;
     }
     
     .chapter-content ul, .chapter-content ol {
-      margin: 20px 0;
+      margin: 16px 0;
       padding-left: 24px;
     }
     
@@ -509,435 +503,221 @@ function generateProductionPDF(book: any, chapters: any[], meta: ExportMetadata)
       margin-bottom: 8px;
     }
     
-    .chapter-content strong {
-      font-weight: 600;
-    }
-    
-    .chapter-content em {
+    .chapter-content blockquote {
+      margin: 20px 0;
+      padding: 15px 20px;
+      border-left: 4px solid #b8860b;
+      background: #fafafa;
       font-style: italic;
-    }
-    
-    /* ===== END PAGE ===== */
-    .end-page {
-      page-break-before: always;
-      min-height: 100vh;
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      text-align: center;
-    }
-    
-    .end-page h3 {
-      font-family: 'Playfair Display', serif;
-      font-size: 24pt;
-      color: #1a1a2e;
-      margin-bottom: 20px;
-    }
-    
-    .end-page p {
-      color: #666;
-      font-size: 10pt;
-    }
-    
-    .publishing-badge {
-      margin-top: 40px;
-      padding: 15px 30px;
-      border: 2px solid #b8860b;
-      border-radius: 4px;
-      font-size: 10pt;
-      color: #b8860b;
-    }
-    
-    @media print {
-      body { margin: 0; padding: 0; }
-      .chapter { page-break-before: always; }
-      .cover-page, .copyright-page, .toc-page { page-break-after: always; }
-      h2, h3, h4 { page-break-after: avoid; }
-      p { orphans: 3; widows: 3; }
     }
   </style>
 </head>
 <body>
-  <!-- COVER PAGE -->
-  <div class="cover-page">
-    <img src="${escapeHtml(meta.coverUrl)}" alt="Book Cover" class="cover-image">
-    <p class="cover-category">${escapeHtml((meta.category || '').replace(/_/g, " "))}</p>
-    <h1 class="cover-title">${escapeHtml(meta.title)}</h1>
-    <p class="cover-author">By ${escapeHtml(meta.author)}</p>
-    <p class="cover-publisher">ScrollLibrary™ Publishing<br>${meta.year}</p>
+  <!-- Print Instructions (hidden when printing) -->
+  <div class="print-instructions no-print">
+    <h3>📖 Ready to Create Your PDF</h3>
+    <p>Press <strong>Ctrl+P</strong> (Windows) or <strong>Cmd+P</strong> (Mac) and select <strong>"Save as PDF"</strong></p>
+    <p>For best results, use A4 or Letter size paper with default margins.</p>
   </div>
-  
-  <!-- COPYRIGHT PAGE -->
+
+  <!-- Cover Page -->
+  <div class="cover-page">
+    <img src="${meta.coverUrl}" alt="Book Cover" class="cover-image" />
+    <div class="cover-category">${escapeHtml(meta.category.replace(/_/g, " "))}</div>
+    <h1 class="cover-title">${escapeHtml(meta.title)}</h1>
+    <div class="cover-author">by ${escapeHtml(meta.author)}</div>
+    <div class="cover-publisher">ScrollLibrary™ Publishing</div>
+  </div>
+
+  <!-- Copyright Page -->
   <div class="copyright-page">
     <p><strong>${escapeHtml(meta.title)}</strong></p>
-    <p>By ${escapeHtml(meta.author)}</p>
-    <p>&nbsp;</p>
-    <p>© ${meta.year} ${escapeHtml(meta.author)}. All rights reserved.</p>
-    <p>&nbsp;</p>
-    <p>No part of this publication may be reproduced, distributed, or transmitted in any form or by any means without the prior written permission of the copyright holder.</p>
-    <p>&nbsp;</p>
-    <p>${meta.isISBN ? 'ISBN' : 'Scroll Publishing Code (SPC)'}: <span class="identifier">${escapeHtml(meta.publishingIdentifier)}</span></p>
-    ${!meta.isISBN ? '<p><em>Note: SPC is an internal publishing identifier. For commercial distribution requiring ISBN, please obtain one from your national ISBN agency.</em></p>' : ''}
-    <p>&nbsp;</p>
-    <p>Published via ScrollLibrary™</p>
-    <p>Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}</p>
-    
+    <p>Copyright © ${meta.year} ${escapeHtml(meta.author)}</p>
+    <p>All rights reserved.</p>
+    <p>
+      ${meta.isISBN 
+        ? `<span class="identifier">ISBN: ${meta.publishingIdentifier}</span>` 
+        : `<span class="identifier">Publishing Code: ${meta.publishingIdentifier}</span><br><small>(Internal identifier - not an ISBN)</small>`
+      }
+    </p>
     <div class="ownership-notice">
-      <p><strong>Authorship & Ownership Declaration</strong></p>
-      <p>This work was generated with the assistance of AI tools under the full authorship and ownership of the user. The creator retains 100% ownership and all commercial publishing rights.</p>
+      <p><strong>Ownership & Rights Notice</strong></p>
+      <p>This work was created with AI assistance under the full authorship and ownership of ${escapeHtml(meta.author)}. The author retains 100% ownership and all commercial rights to this content.</p>
     </div>
+    <p style="margin-top: 30px;">
+      Published with ScrollLibrary™<br>
+      ${meta.totalChapters} chapters • ${meta.totalWords.toLocaleString()} words
+    </p>
   </div>
-  
-  <!-- TABLE OF CONTENTS -->
+
+  <!-- Table of Contents -->
   <div class="toc-page">
-    <h2 class="toc-title">Contents</h2>
+    <h2 class="toc-title">Table of Contents</h2>
     ${chapters.map((ch: any) => `
       <div class="toc-item">
-        <a href="#chapter-${ch.chapter_number}">Chapter ${ch.chapter_number}: ${escapeHtml(ch.title)}</a>
-        <span class="page-ref">${(ch.word_count || 0).toLocaleString()} words</span>
+        <a href="#chapter-${ch.chapter_number}">${ch.chapter_number}. ${escapeHtml(ch.title)}</a>
       </div>
     `).join("")}
     <div class="toc-summary">
-      <p>${meta.totalChapters} Chapters · ${meta.totalWords.toLocaleString()} Words</p>
+      ${meta.totalChapters} chapters • ${meta.totalWords.toLocaleString()} words
     </div>
   </div>
-  
-  <!-- CHAPTERS -->
+
+  <!-- Chapters -->
   ${chaptersHtml}
-  
-  <!-- END PAGE -->
-  <div class="end-page">
-    <h3>The End</h3>
-    <p>Thank you for reading</p>
-    <p>&nbsp;</p>
-    <p><em>${escapeHtml(meta.title)}</em> by ${escapeHtml(meta.author)}</p>
-    <p class="publishing-badge">✓ Publishing Ready</p>
-    <p style="margin-top: 30px;">Generated by ScrollLibrary™<br>© ${meta.year} All Rights Reserved</p>
-  </div>
 </body>
 </html>`;
 }
 
-// ===== PRODUCTION EPUB EXPORT =====
-function generateProductionEPUB(book: any, chapters: any[], meta: ExportMetadata): string {
+// ===== EPUB-COMPATIBLE XHTML =====
+function generateEPUBContent(book: any, chapters: any[], meta: ExportMetadata): string {
   const chaptersXhtml = chapters.map((ch: any) => `
-    <section id="chapter-${ch.chapter_number}" epub:type="chapter" class="chapter">
-      <header class="chapter-header">
-        <p class="chapter-label">Chapter ${ch.chapter_number}</p>
-        <h2 class="chapter-title">${escapeHtml(ch.title)}</h2>
-      </header>
-      <div class="chapter-content">
-        ${markdownToHtml(ch.content || "")}
-      </div>
+    <section epub:type="chapter" id="chapter-${ch.chapter_number}">
+      <h2>${escapeHtml(ch.title)}</h2>
+      ${markdownToHtml(ch.content || "")}
     </section>
   `).join("\n");
 
   return `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" lang="en" xml:lang="en">
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops" xml:lang="${meta.language}">
 <head>
-  <title>${escapeHtml(meta.title)}</title>
   <meta charset="UTF-8"/>
+  <title>${escapeHtml(meta.title)}</title>
   <meta name="author" content="${escapeHtml(meta.author)}"/>
-  <meta name="description" content="${escapeHtml(book.description || '')}"/>
-  <meta name="publisher" content="ScrollLibrary"/>
-  <meta name="date" content="${new Date().toISOString().split('T')[0]}"/>
-  <meta name="identifier" content="${escapeHtml(meta.publishingIdentifier)}"/>
+  <meta name="dcterms.identifier" content="${meta.publishingIdentifier}"/>
   <style type="text/css">
-    body { 
-      font-family: Georgia, 'Times New Roman', serif; 
-      line-height: 1.6; 
-      margin: 0;
-      padding: 20px;
-      color: #1a1a1a;
-    }
-    
-    /* Cover */
-    .cover-page {
-      text-align: center;
-      page-break-after: always;
-      padding: 40px 20px;
-    }
-    
-    .cover-image {
-      max-width: 100%;
-      max-height: 80vh;
-      margin-bottom: 30px;
-    }
-    
-    .cover-title {
-      font-size: 2.5em;
-      font-weight: bold;
-      margin-bottom: 0.5em;
-      line-height: 1.2;
-    }
-    
-    .cover-author {
-      font-size: 1.3em;
-      color: #555;
-    }
-    
-    /* Copyright */
-    .copyright-page {
-      page-break-after: always;
-      padding: 40px 20px;
-      font-size: 0.9em;
-      color: #555;
-    }
-    
-    .copyright-page p {
-      margin-bottom: 1em;
-    }
-    
-    .ownership-notice {
-      margin-top: 2em;
-      padding: 15px;
-      border: 1px solid #ddd;
-      background: #f9f9f9;
-    }
-    
-    /* TOC */
-    nav[epub|type="toc"] {
-      page-break-after: always;
-    }
-    
-    nav[epub|type="toc"] h2 {
-      text-align: center;
-      font-size: 1.8em;
-      margin-bottom: 1.5em;
-    }
-    
-    nav[epub|type="toc"] ol {
-      list-style-type: none;
-      padding-left: 0;
-    }
-    
-    nav[epub|type="toc"] li {
-      margin: 0.8em 0;
-      padding-bottom: 0.5em;
-      border-bottom: 1px dotted #ccc;
-    }
-    
-    nav[epub|type="toc"] a {
-      text-decoration: none;
-      color: #1a1a2e;
-    }
-    
-    /* Chapters */
-    .chapter {
-      page-break-before: always;
-    }
-    
-    .chapter-header {
-      margin-bottom: 2em;
-      padding-bottom: 1em;
-      border-bottom: 2px solid #b8860b;
-    }
-    
-    .chapter-label {
-      text-transform: uppercase;
-      letter-spacing: 2px;
-      color: #b8860b;
-      font-size: 0.85em;
-      margin-bottom: 0.5em;
-    }
-    
-    .chapter-title {
-      font-size: 1.8em;
-      margin: 0;
-      line-height: 1.3;
-    }
-    
-    .chapter-content p {
-      text-align: justify;
-      margin: 1em 0;
-    }
-    
-    .chapter-content p + p {
-      text-indent: 1.5em;
-    }
-    
-    .chapter-content h2 {
-      font-size: 1.5em;
-      margin-top: 2em;
-      margin-bottom: 1em;
-    }
-    
-    .chapter-content h3 {
-      font-size: 1.2em;
-      margin-top: 1.5em;
-      margin-bottom: 0.8em;
-    }
-    
-    .chapter-content ul, .chapter-content ol {
-      margin: 1em 0;
-      padding-left: 1.5em;
-    }
-    
-    .chapter-content li {
-      margin-bottom: 0.5em;
-    }
-    
-    /* End */
-    .end-page {
-      text-align: center;
-      padding: 3em 1em;
-      page-break-before: always;
-    }
-    
-    .end-page h3 {
-      font-size: 1.8em;
-      margin-bottom: 1em;
-    }
-    
-    .publishing-badge {
-      display: inline-block;
-      margin-top: 2em;
-      padding: 10px 20px;
-      border: 2px solid #b8860b;
-      color: #b8860b;
-    }
+    body { font-family: Georgia, serif; line-height: 1.6; margin: 2em; }
+    h1 { font-size: 2em; text-align: center; margin: 2em 0; }
+    h2 { font-size: 1.5em; margin-top: 2em; border-bottom: 1px solid #ccc; padding-bottom: 0.5em; }
+    h3 { font-size: 1.2em; margin-top: 1.5em; }
+    p { margin: 1em 0; text-align: justify; }
+    .cover { text-align: center; page-break-after: always; }
+    .cover img { max-width: 100%; max-height: 90vh; }
+    .copyright { font-size: 0.9em; color: #666; page-break-after: always; }
+    .toc { page-break-after: always; }
+    .toc h2 { text-align: center; }
+    .toc ul { list-style: none; padding: 0; }
+    .toc li { margin: 0.5em 0; }
+    .toc a { text-decoration: none; color: #333; }
+    section { page-break-before: always; }
+    blockquote { margin: 1em 2em; font-style: italic; border-left: 3px solid #ccc; padding-left: 1em; }
+    ul, ol { margin: 1em 0; padding-left: 2em; }
   </style>
 </head>
 <body>
-  <!-- COVER PAGE -->
-  <section class="cover-page" epub:type="cover">
-    <img src="${escapeHtml(meta.coverUrl)}" alt="Book Cover" class="cover-image"/>
-    <h1 class="cover-title">${escapeHtml(meta.title)}</h1>
-    <p class="cover-author">By ${escapeHtml(meta.author)}</p>
+  <!-- Cover -->
+  <section class="cover" epub:type="cover">
+    <img src="${meta.coverUrl}" alt="Cover"/>
+    <h1>${escapeHtml(meta.title)}</h1>
+    <p>by ${escapeHtml(meta.author)}</p>
   </section>
-  
-  <!-- COPYRIGHT PAGE -->
-  <section class="copyright-page" epub:type="copyright-page">
+
+  <!-- Copyright -->
+  <section class="copyright" epub:type="copyright-page">
     <p><strong>${escapeHtml(meta.title)}</strong></p>
-    <p>By ${escapeHtml(meta.author)}</p>
-    <p>© ${meta.year} ${escapeHtml(meta.author)}. All rights reserved.</p>
-    <p>${meta.isISBN ? 'ISBN' : 'Scroll Publishing Code'}: ${escapeHtml(meta.publishingIdentifier)}</p>
-    <p>Published via ScrollLibrary™</p>
-    <div class="ownership-notice">
-      <p><strong>Authorship &amp; Ownership</strong></p>
-      <p>This work was generated with the assistance of AI tools under the full authorship and ownership of the user. The creator retains 100% ownership and all commercial publishing rights.</p>
-    </div>
+    <p>Copyright © ${meta.year} ${escapeHtml(meta.author)}</p>
+    <p>All rights reserved.</p>
+    <p>${meta.isISBN ? `ISBN: ${meta.publishingIdentifier}` : `Publishing Code: ${meta.publishingIdentifier} (Internal identifier)`}</p>
+    <p>This work was created with AI assistance under the full authorship and ownership of ${escapeHtml(meta.author)}.</p>
+    <p>Published with ScrollLibrary™ • ${meta.totalChapters} chapters • ${meta.totalWords.toLocaleString()} words</p>
   </section>
-  
-  <!-- TABLE OF CONTENTS -->
-  <nav epub:type="toc" id="toc">
-    <h2>Contents</h2>
-    <ol>
-      ${chapters.map((ch: any) => `<li><a href="#chapter-${ch.chapter_number}">Chapter ${ch.chapter_number}: ${escapeHtml(ch.title)}</a></li>`).join("\n      ")}
-    </ol>
-    <p style="text-align: center; color: #666; margin-top: 2em;">${meta.totalChapters} Chapters · ${meta.totalWords.toLocaleString()} Words</p>
+
+  <!-- Table of Contents -->
+  <nav class="toc" epub:type="toc">
+    <h2>Table of Contents</h2>
+    <ul>
+      ${chapters.map((ch: any) => `<li><a href="#chapter-${ch.chapter_number}">${ch.chapter_number}. ${escapeHtml(ch.title)}</a></li>`).join("\n      ")}
+    </ul>
   </nav>
-  
-  <!-- CHAPTERS -->
+
+  <!-- Chapters -->
   ${chaptersXhtml}
-  
-  <!-- END PAGE -->
-  <section class="end-page">
-    <h3>The End</h3>
-    <p>Thank you for reading</p>
-    <p><em>${escapeHtml(meta.title)}</em> by ${escapeHtml(meta.author)}</p>
-    <p class="publishing-badge">✓ Publishing Ready</p>
-    <p style="margin-top: 2em; color: #888;">Generated by ScrollLibrary™<br/>© ${meta.year}</p>
-  </section>
 </body>
 </html>`;
 }
 
-// ===== PRODUCTION DOCX (RTF) EXPORT =====
-function generateProductionDOCX(book: any, chapters: any[], meta: ExportMetadata): string {
-  const rtfHeader = `{\\rtf1\\ansi\\ansicpg1252\\deff0\\nouicompat\\deflang1033
-{\\fonttbl{\\f0\\froman\\fcharset0 Georgia;}{\\f1\\fswiss\\fcharset0 Arial;}{\\f2\\fmodern\\fcharset0 Courier New;}}
-{\\colortbl;\\red26\\green26\\blue46;\\red184\\green134\\blue11;\\red102\\green102\\blue102;\\red85\\green85\\blue85;}
-{\\*\\generator ScrollLibrary Publishing Engine;}
-{\\info{\\title ${escapeRtf(meta.title)}}{\\author ${escapeRtf(meta.author)}}{\\company ScrollLibrary}}
-\\paperw12240\\paperh15840\\margl1440\\margr1440\\margt1440\\margb1440
-\\headery720\\footery720
-`;
+// ===== RTF DOCUMENT (Word-compatible) =====
+function generateRTFDocument(book: any, chapters: any[], meta: ExportMetadata): string {
+  const escapeRtf = (text: string): string => {
+    return text
+      .replace(/\\/g, '\\\\')
+      .replace(/\{/g, '\\{')
+      .replace(/\}/g, '\\}')
+      .replace(/\n/g, '\\par ')
+      .replace(/[^\x00-\x7F]/g, char => `\\u${char.charCodeAt(0)}?`);
+  };
 
-  // Cover page
-  const coverPage = `
-\\pard\\qc\\sb2880\\sa480\\f0\\fs96\\cf1\\b ${escapeRtf(meta.title)}\\b0\\par
-\\pard\\qc\\fs36\\cf3 By ${escapeRtf(meta.author)}\\par
-\\pard\\qc\\fs24\\cf2 ${escapeRtf((meta.category || '').replace(/_/g, " ").toUpperCase())}\\par
-\\pard\\qc\\sb1440\\fs20\\cf3 ScrollLibrary\\u8482  Publishing\\par
-\\pard\\qc\\fs20\\cf3 ${meta.year}\\par
-\\page
-`;
-
-  // Copyright page
-  const copyrightPage = `
-\\pard\\sb7200\\sa240\\f0\\fs24\\cf0\\b ${escapeRtf(meta.title)}\\b0\\par
-\\pard\\fs22\\cf0 By ${escapeRtf(meta.author)}\\par
-\\par
-\\pard\\fs20\\cf3 \\u169  ${meta.year} ${escapeRtf(meta.author)}. All rights reserved.\\par
-\\par
-No part of this publication may be reproduced, distributed, or transmitted in any form or by any means without the prior written permission of the copyright holder.\\par
-\\par
-${meta.isISBN ? 'ISBN' : 'Scroll Publishing Code (SPC)'}: {\\f2 ${escapeRtf(meta.publishingIdentifier)}}\\par
-${!meta.isISBN ? '\\par{\\i Note: SPC is an internal publishing identifier. For commercial distribution requiring ISBN, please obtain one from your national ISBN agency.}\\par' : ''}
-\\par
-Published via ScrollLibrary\\u8482 \\par
-Generated: ${new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' })}\\par
-\\par
-\\pard\\box\\brdrs\\brdrw10\\brsp100\\cf0
-{\\b Authorship & Ownership Declaration}\\par
-This work was generated with the assistance of AI tools under the full authorship and ownership of the user. The creator retains 100% ownership and all commercial publishing rights.\\par
-\\pard
-\\page
-`;
-
-  // Table of contents
-  const toc = `
-\\pard\\qc\\sb480\\sa480\\f0\\fs48\\cf1\\b Contents\\b0\\par
-\\pard\\sb240\\sa120\\fs24\\cf0
-${chapters.map((ch: any) => `Chapter ${ch.chapter_number}: ${escapeRtf(ch.title)} \\tab\\tab ${(ch.word_count || 0).toLocaleString()} words\\par`).join("\n")}
-\\pard\\qc\\sb480\\fs20\\cf3 ${meta.totalChapters} Chapters \\u183  ${meta.totalWords.toLocaleString()} Words\\par
-\\page
-`;
-
-  // Chapters
   const chaptersRtf = chapters.map((ch: any) => {
     const content = (ch.content || "")
-      .replace(/^## (.+)$/gm, "\\par\\pard\\sb360\\sa120\\fs36\\cf1\\b $1\\b0\\par\\pard\\fs24\\cf0\\sa120\\qj")
-      .replace(/^### (.+)$/gm, "\\par\\pard\\sb240\\sa120\\fs30\\b $1\\b0\\par\\pard\\fs24\\sa120\\qj")
-      .replace(/^#### (.+)$/gm, "\\par\\pard\\sb180\\sa120\\fs26\\b $1\\b0\\par\\pard\\fs24\\sa120\\qj")
-      .replace(/\*\*(.+?)\*\*/g, "\\b $1\\b0")
-      .replace(/\*(.+?)\*/g, "\\i $1\\i0")
-      .replace(/\n\n/g, "\\par\\par\\sa120")
-      .replace(/^- (.+)$/gm, "\\par\\bullet\\tab $1");
+      .replace(/^## (.+)$/gm, '\\par\\par{\\b\\fs32 $1}\\par\\par')
+      .replace(/^### (.+)$/gm, '\\par\\par{\\b\\fs28 $1}\\par\\par')
+      .replace(/\*\*(.+?)\*\*/g, '{\\b $1}')
+      .replace(/\*(.+?)\*/g, '{\\i $1}')
+      .replace(/^- (.+)$/gm, '\\par\\bullet  $1')
+      .replace(/\n\n/g, '\\par\\par ')
+      .replace(/\n/g, '\\par ');
 
     return `
-\\pard\\sb0\\keepn\\fs20\\cf2 CHAPTER ${ch.chapter_number}\\par
-\\pard\\keepn\\fs44\\cf1\\b ${escapeRtf(ch.title)}\\b0\\par
-\\pard\\brdrb\\brdrs\\brdrw10\\brsp100\\cf2\\par
-\\pard\\fs24\\cf0\\sa120\\qj
-${content}
 \\page
+{\\b\\fs36 CHAPTER ${ch.chapter_number}}\\par\\par
+{\\b\\fs32 ${escapeRtf(ch.title)}}\\par
+\\par\\par
+${content}
 `;
-  }).join("");
+  }).join("\n");
 
-  // End page
-  const endPage = `
-\\pard\\qc\\sb2880\\fs48\\cf1\\b The End\\b0\\par
-\\pard\\qc\\sb240\\fs24\\cf3 Thank you for reading\\par
-\\par
-{\\i ${escapeRtf(meta.title)}} by ${escapeRtf(meta.author)}\\par
-\\par
-\\pard\\qc\\box\\brdrs\\brdrw10\\brsp100\\cf2 \\u10003  Publishing Ready\\par
-\\pard\\qc\\sb480\\fs20\\cf3 Generated by ScrollLibrary\\u8482 \\par
-\\u169  ${meta.year}\\par
-`;
+  return `{\\rtf1\\ansi\\deff0
+{\\fonttbl{\\f0 Georgia;}{\\f1 Arial;}}
+{\\colortbl;\\red0\\green0\\blue0;\\red184\\green134\\blue11;}
 
-  return rtfHeader + coverPage + copyrightPage + toc + chaptersRtf + endPage + "}";
+\\paperw12240\\paperh15840
+\\margl1440\\margr1440\\margt1440\\margb1440
+
+{\\info
+{\\title ${escapeRtf(meta.title)}}
+{\\author ${escapeRtf(meta.author)}}
+{\\creatim\\yr${meta.year}}
 }
 
-function escapeRtf(text: string): string {
-  if (!text) return "";
-  return text
-    .replace(/\\/g, "\\\\")
-    .replace(/\{/g, "\\{")
-    .replace(/\}/g, "\\}")
-    .replace(/\n/g, "\\par ");
+\\f0\\fs24
+
+{\\pard\\qc\\sb2880
+{\\b\\fs56 ${escapeRtf(meta.title)}}\\par\\par
+{\\fs32 by ${escapeRtf(meta.author)}}\\par\\par\\par
+{\\fs24\\cf2 ${escapeRtf(meta.category.replace(/_/g, " ").toUpperCase())}}\\par\\par\\par\\par
+{\\fs20 ScrollLibrary\\super\\u8482?\\nosupersub  Publishing}
+\\par}
+
+\\page
+
+{\\pard\\qj
+{\\b ${escapeRtf(meta.title)}}\\par\\par
+Copyright \\u169? ${meta.year} ${escapeRtf(meta.author)}\\par
+All rights reserved.\\par\\par
+${meta.isISBN 
+  ? `ISBN: ${meta.publishingIdentifier}` 
+  : `Publishing Code: ${meta.publishingIdentifier}\\par{\\fs18 (Internal identifier - not an ISBN)}`
+}\\par\\par\\par
+{\\b Ownership & Rights Notice}\\par
+This work was created with AI assistance under the full authorship and ownership of ${escapeRtf(meta.author)}. The author retains 100% ownership and all commercial rights.\\par\\par\\par
+Published with ScrollLibrary\\super\\u8482?\\nosupersub\\par
+${meta.totalChapters} chapters \\bullet  ${meta.totalWords.toLocaleString()} words
+\\par}
+
+\\page
+
+{\\pard\\qc\\sb720
+{\\b\\fs36 Table of Contents}\\par\\par
+}
+
+${chapters.map((ch: any) => `{\\pard ${ch.chapter_number}. ${escapeRtf(ch.title)}\\par}`).join("\n")}
+
+{\\pard\\qc\\sb360
+{\\fs20 ${meta.totalChapters} chapters \\bullet  ${meta.totalWords.toLocaleString()} words}
+\\par}
+
+${chaptersRtf}
+
+}`;
 }
