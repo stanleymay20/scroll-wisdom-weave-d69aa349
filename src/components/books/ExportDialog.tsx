@@ -113,10 +113,24 @@ export function ExportDialog({
         throw new Error(response.data.error);
       }
 
-      const { content, filename, contentType, metadata, instructions } = response.data;
+      const { content, filename, contentType } = response.data;
 
-      // Create blob and download with correct content type
-      const blob = new Blob([content], { type: contentType });
+      // Decode base64 if present, otherwise use content directly
+      let blobContent: BlobPart;
+      if (response.data.isBase64) {
+        // Decode base64 to binary
+        const binaryString = atob(content);
+        const bytes = new Uint8Array(binaryString.length);
+        for (let i = 0; i < binaryString.length; i++) {
+          bytes[i] = binaryString.charCodeAt(i);
+        }
+        blobContent = bytes;
+      } else {
+        blobContent = content;
+      }
+
+      // Create blob and download
+      const blob = new Blob([blobContent], { type: contentType });
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
@@ -126,16 +140,9 @@ export function ExportDialog({
       document.body.removeChild(link);
       URL.revokeObjectURL(url);
 
-      // Show success with instructions for converting to final format
-      const formatInstructions: Record<string, string> = {
-        pdf: "Open the HTML file in your browser and use Print → Save as PDF",
-        epub: "Use Calibre or similar tool to convert XHTML to EPUB",
-        docx: "Open the RTF file in Microsoft Word or Google Docs",
-      };
-
       toast({
         title: "Export complete!",
-        description: `${metadata.totalChapters} chapters exported. ${formatInstructions[format] || instructions}`,
+        description: `Your book has been downloaded as ${filename}`,
       });
       
       setIsOpen(false);
@@ -154,21 +161,21 @@ export function ExportDialog({
   const formats: { format: ExportFormat; label: string; icon: typeof FileText; description: string }[] = [
     {
       format: "pdf",
-      label: "PDF Ready",
+      label: "PDF Document",
       icon: FileText,
-      description: "Print-ready HTML → use browser Print to save as PDF",
+      description: "Print-ready PDF with cover, TOC, and professional layout",
     },
     {
       format: "epub",
-      label: "EPUB/E-Reader",
+      label: "EPUB E-Book",
       icon: BookOpen,
-      description: "XHTML format for e-readers and Calibre conversion",
+      description: "Standard e-book format for Apple Books, Kobo, and readers",
     },
     {
       format: "docx",
-      label: "Word/RTF",
+      label: "Word Document",
       icon: File,
-      description: "RTF format - opens in Word, Google Docs, LibreOffice",
+      description: "Editable document for Microsoft Word and Google Docs",
     },
   ];
 
