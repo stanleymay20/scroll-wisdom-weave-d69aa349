@@ -106,39 +106,50 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         checkTTSUsage(session.user.id),
       ]);
 
-      // Check subscription status via edge function
-      const { data, error } = await supabase.functions.invoke('check-subscription');
-      
-      if (error) {
-        console.error('Error checking subscription:', error);
-        // Fall back to profile plan
-        const { data: profile } = await supabase
+      // Check subscription status via edge function, but FAIL-OPEN to profile plan
+      // (prevents paid/admin users being incorrectly downgraded when Stripe lookup fails)
+      const [{ data: subData, error: subError }, { data: profileData, error: profileError }] = await Promise.all([
+        supabase.functions.invoke('check-subscription'),
+        supabase
           .from('profiles')
           .select('plan')
           .eq('id', session.user.id)
-          .maybeSingle();
-        
-        if (profile?.plan) {
-          setTier(profile.plan as SubscriptionTier);
+          .maybeSingle(),
+      ]);
+
+      if (profileError) {
+        console.error('Error reading profile plan:', profileError);
+      }
+
+      if (subError) {
+        console.error('Error checking subscription:', subError);
+        if (profileData?.plan) {
+          setTier(profileData.plan as SubscriptionTier);
         }
         return;
       }
 
-      if (data?.subscribed && data?.product_id) {
-        const detectedTier = getTierFromProductId(data.product_id);
+      // Prefer Stripe tier when available, otherwise fall back to profile plan
+      if (subData?.subscribed && subData?.product_id) {
+        const detectedTier = getTierFromProductId(subData.product_id);
         setTier(detectedTier);
-        setSubscriptionEnd(data.subscription_end);
-        
-        // Update profile plan
+        setSubscriptionEnd(subData.subscription_end);
+
+        // Update profile plan to keep things consistent
         const validPlans = ['free', 'premium', 'prophet_tier', 'student'] as const;
         const planToSave = validPlans.includes(detectedTier as any) ? detectedTier : 'premium';
-        
+
         await supabase
           .from('profiles')
           .update({ plan: planToSave })
           .eq('id', session.user.id);
       } else {
-        setTier('free');
+        // FAIL-OPEN: if profile shows a paid plan, do NOT downgrade to free
+        if (profileData?.plan && profileData.plan !== 'free') {
+          setTier(profileData.plan as SubscriptionTier);
+        } else {
+          setTier('free');
+        }
         setSubscriptionEnd(null);
       }
     } catch (error) {
