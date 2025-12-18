@@ -89,7 +89,7 @@ export default function Library() {
       const from = pageNum * ITEMS_PER_PAGE;
       const to = from + ITEMS_PER_PAGE - 1;
 
-      const { data, error, count } = await supabase
+      const { data, error } = await supabase
         .from("user_library")
         .select(`
           id,
@@ -104,7 +104,7 @@ export default function Library() {
             cover_image_url,
             total_chapters
           )
-        `, { count: 'exact' })
+        `)
         .order("created_at", { ascending: false })
         .range(from, to);
 
