@@ -40,7 +40,7 @@ export interface Entitlements {
  * FAIL-SAFE: If resolution fails, default to MORE access for paid users
  */
 export function useEntitlements(): Entitlements {
-  const { tier, isLoading } = useSubscription();
+  const { tier, isLoading: subLoading } = useSubscription();
   const { isAdmin, isLoading: adminLoading } = useIsAdmin();
 
   // Tier checks
@@ -48,6 +48,10 @@ export function useEntitlements(): Entitlements {
   const isPremium = tier === 'premium';
   const isStudent = tier === 'student';
   const isPaid = isProphet || isPremium || isStudent;
+
+  // FAIL-OPEN during loading: If still loading AND we have hints of paid status, grant access
+  // This prevents false upgrade prompts while data loads
+  const stillLoading = subLoading || adminLoading;
 
   // ADMIN: GOD MODE - bypass everything, NO EXCEPTIONS
   if (isAdmin) {
@@ -150,6 +154,32 @@ export function useEntitlements(): Entitlements {
       isStudent: true,
       isScrollStudent: true,
       isPaid: true,
+    };
+  }
+
+  // FAIL-OPEN during loading: If tier isn't 'free' explicitly and we're loading, assume paid
+  if (stillLoading && tier !== 'free') {
+    return {
+      canPublish: true,
+      canExport: true,
+      canDownload: true,
+      canGenerateBooks: true,
+      canUseAllFormats: true,
+      canExportAllFormats: true,
+      hasCommercialRights: true,
+      bypassAllLimits: false,
+      canUseAiCovers: true,
+      canUseTTS: true,
+      canUseOpenAITTS: true,
+      canUseElevenLabsTTS: false,
+      canBatchGenerate: false,
+      tier,
+      isAdmin: false,
+      isProphet: isProphet,
+      isPremium: isPremium || isProphet,
+      isStudent: isStudent,
+      isScrollStudent: isStudent,
+      isPaid: true, // Assume paid during loading if tier isn't explicitly 'free'
     };
   }
 

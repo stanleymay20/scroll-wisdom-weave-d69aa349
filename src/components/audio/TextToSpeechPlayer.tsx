@@ -37,9 +37,10 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: T
   // Use centralized entitlements - SINGLE SOURCE OF TRUTH
   const entitlements = useEntitlements();
   
-  // Full access check - Admin, Prophet, Premium, Student all have TTS
-  const hasFullAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent;
-  const canUseTTS = hasFullAccess || entitlements.canUseTTS || entitlements.isPaid;
+  // FAIL-OPEN: Admin, Prophet, Premium, Student, or any paid user has TTS access
+  // NEVER block paid users - if in doubt, allow
+  const hasFullAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent || entitlements.isPaid;
+  const canUseTTS = hasFullAccess || entitlements.canUseTTS;
 
   const generateSpeech = useCallback(async () => {
     if (!text || text.trim().length === 0) {
@@ -58,6 +59,12 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: T
     console.log("[TTS Client] Starting speech generation...");
 
     try {
+      console.log("[TTS Client] Invoking edge function with:", { 
+        textLength: text.slice(0, 4096).length, 
+        voice: selectedVoice, 
+        language 
+      });
+
       const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
         body: { 
           text: text.slice(0, 4096), // Limit text length
@@ -194,8 +201,9 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: T
     }
   }, []);
 
-  // Don't render if user doesn't have TTS access
-  if (!canUseTTS) {
+  // Don't render if user doesn't have TTS access - but FAIL-OPEN during loading
+  // If entitlements indicate paid status, always show
+  if (!canUseTTS && !entitlements.isPaid && !entitlements.isAdmin) {
     return null;
   }
 
