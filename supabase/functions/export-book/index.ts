@@ -156,7 +156,7 @@ serve(async (req) => {
   }
 });
 
-// ===== PDF Generation =====
+// ===== PDF Generation with Page Numbers =====
 async function generatePDF(book: any, chapters: any[], author: string, identifier: string, isISBN: boolean, year: number): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
@@ -167,9 +167,26 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
   const pageHeight = 792;
   const margin = 72; // 1 inch margins
   const textWidth = pageWidth - (margin * 2);
+  
+  // Track pages for numbering
+  let pageNumber = 0;
+  
+  // Helper function to add page number
+  const addPageNumber = (page: any, num: number) => {
+    if (num > 2) { // Skip page numbers on title and copyright pages
+      page.drawText(String(num - 2), { // Subtract 2 for front matter
+        x: pageWidth / 2 - 5,
+        y: 30,
+        size: 10,
+        font: helvetica,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+    }
+  };
 
   // Title Page
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumber++;
   let y = pageHeight - 200;
   
   // Category
@@ -216,6 +233,7 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
 
   // Copyright Page
   page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumber++;
   y = margin + 200;
   
   const copyrightText = [
@@ -243,6 +261,8 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
 
   // Table of Contents
   page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumber++;
+  addPageNumber(page, pageNumber);
   y = pageHeight - margin - 50;
   
   page.drawText("TABLE OF CONTENTS", {
@@ -265,6 +285,8 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
     y -= 24;
     if (y < margin + 50) {
       page = pdfDoc.addPage([pageWidth, pageHeight]);
+      pageNumber++;
+      addPageNumber(page, pageNumber);
       y = pageHeight - margin - 50;
     }
   }
@@ -273,6 +295,8 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
   for (const chapter of chapters) {
     // New page for each chapter
     page = pdfDoc.addPage([pageWidth, pageHeight]);
+    pageNumber++;
+    addPageNumber(page, pageNumber);
     y = pageHeight - margin - 50;
     
     // Chapter header
@@ -310,6 +334,8 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
       for (const line of lines) {
         if (y < margin + 30) {
           page = pdfDoc.addPage([pageWidth, pageHeight]);
+          pageNumber++;
+          addPageNumber(page, pageNumber);
           y = pageHeight - margin - 30;
         }
         
