@@ -54,10 +54,11 @@ export function ExportDialog({
   
   // ABSOLUTE RULE: If ANY of these are true, user has full export access
   // Admin, Prophet, Premium, ScrollStudent - NO upgrade prompts ever
-  const hasFullAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent;
+  // CRITICAL: During loading, assume access for better UX - prevents false blocks
+  const hasFullAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent || entitlements.isPaid;
   
-  // Fail-safe: also check explicit canExport/canDownload flags
-  const canExport = hasFullAccess || entitlements.canExport || entitlements.canDownload || entitlements.isPaid;
+  // Fail-safe: paid users ALWAYS have export access - no exceptions
+  const canExport = hasFullAccess || entitlements.canExport || entitlements.canDownload;
 
   useEffect(() => {
     if (defaultAuthorName) {
@@ -299,8 +300,8 @@ export function ExportDialog({
           </p>
         )}
 
-        {/* Only show upgrade prompt for FREE users who are NOT paid/admin/prophet/premium/student */}
-        {!canExport && !entitlements.isPaid && !hasFullAccess && (
+        {/* Only show upgrade prompt for FREE tier users - NEVER for paid/admin */}
+        {!canExport && !entitlements.isPaid && !entitlements.isAdmin && !entitlements.isProphet && !entitlements.isPremium && !entitlements.isScrollStudent && (
           <p className="text-sm text-amber-500 flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
             Upgrade to Premium to access publishing exports

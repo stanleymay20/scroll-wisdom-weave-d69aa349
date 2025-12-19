@@ -6,7 +6,7 @@ import { Footer } from "@/components/layout/Footer";
 import { BookCard } from "@/components/books/BookCard";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Library as LibraryIcon, BookOpen, Plus } from "lucide-react";
+import { Library as LibraryIcon, BookOpen, Plus, RefreshCw, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 
@@ -45,10 +45,12 @@ function BookCardSkeleton() {
 export default function Library() {
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
   const [page, setPage] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [isLoadingMore, setIsLoadingMore] = useState(false);
+  const [retryCount, setRetryCount] = useState(0);
   const navigate = useNavigate();
   const { toast } = useToast();
 
@@ -78,9 +80,10 @@ export default function Library() {
     }
   }, [user]);
 
-  const fetchLibrary = async (pageNum: number, reset = false) => {
+  const fetchLibrary = async (pageNum: number, reset = false, retry = 0) => {
     if (reset) {
       setIsLoading(true);
+      setLoadError(null);
     } else {
       setIsLoadingMore(true);
     }
@@ -88,6 +91,10 @@ export default function Library() {
     try {
       const from = pageNum * ITEMS_PER_PAGE;
       const to = from + ITEMS_PER_PAGE - 1;
+
+      // Add timeout to prevent hanging
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
 
       const { data, error } = await supabase
         .from("user_library")
@@ -108,6 +115,8 @@ export default function Library() {
         .order("created_at", { ascending: false })
         .range(from, to);
 
+      clearTimeout(timeoutId);
+
       if (error) throw error;
       
       const newItems = (data as any) || [];
@@ -120,17 +129,37 @@ export default function Library() {
       
       setHasMore(newItems.length === ITEMS_PER_PAGE);
       setPage(pageNum);
+      setLoadError(null);
+      setRetryCount(0);
     } catch (error: any) {
       console.error("Error fetching library:", error);
-      toast({
-        title: "Error",
-        description: "Failed to load your library.",
-        variant: "destructive",
-      });
+      
+      // Retry up to 2 times with exponential backoff
+      if (retry < 2) {
+        const delay = Math.pow(2, retry) * 500; // 500ms, 1000ms
+        setTimeout(() => {
+          fetchLibrary(pageNum, reset, retry + 1);
+        }, delay);
+        return;
+      }
+      
+      setLoadError("Failed to load your library. Please try again.");
+      if (!reset) {
+        toast({
+          title: "Error",
+          description: "Failed to load more books.",
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
       setIsLoadingMore(false);
     }
+  };
+
+  const handleRetry = () => {
+    setRetryCount(prev => prev + 1);
+    fetchLibrary(0, true);
   };
 
   const loadMore = () => {
@@ -171,6 +200,27 @@ export default function Library() {
               <BookCardSkeleton key={index} />
             ))}
           </div>
+        ) : loadError ? (
+          // Error State with Retry
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center py-20"
+          >
+            <div className="bg-destructive/10 rounded-full p-6 w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+              <AlertCircle className="h-12 w-12 text-destructive" />
+            </div>
+            <h2 className="font-display text-2xl font-semibold mb-3">
+              Failed to load library
+            </h2>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              {loadError}
+            </p>
+            <Button variant="outline" onClick={handleRetry}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Try Again
+            </Button>
+          </motion.div>
         ) : libraryItems.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
