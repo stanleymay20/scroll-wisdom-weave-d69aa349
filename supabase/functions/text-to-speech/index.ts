@@ -72,27 +72,89 @@ serve(async (req) => {
 
     console.log(`[TTS] Generating speech for ${cleanedText.length} characters with voice: ${selectedVoice}, language: ${language}`);
 
-    // Call OpenAI TTS API
-    const response = await fetch("https://api.openai.com/v1/audio/speech", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${OPENAI_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "tts-1",
-        input: cleanedText,
-        voice: selectedVoice,
-        response_format: "mp3",
-      }),
-    });
+    // Call OpenAI TTS API with retry logic
+    let response: Response | null = null;
+    let lastError: string = "";
+    const maxRetries = 2;
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[TTS] OpenAI API error:", response.status, errorText);
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        response = await fetch("https://api.openai.com/v1/audio/speech", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${OPENAI_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "tts-1",
+            input: cleanedText,
+            voice: selectedVoice,
+            response_format: "mp3",
+          }),
+        });
+
+        if (response.ok) {
+          break; // Success, exit retry loop
+        }
+
+        const errorData = await response.text();
+        console.error(`[TTS] OpenAI API error (attempt ${attempt + 1}):`, response.status, errorData);
+
+        // Parse error for specific handling
+        let errorMessage = `OpenAI TTS failed: ${response.status}`;
+        let userFriendlyMessage = "Text-to-speech temporarily unavailable. Please try again later.";
+        
+        try {
+          const parsedError = JSON.parse(errorData);
+          if (parsedError.error?.message) {
+            console.error("[TTS] Error message:", parsedError.error.message);
+            
+            // Handle specific error types
+            if (response.status === 429) {
+              userFriendlyMessage = "TTS service is temporarily busy. Please wait a moment and try again.";
+              // Wait before retry
+              if (attempt < maxRetries) {
+                await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+                continue;
+              }
+            } else if (response.status === 401 || parsedError.error.code === "billing_not_active") {
+              userFriendlyMessage = "TTS service configuration issue. Please contact support.";
+              lastError = userFriendlyMessage;
+              break; // Don't retry auth/billing issues
+            } else if (response.status === 400) {
+              userFriendlyMessage = "Invalid text for speech synthesis. Try with different content.";
+              lastError = userFriendlyMessage;
+              break;
+            }
+          }
+        } catch {
+          // Keep default error message
+        }
+
+        lastError = userFriendlyMessage;
+        
+        // Don't retry on non-retryable errors
+        if (response.status !== 429 && response.status !== 500 && response.status !== 503) {
+          break;
+        }
+        
+        // Wait before retry for server errors
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+      } catch (fetchError) {
+        console.error(`[TTS] Fetch error (attempt ${attempt + 1}):`, fetchError);
+        lastError = "Network error connecting to TTS service. Please try again.";
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
+        }
+      }
+    }
+
+    if (!response || !response.ok) {
       return new Response(
-        JSON.stringify({ error: `OpenAI TTS failed: ${response.status}` }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: lastError || "TTS service unavailable. Please try again later." }),
+        { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
@@ -126,7 +188,7 @@ serve(async (req) => {
   } catch (error) {
     console.error("[TTS] Error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ error: "TTS service error. Please try again later." }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
