@@ -24,6 +24,7 @@ import PrivacyPolicy from "./pages/PrivacyPolicy";
 import TermsOfService from "./pages/TermsOfService";
 import ModerationDashboard from "./pages/ModerationDashboard";
 import Pricing from "./pages/Pricing";
+import AdminPanel from "./pages/AdminPanel";
 import { CookieConsent } from "./components/legal/CookieConsent";
 
 const queryClient = new QueryClient();
@@ -53,6 +54,7 @@ const App = () => (
               <Route path="/terms" element={<TermsOfService />} />
               <Route path="/moderation" element={<ModerationDashboard />} />
               <Route path="/pricing" element={<Pricing />} />
+              <Route path="/admin" element={<AdminPanel />} />
               <Route path="/book/:id" element={<BookDetail />} />
               <Route path="/read/:bookId/:chapterId" element={<Reader />} />
               <Route path="*" element={<NotFound />} />
