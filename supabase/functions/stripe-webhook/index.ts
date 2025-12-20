@@ -58,13 +58,12 @@ serve(async (req) => {
 
     logStep("Processing event", { type: event.type, id: event.id });
 
-    // Map Stripe product IDs to tier names
+    // Map Stripe product IDs to tier names - REAL PRODUCT IDs from Stripe
     const getTierFromProductId = (productId: string): string => {
-      // These should match your SUBSCRIPTION_TIERS in subscription.ts
       const productMap: Record<string, string> = {
-        'prod_premium_placeholder': 'premium',
-        'prod_prophet_placeholder': 'prophet_tier',
-        'prod_student_placeholder': 'student',
+        'prod_TaQU3ILEUpbXOT': 'premium',      // ScrollLibrary – Premium ($19/mo)
+        'prod_TaQWA7MSUntiMy': 'prophet_tier', // ScrollLibrary – Prophet Tier ($49/mo)
+        'prod_TaQSrotoUkTuPC': 'student',      // ScrollLibrary – Student Plan ($9/mo)
       };
       return productMap[productId] || 'free';
     };
