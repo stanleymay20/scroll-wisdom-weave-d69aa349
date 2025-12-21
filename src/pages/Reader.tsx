@@ -154,11 +154,12 @@ export default function Reader() {
         const imgMatch = paragraph.match(/!\[([^\]]*)\]\(([^)]+)\)/);
         if (imgMatch) {
           return (
-            <div key={index} className="my-4 sm:my-6 flex justify-center">
+            <div key={index} className="my-6 sm:my-8 flex justify-center comic-panel">
               <img 
                 src={imgMatch[2]} 
                 alt={imgMatch[1]} 
-                className="w-full max-w-md sm:max-w-lg lg:max-w-xl rounded-xl shadow-lg border border-border/50"
+                className="w-full max-w-sm sm:max-w-md md:max-w-lg lg:max-w-xl rounded-xl shadow-2xl"
+                style={{ aspectRatio: '1/1', objectFit: 'cover' }}
               />
             </div>
           );
@@ -167,9 +168,9 @@ export default function Reader() {
       // Handle comic captions (blockquotes)
       if (paragraph.startsWith('>')) {
         return (
-          <blockquote key={index} className="text-center text-lg sm:text-xl italic text-foreground/90 my-4 sm:my-6 px-4 sm:px-8 py-3 bg-muted/30 rounded-lg border-l-4 border-scroll-gold">
+          <div key={index} className="comic-caption text-center text-xl sm:text-2xl font-medium text-foreground my-4 sm:my-6 px-6 sm:px-12 py-4 bg-scroll-gold/10 rounded-xl border border-scroll-gold/30 max-w-md mx-auto">
             {paragraph.replace(/^>\s*/, '')}
-          </blockquote>
+          </div>
         );
       }
       // Handle section dividers
