@@ -138,26 +138,29 @@ serve(async (req) => {
     const selectedTheme = coverThemes[theme] || coverThemes.classic;
     console.log(`[GENERATE-COVER] Generating ${selectedTheme.name} cover for book: ${title}`);
 
-    // Create a detailed prompt for the book cover
-    const coverPrompt = `Create a professional, elegant book cover design for ScrollLibrary™.
+    // Create a detailed prompt for the book cover - MINIMAL TEXT to avoid spelling issues
+    const coverPrompt = `Create a professional, elegant book cover design that is PRIMARILY VISUAL with MINIMAL TEXT.
 
-Book Title: "${title}"
-Category: ${category.replace(/_/g, " ")}
-Theme: ${description || "A scholarly work on this topic"}
+Book Theme: ${category.replace(/_/g, " ")} - ${description || "A scholarly work on this topic"}
 
 COVER STYLE - ${selectedTheme.name.toUpperCase()}:
 ${selectedTheme.style}
 
-CRITICAL REQUIREMENTS:
-- ABSOLUTELY NO SPELLING OR GRAMMATICAL ERRORS - Triple-check all text before rendering
-- All words must be spelled correctly with proper grammar
-- If including ANY text on the cover, use ONLY: "ScrollLibrary™" as the publisher/brand name
-- DO NOT include "Oxford", "Academic Press", "Penguin", or any other publisher names
-- The book title "${title}" must be spelled EXACTLY as shown - no variations or typos
-- Include "ScrollLibrary™" as a small publisher mark at the bottom
+CRITICAL TEXT REQUIREMENTS:
+1. AVOID TEXT AS MUCH AS POSSIBLE - use abstract imagery, symbols, and visual metaphors instead
+2. If ANY text must appear, use ONLY these EXACT words with correct spelling:
+   - "ScrollLibrary" (optional small brand mark)
+3. DO NOT write the book title on the cover - we will add it digitally later
+4. DO NOT include ANY publisher names like "Oxford", "Academic Press", "Penguin" etc.
+5. DO NOT include author names, subtitles, or any other text
+6. Focus on creating a visually striking, abstract design that represents the subject matter through imagery, patterns, and colors rather than words
+
+DESIGN FOCUS:
+- Use powerful abstract imagery, geometric patterns, and symbolic visuals
+- Let the visual design speak for the subject matter without text
 - Aspect ratio: vertical book cover (3:4)
 - Ultra high resolution, professional quality
-- If unsure about spelling, use fewer words rather than risk errors`;
+- Create visual interest through composition, color, and texture - NOT text`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

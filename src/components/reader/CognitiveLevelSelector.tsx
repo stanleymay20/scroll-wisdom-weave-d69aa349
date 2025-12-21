@@ -224,22 +224,25 @@ export function CognitiveLevelSelector({
       {/* Footer with Selected Summary */}
       {selectedLevelData && (
         <div className="p-4 border-t border-border/50 bg-muted/20">
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm">
-                <span className="text-muted-foreground">Selected: </span>
-                <span className="font-medium text-foreground">{selectedLevelData.name}</span>
+          <div className="flex items-center justify-between gap-3">
+            <div className="min-w-0 flex-shrink">
+              <p className="text-sm truncate">
+                <span className="text-muted-foreground">Mode: </span>
+                <span className="font-medium text-foreground">
+                  {selectedLevelData.id === "analytical" ? "Analytical" : selectedLevelData.name}
+                </span>
               </p>
               <p className="text-xs text-muted-foreground">
-                Estimated time: {calculateTime(selectedLevelData.timeMultiplier)}
+                ~{calculateTime(selectedLevelData.timeMultiplier)}
               </p>
             </div>
             {onStartReading && (
               <Button 
                 onClick={onStartReading}
-                className="bg-scroll-gold hover:bg-scroll-gold/90 text-scroll-dark"
+                className="bg-scroll-gold hover:bg-scroll-gold/90 text-scroll-dark flex-shrink-0"
+                size="sm"
               >
-                Start Reading
+                Start
                 <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             )}

@@ -16,7 +16,8 @@ import {
   Brain,
   BookMarked,
   Palette,
-  GraduationCap
+  GraduationCap,
+  MessageCircle
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TextToSpeechPlayer } from "@/components/audio/TextToSpeechPlayer";
@@ -26,6 +27,7 @@ import { CognitiveLevelSelector, COGNITIVE_LEVELS } from "@/components/reader/Co
 import { GuidedReadingMode, CognitiveLevelIndicator } from "@/components/reader/GuidedReadingMode";
 import { ResearchPanel } from "@/components/academic/ResearchPanel";
 import { AcademicModeIndicator, AcademicDisclaimer } from "@/components/academic/AcademicModeIndicator";
+import { InteractiveQA, InteractiveQAButton } from "@/components/reader/InteractiveQA";
 import { CitationStyle } from "@/lib/academicCategories";
 
 interface BookData {
@@ -78,6 +80,7 @@ export default function Reader() {
   const [cognitiveLevel, setCognitiveLevel] = useState("functional");
   const [readingProgress, setReadingProgress] = useState(0);
   const [guidedModeActive, setGuidedModeActive] = useState(true);
+  const [showQA, setShowQA] = useState(false);
   
   const currentChapter = parseInt(chapterId || "1");
 
@@ -506,7 +509,7 @@ export default function Reader() {
       </main>
 
       {/* Floating Cognitive Level Indicator */}
-      {guidedModeActive && !showLevelSelector && (
+      {guidedModeActive && !showLevelSelector && !showQA && (
         <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-30">
           <CognitiveLevelIndicator
             level={cognitiveLevel}
@@ -514,6 +517,24 @@ export default function Reader() {
             onClick={() => setShowLevelSelector(true)}
           />
         </div>
+      )}
+
+      {/* Interactive Q&A Button */}
+      {chapter?.content && !showQA && (
+        <div className="fixed bottom-20 right-4 z-40">
+          <InteractiveQAButton onClick={() => setShowQA(true)} />
+        </div>
+      )}
+
+      {/* Interactive Q&A Panel */}
+      {chapter?.content && (
+        <InteractiveQA
+          isOpen={showQA}
+          onClose={() => setShowQA(false)}
+          chapterContent={chapter.content}
+          chapterTitle={chapter.title}
+          bookTitle={book?.title || ""}
+        />
       )}
 
       {/* Navigation Footer */}
