@@ -20,7 +20,8 @@ serve(async (req) => {
       keyTopics, 
       category,
       wordCount = 4000,
-      language = 'English'
+      language = 'English',
+      bookType = 'text', // text, illustrated, comic
     } = await req.json();
     
     // Map language code to full language name if code is passed
@@ -47,8 +48,181 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     console.log(`Generating chapter ${chapterNumber}: ${chapterTitle} for book: ${bookTitle}`);
-    console.log(`Target word count: ${wordCount}, Language: ${language}`);
+    console.log(`Target word count: ${wordCount}, Language: ${language}, Book type: ${bookType}`);
 
+    // COMIC/CHILDREN BOOK - Visual-first with minimal text
+    if (bookType === 'comic') {
+      console.log("Generating comic/children's book chapter with visual panels...");
+      
+      const comicPrompt = `You are a children's book illustrator and writer. Create a VISUAL STORY for "${chapterTitle}" from the book "${bookTitle}".
+
+CRITICAL: This is a PICTURE BOOK. Visuals are PRIMARY, text is MINIMAL.
+
+Create 4-6 PANELS/PAGES for this chapter. For each panel:
+1. [PANEL X]: Visual Description - Detailed scene description for AI image generation (colors, characters, setting, action, mood)
+2. [CAPTION]: One short sentence or dialogue bubble (MAX 10-15 words)
+
+LANGUAGE: All captions must be in ${languageName}.
+
+Story context: ${keyTopics?.join(', ') || 'Tell an engaging visual story'}
+
+FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
+
+---
+
+[PANEL 1]
+**Visual:** [Detailed visual description for image generation - describe the scene, characters, colors, setting, mood in 2-3 sentences. Be specific enough for AI to generate the image.]
+**Caption:** "[Short text in ${languageName} - MAX 15 words]"
+
+---
+
+[PANEL 2]
+**Visual:** [Next scene description...]
+**Caption:** "[Short text...]"
+
+---
+
+(Continue for 4-6 panels)
+
+IMPORTANT:
+- Captions should be SHORT and SIMPLE (child-friendly)
+- Visual descriptions should be DETAILED and VIVID
+- Tell a complete mini-story arc within this chapter
+- Make it educational yet entertaining
+- Each panel should flow naturally to the next`;
+
+      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+      if (!LOVABLE_API_KEY) {
+        throw new Error("LOVABLE_API_KEY is not configured");
+      }
+      
+      const comicResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: `You create visual storyboards for children's picture books. Your visual descriptions are detailed and vivid. Your captions are minimal and child-friendly. Write all captions in ${languageName}.` },
+            { role: "user", content: comicPrompt }
+          ],
+        }),
+      });
+
+      if (!comicResponse.ok) {
+        const errorText = await comicResponse.text();
+        console.error("Comic generation error:", comicResponse.status, errorText);
+        throw new Error("Failed to generate comic chapter");
+      }
+
+      const comicData = await comicResponse.json();
+      let comicContent = comicData.choices?.[0]?.message?.content || "";
+      
+      console.log("Comic script generated, now generating images for panels...");
+
+      // Parse panels and generate images for each
+      const panelRegex = /\[PANEL\s*(\d+)\]\s*\*\*Visual:\*\*\s*([\s\S]*?)\*\*Caption:\*\*\s*"?([^"]*)"?(?=\s*---|\s*\[PANEL|\s*$)/gi;
+      let match;
+      const panels: { num: number; visual: string; caption: string; imageUrl?: string }[] = [];
+      
+      while ((match = panelRegex.exec(comicContent)) !== null) {
+        panels.push({
+          num: parseInt(match[1]),
+          visual: match[2].trim(),
+          caption: match[3].trim(),
+        });
+      }
+
+      console.log(`Found ${panels.length} panels to illustrate`);
+
+      // Generate images for each panel (limit to avoid rate limits)
+      for (let i = 0; i < Math.min(panels.length, 6); i++) {
+        const panel = panels[i];
+        try {
+          console.log(`Generating image for panel ${panel.num}...`);
+          
+          const imagePrompt = `Children's book illustration. ${panel.visual} Style: Colorful, friendly, child-safe, whimsical, professional children's book art. No text in image.`;
+          
+          const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash-image-preview",
+              messages: [{ role: "user", content: imagePrompt }],
+              modalities: ["image", "text"],
+            }),
+          });
+
+          if (imageResponse.ok) {
+            const imageData = await imageResponse.json();
+            const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+            if (imageUrl) {
+              panel.imageUrl = imageUrl;
+              console.log(`Image generated for panel ${panel.num}`);
+            }
+          } else {
+            console.error(`Failed to generate image for panel ${panel.num}`);
+          }
+          
+          // Add delay to avoid rate limits
+          await new Promise(r => setTimeout(r, 1000));
+        } catch (imgError) {
+          console.error(`Image generation error for panel ${panel.num}:`, imgError);
+        }
+      }
+
+      // Build final comic chapter content with images
+      let finalComicContent = `# ${chapterTitle}\n\n`;
+      finalComicContent += `*A visual story from "${bookTitle}"*\n\n---\n\n`;
+      
+      for (const panel of panels) {
+        finalComicContent += `## Page ${panel.num}\n\n`;
+        if (panel.imageUrl) {
+          finalComicContent += `![Panel ${panel.num}](${panel.imageUrl})\n\n`;
+        } else {
+          finalComicContent += `*[Illustration: ${panel.visual.slice(0, 200)}...]*\n\n`;
+        }
+        finalComicContent += `> ${panel.caption}\n\n---\n\n`;
+      }
+
+      const actualWordCount = finalComicContent.split(/\s+/).filter((word: string) => word.length > 0).length;
+      console.log(`Comic chapter word count: ${actualWordCount}`);
+
+      // Update chapter in database
+      const { error: updateError } = await supabase
+        .from("chapters")
+        .update({
+          content: finalComicContent,
+          word_count: actualWordCount,
+          is_generated: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", chapterId);
+
+      if (updateError) {
+        console.error("Error updating comic chapter:", updateError);
+        throw new Error(`Failed to save comic chapter: ${updateError.message}`);
+      }
+
+      console.log(`Comic chapter ${chapterNumber} saved successfully`);
+
+      return new Response(
+        JSON.stringify({
+          success: true,
+          wordCount: actualWordCount,
+          provider: 'Lovable AI (Comic)',
+          panelCount: panels.length,
+        }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // STANDARD TEXT/ILLUSTRATED BOOK GENERATION
     // Validate and cap word count - DeepSeek max_tokens is 8192
     // ~1.3 tokens per word, so max ~6000 words per API call
     const targetWords = Math.min(Math.max(wordCount, 2000), 6000);
