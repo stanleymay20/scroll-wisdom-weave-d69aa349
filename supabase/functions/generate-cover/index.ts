@@ -80,24 +80,63 @@ serve(async (req) => {
   }
 
   try {
-    const { bookId, title, category, description, theme = "classic" } = await req.json();
-    
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     
-    if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY is not configured");
-    }
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error("Supabase configuration is missing");
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
+    // Authenticate user from JWT token
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error("[GENERATE-COVER] Auth error:", authError);
+      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`[GENERATE-COVER] Authenticated user: ${user.id.slice(0, 8)}...`);
+
+    const { bookId, title, category, description, theme = "classic" } = await req.json();
+
+    // Verify user owns the book
+    const { data: book } = await supabase
+      .from("books")
+      .select("creator_id")
+      .eq("id", bookId)
+      .single();
+
+    if (book && book.creator_id !== user.id) {
+      console.log(`[GENERATE-COVER] User ${user.id.slice(0, 8)}... not authorized for book`);
+      return new Response(JSON.stringify({ error: "Not authorized to modify this book" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
+    }
+
     // Get theme style or default to classic
     const selectedTheme = coverThemes[theme] || coverThemes.classic;
-    console.log(`Generating ${selectedTheme.name} cover for book: ${title} (${category})`);
+    console.log(`[GENERATE-COVER] Generating ${selectedTheme.name} cover for book: ${title}`);
 
     // Create a detailed prompt for the book cover
     const coverPrompt = `Create a professional, elegant book cover design for ScrollLibrary™.
@@ -137,7 +176,7 @@ CRITICAL REQUIREMENTS:
 
     if (!response.ok) {
       const errorText = await response.text();
-      console.error("AI gateway error:", response.status, errorText);
+      console.error("[GENERATE-COVER] AI gateway error:", response.status, errorText);
       
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
@@ -161,7 +200,7 @@ CRITICAL REQUIREMENTS:
       throw new Error("No image generated");
     }
 
-    console.log("Cover generated successfully, saving to database...");
+    console.log("[GENERATE-COVER] Cover generated successfully, saving to database...");
 
     // Update the book with the cover image URL
     const { error: updateError } = await supabase
@@ -170,11 +209,11 @@ CRITICAL REQUIREMENTS:
       .eq("id", bookId);
 
     if (updateError) {
-      console.error("Error updating book cover:", updateError);
+      console.error("[GENERATE-COVER] Error updating book cover:", updateError);
       throw new Error(`Failed to save cover: ${updateError.message}`);
     }
 
-    console.log("Cover saved successfully");
+    console.log("[GENERATE-COVER] Cover saved successfully");
 
     return new Response(
       JSON.stringify({
@@ -187,7 +226,7 @@ CRITICAL REQUIREMENTS:
       }
     );
   } catch (error) {
-    console.error("Error in generate-cover function:", error);
+    console.error("[GENERATE-COVER] Error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       {

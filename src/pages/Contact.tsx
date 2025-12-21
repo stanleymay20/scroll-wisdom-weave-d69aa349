@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { z } from "zod";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -13,6 +14,26 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+// Validation schema for contact form
+const contactSchema = z.object({
+  name: z.string()
+    .trim()
+    .min(1, "Name is required")
+    .max(100, "Name must be less than 100 characters"),
+  email: z.string()
+    .trim()
+    .email("Invalid email address")
+    .max(255, "Email must be less than 255 characters"),
+  subject: z.string()
+    .trim()
+    .min(1, "Subject is required")
+    .max(200, "Subject must be less than 200 characters"),
+  message: z.string()
+    .trim()
+    .min(10, "Message must be at least 10 characters")
+    .max(5000, "Message must be less than 5000 characters"),
+});
+
 export default function Contact() {
   const [form, setForm] = useState({
     name: "",
@@ -20,12 +41,33 @@ export default function Contact() {
     subject: "",
     message: "",
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
+
+    // Validate form data
+    const result = contactSchema.safeParse(form);
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0]) {
+          fieldErrors[err.path[0] as string] = err.message;
+        }
+      });
+      setErrors(fieldErrors);
+      toast({
+        title: "Validation Error",
+        description: result.error.errors[0]?.message || "Please check your input",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -35,10 +77,10 @@ export default function Contact() {
         .from("contact_submissions")
         .insert({
           user_id: user?.id || null,
-          name: form.name,
-          email: form.email,
-          subject: form.subject,
-          message: form.message,
+          name: result.data.name,
+          email: result.data.email,
+          subject: result.data.subject,
+          message: result.data.message,
         });
 
       if (error) throw error;
@@ -189,6 +231,7 @@ export default function Contact() {
                         onClick={() => {
                           setIsSubmitted(false);
                           setForm({ name: "", email: "", subject: "", message: "" });
+                          setErrors({});
                         }}
                       >
                         Send Another Message
@@ -203,10 +246,11 @@ export default function Contact() {
                             id="name"
                             value={form.name}
                             onChange={(e) => setForm(f => ({ ...f, name: e.target.value }))}
-                            className="bg-muted/50 border-border/50"
+                            className={`bg-muted/50 border-border/50 ${errors.name ? 'border-destructive' : ''}`}
                             placeholder="John Doe"
-                            required
+                            maxLength={100}
                           />
+                          {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="email">Email Address</Label>
@@ -215,10 +259,11 @@ export default function Contact() {
                             type="email"
                             value={form.email}
                             onChange={(e) => setForm(f => ({ ...f, email: e.target.value }))}
-                            className="bg-muted/50 border-border/50"
+                            className={`bg-muted/50 border-border/50 ${errors.email ? 'border-destructive' : ''}`}
                             placeholder="john@example.com"
-                            required
+                            maxLength={255}
                           />
+                          {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
                         </div>
                       </div>
                       <div className="space-y-2">
@@ -227,10 +272,11 @@ export default function Contact() {
                           id="subject"
                           value={form.subject}
                           onChange={(e) => setForm(f => ({ ...f, subject: e.target.value }))}
-                          className="bg-muted/50 border-border/50"
+                          className={`bg-muted/50 border-border/50 ${errors.subject ? 'border-destructive' : ''}`}
                           placeholder="How can we help?"
-                          required
+                          maxLength={200}
                         />
+                        {errors.subject && <p className="text-xs text-destructive">{errors.subject}</p>}
                       </div>
                       <div className="space-y-2">
                         <Label htmlFor="message">Message</Label>
@@ -238,10 +284,14 @@ export default function Contact() {
                           id="message"
                           value={form.message}
                           onChange={(e) => setForm(f => ({ ...f, message: e.target.value }))}
-                          className="bg-muted/50 border-border/50 min-h-[180px]"
+                          className={`bg-muted/50 border-border/50 min-h-[180px] ${errors.message ? 'border-destructive' : ''}`}
                           placeholder="Tell us more about your inquiry..."
-                          required
+                          maxLength={5000}
                         />
+                        <div className="flex justify-between text-xs text-muted-foreground">
+                          {errors.message && <p className="text-destructive">{errors.message}</p>}
+                          <span className="ml-auto">{form.message.length}/5000</span>
+                        </div>
                       </div>
                       <Button type="submit" disabled={isSubmitting} className="w-full" variant="gold">
                         {isSubmitting ? (

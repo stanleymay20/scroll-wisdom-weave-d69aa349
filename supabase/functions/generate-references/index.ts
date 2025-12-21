@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,6 +17,37 @@ serve(async (req) => {
   }
 
   try {
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Supabase configuration is missing");
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Authenticate user from JWT token
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      logStep("Auth error", { error: authError?.message });
+      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    logStep("Authenticated user", { userId: user.id.slice(0, 8) + "..." });
+
     const { topic, category, language = "English" } = await req.json();
 
     logStep("Generating references", { topic: topic.slice(0, 100), category, language });
@@ -55,13 +87,13 @@ serve(async (req) => {
           },
           { role: "user", content: searchQuery }
         ],
-        search_mode: "academic", // Use academic search mode
+        search_mode: "academic",
       }),
     });
 
     if (!response.ok) {
       const errorText = await response.text();
-      logStep("Perplexity error", { status: response.status, error: errorText });
+      logStep("Perplexity error", { status: response.status });
       throw new Error("Failed to search for references");
     }
 
@@ -79,8 +111,7 @@ serve(async (req) => {
         references = JSON.parse(jsonMatch[0]);
       }
     } catch (parseError) {
-      logStep("Could not parse JSON references, using citations", { error: parseError });
-      // Fallback: use citations array from Perplexity
+      logStep("Could not parse JSON references, using citations");
       references = citations.map((url: string, i: number) => ({
         author: "Source",
         title: `Reference ${i + 1}`,
@@ -103,7 +134,7 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         references,
-        citations, // Raw URLs from Perplexity
+        citations,
         note: "References sourced via Perplexity AI academic search. Verify before publication.",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
