@@ -13,7 +13,9 @@ import {
   Loader2,
   Flag,
   Volume2,
-  Brain
+  Brain,
+  BookMarked,
+  Palette
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TextToSpeechPlayer } from "@/components/audio/TextToSpeechPlayer";
@@ -37,15 +39,29 @@ interface ChapterData {
   word_count: number | null;
 }
 
+// Reading theme presets
+const READING_THEMES = {
+  default: { bg: 'bg-scroll-indigo-deep', text: 'text-foreground/90', name: 'Default' },
+  sepia: { bg: 'bg-amber-50', text: 'text-amber-900', name: 'Sepia' },
+  dark: { bg: 'bg-zinc-950', text: 'text-zinc-100', name: 'Dark' },
+  cream: { bg: 'bg-orange-50', text: 'text-stone-800', name: 'Cream' },
+  mint: { bg: 'bg-emerald-50', text: 'text-emerald-900', name: 'Mint' },
+  night: { bg: 'bg-slate-900', text: 'text-slate-100', name: 'Night Blue' },
+} as const;
+
+type ReadingTheme = keyof typeof READING_THEMES;
+
 export default function Reader() {
   const { bookId, chapterId } = useParams();
   const navigate = useNavigate();
   const contentRef = useRef<HTMLDivElement>(null);
   
   const [fontSize, setFontSize] = useState(18);
+  const [readingTheme, setReadingTheme] = useState<ReadingTheme>('default');
   const [showSettings, setShowSettings] = useState(false);
   const [showTTS, setShowTTS] = useState(false);
   const [showLevelSelector, setShowLevelSelector] = useState(false);
+  const [showReferences, setShowReferences] = useState(false);
   const [book, setBook] = useState<BookData | null>(null);
   const [chapter, setChapter] = useState<ChapterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -223,8 +239,10 @@ export default function Reader() {
     });
   };
 
+  const currentTheme = READING_THEMES[readingTheme];
+
   return (
-    <div className="min-h-screen bg-scroll-indigo-deep">
+    <div className={`min-h-screen ${currentTheme.bg} transition-colors duration-300`}>
       {/* Header */}
       <header className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50">
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
@@ -246,7 +264,7 @@ export default function Reader() {
             </div>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1 sm:gap-2">
             <Button 
               variant="ghost" 
               size="icon"
@@ -262,6 +280,15 @@ export default function Reader() {
               className={showTTS ? "text-primary" : ""}
             >
               <Volume2 className="h-5 w-5" />
+            </Button>
+            <Button 
+              variant="ghost" 
+              size="icon"
+              onClick={() => setShowReferences(!showReferences)}
+              className={showReferences ? "text-primary" : ""}
+              title="Citations & References"
+            >
+              <BookMarked className="h-5 w-5" />
             </Button>
             <Button variant="ghost" size="icon">
               <Bookmark className="h-5 w-5" />
@@ -334,6 +361,30 @@ export default function Reader() {
                 className="w-full"
               />
             </div>
+            
+            {/* Reading Theme Selection */}
+            <div>
+              <label className="text-sm text-muted-foreground mb-2 block flex items-center gap-2">
+                <Palette className="h-4 w-4" />
+                Reading Theme
+              </label>
+              <div className="grid grid-cols-3 gap-2">
+                {(Object.keys(READING_THEMES) as ReadingTheme[]).map((theme) => (
+                  <button
+                    key={theme}
+                    onClick={() => setReadingTheme(theme)}
+                    className={`p-2 rounded-md text-xs font-medium transition-all ${
+                      readingTheme === theme 
+                        ? 'ring-2 ring-primary ring-offset-1' 
+                        : 'hover:opacity-80'
+                    } ${READING_THEMES[theme].bg} ${READING_THEMES[theme].text}`}
+                  >
+                    {READING_THEMES[theme].name}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Guided Mode</span>
               <Button
@@ -378,6 +429,61 @@ export default function Reader() {
         </motion.div>
       )}
 
+      {/* References/Citations Panel */}
+      <AnimatePresence>
+        {showReferences && (
+          <motion.div
+            initial={{ opacity: 0, x: 300 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 300 }}
+            className="fixed top-14 right-0 bottom-16 w-80 z-40 bg-card border-l border-border shadow-xl overflow-y-auto"
+          >
+            <div className="p-4">
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="font-medium flex items-center gap-2">
+                  <BookMarked className="h-5 w-5 text-scroll-gold" />
+                  Citations & References
+                </h3>
+                <Button variant="ghost" size="icon" onClick={() => setShowReferences(false)}>
+                  <X className="h-4 w-4" />
+                </Button>
+              </div>
+              <div className="space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  This chapter was generated by AI. All claims and references should be independently verified.
+                </p>
+                <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3">
+                  <p className="text-xs text-amber-200">
+                    <strong>AI-Generated Content Notice:</strong> References cited within this chapter are sourced via AI and may require verification before academic or professional use.
+                  </p>
+                </div>
+                <div className="pt-2">
+                  <h4 className="text-sm font-medium mb-2">Suggested Verification Sources:</h4>
+                  <ul className="text-sm text-muted-foreground space-y-2">
+                    <li className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-scroll-gold" />
+                      Google Scholar
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-scroll-gold" />
+                      JSTOR
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-scroll-gold" />
+                      PubMed
+                    </li>
+                    <li className="flex items-center gap-2">
+                      <span className="w-2 h-2 rounded-full bg-scroll-gold" />
+                      ResearchGate
+                    </li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
       {/* Content */}
       <main className={`pt-${guidedModeActive ? '36' : '24'} pb-24`}>
         <article className="container mx-auto px-4 max-w-3xl" ref={contentRef}>
@@ -389,22 +495,22 @@ export default function Reader() {
             {/* AI Disclaimer */}
             <ContentDisclaimer type="ai" className="mb-6" />
 
-            <h2 className="font-display text-3xl md:text-4xl font-bold mb-2 text-gradient-gold">
+            <h2 className={`font-display text-3xl md:text-4xl font-bold mb-2 ${readingTheme === 'default' ? 'text-gradient-gold' : currentTheme.text}`}>
               Chapter {currentChapter}
             </h2>
-            <h3 className="font-display text-xl md:text-2xl text-foreground/80 mb-8">
+            <h3 className={`font-display text-xl md:text-2xl mb-8 ${currentTheme.text} opacity-80`}>
               {chapter?.title || "Loading..."}
             </h3>
             
             {/* Word count and time estimate */}
-            <div className="flex items-center gap-4 mb-8 text-sm text-muted-foreground">
+            <div className={`flex items-center gap-4 mb-8 text-sm ${currentTheme.text} opacity-60`}>
               <span>{wordCount.toLocaleString()} words</span>
               <span>•</span>
               <span>~{estimatedReadingTime} min read</span>
             </div>
             
             <div 
-              className="reading-content text-foreground/90"
+              className={`reading-content ${currentTheme.text}`}
               style={{ fontSize: `${fontSize}px` }}
             >
               {renderContent()}
