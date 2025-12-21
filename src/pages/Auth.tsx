@@ -85,64 +85,106 @@ export default function Auth() {
     return message;
   };
 
+  const normalizeEmail = (value: string) => value.trim().toLowerCase();
+  const normalizePassword = (value: string) => value.trim();
+
+  const handleSendMagicLink = async (targetEmail?: string) => {
+    const safeEmail = normalizeEmail(targetEmail ?? email);
+    if (!safeEmail) return;
+
+    setIsLoading(true);
+    setAuthError(null);
+    try {
+      const { error } = await supabase.auth.signInWithOtp({
+        email: safeEmail,
+        options: { emailRedirectTo: `${window.location.origin}/` },
+      });
+      if (error) throw error;
+      toast({ title: "Magic link sent!", description: "Check your email for the login link." });
+    } catch (error: any) {
+      const friendlyMessage = getErrorMessage(error);
+      setAuthError(friendlyMessage);
+      toast({ title: "Authentication Error", description: friendlyMessage, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const handleSendPasswordReset = async (targetEmail?: string) => {
+    const safeEmail = normalizeEmail(targetEmail ?? email);
+    if (!safeEmail) return;
+
+    setIsLoading(true);
+    setAuthError(null);
+    try {
+      const { error } = await supabase.auth.resetPasswordForEmail(safeEmail, {
+        redirectTo: `${window.location.origin}/auth?mode=reset-password`,
+      });
+      if (error) throw error;
+      toast({ title: "Reset email sent!", description: "Check your email for a password reset link." });
+      setMode("login");
+    } catch (error: any) {
+      const friendlyMessage = getErrorMessage(error);
+      setAuthError(friendlyMessage);
+      toast({ title: "Authentication Error", description: friendlyMessage, variant: "destructive" });
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setAuthError(null);
 
+    const safeEmail = normalizeEmail(email);
+    const safePassword = normalizePassword(password);
+    const safeNewPassword = normalizePassword(newPassword);
+
     try {
       if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: safeEmail, password: safePassword });
         if (error) throw error;
         toast({ title: "Welcome back!", description: "You have successfully signed in." });
       } else if (mode === "signup") {
         const redirectUrl = `${window.location.origin}/`;
         const { data, error } = await supabase.auth.signUp({
-          email,
-          password,
+          email: safeEmail,
+          password: safePassword,
           options: {
             emailRedirectTo: redirectUrl,
-            data: { full_name: fullName },
+            data: { full_name: fullName.trim() },
           },
         });
         if (error) throw error;
-        
+
         // Check if user was actually created (not just returned existing)
         if (data.user && !data.session) {
-          toast({ 
-            title: "Check your email", 
-            description: "We sent you a confirmation link to complete signup." 
+          toast({
+            title: "Check your email",
+            description: "We sent you a confirmation link to complete signup.",
           });
         } else {
           toast({ title: "Account created!", description: "Welcome to ScrollLibrary." });
         }
       } else if (mode === "forgot-password") {
-        const { error } = await supabase.auth.resetPasswordForEmail(email, {
-          redirectTo: `${window.location.origin}/auth?mode=reset-password`,
-        });
-        if (error) throw error;
-        toast({ title: "Reset email sent!", description: "Check your email for a password reset link." });
-        setMode("login");
+        await handleSendPasswordReset(safeEmail);
       } else if (mode === "magic-link") {
-        const { error } = await supabase.auth.signInWithOtp({
-          email,
-          options: { emailRedirectTo: `${window.location.origin}/` },
-        });
-        if (error) throw error;
-        toast({ title: "Magic link sent!", description: "Check your email for the login link." });
+        await handleSendMagicLink(safeEmail);
       } else if (mode === "reset-password") {
-        if (newPassword.length < 6) {
+        if (safeNewPassword.length < 6) {
           throw new Error("Password must be at least 6 characters long.");
         }
-        const { error } = await supabase.auth.updateUser({ password: newPassword });
+        const { error } = await supabase.auth.updateUser({ password: safeNewPassword });
         if (error) throw error;
         toast({ title: "Password updated!", description: "You can now sign in with your new password." });
         await supabase.auth.signOut();
         setMode("login");
       }
     } catch (error: any) {
-      console.error("Auth error:", error);
       const friendlyMessage = getErrorMessage(error);
+      // Avoid logging full auth error objects (may contain sensitive metadata)
+      console.warn("Auth error:", friendlyMessage);
       setAuthError(friendlyMessage);
       toast({
         title: "Authentication Error",
@@ -208,7 +250,33 @@ export default function Auth() {
           {authError && (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
-              <AlertDescription>{authError}</AlertDescription>
+              <AlertDescription>
+                <div className="space-y-3">
+                  <p>{authError}</p>
+                  {authError.includes("Invalid email or password") && email.trim().length > 0 && (
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSendPasswordReset(email)}
+                        disabled={isLoading}
+                      >
+                        Forgot password
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleSendMagicLink(email)}
+                        disabled={isLoading}
+                      >
+                        Send magic link
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              </AlertDescription>
             </Alert>
           )}
           

@@ -15,7 +15,6 @@ import {
   Loader2,
   Sparkles,
   CheckCircle2,
-  ImagePlus,
   Flag,
   Globe,
   Lock,
@@ -478,46 +477,56 @@ export default function BookDetail() {
                 {book.cover_image_url ? (
                   <img
                     src={book.cover_image_url}
-                    alt={book.title}
+                    alt={`${book.title} book cover`}
                     className="w-full h-full object-cover"
+                    loading="lazy"
                   />
                 ) : (
                   <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-4">
                     <Book className="h-24 w-24 text-scroll-gold/30" />
-                    <Select value={coverTheme} onValueChange={setCoverTheme}>
-                      <SelectTrigger className="w-full max-w-[200px]">
-                        <Palette className="h-4 w-4 mr-2" />
-                        <SelectValue placeholder="Select theme" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        {coverThemes.map((theme) => (
-                          <SelectItem key={theme.value} value={theme.value}>
-                            <div className="flex flex-col">
-                              <span>{theme.label}</span>
-                              <span className="text-xs text-muted-foreground">{theme.description}</span>
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <Button
-                      variant="gold-outline"
-                      size="sm"
-                      onClick={() => handleGenerateCover()}
-                      disabled={isGeneratingCover}
-                    >
-                      {isGeneratingCover ? (
-                        <>
-                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Generating...
-                        </>
-                      ) : (
-                        <>
-                          <ImagePlus className="h-4 w-4 mr-2" />
-                          Generate Cover
-                        </>
-                      )}
-                    </Button>
+                    <p className="text-sm text-muted-foreground text-center">No cover yet</p>
+                  </div>
+                )}
+
+                {isOwner && (
+                  <div className="absolute inset-x-0 bottom-0 p-3 bg-background/70 backdrop-blur-sm border-t border-border/50">
+                    <div className="flex flex-col gap-2">
+                      <Select value={coverTheme} onValueChange={setCoverTheme}>
+                        <SelectTrigger className="w-full">
+                          <Palette className="h-4 w-4 mr-2" />
+                          <SelectValue placeholder="Select cover theme" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {coverThemes.map((theme) => (
+                            <SelectItem key={theme.value} value={theme.value}>
+                              <div className="flex flex-col">
+                                <span>{theme.label}</span>
+                                <span className="text-xs text-muted-foreground">{theme.description}</span>
+                              </div>
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+
+                      <Button
+                        variant="gold-outline"
+                        size="sm"
+                        onClick={() => handleGenerateCover()}
+                        disabled={isGeneratingCover}
+                      >
+                        {isGeneratingCover ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Generating...
+                          </>
+                        ) : (
+                          <>
+                            <RefreshCw className="h-4 w-4 mr-2" />
+                            {book.cover_image_url ? "Regenerate Cover" : "Generate Cover"}
+                          </>
+                        )}
+                      </Button>
+                    </div>
                   </div>
                 )}
               </div>
