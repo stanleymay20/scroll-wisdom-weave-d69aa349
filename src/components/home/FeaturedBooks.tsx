@@ -3,6 +3,7 @@ import { BookCard } from "@/components/books/BookCard";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // Sample featured books data
 const SAMPLE_BOOKS = [
@@ -38,6 +39,7 @@ const SAMPLE_BOOKS = [
 
 export function FeaturedBooks() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   return (
     <section className="py-24 relative">
@@ -52,10 +54,10 @@ export function FeaturedBooks() {
         >
           <div>
             <h2 className="font-display text-3xl md:text-4xl font-bold mb-3">
-              <span className="text-gradient-gold">Featured</span> Books
+              <span className="text-gradient-gold">{t('featured.title')}</span> {t('home.stats.books')}
             </h2>
             <p className="text-muted-foreground max-w-md">
-              Discover our curated selection of AI-generated wisdom texts
+              {t('featured.subtitle')}
             </p>
           </div>
           <Button 
@@ -63,7 +65,7 @@ export function FeaturedBooks() {
             className="mt-4 md:mt-0 group text-scroll-gold hover:text-scroll-gold-light"
             onClick={() => navigate('/explore')}
           >
-            View All Books
+            {t('featured.viewAll')}
             <ArrowRight className="h-4 w-4 ml-2 group-hover:translate-x-1 transition-transform" />
           </Button>
         </motion.div>
