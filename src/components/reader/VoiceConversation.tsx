@@ -23,6 +23,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { cn } from "@/lib/utils";
 import { COGNITIVE_LEVELS } from "./CognitiveLevelSelector";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Message {
   role: "user" | "assistant";
@@ -76,6 +77,7 @@ export function VoiceConversation({
   const audioChunksRef = useRef<Blob[]>([]);
   const { toast } = useToast();
   const entitlements = useEntitlements();
+  const { t } = useLanguage();
 
   const levelData = COGNITIVE_LEVELS.find(l => l.id === cognitiveLevel) || COGNITIVE_LEVELS[1];
   const LevelIcon = levelData.icon;
@@ -138,12 +140,12 @@ export function VoiceConversation({
     } catch (error) {
       console.error("Microphone error:", error);
       toast({
-        title: "Microphone Error",
-        description: "Please allow microphone access to use voice mode",
+        title: t('voice.microphoneError'),
+        description: t('voice.allowMicAccess'),
         variant: "destructive",
       });
     }
-  }, [toast]);
+  }, [toast, t]);
 
   // Stop recording
   const stopRecording = useCallback(() => {
@@ -156,7 +158,7 @@ export function VoiceConversation({
   // Process recorded audio
   const processAudio = async (base64Audio: string) => {
     setIsProcessing(true);
-    setTranscript("Processing...");
+    setTranscript(t('voice.processing'));
 
     try {
       // First, transcribe the audio
@@ -210,8 +212,8 @@ export function VoiceConversation({
     } catch (error) {
       console.error("Voice processing error:", error);
       toast({
-        title: "Error",
-        description: error instanceof Error ? error.message : "Failed to process voice",
+        title: t('common.error'),
+        description: error instanceof Error ? error.message : t('voice.processingFailed'),
         variant: "destructive",
       });
       setTranscript("");
@@ -276,16 +278,16 @@ export function VoiceConversation({
   useEffect(() => {
     if (messages.length === 0) {
       const greeting = isInteractiveMode
-        ? `Hello! I'm your AI learning companion for "${chapterTitle}". In ${levelData.name} mode, I'll help you ${
-            cognitiveLevel === "applied" ? "apply these concepts to real situations" :
-            cognitiveLevel === "analytical" ? "analyze and critique the material deeply" :
-            "synthesize and create new knowledge"
-          }. Ask me anything, or just start talking!`
-        : `I'm in Familiarisation mode. I'll read the chapter content to you clearly. Say "read" to start, or ask me to explain any term from the text.`;
+        ? t('voice.greetingInteractive').replace('{chapterTitle}', chapterTitle).replace('{modeName}', levelData.name).replace('{modeDescription}', 
+            cognitiveLevel === "applied" ? t('voice.modeApplied') :
+            cognitiveLevel === "analytical" ? t('voice.modeAnalytical') :
+            t('voice.modeSynthesis')
+          )
+        : t('voice.greetingFamiliarisation');
 
       setMessages([{ role: "assistant", content: greeting }]);
     }
-  }, []);
+  }, [t]);
 
   return (
     <motion.div
@@ -308,12 +310,12 @@ export function VoiceConversation({
               </div>
               <div>
                 <h3 className="font-semibold flex items-center gap-2">
-                  Voice Learning
+                  {t('voice.title')}
                   {!isInteractiveMode && (
-                    <span className="text-xs bg-muted px-2 py-0.5 rounded">Read Only</span>
+                    <span className="text-xs bg-muted px-2 py-0.5 rounded">{t('voice.readOnly')}</span>
                   )}
                 </h3>
-                <p className="text-xs text-muted-foreground">{levelData.name} Mode</p>
+                <p className="text-xs text-muted-foreground">{levelData.name} {t('voice.mode')}</p>
               </div>
             </div>
             <div className="flex items-center gap-2">
@@ -326,7 +328,7 @@ export function VoiceConversation({
                 <PopoverContent className="w-64" align="end">
                   <div className="space-y-4">
                     <div className="space-y-2">
-                      <label className="text-sm font-medium">Voice</label>
+                      <label className="text-sm font-medium">{t('voice.voiceLabel')}</label>
                       <Select value={selectedVoice} onValueChange={setSelectedVoice}>
                         <SelectTrigger>
                           <SelectValue />
@@ -341,7 +343,7 @@ export function VoiceConversation({
                     
                     {isInteractiveMode && (
                       <div className="flex items-center justify-between">
-                        <label className="text-sm font-medium">Proactive Teaching</label>
+                        <label className="text-sm font-medium">{t('voice.proactiveTeaching')}</label>
                         <Switch 
                           checked={proactiveMode} 
                           onCheckedChange={setProactiveMode}
@@ -351,10 +353,10 @@ export function VoiceConversation({
 
                     {voiceLimit > 0 && (
                       <p className="text-xs text-muted-foreground">
-                        {voiceLimit} min/month limit
+                        {voiceLimit} {t('voice.minMonthLimit')}
                         {entitlements.tier === "free" && (
                           <span className="block mt-1 text-scroll-gold">
-                            Upgrade for more voice time
+                            {t('voice.upgradeForMore')}
                           </span>
                         )}
                       </p>
@@ -392,7 +394,7 @@ export function VoiceConversation({
                   className="mt-2 h-6 text-xs"
                 >
                   <Volume2 className="h-3 w-3 mr-1" />
-                  Replay
+                  {t('voice.replay')}
                 </Button>
               )}
             </motion.div>
@@ -463,10 +465,10 @@ export function VoiceConversation({
 
           <p className="text-center text-xs text-muted-foreground mt-3">
             {isListening 
-              ? "Listening... Tap to stop" 
+              ? t('voice.listening') 
               : isSpeaking 
-                ? "AI is speaking..." 
-                : "Tap to speak"}
+                ? t('voice.aiSpeaking') 
+                : t('voice.tapToSpeak')}
           </p>
 
           {/* Mode indicator */}
@@ -474,12 +476,12 @@ export function VoiceConversation({
             {isInteractiveMode ? (
               <span className="flex items-center gap-1 text-xs text-scroll-gold">
                 <Sparkles className="h-3 w-3" />
-                Interactive Teaching Mode
+                {t('voice.interactiveMode')}
               </span>
             ) : (
               <span className="flex items-center gap-1 text-xs text-muted-foreground">
                 <BookOpen className="h-3 w-3" />
-                Text Reading Mode
+                {t('voice.textReadingMode')}
               </span>
             )}
           </div>
@@ -498,6 +500,7 @@ export function VoiceConversationButton({
   cognitiveLevel: string;
 }) {
   const isInteractive = cognitiveLevel !== "familiarisation";
+  const { t } = useLanguage();
   
   return (
     <Button
@@ -507,7 +510,7 @@ export function VoiceConversationButton({
       className="gap-2"
     >
       <Mic className="h-4 w-4" />
-      {isInteractive ? "Voice AI" : "Listen"}
+      {isInteractive ? t('voice.voiceAI') : t('voice.listen')}
     </Button>
   );
 }
