@@ -103,34 +103,8 @@ export function GuidedReadingMode({
   wordCount,
   onDismiss
 }: GuidedReadingModeProps) {
-  const [showFeedback, setShowFeedback] = useState(false);
-  const [currentFeedback, setCurrentFeedback] = useState<CognitiveFeedback | null>(null);
-  const [acknowledgedMilestones, setAcknowledgedMilestones] = useState<number[]>([]);
-
   const levelData = COGNITIVE_LEVELS.find(l => l.id === cognitiveLevel) || COGNITIVE_LEVELS[1];
   const Icon = levelData.icon;
-
-  useEffect(() => {
-    const milestonePoints = [25, 50, 75, 95];
-    const currentMilestone = milestonePoints.find(
-      point => currentProgress >= point && currentProgress < point + 5 && !acknowledgedMilestones.includes(point)
-    );
-
-    if (currentMilestone) {
-      const feedback = generateFeedback(levelData, currentMilestone, chapterNumber);
-      if (feedback) {
-        setCurrentFeedback(feedback);
-        setShowFeedback(true);
-      }
-    }
-  }, [currentProgress, levelData, chapterNumber, acknowledgedMilestones]);
-
-  const acknowledgeFeedback = () => {
-    const milestonePoints = [25, 50, 75, 95];
-    const acknowledged = milestonePoints.filter(p => currentProgress >= p);
-    setAcknowledgedMilestones(acknowledged);
-    setShowFeedback(false);
-  };
 
   const estimatedMinutesLeft = Math.round(
     (wordCount * (1 - currentProgress / 100) / 200) * levelData.timeMultiplier
@@ -219,116 +193,6 @@ export function GuidedReadingMode({
           </div>
         </div>
       </motion.div>
-
-      {/* Cognitive Feedback Modal with Animations */}
-      <AnimatePresence>
-        {showFeedback && currentFeedback && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
-          >
-            <motion.div
-              initial={{ scale: 0.8, y: 50, opacity: 0 }}
-              animate={{ scale: 1, y: 0, opacity: 1 }}
-              exit={{ scale: 0.8, y: 50, opacity: 0 }}
-              transition={{ type: "spring", damping: 25, stiffness: 300 }}
-              className="bg-card rounded-xl border border-border shadow-xl max-w-md w-full p-6 relative overflow-hidden"
-            >
-              {/* Animated background glow */}
-              <motion.div
-                className={cn(
-                  "absolute inset-0 opacity-20",
-                  currentFeedback.type === "milestone" && "bg-gradient-to-br from-scroll-gold to-transparent",
-                  currentFeedback.type === "reflection" && "bg-gradient-to-br from-purple-500 to-transparent",
-                  currentFeedback.type === "checkpoint" && "bg-gradient-to-br from-amber-500 to-transparent",
-                  currentFeedback.type === "encouragement" && "bg-gradient-to-br from-green-500 to-transparent"
-                )}
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.2 }}
-              />
-              
-              <div className="text-center relative z-10">
-                <motion.div 
-                  className={cn(
-                    "inline-flex p-4 rounded-full mb-4",
-                    currentFeedback.type === "milestone" && "bg-scroll-gold/20",
-                    currentFeedback.type === "reflection" && "bg-purple-500/20",
-                    currentFeedback.type === "checkpoint" && "bg-amber-500/20",
-                    currentFeedback.type === "encouragement" && "bg-green-500/20"
-                  )}
-                  initial={{ scale: 0, rotate: -180 }}
-                  animate={{ scale: 1, rotate: 0 }}
-                  transition={{ type: "spring", delay: 0.2 }}
-                >
-                  <motion.div
-                    animate={{ 
-                      scale: [1, 1.1, 1],
-                    }}
-                    transition={{ 
-                      duration: 2, 
-                      repeat: Infinity,
-                      ease: "easeInOut"
-                    }}
-                  >
-                    <currentFeedback.icon className={cn(
-                      "h-8 w-8",
-                      currentFeedback.type === "milestone" && "text-scroll-gold",
-                      currentFeedback.type === "reflection" && "text-purple-400",
-                      currentFeedback.type === "checkpoint" && "text-amber-400",
-                      currentFeedback.type === "encouragement" && "text-green-400"
-                    )} />
-                  </motion.div>
-                </motion.div>
-                
-                <motion.h3 
-                  className="text-xl font-display font-bold mb-2"
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.3 }}
-                >
-                  {currentFeedback.title}
-                </motion.h3>
-                <motion.p 
-                  className="text-muted-foreground mb-6"
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.4 }}
-                >
-                  {currentFeedback.message}
-                </motion.p>
-
-                <motion.div 
-                  className="flex gap-3 justify-center"
-                  initial={{ y: 20, opacity: 0 }}
-                  animate={{ y: 0, opacity: 1 }}
-                  transition={{ delay: 0.5 }}
-                >
-                  {currentFeedback.type === "reflection" && (
-                    <Button
-                      variant="outline"
-                      onClick={() => {
-                        acknowledgeFeedback();
-                      }}
-                    >
-                      <MessageCircle className="h-4 w-4 mr-2" />
-                      Add Note
-                    </Button>
-                  )}
-                  <Button
-                    onClick={acknowledgeFeedback}
-                    className="bg-scroll-gold hover:bg-scroll-gold/90 text-scroll-dark"
-                  >
-                    Continue Reading
-                    <ChevronRight className="h-4 w-4 ml-1" />
-                  </Button>
-                </motion.div>
-              </div>
-            </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
     </>
   );
 }
