@@ -168,48 +168,107 @@ DESIGN REQUIREMENTS:
 - Create visual hierarchy: Title first, then imagery, then author name
 - Include appropriate symbolic or thematic imagery for the topic`;
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash-image-preview",
-        messages: [
-          {
-            role: "user",
-            content: coverPrompt
-          }
-        ],
-        modalities: ["image", "text"]
-      }),
-    });
+    // Retry logic for image generation
+    const maxRetries = 3;
+    let imageUrl: string | null = null;
+    let lastError: string = "";
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[GENERATE-COVER] AI gateway error:", response.status, errorText);
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      try {
+        console.log(`[GENERATE-COVER] Attempt ${attempt}/${maxRetries}...`);
+        
+        const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash-image-preview",
+            messages: [
+              {
+                role: "user",
+                content: coverPrompt
+              }
+            ],
+            modalities: ["image", "text"]
+          }),
         });
+
+        if (!response.ok) {
+          const errorText = await response.text();
+          console.error(`[GENERATE-COVER] AI gateway error (attempt ${attempt}):`, response.status, errorText);
+          
+          if (response.status === 429) {
+            if (attempt < maxRetries) {
+              console.log(`[GENERATE-COVER] Rate limited, waiting ${attempt * 2}s before retry...`);
+              await new Promise(resolve => setTimeout(resolve, attempt * 2000));
+              continue;
+            }
+            return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
+              status: 429,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          if (response.status === 402) {
+            return new Response(JSON.stringify({ error: "Payment required, please add funds to your workspace." }), {
+              status: 402,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          lastError = `AI gateway error: ${response.status}`;
+          if (attempt < maxRetries) {
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            continue;
+          }
+          throw new Error(lastError);
+        }
+
+        const data = await response.json();
+        console.log(`[GENERATE-COVER] Response received, checking for images...`);
+        
+        // Check multiple possible locations for the image
+        const possibleImageUrl = 
+          data.choices?.[0]?.message?.images?.[0]?.image_url?.url ||
+          data.choices?.[0]?.message?.content?.images?.[0]?.image_url?.url ||
+          data.images?.[0]?.image_url?.url;
+
+        if (possibleImageUrl) {
+          imageUrl = possibleImageUrl;
+          console.log(`[GENERATE-COVER] Image URL found on attempt ${attempt}`);
+          break;
+        }
+
+        // Log the response structure for debugging
+        console.log(`[GENERATE-COVER] No image in response structure. Keys:`, Object.keys(data));
+        if (data.choices?.[0]?.message) {
+          console.log(`[GENERATE-COVER] Message keys:`, Object.keys(data.choices[0].message));
+        }
+        
+        lastError = "No image in AI response";
+        if (attempt < maxRetries) {
+          console.log(`[GENERATE-COVER] Retrying in ${attempt}s...`);
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        }
+      } catch (fetchError) {
+        console.error(`[GENERATE-COVER] Fetch error (attempt ${attempt}):`, fetchError);
+        lastError = fetchError instanceof Error ? fetchError.message : "Network error";
+        if (attempt < maxRetries) {
+          await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+        }
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required, please add funds to your workspace." }), {
-          status: 402,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw new Error("Failed to generate cover image");
     }
 
-    const data = await response.json();
-    const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-
     if (!imageUrl) {
-      throw new Error("No image generated");
+      console.error(`[GENERATE-COVER] All ${maxRetries} attempts failed: ${lastError}`);
+      return new Response(JSON.stringify({ 
+        error: "Failed to generate cover image after multiple attempts. Please try again.",
+        details: lastError
+      }), {
+        status: 500,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     console.log("[GENERATE-COVER] Cover generated successfully, saving to database...");
