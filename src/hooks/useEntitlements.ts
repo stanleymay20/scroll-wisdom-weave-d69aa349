@@ -1,6 +1,7 @@
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useIsAdmin } from './useAdmin';
 import { SubscriptionTier } from '@/lib/subscription';
+import { isTrialActive } from '@/lib/config';
 
 export interface Entitlements {
   // Core access flags - use these, NOT tier names
@@ -26,12 +27,15 @@ export interface Entitlements {
   isStudent: boolean;
   isScrollStudent: boolean;
   isPaid: boolean;
+  // Trial mode flag
+  isTrialMode: boolean;
 }
 
 /**
  * SINGLE SOURCE OF TRUTH FOR ALL ENTITLEMENTS
  * 
  * Priority order:
+ * 0. Trial Mode → ALL users get full access (temporary testing period)
  * 1. Admin → unrestricted access to everything
  * 2. Prophet tier → unrestricted access to all features
  * 3. Paid tiers → access according to plan
@@ -43,6 +47,9 @@ export function useEntitlements(): Entitlements {
   const { tier, isLoading: subLoading } = useSubscription();
   const { isAdmin, isLoading: adminLoading } = useIsAdmin();
 
+  // Check if trial mode is active
+  const trialActive = isTrialActive();
+
   // Tier checks
   const isProphet = tier === 'prophet_tier';
   const isPremium = tier === 'premium';
@@ -52,6 +59,33 @@ export function useEntitlements(): Entitlements {
   // FAIL-OPEN during loading: If still loading AND we have hints of paid status, grant access
   // This prevents false upgrade prompts while data loads
   const stillLoading = subLoading || adminLoading;
+
+  // TRIAL MODE: ALL USERS GET FULL ACCESS - 30 day testing period
+  if (trialActive) {
+    return {
+      canPublish: true,
+      canExport: true,
+      canDownload: true,
+      canGenerateBooks: true,
+      canUseAllFormats: true,
+      canExportAllFormats: true,
+      hasCommercialRights: true,
+      bypassAllLimits: true,
+      canUseAiCovers: true,
+      canUseTTS: true,
+      canUseOpenAITTS: true,
+      canUseElevenLabsTTS: true,
+      canBatchGenerate: true,
+      tier,
+      isAdmin,
+      isProphet: true,
+      isPremium: true,
+      isStudent: true,
+      isScrollStudent: true,
+      isPaid: true,
+      isTrialMode: true,
+    };
+  }
 
   // ADMIN: GOD MODE - bypass everything, NO EXCEPTIONS
   if (isAdmin) {
@@ -76,6 +110,7 @@ export function useEntitlements(): Entitlements {
       isStudent: true,
       isScrollStudent: true,
       isPaid: true,
+      isTrialMode: false,
     };
   }
 
@@ -102,6 +137,7 @@ export function useEntitlements(): Entitlements {
       isStudent: true,
       isScrollStudent: true,
       isPaid: true,
+      isTrialMode: false,
     };
   }
 
@@ -128,6 +164,7 @@ export function useEntitlements(): Entitlements {
       isStudent: false,
       isScrollStudent: false,
       isPaid: true,
+      isTrialMode: false,
     };
   }
 
@@ -154,6 +191,7 @@ export function useEntitlements(): Entitlements {
       isStudent: true,
       isScrollStudent: true,
       isPaid: true,
+      isTrialMode: false,
     };
   }
 
@@ -180,6 +218,7 @@ export function useEntitlements(): Entitlements {
       isStudent: isStudent,
       isScrollStudent: isStudent,
       isPaid: true, // Assume paid during loading if tier isn't explicitly 'free'
+      isTrialMode: false,
     };
   }
 
@@ -205,6 +244,7 @@ export function useEntitlements(): Entitlements {
     isStudent: false,
     isScrollStudent: false,
     isPaid: false,
+    isTrialMode: false,
   };
 }
 
