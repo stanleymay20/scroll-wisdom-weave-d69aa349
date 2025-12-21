@@ -138,30 +138,35 @@ serve(async (req) => {
     const selectedTheme = coverThemes[theme] || coverThemes.classic;
     console.log(`[GENERATE-COVER] Generating ${selectedTheme.name} cover for book: ${title}`);
 
-    // Create a detailed prompt for the book cover - NO TEXT to avoid spelling issues
-    // The title will be overlaid digitally on the frontend
-    const coverPrompt = `Create a professional, elegant book cover BACKGROUND design with ABSOLUTELY NO TEXT WHATSOEVER.
+    // Create a detailed prompt for the book cover WITH relevant text
+    const coverPrompt = `Create a professional, elegant book cover design with the title and author clearly visible.
 
-Book Theme: ${category.replace(/_/g, " ")} - ${description || "A scholarly work on this topic"}
+BOOK DETAILS:
+- Title: "${title}"
+- Category: ${category.replace(/_/g, " ")}
+- Theme: ${description || "A scholarly work on this topic"}
+- Author: "ScrollAuthor AI"
 
 COVER STYLE - ${selectedTheme.name.toUpperCase()}:
 ${selectedTheme.style}
 
-CRITICAL REQUIREMENTS - NO TEXT:
-1. DO NOT include ANY text, letters, words, or typography of any kind
-2. DO NOT write the book title "${title}" on the cover
-3. DO NOT include publisher names, author names, or any written content
-4. Create ONLY abstract imagery, patterns, textures, and visual elements
-5. Leave clean space in the center/lower area where a title can be overlaid digitally
+CRITICAL TEXT REQUIREMENTS:
+1. MUST include the book title "${title}" prominently displayed on the cover
+2. MUST include "By ScrollAuthor AI" or "ScrollAuthor AI" as the author credit
+3. Title should be the LARGEST text element, positioned for maximum visual impact
+4. Author name should be smaller, positioned below the title or at the bottom
+5. Use elegant, readable typography that matches the ${selectedTheme.name} style
+6. Ensure HIGH CONTRAST between text and background for readability
+7. Text should be properly spelled exactly as provided
 
-DESIGN FOCUS:
-- Create a striking visual composition that evokes the subject matter
-- Use powerful abstract imagery, geometric patterns, and symbolic visuals
-- Include appropriate colors and textures for the ${category.replace(/_/g, " ")} theme
+DESIGN REQUIREMENTS:
+- Create a striking visual composition that evokes the ${category.replace(/_/g, " ")} subject matter
+- Use powerful imagery, patterns, and visual elements appropriate to the theme
 - Aspect ratio: vertical book cover (3:4)
 - Ultra high resolution, professional quality
-- Reserve a clean, readable area for digital title overlay (center or lower third)
-- Focus on atmosphere, mood, and visual storytelling without any text`;
+- The background should complement and not compete with the text
+- Create visual hierarchy: Title first, then imagery, then author name
+- Include appropriate symbolic or thematic imagery for the topic`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
