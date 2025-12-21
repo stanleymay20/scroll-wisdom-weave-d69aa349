@@ -10,15 +10,14 @@ import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
 import { 
   User, Camera, BookOpen, Download, Award, Clock, 
-  Loader2, Save, Upload, History
+  Loader2, Save, History
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface ProfileData {
   id: string;
@@ -51,6 +50,7 @@ export default function Profile() {
   });
   const { toast } = useToast();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   useEffect(() => {
     checkAuth();
@@ -121,13 +121,13 @@ export default function Profile() {
 
     if (error) {
       toast({
-        title: "Error",
+        title: t('common.error'),
         description: "Failed to update profile",
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Profile updated",
+        title: t('profile.title'),
         description: "Your profile has been saved successfully",
       });
       await fetchProfile(user.id);
@@ -140,14 +140,20 @@ export default function Profile() {
     if (!file || !user) return;
 
     toast({
-      title: "Avatar upload",
-      description: "Avatar upload feature coming soon. Contact support for assistance.",
+      title: t('profile.title'),
+      description: t('profile.avatarUpload'),
     });
   };
 
   const getInitials = (name: string | null) => {
     if (!name) return "U";
     return name.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2);
+  };
+
+  const getPlanLabel = () => {
+    if (profile?.plan === "premium") return t('pricing.premium');
+    if (profile?.plan === "prophet_tier") return t('pricing.prophet');
+    return t('profile.freePlan');
   };
 
   if (isLoading) {
@@ -185,11 +191,11 @@ export default function Profile() {
               
               <div className="text-center md:text-left">
                 <h1 className="text-2xl font-display font-bold text-foreground">
-                  {profile?.full_name || "Anonymous User"}
+                  {profile?.full_name || t('profile.anonymousUser')}
                 </h1>
                 <p className="text-muted-foreground">{user?.email}</p>
                 <Badge variant="outline" className="mt-2 border-primary text-primary">
-                  {profile?.plan === "premium" ? "Premium" : profile?.plan === "prophet_tier" ? "Prophet Tier" : "Free Plan"}
+                  {getPlanLabel()}
                 </Badge>
               </div>
             </div>
@@ -198,28 +204,28 @@ export default function Profile() {
               <TabsList className="bg-muted/50">
                 <TabsTrigger value="profile">
                   <User className="h-4 w-4 mr-2" />
-                  Profile
+                  {t('profile.title')}
                 </TabsTrigger>
                 <TabsTrigger value="books">
                   <BookOpen className="h-4 w-4 mr-2" />
-                  My Books
+                  {t('profile.myBooks')}
                 </TabsTrigger>
                 <TabsTrigger value="history">
                   <History className="h-4 w-4 mr-2" />
-                  History
+                  {t('profile.history')}
                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="profile" className="space-y-6">
                 <Card className="bg-gradient-card border-border/50">
                   <CardHeader>
-                    <CardTitle>Personal Information</CardTitle>
-                    <CardDescription>Update your profile details</CardDescription>
+                    <CardTitle>{t('profile.personalInfo')}</CardTitle>
+                    <CardDescription>{t('profile.updateDetails')}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
                     <div className="grid gap-4 md:grid-cols-2">
                       <div className="space-y-2">
-                        <Label htmlFor="fullName">Full Name</Label>
+                        <Label htmlFor="fullName">{t('profile.fullName')}</Label>
                         <Input
                           id="fullName"
                           value={editedProfile.full_name}
@@ -228,7 +234,7 @@ export default function Profile() {
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="country">Country</Label>
+                        <Label htmlFor="country">{t('profile.country')}</Label>
                         <Input
                           id="country"
                           value={editedProfile.country}
@@ -239,25 +245,25 @@ export default function Profile() {
                       </div>
                     </div>
                     <div className="space-y-2">
-                      <Label htmlFor="bio">Bio</Label>
+                      <Label htmlFor="bio">{t('profile.bio')}</Label>
                       <Textarea
                         id="bio"
                         value={editedProfile.bio}
                         onChange={(e) => setEditedProfile(p => ({ ...p, bio: e.target.value }))}
                         className="bg-muted/50 border-border/50 min-h-[100px]"
-                        placeholder="Tell us about yourself..."
+                        placeholder={t('profile.bioPlaceholder')}
                       />
                     </div>
                     <Button onClick={handleSaveProfile} disabled={isSaving}>
                       {isSaving ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Saving...
+                          {t('profile.saving')}
                         </>
                       ) : (
                         <>
                           <Save className="h-4 w-4 mr-2" />
-                          Save Changes
+                          {t('profile.saveChanges')}
                         </>
                       )}
                     </Button>
@@ -266,28 +272,28 @@ export default function Profile() {
 
                 <Card className="bg-gradient-card border-border/50">
                   <CardHeader>
-                    <CardTitle>Account Statistics</CardTitle>
+                    <CardTitle>{t('profile.stats')}</CardTitle>
                   </CardHeader>
                   <CardContent>
                     <div className="grid gap-4 sm:grid-cols-3">
                       <div className="text-center p-4 bg-muted/30 rounded-lg">
                         <BookOpen className="h-8 w-8 mx-auto mb-2 text-primary" />
                         <p className="text-2xl font-bold text-foreground">{userBooks.length}</p>
-                        <p className="text-sm text-muted-foreground">Books in Library</p>
+                        <p className="text-sm text-muted-foreground">{t('profile.booksInLibrary')}</p>
                       </div>
                       <div className="text-center p-4 bg-muted/30 rounded-lg">
                         <Clock className="h-8 w-8 mx-auto mb-2 text-primary" />
                         <p className="text-2xl font-bold text-foreground">
                           {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : "-"}
                         </p>
-                        <p className="text-sm text-muted-foreground">Member Since</p>
+                        <p className="text-sm text-muted-foreground">{t('profile.memberSince')}</p>
                       </div>
                       <div className="text-center p-4 bg-muted/30 rounded-lg">
                         <Award className="h-8 w-8 mx-auto mb-2 text-primary" />
                         <p className="text-2xl font-bold text-foreground capitalize">
                           {profile?.plan || "Free"}
                         </p>
-                        <p className="text-sm text-muted-foreground">Current Plan</p>
+                        <p className="text-sm text-muted-foreground">{t('profile.currentPlan')}</p>
                       </div>
                     </div>
                   </CardContent>
@@ -297,16 +303,16 @@ export default function Profile() {
               <TabsContent value="books" className="space-y-6">
                 <Card className="bg-gradient-card border-border/50">
                   <CardHeader>
-                    <CardTitle>Generated Books</CardTitle>
-                    <CardDescription>Books you've created or saved</CardDescription>
+                    <CardTitle>{t('profile.generatedBooks')}</CardTitle>
+                    <CardDescription>{t('profile.booksCreated')}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {userBooks.length === 0 ? (
                       <div className="text-center py-12">
                         <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                        <p className="text-muted-foreground mb-4">No books in your library yet</p>
+                        <p className="text-muted-foreground mb-4">{t('profile.noBooks')}</p>
                         <Button onClick={() => navigate("/generate")}>
-                          Generate Your First Book
+                          {t('profile.generateFirst')}
                         </Button>
                       </div>
                     ) : (
@@ -340,13 +346,13 @@ export default function Profile() {
               <TabsContent value="history" className="space-y-6">
                 <Card className="bg-gradient-card border-border/50">
                   <CardHeader>
-                    <CardTitle>Reading History</CardTitle>
-                    <CardDescription>Your reading activity</CardDescription>
+                    <CardTitle>{t('profile.readingHistory')}</CardTitle>
+                    <CardDescription>{t('profile.readingActivity')}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     <div className="text-center py-12">
                       <History className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                      <p className="text-muted-foreground">Reading history will appear here as you read books</p>
+                      <p className="text-muted-foreground">{t('profile.historyWillAppear')}</p>
                     </div>
                   </CardContent>
                 </Card>
