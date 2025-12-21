@@ -37,6 +37,7 @@ import { ShareDialog } from "@/components/books/ShareDialog";
 import { ExportDialog } from "@/components/books/ExportDialog";
 import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface BookData {
   id: string;
@@ -62,6 +63,7 @@ interface ChapterData {
 }
 
 export default function BookDetail() {
+  const { t } = useLanguage();
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
