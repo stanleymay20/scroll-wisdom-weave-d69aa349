@@ -516,15 +516,15 @@ export default function BookDetail() {
                         onClick={() => handleGenerateCover()}
                         disabled={isGeneratingCover}
                       >
-                        {isGeneratingCover ? (
+                      {isGeneratingCover ? (
                           <>
                             <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Generating...
+                            {t('book.generating')}
                           </>
                         ) : (
                           <>
                             <RefreshCw className="h-4 w-4 mr-2" />
-                            {book.cover_image_url ? "Regenerate Cover" : "Generate Cover"}
+                            {book.cover_image_url ? t('book.regenerateCover') : t('book.generateCover')}
                           </>
                         )}
                       </Button>
@@ -551,12 +551,12 @@ export default function BookDetail() {
                     {book.is_published ? (
                       <>
                         <Globe className="h-3.5 w-3.5" />
-                        Public
+                        {t('book.public')}
                       </>
                     ) : (
                       <>
                         <Lock className="h-3.5 w-3.5" />
-                        Private
+                        {t('book.private')}
                       </>
                     )}
                   </span>
@@ -568,7 +568,7 @@ export default function BookDetail() {
               </h1>
               
               <p className="text-muted-foreground text-lg leading-relaxed mb-6">
-                {book.description || "A comprehensive exploration of this topic."}
+                {book.description || t('book.defaultDesc')}
               </p>
 
               {/* Meta */}
@@ -579,11 +579,11 @@ export default function BookDetail() {
                 </div>
                 <div className="flex items-center gap-2">
                   <BookOpen className="h-4 w-4 text-scroll-gold" />
-                  <span>{chapters.length || book.total_chapters} Chapters</span>
+                  <span>{chapters.length || book.total_chapters} {t('book.chapters')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Clock className="h-4 w-4 text-scroll-gold" />
-                  <span>{readingTime} min read</span>
+                  <span>{readingTime} {t('book.minRead')}</span>
                 </div>
               </div>
 
@@ -596,7 +596,7 @@ export default function BookDetail() {
                   disabled={chapters.length === 0 || !chapters.some(ch => ch.is_generated)}
                 >
                   <Play className="h-5 w-5 mr-2" />
-                  Start Reading
+                  {t('book.startReading')}
                 </Button>
                 <Button 
                   variant="gold-outline" 
@@ -604,7 +604,7 @@ export default function BookDetail() {
                   onClick={handleSaveToLibrary}
                 >
                   <Bookmark className={`h-5 w-5 mr-2 ${isSaved ? "fill-current" : ""}`} />
-                  {isSaved ? "Saved" : "Save to Library"}
+                  {isSaved ? t('book.saved') : t('book.saveToLibrary')}
                 </Button>
                 <ExportDialog 
                   bookId={book.id} 
@@ -631,12 +631,12 @@ export default function BookDetail() {
                   <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50 mt-6">
                     <div className="flex-1">
                       <Label htmlFor="publish-toggle" className="text-foreground font-medium">
-                        Publish to Library
+                        {t('book.publishToLibrary')}
                       </Label>
                       <p className="text-sm text-muted-foreground">
                         {book.is_published 
-                          ? "Your book is visible to everyone in the public Explore page." 
-                          : "Your book is private. Only you can see it."}
+                          ? t('book.publicDesc')
+                          : t('book.privateDesc')}
                       </p>
                     </div>
                     <Switch
@@ -648,9 +648,9 @@ export default function BookDetail() {
                   </div>
 
                   <div className="p-4 rounded-xl bg-muted/30 border border-border/50 mt-4">
-                    <Label className="text-foreground font-medium">Book type</Label>
+                    <Label className="text-foreground font-medium">{t('book.bookType')}</Label>
                     <p className="text-sm text-muted-foreground mt-1">
-                      Choose how chapters are generated. Regenerate a chapter to apply.
+                      {t('book.bookTypeDesc')}
                     </p>
 
                     <RadioGroup
@@ -661,22 +661,22 @@ export default function BookDetail() {
                       <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors">
                         <RadioGroupItem value="text" id="bt-text" />
                         <Label htmlFor="bt-text" className="cursor-pointer flex-1">
-                          <span className="text-sm font-medium">Text</span>
-                          <span className="block text-xs text-muted-foreground">No images</span>
+                          <span className="text-sm font-medium">{t('book.text')}</span>
+                          <span className="block text-xs text-muted-foreground">{t('book.noImages')}</span>
                         </Label>
                       </div>
                       <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors">
                         <RadioGroupItem value="illustrated" id="bt-illustrated" />
                         <Label htmlFor="bt-illustrated" className="cursor-pointer flex-1">
-                          <span className="text-sm font-medium">Illustrated</span>
-                          <span className="block text-xs text-muted-foreground">Text + illustrations</span>
+                          <span className="text-sm font-medium">{t('generate.illustrated')}</span>
+                          <span className="block text-xs text-muted-foreground">{t('book.textIllustrations')}</span>
                         </Label>
                       </div>
                       <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors">
                         <RadioGroupItem value="comic" id="bt-comic" />
                         <Label htmlFor="bt-comic" className="cursor-pointer flex-1">
-                          <span className="text-sm font-medium">Comic</span>
-                          <span className="block text-xs text-muted-foreground">Panels + captions</span>
+                          <span className="text-sm font-medium">{t('book.comic')}</span>
+                          <span className="block text-xs text-muted-foreground">{t('book.panelsCaptions')}</span>
                         </Label>
                       </div>
                     </RadioGroup>
@@ -697,7 +697,7 @@ export default function BookDetail() {
           >
             <div className="flex items-center justify-between mb-6">
               <h2 className="font-display text-2xl font-bold">
-                Table of Contents
+                {t('book.tableOfContents')}
               </h2>
               
               {/* Generate All Button */}
@@ -710,12 +710,12 @@ export default function BookDetail() {
                   {isGeneratingAll ? (
                     <>
                       <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Generating {generationProgress.current}/{generationProgress.total}
+                      {t('book.generatingProgress')} {generationProgress.current}/{generationProgress.total}
                     </>
                   ) : (
                     <>
                       <Sparkles className="h-4 w-4 mr-2" />
-                      Generate All Chapters
+                      {t('book.generateAllChapters')}
                     </>
                   )}
                 </Button>
@@ -727,10 +727,10 @@ export default function BookDetail() {
               <div className="mb-6 p-4 rounded-xl bg-gradient-card border border-scroll-gold/30">
                 <div className="flex items-center justify-between mb-2">
                   <span className="text-sm font-medium text-scroll-gold">
-                    Generating chapters...
+                    {t('book.generatingChapters')}
                   </span>
                   <span className="text-sm text-muted-foreground">
-                    {generationProgress.current} of {generationProgress.total} complete
+                    {generationProgress.current} / {generationProgress.total} {t('book.complete')}
                   </span>
                 </div>
                 <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
@@ -742,13 +742,13 @@ export default function BookDetail() {
                   />
                 </div>
                 <p className="mt-2 text-xs text-muted-foreground">
-                  Each chapter generates 8,000-12,000 words of comprehensive content. This may take a few minutes per chapter.
+                  {t('book.generationNote')}
                 </p>
               </div>
             )}
 
             {chapters.length === 0 ? (
-              <p className="text-muted-foreground">Chapters are being generated...</p>
+              <p className="text-muted-foreground">{t('book.chaptersBeingGenerated')}</p>
             ) : (
               <div className="space-y-3">
                 {chapters.map((chapter, index) => {
@@ -777,8 +777,8 @@ export default function BookDetail() {
                             </h3>
                             <p className="text-sm text-muted-foreground">
                               {isGenerated 
-                                ? `${(chapter.word_count || 0).toLocaleString()} words`
-                                : "Content pending generation"
+                                ? `${(chapter.word_count || 0).toLocaleString()} ${t('book.wordsCount')}`
+                                : t('book.contentPending')
                               }
                             </p>
                           </div>
@@ -788,7 +788,7 @@ export default function BookDetail() {
                           {isGenerating ? (
                             <div className="flex items-center gap-2 text-scroll-gold">
                               <Loader2 className="h-5 w-5 animate-spin" />
-                              <span className="text-sm">Generating...</span>
+                              <span className="text-sm">{t('book.generating')}</span>
                             </div>
                           ) : isGenerated ? (
                             <div className="flex items-center gap-2">
@@ -814,7 +814,7 @@ export default function BookDetail() {
                               onClick={(e) => handleGenerateChapter(chapter, e)}
                             >
                               <Sparkles className="h-4 w-4 mr-1" />
-                              Generate
+                              {t('book.generateChapter')}
                             </Button>
                           )}
                         </div>

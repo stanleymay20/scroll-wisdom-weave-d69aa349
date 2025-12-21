@@ -173,7 +173,7 @@ export default function Reader() {
     if (!chapter?.content) {
       return (
         <div className="text-center py-12">
-          <p className="text-muted-foreground">Chapter content is being generated...</p>
+          <p className="text-muted-foreground">{t('reader.contentGenerating')}</p>
         </div>
       );
     }
@@ -367,7 +367,7 @@ export default function Reader() {
           className="fixed top-14 right-4 z-50 bg-card rounded-lg border border-border shadow-lg p-4 w-64"
         >
           <div className="flex items-center justify-between mb-4">
-            <span className="font-medium">Reading Settings</span>
+            <span className="font-medium">{t('reader.settings')}</span>
             <Button variant="ghost" size="icon" onClick={() => setShowSettings(false)}>
               <X className="h-4 w-4" />
             </Button>
@@ -375,7 +375,7 @@ export default function Reader() {
           <div className="space-y-4">
             <div>
               <label className="text-sm text-muted-foreground mb-2 block">
-                Font Size: {fontSize}px
+                {t('reader.fontSize')}: {fontSize}px
               </label>
               <input
                 type="range"
@@ -391,7 +391,7 @@ export default function Reader() {
             <div>
               <label className="text-sm text-muted-foreground mb-2 block flex items-center gap-2">
                 <Palette className="h-4 w-4" />
-                Reading Theme
+                {t('reader.readingTheme')}
               </label>
               <div className="grid grid-cols-3 gap-2">
                 {(Object.keys(READING_THEMES) as ReadingTheme[]).map((theme) => (
@@ -411,13 +411,13 @@ export default function Reader() {
             </div>
 
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Guided Mode</span>
+              <span className="text-sm text-muted-foreground">{t('reader.guidedMode')}</span>
               <Button
                 variant={guidedModeActive ? "default" : "outline"}
                 size="sm"
                 onClick={() => setGuidedModeActive(!guidedModeActive)}
               >
-                {guidedModeActive ? "On" : "Off"}
+                {guidedModeActive ? t('reader.on') : t('reader.off')}
               </Button>
             </div>
           </div>
@@ -493,7 +493,7 @@ export default function Reader() {
             )}
 
             <h2 className={`font-display text-3xl md:text-4xl font-bold mb-2 ${readingTheme === 'default' ? 'text-gradient-gold' : currentTheme.text}`}>
-              Chapter {currentChapter}
+              {t('reader.chapter')} {currentChapter}
             </h2>
             <h3 className={`font-display text-xl md:text-2xl mb-8 ${currentTheme.text} opacity-80`}>
               {chapter?.title || "Loading..."}
@@ -501,9 +501,9 @@ export default function Reader() {
             
             {/* Word count and time estimate */}
             <div className={`flex items-center gap-4 mb-8 text-sm ${currentTheme.text} opacity-60`}>
-              <span>{wordCount.toLocaleString()} words</span>
+              <span>{wordCount.toLocaleString()} {t('reader.words')}</span>
               <span>•</span>
-              <span>~{estimatedReadingTime} min read</span>
+              <span>~{estimatedReadingTime} {t('reader.minRead')}</span>
             </div>
             
             <TextHighlighter onAskAboutSelection={(text) => {
@@ -597,7 +597,7 @@ export default function Reader() {
             className="gap-2"
           >
             <ChevronLeft className="h-4 w-4" />
-            Previous
+            {t('reader.previous')}
           </Button>
           
           <div className="flex items-center gap-2">
@@ -613,7 +613,7 @@ export default function Reader() {
             disabled={currentChapter >= totalChapters}
             className="gap-2"
           >
-            Next
+            {t('reader.next')}
             <ChevronRight className="h-4 w-4" />
           </Button>
         </div>
