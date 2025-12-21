@@ -268,14 +268,23 @@ export default function Settings() {
                     <CardDescription>Customize how ScrollLibrary looks</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
+                    {/* Light/Dark Mode */}
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Theme</Label>
-                        <p className="text-sm text-muted-foreground">Select your preferred color scheme</p>
+                        <Label>Mode</Label>
+                        <p className="text-sm text-muted-foreground">Light or dark background</p>
                       </div>
                       <Select
                         value={settings.theme_preference}
-                        onValueChange={(value) => setSettings(s => ({ ...s, theme_preference: value }))}
+                        onValueChange={(value) => {
+                          setSettings(s => ({ ...s, theme_preference: value }));
+                          if (value === 'light') {
+                            document.documentElement.setAttribute('data-theme', 'light');
+                          } else {
+                            const colorTheme = localStorage.getItem('color-theme') || 'gold';
+                            document.documentElement.setAttribute('data-theme', colorTheme);
+                          }
+                        }}
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />
@@ -296,6 +305,51 @@ export default function Settings() {
                         </SelectContent>
                       </Select>
                     </div>
+
+                    <Separator className="bg-border/50" />
+
+                    {/* Color Theme Picker */}
+                    <div className="space-y-3">
+                      <div className="space-y-0.5">
+                        <Label>Color Theme</Label>
+                        <p className="text-sm text-muted-foreground">Choose your accent color</p>
+                      </div>
+                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                        {[
+                          { id: 'gold', label: 'Gold', color: 'bg-amber-500' },
+                          { id: 'orange', label: 'Orange', color: 'bg-orange-500' },
+                          { id: 'blue', label: 'Blue', color: 'bg-blue-500' },
+                          { id: 'purple', label: 'Purple', color: 'bg-purple-500' },
+                          { id: 'green', label: 'Green', color: 'bg-emerald-500' },
+                          { id: 'rainbow', label: 'Rainbow', color: 'bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500' },
+                        ].map((theme) => {
+                          const isActive = (localStorage.getItem('color-theme') || 'gold') === theme.id;
+                          return (
+                            <button
+                              key={theme.id}
+                              onClick={() => {
+                                localStorage.setItem('color-theme', theme.id);
+                                if (settings.theme_preference !== 'light') {
+                                  document.documentElement.setAttribute('data-theme', theme.id);
+                                }
+                                // force re-render
+                                setSettings(s => ({ ...s }));
+                              }}
+                              className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${
+                                isActive 
+                                  ? 'border-primary ring-2 ring-primary/30 bg-primary/10' 
+                                  : 'border-border/50 hover:border-primary/50'
+                              }`}
+                            >
+                              <div className={`w-8 h-8 rounded-full ${theme.color}`} />
+                              <span className="text-xs font-medium">{theme.label}</span>
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+
+                    <Separator className="bg-border/50" />
 
                     <Separator className="bg-border/50" />
 

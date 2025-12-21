@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
+import { useEffect } from "react";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import Auth from "./pages/Auth";
@@ -29,8 +30,20 @@ import { CookieConsent } from "./components/legal/CookieConsent";
 
 const queryClient = new QueryClient();
 
+function ThemeInitializer() {
+  useEffect(() => {
+    const colorTheme = localStorage.getItem('color-theme') || 'gold';
+    // Only set data-theme if it's not the default gold
+    if (colorTheme && colorTheme !== 'gold') {
+      document.documentElement.setAttribute('data-theme', colorTheme);
+    }
+  }, []);
+  return null;
+}
+
 const App = () => (
   <QueryClientProvider client={queryClient}>
+    <ThemeInitializer />
     <LanguageProvider>
       <SubscriptionProvider>
         <TooltipProvider>
