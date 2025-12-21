@@ -76,7 +76,9 @@ export default function Library() {
 
   useEffect(() => {
     if (user) {
-      fetchLibrary(0, true);
+      // Small delay to let auth settle, then fetch immediately
+      const timer = setTimeout(() => fetchLibrary(0, true), 50);
+      return () => clearTimeout(timer);
     }
   }, [user]);
 
@@ -92,9 +94,9 @@ export default function Library() {
       const from = pageNum * ITEMS_PER_PAGE;
       const to = from + ITEMS_PER_PAGE - 1;
 
-      // Add timeout to prevent hanging
+      // Shorter timeout for faster feedback
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10 second timeout
+      const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
 
       const { data, error } = await supabase
         .from("user_library")

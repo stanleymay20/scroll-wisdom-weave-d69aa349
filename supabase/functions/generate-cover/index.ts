@@ -149,12 +149,15 @@ COVER STYLE - ${selectedTheme.name.toUpperCase()}:
 ${selectedTheme.style}
 
 CRITICAL REQUIREMENTS:
+- ABSOLUTELY NO SPELLING OR GRAMMATICAL ERRORS - Triple-check all text before rendering
+- All words must be spelled correctly with proper grammar
 - If including ANY text on the cover, use ONLY: "ScrollLibrary™" as the publisher/brand name
 - DO NOT include "Oxford", "Academic Press", "Penguin", or any other publisher names
-- The book title "${title}" can be shown on the cover
+- The book title "${title}" must be spelled EXACTLY as shown - no variations or typos
 - Include "ScrollLibrary™" as a small publisher mark at the bottom
 - Aspect ratio: vertical book cover (3:4)
-- Ultra high resolution, professional quality`;
+- Ultra high resolution, professional quality
+- If unsure about spelling, use fewer words rather than risk errors`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
