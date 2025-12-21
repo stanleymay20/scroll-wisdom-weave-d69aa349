@@ -417,6 +417,27 @@ export const translations: Record<Language, Record<string, string>> = {
     'common.report': 'Report',
     'common.settings': 'Settings',
     'common.download': 'Download',
+
+    // Languages
+    'language.english': 'English',
+    'language.french': 'French',
+    'language.german': 'German',
+    'language.spanish': 'Spanish',
+    'language.arabic': 'Arabic',
+    'language.swahili': 'Swahili',
+    'language.portuguese': 'Portuguese',
+
+    // Disclaimers
+    'disclaimer.medical.title': 'Medical Disclaimer',
+    'disclaimer.medical.description': 'This content is for informational purposes only and should not be considered medical advice. Consult a qualified healthcare professional.',
+    'disclaimer.legal.title': 'Legal Disclaimer',
+    'disclaimer.legal.description': 'This content is for informational purposes only and does not constitute legal advice. Consult a licensed attorney for your situation.',
+    'disclaimer.financial.title': 'Financial Disclaimer',
+    'disclaimer.financial.description': 'This content is for educational purposes only and should not be considered financial advice. Consult a qualified financial advisor.',
+    'disclaimer.ai.title': 'AI-Generated Content',
+    'disclaimer.ai.description': 'This content was generated with AI assistance. Please verify important information independently.',
+    'disclaimer.general.title': 'Disclaimer',
+    'disclaimer.general.description': 'This content is for educational purposes. ScrollLibrary does not guarantee accuracy or completeness.',
     
     // Share Dialog
     'share.title': 'Share this book',
@@ -1066,6 +1087,27 @@ export const translations: Record<Language, Record<string, string>> = {
     'common.report': 'Signaler',
     'common.settings': 'Paramètres',
     'common.download': 'Télécharger',
+
+    // Languages
+    'language.english': 'Anglais',
+    'language.french': 'Français',
+    'language.german': 'Allemand',
+    'language.spanish': 'Espagnol',
+    'language.arabic': 'Arabe',
+    'language.swahili': 'Swahili',
+    'language.portuguese': 'Portugais',
+
+    // Disclaimers
+    'disclaimer.medical.title': 'Avertissement médical',
+    'disclaimer.medical.description': 'Ce contenu est informatif et ne remplace pas un avis médical. Consultez un professionnel de santé qualifié.',
+    'disclaimer.legal.title': 'Avertissement juridique',
+    'disclaimer.legal.description': 'Ce contenu est informatif et ne constitue pas un avis juridique. Consultez un avocat pour votre situation.',
+    'disclaimer.financial.title': 'Avertissement financier',
+    'disclaimer.financial.description': 'Ce contenu est éducatif et ne constitue pas un conseil financier. Consultez un conseiller financier qualifié.',
+    'disclaimer.ai.title': 'Contenu généré par IA',
+    'disclaimer.ai.description': 'Ce contenu a été généré avec l’aide de l’IA. Veuillez vérifier les informations importantes de manière indépendante.',
+    'disclaimer.general.title': 'Avertissement',
+    'disclaimer.general.description': 'Ce contenu est à des fins éducatives. ScrollLibrary ne garantit pas l’exactitude ni l’exhaustivité.',
     
     // Share Dialog
     'share.title': 'Partager ce livre',
@@ -1617,6 +1659,27 @@ export const translations: Record<Language, Record<string, string>> = {
     'common.report': 'Melden',
     'common.settings': 'Einstellungen',
     'common.download': 'Herunterladen',
+
+    // Languages
+    'language.english': 'Englisch',
+    'language.french': 'Französisch',
+    'language.german': 'Deutsch',
+    'language.spanish': 'Spanisch',
+    'language.arabic': 'Arabisch',
+    'language.swahili': 'Swahili',
+    'language.portuguese': 'Portugiesisch',
+
+    // Disclaimers
+    'disclaimer.medical.title': 'Medizinischer Hinweis',
+    'disclaimer.medical.description': 'Dieser Inhalt dient nur zu Informationszwecken und ersetzt keinen medizinischen Rat. Konsultieren Sie Fachpersonal.',
+    'disclaimer.legal.title': 'Rechtlicher Hinweis',
+    'disclaimer.legal.description': 'Dieser Inhalt ist informativ und stellt keine Rechtsberatung dar. Konsultieren Sie einen Anwalt.',
+    'disclaimer.financial.title': 'Finanzieller Hinweis',
+    'disclaimer.financial.description': 'Dieser Inhalt ist zu Bildungszwecken und stellt keine Finanzberatung dar. Konsultieren Sie einen Finanzberater.',
+    'disclaimer.ai.title': 'KI-generierter Inhalt',
+    'disclaimer.ai.description': 'Dieser Inhalt wurde mit KI-Unterstützung erstellt. Bitte prüfen Sie wichtige Informationen selbst.',
+    'disclaimer.general.title': 'Hinweis',
+    'disclaimer.general.description': 'Dieser Inhalt dient Bildungszwecken. ScrollLibrary übernimmt keine Gewähr für Richtigkeit oder Vollständigkeit.',
     
     // Share Dialog
     'share.title': 'Dieses Buch teilen',
@@ -2168,6 +2231,27 @@ export const translations: Record<Language, Record<string, string>> = {
     'common.report': 'Reportar',
     'common.settings': 'Configuración',
     'common.download': 'Descargar',
+
+    // Languages
+    'language.english': 'Inglés',
+    'language.french': 'Francés',
+    'language.german': 'Alemán',
+    'language.spanish': 'Español',
+    'language.arabic': 'Árabe',
+    'language.swahili': 'Suajili',
+    'language.portuguese': 'Portugués',
+
+    // Disclaimers
+    'disclaimer.medical.title': 'Aviso médico',
+    'disclaimer.medical.description': 'Este contenido es informativo y no debe considerarse consejo médico. Consulta a un profesional de la salud.',
+    'disclaimer.legal.title': 'Aviso legal',
+    'disclaimer.legal.description': 'Este contenido es informativo y no constituye asesoría legal. Consulta a un abogado.',
+    'disclaimer.financial.title': 'Aviso financiero',
+    'disclaimer.financial.description': 'Este contenido es educativo y no constituye asesoría financiera. Consulta a un asesor financiero.',
+    'disclaimer.ai.title': 'Contenido generado por IA',
+    'disclaimer.ai.description': 'Este contenido fue generado con ayuda de IA. Verifica la información importante de forma independiente.',
+    'disclaimer.general.title': 'Aviso',
+    'disclaimer.general.description': 'Este contenido es educativo. ScrollLibrary no garantiza exactitud ni integridad.',
     
     // Share Dialog
     'share.title': 'Compartir este libro',
@@ -2719,6 +2803,27 @@ export const translations: Record<Language, Record<string, string>> = {
     'common.report': 'إبلاغ',
     'common.settings': 'الإعدادات',
     'common.download': 'تحميل',
+
+    // Languages
+    'language.english': 'الإنجليزية',
+    'language.french': 'الفرنسية',
+    'language.german': 'الألمانية',
+    'language.spanish': 'الإسبانية',
+    'language.arabic': 'العربية',
+    'language.swahili': 'السواحيلية',
+    'language.portuguese': 'البرتغالية',
+
+    // Disclaimers
+    'disclaimer.medical.title': 'إخلاء مسؤولية طبي',
+    'disclaimer.medical.description': 'هذا المحتوى للمعلومات فقط ولا يُعد نصيحة طبية. استشر مختصاً صحياً مؤهلاً.',
+    'disclaimer.legal.title': 'إخلاء مسؤولية قانوني',
+    'disclaimer.legal.description': 'هذا المحتوى للمعلومات فقط ولا يُعد استشارة قانونية. استشر محامياً لحالتك.',
+    'disclaimer.financial.title': 'إخلاء مسؤولية مالي',
+    'disclaimer.financial.description': 'هذا المحتوى للتعليم فقط ولا يُعد نصيحة مالية. استشر مستشاراً مالياً مؤهلاً.',
+    'disclaimer.ai.title': 'محتوى مُولّد بالذكاء الاصطناعي',
+    'disclaimer.ai.description': 'تم إنشاء هذا المحتوى بمساعدة الذكاء الاصطناعي. يرجى التحقق من المعلومات المهمة بشكل مستقل.',
+    'disclaimer.general.title': 'إخلاء مسؤولية',
+    'disclaimer.general.description': 'هذا المحتوى لأغراض تعليمية. لا تضمن ScrollLibrary الدقة أو الاكتمال.',
     
     // Share Dialog
     'share.title': 'مشاركة هذا الكتاب',
@@ -3270,6 +3375,27 @@ export const translations: Record<Language, Record<string, string>> = {
     'common.report': 'Ripoti',
     'common.settings': 'Mipangilio',
     'common.download': 'Pakua',
+
+    // Languages
+    'language.english': 'Kiingereza',
+    'language.french': 'Kifaransa',
+    'language.german': 'Kijerumani',
+    'language.spanish': 'Kihispania',
+    'language.arabic': 'Kiarabu',
+    'language.swahili': 'Kiswahili',
+    'language.portuguese': 'Kireno',
+
+    // Disclaimers
+    'disclaimer.medical.title': 'Kanusho la Matibabu',
+    'disclaimer.medical.description': 'Maudhui haya ni ya taarifa tu na si ushauri wa kitabibu. Wasiliana na mtaalamu wa afya.',
+    'disclaimer.legal.title': 'Kanusho la Kisheria',
+    'disclaimer.legal.description': 'Maudhui haya ni ya taarifa tu na si ushauri wa kisheria. Wasiliana na wakili.',
+    'disclaimer.financial.title': 'Kanusho la Fedha',
+    'disclaimer.financial.description': 'Maudhui haya ni ya elimu tu na si ushauri wa kifedha. Wasiliana na mshauri wa fedha.',
+    'disclaimer.ai.title': 'Maudhui yaliyotengenezwa na AI',
+    'disclaimer.ai.description': 'Maudhui haya yametengenezwa kwa msaada wa AI. Tafadhali thibitisha taarifa muhimu binafsi.',
+    'disclaimer.general.title': 'Kanusho',
+    'disclaimer.general.description': 'Maudhui haya ni ya elimu. ScrollLibrary haitoi dhamana ya usahihi au ukamilifu.',
     
     // Share Dialog
     'share.title': 'Shiriki kitabu hiki',

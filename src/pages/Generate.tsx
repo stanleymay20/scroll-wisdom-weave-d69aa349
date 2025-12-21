@@ -51,7 +51,7 @@ const CATEGORIES = [
 ];
 
 export default function Generate() {
-  const { t } = useLanguage();
+  const { t, language: uiLanguage } = useLanguage();
   const navigate = useNavigate();
   const { 
     user, 
@@ -70,7 +70,7 @@ export default function Generate() {
   const [category, setCategory] = useState("");
   const [numChapters, setNumChapters] = useState("10");
   const [wordCount, setWordCount] = useState("4000");
-  const [language, setLanguage] = useState("en");
+  const [language, setLanguage] = useState<string>(uiLanguage);
   const [coverOption, setCoverOption] = useState<"ai" | "upload">("ai");
   const [customCover, setCustomCover] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
@@ -100,13 +100,13 @@ export default function Generate() {
   })();
 
   const LANGUAGES = [
-    { code: "en", label: "English" },
-    { code: "fr", label: "French" },
-    { code: "de", label: "German" },
-    { code: "es", label: "Spanish" },
-    { code: "ar", label: "Arabic" },
-    { code: "sw", label: "Swahili" },
-    { code: "pt", label: "Portuguese" },
+    { code: "en", label: t('language.english') },
+    { code: "fr", label: t('language.french') },
+    { code: "de", label: t('language.german') },
+    { code: "es", label: t('language.spanish') },
+    { code: "ar", label: t('language.arabic') },
+    { code: "sw", label: t('language.swahili') },
+    { code: "pt", label: t('language.portuguese') },
   ];
 
   const handleGenerate = async () => {
