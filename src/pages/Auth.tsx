@@ -4,10 +4,11 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Book, Loader2, Mail, Lock, User, Wand2 } from "lucide-react";
+import { Book, Loader2, Mail, Lock, User, Wand2, AlertCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type AuthMode = "login" | "signup" | "forgot-password" | "magic-link" | "reset-password";
 
@@ -22,16 +23,26 @@ export default function Auth() {
   const [newPassword, setNewPassword] = useState("");
   const [fullName, setFullName] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [authError, setAuthError] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+
+  // Clear error when mode changes
+  useEffect(() => {
+    setAuthError(null);
+  }, [mode]);
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (event === "PASSWORD_RECOVERY") {
           setMode("reset-password");
-        } else if (session?.user && mode !== "reset-password") {
-          navigate("/");
+          setAuthError(null);
+        } else if (event === "SIGNED_IN" && session?.user) {
+          // Defer navigation to avoid potential deadlocks
+          setTimeout(() => {
+            navigate("/");
+          }, 0);
         }
       }
     );
@@ -45,9 +56,39 @@ export default function Auth() {
     return () => subscription.unsubscribe();
   }, [navigate, mode]);
 
+  const getErrorMessage = (error: any): string => {
+    const message = error?.message || String(error);
+    
+    // Handle common auth errors with user-friendly messages
+    if (message.includes("Invalid login credentials")) {
+      return "Invalid email or password. Please check your credentials and try again.";
+    }
+    if (message.includes("Email not confirmed")) {
+      return "Please verify your email before signing in. Check your inbox for a confirmation link.";
+    }
+    if (message.includes("User already registered")) {
+      return "An account with this email already exists. Try signing in instead.";
+    }
+    if (message.includes("rate limit") || message.includes("429")) {
+      return "Too many requests. Please wait a moment before trying again.";
+    }
+    if (message.includes("Email link is invalid or has expired")) {
+      return "This password reset link has expired. Please request a new one.";
+    }
+    if (message.includes("Password should be at least")) {
+      return "Password must be at least 6 characters long.";
+    }
+    if (message.includes("Unable to validate email")) {
+      return "Please enter a valid email address.";
+    }
+    
+    return message;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
+    setAuthError(null);
 
     try {
       if (mode === "login") {
@@ -56,7 +97,7 @@ export default function Auth() {
         toast({ title: "Welcome back!", description: "You have successfully signed in." });
       } else if (mode === "signup") {
         const redirectUrl = `${window.location.origin}/`;
-        const { error } = await supabase.auth.signUp({
+        const { data, error } = await supabase.auth.signUp({
           email,
           password,
           options: {
@@ -65,7 +106,16 @@ export default function Auth() {
           },
         });
         if (error) throw error;
-        toast({ title: "Account created!", description: "Welcome to ScrollLibrary." });
+        
+        // Check if user was actually created (not just returned existing)
+        if (data.user && !data.session) {
+          toast({ 
+            title: "Check your email", 
+            description: "We sent you a confirmation link to complete signup." 
+          });
+        } else {
+          toast({ title: "Account created!", description: "Welcome to ScrollLibrary." });
+        }
       } else if (mode === "forgot-password") {
         const { error } = await supabase.auth.resetPasswordForEmail(email, {
           redirectTo: `${window.location.origin}/auth?mode=reset-password`,
@@ -81,16 +131,22 @@ export default function Auth() {
         if (error) throw error;
         toast({ title: "Magic link sent!", description: "Check your email for the login link." });
       } else if (mode === "reset-password") {
+        if (newPassword.length < 6) {
+          throw new Error("Password must be at least 6 characters long.");
+        }
         const { error } = await supabase.auth.updateUser({ password: newPassword });
         if (error) throw error;
         toast({ title: "Password updated!", description: "You can now sign in with your new password." });
-        navigate("/");
+        await supabase.auth.signOut();
+        setMode("login");
       }
     } catch (error: any) {
       console.error("Auth error:", error);
+      const friendlyMessage = getErrorMessage(error);
+      setAuthError(friendlyMessage);
       toast({
         title: "Authentication Error",
-        description: error.message || "An error occurred during authentication.",
+        description: friendlyMessage,
         variant: "destructive",
       });
     } finally {
@@ -148,7 +204,14 @@ export default function Auth() {
           <p className="text-muted-foreground mt-2">{getTitle()}</p>
         </div>
 
-        <div className="bg-gradient-card rounded-2xl border border-border/50 p-8 shadow-card">
+        <div className="bg-gradient-card rounded-2xl border border-border/50 p-6 sm:p-8 shadow-card">
+          {authError && (
+            <Alert variant="destructive" className="mb-4">
+              <AlertCircle className="h-4 w-4" />
+              <AlertDescription>{authError}</AlertDescription>
+            </Alert>
+          )}
+          
           <form onSubmit={handleSubmit} className="space-y-5">
             {mode === "signup" && (
               <div className="space-y-2">
