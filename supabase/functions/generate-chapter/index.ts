@@ -489,39 +489,53 @@ BEGIN WRITING THE FULL CHAPTER NOW IN ${languageName}:`;
         throw new Error("LOVABLE_API_KEY is not configured");
       }
 
-      console.log("[GENERATE-CHAPTER] Generating illustration prompts...");
+      console.log("[GENERATE-CHAPTER] Generating context-aware illustration prompts...");
 
-      const illustrationPrompt = `Create 4 illustration ideas for Chapter ${chapterNumber}: "${chapterTitle}" from "${bookTitle}".
+      // Extract key concepts from the generated content for relevant illustrations
+      const contentSummary = chapterContent.slice(0, 2000);
 
-CRITICAL:
-- This is an ILLUSTRATED book (text already written). You are proposing images.
-- NO long prose. Return only the 4 image prompts.
-- Each prompt must be safe, non-violent, and suitable for general audiences.
-- NO text inside the image.
+      const illustrationPrompt = `Analyze this chapter content and create 4 HIGHLY RELEVANT illustration ideas that directly visualize the key concepts discussed.
+
+CHAPTER CONTENT EXCERPT:
+${contentSummary}
+
+CHAPTER: "${chapterTitle}" from "${bookTitle}"
+CATEGORY: ${category.replace(/_/g, " ")}
+KEY TOPICS: ${keyTopics?.join(', ') || chapterTitle}
+
+CRITICAL REQUIREMENTS:
+1. Each illustration MUST directly relate to specific concepts, examples, or ideas mentioned in the chapter
+2. Reference actual content from the text (people, events, concepts, examples mentioned)
+3. Create educational visuals that help readers understand the material
+4. NO generic or abstract imagery - be SPECIFIC to the chapter content
+5. Each prompt must be safe, non-violent, and suitable for general audiences
+6. NO text inside the image
 
 FORMAT EXACTLY:
 
 ---
 
 [ILLUSTRATION 1]
-**Visual:** [2-3 sentence scene description for an AI image generator]
+**Concept:** [Which specific topic/section this illustrates]
+**Visual:** [2-3 sentence detailed scene description for AI image generator, referencing actual chapter content]
 
 ---
 
 [ILLUSTRATION 2]
-**Visual:** ...
+**Concept:** [Which specific topic/section this illustrates]
+**Visual:** [Scene description...]
 
 ---
 
 [ILLUSTRATION 3]
-**Visual:** ...
+**Concept:** [Which specific topic/section this illustrates]
+**Visual:** [Scene description...]
 
 ---
 
 [ILLUSTRATION 4]
-**Visual:** ...
-
-TOPIC CONTEXT: ${keyTopics?.join(', ') || chapterTitle}`;
+**Concept:** [Which specific topic/section this illustrates]
+**Visual:** [Scene description...]`;
 
       try {
         const illustrationResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -543,15 +557,16 @@ TOPIC CONTEXT: ${keyTopics?.join(', ') || chapterTitle}`;
           const illustrationData = await illustrationResponse.json();
           const illustrationContent = illustrationData.choices?.[0]?.message?.content || "";
           
-          // Parse illustration prompts
-          const illustrationRegex = /\[ILLUSTRATION\s*(\d+)\]\s*\*\*Visual:\*\*\s*([\s\S]*?)(?=\s*---|\s*\[ILLUSTRATION|\s*$)/gi;
-          const illustrations: { num: number; visual: string; imageUrl?: string }[] = [];
+          // Parse illustration prompts with concept context
+          const illustrationRegex = /\[ILLUSTRATION\s*(\d+)\]\s*(?:\*\*Concept:\*\*\s*([\s\S]*?))?\*\*Visual:\*\*\s*([\s\S]*?)(?=\s*---|\s*\[ILLUSTRATION|\s*$)/gi;
+          const illustrations: { num: number; concept: string; visual: string; imageUrl?: string }[] = [];
           let illMatch;
           
           while ((illMatch = illustrationRegex.exec(illustrationContent)) !== null) {
             illustrations.push({
               num: parseInt(illMatch[1]),
-              visual: illMatch[2].trim(),
+              concept: (illMatch[2] || '').trim(),
+              visual: illMatch[3].trim(),
             });
           }
 
@@ -561,9 +576,10 @@ TOPIC CONTEXT: ${keyTopics?.join(', ') || chapterTitle}`;
           for (let i = 0; i < Math.min(illustrations.length, 3); i++) {
             const ill = illustrations[i];
             try {
-              console.log(`[GENERATE-CHAPTER] Generating illustration ${ill.num}...`);
+              console.log(`[GENERATE-CHAPTER] Generating illustration ${ill.num} for: ${ill.concept || 'chapter content'}...`);
               
-              const imagePrompt = `Educational book illustration. ${ill.visual} Style: Professional, clean, educational, suitable for scholarly publication. No text in image.`;
+              // Include category context for more relevant imagery
+              const imagePrompt = `Educational book illustration for ${category.replace(/_/g, " ")} topic. ${ill.visual} Context: ${ill.concept || chapterTitle}. Style: Professional, clean, educational, realistic, suitable for scholarly publication. Accurate depiction of the subject matter. No text in image.`;
               
               const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
                 method: "POST",
@@ -602,7 +618,8 @@ TOPIC CONTEXT: ${keyTopics?.join(', ') || chapterTitle}`;
             for (const point of insertPoints) {
               if (illustrationIndex < illustrations.length && illustrations[illustrationIndex].imageUrl && point < sections.length) {
                 const ill = illustrations[illustrationIndex];
-                sections[point] += `\n\n![Illustration ${ill.num}](${ill.imageUrl})\n*${ill.visual.slice(0, 100)}*\n\n`;
+                const caption = ill.concept ? `${ill.concept}: ${ill.visual.slice(0, 80)}` : ill.visual.slice(0, 100);
+                sections[point] += `\n\n![Illustration: ${ill.concept || 'Chapter concept'}](${ill.imageUrl})\n*${caption}*\n\n`;
                 illustrationIndex++;
               }
             }
