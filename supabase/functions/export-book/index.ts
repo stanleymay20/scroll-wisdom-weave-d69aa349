@@ -8,13 +8,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Format restrictions by tier
+// ===========================================
+// TRIAL MODE CONFIG - Matches src/lib/config.ts
+// During trial, all users get full export access
+// ===========================================
+const TRIAL_MODE = true;
+const TRIAL_END_DATE = new Date('2026-01-20');
+
+function isTrialActive(): boolean {
+  if (!TRIAL_MODE) return false;
+  return new Date() < TRIAL_END_DATE;
+}
+
+// Format restrictions by tier (bypassed during trial)
 const TIER_FORMATS = {
   free: ["pdf"],
   student: ["pdf", "epub"],
   premium: ["pdf", "epub", "docx"],
   prophet_tier: ["pdf", "epub", "docx"],
 };
+
+// All formats available during trial
+const ALL_FORMATS = ["pdf", "epub", "docx"];
 
 // Generate Scroll Publishing Code (SPC)
 function generateSPC(bookId: string): string {
@@ -85,6 +100,17 @@ async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
   }
 }
 
+// Safe base64 encoding for large arrays (avoids stack overflow)
+function uint8ArrayToBase64(bytes: Uint8Array): string {
+  const chunkSize = 8192;
+  let binary = '';
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.slice(i, i + chunkSize);
+    binary += String.fromCharCode.apply(null, Array.from(chunk));
+  }
+  return btoa(binary);
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -122,6 +148,9 @@ serve(async (req) => {
 
     console.log(`[EXPORT] Authenticated user: ${user.id.slice(0, 8)}...`);
 
+    // Check if trial mode is active - bypass all restrictions
+    const trialActive = isTrialActive();
+    
     // Get user's subscription plan
     const { data: profile } = await supabase
       .from("profiles")
@@ -130,12 +159,18 @@ serve(async (req) => {
       .single();
 
     const userPlan = profile?.plan || "free";
-    const allowedFormats = TIER_FORMATS[userPlan as keyof typeof TIER_FORMATS] || TIER_FORMATS.free;
+    
+    // During trial, allow all formats. Otherwise, use tier restrictions
+    const allowedFormats = trialActive 
+      ? ALL_FORMATS 
+      : (TIER_FORMATS[userPlan as keyof typeof TIER_FORMATS] || TIER_FORMATS.free);
 
     const { bookId, format, authorName, isbn } = await req.json();
 
-    // Check format permissions
-    if (!allowedFormats.includes(format)) {
+    console.log(`[EXPORT] Trial active: ${trialActive}, User plan: ${userPlan}, Requested format: ${format}`);
+
+    // Check format permissions (skip during trial)
+    if (!trialActive && !allowedFormats.includes(format)) {
       console.log(`[EXPORT] Format ${format} not allowed for ${userPlan} plan`);
       return new Response(JSON.stringify({ 
         error: `${format.toUpperCase()} export requires ${format === 'docx' ? 'Premium' : 'Student'} plan or higher.` 
@@ -145,7 +180,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[EXPORT] Exporting book ${bookId.slice(0, 8)}... as ${format} (${userPlan} plan)`);
+    console.log(`[EXPORT] Exporting book ${bookId.slice(0, 8)}... as ${format} (${trialActive ? 'TRIAL MODE' : userPlan + ' plan'})`);
 
     // Fetch book and verify ownership
     const { data: book, error: bookError } = await supabase
@@ -196,7 +231,7 @@ serve(async (req) => {
     switch (format) {
       case "pdf": {
         const pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes);
-        content = btoa(String.fromCharCode(...pdfBytes));
+        content = uint8ArrayToBase64(pdfBytes);
         contentType = "application/pdf";
         filename = `${sanitizeFilename(book.title)}.pdf`;
         isBase64 = true;
@@ -205,7 +240,7 @@ serve(async (req) => {
       
       case "epub": {
         const epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes);
-        content = btoa(String.fromCharCode(...new Uint8Array(epubBytes)));
+        content = uint8ArrayToBase64(new Uint8Array(epubBytes));
         contentType = "application/epub+zip";
         filename = `${sanitizeFilename(book.title)}.epub`;
         isBase64 = true;
@@ -214,7 +249,7 @@ serve(async (req) => {
       
       case "docx": {
         const docxBytes = await generateDOCX(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes);
-        content = btoa(String.fromCharCode(...new Uint8Array(docxBytes)));
+        content = uint8ArrayToBase64(new Uint8Array(docxBytes));
         contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         filename = `${sanitizeFilename(book.title)}.docx`;
         isBase64 = true;
