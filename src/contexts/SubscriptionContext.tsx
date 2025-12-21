@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { SubscriptionTier, getTierFromProductId, SUBSCRIPTION_TIERS } from '@/lib/subscription';
-import { LAUNCH_MODE, LAUNCH_MODE_CONFIG } from '@/lib/config';
+import { LAUNCH_MODE_CONFIG, isLaunchModeActive } from '@/lib/config';
 import { User } from '@supabase/supabase-js';
 
 interface DailyLimitInfo {
@@ -232,21 +232,21 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const isSubscribed = tier !== 'free';
   
-  // Can generate books logic - considers launch mode
+  // Can generate books logic - considers launch mode (disabled during trial)
   const canGenerateBooks = (() => {
     if (SUBSCRIPTION_TIERS[tier].features.canGenerateBooks) {
       return true;
     }
-    // In launch mode, free tier can generate with daily limit
-    if (LAUNCH_MODE && tier === 'free' && dailyLimitInfo.canGenerateToday) {
+    // In launch mode (not trial), free tier can generate with daily limit
+    if (isLaunchModeActive() && tier === 'free' && dailyLimitInfo.canGenerateToday) {
       return true;
     }
     return false;
   })();
 
-  // Max word count - respects launch mode limits
+  // Max word count - respects launch mode limits (disabled during trial)
   const maxWordCount = (() => {
-    if (LAUNCH_MODE && tier === 'free') {
+    if (isLaunchModeActive() && tier === 'free') {
       return LAUNCH_MODE_CONFIG.freeMaxWordCount;
     }
     return SUBSCRIPTION_TIERS[tier].features.maxWordCount;

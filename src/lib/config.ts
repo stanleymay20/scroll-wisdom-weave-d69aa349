@@ -5,7 +5,7 @@
 // Set to false after trial period ends to restore normal subscription logic
 // ===========================================
 export const TRIAL_MODE = true;
-export const TRIAL_END_DATE = new Date('2025-01-20'); // 30 days from now
+export const TRIAL_END_DATE = new Date('2026-01-20'); // 30 days from Dec 21, 2025
 
 // Check if trial is still active
 export const isTrialActive = (): boolean => {
@@ -14,7 +14,14 @@ export const isTrialActive = (): boolean => {
 };
 
 // Launch mode: When true, enables limited free generation for promotional period
+// NOTE: Launch mode is disabled during trial mode - trial gives full access
 export const LAUNCH_MODE = true;
+
+// Check if launch mode restrictions should apply (disabled during trial)
+export const isLaunchModeActive = (): boolean => {
+  if (isTrialActive()) return false; // Trial mode overrides launch mode
+  return LAUNCH_MODE;
+};
 
 // Launch mode limits
 export const LAUNCH_MODE_CONFIG = {

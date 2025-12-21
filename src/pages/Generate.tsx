@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { getWordCountOptions, SUBSCRIPTION_TIERS } from "@/lib/subscription";
-import { LAUNCH_MODE, LAUNCH_MODE_CONFIG, isTrialActive } from "@/lib/config";
+import { LAUNCH_MODE, LAUNCH_MODE_CONFIG, isTrialActive, isLaunchModeActive } from "@/lib/config";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { LaunchBanner } from "@/components/subscription/LaunchBanner";
@@ -92,8 +92,8 @@ export default function Generate() {
 
   // Get word count options based on tier and launch mode
   const wordCountOptions = (() => {
-    // Admin and Prophet get all word count options
-    if (entitlements.isAdmin || entitlements.isProphet) return [2000, 3000, 4000, 5000, 6000];
+    // Trial mode, Admin, and Prophet get all word count options
+    if (entitlements.isTrialMode || entitlements.isAdmin || entitlements.isProphet) return [2000, 3000, 4000, 5000, 6000];
     if (LAUNCH_MODE && tier === 'free') {
       return [2000, 3000, 4000].filter(w => w <= LAUNCH_MODE_CONFIG.freeMaxWordCount);
     }
@@ -144,7 +144,7 @@ export default function Generate() {
     }
 
     // Check daily limit for free tier in launch mode (admin/prophet/paid/trial bypass)
-    if (!trialActive && !entitlements.isPaid && LAUNCH_MODE && tier === 'free' && !dailyLimitInfo.canGenerateToday) {
+    if (!trialActive && !entitlements.isPaid && isLaunchModeActive() && tier === 'free' && !dailyLimitInfo.canGenerateToday) {
       toast({
         title: t('generate.dailyLimitReached'),
         description: `${t('generate.dailyLimitDesc')} (${LAUNCH_MODE_CONFIG.freeBookLimit} book/day)`,
@@ -261,8 +261,8 @@ export default function Generate() {
       <LaunchBanner />
       <main className="flex-1 pt-20 pb-16">
         <div className="container mx-auto px-4 max-w-3xl">
-          {/* Launch Mode Info for Free Users Only */}
-          {LAUNCH_MODE && tier === 'free' && !entitlements.isPaid && (
+          {/* Launch Mode Info for Free Users Only - HIDE during trial mode */}
+          {isLaunchModeActive() && tier === 'free' && !entitlements.isPaid && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}
