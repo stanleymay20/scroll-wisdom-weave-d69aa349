@@ -13,6 +13,7 @@ export const SUBSCRIPTION_TIERS = {
       maxWordCount: 2000,
       exportFormats: ['pdf_low'],
       ttsMinutes: 0,
+      interactiveVoiceMinutes: 5, // Limited voice interaction
       aiCovers: false,
       commercialRights: false,
       batchGeneration: false,
@@ -31,6 +32,7 @@ export const SUBSCRIPTION_TIERS = {
       maxWordCount: 4000,
       exportFormats: ['pdf', 'epub', 'docx'],
       ttsMinutes: 30,
+      interactiveVoiceMinutes: 30, // 30 min voice interaction
       aiCovers: true,
       commercialRights: false,
       batchGeneration: false,
@@ -49,6 +51,7 @@ export const SUBSCRIPTION_TIERS = {
       maxWordCount: 6000,
       exportFormats: ['pdf', 'epub', 'docx', 'mobi'],
       ttsMinutes: 60,
+      interactiveVoiceMinutes: 120, // 2 hours voice interaction
       aiCovers: true,
       commercialRights: true,
       batchGeneration: false,
@@ -67,6 +70,7 @@ export const SUBSCRIPTION_TIERS = {
       maxWordCount: 6000,
       exportFormats: ['pdf', 'epub', 'docx', 'mobi', 'kpf'],
       ttsMinutes: -1, // unlimited with ElevenLabs
+      interactiveVoiceMinutes: -1, // unlimited voice interaction
       aiCovers: true,
       commercialRights: true,
       batchGeneration: true,
