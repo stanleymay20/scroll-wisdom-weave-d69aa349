@@ -28,6 +28,8 @@ import { GuidedReadingMode, CognitiveLevelIndicator } from "@/components/reader/
 import { ResearchPanel } from "@/components/academic/ResearchPanel";
 import { AcademicModeIndicator, AcademicDisclaimer } from "@/components/academic/AcademicModeIndicator";
 import { InteractiveQA, InteractiveQAButton } from "@/components/reader/InteractiveQA";
+import { TextHighlighter } from "@/components/reader/TextHighlighter";
+import { QuizMode, QuizModeButton } from "@/components/reader/QuizMode";
 import { CitationStyle } from "@/lib/academicCategories";
 
 interface BookData {
@@ -81,7 +83,8 @@ export default function Reader() {
   const [readingProgress, setReadingProgress] = useState(0);
   const [guidedModeActive, setGuidedModeActive] = useState(true);
   const [showQA, setShowQA] = useState(false);
-  
+  const [showQuiz, setShowQuiz] = useState(false);
+  const [highlightedText, setHighlightedText] = useState("");
   const currentChapter = parseInt(chapterId || "1");
 
   useEffect(() => {
@@ -498,12 +501,17 @@ export default function Reader() {
               <span>~{estimatedReadingTime} min read</span>
             </div>
             
-            <div 
-              className={`reading-content ${currentTheme.text}`}
-              style={{ fontSize: `${fontSize}px` }}
-            >
-              {renderContent()}
-            </div>
+            <TextHighlighter onAskAboutSelection={(text) => {
+              setHighlightedText(text);
+              setShowQA(true);
+            }}>
+              <div 
+                className={`reading-content ${currentTheme.text}`}
+                style={{ fontSize: `${fontSize}px` }}
+              >
+                {renderContent()}
+              </div>
+            </TextHighlighter>
           </motion.div>
         </article>
       </main>
@@ -519,21 +527,39 @@ export default function Reader() {
         </div>
       )}
 
-      {/* Interactive Q&A Button */}
+      {/* Interactive Q&A Button + Quiz Button */}
       {chapter?.content && !showQA && (
-        <div className="fixed bottom-20 right-4 z-40">
+        <div className="fixed bottom-20 right-4 z-40 flex flex-col gap-2">
+          <QuizModeButton onClick={() => setShowQuiz(true)} />
           <InteractiveQAButton onClick={() => setShowQA(true)} />
         </div>
+      )}
+
+      {/* Quiz Mode */}
+      {chapter?.content && (
+        <QuizMode
+          isOpen={showQuiz}
+          onClose={() => setShowQuiz(false)}
+          chapterContent={chapter.content}
+          chapterTitle={chapter.title}
+          bookTitle={book?.title || ""}
+          bookId={bookId || ""}
+          chapterId={chapter.id}
+        />
       )}
 
       {/* Interactive Q&A Panel */}
       {chapter?.content && (
         <InteractiveQA
           isOpen={showQA}
-          onClose={() => setShowQA(false)}
+          onClose={() => { setShowQA(false); setHighlightedText(""); }}
           chapterContent={chapter.content}
           chapterTitle={chapter.title}
           bookTitle={book?.title || ""}
+          bookId={bookId}
+          chapterId={chapter.id}
+          highlightedText={highlightedText}
+          onClearHighlight={() => setHighlightedText("")}
         />
       )}
 

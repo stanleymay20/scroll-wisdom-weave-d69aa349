@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect } from "react";
+import { useState, useRef, useEffect, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -9,25 +9,35 @@ import {
   X, 
   Lightbulb,
   HelpCircle,
-  Sparkles
+  Sparkles,
+  Volume2,
+  VolumeX,
+  Save,
+  BookmarkPlus
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { HighlightedTextContext } from "./TextHighlighter";
 
 interface Message {
   id: string;
   role: "user" | "assistant";
   content: string;
+  audioContent?: string;
 }
 
 interface InteractiveQAProps {
   chapterContent: string;
   chapterTitle: string;
   bookTitle: string;
+  bookId?: string;
+  chapterId?: string;
   isOpen: boolean;
   onClose: () => void;
+  highlightedText?: string;
+  onClearHighlight?: () => void;
 }
 
 const SUGGESTED_QUESTIONS = [
@@ -41,13 +51,20 @@ export function InteractiveQA({
   chapterContent, 
   chapterTitle, 
   bookTitle,
+  bookId,
+  chapterId,
   isOpen, 
-  onClose 
+  onClose,
+  highlightedText,
+  onClearHighlight,
 }: InteractiveQAProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
+  const [speakResponses, setSpeakResponses] = useState(false);
+  const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
 
   // Auto-scroll to bottom on new messages
@@ -56,6 +73,28 @@ export function InteractiveQA({
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
   }, [messages]);
+
+  // Play audio response
+  const playAudio = useCallback((audioContent: string) => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+    }
+
+    const audio = new Audio(`data:audio/mpeg;base64,${audioContent}`);
+    audio.onplay = () => setIsPlayingAudio(true);
+    audio.onended = () => setIsPlayingAudio(false);
+    audio.onerror = () => setIsPlayingAudio(false);
+    audioRef.current = audio;
+    audio.play().catch(console.error);
+  }, []);
+
+  const stopAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    setIsPlayingAudio(false);
+  }, []);
 
   const sendMessage = async (question: string) => {
     if (!question.trim() || isLoading) return;
@@ -74,10 +113,12 @@ export function InteractiveQA({
       const { data, error } = await supabase.functions.invoke("interactive-qa", {
         body: {
           question: question.trim(),
-          chapterContent: chapterContent.slice(0, 8000), // Limit context size
+          chapterContent: chapterContent.slice(0, 8000),
           chapterTitle,
           bookTitle,
-          conversationHistory: messages.slice(-6), // Keep last 6 messages for context
+          conversationHistory: messages.slice(-6),
+          highlightedText: highlightedText || undefined,
+          speakResponse: speakResponses,
         },
       });
 
@@ -91,14 +132,24 @@ export function InteractiveQA({
         id: `assistant-${Date.now()}`,
         role: "assistant",
         content: data?.answer || "I couldn't generate a response. Please try again.",
+        audioContent: data?.audioContent,
       };
 
       setMessages(prev => [...prev, assistantMessage]);
+
+      // Auto-play audio if enabled
+      if (speakResponses && data?.audioContent) {
+        playAudio(data.audioContent);
+      }
+
+      // Clear highlighted text after asking about it
+      if (highlightedText && onClearHighlight) {
+        onClearHighlight();
+      }
     } catch (err) {
       console.error("[InteractiveQA] Error:", err);
       const errorMessage = err instanceof Error ? err.message : "Failed to get answer";
       
-      // Handle rate limit and payment errors
       if (errorMessage.includes("429") || errorMessage.includes("Rate limit")) {
         toast({
           title: "Rate Limited",
@@ -120,6 +171,41 @@ export function InteractiveQA({
       }
     } finally {
       setIsLoading(false);
+    }
+  };
+
+  const saveAsNote = async () => {
+    if (messages.length < 2) {
+      toast({ title: "Nothing to save", description: "Have a conversation first." });
+      return;
+    }
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast({ title: "Sign in required", description: "Please sign in to save notes.", variant: "destructive" });
+        return;
+      }
+
+      if (!bookId) {
+        toast({ title: "Error", description: "Book information missing.", variant: "destructive" });
+        return;
+      }
+
+      await (supabase.from("study_notes") as any).insert({
+        user_id: user.id,
+        book_id: bookId,
+        chapter_id: chapterId || null,
+        note_type: highlightedText ? "highlight_qa" : "qa_conversation",
+        title: `Q&A: ${messages[0]?.content.slice(0, 50)}...`,
+        content: { messages },
+        highlighted_text: highlightedText || null,
+      });
+
+      toast({ title: "Saved!", description: "Conversation saved to your study notes." });
+    } catch (err) {
+      console.error("Save error:", err);
+      toast({ title: "Save failed", description: "Could not save notes.", variant: "destructive" });
     }
   };
 
@@ -150,42 +236,82 @@ export function InteractiveQA({
                 <p className="text-xs text-muted-foreground">Get explanations as you read</p>
               </div>
             </div>
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              {/* Voice toggle */}
+              <Button
+                variant="ghost"
+                size="icon"
+                className={cn("h-8 w-8", speakResponses && "text-primary")}
+                onClick={() => {
+                  if (isPlayingAudio) stopAudio();
+                  setSpeakResponses(!speakResponses);
+                }}
+                title={speakResponses ? "Voice responses on" : "Voice responses off"}
+              >
+                {isPlayingAudio ? (
+                  <VolumeX className="h-4 w-4" />
+                ) : (
+                  <Volume2 className="h-4 w-4" />
+                )}
+              </Button>
+              {/* Save button */}
+              {messages.length >= 2 && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-8 w-8"
+                  onClick={saveAsNote}
+                  title="Save as study note"
+                >
+                  <BookmarkPlus className="h-4 w-4" />
+                </Button>
+              )}
+              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={onClose}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
 
           {/* Messages Area */}
           <ScrollArea className="h-64 p-4" ref={scrollRef}>
+            {/* Show highlighted text context */}
+            {highlightedText && (
+              <HighlightedTextContext text={highlightedText} />
+            )}
+
             {messages.length === 0 ? (
               <div className="space-y-4">
                 <div className="text-center py-4">
                   <HelpCircle className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm text-muted-foreground">
-                    Ask questions about what you&apos;re reading
+                    {highlightedText 
+                      ? "Ask about the highlighted text"
+                      : "Ask questions about what you're reading"}
                   </p>
                 </div>
                 
                 {/* Suggested Questions */}
-                <div className="space-y-2">
-                  <p className="text-xs text-muted-foreground flex items-center gap-1">
-                    <Lightbulb className="h-3 w-3" />
-                    Try asking:
-                  </p>
-                  <div className="flex flex-wrap gap-2">
-                    {SUGGESTED_QUESTIONS.map((q, i) => (
-                      <Button
-                        key={i}
-                        variant="outline"
-                        size="sm"
-                        className="text-xs h-auto py-1.5 px-3"
-                        onClick={() => sendMessage(q)}
-                      >
-                        {q}
-                      </Button>
-                    ))}
+                {!highlightedText && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground flex items-center gap-1">
+                      <Lightbulb className="h-3 w-3" />
+                      Try asking:
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      {SUGGESTED_QUESTIONS.map((q, i) => (
+                        <Button
+                          key={i}
+                          variant="outline"
+                          size="sm"
+                          className="text-xs h-auto py-1.5 px-3"
+                          onClick={() => sendMessage(q)}
+                        >
+                          {q}
+                        </Button>
+                      ))}
+                    </div>
                   </div>
-                </div>
+                )}
               </div>
             ) : (
               <div className="space-y-4">
@@ -206,6 +332,16 @@ export function InteractiveQA({
                       )}
                     >
                       {message.content}
+                      {message.role === "assistant" && message.audioContent && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6 ml-2 inline-flex"
+                          onClick={() => playAudio(message.audioContent!)}
+                        >
+                          <Volume2 className="h-3 w-3" />
+                        </Button>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -226,7 +362,7 @@ export function InteractiveQA({
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder="Ask a question about this chapter..."
+                placeholder={highlightedText ? "Ask about this selection..." : "Ask a question about this chapter..."}
                 className="min-h-[44px] max-h-24 resize-none text-sm"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {

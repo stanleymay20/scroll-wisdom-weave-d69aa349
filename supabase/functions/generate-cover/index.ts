@@ -138,29 +138,30 @@ serve(async (req) => {
     const selectedTheme = coverThemes[theme] || coverThemes.classic;
     console.log(`[GENERATE-COVER] Generating ${selectedTheme.name} cover for book: ${title}`);
 
-    // Create a detailed prompt for the book cover - MINIMAL TEXT to avoid spelling issues
-    const coverPrompt = `Create a professional, elegant book cover design that is PRIMARILY VISUAL with MINIMAL TEXT.
+    // Create a detailed prompt for the book cover - NO TEXT to avoid spelling issues
+    // The title will be overlaid digitally on the frontend
+    const coverPrompt = `Create a professional, elegant book cover BACKGROUND design with ABSOLUTELY NO TEXT WHATSOEVER.
 
 Book Theme: ${category.replace(/_/g, " ")} - ${description || "A scholarly work on this topic"}
 
 COVER STYLE - ${selectedTheme.name.toUpperCase()}:
 ${selectedTheme.style}
 
-CRITICAL TEXT REQUIREMENTS:
-1. AVOID TEXT AS MUCH AS POSSIBLE - use abstract imagery, symbols, and visual metaphors instead
-2. If ANY text must appear, use ONLY these EXACT words with correct spelling:
-   - "ScrollLibrary" (optional small brand mark)
-3. DO NOT write the book title on the cover - we will add it digitally later
-4. DO NOT include ANY publisher names like "Oxford", "Academic Press", "Penguin" etc.
-5. DO NOT include author names, subtitles, or any other text
-6. Focus on creating a visually striking, abstract design that represents the subject matter through imagery, patterns, and colors rather than words
+CRITICAL REQUIREMENTS - NO TEXT:
+1. DO NOT include ANY text, letters, words, or typography of any kind
+2. DO NOT write the book title "${title}" on the cover
+3. DO NOT include publisher names, author names, or any written content
+4. Create ONLY abstract imagery, patterns, textures, and visual elements
+5. Leave clean space in the center/lower area where a title can be overlaid digitally
 
 DESIGN FOCUS:
+- Create a striking visual composition that evokes the subject matter
 - Use powerful abstract imagery, geometric patterns, and symbolic visuals
-- Let the visual design speak for the subject matter without text
+- Include appropriate colors and textures for the ${category.replace(/_/g, " ")} theme
 - Aspect ratio: vertical book cover (3:4)
 - Ultra high resolution, professional quality
-- Create visual interest through composition, color, and texture - NOT text`;
+- Reserve a clean, readable area for digital title overlay (center or lower third)
+- Focus on atmosphere, mood, and visual storytelling without any text`;
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",

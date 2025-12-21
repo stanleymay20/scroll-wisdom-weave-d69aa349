@@ -497,6 +497,60 @@ export type Database = {
           },
         ]
       }
+      study_notes: {
+        Row: {
+          book_id: string
+          chapter_id: string | null
+          content: Json
+          created_at: string
+          highlighted_text: string | null
+          id: string
+          note_type: string
+          title: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          chapter_id?: string | null
+          content?: Json
+          created_at?: string
+          highlighted_text?: string | null
+          id?: string
+          note_type?: string
+          title?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          chapter_id?: string | null
+          content?: Json
+          created_at?: string
+          highlighted_text?: string | null
+          id?: string
+          note_type?: string
+          title?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "study_notes_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_notes_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       tts_usage: {
         Row: {
           created_at: string | null
