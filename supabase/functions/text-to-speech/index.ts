@@ -108,14 +108,27 @@ serve(async (req) => {
     const truncatedText = text.length > maxLength ? text.slice(0, maxLength) : text;
 
     // Clean text for speech
+    // - Remove markdown structure
+    // - Remove images entirely (especially base64 data URLs)
     const cleanedText = truncatedText
+      // Images: ![alt](url) → remove entirely
+      .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
+      // Headings
       .replace(/#{1,6}\s*/g, "")
+      // Bold/italic
       .replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1")
+      // Inline code
       .replace(/`[^`]+`/g, "")
+      // Code blocks
       .replace(/```[\s\S]*?```/g, "")
+      // Links: [text](url) → text
       .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      // Bullets / numbered lists
       .replace(/^\s*[-*]\s+/gm, "")
       .replace(/^\s*\d+\.\s+/gm, "")
+      // Any lingering data URLs
+      .replace(/data:image\/[a-zA-Z+.-]+;base64,[A-Za-z0-9+/=]+/g, " ")
+      // Normalize whitespace
       .replace(/\n{2,}/g, ". ")
       .replace(/\n/g, " ")
       .replace(/\s{2,}/g, " ")

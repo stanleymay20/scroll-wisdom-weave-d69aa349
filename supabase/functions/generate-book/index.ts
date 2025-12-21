@@ -12,6 +12,14 @@ const TIER_LIMITS = {
   student: { booksPerDay: 3, maxChapters: 10 },
   premium: { booksPerDay: 10, maxChapters: 20 },
   prophet_tier: { booksPerDay: 50, maxChapters: 50 },
+} as const;
+
+// NOTE: Trial mode is enforced here (server-side) to avoid client-only bypasses.
+// Keep this date in sync with src/lib/config.ts.
+const TRIAL_END_DATE_ISO = "2026-01-20";
+const isTrialActive = () => {
+  const today = new Date().toISOString().split("T")[0];
+  return today <= TRIAL_END_DATE_ISO;
 };
 
 serve(async (req) => {
@@ -63,21 +71,30 @@ serve(async (req) => {
       console.error("Profile error:", profileError);
     }
 
-    const userPlan = profile?.plan || "free";
-    const limits = TIER_LIMITS[userPlan as keyof typeof TIER_LIMITS] || TIER_LIMITS.free;
-    
-    // Check daily book limits
+    const userPlan = (profile?.plan || "free") as keyof typeof TIER_LIMITS;
+
+    // Trial bypass: do NOT cap chapters to free tier, and do NOT block on daily limits.
+    const trialActive = isTrialActive();
+    const effectivePlan: keyof typeof TIER_LIMITS = trialActive ? "premium" : userPlan;
+    const limits = TIER_LIMITS[effectivePlan] || TIER_LIMITS.free;
+
+    // Check daily book limits (skip during trial)
     const today = new Date().toISOString().split("T")[0];
     const currentCount = profile?.last_book_date === today ? (profile?.daily_book_count || 0) : 0;
-    
-    if (currentCount >= limits.booksPerDay) {
-      console.log(`[GENERATE-BOOK] Daily limit reached for user ${user.id.slice(0, 8)}... (${userPlan}: ${currentCount}/${limits.booksPerDay})`);
-      return new Response(JSON.stringify({ 
-        error: `Daily book limit reached (${limits.booksPerDay} books/day for ${userPlan} plan). Upgrade for more.` 
-      }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+
+    if (!trialActive && currentCount >= limits.booksPerDay) {
+      console.log(
+        `[GENERATE-BOOK] Daily limit reached for user ${user.id.slice(0, 8)}... (${effectivePlan}: ${currentCount}/${limits.booksPerDay})`
+      );
+      return new Response(
+        JSON.stringify({
+          error: `Daily book limit reached (${limits.booksPerDay} books/day for ${effectivePlan} plan). Upgrade for more.`,
+        }),
+        {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        }
+      );
     }
 
     const { 
@@ -92,10 +109,12 @@ serve(async (req) => {
       enableReferences = false,
     } = await req.json();
 
-    // Validate chapter limit based on plan
+    // Validate chapter limit based on plan (trial uses effectivePlan)
     const effectiveChapters = Math.min(numChapters, limits.maxChapters);
     if (numChapters > limits.maxChapters) {
-      console.log(`[GENERATE-BOOK] Capping chapters from ${numChapters} to ${limits.maxChapters} for ${userPlan} plan`);
+      console.log(
+        `[GENERATE-BOOK] Capping chapters from ${numChapters} to ${limits.maxChapters} for ${trialActive ? "trial" : effectivePlan} plan`
+      );
     }
     
     // Map language code to full language name

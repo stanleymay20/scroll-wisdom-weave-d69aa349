@@ -42,8 +42,114 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: T
   const hasFullAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent || entitlements.isPaid;
   const canUseTTS = hasFullAccess || entitlements.canUseTTS;
 
+  const base64ToBlobUrl = useCallback((base64: string, mimeType = "audio/mpeg") => {
+    // Convert base64 → Blob URL (faster + avoids massive data: URIs)
+    const binary = atob(base64);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+    const blob = new Blob([bytes], { type: mimeType });
+    return URL.createObjectURL(blob);
+  }, []);
+
+  const sanitizeTextForTTS = useCallback((raw: string) => {
+    return raw
+      // Remove markdown images entirely
+      .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
+      // Remove base64 data urls if they appear inline
+      .replace(/data:image\/[a-zA-Z+.-]+;base64,[A-Za-z0-9+/=]+/g, " ")
+      // Remove headings markers
+      .replace(/#{1,6}\s*/g, "")
+      // Remove code blocks + inline code
+      .replace(/```[\s\S]*?```/g, " ")
+      .replace(/`[^`]+`/g, " ")
+      // Links: [text](url) → text
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      // Bullets
+      .replace(/^\s*[-*]\s+/gm, "")
+      .replace(/^\s*\d+\.\s+/gm, "")
+      // Collapse whitespace
+      .replace(/\n{2,}/g, ". ")
+      .replace(/\n/g, " ")
+      .replace(/\s{2,}/g, " ")
+      .trim();
+  }, []);
+
+  const chunkText = useCallback((input: string, maxChars = 800) => {
+    const text = input.trim();
+    if (!text) return [] as string[];
+
+    const sentences = text
+      .split(/(?<=[.!?])\s+/)
+      .map((s) => s.trim())
+      .filter(Boolean);
+
+    const chunks: string[] = [];
+    let current = "";
+
+    for (const s of sentences) {
+      if (!current) {
+        current = s;
+        continue;
+      }
+
+      if ((current + " " + s).length <= maxChars) {
+        current = current + " " + s;
+      } else {
+        chunks.push(current);
+        current = s;
+      }
+    }
+
+    if (current) chunks.push(current);
+
+    // Fallback if no punctuation-based split happened
+    if (chunks.length === 0) return [text.slice(0, maxChars)];
+
+    return chunks;
+  }, []);
+
+  const stopRef = useRef(false);
+  const activeBlobUrlsRef = useRef<string[]>([]);
+
+  const cleanupBlobUrls = useCallback(() => {
+    for (const url of activeBlobUrlsRef.current) {
+      try {
+        URL.revokeObjectURL(url);
+      } catch {
+        // ignore
+      }
+    }
+    activeBlobUrlsRef.current = [];
+  }, []);
+
+  const playUrl = useCallback(async (url: string) => {
+    return new Promise<void>((resolve, reject) => {
+      const audio = new Audio();
+      audioRef.current = audio;
+
+      audio.volume = volume;
+
+      audio.onplay = () => {
+        setIsPlaying(true);
+        setError(null);
+        onPlayingChange?.(true);
+      };
+
+      audio.onended = () => resolve();
+      audio.onerror = (e) => reject(e);
+      audio.ontimeupdate = () => {
+        if (audio.duration) setProgress((audio.currentTime / audio.duration) * 100);
+      };
+
+      audio.src = url;
+      audio.play().catch(reject);
+    });
+  }, [onPlayingChange, volume]);
+
   const generateSpeech = useCallback(async () => {
-    if (!text || text.trim().length === 0) {
+    const cleaned = sanitizeTextForTTS(text || "");
+
+    if (!cleaned) {
       toast({
         title: "No text",
         description: "No readable text found",
@@ -52,99 +158,49 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: T
       return;
     }
 
-    // Clear previous error
     setError(null);
     setIsLoading(true);
+    stopRef.current = false;
+    setProgress(0);
 
-    console.log("[TTS Client] Starting speech generation...");
+    // Stop any existing audio
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current = null;
+    }
+    cleanupBlobUrls();
+
+    const chunks = chunkText(cleaned, 800);
+
+    console.log("[TTS Client] Chunked playback:", { chunks: chunks.length });
 
     try {
-      console.log("[TTS Client] Invoking edge function with:", { 
-        textLength: text.slice(0, 4096).length, 
-        voice: selectedVoice, 
-        language 
-      });
+      for (let i = 0; i < chunks.length; i++) {
+        if (stopRef.current) break;
 
-      const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
-        body: { 
-          text: text.slice(0, 4096), // Limit text length
-          voice: selectedVoice,
-          language,
-        },
-      });
+        const chunk = chunks[i];
+        console.log("[TTS Client] Generating chunk", i + 1, "/", chunks.length, { len: chunk.length });
 
-      console.log("[TTS Client] Response:", { data: data ? "received" : "null", error: invokeError });
-
-      if (invokeError) {
-        throw new Error(invokeError.message || "Failed to invoke TTS function");
-      }
-
-      if (data?.error) {
-        throw new Error(data.error);
-      }
-
-      if (!data?.audioContent) {
-        throw new Error("No audio content received from server");
-      }
-
-      console.log("[TTS Client] Audio content received, length:", data.audioContent.length);
-
-      // Stop any existing audio
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current = null;
-      }
-
-      // Create audio from base64 using data URI
-      const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
-      const audio = new Audio();
-      
-      // Set up event handlers before setting src
-      audio.oncanplaythrough = () => {
-        console.log("[TTS Client] Audio can play through");
-        setIsLoading(false);
-        audio.play().catch(e => {
-          console.error("[TTS Client] Play error:", e);
-          setError("Failed to play audio. Try clicking play again.");
-          setIsLoading(false);
+        const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
+          body: {
+            text: chunk,
+            voice: selectedVoice,
+            language,
+          },
         });
-      };
 
-      audio.onplay = () => {
-        console.log("[TTS Client] Audio playing");
-        setIsPlaying(true);
-        setError(null);
-        onPlayingChange?.(true);
-      };
+        if (invokeError) throw new Error(invokeError.message || "Failed to invoke TTS function");
+        if (data?.error) throw new Error(data.error);
+        if (!data?.audioContent) throw new Error("No audio content received from server");
 
-      audio.onended = () => {
-        console.log("[TTS Client] Audio ended");
-        setIsPlaying(false);
-        setProgress(0);
-        onPlayingChange?.(false);
-      };
+        const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
+        activeBlobUrlsRef.current.push(url);
 
-      audio.onerror = (e) => {
-        console.error("[TTS Client] Audio error:", e);
-        setIsPlaying(false);
-        setIsLoading(false);
-        setError("Failed to play audio");
-        onPlayingChange?.(false);
-      };
+        // First audio should start ASAP
+        if (i === 0) setIsLoading(false);
 
-      audio.ontimeupdate = () => {
-        if (audio.duration) {
-          setProgress((audio.currentTime / audio.duration) * 100);
-        }
-      };
-
-      audio.volume = volume;
-      audioRef.current = audio;
-      
-      // Set source to trigger load
-      audio.src = audioUrl;
-      audio.load();
-      
+        await playUrl(url);
+      }
     } catch (err) {
       console.error("[TTS Client] Error:", err);
       const errorMessage = err instanceof Error ? err.message : "Failed to generate speech";
@@ -154,45 +210,54 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: T
         description: errorMessage,
         variant: "destructive",
       });
+    } finally {
       setIsLoading(false);
+      setIsPlaying(false);
+      setProgress(0);
+      onPlayingChange?.(false);
     }
-  }, [text, selectedVoice, language, volume, onPlayingChange, toast]);
+  }, [
+    base64ToBlobUrl,
+    chunkText,
+    cleanupBlobUrls,
+    language,
+    onPlayingChange,
+    playUrl,
+    sanitizeTextForTTS,
+    selectedVoice,
+    text,
+    toast,
+  ]);
 
   const stop = useCallback(() => {
+    stopRef.current = true;
+
     if (audioRef.current) {
       audioRef.current.pause();
       audioRef.current.currentTime = 0;
+      audioRef.current = null;
     }
+
+    cleanupBlobUrls();
+
+    setIsLoading(false);
     setIsPlaying(false);
     setProgress(0);
     setError(null);
     onPlayingChange?.(false);
-  }, [onPlayingChange]);
+  }, [cleanupBlobUrls, onPlayingChange]);
 
   const togglePlayPause = useCallback(() => {
     if (isLoading) return;
-    
-    if (!isPlaying) {
-      if (audioRef.current && audioRef.current.currentTime > 0 && audioRef.current.src) {
-        // Resume existing audio
-        audioRef.current.play().catch(e => {
-          console.error("[TTS Client] Resume error:", e);
-          // If resume fails, generate new speech
-          generateSpeech();
-        });
-      } else {
-        // Generate new speech
-        generateSpeech();
-      }
-    } else {
-      // Pause
-      if (audioRef.current) {
-        audioRef.current.pause();
-        setIsPlaying(false);
-        onPlayingChange?.(false);
-      }
+
+    // For chunked playback, "pause" behaves like stop (to avoid hanging the generation loop).
+    if (isPlaying) {
+      stop();
+      return;
     }
-  }, [isPlaying, isLoading, generateSpeech, onPlayingChange]);
+
+    generateSpeech();
+  }, [generateSpeech, isLoading, isPlaying, stop]);
 
   const handleVolumeChange = useCallback((newVolume: number) => {
     setVolume(newVolume);
