@@ -55,6 +55,31 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
+// Fetch image as bytes
+async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
+  try {
+    // Handle base64 data URLs
+    if (url.startsWith("data:image")) {
+      const base64Data = url.split(",")[1];
+      const binaryString = atob(base64Data);
+      const bytes = new Uint8Array(binaryString.length);
+      for (let i = 0; i < binaryString.length; i++) {
+        bytes[i] = binaryString.charCodeAt(i);
+      }
+      return bytes;
+    }
+    
+    // Fetch from URL
+    const response = await fetch(url);
+    if (!response.ok) return null;
+    const arrayBuffer = await response.arrayBuffer();
+    return new Uint8Array(arrayBuffer);
+  } catch (error) {
+    console.error("Error fetching image:", error);
+    return null;
+  }
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -94,6 +119,10 @@ serve(async (req) => {
     if (chaptersError) throw new Error("Failed to fetch chapters");
     if (!chapters || chapters.length === 0) throw new Error("No generated chapters found");
 
+    // Fetch cover image
+    console.log(`[EXPORT] Fetching cover image...`);
+    const coverImageBytes = await fetchImageBytes(book.cover_image_url);
+    
     const finalAuthorName = authorName || book.author_ai_agent || "ScrollLibrary Author";
     const publishingIdentifier = isbn && isValidISBN(isbn) ? isbn : generateSPC(bookId);
     const isISBN = isbn && isValidISBN(isbn);
@@ -108,8 +137,7 @@ serve(async (req) => {
 
     switch (format) {
       case "pdf": {
-        // Generate real PDF using pdf-lib
-        const pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year);
+        const pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes);
         content = btoa(String.fromCharCode(...pdfBytes));
         contentType = "application/pdf";
         filename = `${sanitizeFilename(book.title)}.pdf`;
@@ -118,8 +146,7 @@ serve(async (req) => {
       }
       
       case "epub": {
-        // Generate real EPUB (ZIP-based)
-        const epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year);
+        const epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes);
         content = btoa(String.fromCharCode(...new Uint8Array(epubBytes)));
         contentType = "application/epub+zip";
         filename = `${sanitizeFilename(book.title)}.epub`;
@@ -128,8 +155,7 @@ serve(async (req) => {
       }
       
       case "docx": {
-        // Generate real DOCX (ZIP-based)
-        const docxBytes = await generateDOCX(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year);
+        const docxBytes = await generateDOCX(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes);
         content = btoa(String.fromCharCode(...new Uint8Array(docxBytes)));
         contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         filename = `${sanitizeFilename(book.title)}.docx`;
@@ -156,8 +182,8 @@ serve(async (req) => {
   }
 });
 
-// ===== PDF Generation with Page Numbers =====
-async function generatePDF(book: any, chapters: any[], author: string, identifier: string, isISBN: boolean, year: number): Promise<Uint8Array> {
+// ===== PDF Generation with Cover Page =====
+async function generatePDF(book: any, chapters: any[], author: string, identifier: string, isISBN: boolean, year: number, coverImageBytes: Uint8Array | null): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
   const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
@@ -168,13 +194,11 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
   const margin = 72; // 1 inch margins
   const textWidth = pageWidth - (margin * 2);
   
-  // Track pages for numbering
   let pageNumber = 0;
   
-  // Helper function to add page number
   const addPageNumber = (page: any, num: number) => {
-    if (num > 2) { // Skip page numbers on title and copyright pages
-      page.drawText(String(num - 2), { // Subtract 2 for front matter
+    if (num > 3) { // Skip page numbers on cover, title, and copyright pages
+      page.drawText(String(num - 3), {
         x: pageWidth / 2 - 5,
         y: 30,
         size: 10,
@@ -184,8 +208,59 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
     }
   };
 
-  // Title Page
+  // Cover Page with Image
   let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumber++;
+  
+  if (coverImageBytes) {
+    try {
+      // Try to embed as PNG first, then JPEG
+      let image;
+      try {
+        image = await pdfDoc.embedPng(coverImageBytes);
+      } catch {
+        try {
+          image = await pdfDoc.embedJpg(coverImageBytes);
+        } catch {
+          console.log("Could not embed cover image, using text-only cover");
+        }
+      }
+      
+      if (image) {
+        // Scale image to fill the page while maintaining aspect ratio
+        const imgAspect = image.width / image.height;
+        const pageAspect = pageWidth / pageHeight;
+        
+        let drawWidth, drawHeight, drawX, drawY;
+        
+        if (imgAspect > pageAspect) {
+          // Image is wider - fit by height
+          drawHeight = pageHeight;
+          drawWidth = drawHeight * imgAspect;
+          drawX = (pageWidth - drawWidth) / 2;
+          drawY = 0;
+        } else {
+          // Image is taller - fit by width
+          drawWidth = pageWidth;
+          drawHeight = drawWidth / imgAspect;
+          drawX = 0;
+          drawY = (pageHeight - drawHeight) / 2;
+        }
+        
+        page.drawImage(image, {
+          x: drawX,
+          y: drawY,
+          width: drawWidth,
+          height: drawHeight,
+        });
+      }
+    } catch (error) {
+      console.error("Error embedding cover image:", error);
+    }
+  }
+
+  // Title Page
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
   pageNumber++;
   let y = pageHeight - 200;
   
@@ -293,7 +368,6 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
 
   // Chapters
   for (const chapter of chapters) {
-    // New page for each chapter
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     pageNumber++;
     addPageNumber(page, pageNumber);
@@ -376,8 +450,8 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
   return lines;
 }
 
-// ===== EPUB Generation =====
-async function generateEPUB(book: any, chapters: any[], author: string, identifier: string, isISBN: boolean, year: number): Promise<ArrayBuffer> {
+// ===== EPUB Generation with Cover =====
+async function generateEPUB(book: any, chapters: any[], author: string, identifier: string, isISBN: boolean, year: number, coverImageBytes: Uint8Array | null): Promise<ArrayBuffer> {
   const blobWriter = new zip.BlobWriter("application/epub+zip");
   const zipWriter = new zip.ZipWriter(blobWriter);
 
@@ -392,6 +466,12 @@ async function generateEPUB(book: any, chapters: any[], author: string, identifi
   </rootfiles>
 </container>`;
   await zipWriter.add("META-INF/container.xml", new zip.TextReader(containerXml));
+
+  // Add cover image if available
+  const hasCover = coverImageBytes && coverImageBytes.length > 0;
+  if (hasCover) {
+    await zipWriter.add("OEBPS/images/cover.jpg", new zip.Uint8ArrayReader(coverImageBytes));
+  }
 
   // Generate chapter IDs
   const chapterItems = chapters.map((ch, i) => ({
@@ -411,13 +491,17 @@ async function generateEPUB(book: any, chapters: any[], author: string, identifi
     <dc:publisher>ScrollLibrary Publishing</dc:publisher>
     <dc:date>${year}</dc:date>
     <meta property="dcterms:modified">${new Date().toISOString().split('.')[0]}Z</meta>
+    ${hasCover ? '<meta name="cover" content="cover-image"/>' : ''}
   </metadata>
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    ${hasCover ? '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>' : ''}
+    ${hasCover ? '<item id="cover-image" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/>' : ''}
     <item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>
     ${chapterItems.map(c => `<item id="${c.id}" href="${c.href}" media-type="application/xhtml+xml"/>`).join('\n    ')}
   </manifest>
   <spine>
+    ${hasCover ? '<itemref idref="cover"/>' : ''}
     <itemref idref="title"/>
     ${chapterItems.map(c => `<itemref idref="${c.id}"/>`).join('\n    ')}
   </spine>
@@ -433,6 +517,7 @@ async function generateEPUB(book: any, chapters: any[], author: string, identifi
   <nav epub:type="toc">
     <h1>Table of Contents</h1>
     <ol>
+      ${hasCover ? '<li><a href="cover.xhtml">Cover</a></li>' : ''}
       <li><a href="title.xhtml">Title Page</a></li>
       ${chapterItems.map(c => `<li><a href="${c.href}">Chapter ${c.chapter.chapter_number}: ${escapeXml(c.chapter.title)}</a></li>`).join('\n      ')}
     </ol>
@@ -440,6 +525,19 @@ async function generateEPUB(book: any, chapters: any[], author: string, identifi
 </body>
 </html>`;
   await zipWriter.add("OEBPS/nav.xhtml", new zip.TextReader(navXhtml));
+
+  // OEBPS/cover.xhtml (Cover page)
+  if (hasCover) {
+    const coverXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Cover</title></head>
+<body style="margin:0; padding:0; text-align:center;">
+  <img src="images/cover.jpg" alt="Cover" style="max-width:100%; max-height:100vh;"/>
+</body>
+</html>`;
+    await zipWriter.add("OEBPS/cover.xhtml", new zip.TextReader(coverXhtml));
+  }
 
   // OEBPS/title.xhtml
   const titleXhtml = `<?xml version="1.0" encoding="UTF-8"?>
@@ -479,16 +577,20 @@ async function generateEPUB(book: any, chapters: any[], author: string, identifi
   return blob.arrayBuffer();
 }
 
-// ===== DOCX Generation =====
-async function generateDOCX(book: any, chapters: any[], author: string, identifier: string, isISBN: boolean, year: number): Promise<ArrayBuffer> {
+// ===== DOCX Generation with Cover =====
+async function generateDOCX(book: any, chapters: any[], author: string, identifier: string, isISBN: boolean, year: number, coverImageBytes: Uint8Array | null): Promise<ArrayBuffer> {
   const blobWriter = new zip.BlobWriter("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   const zipWriter = new zip.ZipWriter(blobWriter);
+
+  const hasCover = coverImageBytes && coverImageBytes.length > 0;
 
   // [Content_Types].xml
   const contentTypes = `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
+  ${hasCover ? '<Default Extension="jpeg" ContentType="image/jpeg"/>' : ''}
+  ${hasCover ? '<Default Extension="jpg" ContentType="image/jpeg"/>' : ''}
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
   <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
 </Types>`;
@@ -501,10 +603,16 @@ async function generateDOCX(book: any, chapters: any[], author: string, identifi
 </Relationships>`;
   await zipWriter.add("_rels/.rels", new zip.TextReader(rels));
 
+  // Add cover image if available
+  if (hasCover) {
+    await zipWriter.add("word/media/cover.jpg", new zip.Uint8ArrayReader(coverImageBytes));
+  }
+
   // word/_rels/document.xml.rels
   const documentRels = `<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  ${hasCover ? '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/cover.jpg"/>' : ''}
 </Relationships>`;
   await zipWriter.add("word/_rels/document.xml.rels", new zip.TextReader(documentRels));
 
@@ -536,8 +644,46 @@ async function generateDOCX(book: any, chapters: any[], author: string, identifi
 
   // word/document.xml
   let documentContent = `<?xml version="1.0" encoding="UTF-8"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
   <w:body>`;
+
+  // Cover image page
+  if (hasCover) {
+    documentContent += `
+    <w:p>
+      <w:pPr><w:jc w:val="center"/></w:pPr>
+      <w:r>
+        <w:drawing>
+          <wp:inline distT="0" distB="0" distL="0" distR="0">
+            <wp:extent cx="5486400" cy="7315200"/>
+            <wp:docPr id="1" name="Cover"/>
+            <a:graphic>
+              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+                <pic:pic>
+                  <pic:nvPicPr>
+                    <pic:cNvPr id="1" name="cover.jpg"/>
+                    <pic:cNvPicPr/>
+                  </pic:nvPicPr>
+                  <pic:blipFill>
+                    <a:blip r:embed="rId2"/>
+                    <a:stretch><a:fillRect/></a:stretch>
+                  </pic:blipFill>
+                  <pic:spPr>
+                    <a:xfrm>
+                      <a:off x="0" y="0"/>
+                      <a:ext cx="5486400" cy="7315200"/>
+                    </a:xfrm>
+                    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+                  </pic:spPr>
+                </pic:pic>
+              </a:graphicData>
+            </a:graphic>
+          </wp:inline>
+        </w:drawing>
+      </w:r>
+    </w:p>
+    <w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+  }
 
   // Title page
   documentContent += `

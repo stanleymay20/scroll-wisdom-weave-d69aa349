@@ -19,8 +19,16 @@ import {
   Flag,
   Globe,
   Lock,
-  RefreshCw
+  RefreshCw,
+  Palette
 } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -68,7 +76,19 @@ export default function BookDetail() {
   const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
   const [isUpdatingPublish, setIsUpdatingPublish] = useState(false);
+  const [coverTheme, setCoverTheme] = useState("classic");
   const isOwner = user && book?.creator_id === user.id;
+
+  const coverThemes = [
+    { value: "classic", label: "Classic", description: "Dark indigo with gold accents" },
+    { value: "modern", label: "Modern", description: "Bold geometric gradients" },
+    { value: "vintage", label: "Vintage", description: "Aged paper & ornate borders" },
+    { value: "nature", label: "Nature", description: "Earthy tones & organic elements" },
+    { value: "cosmic", label: "Cosmic", description: "Deep space & nebulae" },
+    { value: "minimalist", label: "Minimalist", description: "Ultra-clean simplicity" },
+    { value: "african", label: "African Heritage", description: "Rich patterns & warm tones" },
+    { value: "prophetic", label: "Prophetic", description: "Divine light & sacred aesthetic" },
+  ];
 
   useEffect(() => {
     const fetchData = async () => {
@@ -318,7 +338,7 @@ export default function BookDetail() {
     });
   };
 
-  const handleGenerateCover = async () => {
+  const handleGenerateCover = async (theme?: string) => {
     if (!book) return;
     
     setIsGeneratingCover(true);
@@ -330,6 +350,7 @@ export default function BookDetail() {
           title: book.title,
           category: book.category,
           description: book.description,
+          theme: theme || coverTheme,
         }
       });
 
@@ -346,7 +367,7 @@ export default function BookDetail() {
 
       toast({
         title: "Cover generated!",
-        description: "Your book now has a unique AI-generated cover.",
+        description: `Your book now has a ${response.data.theme || coverTheme} style cover.`,
       });
     } catch (error) {
       console.error("Error generating cover:", error);
@@ -461,12 +482,28 @@ export default function BookDetail() {
                     className="w-full h-full object-cover"
                   />
                 ) : (
-                  <div className="w-full h-full flex flex-col items-center justify-center gap-4">
+                  <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-4">
                     <Book className="h-24 w-24 text-scroll-gold/30" />
+                    <Select value={coverTheme} onValueChange={setCoverTheme}>
+                      <SelectTrigger className="w-full max-w-[200px]">
+                        <Palette className="h-4 w-4 mr-2" />
+                        <SelectValue placeholder="Select theme" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {coverThemes.map((theme) => (
+                          <SelectItem key={theme.value} value={theme.value}>
+                            <div className="flex flex-col">
+                              <span>{theme.label}</span>
+                              <span className="text-xs text-muted-foreground">{theme.description}</span>
+                            </div>
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
                     <Button
                       variant="gold-outline"
                       size="sm"
-                      onClick={handleGenerateCover}
+                      onClick={() => handleGenerateCover()}
                       disabled={isGeneratingCover}
                     >
                       {isGeneratingCover ? (
