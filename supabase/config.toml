@@ -38,3 +38,6 @@ verify_jwt = true
 
 [functions.generate-references]
 verify_jwt = true
+
+[functions.interactive-qa]
+verify_jwt = true
