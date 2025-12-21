@@ -71,6 +71,10 @@
     --sidebar-ring: 43 74% 45%;
   }
 
+  .dark {
+    --background: 30 25% 5%;
+    --foreground: 40 35% 92%;
+
     --card: 28 30% 9%;
     --card-foreground: 40 35% 92%;
 
@@ -238,12 +242,6 @@
     --sidebar-accent: 45 15% 90%;
     --sidebar-accent-foreground: 222 47% 11%;
     --sidebar-border: 45 15% 85%;
-  }
-
-  .dark {
-    /* Dark mode is the default - warm amber theme */
-    --background: 30 25% 5%;
-    --foreground: 40 35% 92%;
   }
 }
 
