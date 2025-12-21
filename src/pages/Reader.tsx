@@ -110,8 +110,14 @@ export default function Reader() {
 
       if (chapterError) {
         console.error("Error fetching chapter:", chapterError);
-      } else {
-        setChapter(chapterData);
+      } else if (chapterData) {
+        setChapter({
+          ...chapterData,
+          chapter_references: Array.isArray(chapterData.chapter_references) 
+            ? chapterData.chapter_references 
+            : [],
+          research_metadata: chapterData.research_metadata as Record<string, any> || {}
+        });
       }
 
       setIsLoading(false);
