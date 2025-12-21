@@ -17,6 +17,7 @@ export type Database = {
       books: {
         Row: {
           author_ai_agent: string | null
+          book_type: string
           category: Database["public"]["Enums"]["book_category"]
           cover_image_url: string | null
           created_at: string | null
@@ -32,6 +33,7 @@ export type Database = {
         }
         Insert: {
           author_ai_agent?: string | null
+          book_type?: string
           category: Database["public"]["Enums"]["book_category"]
           cover_image_url?: string | null
           created_at?: string | null
@@ -47,6 +49,7 @@ export type Database = {
         }
         Update: {
           author_ai_agent?: string | null
+          book_type?: string
           category?: Database["public"]["Enums"]["book_category"]
           cover_image_url?: string | null
           created_at?: string | null

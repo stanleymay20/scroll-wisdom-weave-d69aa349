@@ -201,6 +201,7 @@ Format your response as a JSON object with this structure:
         cover_image_url: customCover || null,
         creator_id: userId, // Track book ownership
         language: language, // Store language for chapter generation
+        book_type: bookType, // Store book type (text, illustrated, comic)
       })
       .select()
       .single();

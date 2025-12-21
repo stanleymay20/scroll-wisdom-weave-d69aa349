@@ -18,7 +18,8 @@ import {
   ImagePlus,
   Flag,
   Globe,
-  Lock
+  Lock,
+  RefreshCw
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -40,6 +41,7 @@ interface BookData {
   is_published: boolean | null;
   creator_id: string | null;
   language: string | null;
+  book_type: string | null;
 }
 
 interface ChapterData {
@@ -212,7 +214,8 @@ export default function BookDetail() {
           chapterNumber: chapter.chapter_number,
           keyTopics,
           category: book.category,
-          language: book.language || 'en', // Pass book's language for consistency
+          language: book.language || 'en',
+          bookType: book.book_type || 'text', // Pass book type for comic/illustrated generation
         }
       });
 
@@ -278,7 +281,8 @@ export default function BookDetail() {
             chapterNumber: chapter.chapter_number,
             keyTopics,
             category: book.category,
-            language: book.language || 'en', // Pass book's language for consistency
+            language: book.language || 'en',
+            bookType: book.book_type || 'text', // Pass book type for comic/illustrated generation
           }
         });
 
@@ -674,6 +678,15 @@ export default function BookDetail() {
                             </div>
                           ) : isGenerated ? (
                             <div className="flex items-center gap-2">
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={(e) => handleGenerateChapter(chapter, e)}
+                                title="Regenerate chapter"
+                                className="text-muted-foreground hover:text-scroll-gold"
+                              >
+                                <RefreshCw className="h-4 w-4" />
+                              </Button>
                               <CheckCircle2 className="h-5 w-5 text-green-500" />
                               <ChevronRight 
                                 className="h-5 w-5 text-muted-foreground group-hover:text-scroll-gold transition-all cursor-pointer"
