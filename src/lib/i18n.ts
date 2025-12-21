@@ -3456,13 +3456,23 @@ export function t(key: string, lang: Language = 'en'): string {
 }
 
 export function getStoredLanguage(): Language {
-  const stored = localStorage.getItem('scrolllibrary-language');
-  if (stored && ['en', 'fr', 'de', 'es', 'ar', 'sw'].includes(stored)) {
-    return stored as Language;
+  if (typeof window === 'undefined') return 'en';
+  try {
+    const stored = localStorage.getItem('scrolllibrary-language');
+    if (stored && ['en', 'fr', 'de', 'es', 'ar', 'sw'].includes(stored)) {
+      return stored as Language;
+    }
+  } catch {
+    // localStorage not available
   }
   return 'en';
 }
 
 export function setStoredLanguage(lang: Language): void {
-  localStorage.setItem('scrolllibrary-language', lang);
+  if (typeof window === 'undefined') return;
+  try {
+    localStorage.setItem('scrolllibrary-language', lang);
+  } catch {
+    // localStorage not available
+  }
 }
