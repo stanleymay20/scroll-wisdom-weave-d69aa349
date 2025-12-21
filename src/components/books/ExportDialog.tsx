@@ -25,6 +25,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEntitlements } from "@/hooks/useEntitlements";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface ExportDialogProps {
   bookId: string;
@@ -48,13 +49,12 @@ export function ExportDialog({
   const [isbn, setIsbn] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const { toast } = useToast();
+  const { t } = useLanguage();
   
   // Use centralized entitlements - SINGLE SOURCE OF TRUTH
   const entitlements = useEntitlements();
   
   // ABSOLUTE RULE: If ANY of these are true, user has full export access
-  // Admin, Prophet, Premium, ScrollStudent - NO upgrade prompts ever
-  // CRITICAL: During loading, assume access for better UX - prevents false blocks
   const hasFullAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent || entitlements.isPaid;
   
   // Fail-safe: paid users ALWAYS have export access - no exceptions
@@ -69,8 +69,8 @@ export function ExportDialog({
   const handleExport = async (format: ExportFormat) => {
     if (!hasGeneratedChapters) {
       toast({
-        title: "No chapters generated",
-        description: "Please generate at least one chapter before exporting.",
+        title: t('export.noChapters'),
+        description: t('export.noChaptersDesc'),
         variant: "destructive",
       });
       return;
@@ -78,8 +78,8 @@ export function ExportDialog({
 
     if (!coverImageUrl) {
       toast({
-        title: "Cover required",
-        description: "Please generate or upload a cover image before exporting.",
+        title: t('export.coverRequired'),
+        description: t('export.coverRequiredDesc'),
         variant: "destructive",
       });
       return;
@@ -87,8 +87,8 @@ export function ExportDialog({
 
     if (!authorName.trim()) {
       toast({
-        title: "Author name required",
-        description: "Please enter an author name for your book.",
+        title: t('export.authorRequired'),
+        description: t('export.authorRequiredDesc'),
         variant: "destructive",
       });
       return;
@@ -119,7 +119,6 @@ export function ExportDialog({
       // Decode base64 if present, otherwise use content directly
       let blobContent: BlobPart;
       if (response.data.isBase64) {
-        // Decode base64 to binary
         const binaryString = atob(content);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) {
@@ -142,16 +141,16 @@ export function ExportDialog({
       URL.revokeObjectURL(url);
 
       toast({
-        title: "Export complete!",
-        description: `Your book has been downloaded as ${filename}`,
+        title: t('export.complete'),
+        description: t('export.downloaded').replace('{filename}', filename),
       });
       
       setIsOpen(false);
     } catch (error) {
       console.error("Export error:", error);
       toast({
-        title: "Export failed",
-        description: error instanceof Error ? error.message : "Failed to export book",
+        title: t('export.failed'),
+        description: error instanceof Error ? error.message : t('export.failed'),
         variant: "destructive",
       });
     } finally {
@@ -162,21 +161,21 @@ export function ExportDialog({
   const formats: { format: ExportFormat; label: string; icon: typeof FileText; description: string }[] = [
     {
       format: "pdf",
-      label: "PDF Document",
+      label: t('export.pdf'),
       icon: FileText,
-      description: "Print-ready PDF with cover, TOC, and professional layout",
+      description: t('export.pdfDesc'),
     },
     {
       format: "epub",
-      label: "EPUB E-Book",
+      label: t('export.epub'),
       icon: BookOpen,
-      description: "Standard e-book format for Apple Books, Kobo, and readers",
+      description: t('export.epubDesc'),
     },
     {
       format: "docx",
-      label: "Word Document",
+      label: t('export.docx'),
       icon: File,
-      description: "Editable document for Microsoft Word and Google Docs",
+      description: t('export.docxDesc'),
     },
   ];
 
@@ -188,17 +187,17 @@ export function ExportDialog({
       <DialogTrigger asChild>
         <Button variant="gold-outline" size="lg">
           <Download className="h-5 w-5 mr-2" />
-          Download
+          {t('common.download')}
         </Button>
       </DialogTrigger>
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Award className="h-5 w-5 text-scroll-gold" />
-            Export Book
+            {t('export.title')}
           </DialogTitle>
           <DialogDescription>
-            Download "{title}" in publishing-ready format
+            {t('export.subtitle').replace('{title}', title)}
           </DialogDescription>
         </DialogHeader>
 
@@ -218,12 +217,12 @@ export function ExportDialog({
             {hasCover ? (
               <p className="text-xs text-green-500 flex items-center gap-1 mt-1">
                 <CheckCircle2 className="h-3 w-3" />
-                Cover included
+                {t('export.coverIncluded')}
               </p>
             ) : (
               <p className="text-xs text-amber-500 flex items-center gap-1 mt-1">
                 <AlertCircle className="h-3 w-3" />
-                Cover required for export
+                {t('export.coverNeeded')}
               </p>
             )}
           </div>
@@ -231,12 +230,12 @@ export function ExportDialog({
 
         {/* Author Name Input */}
         <div className="space-y-2">
-          <Label htmlFor="author-name">Author Name *</Label>
+          <Label htmlFor="author-name">{t('export.authorName')} *</Label>
           <Input
             id="author-name"
             value={authorName}
             onChange={(e) => setAuthorName(e.target.value)}
-            placeholder="Enter author name for publishing"
+            placeholder={t('export.authorPlaceholder')}
             className="bg-background"
           />
         </div>
@@ -244,23 +243,23 @@ export function ExportDialog({
         {/* ISBN Input (Optional) */}
         <div className="space-y-2">
           <Label htmlFor="isbn" className="flex items-center gap-2">
-            ISBN <span className="text-xs text-muted-foreground">(optional)</span>
+            {t('export.isbn')} <span className="text-xs text-muted-foreground">({t('export.isbnOptional')})</span>
           </Label>
           <Input
             id="isbn"
             value={isbn}
             onChange={(e) => setIsbn(e.target.value)}
-            placeholder="978-X-XXX-XXXXX-X"
+            placeholder={t('export.isbnPlaceholder')}
             className="bg-background font-mono"
           />
           <p className="text-xs text-muted-foreground">
-            If no ISBN is provided, a Scroll Publishing Code (SPC) will be generated as an internal identifier.
+            {t('export.isbnNote')}
           </p>
         </div>
 
         {/* Export Formats */}
         <div className="space-y-2">
-          <Label>Export Format</Label>
+          <Label>{t('export.format')}</Label>
           <div className="grid gap-2">
             {formats.map(({ format, label, icon: Icon, description }) => (
               <Button
@@ -289,22 +288,22 @@ export function ExportDialog({
         {!hasGeneratedChapters && (
           <p className="text-sm text-amber-500 flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
-            Generate chapters first to enable export
+            {t('export.generateFirst')}
           </p>
         )}
         
         {!hasCover && hasGeneratedChapters && (
           <p className="text-sm text-amber-500 flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
-            Add a cover image to enable export
+            {t('export.addCover')}
           </p>
         )}
 
-        {/* Only show upgrade prompt for FREE tier users - NEVER for paid/admin */}
+        {/* Only show upgrade prompt for FREE tier users */}
         {!canExport && !entitlements.isPaid && !entitlements.isAdmin && !entitlements.isProphet && !entitlements.isPremium && !entitlements.isScrollStudent && (
           <p className="text-sm text-amber-500 flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
-            Upgrade to Premium to access publishing exports
+            {t('export.upgradeForExport')}
           </p>
         )}
 
@@ -313,10 +312,9 @@ export function ExportDialog({
           <div className="flex items-start gap-3">
             <Shield className="h-5 w-5 text-scroll-gold flex-shrink-0 mt-0.5" />
             <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">Ownership & Commercial Rights</p>
+              <p className="text-sm font-medium text-foreground">{t('export.ownership')}</p>
               <p className="text-xs text-muted-foreground">
-                You own 100% of your generated content. You may publish, sell, or distribute your book freely. 
-                ScrollLibrary claims no royalties or ownership.
+                {t('export.ownershipDesc')}
               </p>
             </div>
           </div>
@@ -326,7 +324,7 @@ export function ExportDialog({
         <div className="flex items-center justify-center gap-2 py-2">
           <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30">
             <CheckCircle2 className="h-4 w-4 text-green-500" />
-            <span className="text-sm font-medium text-green-600 dark:text-green-400">Publishing Ready</span>
+            <span className="text-sm font-medium text-green-600 dark:text-green-400">{t('export.publishingReady')}</span>
           </div>
         </div>
       </DialogContent>
