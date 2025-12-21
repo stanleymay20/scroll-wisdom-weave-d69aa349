@@ -32,9 +32,12 @@ const queryClient = new QueryClient();
 
 function ThemeInitializer() {
   useEffect(() => {
+    const themeMode = localStorage.getItem('theme-mode') || 'dark';
     const colorTheme = localStorage.getItem('color-theme') || 'gold';
-    // Only set data-theme if it's not the default gold
-    if (colorTheme && colorTheme !== 'gold') {
+    
+    if (themeMode === 'light') {
+      document.documentElement.setAttribute('data-theme', 'light');
+    } else {
       document.documentElement.setAttribute('data-theme', colorTheme);
     }
   }, []);

@@ -278,6 +278,7 @@ export default function Settings() {
                         value={settings.theme_preference}
                         onValueChange={(value) => {
                           setSettings(s => ({ ...s, theme_preference: value }));
+                          localStorage.setItem('theme-mode', value);
                           if (value === 'light') {
                             document.documentElement.setAttribute('data-theme', 'light');
                           } else {
@@ -323,16 +324,19 @@ export default function Settings() {
                           { id: 'green', label: 'Green', color: 'bg-emerald-500' },
                           { id: 'rainbow', label: 'Rainbow', color: 'bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500' },
                         ].map((theme) => {
-                          const isActive = (localStorage.getItem('color-theme') || 'gold') === theme.id;
+                          const currentColorTheme = localStorage.getItem('color-theme') || 'gold';
+                          const isActive = currentColorTheme === theme.id;
                           return (
                             <button
                               key={theme.id}
                               onClick={() => {
                                 localStorage.setItem('color-theme', theme.id);
-                                if (settings.theme_preference !== 'light') {
+                                // Apply the theme immediately if not in light mode
+                                const themeMode = localStorage.getItem('theme-mode') || settings.theme_preference;
+                                if (themeMode !== 'light') {
                                   document.documentElement.setAttribute('data-theme', theme.id);
                                 }
-                                // force re-render
+                                // Force re-render to update active state
                                 setSettings(s => ({ ...s }));
                               }}
                               className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${
