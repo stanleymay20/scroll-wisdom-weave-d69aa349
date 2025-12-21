@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -12,6 +12,8 @@ interface TextToSpeechPlayerProps {
   text: string;
   language?: string;
   onPlayingChange?: (playing: boolean) => void;
+  /** Change this value to force-stop playback (e.g. when changing pages). */
+  stopKey?: string | number;
 }
 
 // OpenAI TTS voices
@@ -24,7 +26,7 @@ const OPENAI_VOICES = [
   { id: "shimmer", name: "Shimmer (Soft Female)" },
 ];
 
-export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: TextToSpeechPlayerProps) {
+export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, stopKey }: TextToSpeechPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -33,7 +35,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: T
   const [progress, setProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
-  
+
   // Use centralized entitlements - SINGLE SOURCE OF TRUTH
   const entitlements = useEntitlements();
   
@@ -170,7 +172,14 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: T
     }
     cleanupBlobUrls();
 
-    const chunks = chunkText(cleaned, 800);
+    let chunks = chunkText(cleaned, 800);
+
+    // Faster “time to first audio”: make the first chunk smaller.
+    if (chunks[0] && chunks[0].length > 260) {
+      const first = chunks[0].slice(0, 260);
+      const rest = chunks[0].slice(260).trim();
+      chunks = [first, ...(rest ? [rest] : []), ...chunks.slice(1)];
+    }
 
     console.log("[TTS Client] Chunked playback:", { chunks: chunks.length });
 
@@ -246,6 +255,18 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange }: T
     setError(null);
     onPlayingChange?.(false);
   }, [cleanupBlobUrls, onPlayingChange]);
+
+  // Stop audio when changing pages (or any parent-controlled stopKey changes)
+  useEffect(() => {
+    if (stopKey === undefined) return;
+    stop();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stopKey]);
+
+  // Cleanup on unmount to avoid “audio continues after navigation”
+  useEffect(() => {
+    return () => stop();
+  }, [stop]);
 
   const togglePlayPause = useCallback(() => {
     if (isLoading) return;
