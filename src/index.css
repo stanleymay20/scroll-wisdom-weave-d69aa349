@@ -2,13 +2,13 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ScrollLibrary™ Design System - Ancient Wisdom Meets Modern Tech */
+/* ScrollLibrary™ Design System - Multi-Theme Support */
 
 @import url('https://fonts.googleapis.com/css2?family=Playfair+Display:wght@400;500;600;700&family=Source+Sans+3:wght@300;400;500;600;700&display=swap');
 
 @layer base {
   :root {
-    /* Core palette - Deep indigo/navy with gold accents */
+    /* Default: Gold theme (from logo) */
     --background: 222 47% 6%;
     --foreground: 45 30% 94%;
 
@@ -73,8 +73,116 @@
     --sidebar-ring: 43 74% 55%;
   }
 
+  /* Orange Theme - from the scroll in logo */
+  [data-theme="orange"] {
+    --primary: 24 85% 55%;
+    --accent: 16 80% 50%;
+    --ring: 24 85% 55%;
+    --scroll-gold: 24 85% 55%;
+    --scroll-gold-light: 28 90% 65%;
+    --scroll-gold-dark: 20 75% 40%;
+    --scroll-bronze: 16 70% 45%;
+    --gradient-gold: linear-gradient(135deg, hsl(24 85% 55%), hsl(16 80% 50%));
+    --shadow-gold: 0 0 40px hsl(24 85% 55% / 0.25);
+    --shadow-hover: 0 20px 60px -15px hsl(24 85% 55% / 0.3);
+    --sidebar-primary: 24 85% 55%;
+    --sidebar-ring: 24 85% 55%;
+  }
+
+  /* Blue Theme - from the book pages in logo */
+  [data-theme="blue"] {
+    --primary: 210 80% 55%;
+    --accent: 220 75% 50%;
+    --ring: 210 80% 55%;
+    --scroll-gold: 210 80% 55%;
+    --scroll-gold-light: 205 85% 65%;
+    --scroll-gold-dark: 215 70% 40%;
+    --scroll-bronze: 220 60% 45%;
+    --gradient-gold: linear-gradient(135deg, hsl(210 80% 55%), hsl(220 75% 50%));
+    --shadow-gold: 0 0 40px hsl(210 80% 55% / 0.25);
+    --shadow-hover: 0 20px 60px -15px hsl(210 80% 55% / 0.3);
+    --sidebar-primary: 210 80% 55%;
+    --sidebar-ring: 210 80% 55%;
+  }
+
+  /* Purple Theme - from the book pages in logo */
+  [data-theme="purple"] {
+    --primary: 270 65% 55%;
+    --accent: 280 60% 50%;
+    --ring: 270 65% 55%;
+    --scroll-gold: 270 65% 55%;
+    --scroll-gold-light: 265 70% 65%;
+    --scroll-gold-dark: 275 55% 40%;
+    --scroll-bronze: 280 50% 45%;
+    --gradient-gold: linear-gradient(135deg, hsl(270 65% 55%), hsl(280 60% 50%));
+    --shadow-gold: 0 0 40px hsl(270 65% 55% / 0.25);
+    --shadow-hover: 0 20px 60px -15px hsl(270 65% 55% / 0.3);
+    --sidebar-primary: 270 65% 55%;
+    --sidebar-ring: 270 65% 55%;
+  }
+
+  /* Green Theme - from the leaf in logo */
+  [data-theme="green"] {
+    --primary: 145 65% 45%;
+    --accent: 155 60% 40%;
+    --ring: 145 65% 45%;
+    --scroll-gold: 145 65% 45%;
+    --scroll-gold-light: 140 70% 55%;
+    --scroll-gold-dark: 150 55% 35%;
+    --scroll-bronze: 155 50% 40%;
+    --gradient-gold: linear-gradient(135deg, hsl(145 65% 45%), hsl(155 60% 40%));
+    --shadow-gold: 0 0 40px hsl(145 65% 45% / 0.25);
+    --shadow-hover: 0 20px 60px -15px hsl(145 65% 45% / 0.3);
+    --sidebar-primary: 145 65% 45%;
+    --sidebar-ring: 145 65% 45%;
+  }
+
+  /* Rainbow Theme - multi-color inspired by the colorful logo */
+  [data-theme="rainbow"] {
+    --primary: 340 75% 55%;
+    --accent: 280 70% 55%;
+    --ring: 340 75% 55%;
+    --scroll-gold: 340 75% 55%;
+    --scroll-gold-light: 330 80% 65%;
+    --scroll-gold-dark: 350 65% 45%;
+    --scroll-bronze: 280 60% 50%;
+    --gradient-gold: linear-gradient(135deg, hsl(340 75% 55%), hsl(280 70% 55%), hsl(210 80% 55%));
+    --shadow-gold: 0 0 40px hsl(340 75% 55% / 0.25);
+    --shadow-hover: 0 20px 60px -15px hsl(340 75% 55% / 0.3);
+    --sidebar-primary: 340 75% 55%;
+    --sidebar-ring: 340 75% 55%;
+  }
+
+  /* Light mode variants */
+  [data-theme="light"] {
+    --background: 45 30% 97%;
+    --foreground: 222 47% 11%;
+    --card: 45 25% 95%;
+    --card-foreground: 222 47% 11%;
+    --popover: 45 25% 98%;
+    --popover-foreground: 222 47% 11%;
+    --primary: 43 74% 45%;
+    --primary-foreground: 45 30% 98%;
+    --secondary: 40 20% 90%;
+    --secondary-foreground: 222 47% 11%;
+    --muted: 45 15% 90%;
+    --muted-foreground: 222 20% 45%;
+    --accent: 35 70% 40%;
+    --accent-foreground: 45 30% 98%;
+    --border: 45 15% 85%;
+    --input: 45 15% 85%;
+    --gradient-hero: linear-gradient(180deg, hsl(45 30% 96%) 0%, hsl(45 25% 92%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(45 25% 96%) 0%, hsl(45 20% 92%) 100%);
+    --shadow-card: 0 10px 40px -10px hsl(222 20% 70% / 0.3);
+    --sidebar-background: 45 25% 95%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-accent: 45 15% 90%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 45 15% 85%;
+  }
+
   .dark {
-    /* Dark mode is the default for this spiritual library theme */
+    /* Dark mode is the default */
     --background: 222 47% 6%;
     --foreground: 45 30% 94%;
   }

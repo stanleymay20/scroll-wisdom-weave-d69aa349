@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Book, Search, User, Menu, X, Settings, LogOut, HelpCircle, Shield } from "lucide-react";
+import { Search, User, Menu, X, Settings, LogOut, HelpCircle, Shield } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useIsAdmin } from "@/hooks/useAdmin";
+import logo from "@/assets/logo.png";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -55,14 +56,8 @@ export function Navbar() {
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/50 bg-background/80 backdrop-blur-xl">
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
-          <Link to="/" className="flex items-center gap-3 group">
-            <div className="relative">
-              <div className="absolute inset-0 bg-gradient-gold rounded-lg blur-md opacity-50 group-hover:opacity-75 transition-opacity" />
-              <div className="relative bg-gradient-gold p-2 rounded-lg">
-                <Book className="h-5 w-5 text-primary-foreground" />
-              </div>
-            </div>
-            <span className="font-display text-xl font-semibold text-gradient-gold">ScrollLibrary</span>
+          <Link to="/" className="flex items-center gap-2 group">
+            <img src={logo} alt="ScrollLibrary" className="h-10 w-auto" />
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
