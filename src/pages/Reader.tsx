@@ -17,7 +17,8 @@ import {
   BookMarked,
   Palette,
   GraduationCap,
-  MessageCircle
+  MessageCircle,
+  Mic
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { TextToSpeechPlayer } from "@/components/audio/TextToSpeechPlayer";
@@ -30,6 +31,7 @@ import { AcademicModeIndicator, AcademicDisclaimer } from "@/components/academic
 import { InteractiveQA, InteractiveQAButton } from "@/components/reader/InteractiveQA";
 import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode, QuizModeButton } from "@/components/reader/QuizMode";
+import { VoiceConversation, VoiceConversationButton } from "@/components/reader/VoiceConversation";
 import { CitationStyle } from "@/lib/academicCategories";
 
 interface BookData {
@@ -84,6 +86,7 @@ export default function Reader() {
   const [guidedModeActive, setGuidedModeActive] = useState(true);
   const [showQA, setShowQA] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
+  const [showVoiceConversation, setShowVoiceConversation] = useState(false);
   const [highlightedText, setHighlightedText] = useState("");
   const currentChapter = parseInt(chapterId || "1");
 
@@ -527,9 +530,13 @@ export default function Reader() {
         </div>
       )}
 
-      {/* Interactive Q&A Button + Quiz Button */}
-      {chapter?.content && !showQA && (
+      {/* Interactive Q&A Button + Quiz Button + Voice Button */}
+      {chapter?.content && !showQA && !showVoiceConversation && (
         <div className="fixed bottom-20 right-4 z-40 flex flex-col gap-2">
+          <VoiceConversationButton 
+            onClick={() => setShowVoiceConversation(true)} 
+            cognitiveLevel={cognitiveLevel}
+          />
           <QuizModeButton onClick={() => setShowQuiz(true)} />
           <InteractiveQAButton onClick={() => setShowQA(true)} />
         </div>
@@ -562,6 +569,21 @@ export default function Reader() {
           onClearHighlight={() => setHighlightedText("")}
         />
       )}
+
+      {/* Voice Conversation */}
+      <AnimatePresence>
+        {showVoiceConversation && chapter?.content && (
+          <VoiceConversation
+            chapterContent={chapter.content}
+            chapterTitle={chapter.title}
+            bookTitle={book?.title || ""}
+            cognitiveLevel={cognitiveLevel}
+            bookId={bookId || ""}
+            chapterId={chapter.id}
+            onClose={() => setShowVoiceConversation(false)}
+          />
+        )}
+      </AnimatePresence>
 
       {/* Navigation Footer */}
       <footer className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-border/50">

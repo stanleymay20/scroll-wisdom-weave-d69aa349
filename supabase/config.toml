@@ -41,3 +41,12 @@ verify_jwt = true
 
 [functions.interactive-qa]
 verify_jwt = true
+
+[functions.voice-stt]
+verify_jwt = true
+
+[functions.voice-tts]
+verify_jwt = true
+
+[functions.voice-conversation]
+verify_jwt = true
