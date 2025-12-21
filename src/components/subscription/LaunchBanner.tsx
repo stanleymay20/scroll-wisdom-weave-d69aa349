@@ -1,4 +1,4 @@
-import { LAUNCH_MODE, LAUNCH_MODE_CONFIG } from '@/lib/config';
+import { isLaunchModeActive, LAUNCH_MODE_CONFIG } from '@/lib/config';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { Rocket, X } from 'lucide-react';
 import { useState } from 'react';
@@ -12,8 +12,9 @@ export function LaunchBanner() {
   const navigate = useNavigate();
   const { t } = useLanguage();
 
+  // Don't show during trial mode (isLaunchModeActive returns false during trial)
   // Only show for free tier users during launch mode
-  if (!LAUNCH_MODE || !LAUNCH_MODE_CONFIG.showBanner || tier !== 'free' || dismissed) {
+  if (!isLaunchModeActive() || !LAUNCH_MODE_CONFIG.showBanner || tier !== 'free' || dismissed) {
     return null;
   }
 
