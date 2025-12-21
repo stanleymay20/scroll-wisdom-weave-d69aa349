@@ -222,7 +222,9 @@ IMPORTANT:
       );
     }
 
-    // STANDARD TEXT/ILLUSTRATED BOOK GENERATION
+
+    // STANDARD TEXT / ILLUSTRATED BOOK GENERATION
+
     // Validate and cap word count - DeepSeek max_tokens is 8192
     // ~1.3 tokens per word, so max ~6000 words per API call
     const targetWords = Math.min(Math.max(wordCount, 2000), 6000);
@@ -273,6 +275,7 @@ CRITICAL REQUIREMENTS:
 8. This is a COMPLETE chapter - do not truncate or summarize
 
 BEGIN WRITING THE FULL CHAPTER NOW IN ${languageName}:`;
+
 
     let chapterContent: string = "";
     let retryCount = 0;
@@ -386,15 +389,140 @@ BEGIN WRITING THE FULL CHAPTER NOW IN ${languageName}:`;
 
     console.log(`Generated chapter content: ${chapterContent.length} characters`);
 
+    let finalContent = chapterContent;
+
+    if (bookType === 'illustrated') {
+      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+      if (!LOVABLE_API_KEY) {
+        throw new Error("LOVABLE_API_KEY is not configured");
+      }
+
+      console.log("Generating illustration prompts...");
+
+      const illustrationPrompt = `Create 4 illustration ideas for Chapter ${chapterNumber}: "${chapterTitle}" from "${bookTitle}".
+
+CRITICAL:
+- This is an ILLUSTRATED book (text already written). You are proposing images.
+- NO long prose. Return only the 4 image prompts.
+- Each prompt must be safe, non-violent, and suitable for general audiences.
+- NO text inside the image.
+
+FORMAT EXACTLY:
+
+---
+
+[ILLUSTRATION 1]
+**Visual:** [2-3 sentence scene description for an AI image generator]
+
+---
+
+[ILLUSTRATION 2]
+**Visual:** ...
+
+---
+
+[ILLUSTRATION 3]
+**Visual:** ...
+
+---
+
+[ILLUSTRATION 4]
+**Visual:** ...
+
+---`;
+
+      const promptResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            {
+              role: "system",
+              content: `You create concise illustration prompts. Do not write chapter text. All descriptions must be in ${languageName}.`,
+            },
+            { role: "user", content: illustrationPrompt },
+          ],
+        }),
+      });
+
+      if (!promptResp.ok) {
+        const t = await promptResp.text();
+        console.error("Illustration prompt generation failed:", promptResp.status, t);
+        throw new Error("Failed to generate illustration prompts");
+      }
+
+      const promptData = await promptResp.json();
+      const promptText: string = promptData.choices?.[0]?.message?.content || "";
+
+      const illRegex = /\[ILLUSTRATION\s*(\d+)\][\s\S]*?\*\*Visual:\*\*\s*([\s\S]*?)(?=\n\s*---|\n\s*\[ILLUSTRATION|\s*$)/gi;
+      const illustrations: { num: number; visual: string; imageUrl?: string }[] = [];
+      let m;
+      while ((m = illRegex.exec(promptText)) !== null) {
+        illustrations.push({ num: parseInt(m[1]), visual: m[2].trim() });
+      }
+
+      console.log(`Found ${illustrations.length} illustration prompts`);
+
+      for (let i = 0; i < Math.min(illustrations.length, 4); i++) {
+        const ill = illustrations[i];
+        try {
+          console.log(`Generating image for illustration ${ill.num}...`);
+          const imagePrompt = `Book illustration (no text). ${ill.visual} Style: cinematic, detailed, professional illustration, high quality. No words or letters in the image.`;
+
+          const imgResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash-image-preview",
+              messages: [{ role: "user", content: imagePrompt }],
+              modalities: ["image", "text"],
+            }),
+          });
+
+          if (imgResp.ok) {
+            const imgData = await imgResp.json();
+            const imageUrl = imgData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+            if (imageUrl) ill.imageUrl = imageUrl;
+          } else {
+            const t = await imgResp.text();
+            console.error(`Image generation failed for illustration ${ill.num}:`, imgResp.status, t);
+          }
+
+          await new Promise((r) => setTimeout(r, 1000));
+        } catch (imgError) {
+          console.error(`Image generation error for illustration ${ill.num}:`, imgError);
+        }
+      }
+
+      if (illustrations.length > 0) {
+        finalContent += `\n\n---\n\n## Illustrations\n\n`;
+        for (const ill of illustrations.slice(0, 4)) {
+          finalContent += `### Illustration ${ill.num}\n\n`;
+          if (ill.imageUrl) {
+            finalContent += `![Illustration ${ill.num}](${ill.imageUrl})\n\n`;
+          } else {
+            finalContent += `*Illustration idea:* ${ill.visual}\n\n`;
+          }
+        }
+      }
+    }
+
     // Calculate word count
-    const actualWordCount = chapterContent.split(/\s+/).filter((word: string) => word.length > 0).length;
+    const actualWordCount = finalContent.split(/\s+/).filter((word: string) => word.length > 0).length;
     console.log(`Actual word count: ${actualWordCount}`);
 
     // Update chapter in database
     const { error: updateError } = await supabase
       .from("chapters")
       .update({
-        content: chapterContent,
+        content: finalContent,
         word_count: actualWordCount,
         is_generated: true,
         updated_at: new Date().toISOString(),

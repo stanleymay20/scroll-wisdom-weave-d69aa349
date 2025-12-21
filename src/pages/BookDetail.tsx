@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
+import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ShareDialog } from "@/components/books/ShareDialog";
@@ -392,6 +393,34 @@ export default function BookDetail() {
     }
   };
 
+  const handleUpdateBookType = async (nextType: "text" | "illustrated" | "comic") => {
+    if (!book || !isOwner) return;
+
+    const prevType = (book.book_type as any) || "text";
+    setBook(prev => (prev ? { ...prev, book_type: nextType } : prev));
+
+    const { error } = await supabase
+      .from("books")
+      .update({ book_type: nextType })
+      .eq("id", book.id);
+
+    if (error) {
+      console.error("Error updating book type:", error);
+      setBook(prev => (prev ? { ...prev, book_type: prevType } : prev));
+      toast({
+        title: "Failed to update book type",
+        description: "Please try again.",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Book type updated",
+      description: "Regenerate a chapter to apply the new style.",
+    });
+  };
+
   if (isLoading) {
     return (
       <div className="min-h-screen">
@@ -550,24 +579,61 @@ export default function BookDetail() {
 
               {/* Publish Toggle for Owners */}
               {isOwner && (
-                <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50 mt-6">
-                  <div className="flex-1">
-                    <Label htmlFor="publish-toggle" className="text-foreground font-medium">
-                      Publish to Library
-                    </Label>
-                    <p className="text-sm text-muted-foreground">
-                      {book.is_published 
-                        ? "Your book is visible to everyone in the public Explore page." 
-                        : "Your book is private. Only you can see it."}
-                    </p>
+                <>
+                  <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50 mt-6">
+                    <div className="flex-1">
+                      <Label htmlFor="publish-toggle" className="text-foreground font-medium">
+                        Publish to Library
+                      </Label>
+                      <p className="text-sm text-muted-foreground">
+                        {book.is_published 
+                          ? "Your book is visible to everyone in the public Explore page." 
+                          : "Your book is private. Only you can see it."}
+                      </p>
+                    </div>
+                    <Switch
+                      id="publish-toggle"
+                      checked={book.is_published ?? false}
+                      onCheckedChange={handleTogglePublish}
+                      disabled={isUpdatingPublish}
+                    />
                   </div>
-                  <Switch
-                    id="publish-toggle"
-                    checked={book.is_published ?? false}
-                    onCheckedChange={handleTogglePublish}
-                    disabled={isUpdatingPublish}
-                  />
-                </div>
+
+                  <div className="p-4 rounded-xl bg-muted/30 border border-border/50 mt-4">
+                    <Label className="text-foreground font-medium">Book type</Label>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Choose how chapters are generated. Regenerate a chapter to apply.
+                    </p>
+
+                    <RadioGroup
+                      value={(book.book_type || "text") as any}
+                      onValueChange={(v) => handleUpdateBookType(v as any)}
+                      className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4"
+                    >
+                      <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors">
+                        <RadioGroupItem value="text" id="bt-text" />
+                        <Label htmlFor="bt-text" className="cursor-pointer flex-1">
+                          <span className="text-sm font-medium">Text</span>
+                          <span className="block text-xs text-muted-foreground">No images</span>
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors">
+                        <RadioGroupItem value="illustrated" id="bt-illustrated" />
+                        <Label htmlFor="bt-illustrated" className="cursor-pointer flex-1">
+                          <span className="text-sm font-medium">Illustrated</span>
+                          <span className="block text-xs text-muted-foreground">Text + illustrations</span>
+                        </Label>
+                      </div>
+                      <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors">
+                        <RadioGroupItem value="comic" id="bt-comic" />
+                        <Label htmlFor="bt-comic" className="cursor-pointer flex-1">
+                          <span className="text-sm font-medium">Comic</span>
+                          <span className="block text-xs text-muted-foreground">Panels + captions</span>
+                        </Label>
+                      </div>
+                    </RadioGroup>
+                  </div>
+                </>
               )}
 
               {/* AI Disclaimer */}
