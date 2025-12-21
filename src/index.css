@@ -8,9 +8,68 @@
 
 @layer base {
   :root {
-    /* Default: Gold/Amber theme (matching the logo) */
-    --background: 30 25% 5%;
-    --foreground: 40 35% 92%;
+    /* Default: Light theme for better accessibility */
+    --background: 45 30% 97%;
+    --foreground: 222 47% 11%;
+
+    --card: 45 25% 95%;
+    --card-foreground: 222 47% 11%;
+
+    --popover: 45 25% 98%;
+    --popover-foreground: 222 47% 11%;
+
+    --primary: 43 74% 45%;
+    --primary-foreground: 45 30% 98%;
+
+    --secondary: 40 20% 90%;
+    --secondary-foreground: 222 47% 11%;
+
+    --muted: 45 15% 90%;
+    --muted-foreground: 222 20% 45%;
+
+    --accent: 35 70% 40%;
+    --accent-foreground: 45 30% 98%;
+
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 45 30% 98%;
+
+    --border: 45 15% 85%;
+    --input: 45 15% 85%;
+    --ring: 43 74% 45%;
+
+    --radius: 0.75rem;
+
+    /* Custom ScrollLibrary tokens - warm palette for light mode */
+    --scroll-gold: 43 74% 45%;
+    --scroll-gold-light: 48 80% 55%;
+    --scroll-gold-dark: 38 65% 35%;
+    --scroll-indigo: 45 20% 94%;
+    --scroll-indigo-deep: 45 25% 92%;
+    --scroll-cream: 222 47% 11%;
+    --scroll-cream-dark: 222 30% 25%;
+    --scroll-bronze: 25 55% 40%;
+
+    /* Gradients - light mode */
+    --gradient-gold: linear-gradient(135deg, hsl(43 74% 45%), hsl(35 70% 40%));
+    --gradient-hero: linear-gradient(180deg, hsl(45 30% 96%) 0%, hsl(45 25% 92%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(45 25% 96%) 0%, hsl(45 20% 92%) 100%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(43 74% 45% / 0.12) 0%, transparent 70%);
+
+    /* Shadows - light mode */
+    --shadow-gold: 0 0 40px hsl(43 74% 45% / 0.2);
+    --shadow-card: 0 10px 40px -10px hsl(222 20% 70% / 0.25);
+    --shadow-hover: 0 20px 60px -15px hsl(43 74% 45% / 0.25);
+
+    /* Sidebar - light mode */
+    --sidebar-background: 45 25% 95%;
+    --sidebar-foreground: 222 47% 11%;
+    --sidebar-primary: 43 74% 45%;
+    --sidebar-primary-foreground: 45 30% 98%;
+    --sidebar-accent: 45 15% 90%;
+    --sidebar-accent-foreground: 222 47% 11%;
+    --sidebar-border: 45 15% 85%;
+    --sidebar-ring: 43 74% 45%;
+  }
 
     --card: 28 30% 9%;
     --card-foreground: 40 35% 92%;

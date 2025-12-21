@@ -67,34 +67,46 @@ export type Database = {
       }
       chapters: {
         Row: {
+          academic_mode: boolean | null
           book_id: string
           chapter_number: number
+          chapter_references: Json | null
+          citation_style: string | null
           content: string | null
           created_at: string | null
           id: string
           is_generated: boolean | null
+          research_metadata: Json | null
           title: string
           updated_at: string | null
           word_count: number | null
         }
         Insert: {
+          academic_mode?: boolean | null
           book_id: string
           chapter_number: number
+          chapter_references?: Json | null
+          citation_style?: string | null
           content?: string | null
           created_at?: string | null
           id?: string
           is_generated?: boolean | null
+          research_metadata?: Json | null
           title: string
           updated_at?: string | null
           word_count?: number | null
         }
         Update: {
+          academic_mode?: boolean | null
           book_id?: string
           chapter_number?: number
+          chapter_references?: Json | null
+          citation_style?: string | null
           content?: string | null
           created_at?: string | null
           id?: string
           is_generated?: boolean | null
+          research_metadata?: Json | null
           title?: string
           updated_at?: string | null
           word_count?: number | null
