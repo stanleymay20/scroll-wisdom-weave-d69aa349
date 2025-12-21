@@ -1,5 +1,18 @@
 // ScrollLibrary Global Configuration
 
+// ===========================================
+// TRIAL MODE - 30 DAY FREE ACCESS FOR ALL USERS
+// Set to false after trial period ends to restore normal subscription logic
+// ===========================================
+export const TRIAL_MODE = true;
+export const TRIAL_END_DATE = new Date('2025-01-20'); // 30 days from now
+
+// Check if trial is still active
+export const isTrialActive = (): boolean => {
+  if (!TRIAL_MODE) return false;
+  return new Date() < TRIAL_END_DATE;
+};
+
 // Launch mode: When true, enables limited free generation for promotional period
 export const LAUNCH_MODE = true;
 
