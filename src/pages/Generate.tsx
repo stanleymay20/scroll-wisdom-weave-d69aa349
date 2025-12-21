@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
@@ -15,7 +15,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown, Rocket, ImageIcon, BookImage, GraduationCap } from "lucide-react";
+import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown, Rocket, ImageIcon, BookImage, GraduationCap, AlertTriangle } from "lucide-react";
+import { isAcademicCategory, CITATION_STYLES } from "@/lib/academicCategories";
+import { AcademicModeIndicator, AcademicDisclaimer } from "@/components/academic/AcademicModeIndicator";
 import { Switch } from "@/components/ui/switch";
 import { CoverUpload } from "@/components/books/CoverUpload";
 import { useToast } from "@/hooks/use-toast";
@@ -72,7 +74,17 @@ export default function Generate() {
   const [generationProgress, setGenerationProgress] = useState<string[]>([]);
   const [bookType, setBookType] = useState<"text" | "illustrated" | "comic">("text");
   const [enableReferences, setEnableReferences] = useState(false);
+  const [citationStyle, setCitationStyle] = useState("APA");
+  const [generationMode, setGenerationMode] = useState<"learning" | "academic">("learning");
   const { toast } = useToast();
+
+  // Auto-enable academic mode for academic categories
+  useEffect(() => {
+    if (category && isAcademicCategory(category) && bookType === "text") {
+      setGenerationMode("academic");
+      setEnableReferences(true);
+    }
+  }, [category, bookType]);
 
   // Get word count options based on tier and launch mode
   const wordCountOptions = (() => {
@@ -147,12 +159,14 @@ export default function Generate() {
           description,
           category,
           numChapters: parseInt(numChapters),
-          wordCount: bookType === "comic" ? 500 : parseInt(wordCount), // Comics have minimal text
+          wordCount: bookType === "comic" ? 500 : parseInt(wordCount),
           language,
           userId: user.id,
           customCover: coverOption === "upload" ? customCover : null,
-          bookType, // text, illustrated, or comic
-          enableReferences,
+          bookType,
+          enableReferences: generationMode === "academic",
+          citationStyle,
+          academicMode: generationMode === "academic",
         },
       });
 
@@ -447,23 +461,111 @@ export default function Generate() {
                 </div>
               </div>
 
-              {/* Academic References Toggle */}
+              {/* Generation Mode Selection */}
               {bookType === "text" && (
-                <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border/50">
-                  <div className="flex items-center gap-3">
-                    <GraduationCap className="h-5 w-5 text-scroll-gold" />
-                    <div>
-                      <p className="text-sm font-medium">Enable Academic References</p>
-                      <p className="text-xs text-muted-foreground">
-                        Generate verified citations using Perplexity AI (recommended for professors)
+                <div className="space-y-4">
+                  <Label className="text-foreground">Generation Mode</Label>
+                  
+                  <RadioGroup
+                    value={generationMode}
+                    onValueChange={(v) => {
+                      setGenerationMode(v as "learning" | "academic");
+                      setEnableReferences(v === "academic");
+                    }}
+                    className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                    disabled={isGenerating}
+                  >
+                    <div 
+                      className={`flex items-start space-x-3 p-4 rounded-lg border transition-colors cursor-pointer ${
+                        generationMode === "learning" 
+                          ? "border-primary bg-primary/5" 
+                          : "border-border/50 hover:border-primary/50"
+                      }`}
+                      onClick={() => {
+                        setGenerationMode("learning");
+                        setEnableReferences(false);
+                      }}
+                    >
+                      <RadioGroupItem value="learning" id="mode-learning" className="mt-1" />
+                      <Label htmlFor="mode-learning" className="cursor-pointer flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <BookOpen className="h-4 w-4 text-scroll-gold" />
+                          <span className="font-medium">Learning Mode</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Simplified explanations, optional references. For general readers.
+                        </p>
+                      </Label>
+                    </div>
+                    
+                    <div 
+                      className={`flex items-start space-x-3 p-4 rounded-lg border transition-colors cursor-pointer ${
+                        generationMode === "academic" 
+                          ? "border-green-500 bg-green-500/5" 
+                          : "border-border/50 hover:border-green-500/50"
+                      }`}
+                      onClick={() => {
+                        setGenerationMode("academic");
+                        setEnableReferences(true);
+                      }}
+                    >
+                      <RadioGroupItem value="academic" id="mode-academic" className="mt-1" />
+                      <Label htmlFor="mode-academic" className="cursor-pointer flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <GraduationCap className="h-4 w-4 text-green-500" />
+                          <span className="font-medium">Academic Research Mode</span>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          Mandatory references, verified sources. For professors & researchers.
+                        </p>
+                      </Label>
+                    </div>
+                  </RadioGroup>
+
+                  {/* Citation Style Selector - only show in academic mode */}
+                  {generationMode === "academic" && (
+                    <div className="space-y-3 p-4 rounded-lg bg-green-500/5 border border-green-500/20">
+                      <div className="flex items-center justify-between">
+                        <AcademicModeIndicator isAcademicMode={true} citationStyle={citationStyle} />
+                      </div>
+                      
+                      <div className="space-y-2">
+                        <Label className="text-sm">Citation Style</Label>
+                        <Select value={citationStyle} onValueChange={setCitationStyle} disabled={isGenerating}>
+                          <SelectTrigger className="bg-background/50">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            {CITATION_STYLES.map((style) => (
+                              <SelectItem key={style.value} value={style.value}>
+                                <div className="flex items-center justify-between gap-4">
+                                  <span>{style.label}</span>
+                                  <span className="text-xs text-muted-foreground">{style.example}</span>
+                                </div>
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+
+                      <div className="flex items-start gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/20">
+                        <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
+                        <p className="text-xs text-muted-foreground">
+                          Academic mode requires verified sources. Generation may take longer as we search for real citations.
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Academic category auto-detection notice */}
+                  {category && isAcademicCategory(category) && generationMode !== "academic" && (
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
+                      <AlertTriangle className="h-4 w-4 text-amber-500" />
+                      <p className="text-xs text-amber-400">
+                        <strong>{category.replace(/_/g, " ")}</strong> is an academic category. Academic Research Mode is recommended.
                       </p>
                     </div>
-                  </div>
-                  <Switch
-                    checked={enableReferences}
-                    onCheckedChange={setEnableReferences}
-                    disabled={isGenerating}
-                  />
+                  )}
                 </div>
               )}
 
