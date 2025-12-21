@@ -9,6 +9,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Library as LibraryIcon, BookOpen, Plus, RefreshCw, AlertCircle } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Book {
   id: string;
@@ -43,6 +44,7 @@ function BookCardSkeleton() {
 }
 
 export default function Library() {
+  const { t } = useLanguage();
   const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState<string | null>(null);
@@ -145,11 +147,11 @@ export default function Library() {
         return;
       }
       
-      setLoadError("Failed to load your library. Please try again.");
+      setLoadError(t('library.loadError'));
       if (!reset) {
         toast({
-          title: "Error",
-          description: "Failed to load more books.",
+          title: t('common.error'),
+          description: t('library.loadMoreError'),
           variant: "destructive",
         });
       }
@@ -187,10 +189,10 @@ export default function Library() {
             </div>
           </div>
           <h1 className="font-display text-4xl md:text-5xl font-bold text-gradient-gold mb-4">
-            My Library
+            {t('library.title')}
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-            Your personal collection of saved books and reading progress
+            {t('library.subtitle')}
           </p>
         </motion.div>
 
@@ -213,14 +215,14 @@ export default function Library() {
               <AlertCircle className="h-12 w-12 text-destructive" />
             </div>
             <h2 className="font-display text-2xl font-semibold mb-3">
-              Failed to load library
+              {t('library.failedToLoad')}
             </h2>
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               {loadError}
             </p>
             <Button variant="outline" onClick={handleRetry}>
               <RefreshCw className="h-4 w-4 mr-2" />
-              Try Again
+              {t('common.tryAgain')}
             </Button>
           </motion.div>
         ) : libraryItems.length === 0 ? (
@@ -233,18 +235,18 @@ export default function Library() {
               <BookOpen className="h-12 w-12 text-muted-foreground" />
             </div>
             <h2 className="font-display text-2xl font-semibold mb-3">
-              Your library is empty
+              {t('library.empty')}
             </h2>
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              Start exploring our collection and save books to build your personal library.
+              {t('library.emptyDescription')}
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Button variant="hero" onClick={() => navigate("/explore")}>
                 <Plus className="h-4 w-4 mr-2" />
-                Explore Books
+                {t('library.exploreBooks')}
               </Button>
               <Button variant="gold-outline" onClick={() => navigate("/generate")}>
-                Generate a Book
+                {t('library.generateBook')}
               </Button>
             </div>
           </motion.div>
@@ -286,7 +288,7 @@ export default function Library() {
                   onClick={loadMore}
                   size="lg"
                 >
-                  Load More Books
+                  {t('library.loadMore')}
                 </Button>
               </div>
             )}

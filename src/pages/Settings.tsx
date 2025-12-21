@@ -20,6 +20,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { SUBSCRIPTION_TIERS } from "@/lib/subscription";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface SettingsData {
   theme_preference: string;
@@ -54,6 +55,7 @@ const defaultSettings: SettingsData = {
 };
 
 export default function Settings() {
+  const { t } = useLanguage();
   const [user, setUser] = useState<any>(null);
   const [settings, setSettings] = useState<SettingsData>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
@@ -71,7 +73,7 @@ export default function Settings() {
       if (error) throw error;
       if (data?.url) window.open(data.url, "_blank");
     } catch (error: any) {
-      toast({ title: "Error", description: "Unable to open billing portal", variant: "destructive" });
+      toast({ title: t('common.error'), description: t('settings.billingError'), variant: "destructive" });
     } finally {
       setPortalLoading(false);
     }
@@ -131,14 +133,14 @@ export default function Settings() {
 
     if (error) {
       toast({
-        title: "Error",
-        description: "Failed to save settings",
+        title: t('common.error'),
+        description: t('settings.saveFailed'),
         variant: "destructive",
       });
     } else {
       toast({
-        title: "Settings saved",
-        description: "Your preferences have been updated",
+        title: t('settings.saved'),
+        description: t('settings.savedDesc'),
       });
     }
     setIsSaving(false);
@@ -146,15 +148,15 @@ export default function Settings() {
 
   const handleDeleteAccount = async () => {
     toast({
-      title: "Account deletion",
-      description: "Please contact support@scrolllibrary.com to delete your account",
+      title: t('settings.accountDeletion'),
+      description: t('settings.contactSupport'),
     });
   };
 
   const handleExportData = async () => {
     toast({
-      title: "Data export",
-      description: "Your data export is being prepared. You'll receive an email when ready.",
+      title: t('settings.dataExport'),
+      description: t('settings.dataExportDesc'),
     });
   };
 
@@ -163,7 +165,7 @@ export default function Settings() {
       <div className="min-h-screen flex items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
           <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-muted-foreground animate-pulse">Loading settings...</p>
+          <p className="text-muted-foreground animate-pulse">{t('settings.loading')}</p>
         </div>
       </div>
     );
@@ -181,32 +183,32 @@ export default function Settings() {
           >
             <div className="mb-8">
               <h1 className="text-3xl font-display font-bold text-gradient-gold mb-2">
-                Settings
+                {t('settings.title')}
               </h1>
-              <p className="text-muted-foreground">Customize your ScrollLibrary experience</p>
+              <p className="text-muted-foreground">{t('settings.subtitle')}</p>
             </div>
 
             <Tabs defaultValue="system" className="space-y-6">
               <TabsList className="bg-muted/50 flex-wrap h-auto gap-1 p-1.5 w-full justify-start">
                 <TabsTrigger value="system" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   <Palette className="h-4 w-4 mr-2" />
-                  System
+                  {t('settings.system')}
                 </TabsTrigger>
                 <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   <Bell className="h-4 w-4 mr-2" />
-                  Notifications
+                  {t('settings.notifications')}
                 </TabsTrigger>
                 <TabsTrigger value="ai" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   <Brain className="h-4 w-4 mr-2" />
-                  AI
+                  {t('settings.ai')}
                 </TabsTrigger>
                 <TabsTrigger value="privacy" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   <Shield className="h-4 w-4 mr-2" />
-                  Privacy
+                  {t('settings.privacy')}
                 </TabsTrigger>
                 <TabsTrigger value="billing" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
                   <CreditCard className="h-4 w-4 mr-2" />
-                  Billing
+                  {t('settings.billing')}
                 </TabsTrigger>
               </TabsList>
 
@@ -216,29 +218,29 @@ export default function Settings() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Crown className="h-5 w-5 text-scroll-gold" />
-                      Subscription & Billing
+                      {t('settings.subscriptionBilling')}
                     </CardTitle>
-                    <CardDescription>Manage your plan and usage</CardDescription>
+                    <CardDescription>{t('settings.manageYourPlan')}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Current Plan</Label>
+                        <Label>{t('settings.currentPlan')}</Label>
                         <p className="text-lg font-semibold text-scroll-gold">{SUBSCRIPTION_TIERS[tier].name}</p>
                       </div>
                       <Button variant="outline" onClick={() => navigate("/pricing")}>
-                        {tier === 'free' ? 'Upgrade' : 'Change Plan'}
+                        {tier === 'free' ? t('common.upgrade') : t('settings.changePlan')}
                       </Button>
                     </div>
                     {subscriptionEnd && (
                       <p className="text-sm text-muted-foreground">
-                        Renews: {new Date(subscriptionEnd).toLocaleDateString()}
+                        {t('settings.renews')}: {new Date(subscriptionEnd).toLocaleDateString()}
                       </p>
                     )}
                     <Separator className="bg-border/50" />
                     <div className="space-y-2">
                       <div className="flex justify-between">
-                        <Label>TTS Usage This Month</Label>
+                        <Label>{t('settings.ttsUsage')}</Label>
                         <span className="text-sm text-muted-foreground">
                           {ttsMinutesUsed} / {ttsLimit === -1 ? '∞' : ttsLimit} min
                         </span>
@@ -251,7 +253,7 @@ export default function Settings() {
                     {tier !== 'free' && (
                       <Button variant="outline" onClick={handleManageBilling} disabled={portalLoading}>
                         {portalLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CreditCard className="h-4 w-4 mr-2" />}
-                        Manage Billing
+                        {t('settings.manageBilling')}
                       </Button>
                     )}
                   </CardContent>
@@ -263,16 +265,16 @@ export default function Settings() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Palette className="h-5 w-5 text-primary" />
-                      Appearance
+                      {t('settings.appearance')}
                     </CardTitle>
-                    <CardDescription>Customize how ScrollLibrary looks</CardDescription>
+                    <CardDescription>{t('settings.appearanceDesc')}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {/* Light/Dark Mode */}
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Mode</Label>
-                        <p className="text-sm text-muted-foreground">Light or dark background</p>
+                        <Label>{t('settings.mode')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.modeDesc')}</p>
                       </div>
                       <Select
                         value={settings.theme_preference}
@@ -294,13 +296,13 @@ export default function Settings() {
                           <SelectItem value="dark">
                             <div className="flex items-center gap-2">
                               <Moon className="h-4 w-4" />
-                              Dark
+                              {t('settings.dark')}
                             </div>
                           </SelectItem>
                           <SelectItem value="light">
                             <div className="flex items-center gap-2">
                               <Sun className="h-4 w-4" />
-                              Light
+                              {t('settings.light')}
                             </div>
                           </SelectItem>
                         </SelectContent>
@@ -312,17 +314,17 @@ export default function Settings() {
                     {/* Color Theme Picker */}
                     <div className="space-y-3">
                       <div className="space-y-0.5">
-                        <Label>Color Theme</Label>
-                        <p className="text-sm text-muted-foreground">Choose your accent color</p>
+                        <Label>{t('settings.colorTheme')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.colorThemeDesc')}</p>
                       </div>
                       <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
                         {[
-                          { id: 'gold', label: 'Gold', color: 'bg-amber-500' },
-                          { id: 'orange', label: 'Orange', color: 'bg-orange-500' },
-                          { id: 'blue', label: 'Blue', color: 'bg-blue-500' },
-                          { id: 'purple', label: 'Purple', color: 'bg-purple-500' },
-                          { id: 'green', label: 'Green', color: 'bg-emerald-500' },
-                          { id: 'rainbow', label: 'Rainbow', color: 'bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500' },
+                          { id: 'gold', label: t('settings.gold'), color: 'bg-amber-500' },
+                          { id: 'orange', label: t('settings.orange'), color: 'bg-orange-500' },
+                          { id: 'blue', label: t('settings.blue'), color: 'bg-blue-500' },
+                          { id: 'purple', label: t('settings.purple'), color: 'bg-purple-500' },
+                          { id: 'green', label: t('settings.green'), color: 'bg-emerald-500' },
+                          { id: 'rainbow', label: t('settings.rainbow'), color: 'bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500' },
                         ].map((theme) => {
                           const currentColorTheme = localStorage.getItem('color-theme') || 'gold';
                           const isActive = currentColorTheme === theme.id;
@@ -359,8 +361,8 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Font Size</Label>
-                        <p className="text-sm text-muted-foreground">Adjust text size for reading</p>
+                        <Label>{t('settings.fontSize')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.fontSizeDesc')}</p>
                       </div>
                       <Select
                         value={settings.font_size}
@@ -370,10 +372,10 @@ export default function Settings() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="small">Small</SelectItem>
-                          <SelectItem value="medium">Medium</SelectItem>
-                          <SelectItem value="large">Large</SelectItem>
-                          <SelectItem value="xlarge">Extra Large</SelectItem>
+                          <SelectItem value="small">{t('settings.small')}</SelectItem>
+                          <SelectItem value="medium">{t('settings.medium')}</SelectItem>
+                          <SelectItem value="large">{t('settings.large')}</SelectItem>
+                          <SelectItem value="xlarge">{t('settings.extraLarge')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -382,8 +384,8 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Reader Theme</Label>
-                        <p className="text-sm text-muted-foreground">Choose reading background</p>
+                        <Label>{t('settings.readerTheme')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.readerThemeDesc')}</p>
                       </div>
                       <Select
                         value={settings.reader_theme}
@@ -393,10 +395,10 @@ export default function Settings() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="default">Default</SelectItem>
-                          <SelectItem value="sepia">Sepia</SelectItem>
-                          <SelectItem value="dark">Dark</SelectItem>
-                          <SelectItem value="paper">Paper</SelectItem>
+                          <SelectItem value="default">{t('settings.default')}</SelectItem>
+                          <SelectItem value="sepia">{t('settings.sepia')}</SelectItem>
+                          <SelectItem value="dark">{t('settings.dark')}</SelectItem>
+                          <SelectItem value="paper">{t('settings.paper')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -405,8 +407,8 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Text-to-Speech Voice</Label>
-                        <p className="text-sm text-muted-foreground">AI voice for reading aloud</p>
+                        <Label>{t('settings.ttsVoice')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.ttsVoiceDesc')}</p>
                       </div>
                       <Select
                         value={settings.ai_voice_preference}
@@ -416,10 +418,10 @@ export default function Settings() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="natural">Natural</SelectItem>
-                          <SelectItem value="professional">Professional</SelectItem>
-                          <SelectItem value="warm">Warm</SelectItem>
-                          <SelectItem value="clear">Clear</SelectItem>
+                          <SelectItem value="natural">{t('settings.natural')}</SelectItem>
+                          <SelectItem value="professional">{t('settings.professional')}</SelectItem>
+                          <SelectItem value="warm">{t('settings.warm')}</SelectItem>
+                          <SelectItem value="clear">{t('settings.clear')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -428,8 +430,8 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Enable Text-to-Speech</Label>
-                        <p className="text-sm text-muted-foreground">Allow audio reading of books</p>
+                        <Label>{t('settings.enableTTS')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.enableTTSDesc')}</p>
                       </div>
                       <Switch
                         checked={settings.tts_enabled}
@@ -439,8 +441,8 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Enable Animations</Label>
-                        <p className="text-sm text-muted-foreground">Show motion effects</p>
+                        <Label>{t('settings.enableAnimations')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.enableAnimationsDesc')}</p>
                       </div>
                       <Switch
                         checked={settings.animations_enabled}
@@ -456,15 +458,15 @@ export default function Settings() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Bell className="h-5 w-5 text-primary" />
-                      Notification Preferences
+                      {t('settings.notificationPrefs')}
                     </CardTitle>
-                    <CardDescription>Control what notifications you receive</CardDescription>
+                    <CardDescription>{t('settings.notificationPrefsDesc')}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Email Updates</Label>
-                        <p className="text-sm text-muted-foreground">Receive platform updates via email</p>
+                        <Label>{t('settings.emailUpdates')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.emailUpdatesDesc')}</p>
                       </div>
                       <Switch
                         checked={settings.email_updates}
@@ -476,8 +478,8 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>New Book Alerts</Label>
-                        <p className="text-sm text-muted-foreground">Notifications when books are ready</p>
+                        <Label>{t('settings.newBookAlerts')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.newBookAlertsDesc')}</p>
                       </div>
                       <Switch
                         checked={settings.new_book_alerts}
@@ -489,8 +491,8 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Course Reminders</Label>
-                        <p className="text-sm text-muted-foreground">Reminders for learning progress</p>
+                        <Label>{t('settings.courseReminders')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.courseRemindersDesc')}</p>
                       </div>
                       <Switch
                         checked={settings.course_reminders}
@@ -506,15 +508,15 @@ export default function Settings() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Brain className="h-5 w-5 text-primary" />
-                      AI Generation Preferences
+                      {t('settings.aiPrefs')}
                     </CardTitle>
-                    <CardDescription>Customize how AI generates content for you</CardDescription>
+                    <CardDescription>{t('settings.aiPrefsDesc')}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Writing Tone</Label>
-                        <p className="text-sm text-muted-foreground">Style of generated content</p>
+                        <Label>{t('settings.writingTone')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.writingToneDesc')}</p>
                       </div>
                       <Select
                         value={settings.writing_tone}
@@ -524,10 +526,10 @@ export default function Settings() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="scholarly">Scholarly</SelectItem>
-                          <SelectItem value="conversational">Conversational</SelectItem>
-                          <SelectItem value="formal">Formal</SelectItem>
-                          <SelectItem value="inspirational">Inspirational</SelectItem>
+                          <SelectItem value="scholarly">{t('settings.scholarly')}</SelectItem>
+                          <SelectItem value="conversational">{t('settings.conversational')}</SelectItem>
+                          <SelectItem value="formal">{t('settings.formal')}</SelectItem>
+                          <SelectItem value="inspirational">{t('settings.inspirational')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -536,8 +538,8 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Spiritual Alignment</Label>
-                        <p className="text-sm text-muted-foreground">Strictness of scroll alignment</p>
+                        <Label>{t('settings.spiritualAlignment')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.spiritualAlignmentDesc')}</p>
                       </div>
                       <Select
                         value={settings.spiritual_strictness}
@@ -547,10 +549,10 @@ export default function Settings() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="relaxed">Relaxed</SelectItem>
-                          <SelectItem value="balanced">Balanced</SelectItem>
-                          <SelectItem value="strict">Strict</SelectItem>
-                          <SelectItem value="prophetic">Prophetic</SelectItem>
+                          <SelectItem value="relaxed">{t('settings.relaxed')}</SelectItem>
+                          <SelectItem value="balanced">{t('settings.balanced')}</SelectItem>
+                          <SelectItem value="strict">{t('settings.strict')}</SelectItem>
+                          <SelectItem value="prophetic">{t('settings.prophetic')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -559,8 +561,8 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Complexity Level</Label>
-                        <p className="text-sm text-muted-foreground">Depth of generated content</p>
+                        <Label>{t('settings.complexityLevel')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.complexityLevelDesc')}</p>
                       </div>
                       <Select
                         value={settings.complexity_level}
@@ -570,10 +572,10 @@ export default function Settings() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="beginner">Beginner</SelectItem>
-                          <SelectItem value="intermediate">Intermediate</SelectItem>
-                          <SelectItem value="advanced">Advanced</SelectItem>
-                          <SelectItem value="expert">Expert</SelectItem>
+                          <SelectItem value="beginner">{t('settings.beginner')}</SelectItem>
+                          <SelectItem value="intermediate">{t('settings.intermediate')}</SelectItem>
+                          <SelectItem value="advanced">{t('settings.advanced')}</SelectItem>
+                          <SelectItem value="expert">{t('settings.expert')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -582,8 +584,8 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Study Speed</Label>
-                        <p className="text-sm text-muted-foreground">Pace of learning content</p>
+                        <Label>{t('settings.studySpeed')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.studySpeedDesc')}</p>
                       </div>
                       <Select
                         value={settings.study_speed}
@@ -593,10 +595,10 @@ export default function Settings() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
-                          <SelectItem value="relaxed">Relaxed</SelectItem>
-                          <SelectItem value="normal">Normal</SelectItem>
-                          <SelectItem value="intensive">Intensive</SelectItem>
-                          <SelectItem value="accelerated">Accelerated</SelectItem>
+                          <SelectItem value="relaxed">{t('settings.relaxed')}</SelectItem>
+                          <SelectItem value="normal">{t('settings.normal')}</SelectItem>
+                          <SelectItem value="intensive">{t('settings.intensive')}</SelectItem>
+                          <SelectItem value="accelerated">{t('settings.accelerated')}</SelectItem>
                         </SelectContent>
                       </Select>
                     </div>
@@ -609,19 +611,19 @@ export default function Settings() {
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
                       <Shield className="h-5 w-5 text-primary" />
-                      Privacy & Data
+                      {t('settings.privacyData')}
                     </CardTitle>
-                    <CardDescription>Manage your account and data</CardDescription>
+                    <CardDescription>{t('settings.privacyDataDesc')}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label>Export Your Data</Label>
-                        <p className="text-sm text-muted-foreground">Download all your data</p>
+                        <Label>{t('settings.exportYourData')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.exportYourDataDesc')}</p>
                       </div>
                       <Button variant="outline" onClick={handleExportData}>
                         <Download className="h-4 w-4 mr-2" />
-                        Export
+                        {t('settings.export')}
                       </Button>
                     </div>
 
@@ -629,28 +631,27 @@ export default function Settings() {
 
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
-                        <Label className="text-destructive">Delete Account</Label>
-                        <p className="text-sm text-muted-foreground">Permanently delete your account and data</p>
+                        <Label className="text-destructive">{t('settings.deleteAccount')}</Label>
+                        <p className="text-sm text-muted-foreground">{t('settings.deleteAccountDesc')}</p>
                       </div>
                       <AlertDialog>
                         <AlertDialogTrigger asChild>
                           <Button variant="destructive">
                             <Trash2 className="h-4 w-4 mr-2" />
-                            Delete
+                            {t('settings.delete')}
                           </Button>
                         </AlertDialogTrigger>
                         <AlertDialogContent>
                           <AlertDialogHeader>
-                            <AlertDialogTitle>Are you absolutely sure?</AlertDialogTitle>
+                            <AlertDialogTitle>{t('settings.areYouSure')}</AlertDialogTitle>
                             <AlertDialogDescription>
-                              This action cannot be undone. This will permanently delete your account
-                              and remove all your data from our servers.
+                              {t('settings.deleteWarning')}
                             </AlertDialogDescription>
                           </AlertDialogHeader>
                           <AlertDialogFooter>
-                            <AlertDialogCancel>Cancel</AlertDialogCancel>
+                            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
                             <AlertDialogAction onClick={handleDeleteAccount} className="bg-destructive text-destructive-foreground">
-                              Delete Account
+                              {t('settings.deleteAccount')}
                             </AlertDialogAction>
                           </AlertDialogFooter>
                         </AlertDialogContent>
@@ -666,12 +667,12 @@ export default function Settings() {
                 {isSaving ? (
                   <>
                     <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Saving...
+                    {t('settings.saving')}
                   </>
                 ) : (
                   <>
                     <Save className="h-4 w-4 mr-2" />
-                    Save All Settings
+                    {t('settings.saveAll')}
                   </>
                 )}
               </Button>

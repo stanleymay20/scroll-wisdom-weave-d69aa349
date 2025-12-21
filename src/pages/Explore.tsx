@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Search, X, Loader2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 const CATEGORIES = [
   "all",
@@ -41,6 +42,7 @@ interface Book {
 }
 
 export default function Explore() {
+  const { t } = useLanguage();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(
@@ -95,6 +97,12 @@ export default function Explore() {
     setSearchParams(searchParams);
   };
 
+  const getCategoryLabel = (category: string) => {
+    if (category === "all") return t('explore.allCategories');
+    const key = `categories.${category}`;
+    return t(key);
+  };
+
   return (
     <div className="min-h-screen">
       <Navbar />
@@ -107,11 +115,10 @@ export default function Explore() {
             className="mb-12"
           >
             <h1 className="font-display text-4xl md:text-5xl font-bold mb-4">
-              Explore the <span className="text-gradient-gold">Library</span>
+              {t('explore.title')} <span className="text-gradient-gold">{t('explore.highlight')}</span>
             </h1>
             <p className="text-muted-foreground text-lg max-w-2xl">
-              Browse through our collection of AI-generated books spanning theology, 
-              science, history, and beyond.
+              {t('explore.subtitle')}
             </p>
           </motion.div>
 
@@ -126,7 +133,7 @@ export default function Explore() {
               <div className="relative flex-1">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-5 w-5 text-muted-foreground" />
                 <Input
-                  placeholder="Search books..."
+                  placeholder={t('explore.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
@@ -152,7 +159,7 @@ export default function Explore() {
                   onClick={() => handleCategoryChange(category)}
                   className="capitalize"
                 >
-                  {category.replace(/_/g, " ")}
+                  {getCategoryLabel(category)}
                 </Button>
               ))}
             </div>
@@ -186,8 +193,8 @@ export default function Explore() {
             >
               <p className="text-muted-foreground text-lg">
                 {books.length === 0 
-                  ? "No books yet. Be the first to generate one!"
-                  : "No books found. Try adjusting your search or filters."}
+                  ? t('explore.noBooks')
+                  : t('explore.noBooksFound')}
               </p>
             </motion.div>
           )}
