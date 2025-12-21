@@ -152,11 +152,17 @@ BEGIN WRITING THE FULL CHAPTER NOW IN ${languageName}:`;
           console.log("DeepSeek response received successfully");
           break;
         } else {
-          // Use Lovable AI (Gemini) as fallback - no API key needed
+          // Use Lovable AI (Gemini) as fallback
+          const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+          if (!LOVABLE_API_KEY) {
+            throw new Error("No AI API key configured (DEEPSEEK_API_KEY or LOVABLE_API_KEY required)");
+          }
+          
           console.log(`Calling Lovable AI Gemini (attempt ${retryCount + 1})...`);
           const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
             method: "POST",
             headers: {
+              "Authorization": `Bearer ${LOVABLE_API_KEY}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({

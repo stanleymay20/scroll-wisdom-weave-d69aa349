@@ -15,7 +15,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown, Rocket } from "lucide-react";
+import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown, Rocket, ImageIcon, BookImage, GraduationCap } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
 import { CoverUpload } from "@/components/books/CoverUpload";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -69,6 +70,8 @@ export default function Generate() {
   const [customCover, setCustomCover] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<string[]>([]);
+  const [bookType, setBookType] = useState<"text" | "illustrated" | "comic">("text");
+  const [enableReferences, setEnableReferences] = useState(false);
   const { toast } = useToast();
 
   // Get word count options based on tier and launch mode
@@ -144,10 +147,12 @@ export default function Generate() {
           description,
           category,
           numChapters: parseInt(numChapters),
-          wordCount: parseInt(wordCount),
+          wordCount: bookType === "comic" ? 500 : parseInt(wordCount), // Comics have minimal text
           language,
           userId: user.id,
           customCover: coverOption === "upload" ? customCover : null,
+          bookType, // text, illustrated, or comic
+          enableReferences,
         },
       });
 
@@ -355,26 +360,75 @@ export default function Generate() {
                 </div>
               </div>
 
-              {/* Word Count & Language */}
+              {/* Book Type Selection */}
+              <div className="space-y-3">
+                <Label className="text-foreground">Book Type</Label>
+                <RadioGroup
+                  value={bookType}
+                  onValueChange={(v) => setBookType(v as "text" | "illustrated" | "comic")}
+                  className="grid grid-cols-3 gap-3"
+                  disabled={isGenerating}
+                >
+                  <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors cursor-pointer" onClick={() => setBookType("text")}>
+                    <RadioGroupItem value="text" id="type-text" />
+                    <Label htmlFor="type-text" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <BookOpen className="h-4 w-4 text-scroll-gold" />
+                      <div>
+                        <p className="text-sm font-medium">Text Only</p>
+                        <p className="text-xs text-muted-foreground">Academic/scholarly</p>
+                      </div>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors cursor-pointer" onClick={() => setBookType("illustrated")}>
+                    <RadioGroupItem value="illustrated" id="type-illustrated" />
+                    <Label htmlFor="type-illustrated" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <BookImage className="h-4 w-4 text-scroll-gold" />
+                      <div>
+                        <p className="text-sm font-medium">Illustrated</p>
+                        <p className="text-xs text-muted-foreground">Text + images</p>
+                      </div>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors cursor-pointer" onClick={() => setBookType("comic")}>
+                    <RadioGroupItem value="comic" id="type-comic" />
+                    <Label htmlFor="type-comic" className="flex items-center gap-2 cursor-pointer flex-1">
+                      <ImageIcon className="h-4 w-4 text-scroll-gold" />
+                      <div>
+                        <p className="text-sm font-medium">Comic/Children</p>
+                        <p className="text-xs text-muted-foreground">Image-first</p>
+                      </div>
+                    </Label>
+                  </div>
+                </RadioGroup>
+                {bookType === "comic" && (
+                  <p className="text-xs text-scroll-gold">
+                    Comic mode uses minimal text with AI-generated illustrations per page.
+                  </p>
+                )}
+              </div>
+
+              {/* Word Count & Language - hide word count for comics */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label className="text-foreground">Words per Chapter</Label>
-                  <Select value={wordCount} onValueChange={setWordCount} disabled={isGenerating}>
-                    <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {wordCountOptions.map((count) => (
-                        <SelectItem key={count} value={count.toString()}>
-                          {count.toLocaleString()} words
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {tier === "prophet_tier" && (
-                    <p className="text-xs text-scroll-gold">Prophet tier: Maximum quality generation</p>
-                  )}
-                </div>
+                {bookType !== "comic" && (
+                  <div className="space-y-2">
+                    <Label className="text-foreground">Words per Chapter</Label>
+                    <Select value={wordCount} onValueChange={setWordCount} disabled={isGenerating}>
+                      <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {wordCountOptions.map((count) => (
+                          <SelectItem key={count} value={count.toString()}>
+                            {count.toLocaleString()} words
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    {tier === "prophet_tier" && (
+                      <p className="text-xs text-scroll-gold">Prophet tier: Maximum quality generation</p>
+                    )}
+                  </div>
+                )}
 
                 <div className="space-y-2">
                   <Label className="text-foreground">Language</Label>
@@ -392,6 +446,26 @@ export default function Generate() {
                   </Select>
                 </div>
               </div>
+
+              {/* Academic References Toggle */}
+              {bookType === "text" && (
+                <div className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border/50">
+                  <div className="flex items-center gap-3">
+                    <GraduationCap className="h-5 w-5 text-scroll-gold" />
+                    <div>
+                      <p className="text-sm font-medium">Enable Academic References</p>
+                      <p className="text-xs text-muted-foreground">
+                        Generate verified citations using Perplexity AI (recommended for professors)
+                      </p>
+                    </div>
+                  </div>
+                  <Switch
+                    checked={enableReferences}
+                    onCheckedChange={setEnableReferences}
+                    disabled={isGenerating}
+                  />
+                </div>
+              )}
 
               {/* Cover Option */}
               <div className="space-y-3">
