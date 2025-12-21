@@ -2,13 +2,14 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Book, Search, User, Menu, X, Settings, LogOut, HelpCircle } from "lucide-react";
+import { Book, Search, User, Menu, X, Settings, LogOut, HelpCircle, Shield } from "lucide-react";
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useIsAdmin } from "@/hooks/useAdmin";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -17,6 +18,7 @@ export function Navbar() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useLanguage();
+  const { isAdmin } = useIsAdmin();
 
   useEffect(() => {
     supabase.auth.getSession().then(({ data: { session } }) => {
@@ -93,6 +95,9 @@ export function Navbar() {
                   <DropdownMenuItem onClick={() => navigate("/profile")}><User className="mr-2 h-4 w-4" />{t('nav.profile')}</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/settings")}><Settings className="mr-2 h-4 w-4" />{t('nav.settings')}</DropdownMenuItem>
                   <DropdownMenuItem onClick={() => navigate("/help")}><HelpCircle className="mr-2 h-4 w-4" />{t('footer.help')}</DropdownMenuItem>
+                  {isAdmin && (
+                    <DropdownMenuItem onClick={() => navigate("/admin")}><Shield className="mr-2 h-4 w-4" />Admin Panel</DropdownMenuItem>
+                  )}
                   <DropdownMenuSeparator />
                   <DropdownMenuItem onClick={handleSignOut}><LogOut className="mr-2 h-4 w-4" />{t('nav.signout')}</DropdownMenuItem>
                 </DropdownMenuContent>

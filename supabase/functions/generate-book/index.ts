@@ -13,7 +13,18 @@ serve(async (req) => {
   }
 
   try {
-    const { title, description, category, numChapters, wordCount, language = 'en', userId, customCover } = await req.json();
+    const { 
+      title, 
+      description, 
+      category, 
+      numChapters, 
+      wordCount, 
+      language = 'en', 
+      userId, 
+      customCover,
+      bookType = 'text', // text, illustrated, comic
+      enableReferences = false,
+    } = await req.json();
     
     // Map language code to full language name
     const languageMap: Record<string, string> = {
@@ -40,7 +51,24 @@ serve(async (req) => {
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     console.log(`Generating book: ${title} with ${numChapters} chapters for user: ${userId}`);
-    console.log(`Language: ${languageName}, Word count: ${wordCount}, Custom cover: ${!!customCover}`);
+    console.log(`Language: ${languageName}, Word count: ${wordCount}, Book type: ${bookType}, References: ${enableReferences}`);
+    console.log(`Custom cover: ${!!customCover}`);
+
+    // Build outline prompt based on book type
+    const bookTypeInstructions = bookType === 'comic' 
+      ? `This is a COMIC/CHILDREN'S BOOK. Each chapter is a visual scene/page with minimal text (1-2 sentences max per scene).
+         Focus on visual descriptions that can be illustrated.
+         Structure: Scene number, Scene description (visual), Short dialogue or caption.`
+      : bookType === 'illustrated'
+      ? `This is an ILLUSTRATED BOOK. Include image placement suggestions within chapters.
+         After key sections, note [IMAGE: description of illustration needed].`
+      : `This is a TEXT-ONLY academic book. Focus on depth, rigor, and scholarly content.`;
+
+    const referenceInstructions = enableReferences
+      ? `IMPORTANT: This book requires VERIFIED ACADEMIC REFERENCES.
+         For each chapter, include a "references" array with real, verifiable sources.
+         Format: {"author": "Name", "title": "Work Title", "year": 2023, "type": "book|article|journal"}`
+      : '';
 
     // First, generate the book outline
     const outlinePrompt = `You are ScrollResearchGPT, an AI agent specialized in creating comprehensive book outlines.
@@ -52,11 +80,16 @@ Do NOT mix languages.
 Do NOT explain language choices.
 Every title, description, and topic must be in ${languageName}.
 
+${bookTypeInstructions}
+
+${referenceInstructions}
+
 Create a detailed outline for a book with the following specifications:
 - Title: ${title}
 - Description: ${description || "A comprehensive exploration of the topic"}
 - Category: ${category}
 - Number of Chapters: ${numChapters}
+- Book Type: ${bookType}
 - Language: ${languageName} (ALL content must be in this language)
 
 For each chapter, provide:
@@ -64,12 +97,14 @@ For each chapter, provide:
 2. Chapter title (in ${languageName})
 3. Brief description (2-3 sentences, in ${languageName})
 4. Key topics to cover (4-5 bullet points, in ${languageName})
+${bookType === 'comic' ? '5. Scene descriptions for illustrations (3-5 per chapter)' : ''}
+${enableReferences ? '5. Suggested references (will be verified later)' : ''}
 
 The book must be:
-- Academically rigorous
+- ${bookType === 'comic' ? 'Visually engaging with minimal text' : 'Academically rigorous'}
 - Well-structured with logical flow
 - Each chapter should naturally lead to the next
-- Rich in depth and substance
+- ${bookType === 'text' ? 'Rich in depth and substance' : 'Visual and engaging'}
 - ENTIRELY in ${languageName}
 
 Format your response as a JSON object with this structure:
@@ -77,12 +112,13 @@ Format your response as a JSON object with this structure:
   "bookTitle": "string",
   "bookDescription": "string",
   "language": "${languageName}",
+  "bookType": "${bookType}",
   "chapters": [
     {
       "chapterNumber": number,
       "title": "string",
       "description": "string",
-      "keyTopics": ["string", "string", ...]
+      "keyTopics": ["string", "string", ...]${bookType === 'comic' ? ',\n      "scenes": [{"description": "string", "caption": "string"}]' : ''}${enableReferences ? ',\n      "suggestedReferences": [{"topic": "string"}]' : ''}
     }
   ]
 }`;
