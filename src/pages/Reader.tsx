@@ -33,6 +33,7 @@ import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode, QuizModeButton } from "@/components/reader/QuizMode";
 import { VoiceConversation, VoiceConversationButton } from "@/components/reader/VoiceConversation";
 import { CitationStyle } from "@/lib/academicCategories";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface BookData {
   id: string;
@@ -66,6 +67,7 @@ const READING_THEMES = {
 type ReadingTheme = keyof typeof READING_THEMES;
 
 export default function Reader() {
+  const { t } = useLanguage();
   const { bookId, chapterId } = useParams();
   const navigate = useNavigate();
   const contentRef = useRef<HTMLDivElement>(null);
