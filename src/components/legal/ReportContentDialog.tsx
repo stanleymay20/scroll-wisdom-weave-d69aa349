@@ -7,6 +7,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { Flag, Loader2, CheckCircle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface ReportContentDialogProps {
   contentType: "book" | "chapter" | "comment";
@@ -14,16 +15,6 @@ interface ReportContentDialogProps {
   contentTitle?: string;
   trigger?: React.ReactNode;
 }
-
-const reportReasons = [
-  { value: "hate_speech", label: "Hate speech or discrimination" },
-  { value: "explicit", label: "Explicit or inappropriate content" },
-  { value: "copyright", label: "Copyright infringement" },
-  { value: "misinformation", label: "Misinformation or false claims" },
-  { value: "violence", label: "Violence or harmful content" },
-  { value: "spam", label: "Spam or misleading" },
-  { value: "other", label: "Other" },
-];
 
 export function ReportContentDialog({ 
   contentType, 
@@ -37,12 +28,23 @@ export function ReportContentDialog({
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const { toast } = useToast();
+  const { t } = useLanguage();
+
+  const reportReasons = [
+    { value: "hate_speech", label: t('report.hateSpeech') },
+    { value: "explicit", label: t('report.explicit') },
+    { value: "copyright", label: t('report.copyright') },
+    { value: "misinformation", label: t('report.misinformation') },
+    { value: "violence", label: t('report.violence') },
+    { value: "spam", label: t('report.spam') },
+    { value: "other", label: t('report.other') },
+  ];
 
   const handleSubmit = async () => {
     if (!reason) {
       toast({
-        title: "Please select a reason",
-        description: "Choose why you're reporting this content",
+        title: t('report.selectReason'),
+        description: t('report.selectReasonDesc'),
         variant: "destructive",
       });
       return;
@@ -67,8 +69,8 @@ export function ReportContentDialog({
 
       setIsSubmitted(true);
       toast({
-        title: "Report submitted",
-        description: "Thank you for helping keep ScrollLibrary safe.",
+        title: t('report.submitted'),
+        description: t('report.submittedDesc'),
       });
 
       setTimeout(() => {
@@ -79,8 +81,8 @@ export function ReportContentDialog({
       }, 2000);
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to submit report. Please try again.",
+        title: t('common.error'),
+        description: t('report.submitError'),
         variant: "destructive",
       });
     } finally {
@@ -94,7 +96,7 @@ export function ReportContentDialog({
         {trigger || (
           <Button variant="ghost" size="sm" className="text-muted-foreground hover:text-destructive">
             <Flag className="h-4 w-4 mr-2" />
-            Report
+            {t('common.report')}
           </Button>
         )}
       </DialogTrigger>
@@ -102,12 +104,12 @@ export function ReportContentDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Flag className="h-5 w-5 text-destructive" />
-            Report Content
+            {t('report.title')}
           </DialogTitle>
           <DialogDescription>
             {contentTitle 
-              ? `Report "${contentTitle}" for policy violation`
-              : "Report this content for policy violation"
+              ? t('report.description').replace('{title}', contentTitle)
+              : t('report.descriptionGeneric')
             }
           </DialogDescription>
         </DialogHeader>
@@ -115,13 +117,13 @@ export function ReportContentDialog({
         {isSubmitted ? (
           <div className="py-8 text-center">
             <CheckCircle className="h-12 w-12 mx-auto mb-4 text-green-500" />
-            <p className="text-foreground font-medium">Report Submitted</p>
-            <p className="text-sm text-muted-foreground">Our team will review this content.</p>
+            <p className="text-foreground font-medium">{t('report.reportSubmitted')}</p>
+            <p className="text-sm text-muted-foreground">{t('report.teamReview')}</p>
           </div>
         ) : (
           <div className="space-y-4 py-4">
             <div className="space-y-3">
-              <Label>Why are you reporting this?</Label>
+              <Label>{t('report.whyReporting')}</Label>
               <RadioGroup value={reason} onValueChange={setReason}>
                 {reportReasons.map((item) => (
                   <div key={item.value} className="flex items-center space-x-2">
@@ -135,12 +137,12 @@ export function ReportContentDialog({
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="description">Additional details (optional)</Label>
+              <Label htmlFor="description">{t('report.additionalDetails')}</Label>
               <Textarea
                 id="description"
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder="Provide more context about your report..."
+                placeholder={t('report.detailsPlaceholder')}
                 className="min-h-[80px] bg-muted/50 border-border/50"
               />
             </div>
@@ -150,7 +152,7 @@ export function ReportContentDialog({
         {!isSubmitted && (
           <DialogFooter>
             <Button variant="outline" onClick={() => setOpen(false)}>
-              Cancel
+              {t('common.cancel')}
             </Button>
             <Button 
               variant="destructive" 
@@ -160,12 +162,12 @@ export function ReportContentDialog({
               {isSubmitting ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Submitting...
+                  {t('common.submitting')}
                 </>
               ) : (
                 <>
                   <Flag className="h-4 w-4 mr-2" />
-                  Submit Report
+                  {t('report.submitReport')}
                 </>
               )}
             </Button>

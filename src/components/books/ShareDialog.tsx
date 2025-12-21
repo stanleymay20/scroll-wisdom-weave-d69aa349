@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Share2, Copy, Check, Twitter, Facebook, Linkedin, Mail } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface ShareDialogProps {
   title: string;
@@ -21,18 +22,19 @@ interface ShareDialogProps {
 export function ShareDialog({ title, bookId, description }: ShareDialogProps) {
   const [copied, setCopied] = useState(false);
   const { toast } = useToast();
+  const { t } = useLanguage();
   
   const bookUrl = `${window.location.origin}/book/${bookId}`;
-  const shareText = `Check out "${title}" on ScrollLibrary™`;
+  const shareText = t('share.checkOut').replace('{title}', title);
   
   const copyToClipboard = async () => {
     try {
       await navigator.clipboard.writeText(bookUrl);
       setCopied(true);
-      toast({ title: "Link copied to clipboard!" });
+      toast({ title: t('share.copied') });
       setTimeout(() => setCopied(false), 2000);
     } catch (err) {
-      toast({ title: "Failed to copy link", variant: "destructive" });
+      toast({ title: t('share.failed'), variant: "destructive" });
     }
   };
   
@@ -66,9 +68,9 @@ export function ShareDialog({ title, bookId, description }: ShareDialogProps) {
       </DialogTrigger>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Share this book</DialogTitle>
+          <DialogTitle>{t('share.title')}</DialogTitle>
           <DialogDescription>
-            Share "{title}" with your friends and colleagues
+            {t('share.description').replace('{title}', title)}
           </DialogDescription>
         </DialogHeader>
         

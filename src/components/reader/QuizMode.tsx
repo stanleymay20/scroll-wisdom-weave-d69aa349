@@ -16,6 +16,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface QuizQuestion {
   question: string;
@@ -51,6 +52,7 @@ export function QuizMode({
   const [isLoading, setIsLoading] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const { toast } = useToast();
+  const { t } = useLanguage();
 
   const generateQuiz = useCallback(async () => {
     setIsLoading(true);
@@ -77,7 +79,6 @@ export function QuizMode({
       if (data?.questions && Array.isArray(data.questions)) {
         setQuestions(data.questions);
       } else if (data?.answer) {
-        // Try to parse from answer
         try {
           const parsed = JSON.parse(data.answer);
           if (Array.isArray(parsed)) {
@@ -92,14 +93,14 @@ export function QuizMode({
     } catch (err) {
       console.error("[QuizMode] Error:", err);
       toast({
-        title: "Quiz Generation Failed",
-        description: "Could not generate quiz. Please try again.",
+        title: t('quiz.generationFailed'),
+        description: t('quiz.generationFailedDesc'),
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
-  }, [chapterContent, chapterTitle, bookTitle, toast]);
+  }, [chapterContent, chapterTitle, bookTitle, toast, t]);
 
   const handleSelectAnswer = (index: number) => {
     if (showResult) return;
@@ -170,9 +171,11 @@ export function QuizMode({
                 <GraduationCap className="h-5 w-5 text-primary" />
               </div>
               <div>
-                <h3 className="font-semibold">Chapter Quiz</h3>
+                <h3 className="font-semibold">{t('quiz.title')}</h3>
                 <p className="text-xs text-muted-foreground">
-                  {questions.length > 0 ? `Question ${currentIndex + 1} of ${questions.length}` : "Ready to test your knowledge?"}
+                  {questions.length > 0 
+                    ? t('quiz.questionOf').replace('{current}', String(currentIndex + 1)).replace('{total}', String(questions.length))
+                    : t('quiz.ready')}
                 </p>
               </div>
             </div>
@@ -186,13 +189,13 @@ export function QuizMode({
             {questions.length === 0 && !isLoading && (
               <div className="text-center py-12">
                 <GraduationCap className="h-16 w-16 mx-auto text-muted-foreground mb-4" />
-                <h4 className="text-lg font-semibold mb-2">Ready for a Quiz?</h4>
+                <h4 className="text-lg font-semibold mb-2">{t('quiz.readyTitle')}</h4>
                 <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-                  Test your understanding of "{chapterTitle}" with AI-generated comprehension questions.
+                  {t('quiz.readyDesc').replace('{chapter}', chapterTitle)}
                 </p>
                 <Button onClick={generateQuiz} size="lg" className="gap-2">
                   <GraduationCap className="h-4 w-4" />
-                  Start Quiz
+                  {t('quiz.startQuiz')}
                 </Button>
               </div>
             )}
@@ -201,7 +204,7 @@ export function QuizMode({
             {isLoading && (
               <div className="text-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary mb-4" />
-                <p className="text-muted-foreground">Generating quiz questions...</p>
+                <p className="text-muted-foreground">{t('quiz.generating')}</p>
               </div>
             )}
 
@@ -209,9 +212,9 @@ export function QuizMode({
             {isComplete && (
               <div className="text-center py-8">
                 <Trophy className="h-16 w-16 mx-auto text-scroll-gold mb-4" />
-                <h4 className="text-2xl font-bold mb-2">Quiz Complete!</h4>
+                <h4 className="text-2xl font-bold mb-2">{t('quiz.complete')}</h4>
                 <p className="text-lg text-muted-foreground mb-4">
-                  You scored {score} out of {questions.length}
+                  {t('quiz.score').replace('{score}', String(score)).replace('{total}', String(questions.length))}
                 </p>
                 <div className="text-4xl font-bold text-primary mb-6">
                   {Math.round((score / questions.length) * 100)}%
@@ -219,9 +222,9 @@ export function QuizMode({
                 <div className="flex gap-2 justify-center">
                   <Button variant="outline" onClick={generateQuiz} className="gap-2">
                     <RefreshCw className="h-4 w-4" />
-                    Try Again
+                    {t('quiz.tryAgain')}
                   </Button>
-                  <Button onClick={onClose}>Continue Reading</Button>
+                  <Button onClick={onClose}>{t('quiz.continueReading')}</Button>
                 </div>
               </div>
             )}
@@ -283,7 +286,7 @@ export function QuizMode({
                     animate={{ opacity: 1, y: 0 }}
                     className="p-4 bg-muted rounded-lg"
                   >
-                    <p className="text-sm font-medium mb-1">Explanation:</p>
+                    <p className="text-sm font-medium mb-1">{t('quiz.explanation')}</p>
                     <p className="text-sm text-muted-foreground">{currentQuestion.explanation}</p>
                   </motion.div>
                 )}
@@ -295,21 +298,21 @@ export function QuizMode({
           {currentQuestion && !isComplete && (
             <div className="p-4 border-t border-border flex justify-between items-center">
               <div className="text-sm text-muted-foreground">
-                Score: {score}/{currentIndex + (showResult ? 1 : 0)}
+                {t('quiz.currentScore')} {score}/{currentIndex + (showResult ? 1 : 0)}
               </div>
               {!showResult ? (
                 <Button 
                   onClick={handleSubmitAnswer} 
                   disabled={selectedAnswer === null}
                 >
-                  Submit Answer
+                  {t('quiz.submitAnswer')}
                 </Button>
               ) : (
                 <Button onClick={handleNextQuestion} className="gap-2">
                   {currentIndex < questions.length - 1 ? (
-                    <>Next Question <ChevronRight className="h-4 w-4" /></>
+                    <>{t('quiz.nextQuestion')} <ChevronRight className="h-4 w-4" /></>
                   ) : (
-                    "See Results"
+                    t('quiz.seeResults')
                   )}
                 </Button>
               )}
@@ -323,6 +326,7 @@ export function QuizMode({
 
 // Button to open quiz mode
 export function QuizModeButton({ onClick }: { onClick: () => void }) {
+  const { t } = useLanguage();
   return (
     <Button
       onClick={onClick}
@@ -331,7 +335,7 @@ export function QuizModeButton({ onClick }: { onClick: () => void }) {
       className="gap-2"
     >
       <GraduationCap className="h-4 w-4" />
-      Quiz
+      {t('quiz.title').replace('Chapter ', '')}
     </Button>
   );
 }

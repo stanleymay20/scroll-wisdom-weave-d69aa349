@@ -20,6 +20,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { HighlightedTextContext } from "./TextHighlighter";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Message {
   id: string;
@@ -40,13 +41,6 @@ interface InteractiveQAProps {
   onClearHighlight?: () => void;
 }
 
-const SUGGESTED_QUESTIONS = [
-  "Explain this in simpler terms",
-  "What are the key takeaways?",
-  "How does this apply in practice?",
-  "Can you give me an example?",
-];
-
 export function InteractiveQA({ 
   chapterContent, 
   chapterTitle, 
@@ -66,6 +60,14 @@ export function InteractiveQA({
   const scrollRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
+  const { t } = useLanguage();
+
+  const SUGGESTED_QUESTIONS = [
+    t('qa.explain'),
+    t('qa.keyTakeaways'),
+    t('qa.apply'),
+    t('qa.example'),
+  ];
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
@@ -152,19 +154,19 @@ export function InteractiveQA({
       
       if (errorMessage.includes("429") || errorMessage.includes("Rate limit")) {
         toast({
-          title: "Rate Limited",
-          description: "Too many requests. Please wait a moment.",
+          title: t('qa.rateLimited'),
+          description: t('qa.rateLimitedDesc'),
           variant: "destructive",
         });
       } else if (errorMessage.includes("402") || errorMessage.includes("Payment")) {
         toast({
-          title: "Credits Required",
-          description: "Please add funds to continue using AI features.",
+          title: t('qa.creditsRequired'),
+          description: t('qa.creditsRequiredDesc'),
           variant: "destructive",
         });
       } else {
         toast({
-          title: "Error",
+          title: t('common.error'),
           description: errorMessage,
           variant: "destructive",
         });
@@ -176,19 +178,19 @@ export function InteractiveQA({
 
   const saveAsNote = async () => {
     if (messages.length < 2) {
-      toast({ title: "Nothing to save", description: "Have a conversation first." });
+      toast({ title: t('qa.nothingToSave'), description: t('qa.conversationFirst') });
       return;
     }
 
     try {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
-        toast({ title: "Sign in required", description: "Please sign in to save notes.", variant: "destructive" });
+        toast({ title: t('qa.signInRequired'), description: t('qa.signInRequiredDesc'), variant: "destructive" });
         return;
       }
 
       if (!bookId) {
-        toast({ title: "Error", description: "Book information missing.", variant: "destructive" });
+        toast({ title: t('common.error'), description: t('qa.bookMissing'), variant: "destructive" });
         return;
       }
 
@@ -202,10 +204,10 @@ export function InteractiveQA({
         highlighted_text: highlightedText || null,
       });
 
-      toast({ title: "Saved!", description: "Conversation saved to your study notes." });
+      toast({ title: t('qa.saved'), description: t('qa.savedDesc') });
     } catch (err) {
       console.error("Save error:", err);
-      toast({ title: "Save failed", description: "Could not save notes.", variant: "destructive" });
+      toast({ title: t('qa.saveFailed'), description: t('qa.saveFailedDesc'), variant: "destructive" });
     }
   };
 
@@ -232,8 +234,8 @@ export function InteractiveQA({
                 <Sparkles className="h-4 w-4 text-scroll-gold" />
               </div>
               <div>
-                <h3 className="font-semibold text-sm">Ask AI</h3>
-                <p className="text-xs text-muted-foreground">Get explanations as you read</p>
+                <h3 className="font-semibold text-sm">{t('qa.title')}</h3>
+                <p className="text-xs text-muted-foreground">{t('qa.subtitle')}</p>
               </div>
             </div>
             <div className="flex items-center gap-1">
@@ -246,7 +248,7 @@ export function InteractiveQA({
                   if (isPlayingAudio) stopAudio();
                   setSpeakResponses(!speakResponses);
                 }}
-                title={speakResponses ? "Voice responses on" : "Voice responses off"}
+                title={speakResponses ? t('qa.voiceOn') : t('qa.voiceOff')}
               >
                 {isPlayingAudio ? (
                   <VolumeX className="h-4 w-4" />
@@ -261,7 +263,7 @@ export function InteractiveQA({
                   size="icon"
                   className="h-8 w-8"
                   onClick={saveAsNote}
-                  title="Save as study note"
+                  title={t('qa.saveNote')}
                 >
                   <BookmarkPlus className="h-4 w-4" />
                 </Button>
@@ -285,8 +287,8 @@ export function InteractiveQA({
                   <HelpCircle className="h-8 w-8 mx-auto text-muted-foreground mb-2" />
                   <p className="text-sm text-muted-foreground">
                     {highlightedText 
-                      ? "Ask about the highlighted text"
-                      : "Ask questions about what you're reading"}
+                      ? t('qa.askHighlighted')
+                      : t('qa.askQuestions')}
                   </p>
                 </div>
                 
@@ -295,7 +297,7 @@ export function InteractiveQA({
                   <div className="space-y-2">
                     <p className="text-xs text-muted-foreground flex items-center gap-1">
                       <Lightbulb className="h-3 w-3" />
-                      Try asking:
+                      {t('qa.tryAsking')}
                     </p>
                     <div className="flex flex-wrap gap-2">
                       {SUGGESTED_QUESTIONS.map((q, i) => (
@@ -362,7 +364,7 @@ export function InteractiveQA({
               <Textarea
                 value={input}
                 onChange={(e) => setInput(e.target.value)}
-                placeholder={highlightedText ? "Ask about this selection..." : "Ask a question about this chapter..."}
+                placeholder={highlightedText ? t('qa.placeholderHighlight') : t('qa.placeholder')}
                 className="min-h-[44px] max-h-24 resize-none text-sm"
                 onKeyDown={(e) => {
                   if (e.key === "Enter" && !e.shiftKey) {

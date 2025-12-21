@@ -3,6 +3,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Cookie, Settings, X } from "lucide-react";
 import { Link } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface CookiePreferences {
   essential: boolean;
@@ -18,6 +19,7 @@ export function CookieConsent() {
     analytics: false,
     marketing: false,
   });
+  const { t } = useLanguage();
 
   useEffect(() => {
     const consent = localStorage.getItem("cookie-consent");
@@ -62,23 +64,22 @@ export function CookieConsent() {
               <div className="flex flex-col md:flex-row items-start md:items-center gap-4">
                 <Cookie className="h-8 w-8 text-primary flex-shrink-0" />
                 <div className="flex-1">
-                  <h3 className="font-semibold text-foreground mb-1">Cookie Consent</h3>
+                  <h3 className="font-semibold text-foreground mb-1">{t('cookie.title')}</h3>
                   <p className="text-sm text-muted-foreground">
-                    We use cookies to enhance your experience. Essential cookies are required for the platform to function. 
-                    Analytics and marketing cookies help us improve our services.{" "}
-                    <Link to="/privacy" className="text-primary hover:underline">Learn more</Link>
+                    {t('cookie.description')}{" "}
+                    <Link to="/privacy" className="text-primary hover:underline">{t('cookie.learnMore')}</Link>
                   </p>
                 </div>
                 <div className="flex flex-wrap gap-2 w-full md:w-auto">
                   <Button variant="outline" size="sm" onClick={() => setShowSettings(true)}>
                     <Settings className="h-4 w-4 mr-2" />
-                    Settings
+                    {t('cookie.settings')}
                   </Button>
                   <Button variant="outline" size="sm" onClick={acceptEssential}>
-                    Essential Only
+                    {t('cookie.essentialOnly')}
                   </Button>
                   <Button size="sm" onClick={acceptAll}>
-                    Accept All
+                    {t('cookie.acceptAll')}
                   </Button>
                 </div>
               </div>
@@ -87,7 +88,7 @@ export function CookieConsent() {
                 <div className="flex items-center justify-between">
                   <h3 className="font-semibold text-foreground flex items-center gap-2">
                     <Settings className="h-5 w-5 text-primary" />
-                    Cookie Preferences
+                    {t('cookie.preferences')}
                   </h3>
                   <Button variant="ghost" size="icon" onClick={() => setShowSettings(false)}>
                     <X className="h-4 w-4" />
@@ -97,16 +98,16 @@ export function CookieConsent() {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between p-3 bg-muted/50 rounded-lg">
                     <div>
-                      <p className="font-medium text-foreground">Essential Cookies</p>
-                      <p className="text-xs text-muted-foreground">Required for the platform to function</p>
+                      <p className="font-medium text-foreground">{t('cookie.essential')}</p>
+                      <p className="text-xs text-muted-foreground">{t('cookie.essentialDesc')}</p>
                     </div>
-                    <span className="text-xs text-muted-foreground">Always On</span>
+                    <span className="text-xs text-muted-foreground">{t('cookie.alwaysOn')}</span>
                   </div>
 
                   <label className="flex items-center justify-between p-3 bg-muted/50 rounded-lg cursor-pointer">
                     <div>
-                      <p className="font-medium text-foreground">Analytics Cookies</p>
-                      <p className="text-xs text-muted-foreground">Help us understand how you use the platform</p>
+                      <p className="font-medium text-foreground">{t('cookie.analytics')}</p>
+                      <p className="text-xs text-muted-foreground">{t('cookie.analyticsDesc')}</p>
                     </div>
                     <input
                       type="checkbox"
@@ -118,8 +119,8 @@ export function CookieConsent() {
 
                   <label className="flex items-center justify-between p-3 bg-muted/50 rounded-lg cursor-pointer">
                     <div>
-                      <p className="font-medium text-foreground">Marketing Cookies</p>
-                      <p className="text-xs text-muted-foreground">Used for personalized recommendations</p>
+                      <p className="font-medium text-foreground">{t('cookie.marketing')}</p>
+                      <p className="text-xs text-muted-foreground">{t('cookie.marketingDesc')}</p>
                     </div>
                     <input
                       type="checkbox"
@@ -132,10 +133,10 @@ export function CookieConsent() {
 
                 <div className="flex justify-end gap-2">
                   <Button variant="outline" onClick={acceptEssential}>
-                    Essential Only
+                    {t('cookie.essentialOnly')}
                   </Button>
                   <Button onClick={savePreferences}>
-                    Save Preferences
+                    {t('cookie.savePreferences')}
                   </Button>
                 </div>
               </div>

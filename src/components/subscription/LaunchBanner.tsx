@@ -4,11 +4,13 @@ import { Rocket, X } from 'lucide-react';
 import { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
+import { useLanguage } from '@/contexts/LanguageContext';
 
 export function LaunchBanner() {
   const [dismissed, setDismissed] = useState(false);
   const { tier } = useSubscription();
   const navigate = useNavigate();
+  const { t } = useLanguage();
 
   // Only show for free tier users during launch mode
   if (!LAUNCH_MODE || !LAUNCH_MODE_CONFIG.showBanner || tier !== 'free' || dismissed) {
@@ -24,11 +26,13 @@ export function LaunchBanner() {
           <div className="flex items-center gap-2">
             <Rocket className="h-4 w-4 text-primary animate-float" />
             <span className="text-foreground font-medium">
-              🚀 Launch Promo: Free book generation is temporarily available!
+              {t('launch.promo')}
             </span>
           </div>
           <span className="text-muted-foreground hidden sm:inline">
-            ({LAUNCH_MODE_CONFIG.freeBookLimit} book/day, max {LAUNCH_MODE_CONFIG.freeMaxWordCount.toLocaleString()} words/chapter)
+            {t('launch.limit')
+              .replace('{limit}', String(LAUNCH_MODE_CONFIG.freeBookLimit))
+              .replace('{words}', LAUNCH_MODE_CONFIG.freeMaxWordCount.toLocaleString())}
           </span>
           <Button 
             size="sm" 
@@ -36,7 +40,7 @@ export function LaunchBanner() {
             className="h-7 text-xs"
             onClick={() => navigate('/pricing')}
           >
-            Upgrade for More
+            {t('launch.upgrade')}
           </Button>
           <button
             onClick={() => setDismissed(true)}
