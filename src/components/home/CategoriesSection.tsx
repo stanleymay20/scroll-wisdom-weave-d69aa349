@@ -1,5 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { 
   BookOpen, 
   Sparkles, 
@@ -22,27 +23,29 @@ import {
 } from "lucide-react";
 
 const CATEGORIES = [
-  { id: "theology", label: "Theology", icon: BookOpen, color: "from-amber-500/20 to-amber-600/20" },
-  { id: "prophecy", label: "Prophecy", icon: Sparkles, color: "from-purple-500/20 to-purple-600/20" },
-  { id: "science", label: "Science", icon: FlaskConical, color: "from-blue-500/20 to-blue-600/20" },
-  { id: "technology", label: "Technology", icon: Cpu, color: "from-cyan-500/20 to-cyan-600/20" },
-  { id: "business", label: "Business", icon: Briefcase, color: "from-emerald-500/20 to-emerald-600/20" },
-  { id: "finance", label: "Finance", icon: Coins, color: "from-yellow-500/20 to-yellow-600/20" },
-  { id: "economics", label: "Economics", icon: TrendingUp, color: "from-green-500/20 to-green-600/20" },
-  { id: "medicine", label: "Medicine", icon: Heart, color: "from-red-500/20 to-red-600/20" },
-  { id: "law", label: "Law", icon: Scale, color: "from-slate-500/20 to-slate-600/20" },
-  { id: "governance", label: "Governance", icon: Building, color: "from-indigo-500/20 to-indigo-600/20" },
-  { id: "history", label: "History", icon: Clock, color: "from-orange-500/20 to-orange-600/20" },
-  { id: "african_studies", label: "African Studies", icon: Globe, color: "from-amber-600/20 to-orange-600/20" },
-  { id: "culture", label: "Culture", icon: Palette, color: "from-pink-500/20 to-pink-600/20" },
-  { id: "philosophy", label: "Philosophy", icon: Brain, color: "from-violet-500/20 to-violet-600/20" },
-  { id: "arts", label: "Arts", icon: Music, color: "from-rose-500/20 to-rose-600/20" },
-  { id: "fiction", label: "Fiction", icon: Feather, color: "from-teal-500/20 to-teal-600/20" },
-  { id: "non_fiction", label: "Non-Fiction", icon: ScrollText, color: "from-sky-500/20 to-sky-600/20" },
-  { id: "poetry", label: "Poetry", icon: Lightbulb, color: "from-fuchsia-500/20 to-fuchsia-600/20" },
+  { id: "theology", labelKey: "categories.theology", icon: BookOpen, color: "from-amber-500/20 to-amber-600/20" },
+  { id: "prophecy", labelKey: "categories.prophecy", icon: Sparkles, color: "from-purple-500/20 to-purple-600/20" },
+  { id: "science", labelKey: "categories.science", icon: FlaskConical, color: "from-blue-500/20 to-blue-600/20" },
+  { id: "technology", labelKey: "categories.technology", icon: Cpu, color: "from-cyan-500/20 to-cyan-600/20" },
+  { id: "business", labelKey: "categories.business", icon: Briefcase, color: "from-emerald-500/20 to-emerald-600/20" },
+  { id: "finance", labelKey: "categories.finance", icon: Coins, color: "from-yellow-500/20 to-yellow-600/20" },
+  { id: "economics", labelKey: "categories.economics", icon: TrendingUp, color: "from-green-500/20 to-green-600/20" },
+  { id: "medicine", labelKey: "categories.medicine", icon: Heart, color: "from-red-500/20 to-red-600/20" },
+  { id: "law", labelKey: "categories.law", icon: Scale, color: "from-slate-500/20 to-slate-600/20" },
+  { id: "governance", labelKey: "categories.governance", icon: Building, color: "from-indigo-500/20 to-indigo-600/20" },
+  { id: "history", labelKey: "categories.history", icon: Clock, color: "from-orange-500/20 to-orange-600/20" },
+  { id: "african_studies", labelKey: "categories.african_studies", icon: Globe, color: "from-amber-600/20 to-orange-600/20" },
+  { id: "culture", labelKey: "categories.culture", icon: Palette, color: "from-pink-500/20 to-pink-600/20" },
+  { id: "philosophy", labelKey: "categories.philosophy", icon: Brain, color: "from-violet-500/20 to-violet-600/20" },
+  { id: "arts", labelKey: "categories.arts", icon: Music, color: "from-rose-500/20 to-rose-600/20" },
+  { id: "fiction", labelKey: "categories.fiction", icon: Feather, color: "from-teal-500/20 to-teal-600/20" },
+  { id: "non_fiction", labelKey: "categories.non_fiction", icon: ScrollText, color: "from-sky-500/20 to-sky-600/20" },
+  { id: "poetry", labelKey: "categories.poetry", icon: Lightbulb, color: "from-fuchsia-500/20 to-fuchsia-600/20" },
 ];
 
 export function CategoriesSection() {
+  const { t } = useLanguage();
+
   return (
     <section className="py-24 bg-gradient-to-b from-transparent via-muted/20 to-transparent">
       <div className="container mx-auto px-4">
@@ -55,11 +58,10 @@ export function CategoriesSection() {
           className="text-center mb-16"
         >
           <h2 className="font-display text-3xl md:text-4xl font-bold mb-4">
-            Explore by <span className="text-gradient-gold">Category</span>
+            {t('categories.title')} <span className="text-gradient-gold">{t('categories.highlight')}</span>
           </h2>
           <p className="text-muted-foreground max-w-xl mx-auto">
-            Navigate through our vast collection spanning theology to technology, 
-            prophecy to poetry, and everything in between.
+            {t('categories.subtitle')}
           </p>
         </motion.div>
 
@@ -91,7 +93,7 @@ export function CategoriesSection() {
                         <Icon className="h-5 w-5 text-scroll-gold" />
                       </div>
                       <span className="text-sm font-medium text-foreground group-hover:text-scroll-gold transition-colors">
-                        {category.label}
+                        {t(category.labelKey)}
                       </span>
                     </div>
                   </div>
