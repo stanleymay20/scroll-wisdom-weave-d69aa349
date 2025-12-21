@@ -24,8 +24,9 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { getWordCountOptions, SUBSCRIPTION_TIERS } from "@/lib/subscription";
-import { LAUNCH_MODE, LAUNCH_MODE_CONFIG } from "@/lib/config";
+import { LAUNCH_MODE, LAUNCH_MODE_CONFIG, isTrialActive } from "@/lib/config";
 import { useEntitlements } from "@/hooks/useEntitlements";
+import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { LaunchBanner } from "@/components/subscription/LaunchBanner";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -128,8 +129,11 @@ export default function Generate() {
       return;
     }
 
-    // Admin and Prophet ALWAYS can generate - no upgrade prompts
-    if (!entitlements.canGenerateBooks && !entitlements.isAdmin && !entitlements.isProphet) {
+    // During trial mode, everyone can generate - skip all subscription checks
+    const trialActive = isTrialActive();
+    
+    // Admin, Prophet, or Trial Mode ALWAYS can generate - no upgrade prompts
+    if (!trialActive && !entitlements.canGenerateBooks && !entitlements.isAdmin && !entitlements.isProphet) {
       toast({
         title: t('generate.subscriptionRequired'),
         description: t('generate.upgradeToGenerate'),
@@ -139,8 +143,8 @@ export default function Generate() {
       return;
     }
 
-    // Check daily limit for free tier in launch mode (admin/prophet/paid bypass)
-    if (!entitlements.isPaid && LAUNCH_MODE && tier === 'free' && !dailyLimitInfo.canGenerateToday) {
+    // Check daily limit for free tier in launch mode (admin/prophet/paid/trial bypass)
+    if (!trialActive && !entitlements.isPaid && LAUNCH_MODE && tier === 'free' && !dailyLimitInfo.canGenerateToday) {
       toast({
         title: t('generate.dailyLimitReached'),
         description: `${t('generate.dailyLimitDesc')} (${LAUNCH_MODE_CONFIG.freeBookLimit} book/day)`,
@@ -182,8 +186,8 @@ export default function Generate() {
         t('generate.bookSaved'),
       ]);
 
-      // Increment daily count for free tier in launch mode (paid users don't count)
-      if (!entitlements.isPaid && LAUNCH_MODE && tier === 'free') {
+      // Increment daily count for free tier in launch mode (paid/trial users don't count)
+      if (!trialActive && !entitlements.isPaid && LAUNCH_MODE && tier === 'free') {
         await incrementDailyBookCount();
       }
 
@@ -212,8 +216,8 @@ export default function Generate() {
   };
 
   // Show upgrade prompt ONLY for free users who cannot generate
-  // NEVER show for admin, prophet, or any paid user
-  if (!subLoading && !canGenerateBooks && user && !entitlements.isAdmin && !entitlements.isProphet && !entitlements.isPaid) {
+  // NEVER show for admin, prophet, any paid user, OR during trial mode
+  if (!subLoading && !canGenerateBooks && user && !entitlements.isAdmin && !entitlements.isProphet && !entitlements.isPaid && !entitlements.isTrialMode) {
     return (
       <div className="min-h-screen">
         <Navbar />
@@ -253,6 +257,7 @@ export default function Generate() {
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
+      <TrialBanner />
       <LaunchBanner />
       <main className="flex-1 pt-20 pb-16">
         <div className="container mx-auto px-4 max-w-3xl">

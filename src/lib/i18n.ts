@@ -13,6 +13,11 @@ export const LANGUAGES: { code: Language; name: string; nativeName: string; dir:
 
 export const translations: Record<Language, Record<string, string>> = {
   en: {
+    // Trial Mode
+    'trial.title': '🎉 Free Trial Mode Active!',
+    'trial.description': 'Enjoy unlimited access to all premium features for {days} more days!',
+    'trial.allFeatures': 'All Features Unlocked',
+    
     // Navigation
     'nav.home': 'Home',
     'nav.explore': 'Explore',
@@ -785,6 +790,11 @@ export const translations: Record<Language, Record<string, string>> = {
   },
   
   fr: {
+    // Trial Mode
+    'trial.title': '🎉 Mode Essai Gratuit Actif!',
+    'trial.description': 'Profitez d\'un accès illimité à toutes les fonctionnalités premium pendant encore {days} jours!',
+    'trial.allFeatures': 'Toutes les Fonctionnalités Débloquées',
+    
     'nav.home': 'Accueil',
     'nav.explore': 'Explorer',
     'nav.generate': 'Générer un livre',
@@ -1425,6 +1435,11 @@ export const translations: Record<Language, Record<string, string>> = {
   },
   
   de: {
+    // Trial Mode
+    'trial.title': '🎉 Kostenloser Testmodus Aktiv!',
+    'trial.description': 'Genießen Sie unbegrenzten Zugang zu allen Premium-Funktionen für noch {days} Tage!',
+    'trial.allFeatures': 'Alle Funktionen Freigeschaltet',
+    
     'nav.home': 'Startseite',
     'nav.explore': 'Entdecken',
     'nav.generate': 'Buch Generieren',
@@ -2065,6 +2080,11 @@ export const translations: Record<Language, Record<string, string>> = {
   },
   
   es: {
+    // Trial Mode
+    'trial.title': '🎉 ¡Modo de Prueba Gratuita Activo!',
+    'trial.description': '¡Disfruta de acceso ilimitado a todas las funciones premium por {days} días más!',
+    'trial.allFeatures': 'Todas las Funciones Desbloqueadas',
+    
     'nav.home': 'Inicio',
     'nav.explore': 'Explorar',
     'nav.generate': 'Generar Libro',
@@ -2705,6 +2725,11 @@ export const translations: Record<Language, Record<string, string>> = {
   },
   
   ar: {
+    // Trial Mode
+    'trial.title': '🎉 وضع التجربة المجانية نشط!',
+    'trial.description': 'استمتع بوصول غير محدود لجميع الميزات المميزة لمدة {days} يومًا إضافيًا!',
+    'trial.allFeatures': 'جميع الميزات مفتوحة',
+    
     'nav.home': 'الرئيسية',
     'nav.explore': 'استكشاف',
     'nav.generate': 'إنشاء كتاب',
@@ -3345,6 +3370,11 @@ export const translations: Record<Language, Record<string, string>> = {
   },
   
   sw: {
+    // Trial Mode
+    'trial.title': '🎉 Hali ya Majaribio ya Bure Imeamilishwa!',
+    'trial.description': 'Furahia upatikanaji usio na kikomo kwa vipengele vyote vya premium kwa siku {days} zaidi!',
+    'trial.allFeatures': 'Vipengele Vyote Vimefunguliwa',
+    
     'nav.home': 'Nyumbani',
     'nav.explore': 'Gundua',
     'nav.generate': 'Tengeneza Kitabu',
