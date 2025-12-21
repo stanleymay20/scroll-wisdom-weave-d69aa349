@@ -8,69 +8,69 @@
 
 @layer base {
   :root {
-    /* Default: Gold theme (from logo) */
-    --background: 222 47% 6%;
-    --foreground: 45 30% 94%;
+    /* Default: Gold/Amber theme (matching the logo) */
+    --background: 30 25% 5%;
+    --foreground: 40 35% 92%;
 
-    --card: 222 40% 10%;
-    --card-foreground: 45 30% 94%;
+    --card: 28 30% 9%;
+    --card-foreground: 40 35% 92%;
 
-    --popover: 222 40% 8%;
-    --popover-foreground: 45 30% 94%;
+    --popover: 28 30% 7%;
+    --popover-foreground: 40 35% 92%;
 
-    /* Gold primary for spiritual/premium feel */
-    --primary: 43 74% 55%;
-    --primary-foreground: 222 47% 6%;
+    /* Warm amber/gold primary from logo */
+    --primary: 38 90% 50%;
+    --primary-foreground: 30 25% 5%;
 
     /* Warm cream secondary */
-    --secondary: 40 25% 20%;
-    --secondary-foreground: 45 30% 94%;
+    --secondary: 35 30% 18%;
+    --secondary-foreground: 40 35% 92%;
 
-    --muted: 222 30% 15%;
-    --muted-foreground: 220 15% 55%;
+    --muted: 30 20% 14%;
+    --muted-foreground: 35 15% 55%;
 
-    --accent: 35 70% 45%;
-    --accent-foreground: 45 30% 94%;
+    --accent: 28 80% 45%;
+    --accent-foreground: 40 35% 92%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 45 30% 94%;
+    --destructive-foreground: 40 35% 92%;
 
-    --border: 222 25% 18%;
-    --input: 222 25% 18%;
-    --ring: 43 74% 55%;
+    --border: 30 20% 16%;
+    --input: 30 20% 16%;
+    --ring: 38 90% 50%;
 
     --radius: 0.75rem;
 
-    /* Custom ScrollLibrary tokens */
-    --scroll-gold: 43 74% 55%;
-    --scroll-gold-light: 45 80% 70%;
-    --scroll-gold-dark: 40 70% 40%;
-    --scroll-indigo: 222 47% 12%;
-    --scroll-indigo-deep: 222 47% 6%;
-    --scroll-cream: 45 30% 94%;
-    --scroll-cream-dark: 40 20% 85%;
-    --scroll-bronze: 30 60% 40%;
+    /* Custom ScrollLibrary tokens - warm amber palette */
+    --scroll-gold: 38 90% 50%;
+    --scroll-gold-light: 42 95% 65%;
+    --scroll-gold-dark: 32 80% 38%;
+    --scroll-indigo: 30 25% 10%;
+    --scroll-indigo-deep: 30 25% 5%;
+    --scroll-cream: 40 35% 92%;
+    --scroll-cream-dark: 38 25% 80%;
+    --scroll-bronze: 25 65% 35%;
 
-    /* Gradients */
-    --gradient-gold: linear-gradient(135deg, hsl(43 74% 55%), hsl(35 70% 45%));
-    --gradient-hero: linear-gradient(180deg, hsl(222 47% 8%) 0%, hsl(222 47% 4%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(222 40% 12%) 0%, hsl(222 40% 8%) 100%);
-    --gradient-glow: radial-gradient(ellipse at center, hsl(43 74% 55% / 0.15) 0%, transparent 70%);
+    /* Gradients - warm amber glow */
+    --gradient-gold: linear-gradient(135deg, hsl(38 90% 50%), hsl(28 80% 45%));
+    --gradient-hero: linear-gradient(180deg, hsl(30 25% 7%) 0%, hsl(25 20% 4%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(28 30% 11%) 0%, hsl(28 30% 7%) 100%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(38 90% 50% / 0.18) 0%, transparent 70%);
 
-    /* Shadows */
-    --shadow-gold: 0 0 40px hsl(43 74% 55% / 0.2);
-    --shadow-card: 0 10px 40px -10px hsl(222 47% 2% / 0.5);
-    --shadow-hover: 0 20px 60px -15px hsl(43 74% 55% / 0.25);
+    /* Shadows - warm amber glow */
+    --shadow-gold: 0 0 50px hsl(38 90% 50% / 0.25);
+    --shadow-card: 0 10px 40px -10px hsl(25 30% 2% / 0.6);
+    --shadow-hover: 0 20px 60px -15px hsl(38 90% 50% / 0.3);
 
     /* Sidebar */
-    --sidebar-background: 222 47% 8%;
-    --sidebar-foreground: 45 30% 94%;
-    --sidebar-primary: 43 74% 55%;
-    --sidebar-primary-foreground: 222 47% 6%;
-    --sidebar-accent: 222 30% 15%;
-    --sidebar-accent-foreground: 45 30% 94%;
-    --sidebar-border: 222 25% 18%;
-    --sidebar-ring: 43 74% 55%;
+    --sidebar-background: 30 25% 7%;
+    --sidebar-foreground: 40 35% 92%;
+    --sidebar-primary: 38 90% 50%;
+    --sidebar-primary-foreground: 30 25% 5%;
+    --sidebar-accent: 30 20% 14%;
+    --sidebar-accent-foreground: 40 35% 92%;
+    --sidebar-border: 30 20% 16%;
+    --sidebar-ring: 38 90% 50%;
   }
 
   /* Orange Theme - from the scroll in logo */
@@ -182,9 +182,9 @@
   }
 
   .dark {
-    /* Dark mode is the default */
-    --background: 222 47% 6%;
-    --foreground: 45 30% 94%;
+    /* Dark mode is the default - warm amber theme */
+    --background: 30 25% 5%;
+    --foreground: 40 35% 92%;
   }
 }
 

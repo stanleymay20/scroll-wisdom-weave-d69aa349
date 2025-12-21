@@ -50,19 +50,20 @@ serve(async (req) => {
     console.log(`Generating chapter ${chapterNumber}: ${chapterTitle} for book: ${bookTitle}`);
     console.log(`Target word count: ${wordCount}, Language: ${language}, Book type: ${bookType}`);
 
-    // COMIC/CHILDREN BOOK - Visual-first with minimal text
+    // COMIC/CHILDREN BOOK - Visual-first with dialogues
     if (bookType === 'comic') {
-      console.log("Generating comic/children's book chapter with visual panels...");
+      console.log("Generating comic book chapter with visual panels and dialogues...");
       
-      const comicPrompt = `You are a children's book illustrator and writer. Create a VISUAL STORY for "${chapterTitle}" from the book "${bookTitle}".
+      const comicPrompt = `You are a professional comic book writer and illustrator. Create a COMIC BOOK STORY for "${chapterTitle}" from the book "${bookTitle}".
 
-CRITICAL: This is a PICTURE BOOK. Visuals are PRIMARY, text is MINIMAL.
+CRITICAL: This is a COMIC BOOK with visual storytelling AND character dialogues.
 
-Create 4-6 PANELS/PAGES for this chapter. For each panel:
-1. [PANEL X]: Visual Description - Detailed scene description for AI image generation (colors, characters, setting, action, mood)
-2. [CAPTION]: One short sentence or dialogue bubble (MAX 10-15 words)
+Create 5-7 PANELS for this chapter. For each panel, you MUST include:
+1. [PANEL X]: Visual Description - Detailed scene for AI image generation
+2. [DIALOGUE]: Character speech bubbles (who says what) - MANDATORY
+3. [CAPTION]: Optional narration box (only if needed)
 
-LANGUAGE: All captions must be in ${languageName}.
+LANGUAGE: ALL text must be in ${languageName}.
 
 Story context: ${keyTopics?.join(', ') || 'Tell an engaging visual story'}
 
@@ -71,24 +72,32 @@ FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
 ---
 
 [PANEL 1]
-**Visual:** [Detailed visual description for image generation - describe the scene, characters, colors, setting, mood in 2-3 sentences. Be specific enough for AI to generate the image.]
-**Caption:** "[Short text in ${languageName} - MAX 15 words]"
+**Visual:** [Detailed visual description - describe the scene, characters, their expressions, poses, setting, action, mood in 2-3 sentences. Be specific for AI image generation.]
+**Dialogue:**
+- CHARACTER_NAME: "What they say in speech bubble"
+- CHARACTER_NAME: "Their response"
+**Caption:** "[Optional narration - describe time/place/thought if needed]"
 
 ---
 
 [PANEL 2]
 **Visual:** [Next scene description...]
-**Caption:** "[Short text...]"
+**Dialogue:**
+- CHARACTER_NAME: "Speech..."
+**Caption:** "[Optional]"
 
 ---
 
-(Continue for 4-6 panels)
+(Continue for 5-7 panels)
 
-IMPORTANT:
-- Captions should be SHORT and SIMPLE (child-friendly)
-- Visual descriptions should be DETAILED and VIVID
-- Tell a complete mini-story arc within this chapter
-- Make it educational yet entertaining
+CRITICAL REQUIREMENTS:
+- EVERY panel MUST have character dialogue (speech bubbles) - this is what makes it a comic!
+- Dialogues should be natural, expressive, and move the story forward
+- Use different characters talking to each other
+- Include emotions, exclamations, questions in dialogue
+- Visual descriptions should show characters' expressions matching their words
+- Tell a complete story arc with beginning, conflict, and resolution
+- Make dialogues age-appropriate and engaging
 - Each panel should flow naturally to the next`;
 
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -122,16 +131,17 @@ IMPORTANT:
       
       console.log("Comic script generated, now generating images for panels...");
 
-      // Parse panels and generate images for each
-      const panelRegex = /\[PANEL\s*(\d+)\]\s*\*\*Visual:\*\*\s*([\s\S]*?)\*\*Caption:\*\*\s*"?([^"]*)"?(?=\s*---|\s*\[PANEL|\s*$)/gi;
+      // Parse panels and generate images for each - now with dialogues
+      const panelRegex = /\[PANEL\s*(\d+)\]\s*\*\*Visual:\*\*\s*([\s\S]*?)\*\*Dialogue:\*\*\s*([\s\S]*?)(?:\*\*Caption:\*\*\s*"?([^"]*)"?)?(?=\s*---|\s*\[PANEL|\s*$)/gi;
       let match;
-      const panels: { num: number; visual: string; caption: string; imageUrl?: string }[] = [];
+      const panels: { num: number; visual: string; dialogue: string; caption: string; imageUrl?: string }[] = [];
       
       while ((match = panelRegex.exec(comicContent)) !== null) {
         panels.push({
           num: parseInt(match[1]),
           visual: match[2].trim(),
-          caption: match[3].trim(),
+          dialogue: match[3].trim(),
+          caption: (match[4] || '').trim(),
         });
       }
 
@@ -176,18 +186,34 @@ IMPORTANT:
         }
       }
 
-      // Build final comic chapter content with images
+      // Build final comic chapter content with images and dialogues
       let finalComicContent = `# ${chapterTitle}\n\n`;
-      finalComicContent += `*A visual story from "${bookTitle}"*\n\n---\n\n`;
+      finalComicContent += `*A comic story from "${bookTitle}"*\n\n---\n\n`;
       
       for (const panel of panels) {
-        finalComicContent += `## Page ${panel.num}\n\n`;
+        finalComicContent += `## Panel ${panel.num}\n\n`;
         if (panel.imageUrl) {
           finalComicContent += `![Panel ${panel.num}](${panel.imageUrl})\n\n`;
         } else {
           finalComicContent += `*[Illustration: ${panel.visual.slice(0, 200)}...]*\n\n`;
         }
-        finalComicContent += `> ${panel.caption}\n\n---\n\n`;
+        // Add dialogue bubbles
+        if (panel.dialogue) {
+          const dialogueLines = panel.dialogue.split('\n').filter(l => l.trim().startsWith('-'));
+          for (const line of dialogueLines) {
+            const dialogueMatch = line.match(/-\s*([^:]+):\s*"?([^"]+)"?/);
+            if (dialogueMatch) {
+              const character = dialogueMatch[1].trim();
+              const speech = dialogueMatch[2].trim();
+              finalComicContent += `**${character}:** "${speech}"\n\n`;
+            }
+          }
+        }
+        // Add caption/narration if exists
+        if (panel.caption) {
+          finalComicContent += `*${panel.caption}*\n\n`;
+        }
+        finalComicContent += `---\n\n`;
       }
 
       const actualWordCount = finalComicContent.split(/\s+/).filter((word: string) => word.length > 0).length;
