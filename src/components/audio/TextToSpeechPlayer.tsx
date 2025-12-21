@@ -126,6 +126,11 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
 
   const playUrl = useCallback(async (url: string) => {
     return new Promise<void>((resolve, reject) => {
+      if (stopRef.current) {
+        resolve();
+        return;
+      }
+
       const audio = new Audio();
       audioRef.current = audio;
 
@@ -144,7 +149,17 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       };
 
       audio.src = url;
-      audio.play().catch(reject);
+      // Handle AbortError gracefully when play is interrupted by pause
+      audio.play().then(() => {
+        // Playing started successfully
+      }).catch((err) => {
+        // Ignore AbortError (happens when stop() is called during playback start)
+        if (err.name === "AbortError") {
+          resolve();
+        } else {
+          reject(err);
+        }
+      });
     });
   }, [onPlayingChange, volume]);
 
@@ -211,14 +226,19 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         await playUrl(url);
       }
     } catch (err) {
-      console.error("[TTS Client] Error:", err);
-      const errorMessage = err instanceof Error ? err.message : "Failed to generate speech";
-      setError(errorMessage);
-      toast({
-        title: "TTS Failed",
-        description: errorMessage,
-        variant: "destructive",
-      });
+      // Don't log or show toast for AbortError - it's expected when user stops playback
+      if (err instanceof Error && err.name === "AbortError") {
+        console.log("[TTS Client] Playback stopped by user");
+      } else {
+        console.error("[TTS Client] Error:", err);
+        const errorMessage = err instanceof Error ? err.message : "Failed to generate speech";
+        setError(errorMessage);
+        toast({
+          title: "TTS Failed",
+          description: errorMessage,
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsLoading(false);
       setIsPlaying(false);
