@@ -57,7 +57,7 @@ export function Navbar() {
       <div className="container mx-auto px-4">
         <div className="flex h-16 items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group">
-            <img src={logo} alt="ScrollLibrary" className="h-10 w-auto" />
+            <img src={logo} alt="ScrollLibrary" className="h-10 w-auto md:h-12" />
           </Link>
 
           <div className="hidden md:flex items-center gap-8">
