@@ -11,103 +11,145 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { SUBSCRIPTION_TIERS } from "@/lib/subscription";
 import { useToast } from "@/hooks/use-toast";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 interface PlanFeature {
-  text: string;
+  textKey: string;
   included: boolean;
 }
 
 interface Plan {
-  name: string;
-  description: string;
+  nameKey: string;
+  descriptionKey: string;
   price: string;
-  period: string;
+  periodKey: string;
   icon: typeof Sparkles;
   popular?: boolean;
   features: PlanFeature[];
-  buttonText: string;
+  buttonTextKey: string;
   buttonVariant: "outline" | "hero" | "gold";
+  tierKey: string;
 }
 
 const plans: Plan[] = [
   {
-    name: "Free",
-    description: "Perfect for exploring ScrollLibrary",
+    nameKey: "pricing.free",
+    descriptionKey: "pricing.freeDesc",
     price: "$0",
-    period: "forever",
+    periodKey: "pricing.forever",
     icon: BookOpen,
+    tierKey: "free",
     features: [
-      { text: "Read 5 AI-generated books/month", included: true },
-      { text: "Basic reader tools", included: true },
-      { text: "Low-quality PDF export only", included: true },
-      { text: "Community support", included: true },
-      { text: "Book generation", included: false },
-      { text: "AI-generated covers", included: false },
-      { text: "Text-to-Speech audio", included: false },
-      { text: "Commercial publishing rights", included: false },
+      { textKey: "pricing.feature.read5", included: true },
+      { textKey: "pricing.feature.basicReader", included: true },
+      { textKey: "pricing.feature.lowQualityPdf", included: true },
+      { textKey: "pricing.feature.communitySupport", included: true },
+      { textKey: "pricing.feature.bookGen", included: false },
+      { textKey: "pricing.feature.aiCovers", included: false },
+      { textKey: "pricing.feature.ttsAudio", included: false },
+      { textKey: "pricing.feature.commercial", included: false },
     ],
-    buttonText: "Get Started",
+    buttonTextKey: "pricing.getStarted",
     buttonVariant: "outline",
   },
   {
-    name: "Student",
-    description: "Discounted plan for students",
+    nameKey: "pricing.student",
+    descriptionKey: "pricing.studentDesc",
     price: "$9",
-    period: "/month",
+    periodKey: "pricing.perMonth",
     icon: GraduationCap,
+    tierKey: "student",
     features: [
-      { text: "Generate up to 10 books/month", included: true },
-      { text: "Up to 4,000 words per chapter", included: true },
-      { text: "PDF, EPUB, DOCX exports", included: true },
-      { text: "AI-generated covers", included: true },
-      { text: "30 minutes TTS audio/month", included: true },
-      { text: "Student verification required", included: true },
-      { text: "Commercial publishing rights", included: false },
-      { text: "Priority support", included: false },
+      { textKey: "pricing.feature.gen10", included: true },
+      { textKey: "pricing.feature.4000words", included: true },
+      { textKey: "pricing.feature.allExports", included: true },
+      { textKey: "pricing.feature.aiCovers", included: true },
+      { textKey: "pricing.feature.tts30", included: true },
+      { textKey: "pricing.feature.studentVerify", included: true },
+      { textKey: "pricing.feature.commercial", included: false },
+      { textKey: "pricing.feature.prioritySupport", included: false },
     ],
-    buttonText: "Student Plan",
+    buttonTextKey: "pricing.studentPlan",
     buttonVariant: "outline",
   },
   {
-    name: "Premium",
-    description: "For serious readers and creators",
+    nameKey: "pricing.premium",
+    descriptionKey: "pricing.premiumDesc",
     price: "$19",
-    period: "/month",
+    periodKey: "pricing.perMonth",
     icon: Zap,
     popular: true,
+    tierKey: "premium",
     features: [
-      { text: "Unlimited books", included: true },
-      { text: "Up to 6,000 words per chapter", included: true },
-      { text: "All export formats (PDF/EPUB/DOCX/MOBI)", included: true },
-      { text: "AI-generated covers", included: true },
-      { text: "60 minutes TTS audio/month", included: true },
-      { text: "Commercial publishing rights", included: true },
-      { text: "Priority support", included: true },
-      { text: "ElevenLabs premium TTS", included: false },
+      { textKey: "pricing.feature.unlimited", included: true },
+      { textKey: "pricing.feature.6000words", included: true },
+      { textKey: "pricing.feature.allFormats", included: true },
+      { textKey: "pricing.feature.aiCovers", included: true },
+      { textKey: "pricing.feature.tts60", included: true },
+      { textKey: "pricing.feature.commercial", included: true },
+      { textKey: "pricing.feature.prioritySupport", included: true },
+      { textKey: "pricing.feature.elevenLabs", included: false },
     ],
-    buttonText: "Subscribe Now",
+    buttonTextKey: "pricing.subscribe",
     buttonVariant: "hero",
   },
   {
-    name: "Prophet Tier",
-    description: "The ultimate scroll experience",
+    nameKey: "pricing.prophet",
+    descriptionKey: "pricing.prophetDesc",
     price: "$49",
-    period: "/month",
+    periodKey: "pricing.perMonth",
     icon: Crown,
+    tierKey: "prophet_tier",
     features: [
-      { text: "Everything in Premium", included: true },
-      { text: "Up to 6,000 words per chapter", included: true },
-      { text: "Unlimited ElevenLabs TTS", included: true },
-      { text: "50-book batch generator", included: true },
-      { text: "AI Research Assistant", included: true },
-      { text: "ScrollProphetGPT deep-alignment", included: true },
-      { text: "White-glove publishing formatting", included: true },
-      { text: "Early access to new features", included: true },
+      { textKey: "pricing.feature.everything", included: true },
+      { textKey: "pricing.feature.6000words", included: true },
+      { textKey: "pricing.feature.unlimitedTts", included: true },
+      { textKey: "pricing.feature.batch50", included: true },
+      { textKey: "pricing.feature.aiResearch", included: true },
+      { textKey: "pricing.feature.scrollProphet", included: true },
+      { textKey: "pricing.feature.whiteGlove", included: true },
+      { textKey: "pricing.feature.earlyAccess", included: true },
     ],
-    buttonText: "Upgrade to Prophet",
+    buttonTextKey: "pricing.upgradeProphet",
     buttonVariant: "gold",
   },
 ];
+
+// Feature text translations (fallback to English)
+const featureTexts: Record<string, string> = {
+  "pricing.feature.read5": "Read 5 AI-generated books/month",
+  "pricing.feature.basicReader": "Basic reader tools",
+  "pricing.feature.lowQualityPdf": "Low-quality PDF export only",
+  "pricing.feature.communitySupport": "Community support",
+  "pricing.feature.bookGen": "Book generation",
+  "pricing.feature.aiCovers": "AI-generated covers",
+  "pricing.feature.ttsAudio": "Text-to-Speech audio",
+  "pricing.feature.commercial": "Commercial publishing rights",
+  "pricing.feature.gen10": "Generate up to 10 books/month",
+  "pricing.feature.4000words": "Up to 4,000 words per chapter",
+  "pricing.feature.allExports": "PDF, EPUB, DOCX exports",
+  "pricing.feature.tts30": "30 minutes TTS audio/month",
+  "pricing.feature.studentVerify": "Student verification required",
+  "pricing.feature.prioritySupport": "Priority support",
+  "pricing.feature.unlimited": "Unlimited books",
+  "pricing.feature.6000words": "Up to 6,000 words per chapter",
+  "pricing.feature.allFormats": "All export formats (PDF/EPUB/DOCX/MOBI)",
+  "pricing.feature.tts60": "60 minutes TTS audio/month",
+  "pricing.feature.elevenLabs": "ElevenLabs premium TTS",
+  "pricing.feature.everything": "Everything in Premium",
+  "pricing.feature.unlimitedTts": "Unlimited ElevenLabs TTS",
+  "pricing.feature.batch50": "50-book batch generator",
+  "pricing.feature.aiResearch": "AI Research Assistant",
+  "pricing.feature.scrollProphet": "ScrollProphetGPT deep-alignment",
+  "pricing.feature.whiteGlove": "White-glove publishing formatting",
+  "pricing.feature.earlyAccess": "Early access to new features",
+  "pricing.forever": "forever",
+  "pricing.perMonth": "/month",
+  "pricing.freeDesc": "Perfect for exploring ScrollLibrary",
+  "pricing.studentDesc": "Discounted plan for students",
+  "pricing.premiumDesc": "For serious readers and creators",
+  "pricing.prophetDesc": "The ultimate scroll experience",
+};
 
 export default function Pricing() {
   const { user, tier, isSubscribed, isLoading } = useSubscription();
@@ -115,32 +157,34 @@ export default function Pricing() {
   const [portalLoading, setPortalLoading] = useState(false);
   const navigate = useNavigate();
   const { toast } = useToast();
+  const { t } = useLanguage();
 
-  const handleSelectPlan = async (planName: string) => {
+  const getFeatureText = (key: string) => featureTexts[key] || key;
+  const getPlanName = (key: string) => t(key) || key.split('.').pop();
+  const getPlanDesc = (key: string) => featureTexts[key] || key;
+
+  const handleSelectPlan = async (planTierKey: string) => {
     if (!user) {
       navigate("/auth");
       return;
     }
 
-    const tierKey = planName.toLowerCase().replace(" ", "_") as keyof typeof SUBSCRIPTION_TIERS;
-    
-    if (tierKey === "free") {
+    if (planTierKey === "free") {
       navigate("/explore");
       return;
     }
 
-    // Get the price ID for this tier
-    const priceId = SUBSCRIPTION_TIERS[tierKey]?.price_id;
+    const priceId = SUBSCRIPTION_TIERS[planTierKey as keyof typeof SUBSCRIPTION_TIERS]?.price_id;
     if (!priceId) {
       toast({
-        title: "Configuration Error",
+        title: t('common.error'),
         description: "This plan is not yet configured. Please contact support.",
         variant: "destructive",
       });
       return;
     }
 
-    setCheckoutLoading(planName);
+    setCheckoutLoading(planTierKey);
 
     try {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
@@ -155,7 +199,7 @@ export default function Pricing() {
     } catch (error: any) {
       console.error("Checkout error:", error);
       toast({
-        title: "Checkout Failed",
+        title: t('common.error'),
         description: error.message || "Unable to start checkout. Please try again.",
         variant: "destructive",
       });
@@ -177,7 +221,7 @@ export default function Pricing() {
     } catch (error: any) {
       console.error("Portal error:", error);
       toast({
-        title: "Error",
+        title: t('common.error'),
         description: error.message || "Unable to open subscription portal.",
         variant: "destructive",
       });
@@ -187,24 +231,23 @@ export default function Pricing() {
   };
 
   const getPlanButtonContent = (plan: Plan) => {
-    const tierKey = plan.name.toLowerCase().replace(" ", "_");
-    const isCurrentPlan = tier === tierKey;
-    const isLoadingThis = checkoutLoading === plan.name;
+    const isCurrentPlan = tier === plan.tierKey;
+    const isLoadingThis = checkoutLoading === plan.tierKey;
 
     if (isLoadingThis) {
       return (
         <>
           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          Processing...
+          {t('pricing.processing')}
         </>
       );
     }
 
     if (isCurrentPlan) {
-      return "Current Plan";
+      return t('pricing.current');
     }
 
-    return plan.buttonText;
+    return t(plan.buttonTextKey);
   };
 
   return (
@@ -221,13 +264,13 @@ export default function Pricing() {
             <div className="text-center mb-16">
               <Badge variant="outline" className="mb-4 border-scroll-gold text-scroll-gold">
                 <Sparkles className="h-3 w-3 mr-1" />
-                Pricing Plans
+                {t('pricing.plans')}
               </Badge>
               <h1 className="text-4xl md:text-5xl font-display font-bold text-gradient-gold mb-4">
-                Choose Your Plan
+                {t('pricing.title')}
               </h1>
               <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-                Unlock the full power of ScrollLibrary with plans designed for every reader and creator.
+                {t('pricing.subtitle')}
               </p>
             </div>
 
@@ -235,7 +278,7 @@ export default function Pricing() {
             <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 mb-16">
               {plans.map((plan, index) => (
                 <motion.div
-                  key={plan.name}
+                  key={plan.tierKey}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
                   transition={{ delay: index * 0.1 }}
@@ -244,7 +287,7 @@ export default function Pricing() {
                   {plan.popular && (
                     <div className="absolute -top-3 left-1/2 -translate-x-1/2 z-10">
                       <Badge className="bg-scroll-gold text-primary-foreground">
-                        Most Popular
+                        {t('pricing.popular')}
                       </Badge>
                     </div>
                   )}
@@ -260,12 +303,12 @@ export default function Pricing() {
                         }`} />
                       </div>
                       <CardTitle className="text-2xl font-display mt-4">
-                        {plan.name}
+                        {getPlanName(plan.nameKey)}
                       </CardTitle>
-                      <CardDescription>{plan.description}</CardDescription>
+                      <CardDescription>{getPlanDesc(plan.descriptionKey)}</CardDescription>
                       <div className="mt-4">
                         <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-                        <span className="text-muted-foreground">{plan.period}</span>
+                        <span className="text-muted-foreground">{featureTexts[plan.periodKey]}</span>
                       </div>
                     </CardHeader>
                     <CardContent className="space-y-4">
@@ -276,7 +319,7 @@ export default function Pricing() {
                               feature.included ? "text-scroll-gold" : "text-muted-foreground/30"
                             }`} />
                             <span className={feature.included ? "text-foreground" : "text-muted-foreground/50 line-through"}>
-                              {feature.text}
+                              {getFeatureText(feature.textKey)}
                             </span>
                           </li>
                         ))}
@@ -284,8 +327,8 @@ export default function Pricing() {
                       <Button
                         variant={plan.buttonVariant}
                         className="w-full mt-6"
-                        onClick={() => handleSelectPlan(plan.name)}
-                        disabled={tier === plan.name.toLowerCase().replace(" ", "_") || !!checkoutLoading}
+                        onClick={() => handleSelectPlan(plan.tierKey)}
+                        disabled={tier === plan.tierKey || !!checkoutLoading}
                       >
                         {getPlanButtonContent(plan)}
                       </Button>
@@ -305,7 +348,7 @@ export default function Pricing() {
                 <Card className="bg-gradient-card border-scroll-gold/30 max-w-md mx-auto">
                   <CardContent className="pt-6">
                     <p className="text-muted-foreground mb-4">
-                      Manage your subscription, update payment method, or cancel anytime.
+                      {t('pricing.manageSubscriptionDesc')}
                     </p>
                     <Button
                       variant="outline"
@@ -315,10 +358,10 @@ export default function Pricing() {
                       {portalLoading ? (
                         <>
                           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                          Opening...
+                          {t('pricing.opening')}
                         </>
                       ) : (
-                        "Manage Subscription"
+                        t('pricing.manageSubscription')
                       )}
                     </Button>
                   </CardContent>
@@ -329,17 +372,17 @@ export default function Pricing() {
             {/* FAQ Section */}
             <div className="text-center">
               <h2 className="text-2xl font-display font-bold text-foreground mb-4">
-                Questions?
+                {t('pricing.questions')}
               </h2>
               <p className="text-muted-foreground mb-6">
-                Visit our Help Center or contact support for more information.
+                {t('pricing.questionsSubtitle')}
               </p>
               <div className="flex justify-center gap-4">
                 <Button variant="outline" onClick={() => navigate("/help")}>
-                  View FAQ
+                  {t('pricing.viewFaq')}
                 </Button>
                 <Button variant="ghost" onClick={() => navigate("/support")}>
-                  Contact Support
+                  {t('pricing.contactSupport')}
                 </Button>
               </div>
             </div>
@@ -354,15 +397,15 @@ export default function Pricing() {
               <div className="flex flex-wrap justify-center gap-8 text-muted-foreground">
                 <div className="flex items-center gap-2">
                   <Shield className="h-5 w-5 text-scroll-gold" />
-                  <span className="text-sm">Secure Payments</span>
+                  <span className="text-sm">{t('pricing.securePayments')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Download className="h-5 w-5 text-scroll-gold" />
-                  <span className="text-sm">Instant Access</span>
+                  <span className="text-sm">{t('pricing.instantAccess')}</span>
                 </div>
                 <div className="flex items-center gap-2">
                   <Volume2 className="h-5 w-5 text-scroll-gold" />
-                  <span className="text-sm">Cancel Anytime</span>
+                  <span className="text-sm">{t('pricing.cancelAnytime')}</span>
                 </div>
               </div>
             </motion.div>
