@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
+import { z } from "zod";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
@@ -9,11 +10,31 @@ import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
-  MessageSquare, Send, HelpCircle, FileQuestion, 
-  Loader2, CheckCircle, Mail, Phone
+  MessageSquare, Send, FileQuestion, 
+  Loader2, CheckCircle, Mail
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+
+// Validation schema for support form
+const supportSchema = z.object({
+  name: z.string()
+    .trim()
+    .min(1, "Name is required")
+    .max(100, "Name must be less than 100 characters"),
+  email: z.string()
+    .trim()
+    .email("Invalid email address")
+    .max(255, "Email must be less than 255 characters"),
+  subject: z.string()
+    .trim()
+    .min(1, "Subject is required")
+    .max(200, "Subject must be less than 200 characters"),
+  message: z.string()
+    .trim()
+    .min(10, "Message must be at least 10 characters")
+    .max(5000, "Message must be less than 5000 characters"),
+});
 
 export default function Support() {
   const [contactForm, setContactForm] = useState({
@@ -22,12 +43,33 @@ export default function Support() {
     subject: "",
     message: "",
   });
+  const [errors, setErrors] = useState<Record<string, string>>({});
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isSubmitted, setIsSubmitted] = useState(false);
   const { toast } = useToast();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    setErrors({});
+
+    // Validate form data
+    const result = supportSchema.safeParse(contactForm);
+    if (!result.success) {
+      const fieldErrors: Record<string, string> = {};
+      result.error.errors.forEach((err) => {
+        if (err.path[0]) {
+          fieldErrors[err.path[0] as string] = err.message;
+        }
+      });
+      setErrors(fieldErrors);
+      toast({
+        title: "Validation Error",
+        description: result.error.errors[0]?.message || "Please check your input",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setIsSubmitting(true);
 
     try {
@@ -37,10 +79,10 @@ export default function Support() {
         .from("contact_submissions")
         .insert({
           user_id: user?.id || null,
-          name: contactForm.name,
-          email: contactForm.email,
-          subject: contactForm.subject,
-          message: contactForm.message,
+          name: result.data.name,
+          email: result.data.email,
+          subject: result.data.subject,
+          message: result.data.message,
         });
 
       if (error) throw error;
@@ -59,6 +101,12 @@ export default function Support() {
     } finally {
       setIsSubmitting(false);
     }
+  };
+
+  const resetForm = () => {
+    setIsSubmitted(false);
+    setContactForm({ name: "", email: "", subject: "", message: "" });
+    setErrors({});
   };
 
   return (
@@ -110,10 +158,7 @@ export default function Support() {
                           <Button 
                             className="mt-4" 
                             variant="outline"
-                            onClick={() => {
-                              setIsSubmitted(false);
-                              setContactForm({ name: "", email: "", subject: "", message: "" });
-                            }}
+                            onClick={resetForm}
                           >
                             Send Another Message
                           </Button>
@@ -127,9 +172,10 @@ export default function Support() {
                                 id="name"
                                 value={contactForm.name}
                                 onChange={(e) => setContactForm(f => ({ ...f, name: e.target.value }))}
-                                className="bg-muted/50 border-border/50"
-                                required
+                                className={`bg-muted/50 border-border/50 ${errors.name ? 'border-destructive' : ''}`}
+                                maxLength={100}
                               />
+                              {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                             </div>
                             <div className="space-y-2">
                               <Label htmlFor="email">Email</Label>
@@ -138,9 +184,10 @@ export default function Support() {
                                 type="email"
                                 value={contactForm.email}
                                 onChange={(e) => setContactForm(f => ({ ...f, email: e.target.value }))}
-                                className="bg-muted/50 border-border/50"
-                                required
+                                className={`bg-muted/50 border-border/50 ${errors.email ? 'border-destructive' : ''}`}
+                                maxLength={255}
                               />
+                              {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
                             </div>
                           </div>
                           <div className="space-y-2">
@@ -149,9 +196,10 @@ export default function Support() {
                               id="subject"
                               value={contactForm.subject}
                               onChange={(e) => setContactForm(f => ({ ...f, subject: e.target.value }))}
-                              className="bg-muted/50 border-border/50"
-                              required
+                              className={`bg-muted/50 border-border/50 ${errors.subject ? 'border-destructive' : ''}`}
+                              maxLength={200}
                             />
+                            {errors.subject && <p className="text-xs text-destructive">{errors.subject}</p>}
                           </div>
                           <div className="space-y-2">
                             <Label htmlFor="message">Message</Label>
@@ -159,9 +207,13 @@ export default function Support() {
                               id="message"
                               value={contactForm.message}
                               onChange={(e) => setContactForm(f => ({ ...f, message: e.target.value }))}
-                              className="bg-muted/50 border-border/50 min-h-[150px]"
-                              required
+                              className={`bg-muted/50 border-border/50 min-h-[150px] ${errors.message ? 'border-destructive' : ''}`}
+                              maxLength={5000}
                             />
+                            <div className="flex justify-between text-xs text-muted-foreground">
+                              {errors.message && <p className="text-destructive">{errors.message}</p>}
+                              <span className="ml-auto">{contactForm.message.length}/5000</span>
+                            </div>
                           </div>
                           <Button type="submit" disabled={isSubmitting} className="w-full">
                             {isSubmitting ? (
@@ -220,66 +272,90 @@ export default function Support() {
                     <CardDescription>Help us improve by reporting bugs or problems</CardDescription>
                   </CardHeader>
                   <CardContent>
-                    <form onSubmit={handleSubmit} className="space-y-4">
-                      <div className="grid gap-4 md:grid-cols-2">
-                        <div className="space-y-2">
-                          <Label htmlFor="issue-name">Name</Label>
-                          <Input
-                            id="issue-name"
-                            value={contactForm.name}
-                            onChange={(e) => setContactForm(f => ({ ...f, name: e.target.value }))}
-                            className="bg-muted/50 border-border/50"
-                            required
-                          />
+                    {isSubmitted ? (
+                      <div className="text-center py-12">
+                        <CheckCircle className="h-16 w-16 mx-auto mb-4 text-green-500" />
+                        <h3 className="text-xl font-semibold mb-2">Issue Reported!</h3>
+                        <p className="text-muted-foreground">
+                          Thank you for your feedback. Our team will investigate.
+                        </p>
+                        <Button 
+                          className="mt-4" 
+                          variant="outline"
+                          onClick={resetForm}
+                        >
+                          Report Another Issue
+                        </Button>
+                      </div>
+                    ) : (
+                      <form onSubmit={handleSubmit} className="space-y-4">
+                        <div className="grid gap-4 md:grid-cols-2">
+                          <div className="space-y-2">
+                            <Label htmlFor="issue-name">Name</Label>
+                            <Input
+                              id="issue-name"
+                              value={contactForm.name}
+                              onChange={(e) => setContactForm(f => ({ ...f, name: e.target.value }))}
+                              className={`bg-muted/50 border-border/50 ${errors.name ? 'border-destructive' : ''}`}
+                              maxLength={100}
+                            />
+                            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
+                          </div>
+                          <div className="space-y-2">
+                            <Label htmlFor="issue-email">Email</Label>
+                            <Input
+                              id="issue-email"
+                              type="email"
+                              value={contactForm.email}
+                              onChange={(e) => setContactForm(f => ({ ...f, email: e.target.value }))}
+                              className={`bg-muted/50 border-border/50 ${errors.email ? 'border-destructive' : ''}`}
+                              maxLength={255}
+                            />
+                            {errors.email && <p className="text-xs text-destructive">{errors.email}</p>}
+                          </div>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="issue-email">Email</Label>
+                          <Label htmlFor="issue-subject">Issue Type</Label>
                           <Input
-                            id="issue-email"
-                            type="email"
-                            value={contactForm.email}
-                            onChange={(e) => setContactForm(f => ({ ...f, email: e.target.value }))}
-                            className="bg-muted/50 border-border/50"
-                            required
+                            id="issue-subject"
+                            placeholder="e.g., Book generation failed, Export not working..."
+                            value={contactForm.subject}
+                            onChange={(e) => setContactForm(f => ({ ...f, subject: e.target.value }))}
+                            className={`bg-muted/50 border-border/50 ${errors.subject ? 'border-destructive' : ''}`}
+                            maxLength={200}
                           />
+                          {errors.subject && <p className="text-xs text-destructive">{errors.subject}</p>}
                         </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="issue-subject">Issue Type</Label>
-                        <Input
-                          id="issue-subject"
-                          placeholder="e.g., Book generation failed, Export not working..."
-                          value={contactForm.subject}
-                          onChange={(e) => setContactForm(f => ({ ...f, subject: e.target.value }))}
-                          className="bg-muted/50 border-border/50"
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="issue-message">Describe the Issue</Label>
-                        <Textarea
-                          id="issue-message"
-                          placeholder="Please describe what happened, what you expected, and any error messages you saw..."
-                          value={contactForm.message}
-                          onChange={(e) => setContactForm(f => ({ ...f, message: e.target.value }))}
-                          className="bg-muted/50 border-border/50 min-h-[150px]"
-                          required
-                        />
-                      </div>
-                      <Button type="submit" disabled={isSubmitting} className="w-full">
-                        {isSubmitting ? (
-                          <>
-                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                            Submitting...
-                          </>
-                        ) : (
-                          <>
-                            <FileQuestion className="h-4 w-4 mr-2" />
-                            Submit Issue Report
-                          </>
-                        )}
-                      </Button>
-                    </form>
+                        <div className="space-y-2">
+                          <Label htmlFor="issue-message">Describe the Issue</Label>
+                          <Textarea
+                            id="issue-message"
+                            placeholder="Please describe what happened, what you expected, and any error messages you saw..."
+                            value={contactForm.message}
+                            onChange={(e) => setContactForm(f => ({ ...f, message: e.target.value }))}
+                            className={`bg-muted/50 border-border/50 min-h-[150px] ${errors.message ? 'border-destructive' : ''}`}
+                            maxLength={5000}
+                          />
+                          <div className="flex justify-between text-xs text-muted-foreground">
+                            {errors.message && <p className="text-destructive">{errors.message}</p>}
+                            <span className="ml-auto">{contactForm.message.length}/5000</span>
+                          </div>
+                        </div>
+                        <Button type="submit" disabled={isSubmitting} className="w-full">
+                          {isSubmitting ? (
+                            <>
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              Submitting...
+                            </>
+                          ) : (
+                            <>
+                              <FileQuestion className="h-4 w-4 mr-2" />
+                              Submit Issue Report
+                            </>
+                          )}
+                        </Button>
+                      </form>
+                    )}
                   </CardContent>
                 </Card>
               </TabsContent>

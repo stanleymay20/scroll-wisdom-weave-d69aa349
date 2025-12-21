@@ -6,6 +6,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Tier limits for book generation
+const TIER_LIMITS = {
+  free: { booksPerDay: 1, maxChapters: 5 },
+  student: { booksPerDay: 3, maxChapters: 10 },
+  premium: { booksPerDay: 10, maxChapters: 20 },
+  prophet_tier: { booksPerDay: 50, maxChapters: 50 },
+};
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === "OPTIONS") {
@@ -13,6 +21,65 @@ serve(async (req) => {
   }
 
   try {
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Supabase configuration is missing");
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Authenticate user from JWT token
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error("Auth error:", authError);
+      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`[GENERATE-BOOK] Authenticated user: ${user.id.slice(0, 8)}...`);
+
+    // Get user's subscription plan and check daily limits
+    const { data: profile, error: profileError } = await supabase
+      .from("profiles")
+      .select("plan, daily_book_count, last_book_date")
+      .eq("id", user.id)
+      .single();
+
+    if (profileError) {
+      console.error("Profile error:", profileError);
+    }
+
+    const userPlan = profile?.plan || "free";
+    const limits = TIER_LIMITS[userPlan as keyof typeof TIER_LIMITS] || TIER_LIMITS.free;
+    
+    // Check daily book limits
+    const today = new Date().toISOString().split("T")[0];
+    const currentCount = profile?.last_book_date === today ? (profile?.daily_book_count || 0) : 0;
+    
+    if (currentCount >= limits.booksPerDay) {
+      console.log(`[GENERATE-BOOK] Daily limit reached for user ${user.id.slice(0, 8)}... (${userPlan}: ${currentCount}/${limits.booksPerDay})`);
+      return new Response(JSON.stringify({ 
+        error: `Daily book limit reached (${limits.booksPerDay} books/day for ${userPlan} plan). Upgrade for more.` 
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { 
       title, 
       description, 
@@ -20,11 +87,16 @@ serve(async (req) => {
       numChapters, 
       wordCount, 
       language = 'en', 
-      userId, 
       customCover,
-      bookType = 'text', // text, illustrated, comic
+      bookType = 'text',
       enableReferences = false,
     } = await req.json();
+
+    // Validate chapter limit based on plan
+    const effectiveChapters = Math.min(numChapters, limits.maxChapters);
+    if (numChapters > limits.maxChapters) {
+      console.log(`[GENERATE-BOOK] Capping chapters from ${numChapters} to ${limits.maxChapters} for ${userPlan} plan`);
+    }
     
     // Map language code to full language name
     const languageMap: Record<string, string> = {
@@ -38,21 +110,13 @@ serve(async (req) => {
     };
     const languageName = languageMap[language] || 'English';
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-      throw new Error("Supabase configuration is missing");
-    }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    console.log(`Generating book: ${title} with ${numChapters} chapters for user: ${userId}`);
-    console.log(`Language: ${languageName}, Word count: ${wordCount}, Book type: ${bookType}, References: ${enableReferences}`);
-    console.log(`Custom cover: ${!!customCover}`);
+    console.log(`[GENERATE-BOOK] Generating: ${title} with ${effectiveChapters} chapters`);
+    console.log(`[GENERATE-BOOK] Language: ${languageName}, Book type: ${bookType}, Plan: ${userPlan}`);
 
     // Build outline prompt based on book type
     const bookTypeInstructions = bookType === 'comic' 
@@ -88,7 +152,7 @@ Create a detailed outline for a book with the following specifications:
 - Title: ${title}
 - Description: ${description || "A comprehensive exploration of the topic"}
 - Category: ${category}
-- Number of Chapters: ${numChapters}
+- Number of Chapters: ${effectiveChapters}
 - Book Type: ${bookType}
 - Language: ${languageName} (ALL content must be in this language)
 
@@ -140,7 +204,7 @@ Format your response as a JSON object with this structure:
 
     if (!outlineResponse.ok) {
       const errorText = await outlineResponse.text();
-      console.error("AI gateway error:", outlineResponse.status, errorText);
+      console.error("[GENERATE-BOOK] AI gateway error:", outlineResponse.status, errorText);
       
       if (outlineResponse.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
@@ -160,12 +224,11 @@ Format your response as a JSON object with this structure:
     const outlineData = await outlineResponse.json();
     const outlineContent = outlineData.choices?.[0]?.message?.content;
     
-    console.log("Generated outline:", outlineContent);
+    console.log("[GENERATE-BOOK] Outline generated successfully");
 
     // Parse the outline
     let bookOutline;
     try {
-      // Extract JSON from the response (it might be wrapped in markdown code blocks)
       const jsonMatch = outlineContent.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         bookOutline = JSON.parse(jsonMatch[0]);
@@ -173,11 +236,11 @@ Format your response as a JSON object with this structure:
         throw new Error("No JSON found in response");
       }
     } catch (parseError) {
-      console.error("Failed to parse outline:", parseError);
+      console.error("[GENERATE-BOOK] Failed to parse outline:", parseError);
       bookOutline = {
         bookTitle: title,
         bookDescription: description || "A comprehensive exploration of the topic",
-        chapters: Array.from({ length: numChapters }, (_, i) => ({
+        chapters: Array.from({ length: effectiveChapters }, (_, i) => ({
           chapterNumber: i + 1,
           title: `Chapter ${i + 1}`,
           description: "Chapter content pending generation",
@@ -187,31 +250,31 @@ Format your response as a JSON object with this structure:
     }
 
     // Save book to database
-    console.log("Saving book to database...");
+    console.log("[GENERATE-BOOK] Saving book to database...");
     const { data: book, error: bookError } = await supabase
       .from("books")
       .insert({
         title: bookOutline.bookTitle || title,
         description: bookOutline.bookDescription || description,
         category: category,
-        total_chapters: numChapters,
-        is_published: false, // Private by default - creator must publish
+        total_chapters: effectiveChapters,
+        is_published: false,
         is_featured: false,
         author_ai_agent: "ScrollAuthorGPT",
         cover_image_url: customCover || null,
-        creator_id: userId, // Track book ownership
-        language: language, // Store language for chapter generation
-        book_type: bookType, // Store book type (text, illustrated, comic)
+        creator_id: user.id,
+        language: language,
+        book_type: bookType,
       })
       .select()
       .single();
 
     if (bookError) {
-      console.error("Error saving book:", bookError);
+      console.error("[GENERATE-BOOK] Error saving book:", bookError);
       throw new Error(`Failed to save book: ${bookError.message}`);
     }
 
-    console.log("Book saved with ID:", book.id);
+    console.log(`[GENERATE-BOOK] Book saved with ID: ${book.id.slice(0, 8)}...`);
 
     // Save chapters to database
     const chaptersToInsert = bookOutline.chapters.map((chapter: any) => ({
@@ -228,30 +291,38 @@ Format your response as a JSON object with this structure:
       .insert(chaptersToInsert);
 
     if (chaptersError) {
-      console.error("Error saving chapters:", chaptersError);
+      console.error("[GENERATE-BOOK] Error saving chapters:", chaptersError);
       throw new Error(`Failed to save chapters: ${chaptersError.message}`);
     }
 
-    console.log("Chapters saved successfully");
+    console.log("[GENERATE-BOOK] Chapters saved successfully");
 
-    // Add book to user's library if userId provided
-    if (userId) {
-      const { error: libraryError } = await supabase
-        .from("user_library")
-        .insert({
-          user_id: userId,
-          book_id: book.id,
-          progress_percent: 0,
-          last_read_chapter: 1,
-        });
+    // Add book to user's library
+    const { error: libraryError } = await supabase
+      .from("user_library")
+      .insert({
+        user_id: user.id,
+        book_id: book.id,
+        progress_percent: 0,
+        last_read_chapter: 1,
+      });
 
-      if (libraryError) {
-        console.error("Error adding to library:", libraryError);
-        // Don't throw - book was created successfully
-      } else {
-        console.log("Book added to user library");
-      }
+    if (libraryError) {
+      console.error("[GENERATE-BOOK] Error adding to library:", libraryError);
+    } else {
+      console.log("[GENERATE-BOOK] Book added to user library");
     }
+
+    // Update daily book count
+    await supabase
+      .from("profiles")
+      .update({
+        daily_book_count: currentCount + 1,
+        last_book_date: today,
+      })
+      .eq("id", user.id);
+
+    console.log(`[GENERATE-BOOK] Daily count updated: ${currentCount + 1}/${limits.booksPerDay}`);
 
     return new Response(
       JSON.stringify({
@@ -265,7 +336,7 @@ Format your response as a JSON object with this structure:
       }
     );
   } catch (error) {
-    console.error("Error in generate-book function:", error);
+    console.error("[GENERATE-BOOK] Error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
       {

@@ -1,8 +1,17 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
+
+// TTS monthly limits by tier (in minutes)
+const TIER_TTS_LIMITS = {
+  free: 10,
+  student: 60,
+  premium: 300,
+  prophet_tier: 1000,
 };
 
 // OpenAI TTS voices
@@ -17,8 +26,63 @@ serve(async (req) => {
   }
 
   try {
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Supabase configuration is missing");
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Authenticate user from JWT token
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error("[TTS] Auth error:", authError);
+      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`[TTS] Authenticated user: ${user.id.slice(0, 8)}...`);
+
+    // Get user's subscription plan and TTS usage
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("plan, tts_minutes_used, tts_month")
+      .eq("id", user.id)
+      .single();
+
+    const userPlan = profile?.plan || "free";
+    const monthlyLimit = TIER_TTS_LIMITS[userPlan as keyof typeof TIER_TTS_LIMITS] || TIER_TTS_LIMITS.free;
+    
+    // Check current month's usage
+    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
+    const currentUsage = profile?.tts_month === currentMonth ? (profile?.tts_minutes_used || 0) : 0;
+
+    if (currentUsage >= monthlyLimit) {
+      console.log(`[TTS] Monthly limit reached for user ${user.id.slice(0, 8)}... (${userPlan}: ${currentUsage}/${monthlyLimit} min)`);
+      return new Response(JSON.stringify({ 
+        error: `Monthly TTS limit reached (${monthlyLimit} min for ${userPlan} plan). Upgrade for more.` 
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const body = await req.json();
-    console.log("[TTS] Request body:", { textLength: body.text?.length, voice: body.voice, language: body.language });
+    console.log("[TTS] Request params:", { textLength: body.text?.length, voice: body.voice });
     
     const { text, voice = "alloy", language = "en" } = body;
 
@@ -39,22 +103,22 @@ serve(async (req) => {
       );
     }
 
-    // Limit text length to avoid timeouts (OpenAI TTS has limits)
+    // Limit text length to avoid timeouts
     const maxLength = 4096;
     const truncatedText = text.length > maxLength ? text.slice(0, maxLength) : text;
 
     // Clean text for speech
     const cleanedText = truncatedText
-      .replace(/#{1,6}\s*/g, "") // Remove markdown headers
-      .replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1") // Remove bold/italic
-      .replace(/`[^`]+`/g, "") // Remove inline code
-      .replace(/```[\s\S]*?```/g, "") // Remove code blocks
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Convert links to just text
-      .replace(/^\s*[-*]\s+/gm, "") // Remove list markers
-      .replace(/^\s*\d+\.\s+/gm, "") // Remove numbered list markers
-      .replace(/\n{2,}/g, ". ") // Replace multiple newlines with pause
-      .replace(/\n/g, " ") // Replace single newlines with space
-      .replace(/\s{2,}/g, " ") // Normalize spaces
+      .replace(/#{1,6}\s*/g, "")
+      .replace(/\*{1,2}([^*]+)\*{1,2}/g, "$1")
+      .replace(/`[^`]+`/g, "")
+      .replace(/```[\s\S]*?```/g, "")
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+      .replace(/^\s*[-*]\s+/gm, "")
+      .replace(/^\s*\d+\.\s+/gm, "")
+      .replace(/\n{2,}/g, ". ")
+      .replace(/\n/g, " ")
+      .replace(/\s{2,}/g, " ")
       .trim();
 
     if (!cleanedText) {
@@ -70,7 +134,7 @@ serve(async (req) => {
       ? voice as OpenAIVoice 
       : "alloy";
 
-    console.log(`[TTS] Generating speech for ${cleanedText.length} characters with voice: ${selectedVoice}, language: ${language}`);
+    console.log(`[TTS] Generating speech for ${cleanedText.length} characters with voice: ${selectedVoice}`);
 
     // Call OpenAI TTS API with retry logic
     let response: Response | null = null;
@@ -94,25 +158,19 @@ serve(async (req) => {
         });
 
         if (response.ok) {
-          break; // Success, exit retry loop
+          break;
         }
 
         const errorData = await response.text();
         console.error(`[TTS] OpenAI API error (attempt ${attempt + 1}):`, response.status, errorData);
 
-        // Parse error for specific handling
-        let errorMessage = `OpenAI TTS failed: ${response.status}`;
         let userFriendlyMessage = "Text-to-speech temporarily unavailable. Please try again later.";
         
         try {
           const parsedError = JSON.parse(errorData);
           if (parsedError.error?.message) {
-            console.error("[TTS] Error message:", parsedError.error.message);
-            
-            // Handle specific error types
             if (response.status === 429) {
               userFriendlyMessage = "TTS service is temporarily busy. Please wait a moment and try again.";
-              // Wait before retry
               if (attempt < maxRetries) {
                 await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
                 continue;
@@ -120,7 +178,7 @@ serve(async (req) => {
             } else if (response.status === 401 || parsedError.error.code === "billing_not_active") {
               userFriendlyMessage = "TTS service configuration issue. Please contact support.";
               lastError = userFriendlyMessage;
-              break; // Don't retry auth/billing issues
+              break;
             } else if (response.status === 400) {
               userFriendlyMessage = "Invalid text for speech synthesis. Try with different content.";
               lastError = userFriendlyMessage;
@@ -133,12 +191,10 @@ serve(async (req) => {
 
         lastError = userFriendlyMessage;
         
-        // Don't retry on non-retryable errors
         if (response.status !== 429 && response.status !== 500 && response.status !== 503) {
           break;
         }
         
-        // Wait before retry for server errors
         if (attempt < maxRetries) {
           await new Promise(resolve => setTimeout(resolve, 1000 * (attempt + 1)));
         }
@@ -172,7 +228,19 @@ serve(async (req) => {
     }
     const base64Audio = btoa(binary);
 
-    console.log(`[TTS] Successfully generated audio, base64 length: ${base64Audio.length}`);
+    // Estimate minutes used (approximately 150 words per minute, 5 chars per word)
+    const estimatedMinutes = Math.ceil(cleanedText.length / 750);
+    
+    // Update TTS usage
+    await supabase
+      .from("profiles")
+      .update({
+        tts_minutes_used: currentUsage + estimatedMinutes,
+        tts_month: currentMonth,
+      })
+      .eq("id", user.id);
+
+    console.log(`[TTS] Successfully generated audio, usage: ${currentUsage + estimatedMinutes}/${monthlyLimit} min`);
 
     return new Response(
       JSON.stringify({
@@ -182,6 +250,8 @@ serve(async (req) => {
         voice: selectedVoice,
         method: "openai-tts",
         charCount: cleanedText.length,
+        minutesUsed: estimatedMinutes,
+        remainingMinutes: monthlyLimit - currentUsage - estimatedMinutes,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

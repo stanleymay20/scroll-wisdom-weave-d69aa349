@@ -8,6 +8,14 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Format restrictions by tier
+const TIER_FORMATS = {
+  free: ["pdf"],
+  student: ["pdf", "epub"],
+  premium: ["pdf", "epub", "docx"],
+  prophet_tier: ["pdf", "epub", "docx"],
+};
+
 // Generate Scroll Publishing Code (SPC)
 function generateSPC(bookId: string): string {
   const year = new Date().getFullYear();
@@ -43,22 +51,20 @@ function sanitizeFilename(title: string): string {
 function stripMarkdown(text: string): string {
   if (!text) return "";
   return text
-    .replace(/^#{1,6}\s+/gm, "") // Headers
-    .replace(/\*\*([^*]+)\*\*/g, "$1") // Bold
-    .replace(/\*([^*]+)\*/g, "$1") // Italic
-    .replace(/`[^`]+`/g, "") // Inline code
-    .replace(/```[\s\S]*?```/g, "") // Code blocks
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Links
-    .replace(/^\s*[-*]\s+/gm, "• ") // List items
-    .replace(/^\s*\d+\.\s+/gm, "") // Numbered lists
-    .replace(/\n{3,}/g, "\n\n") // Multiple newlines
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*([^*]+)\*\*/g, "$1")
+    .replace(/\*([^*]+)\*/g, "$1")
+    .replace(/`[^`]+`/g, "")
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/^\s*[-*]\s+/gm, "• ")
+    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/\n{3,}/g, "\n\n")
     .trim();
 }
 
-// Fetch image as bytes
 async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
   try {
-    // Handle base64 data URLs
     if (url.startsWith("data:image")) {
       const base64Data = url.split(",")[1];
       const binaryString = atob(base64Data);
@@ -69,13 +75,12 @@ async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
       return bytes;
     }
     
-    // Fetch from URL
     const response = await fetch(url);
     if (!response.ok) return null;
     const arrayBuffer = await response.arrayBuffer();
     return new Uint8Array(arrayBuffer);
   } catch (error) {
-    console.error("Error fetching image:", error);
+    console.error("[EXPORT] Error fetching image:", error);
     return null;
   }
 }
@@ -86,8 +91,6 @@ serve(async (req) => {
   }
 
   try {
-    const { bookId, format, authorName, isbn } = await req.json();
-    
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     
@@ -96,9 +99,55 @@ serve(async (req) => {
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-    console.log(`[EXPORT] Exporting book ${bookId} as ${format}`);
 
-    // Fetch book
+    // Authenticate user from JWT token
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      console.error("[EXPORT] Auth error:", authError);
+      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`[EXPORT] Authenticated user: ${user.id.slice(0, 8)}...`);
+
+    // Get user's subscription plan
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("plan")
+      .eq("id", user.id)
+      .single();
+
+    const userPlan = profile?.plan || "free";
+    const allowedFormats = TIER_FORMATS[userPlan as keyof typeof TIER_FORMATS] || TIER_FORMATS.free;
+
+    const { bookId, format, authorName, isbn } = await req.json();
+
+    // Check format permissions
+    if (!allowedFormats.includes(format)) {
+      console.log(`[EXPORT] Format ${format} not allowed for ${userPlan} plan`);
+      return new Response(JSON.stringify({ 
+        error: `${format.toUpperCase()} export requires ${format === 'docx' ? 'Premium' : 'Student'} plan or higher.` 
+      }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    console.log(`[EXPORT] Exporting book ${bookId.slice(0, 8)}... as ${format} (${userPlan} plan)`);
+
+    // Fetch book and verify ownership
     const { data: book, error: bookError } = await supabase
       .from("books")
       .select("*")
@@ -106,6 +155,15 @@ serve(async (req) => {
       .single();
 
     if (bookError || !book) throw new Error("Book not found");
+    
+    // Verify user owns the book or it's published
+    if (book.creator_id !== user.id && !book.is_published) {
+      return new Response(JSON.stringify({ error: "Not authorized to export this book" }), {
+        status: 403,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     if (!book.cover_image_url) throw new Error("Export requires a cover image");
 
     // Fetch chapters
@@ -167,7 +225,7 @@ serve(async (req) => {
         throw new Error(`Unsupported format: ${format}`);
     }
 
-    console.log(`[EXPORT] Export complete: ${format}, ${content.length} base64 chars`);
+    console.log(`[EXPORT] Export complete: ${format}`);
 
     return new Response(
       JSON.stringify({ success: true, content, contentType, filename, isBase64 }),
@@ -189,15 +247,15 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
   const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
   
-  const pageWidth = 612; // Letter size
+  const pageWidth = 612;
   const pageHeight = 792;
-  const margin = 72; // 1 inch margins
+  const margin = 72;
   const textWidth = pageWidth - (margin * 2);
   
   let pageNumber = 0;
   
   const addPageNumber = (page: any, num: number) => {
-    if (num > 3) { // Skip page numbers on cover, title, and copyright pages
+    if (num > 3) {
       page.drawText(String(num - 3), {
         x: pageWidth / 2 - 5,
         y: 30,
@@ -214,7 +272,6 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
   
   if (coverImageBytes) {
     try {
-      // Try to embed as PNG first, then JPEG
       let image;
       try {
         image = await pdfDoc.embedPng(coverImageBytes);
@@ -222,25 +279,22 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
         try {
           image = await pdfDoc.embedJpg(coverImageBytes);
         } catch {
-          console.log("Could not embed cover image, using text-only cover");
+          console.log("[EXPORT] Could not embed cover image, using text-only cover");
         }
       }
       
       if (image) {
-        // Scale image to fill the page while maintaining aspect ratio
         const imgAspect = image.width / image.height;
         const pageAspect = pageWidth / pageHeight;
         
         let drawWidth, drawHeight, drawX, drawY;
         
         if (imgAspect > pageAspect) {
-          // Image is wider - fit by height
           drawHeight = pageHeight;
           drawWidth = drawHeight * imgAspect;
           drawX = (pageWidth - drawWidth) / 2;
           drawY = 0;
         } else {
-          // Image is taller - fit by width
           drawWidth = pageWidth;
           drawHeight = drawWidth / imgAspect;
           drawX = 0;
@@ -255,7 +309,7 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
         });
       }
     } catch (error) {
-      console.error("Error embedding cover image:", error);
+      console.error("[EXPORT] Error embedding cover image:", error);
     }
   }
 
@@ -264,7 +318,6 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
   pageNumber++;
   let y = pageHeight - 200;
   
-  // Category
   page.drawText(book.category?.toUpperCase() || "BOOK", {
     x: margin,
     y,
@@ -274,7 +327,6 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
   });
   y -= 50;
   
-  // Title
   const titleLines = wrapText(book.title, timesRomanBold, 28, textWidth);
   for (const line of titleLines) {
     page.drawText(line, {
@@ -288,7 +340,6 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
   }
   y -= 30;
   
-  // Author
   page.drawText(`by ${author}`, {
     x: margin,
     y,
@@ -297,7 +348,6 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
     color: rgb(0.3, 0.3, 0.3),
   });
   
-  // Publisher at bottom
   page.drawText("ScrollLibrary Publishing", {
     x: margin,
     y: margin + 50,
@@ -373,7 +423,6 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
     addPageNumber(page, pageNumber);
     y = pageHeight - margin - 50;
     
-    // Chapter header
     page.drawText(`CHAPTER ${chapter.chapter_number}`, {
       x: margin,
       y,
@@ -383,7 +432,6 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
     });
     y -= 30;
     
-    // Chapter title
     const chapterTitleLines = wrapText(chapter.title, timesRomanBold, 22, textWidth);
     for (const line of chapterTitleLines) {
       page.drawText(line, {
@@ -397,7 +445,6 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
     }
     y -= 30;
     
-    // Chapter content
     const cleanContent = stripMarkdown(chapter.content || "");
     const paragraphs = cleanContent.split(/\n\n+/);
     
@@ -422,7 +469,7 @@ async function generatePDF(book: any, chapters: any[], author: string, identifie
         });
         y -= 16;
       }
-      y -= 8; // Paragraph spacing
+      y -= 8;
     }
   }
 
@@ -450,15 +497,22 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
   return lines;
 }
 
+function escapeXml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&#39;');
+}
+
 // ===== EPUB Generation with Cover =====
 async function generateEPUB(book: any, chapters: any[], author: string, identifier: string, isISBN: boolean, year: number, coverImageBytes: Uint8Array | null): Promise<ArrayBuffer> {
   const blobWriter = new zip.BlobWriter("application/epub+zip");
   const zipWriter = new zip.ZipWriter(blobWriter);
 
-  // mimetype (must be first, uncompressed)
   await zipWriter.add("mimetype", new zip.TextReader("application/epub+zip"), { level: 0 });
 
-  // META-INF/container.xml
   const containerXml = `<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
   <rootfiles>
@@ -467,20 +521,17 @@ async function generateEPUB(book: any, chapters: any[], author: string, identifi
 </container>`;
   await zipWriter.add("META-INF/container.xml", new zip.TextReader(containerXml));
 
-  // Add cover image if available
   const hasCover = coverImageBytes && coverImageBytes.length > 0;
   if (hasCover) {
     await zipWriter.add("OEBPS/images/cover.jpg", new zip.Uint8ArrayReader(coverImageBytes));
   }
 
-  // Generate chapter IDs
   const chapterItems = chapters.map((ch, i) => ({
     id: `chapter${i + 1}`,
     href: `chapter${i + 1}.xhtml`,
     chapter: ch,
   }));
 
-  // OEBPS/content.opf
   const contentOpf = `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -499,74 +550,79 @@ async function generateEPUB(book: any, chapters: any[], author: string, identifi
     ${hasCover ? '<item id="cover-image" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/>' : ''}
     <item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>
     ${chapterItems.map(c => `<item id="${c.id}" href="${c.href}" media-type="application/xhtml+xml"/>`).join('\n    ')}
+    <item id="css" href="style.css" media-type="text/css"/>
   </manifest>
   <spine>
     ${hasCover ? '<itemref idref="cover"/>' : ''}
+    <itemref idref="nav"/>
     <itemref idref="title"/>
     ${chapterItems.map(c => `<itemref idref="${c.id}"/>`).join('\n    ')}
   </spine>
 </package>`;
   await zipWriter.add("OEBPS/content.opf", new zip.TextReader(contentOpf));
 
-  // OEBPS/nav.xhtml (Navigation)
-  const navXhtml = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
-<head><title>Table of Contents</title></head>
-<body>
-  <nav epub:type="toc">
-    <h1>Table of Contents</h1>
-    <ol>
-      ${hasCover ? '<li><a href="cover.xhtml">Cover</a></li>' : ''}
-      <li><a href="title.xhtml">Title Page</a></li>
-      ${chapterItems.map(c => `<li><a href="${c.href}">Chapter ${c.chapter.chapter_number}: ${escapeXml(c.chapter.title)}</a></li>`).join('\n      ')}
-    </ol>
-  </nav>
-</body>
-</html>`;
-  await zipWriter.add("OEBPS/nav.xhtml", new zip.TextReader(navXhtml));
+  const css = `body { font-family: Georgia, serif; margin: 2em; line-height: 1.6; }
+h1 { font-size: 1.8em; margin-bottom: 0.5em; }
+h2 { font-size: 1.4em; margin-top: 1.5em; }
+p { margin: 0.8em 0; text-align: justify; }
+.cover { text-align: center; }
+.cover img { max-width: 100%; height: auto; }`;
+  await zipWriter.add("OEBPS/style.css", new zip.TextReader(css));
 
-  // OEBPS/cover.xhtml (Cover page)
   if (hasCover) {
     const coverXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>Cover</title></head>
-<body style="margin:0; padding:0; text-align:center;">
-  <img src="images/cover.jpg" alt="Cover" style="max-width:100%; max-height:100vh;"/>
-</body>
+<head><title>Cover</title><link rel="stylesheet" href="style.css"/></head>
+<body class="cover"><img src="images/cover.jpg" alt="Cover"/></body>
 </html>`;
     await zipWriter.add("OEBPS/cover.xhtml", new zip.TextReader(coverXhtml));
   }
 
-  // OEBPS/title.xhtml
+  const navXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head><title>Navigation</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<nav epub:type="toc" id="toc">
+  <h1>Table of Contents</h1>
+  <ol>
+    ${chapterItems.map(c => `<li><a href="${c.href}">Chapter ${c.chapter.chapter_number}: ${escapeXml(c.chapter.title)}</a></li>`).join('\n    ')}
+  </ol>
+</nav>
+</body>
+</html>`;
+  await zipWriter.add("OEBPS/nav.xhtml", new zip.TextReader(navXhtml));
+
   const titleXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>${escapeXml(book.title)}</title></head>
-<body style="text-align:center; padding:2em;">
-  <h1 style="font-size:2em; margin-top:3em;">${escapeXml(book.title)}</h1>
-  <p style="margin-top:2em; font-size:1.2em;">by ${escapeXml(author)}</p>
-  <p style="margin-top:4em; font-size:0.9em; color:#666;">© ${year} ${escapeXml(author)}</p>
-  <p style="font-size:0.8em; color:#888;">${isISBN ? `ISBN: ${identifier}` : `SPC: ${identifier}`}</p>
-  <p style="margin-top:2em; font-size:0.8em; color:#888;">ScrollLibrary Publishing</p>
+<head><title>${escapeXml(book.title)}</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<h1>${escapeXml(book.title)}</h1>
+<p>by ${escapeXml(author)}</p>
+<p>${escapeXml(book.category?.replace(/_/g, ' ') || 'Book')}</p>
+<hr/>
+<p>© ${year} ${escapeXml(author)}. All rights reserved.</p>
+<p>${isISBN ? `ISBN: ${identifier}` : `SPC: ${identifier}`}</p>
+<p>Published by ScrollLibrary Publishing</p>
 </body>
 </html>`;
   await zipWriter.add("OEBPS/title.xhtml", new zip.TextReader(titleXhtml));
 
-  // Add chapters
   for (const item of chapterItems) {
-    const cleanContent = stripMarkdown(item.chapter.content || "");
-    const paragraphs = cleanContent.split(/\n\n+/).filter(p => p.trim());
+    const content = stripMarkdown(item.chapter.content || "")
+      .split(/\n\n+/)
+      .map(p => `<p>${escapeXml(p.trim())}</p>`)
+      .join('\n');
     
     const chapterXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>Chapter ${item.chapter.chapter_number}</title></head>
-<body style="font-family:serif; line-height:1.6; padding:1em;">
-  <h2 style="color:#b8860b; font-size:0.9em; text-transform:uppercase; letter-spacing:2px;">Chapter ${item.chapter.chapter_number}</h2>
-  <h1 style="font-size:1.5em; margin-bottom:1em;">${escapeXml(item.chapter.title)}</h1>
-  ${paragraphs.map(p => `<p style="margin-bottom:1em; text-align:justify;">${escapeXml(p.trim())}</p>`).join('\n  ')}
+<head><title>${escapeXml(item.chapter.title)}</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<h1>Chapter ${item.chapter.chapter_number}: ${escapeXml(item.chapter.title)}</h1>
+${content}
 </body>
 </html>`;
     await zipWriter.add(`OEBPS/${item.href}`, new zip.TextReader(chapterXhtml));
@@ -574,7 +630,7 @@ async function generateEPUB(book: any, chapters: any[], author: string, identifi
 
   await zipWriter.close();
   const blob = await blobWriter.getData();
-  return blob.arrayBuffer();
+  return await blob.arrayBuffer();
 }
 
 // ===== DOCX Generation with Cover =====
@@ -582,162 +638,104 @@ async function generateDOCX(book: any, chapters: any[], author: string, identifi
   const blobWriter = new zip.BlobWriter("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   const zipWriter = new zip.ZipWriter(blobWriter);
 
-  const hasCover = coverImageBytes && coverImageBytes.length > 0;
-
-  // [Content_Types].xml
   const contentTypes = `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
-  ${hasCover ? '<Default Extension="jpeg" ContentType="image/jpeg"/>' : ''}
-  ${hasCover ? '<Default Extension="jpg" ContentType="image/jpeg"/>' : ''}
+  ${coverImageBytes ? '<Default Extension="jpeg" ContentType="image/jpeg"/>' : ''}
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
-  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
 </Types>`;
   await zipWriter.add("[Content_Types].xml", new zip.TextReader(contentTypes));
 
-  // _rels/.rels
   const rels = `<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`;
   await zipWriter.add("_rels/.rels", new zip.TextReader(rels));
 
-  // Add cover image if available
-  if (hasCover) {
-    await zipWriter.add("word/media/cover.jpg", new zip.Uint8ArrayReader(coverImageBytes));
+  let imageRel = '';
+  if (coverImageBytes) {
+    await zipWriter.add("word/media/cover.jpeg", new zip.Uint8ArrayReader(coverImageBytes));
+    imageRel = '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/cover.jpeg"/>';
   }
 
-  // word/_rels/document.xml.rels
   const documentRels = `<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
-  ${hasCover ? '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/cover.jpg"/>' : ''}
+  ${imageRel}
 </Relationships>`;
   await zipWriter.add("word/_rels/document.xml.rels", new zip.TextReader(documentRels));
 
-  // word/styles.xml
-  const styles = `<?xml version="1.0" encoding="UTF-8"?>
-<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
-  <w:style w:type="paragraph" w:styleId="Title">
-    <w:name w:val="Title"/>
-    <w:pPr><w:jc w:val="center"/></w:pPr>
-    <w:rPr><w:b/><w:sz w:val="56"/></w:rPr>
-  </w:style>
-  <w:style w:type="paragraph" w:styleId="Heading1">
-    <w:name w:val="Heading 1"/>
-    <w:pPr><w:spacing w:before="400" w:after="200"/></w:pPr>
-    <w:rPr><w:b/><w:sz w:val="32"/></w:rPr>
-  </w:style>
-  <w:style w:type="paragraph" w:styleId="Heading2">
-    <w:name w:val="Heading 2"/>
-    <w:pPr><w:spacing w:before="300" w:after="100"/></w:pPr>
-    <w:rPr><w:b/><w:sz w:val="28"/></w:rPr>
-  </w:style>
-  <w:style w:type="paragraph" w:styleId="Normal">
-    <w:name w:val="Normal"/>
-    <w:pPr><w:spacing w:after="200" w:line="276" w:lineRule="auto"/></w:pPr>
-    <w:rPr><w:sz w:val="24"/></w:rPr>
-  </w:style>
-</w:styles>`;
-  await zipWriter.add("word/styles.xml", new zip.TextReader(styles));
+  let documentContent = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+            xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+            xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+<w:body>`;
 
-  // word/document.xml
-  let documentContent = `<?xml version="1.0" encoding="UTF-8"?>
-<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
-  <w:body>`;
-
-  // Cover image page
-  if (hasCover) {
+  if (coverImageBytes) {
     documentContent += `
-    <w:p>
-      <w:pPr><w:jc w:val="center"/></w:pPr>
-      <w:r>
-        <w:drawing>
-          <wp:inline distT="0" distB="0" distL="0" distR="0">
-            <wp:extent cx="5486400" cy="7315200"/>
-            <wp:docPr id="1" name="Cover"/>
-            <a:graphic>
-              <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
-                <pic:pic>
-                  <pic:nvPicPr>
-                    <pic:cNvPr id="1" name="cover.jpg"/>
-                    <pic:cNvPicPr/>
-                  </pic:nvPicPr>
-                  <pic:blipFill>
-                    <a:blip r:embed="rId2"/>
-                    <a:stretch><a:fillRect/></a:stretch>
-                  </pic:blipFill>
-                  <pic:spPr>
-                    <a:xfrm>
-                      <a:off x="0" y="0"/>
-                      <a:ext cx="5486400" cy="7315200"/>
-                    </a:xfrm>
-                    <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
-                  </pic:spPr>
-                </pic:pic>
-              </a:graphicData>
-            </a:graphic>
-          </wp:inline>
-        </w:drawing>
-      </w:r>
-    </w:p>
-    <w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+<w:p>
+  <w:r>
+    <w:drawing>
+      <wp:inline>
+        <wp:extent cx="5943600" cy="7920000"/>
+        <wp:docPr id="1" name="Cover"/>
+        <a:graphic>
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+            <pic:pic>
+              <pic:nvPicPr>
+                <pic:cNvPr id="1" name="cover.jpeg"/>
+                <pic:cNvPicPr/>
+              </pic:nvPicPr>
+              <pic:blipFill>
+                <a:blip r:embed="rId2"/>
+                <a:stretch><a:fillRect/></a:stretch>
+              </pic:blipFill>
+              <pic:spPr>
+                <a:xfrm>
+                  <a:off x="0" y="0"/>
+                  <a:ext cx="5943600" cy="7920000"/>
+                </a:xfrm>
+                <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+              </pic:spPr>
+            </pic:pic>
+          </a:graphicData>
+        </a:graphic>
+      </wp:inline>
+    </w:drawing>
+  </w:r>
+</w:p>
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
   }
 
-  // Title page
   documentContent += `
-    <w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>${escapeXml(book.title)}</w:t></w:r></w:p>
-    <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t>by ${escapeXml(author)}</w:t></w:r></w:p>
-    <w:p><w:pPr><w:jc w:val="center"/></w:pPr></w:p>
-    <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>© ${year} ${escapeXml(author)}</w:t></w:r></w:p>
-    <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${isISBN ? `ISBN: ${identifier}` : `SPC: ${identifier}`}</w:t></w:r></w:p>
-    <w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>${escapeXml(book.title)}</w:t></w:r></w:p>
+<w:p><w:r><w:t>by ${escapeXml(author)}</w:t></w:r></w:p>
+<w:p><w:r><w:t>${escapeXml(book.category?.replace(/_/g, ' ') || 'Book')}</w:t></w:r></w:p>
+<w:p><w:r><w:t></w:t></w:r></w:p>
+<w:p><w:r><w:t>© ${year} ${escapeXml(author)}. All rights reserved.</w:t></w:r></w:p>
+<w:p><w:r><w:t>${isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`}</w:t></w:r></w:p>
+<w:p><w:r><w:t>Published by ScrollLibrary Publishing</w:t></w:r></w:p>
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
 
-  // Table of Contents
-  documentContent += `
-    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Table of Contents</w:t></w:r></w:p>`;
-  
   for (const chapter of chapters) {
     documentContent += `
-    <w:p><w:r><w:t>Chapter ${chapter.chapter_number}: ${escapeXml(chapter.title)}</w:t></w:r></w:p>`;
-  }
-  
-  documentContent += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
-
-  // Chapters
-  for (const chapter of chapters) {
-    documentContent += `
-    <w:p><w:pPr><w:pStyle w:val="Heading2"/></w:pPr><w:r><w:t>CHAPTER ${chapter.chapter_number}</w:t></w:r></w:p>
-    <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>${escapeXml(chapter.title)}</w:t></w:r></w:p>`;
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter ${chapter.chapter_number}: ${escapeXml(chapter.title)}</w:t></w:r></w:p>`;
     
-    const cleanContent = stripMarkdown(chapter.content || "");
-    const paragraphs = cleanContent.split(/\n\n+/).filter(p => p.trim());
-    
+    const paragraphs = stripMarkdown(chapter.content || "").split(/\n\n+/);
     for (const para of paragraphs) {
-      documentContent += `
-    <w:p><w:pPr><w:pStyle w:val="Normal"/></w:pPr><w:r><w:t>${escapeXml(para.trim())}</w:t></w:r></w:p>`;
+      if (para.trim()) {
+        documentContent += `<w:p><w:r><w:t>${escapeXml(para.trim())}</w:t></w:r></w:p>`;
+      }
     }
-    
     documentContent += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
   }
 
-  documentContent += `
-  </w:body>
-</w:document>`;
-
+  documentContent += `</w:body></w:document>`;
   await zipWriter.add("word/document.xml", new zip.TextReader(documentContent));
+
   await zipWriter.close();
   const blob = await blobWriter.getData();
-  return blob.arrayBuffer();
-}
-
-function escapeXml(text: string): string {
-  if (!text) return "";
-  return text
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&apos;");
+  return await blob.arrayBuffer();
 }

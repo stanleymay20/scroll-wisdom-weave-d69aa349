@@ -1,40 +1,40 @@
 project_id = "lrricdforqfkaaciammv"
 
 [functions.generate-book]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-chapter]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-cover]
-verify_jwt = false
+verify_jwt = true
 
 [functions.content-filter]
 verify_jwt = false
 
 [functions.export-book]
-verify_jwt = false
+verify_jwt = true
 
 [functions.text-to-speech]
-verify_jwt = false
+verify_jwt = true
 
 [functions.check-subscription]
-verify_jwt = false
+verify_jwt = true
 
 [functions.create-checkout]
-verify_jwt = false
+verify_jwt = true
 
 [functions.customer-portal]
-verify_jwt = false
+verify_jwt = true
 
 [functions.stripe-webhook]
 verify_jwt = false
 
 [functions.claim-admin]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-image]
-verify_jwt = false
+verify_jwt = true
 
 [functions.generate-references]
-verify_jwt = false
+verify_jwt = true

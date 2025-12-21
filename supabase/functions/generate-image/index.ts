@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -16,13 +17,57 @@ serve(async (req) => {
   }
 
   try {
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      throw new Error("Supabase configuration is missing");
+    }
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Authenticate user from JWT token
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    
+    if (authError || !user) {
+      logStep("Auth error", { error: authError?.message });
+      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
+        status: 401,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    logStep("Authenticated user", { userId: user.id.slice(0, 8) + "..." });
+
+    // Get user's subscription plan
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("plan")
+      .eq("id", user.id)
+      .single();
+
+    const userPlan = profile?.plan || "free";
+    const isPremiumPlan = userPlan === "premium" || userPlan === "prophet_tier";
+
     const { 
       prompt, 
-      style = "illustration", // illustration, comic, children, realistic
-      isPremium = false, // Use higher quality model for premium
+      style = "illustration",
+      isPremium = false,
     } = await req.json();
 
-    logStep("Generating image", { prompt: prompt.slice(0, 100), style, isPremium });
+    // Use premium model only if user has premium plan
+    const effectiveIsPremium = isPremium && isPremiumPlan;
+
+    logStep("Generating image", { prompt: prompt.slice(0, 100), style, plan: userPlan, premium: effectiveIsPremium });
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -40,7 +85,7 @@ serve(async (req) => {
     const enhancedPrompt = `${prompt}. ${stylePrompts[style] || stylePrompts.illustration}`;
 
     // Use Gemini 2.5 Flash Image for standard, Gemini 3 Pro Image for premium
-    const model = isPremium 
+    const model = effectiveIsPremium 
       ? "google/gemini-3-pro-image-preview" 
       : "google/gemini-2.5-flash-image-preview";
 
@@ -63,7 +108,7 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
-      logStep("AI gateway error", { status: response.status, error: errorText });
+      logStep("AI gateway error", { status: response.status });
       
       if (response.status === 429) {
         return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
@@ -84,7 +129,7 @@ serve(async (req) => {
     const imageUrl = data.choices?.[0]?.message?.images?.[0]?.image_url?.url;
 
     if (!imageUrl) {
-      logStep("No image in response", { data });
+      logStep("No image in response");
       throw new Error("No image generated");
     }
 
@@ -93,7 +138,7 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        imageUrl, // base64 data URL
+        imageUrl,
         model,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }

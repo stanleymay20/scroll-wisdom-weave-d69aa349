@@ -7,6 +7,19 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, stripe-signature",
 };
 
+// Mask email for logging
+const maskEmail = (email: string | null): string => {
+  if (!email) return "none";
+  const [local, domain] = email.split("@");
+  if (!local || !domain) return "invalid";
+  return `${local[0]}***@${domain}`;
+};
+
+// Mask user ID for logging
+const maskUserId = (id: string): string => {
+  return `${id.slice(0, 8)}...`;
+};
+
 const logStep = (step: string, details?: Record<string, unknown>) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[STRIPE-WEBHOOK] ${step}${detailsStr}`);
@@ -44,7 +57,7 @@ serve(async (req) => {
         event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
         logStep("Webhook signature verified");
       } catch (err) {
-        logStep("Webhook signature verification failed", { error: err instanceof Error ? err.message : "Unknown" });
+        logStep("Webhook signature verification failed");
         return new Response(JSON.stringify({ error: "Invalid signature" }), {
           status: 400,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -58,12 +71,12 @@ serve(async (req) => {
 
     logStep("Processing event", { type: event.type, id: event.id });
 
-    // Map Stripe product IDs to tier names - REAL PRODUCT IDs from Stripe
+    // Map Stripe product IDs to tier names
     const getTierFromProductId = (productId: string): string => {
       const productMap: Record<string, string> = {
-        'prod_TaQU3ILEUpbXOT': 'premium',      // ScrollLibrary – Premium ($19/mo)
-        'prod_TaQWA7MSUntiMy': 'prophet_tier', // ScrollLibrary – Prophet Tier ($49/mo)
-        'prod_TaQSrotoUkTuPC': 'student',      // ScrollLibrary – Student Plan ($9/mo)
+        'prod_TaQU3ILEUpbXOT': 'premium',
+        'prod_TaQWA7MSUntiMy': 'prophet_tier',
+        'prod_TaQSrotoUkTuPC': 'student',
       };
       return productMap[productId] || 'free';
     };
@@ -71,16 +84,15 @@ serve(async (req) => {
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
-        logStep("Checkout session completed", { sessionId: session.id, customerEmail: session.customer_email });
+        logStep("Checkout session completed", { sessionId: session.id, email: maskEmail(session.customer_email) });
 
         if (session.mode === "subscription" && session.subscription) {
           const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
           const productId = subscription.items.data[0]?.price?.product as string;
           const tier = getTierFromProductId(productId);
           
-          logStep("Subscription created", { subscriptionId: subscription.id, productId, tier });
+          logStep("Subscription created", { tier });
 
-          // Find user by email and update their profile
           const customerEmail = session.customer_email;
           if (customerEmail) {
             const { data: users, error: userError } = await supabase.auth.admin.listUsers();
@@ -99,7 +111,7 @@ serve(async (req) => {
                 if (updateError) {
                   logStep("Error updating profile", { error: updateError.message });
                 } else {
-                  logStep("Profile updated successfully", { userId: user.id, tier });
+                  logStep("Profile updated successfully", { tier });
                 }
               }
             }
@@ -110,9 +122,8 @@ serve(async (req) => {
 
       case "invoice.paid": {
         const invoice = event.data.object as Stripe.Invoice;
-        logStep("Invoice paid", { invoiceId: invoice.id, customerId: invoice.customer });
+        logStep("Invoice paid", { invoiceId: invoice.id });
 
-        // Subscription renewed successfully
         if (invoice.subscription) {
           const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
           const productId = subscription.items.data[0]?.price?.product as string;
@@ -134,7 +145,7 @@ serve(async (req) => {
                   })
                   .eq("id", user.id);
                 
-                logStep("Subscription renewed", { userId: user.id, tier });
+                logStep("Subscription renewed", { tier });
               }
             }
           }
@@ -144,7 +155,7 @@ serve(async (req) => {
 
       case "customer.subscription.updated": {
         const subscription = event.data.object as Stripe.Subscription;
-        logStep("Subscription updated", { subscriptionId: subscription.id, status: subscription.status });
+        logStep("Subscription updated", { status: subscription.status });
 
         const productId = subscription.items.data[0]?.price?.product as string;
         const tier = subscription.status === "active" ? getTierFromProductId(productId) : "free";
@@ -165,7 +176,7 @@ serve(async (req) => {
                 })
                 .eq("id", user.id);
               
-              logStep("Profile tier updated", { userId: user.id, tier, status: subscription.status });
+              logStep("Profile tier updated", { tier, status: subscription.status });
             }
           }
         }
@@ -174,9 +185,8 @@ serve(async (req) => {
 
       case "customer.subscription.deleted": {
         const subscription = event.data.object as Stripe.Subscription;
-        logStep("Subscription deleted/cancelled", { subscriptionId: subscription.id });
+        logStep("Subscription deleted/cancelled");
 
-        // Downgrade user to free tier
         const customer = await stripe.customers.retrieve(subscription.customer as string);
         if (customer && !customer.deleted && "email" in customer) {
           const customerEmail = customer.email;
@@ -193,7 +203,7 @@ serve(async (req) => {
                 })
                 .eq("id", user.id);
               
-              logStep("User downgraded to free", { userId: user.id });
+              logStep("User downgraded to free");
             }
           }
         }
@@ -210,7 +220,7 @@ serve(async (req) => {
     });
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : String(error);
-    logStep("ERROR in stripe-webhook", { message: errorMessage });
+    logStep("ERROR", { message: errorMessage });
     return new Response(JSON.stringify({ error: errorMessage }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
       status: 500,
