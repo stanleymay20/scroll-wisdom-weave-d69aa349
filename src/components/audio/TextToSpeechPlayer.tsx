@@ -112,6 +112,8 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
 
   const stopRef = useRef(false);
   const activeBlobUrlsRef = useRef<string[]>([]);
+  const prevStopKeyRef = useRef<string | number | undefined>(undefined);
+  const isStoppingRef = useRef(false);
 
   const cleanupBlobUrls = useCallback(() => {
     for (const url of activeBlobUrlsRef.current) {
@@ -143,18 +145,22 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       };
 
       audio.onended = () => resolve();
+
+      // When stop() pauses the element, onended won't fire; resolve to unblock the loop.
+      audio.onpause = () => {
+        if (stopRef.current || isStoppingRef.current) resolve();
+      };
+
       audio.onerror = (e) => reject(e);
       audio.ontimeupdate = () => {
         if (audio.duration) setProgress((audio.currentTime / audio.duration) * 100);
       };
 
       audio.src = url;
+
       // Handle AbortError gracefully when play is interrupted by pause
-      audio.play().then(() => {
-        // Playing started successfully
-      }).catch((err) => {
-        // Ignore AbortError (happens when stop() is called during playback start)
-        if (err.name === "AbortError") {
+      audio.play().catch((err) => {
+        if (err?.name === "AbortError") {
           resolve();
         } else {
           reject(err);
@@ -259,6 +265,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   ]);
 
   const stop = useCallback(() => {
+    isStoppingRef.current = true;
     stopRef.current = true;
 
     if (audioRef.current) {
@@ -274,14 +281,26 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     setProgress(0);
     setError(null);
     onPlayingChange?.(false);
+
+    // allow future playback
+    isStoppingRef.current = false;
   }, [cleanupBlobUrls, onPlayingChange]);
 
   // Stop audio when changing pages (or any parent-controlled stopKey changes)
+  // NOTE: don't stop on initial mount (it would immediately cancel playback when opening the player).
   useEffect(() => {
     if (stopKey === undefined) return;
-    stop();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stopKey]);
+
+    if (prevStopKeyRef.current === undefined) {
+      prevStopKeyRef.current = stopKey;
+      return;
+    }
+
+    if (prevStopKeyRef.current !== stopKey) {
+      prevStopKeyRef.current = stopKey;
+      stop();
+    }
+  }, [stopKey, stop]);
 
   // Cleanup on unmount to avoid “audio continues after navigation”
   useEffect(() => {
