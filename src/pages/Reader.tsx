@@ -78,10 +78,28 @@ export default function Reader() {
   const [showTTS, setShowTTS] = useState(false);
   const [showLevelSelector, setShowLevelSelector] = useState(false);
   const [showReferences, setShowReferences] = useState(false);
+  const [isTtsPlaying, setIsTtsPlaying] = useState(false);
   const [book, setBook] = useState<BookData | null>(null);
   const [chapter, setChapter] = useState<ChapterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
-  
+
+  const closeTopPanels = useCallback(() => {
+    setShowSettings(false);
+    setShowTTS(false);
+    setShowLevelSelector(false);
+    setShowReferences(false);
+  }, []);
+
+  const openExclusive = useCallback(
+    (panel: "settings" | "tts" | "level" | "refs") => {
+      setShowSettings(panel === "settings");
+      setShowTTS(panel === "tts");
+      setShowLevelSelector(panel === "level");
+      setShowReferences(panel === "refs");
+    },
+    []
+  );
+
   // Cognitive level and reading progress
   const [cognitiveLevel, setCognitiveLevel] = useState("functional");
   const [readingProgress, setReadingProgress] = useState(0);
@@ -90,6 +108,7 @@ export default function Reader() {
   const [showQuiz, setShowQuiz] = useState(false);
   const [showVoiceConversation, setShowVoiceConversation] = useState(false);
   const [highlightedText, setHighlightedText] = useState("");
+
   const currentChapter = parseInt(chapterId || "1");
 
   useEffect(() => {
@@ -293,7 +312,16 @@ export default function Reader() {
             <Button 
               variant="ghost" 
               size="icon"
-              onClick={() => setShowLevelSelector(!showLevelSelector)}
+              onClick={() => {
+                if (showLevelSelector) {
+                  setShowLevelSelector(false);
+                  return;
+                }
+                openExclusive('level');
+                setShowQA(false);
+                setShowQuiz(false);
+                setShowVoiceConversation(false);
+              }}
               className={showLevelSelector ? "text-primary" : ""}
             >
               <Brain className="h-5 w-5" />
@@ -301,7 +329,16 @@ export default function Reader() {
             <Button 
               variant="ghost" 
               size="icon"
-              onClick={() => setShowTTS(!showTTS)}
+              onClick={() => {
+                if (showTTS && !isTtsPlaying) {
+                  setShowTTS(false);
+                  return;
+                }
+                openExclusive('tts');
+                setShowQA(false);
+                setShowQuiz(false);
+                setShowVoiceConversation(false);
+              }}
               className={showTTS ? "text-primary" : ""}
             >
               <Volume2 className="h-5 w-5" />
@@ -309,7 +346,16 @@ export default function Reader() {
             <Button 
               variant="ghost" 
               size="icon"
-              onClick={() => setShowReferences(!showReferences)}
+              onClick={() => {
+                if (showReferences) {
+                  setShowReferences(false);
+                  return;
+                }
+                openExclusive('refs');
+                setShowQA(false);
+                setShowQuiz(false);
+                setShowVoiceConversation(false);
+              }}
               className={showReferences ? "text-primary" : ""}
               title="Citations & References"
             >
@@ -321,7 +367,16 @@ export default function Reader() {
             <Button 
               variant="ghost" 
               size="icon"
-              onClick={() => setShowSettings(!showSettings)}
+              onClick={() => {
+                if (showSettings) {
+                  setShowSettings(false);
+                  return;
+                }
+                openExclusive('settings');
+                setShowQA(false);
+                setShowQuiz(false);
+                setShowVoiceConversation(false);
+              }}
             >
               <Settings className="h-5 w-5" />
             </Button>
@@ -450,7 +505,16 @@ export default function Reader() {
           animate={{ opacity: 1, y: 0 }}
           className="fixed top-32 left-1/2 -translate-x-1/2 z-40"
         >
-          <TextToSpeechPlayer text={chapter.content} language={book?.language || "en"} />
+          <TextToSpeechPlayer
+            text={chapter.content}
+            language={book?.language || "en"}
+            stopKey={`${bookId}-${currentChapter}`}
+            onPlayingChange={(playing) => {
+              setIsTtsPlaying(playing);
+              // Keep controls visible while playing; allow manual close when not playing.
+              if (playing) setShowTTS(true);
+            }}
+          />
         </motion.div>
       )}
 
@@ -508,6 +572,9 @@ export default function Reader() {
             
             <TextHighlighter onAskAboutSelection={(text) => {
               setHighlightedText(text);
+              closeTopPanels();
+              setShowQuiz(false);
+              setShowVoiceConversation(false);
               setShowQA(true);
             }}>
               <div 
@@ -533,16 +600,31 @@ export default function Reader() {
       )}
 
       {/* Interactive Q&A Button + Quiz Button + Voice Button */}
-      {chapter?.content && !showQA && !showVoiceConversation && (
-        <div className="fixed bottom-20 right-4 z-40 flex flex-col gap-2">
-          <VoiceConversationButton 
-            onClick={() => setShowVoiceConversation(true)} 
-            cognitiveLevel={cognitiveLevel}
-          />
-          <QuizModeButton onClick={() => setShowQuiz(true)} />
-          <InteractiveQAButton onClick={() => setShowQA(true)} />
-        </div>
-      )}
+       {chapter?.content && !showQA && !showVoiceConversation && (
+         <div className="fixed bottom-20 right-4 z-40 flex flex-col gap-2">
+           <VoiceConversationButton 
+             onClick={() => {
+               closeTopPanels();
+               setShowQA(false);
+               setShowQuiz(false);
+               setShowVoiceConversation(true);
+             }} 
+             cognitiveLevel={cognitiveLevel}
+           />
+           <QuizModeButton onClick={() => {
+             closeTopPanels();
+             setShowQA(false);
+             setShowVoiceConversation(false);
+             setShowQuiz(true);
+           }} />
+           <InteractiveQAButton onClick={() => {
+             closeTopPanels();
+             setShowQuiz(false);
+             setShowVoiceConversation(false);
+             setShowQA(true);
+           }} />
+         </div>
+       )}
 
       {/* Quiz Mode */}
       {chapter?.content && (
