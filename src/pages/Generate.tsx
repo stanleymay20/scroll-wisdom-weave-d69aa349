@@ -366,43 +366,43 @@ export default function Generate() {
                 <RadioGroup
                   value={bookType}
                   onValueChange={(v) => setBookType(v as "text" | "illustrated" | "comic")}
-                  className="grid grid-cols-3 gap-3"
+                  className="grid grid-cols-1 sm:grid-cols-3 gap-3"
                   disabled={isGenerating}
                 >
                   <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors cursor-pointer" onClick={() => setBookType("text")}>
                     <RadioGroupItem value="text" id="type-text" />
                     <Label htmlFor="type-text" className="flex items-center gap-2 cursor-pointer flex-1">
-                      <BookOpen className="h-4 w-4 text-scroll-gold" />
-                      <div>
+                      <BookOpen className="h-4 w-4 text-scroll-gold flex-shrink-0" />
+                      <div className="min-w-0">
                         <p className="text-sm font-medium">Text Only</p>
-                        <p className="text-xs text-muted-foreground">Academic/scholarly</p>
+                        <p className="text-xs text-muted-foreground truncate">Academic/scholarly</p>
                       </div>
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors cursor-pointer" onClick={() => setBookType("illustrated")}>
                     <RadioGroupItem value="illustrated" id="type-illustrated" />
                     <Label htmlFor="type-illustrated" className="flex items-center gap-2 cursor-pointer flex-1">
-                      <BookImage className="h-4 w-4 text-scroll-gold" />
-                      <div>
+                      <BookImage className="h-4 w-4 text-scroll-gold flex-shrink-0" />
+                      <div className="min-w-0">
                         <p className="text-sm font-medium">Illustrated</p>
-                        <p className="text-xs text-muted-foreground">Text + images</p>
+                        <p className="text-xs text-muted-foreground truncate">Text + images</p>
                       </div>
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors cursor-pointer" onClick={() => setBookType("comic")}>
                     <RadioGroupItem value="comic" id="type-comic" />
                     <Label htmlFor="type-comic" className="flex items-center gap-2 cursor-pointer flex-1">
-                      <ImageIcon className="h-4 w-4 text-scroll-gold" />
-                      <div>
+                      <ImageIcon className="h-4 w-4 text-scroll-gold flex-shrink-0" />
+                      <div className="min-w-0">
                         <p className="text-sm font-medium">Comic/Children</p>
-                        <p className="text-xs text-muted-foreground">Image-first</p>
+                        <p className="text-xs text-muted-foreground truncate">Image-first</p>
                       </div>
                     </Label>
                   </div>
                 </RadioGroup>
                 {bookType === "comic" && (
                   <p className="text-xs text-scroll-gold">
-                    Comic mode uses minimal text with AI-generated illustrations per page.
+                    Comic mode generates visual panels with minimal text and AI illustrations.
                   </p>
                 )}
               </div>

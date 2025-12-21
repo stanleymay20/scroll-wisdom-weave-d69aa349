@@ -137,32 +137,85 @@ export default function Reader() {
       );
     }
 
+    // Check if this is comic content (contains base64 images or panel markers)
+    const isComicContent = chapter.content.includes('![Panel') || chapter.content.includes('## Page');
+
     return chapter.content.split('\n\n').map((paragraph, index) => {
+      // Handle comic page headers
+      if (paragraph.startsWith('## Page')) {
+        return (
+          <h4 key={index} className="text-xl sm:text-2xl font-display font-bold text-scroll-gold mt-8 sm:mt-12 mb-4 sm:mb-6 text-center">
+            {paragraph.replace('## ', '')}
+          </h4>
+        );
+      }
+      // Handle comic images (base64 or URL)
+      if (paragraph.startsWith('![')) {
+        const imgMatch = paragraph.match(/!\[([^\]]*)\]\(([^)]+)\)/);
+        if (imgMatch) {
+          return (
+            <div key={index} className="my-4 sm:my-6 flex justify-center">
+              <img 
+                src={imgMatch[2]} 
+                alt={imgMatch[1]} 
+                className="w-full max-w-md sm:max-w-lg lg:max-w-xl rounded-xl shadow-lg border border-border/50"
+              />
+            </div>
+          );
+        }
+      }
+      // Handle comic captions (blockquotes)
+      if (paragraph.startsWith('>')) {
+        return (
+          <blockquote key={index} className="text-center text-lg sm:text-xl italic text-foreground/90 my-4 sm:my-6 px-4 sm:px-8 py-3 bg-muted/30 rounded-lg border-l-4 border-scroll-gold">
+            {paragraph.replace(/^>\s*/, '')}
+          </blockquote>
+        );
+      }
+      // Handle section dividers
+      if (paragraph === '---') {
+        return <hr key={index} className="my-6 sm:my-8 border-border/50" />;
+      }
       if (paragraph.startsWith('## ')) {
         return (
-          <h4 key={index} className="text-2xl font-display font-bold text-scroll-gold mt-12 mb-6">
+          <h4 key={index} className="text-xl sm:text-2xl font-display font-bold text-scroll-gold mt-8 sm:mt-12 mb-4 sm:mb-6">
             {paragraph.replace('## ', '')}
           </h4>
         );
       }
       if (paragraph.startsWith('### ')) {
         return (
-          <h5 key={index} className="text-xl font-display font-semibold text-foreground/90 mt-8 mb-4">
+          <h5 key={index} className="text-lg sm:text-xl font-display font-semibold text-foreground/90 mt-6 sm:mt-8 mb-3 sm:mb-4">
             {paragraph.replace('### ', '')}
           </h5>
         );
       }
       if (paragraph.startsWith('- ')) {
         return (
-          <ul key={index} className="list-disc list-inside mb-4 space-y-2">
+          <ul key={index} className="list-disc list-inside mb-4 space-y-2 text-sm sm:text-base">
             {paragraph.split('\n').map((item, i) => (
               <li key={i} className="text-foreground/80">{item.replace('- ', '')}</li>
             ))}
           </ul>
         );
       }
+      // Handle italic text in comic content
+      if (paragraph.startsWith('*[Illustration:')) {
+        return (
+          <div key={index} className="text-center text-muted-foreground italic my-4 p-4 bg-muted/20 rounded-lg text-sm">
+            {paragraph.replace(/^\*|\*$/g, '')}
+          </div>
+        );
+      }
+      if (paragraph.startsWith('*') && paragraph.endsWith('*')) {
+        return (
+          <p key={index} className="text-center text-muted-foreground italic my-4 text-sm sm:text-base">
+            {paragraph.replace(/^\*|\*$/g, '')}
+          </p>
+        );
+      }
       return (
-        <p key={index} className="mb-6 leading-relaxed">
+        <p key={index} className="mb-4 sm:mb-6 leading-relaxed text-sm sm:text-base">
           {paragraph}
         </p>
       );

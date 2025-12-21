@@ -116,20 +116,26 @@ export function Navbar() {
       <AnimatePresence>
         {isMenuOpen && (
           <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} className="md:hidden border-t border-border bg-background">
-            <div className="container mx-auto px-4 py-4 space-y-4">
-              <Link to="/explore" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('nav.explore')}</Link>
-              <Link to="/library" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('nav.library')}</Link>
-              <Link to="/generate" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('nav.generate')}</Link>
-              <Link to="/about" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('footer.about')}</Link>
-              <Link to="/help" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('footer.help')}</Link>
+            <div className="container mx-auto px-4 py-4 space-y-3">
+              <Link to="/explore" className="block py-2.5 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>{t('nav.explore')}</Link>
+              <Link to="/library" className="block py-2.5 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>{t('nav.library')}</Link>
+              <Link to="/generate" className="block py-2.5 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>{t('nav.generate')}</Link>
+              <Link to="/about" className="block py-2.5 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>{t('footer.about')}</Link>
+              <Link to="/help" className="block py-2.5 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>{t('footer.help')}</Link>
               {user ? (
                 <>
-                  <Link to="/profile" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('nav.profile')}</Link>
-                  <Link to="/settings" className="block py-2 text-foreground font-medium" onClick={() => setIsMenuOpen(false)}>{t('nav.settings')}</Link>
-                  <Button variant="outline" className="w-full" onClick={() => { setIsMenuOpen(false); handleSignOut(); }}>{t('nav.signout')}</Button>
+                  <Link to="/profile" className="block py-2.5 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>{t('nav.profile')}</Link>
+                  <Link to="/settings" className="block py-2.5 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>{t('nav.settings')}</Link>
+                  {isAdmin && (
+                    <Link to="/admin" className="flex items-center gap-2 py-2.5 px-3 text-scroll-gold font-medium rounded-lg hover:bg-scroll-gold/10 transition-colors" onClick={() => setIsMenuOpen(false)}>
+                      <Shield className="h-4 w-4" />
+                      Admin Panel
+                    </Link>
+                  )}
+                  <Button variant="outline" className="w-full mt-2" onClick={() => { setIsMenuOpen(false); handleSignOut(); }}>{t('nav.signout')}</Button>
                 </>
               ) : (
-                <Button variant="gold" className="w-full" onClick={() => { setIsMenuOpen(false); navigate('/auth'); }}>{t('nav.signin')}</Button>
+                <Button variant="gold" className="w-full mt-2" onClick={() => { setIsMenuOpen(false); navigate('/auth'); }}>{t('nav.signin')}</Button>
               )}
             </div>
           </motion.div>
