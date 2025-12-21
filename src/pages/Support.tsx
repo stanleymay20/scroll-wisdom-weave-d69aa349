@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { useLanguage } from "@/contexts/LanguageContext";
 
 // Validation schema for support form
 const supportSchema = z.object({
@@ -37,6 +38,7 @@ const supportSchema = z.object({
 });
 
 export default function Support() {
+  const { t } = useLanguage();
   const [contactForm, setContactForm] = useState({
     name: "",
     email: "",
@@ -63,8 +65,8 @@ export default function Support() {
       });
       setErrors(fieldErrors);
       toast({
-        title: "Validation Error",
-        description: result.error.errors[0]?.message || "Please check your input",
+        title: t('support.validationError'),
+        description: result.error.errors[0]?.message || t('support.checkInput'),
         variant: "destructive",
       });
       return;
@@ -89,13 +91,13 @@ export default function Support() {
 
       setIsSubmitted(true);
       toast({
-        title: "Message sent!",
-        description: "We'll get back to you within 24-48 hours.",
+        title: t('support.messageSent'),
+        description: t('support.responseTime'),
       });
     } catch (error) {
       toast({
-        title: "Error",
-        description: "Failed to send message. Please try again.",
+        title: t('common.error'),
+        description: t('support.failedToSend'),
         variant: "destructive",
       });
     } finally {
@@ -121,10 +123,10 @@ export default function Support() {
           >
             <div className="text-center mb-12">
               <h1 className="text-4xl font-display font-bold text-gradient-gold mb-4">
-                Support Center
+                {t('support.title')}
               </h1>
               <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-                Need help? We're here to assist you with any questions about ScrollLibrary.
+                {t('support.subtitle')}
               </p>
             </div>
 
@@ -132,11 +134,11 @@ export default function Support() {
               <TabsList className="bg-muted/50 w-full justify-start">
                 <TabsTrigger value="contact">
                   <MessageSquare className="h-4 w-4 mr-2" />
-                  Contact Us
+                  {t('support.contactUs')}
                 </TabsTrigger>
                 <TabsTrigger value="issue">
                   <FileQuestion className="h-4 w-4 mr-2" />
-                  Report Issue
+                  {t('support.reportIssue')}
                 </TabsTrigger>
               </TabsList>
 
@@ -144,30 +146,30 @@ export default function Support() {
                 <div className="grid gap-6 md:grid-cols-3">
                   <Card className="bg-gradient-card border-border/50 md:col-span-2">
                     <CardHeader>
-                      <CardTitle>Send us a message</CardTitle>
-                      <CardDescription>Fill out the form and we'll respond shortly</CardDescription>
+                      <CardTitle>{t('support.sendMessage')}</CardTitle>
+                      <CardDescription>{t('support.sendMessageDesc')}</CardDescription>
                     </CardHeader>
                     <CardContent>
                       {isSubmitted ? (
                         <div className="text-center py-12">
                           <CheckCircle className="h-16 w-16 mx-auto mb-4 text-green-500" />
-                          <h3 className="text-xl font-semibold mb-2">Thank you!</h3>
+                          <h3 className="text-xl font-semibold mb-2">{t('support.thankYou')}</h3>
                           <p className="text-muted-foreground">
-                            Your message has been sent. We'll get back to you soon.
+                            {t('support.messageSentDesc')}
                           </p>
                           <Button 
                             className="mt-4" 
                             variant="outline"
                             onClick={resetForm}
                           >
-                            Send Another Message
+                            {t('support.sendAnother')}
                           </Button>
                         </div>
                       ) : (
                         <form onSubmit={handleSubmit} className="space-y-4">
                           <div className="grid gap-4 md:grid-cols-2">
                             <div className="space-y-2">
-                              <Label htmlFor="name">Name</Label>
+                              <Label htmlFor="name">{t('support.name')}</Label>
                               <Input
                                 id="name"
                                 value={contactForm.name}
@@ -178,7 +180,7 @@ export default function Support() {
                               {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                             </div>
                             <div className="space-y-2">
-                              <Label htmlFor="email">Email</Label>
+                              <Label htmlFor="email">{t('support.email')}</Label>
                               <Input
                                 id="email"
                                 type="email"
@@ -191,7 +193,7 @@ export default function Support() {
                             </div>
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="subject">Subject</Label>
+                            <Label htmlFor="subject">{t('support.subject')}</Label>
                             <Input
                               id="subject"
                               value={contactForm.subject}
@@ -202,7 +204,7 @@ export default function Support() {
                             {errors.subject && <p className="text-xs text-destructive">{errors.subject}</p>}
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="message">Message</Label>
+                            <Label htmlFor="message">{t('support.message')}</Label>
                             <Textarea
                               id="message"
                               value={contactForm.message}
@@ -219,12 +221,12 @@ export default function Support() {
                             {isSubmitting ? (
                               <>
                                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                                Sending...
+                                {t('support.sending')}
                               </>
                             ) : (
                               <>
                                 <Send className="h-4 w-4 mr-2" />
-                                Send Message
+                                {t('support.sendMessageBtn')}
                               </>
                             )}
                           </Button>
@@ -236,13 +238,13 @@ export default function Support() {
                   <div className="space-y-6">
                     <Card className="bg-gradient-card border-border/50">
                       <CardHeader>
-                        <CardTitle className="text-lg">Quick Contact</CardTitle>
+                        <CardTitle className="text-lg">{t('support.quickContact')}</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-4">
                         <div className="flex items-center gap-3">
                           <Mail className="h-5 w-5 text-primary" />
                           <div>
-                            <p className="text-sm text-muted-foreground">Email</p>
+                            <p className="text-sm text-muted-foreground">{t('support.email')}</p>
                             <a href="mailto:support@scrolllibrary.com" className="text-foreground hover:text-primary">
                               support@scrolllibrary.com
                             </a>
@@ -253,11 +255,11 @@ export default function Support() {
 
                     <Card className="bg-gradient-card border-border/50">
                       <CardHeader>
-                        <CardTitle className="text-lg">Response Time</CardTitle>
+                        <CardTitle className="text-lg">{t('support.responseTimeTitle')}</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <p className="text-muted-foreground text-sm">
-                          We typically respond within <span className="text-foreground font-medium">24-48 hours</span> during business days.
+                          {t('support.responseTimeDesc')}
                         </p>
                       </CardContent>
                     </Card>
@@ -268,30 +270,30 @@ export default function Support() {
               <TabsContent value="issue">
                 <Card className="bg-gradient-card border-border/50">
                   <CardHeader>
-                    <CardTitle>Report an Issue</CardTitle>
-                    <CardDescription>Help us improve by reporting bugs or problems</CardDescription>
+                    <CardTitle>{t('support.reportIssue')}</CardTitle>
+                    <CardDescription>{t('support.reportIssueDesc')}</CardDescription>
                   </CardHeader>
                   <CardContent>
                     {isSubmitted ? (
                       <div className="text-center py-12">
                         <CheckCircle className="h-16 w-16 mx-auto mb-4 text-green-500" />
-                        <h3 className="text-xl font-semibold mb-2">Issue Reported!</h3>
+                        <h3 className="text-xl font-semibold mb-2">{t('support.issueReported')}</h3>
                         <p className="text-muted-foreground">
-                          Thank you for your feedback. Our team will investigate.
+                          {t('support.issueReportedDesc')}
                         </p>
                         <Button 
                           className="mt-4" 
                           variant="outline"
                           onClick={resetForm}
                         >
-                          Report Another Issue
+                          {t('support.reportAnother')}
                         </Button>
                       </div>
                     ) : (
                       <form onSubmit={handleSubmit} className="space-y-4">
                         <div className="grid gap-4 md:grid-cols-2">
                           <div className="space-y-2">
-                            <Label htmlFor="issue-name">Name</Label>
+                            <Label htmlFor="issue-name">{t('support.name')}</Label>
                             <Input
                               id="issue-name"
                               value={contactForm.name}
@@ -302,7 +304,7 @@ export default function Support() {
                             {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
                           </div>
                           <div className="space-y-2">
-                            <Label htmlFor="issue-email">Email</Label>
+                            <Label htmlFor="issue-email">{t('support.email')}</Label>
                             <Input
                               id="issue-email"
                               type="email"
@@ -315,10 +317,10 @@ export default function Support() {
                           </div>
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="issue-subject">Issue Type</Label>
+                          <Label htmlFor="issue-subject">{t('support.issueType')}</Label>
                           <Input
                             id="issue-subject"
-                            placeholder="e.g., Book generation failed, Export not working..."
+                            placeholder={t('support.issueTypePlaceholder')}
                             value={contactForm.subject}
                             onChange={(e) => setContactForm(f => ({ ...f, subject: e.target.value }))}
                             className={`bg-muted/50 border-border/50 ${errors.subject ? 'border-destructive' : ''}`}
@@ -327,10 +329,10 @@ export default function Support() {
                           {errors.subject && <p className="text-xs text-destructive">{errors.subject}</p>}
                         </div>
                         <div className="space-y-2">
-                          <Label htmlFor="issue-message">Describe the Issue</Label>
+                          <Label htmlFor="issue-message">{t('support.describeIssue')}</Label>
                           <Textarea
                             id="issue-message"
-                            placeholder="Please describe what happened, what you expected, and any error messages you saw..."
+                            placeholder={t('support.describeIssuePlaceholder')}
                             value={contactForm.message}
                             onChange={(e) => setContactForm(f => ({ ...f, message: e.target.value }))}
                             className={`bg-muted/50 border-border/50 min-h-[150px] ${errors.message ? 'border-destructive' : ''}`}
@@ -345,12 +347,12 @@ export default function Support() {
                           {isSubmitting ? (
                             <>
                               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              Submitting...
+                              {t('common.submitting')}
                             </>
                           ) : (
                             <>
                               <FileQuestion className="h-4 w-4 mr-2" />
-                              Submit Issue Report
+                              {t('support.submitIssue')}
                             </>
                           )}
                         </Button>
