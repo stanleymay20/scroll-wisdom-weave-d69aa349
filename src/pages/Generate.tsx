@@ -27,28 +27,31 @@ import { getWordCountOptions, SUBSCRIPTION_TIERS } from "@/lib/subscription";
 import { LAUNCH_MODE, LAUNCH_MODE_CONFIG } from "@/lib/config";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { LaunchBanner } from "@/components/subscription/LaunchBanner";
+import { useLanguage } from "@/contexts/LanguageContext";
+
 const CATEGORIES = [
-  { value: "theology", label: "Theology" },
-  { value: "prophecy", label: "Prophecy & Scroll Studies" },
-  { value: "science", label: "Science" },
-  { value: "technology", label: "Technology" },
-  { value: "business", label: "Business" },
-  { value: "finance", label: "Finance" },
-  { value: "economics", label: "Economics" },
-  { value: "medicine", label: "Medicine" },
-  { value: "law", label: "Law" },
-  { value: "governance", label: "Governance" },
-  { value: "history", label: "History" },
-  { value: "african_studies", label: "African Studies" },
-  { value: "culture", label: "Culture" },
-  { value: "philosophy", label: "Philosophy" },
-  { value: "arts", label: "Arts" },
-  { value: "fiction", label: "Fiction" },
-  { value: "non_fiction", label: "Non-Fiction" },
-  { value: "poetry", label: "Poetry" },
+  { value: "theology", labelKey: "categories.theology" },
+  { value: "prophecy", labelKey: "categories.prophecy" },
+  { value: "science", labelKey: "categories.science" },
+  { value: "technology", labelKey: "categories.technology" },
+  { value: "business", labelKey: "categories.business" },
+  { value: "finance", labelKey: "categories.finance" },
+  { value: "economics", labelKey: "categories.economics" },
+  { value: "medicine", labelKey: "categories.medicine" },
+  { value: "law", labelKey: "categories.law" },
+  { value: "governance", labelKey: "categories.governance" },
+  { value: "history", labelKey: "categories.history" },
+  { value: "african_studies", labelKey: "categories.african_studies" },
+  { value: "culture", labelKey: "categories.culture" },
+  { value: "philosophy", labelKey: "categories.philosophy" },
+  { value: "arts", labelKey: "categories.arts" },
+  { value: "fiction", labelKey: "categories.fiction" },
+  { value: "non_fiction", labelKey: "categories.non_fiction" },
+  { value: "poetry", labelKey: "categories.poetry" },
 ];
 
 export default function Generate() {
+  const { t } = useLanguage();
   const navigate = useNavigate();
   const { 
     user, 
@@ -109,8 +112,8 @@ export default function Generate() {
   const handleGenerate = async () => {
     if (!title || !category) {
       toast({
-        title: "Missing Information",
-        description: "Please provide a title and select a category.",
+        title: t('generate.missingInfo'),
+        description: t('generate.provideTitleCategory'),
         variant: "destructive",
       });
       return;
@@ -118,8 +121,8 @@ export default function Generate() {
 
     if (!user) {
       toast({
-        title: "Sign in required",
-        description: "Please sign in to generate books.",
+        title: t('generate.signInRequired'),
+        description: t('generate.signInToGenerate'),
       });
       navigate("/auth");
       return;
@@ -128,8 +131,8 @@ export default function Generate() {
     // Admin and Prophet ALWAYS can generate - no upgrade prompts
     if (!entitlements.canGenerateBooks && !entitlements.isAdmin && !entitlements.isProphet) {
       toast({
-        title: "Subscription Required",
-        description: "Please upgrade to generate books.",
+        title: t('generate.subscriptionRequired'),
+        description: t('generate.upgradeToGenerate'),
         variant: "destructive",
       });
       navigate("/pricing");
@@ -139,8 +142,8 @@ export default function Generate() {
     // Check daily limit for free tier in launch mode (admin/prophet/paid bypass)
     if (!entitlements.isPaid && LAUNCH_MODE && tier === 'free' && !dailyLimitInfo.canGenerateToday) {
       toast({
-        title: "Daily Limit Reached",
-        description: `You've reached today's free generation limit (${LAUNCH_MODE_CONFIG.freeBookLimit} book/day). Upgrade to continue.`,
+        title: t('generate.dailyLimitReached'),
+        description: `${t('generate.dailyLimitDesc')} (${LAUNCH_MODE_CONFIG.freeBookLimit} book/day)`,
         variant: "destructive",
       });
       navigate("/pricing");
@@ -151,7 +154,7 @@ export default function Generate() {
     setGenerationProgress([]);
 
     try {
-      setGenerationProgress((prev) => [...prev, "Initializing ScrollAuthorGPT..."]);
+      setGenerationProgress((prev) => [...prev, t('generate.initializingAI')]);
       
       const { data, error } = await supabase.functions.invoke("generate-book", {
         body: {
@@ -174,9 +177,9 @@ export default function Generate() {
 
       setGenerationProgress((prev) => [
         ...prev,
-        "Book outline created",
-        "Chapter structure defined",
-        "Book saved to your library!",
+        t('generate.outlineCreated'),
+        t('generate.chaptersDefined'),
+        t('generate.bookSaved'),
       ]);
 
       // Increment daily count for free tier in launch mode (paid users don't count)
@@ -185,8 +188,8 @@ export default function Generate() {
       }
 
       toast({
-        title: "Book Created Successfully!",
-        description: "Your book has been added to your library.",
+        title: t('generate.success'),
+        description: t('generate.successDesc'),
       });
 
       // Navigate to the new book
@@ -199,8 +202,8 @@ export default function Generate() {
     } catch (error: any) {
       console.error("Generation error:", error);
       toast({
-        title: "Generation Failed",
-        description: error.message || "There was an error generating your book. Please try again.",
+        title: t('generate.failed'),
+        description: error.message || t('generate.failedDesc'),
         variant: "destructive",
       });
     } finally {
@@ -225,19 +228,18 @@ export default function Generate() {
                 <Lock className="h-12 w-12 text-scroll-gold" />
               </div>
               <h1 className="font-display text-3xl font-bold mb-4">
-                Upgrade to Generate Books
+                {t('generate.upgradeTitle')}
               </h1>
               <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-                Book generation is available for paid subscribers. 
-                Unlock unlimited AI-powered book creation today.
+                {t('generate.upgradeDesc')}
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
                 <Button variant="hero" onClick={() => navigate("/pricing")}>
                   <Crown className="h-4 w-4 mr-2" />
-                  View Plans
+                  {t('generate.viewPlans')}
                 </Button>
                 <Button variant="outline" onClick={() => navigate("/explore")}>
-                  Browse Library
+                  {t('generate.browseLibrary')}
                 </Button>
               </div>
             </motion.div>
@@ -265,14 +267,14 @@ export default function Generate() {
                 <Rocket className="h-5 w-5 text-primary" />
                 <div className="flex-1">
                   <p className="text-sm font-medium">
-                    Free Trial: {LAUNCH_MODE_CONFIG.freeBookLimit - dailyLimitInfo.dailyBookCount} book(s) remaining today
+                    {t('generate.freeTrial')}: {LAUNCH_MODE_CONFIG.freeBookLimit - dailyLimitInfo.dailyBookCount} {t('generate.booksRemaining')}
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    Max {LAUNCH_MODE_CONFIG.freeMaxWordCount.toLocaleString()} words/chapter • Low-quality PDF only
+                    {t('generate.maxWords')} {LAUNCH_MODE_CONFIG.freeMaxWordCount.toLocaleString()} {t('generate.wordsChapter')}
                   </p>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => navigate('/pricing')}>
-                  Upgrade
+                  {t('common.upgrade')}
                 </Button>
               </div>
             </motion.div>
@@ -285,7 +287,7 @@ export default function Generate() {
           >
             <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-scroll-gold/10 border border-scroll-gold/30 text-scroll-gold text-sm font-medium mb-6">
               <Sparkles className="h-4 w-4" />
-              AI Book Generator
+              {t('generate.aiGenerator')}
               {tier !== "free" && (
                 <span className="ml-2 text-xs bg-scroll-gold/20 px-2 py-0.5 rounded-full">
                   {SUBSCRIPTION_TIERS[tier].name}
@@ -293,11 +295,10 @@ export default function Generate() {
               )}
             </div>
             <h1 className="font-display text-4xl md:text-5xl font-bold mb-4">
-              Generate Your <span className="text-gradient-gold">Book</span>
+              {t('generate.title')} <span className="text-gradient-gold">{t('generate.highlight')}</span>
             </h1>
             <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-              Create unlimited books with chapters of 8,000+ words, 
-              scroll-aligned accuracy, and academic rigor.
+              {t('generate.subtitle')}
             </p>
           </motion.div>
 
@@ -312,11 +313,11 @@ export default function Generate() {
               {/* Title */}
               <div className="space-y-2">
                 <Label htmlFor="title" className="text-foreground">
-                  Book Title
+                  {t('generate.bookTitle')}
                 </Label>
                 <Input
                   id="title"
-                  placeholder="Enter your book title..."
+                  placeholder={t('generate.bookTitlePlaceholder')}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
                   className="bg-muted/50 border-border/50 focus:border-scroll-gold"
@@ -327,11 +328,11 @@ export default function Generate() {
               {/* Description */}
               <div className="space-y-2">
                 <Label htmlFor="description" className="text-foreground">
-                  Description (Optional)
+                  {t('generate.description')}
                 </Label>
                 <Textarea
                   id="description"
-                  placeholder="Describe what your book should cover..."
+                  placeholder={t('generate.descriptionPlaceholder')}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
                   className="bg-muted/50 border-border/50 focus:border-scroll-gold min-h-[100px]"
@@ -342,15 +343,15 @@ export default function Generate() {
               {/* Category & Chapters */}
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-foreground">Category</Label>
+                  <Label className="text-foreground">{t('generate.category')}</Label>
                   <Select value={category} onValueChange={setCategory} disabled={isGenerating}>
                     <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
-                      <SelectValue placeholder="Select category" />
+                      <SelectValue placeholder={t('generate.selectCategory')} />
                     </SelectTrigger>
                     <SelectContent>
                       {CATEGORIES.map((cat) => (
                         <SelectItem key={cat.value} value={cat.value}>
-                          {cat.label}
+                          {t(cat.labelKey)}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -358,7 +359,7 @@ export default function Generate() {
                 </div>
 
                 <div className="space-y-2">
-                  <Label className="text-foreground">Number of Chapters</Label>
+                  <Label className="text-foreground">{t('generate.numChapters')}</Label>
                   <Select value={numChapters} onValueChange={setNumChapters} disabled={isGenerating}>
                     <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
                       <SelectValue />
@@ -366,7 +367,7 @@ export default function Generate() {
                     <SelectContent>
                       {[6, 8, 10, 12, 15, 20, 25, 30].map((num) => (
                         <SelectItem key={num} value={num.toString()}>
-                          {num} Chapters
+                          {num} {t('generate.chapters')}
                         </SelectItem>
                       ))}
                     </SelectContent>
@@ -376,7 +377,7 @@ export default function Generate() {
 
               {/* Book Type Selection */}
               <div className="space-y-3">
-                <Label className="text-foreground">Book Type</Label>
+                <Label className="text-foreground">{t('generate.bookType')}</Label>
                 <RadioGroup
                   value={bookType}
                   onValueChange={(v) => setBookType(v as "text" | "illustrated" | "comic")}
@@ -388,8 +389,8 @@ export default function Generate() {
                     <Label htmlFor="type-text" className="flex items-center gap-2 cursor-pointer flex-1">
                       <BookOpen className="h-4 w-4 text-scroll-gold flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium">Text Only</p>
-                        <p className="text-xs text-muted-foreground truncate">Academic/scholarly</p>
+                        <p className="text-sm font-medium">{t('generate.textOnly')}</p>
+                        <p className="text-xs text-muted-foreground truncate">{t('generate.textOnlyDesc')}</p>
                       </div>
                     </Label>
                   </div>
@@ -398,8 +399,8 @@ export default function Generate() {
                     <Label htmlFor="type-illustrated" className="flex items-center gap-2 cursor-pointer flex-1">
                       <BookImage className="h-4 w-4 text-scroll-gold flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium">Illustrated</p>
-                        <p className="text-xs text-muted-foreground truncate">Text + images</p>
+                        <p className="text-sm font-medium">{t('generate.illustrated')}</p>
+                        <p className="text-xs text-muted-foreground truncate">{t('generate.illustratedDesc')}</p>
                       </div>
                     </Label>
                   </div>
@@ -408,15 +409,15 @@ export default function Generate() {
                     <Label htmlFor="type-comic" className="flex items-center gap-2 cursor-pointer flex-1">
                       <ImageIcon className="h-4 w-4 text-scroll-gold flex-shrink-0" />
                       <div className="min-w-0">
-                        <p className="text-sm font-medium">Comic/Children</p>
-                        <p className="text-xs text-muted-foreground truncate">Image-first</p>
+                        <p className="text-sm font-medium">{t('generate.comic')}</p>
+                        <p className="text-xs text-muted-foreground truncate">{t('generate.comicDesc')}</p>
                       </div>
                     </Label>
                   </div>
                 </RadioGroup>
                 {bookType === "comic" && (
                   <p className="text-xs text-scroll-gold">
-                    Comic mode generates visual panels with minimal text and AI illustrations.
+                    {t('generate.comicNote')}
                   </p>
                 )}
               </div>
@@ -425,7 +426,7 @@ export default function Generate() {
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {bookType !== "comic" && (
                   <div className="space-y-2">
-                    <Label className="text-foreground">Words per Chapter</Label>
+                    <Label className="text-foreground">{t('generate.wordsPerChapter')}</Label>
                     <Select value={wordCount} onValueChange={setWordCount} disabled={isGenerating}>
                       <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
                         <SelectValue />
@@ -433,19 +434,19 @@ export default function Generate() {
                       <SelectContent>
                         {wordCountOptions.map((count) => (
                           <SelectItem key={count} value={count.toString()}>
-                            {count.toLocaleString()} words
+                            {count.toLocaleString()} {t('generate.words')}
                           </SelectItem>
                         ))}
                       </SelectContent>
                     </Select>
                     {tier === "prophet_tier" && (
-                      <p className="text-xs text-scroll-gold">Prophet tier: Maximum quality generation</p>
+                      <p className="text-xs text-scroll-gold">{t('generate.prophetTier')}</p>
                     )}
                   </div>
                 )}
 
                 <div className="space-y-2">
-                  <Label className="text-foreground">Language</Label>
+                  <Label className="text-foreground">{t('generate.language')}</Label>
                   <Select value={language} onValueChange={setLanguage} disabled={isGenerating}>
                     <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
                       <SelectValue />
@@ -464,7 +465,7 @@ export default function Generate() {
               {/* Generation Mode Selection */}
               {bookType === "text" && (
                 <div className="space-y-4">
-                  <Label className="text-foreground">Generation Mode</Label>
+                  <Label className="text-foreground">{t('generate.generationMode')}</Label>
                   
                   <RadioGroup
                     value={generationMode}
@@ -490,10 +491,10 @@ export default function Generate() {
                       <Label htmlFor="mode-learning" className="cursor-pointer flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <BookOpen className="h-4 w-4 text-scroll-gold" />
-                          <span className="font-medium">Learning Mode</span>
+                          <span className="font-medium">{t('generate.learningMode')}</span>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Simplified explanations, optional references. For general readers.
+                          {t('generate.learningModeDesc')}
                         </p>
                       </Label>
                     </div>
@@ -513,10 +514,10 @@ export default function Generate() {
                       <Label htmlFor="mode-academic" className="cursor-pointer flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <GraduationCap className="h-4 w-4 text-green-500" />
-                          <span className="font-medium">Academic Research Mode</span>
+                          <span className="font-medium">{t('generate.academicMode')}</span>
                         </div>
                         <p className="text-xs text-muted-foreground">
-                          Mandatory references, verified sources. For professors & researchers.
+                          {t('generate.academicModeDesc')}
                         </p>
                       </Label>
                     </div>
@@ -530,7 +531,7 @@ export default function Generate() {
                       </div>
                       
                       <div className="space-y-2">
-                        <Label className="text-sm">Citation Style</Label>
+                        <Label className="text-sm">{t('generate.citationStyle')}</Label>
                         <Select value={citationStyle} onValueChange={setCitationStyle} disabled={isGenerating}>
                           <SelectTrigger className="bg-background/50">
                             <SelectValue />
@@ -551,7 +552,7 @@ export default function Generate() {
                       <div className="flex items-start gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/20">
                         <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-muted-foreground">
-                          Academic mode requires verified sources. Generation may take longer as we search for real citations.
+                          {t('generate.academicWarning')}
                         </p>
                       </div>
                     </div>
@@ -562,7 +563,7 @@ export default function Generate() {
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
                       <AlertTriangle className="h-4 w-4 text-amber-500" />
                       <p className="text-xs text-amber-400">
-                        <strong>{category.replace(/_/g, " ")}</strong> is an academic category. Academic Research Mode is recommended.
+                        <strong>{category.replace(/_/g, " ")}</strong> {t('generate.academicRecommended')}
                       </p>
                     </div>
                   )}
@@ -571,7 +572,7 @@ export default function Generate() {
 
               {/* Cover Option */}
               <div className="space-y-3">
-                <Label className="text-foreground">Book Cover</Label>
+                <Label className="text-foreground">{t('generate.bookCover')}</Label>
                 <RadioGroup
                   value={coverOption}
                   onValueChange={(v) => setCoverOption(v as "ai" | "upload")}
@@ -582,14 +583,14 @@ export default function Generate() {
                     <RadioGroupItem value="ai" id="ai-cover" />
                     <Label htmlFor="ai-cover" className="flex items-center gap-2 cursor-pointer">
                       <Wand2 className="h-4 w-4 text-scroll-gold" />
-                      AI-Generated
+                      {t('generate.aiGenerated')}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="upload" id="upload-cover" />
                     <Label htmlFor="upload-cover" className="flex items-center gap-2 cursor-pointer">
                       <Upload className="h-4 w-4 text-scroll-gold" />
-                      Upload Custom
+                      {t('generate.uploadCustom')}
                     </Label>
                   </div>
                 </RadioGroup>
@@ -609,12 +610,12 @@ export default function Generate() {
                 {isGenerating ? (
                   <>
                     <Loader2 className="h-5 w-5 mr-2 animate-spin" />
-                    Generating...
+                    {t('generate.generating')}
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-5 w-5 mr-2" />
-                    Generate Book
+                    {t('generate.generateButton')}
                   </>
                 )}
               </Button>
@@ -648,18 +649,18 @@ export default function Generate() {
             {[
               {
                 icon: BookOpen,
-                title: "8,000+ Words/Chapter",
-                description: "Each chapter is rich with depth and substance",
+                titleKey: "generate.feature1Title",
+                descKey: "generate.feature1Desc",
               },
               {
                 icon: Sparkles,
-                title: "Scroll-Aligned",
-                description: "Content aligned with spiritual and prophetic wisdom",
+                titleKey: "generate.feature2Title",
+                descKey: "generate.feature2Desc",
               },
               {
                 icon: CheckCircle,
-                title: "Academic Rigor",
-                description: "Factually grounded with proper citations",
+                titleKey: "generate.feature3Title",
+                descKey: "generate.feature3Desc",
               },
             ].map((feature, index) => (
               <div
@@ -667,8 +668,8 @@ export default function Generate() {
                 className="text-center p-6 rounded-xl bg-muted/20 border border-border/30"
               >
                 <feature.icon className="h-8 w-8 text-scroll-gold mx-auto mb-3" />
-                <h3 className="font-display font-semibold mb-2">{feature.title}</h3>
-                <p className="text-sm text-muted-foreground">{feature.description}</p>
+                <h3 className="font-display font-semibold mb-2">{t(feature.titleKey)}</h3>
+                <p className="text-sm text-muted-foreground">{t(feature.descKey)}</p>
               </div>
             ))}
           </motion.div>
