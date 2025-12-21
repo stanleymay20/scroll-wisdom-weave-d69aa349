@@ -81,14 +81,14 @@ export default function BookDetail() {
   const isOwner = user && book?.creator_id === user.id;
 
   const coverThemes = [
-    { value: "classic", label: "Classic", description: "Dark indigo with gold accents" },
-    { value: "modern", label: "Modern", description: "Bold geometric gradients" },
-    { value: "vintage", label: "Vintage", description: "Aged paper & ornate borders" },
-    { value: "nature", label: "Nature", description: "Earthy tones & organic elements" },
-    { value: "cosmic", label: "Cosmic", description: "Deep space & nebulae" },
-    { value: "minimalist", label: "Minimalist", description: "Ultra-clean simplicity" },
-    { value: "african", label: "African Heritage", description: "Rich patterns & warm tones" },
-    { value: "prophetic", label: "Prophetic", description: "Divine light & sacred aesthetic" },
+    { value: "classic", labelKey: "coverTheme.classic", descKey: "coverTheme.classicDesc" },
+    { value: "modern", labelKey: "coverTheme.modern", descKey: "coverTheme.modernDesc" },
+    { value: "vintage", labelKey: "coverTheme.vintage", descKey: "coverTheme.vintageDesc" },
+    { value: "nature", labelKey: "coverTheme.nature", descKey: "coverTheme.natureDesc" },
+    { value: "cosmic", labelKey: "coverTheme.cosmic", descKey: "coverTheme.cosmicDesc" },
+    { value: "minimalist", labelKey: "coverTheme.minimalist", descKey: "coverTheme.minimalistDesc" },
+    { value: "african", labelKey: "coverTheme.african", descKey: "coverTheme.africanDesc" },
+    { value: "prophetic", labelKey: "coverTheme.prophetic", descKey: "coverTheme.propheticDesc" },
   ];
 
   useEffect(() => {
@@ -109,8 +109,8 @@ export default function BookDetail() {
       if (bookError) {
         console.error("Error fetching book:", bookError);
         toast({
-          title: "Error",
-          description: "Book not found",
+          title: t('common.error'),
+          description: t('book.notFound'),
           variant: "destructive",
         });
         navigate("/explore");
@@ -177,8 +177,8 @@ export default function BookDetail() {
   const handleSaveToLibrary = async () => {
     if (!user) {
       toast({
-        title: "Sign in required",
-        description: "Please sign in to save books to your library",
+        title: t('generate.signInRequired'),
+        description: t('book.signInToSave'),
       });
       navigate("/auth");
       return;
@@ -194,7 +194,7 @@ export default function BookDetail() {
 
       if (!error) {
         setIsSaved(false);
-        toast({ title: "Removed from library" });
+        toast({ title: t('book.removedFromLibrary') });
       }
     } else {
       // Add to library
@@ -209,7 +209,7 @@ export default function BookDetail() {
 
       if (!error) {
         setIsSaved(true);
-        toast({ title: "Added to library" });
+        toast({ title: t('book.addedToLibrary') });
       }
     }
   };
@@ -257,14 +257,14 @@ export default function BookDetail() {
       ));
 
       toast({
-        title: "Chapter generated",
-        description: `${chapter.title} is now ready to read!`,
+        title: t('book.chapterGenerated'),
+        description: `${chapter.title} ${t('book.readyToRead')}`,
       });
     } catch (error) {
       console.error("Error generating chapter:", error);
       toast({
-        title: "Generation failed",
-        description: error instanceof Error ? error.message : "Failed to generate chapter",
+        title: t('book.generationFailed'),
+        description: error instanceof Error ? error.message : t('book.failedToGenerateChapter'),
         variant: "destructive",
       });
     } finally {
@@ -277,7 +277,7 @@ export default function BookDetail() {
     
     const ungeneratedChapters = chapters.filter(ch => !ch.is_generated);
     if (ungeneratedChapters.length === 0) {
-      toast({ title: "All chapters already generated" });
+      toast({ title: t('book.allChaptersAlreadyGenerated') });
       return;
     }
 
@@ -321,8 +321,8 @@ export default function BookDetail() {
       } catch (error) {
         console.error(`Error generating chapter ${chapter.chapter_number}:`, error);
         toast({
-          title: `Failed to generate Chapter ${chapter.chapter_number}`,
-          description: error instanceof Error ? error.message : "Unknown error",
+          title: `${t('book.failedToGenerateChapter')} ${chapter.chapter_number}`,
+          description: error instanceof Error ? error.message : t('common.unknownError'),
           variant: "destructive",
         });
         // Continue with next chapter instead of stopping
@@ -334,8 +334,8 @@ export default function BookDetail() {
     setGenerationProgress({ current: 0, total: 0 });
     
     toast({
-      title: "Book generation complete",
-      description: "All chapters have been generated!",
+      title: t('book.generationComplete'),
+      description: t('book.allChaptersGenerated'),
     });
   };
 
@@ -367,14 +367,14 @@ export default function BookDetail() {
       setBook(prev => prev ? { ...prev, cover_image_url: response.data.coverUrl } : null);
 
       toast({
-        title: "Cover generated!",
-        description: `Your book now has a ${response.data.theme || coverTheme} style cover.`,
+        title: t('book.coverGenerated'),
+        description: t('book.coverStyleApplied'),
       });
     } catch (error) {
       console.error("Error generating cover:", error);
       toast({
-        title: "Cover generation failed",
-        description: error instanceof Error ? error.message : "Failed to generate cover",
+        title: t('book.coverGenerationFailed'),
+        description: error instanceof Error ? error.message : t('book.failedToGenerateCover'),
         variant: "destructive",
       });
     } finally {
@@ -398,16 +398,16 @@ export default function BookDetail() {
       setBook(prev => prev ? { ...prev, is_published: newPublishState } : null);
       
       toast({
-        title: newPublishState ? "Book published!" : "Book unpublished",
+        title: newPublishState ? t('book.published') : t('book.unpublished'),
         description: newPublishState 
-          ? "Your book is now visible in the public library." 
-          : "Your book is now private and only visible to you.",
+          ? t('book.publishedDesc') 
+          : t('book.unpublishedDesc'),
       });
     } catch (error) {
       console.error("Error updating publish status:", error);
       toast({
-        title: "Failed to update",
-        description: "Could not change publish status. Please try again.",
+        title: t('book.failedToUpdate'),
+        description: t('book.couldNotChangePublishStatus'),
         variant: "destructive",
       });
     } finally {
@@ -430,16 +430,16 @@ export default function BookDetail() {
       console.error("Error updating book type:", error);
       setBook(prev => (prev ? { ...prev, book_type: prevType } : prev));
       toast({
-        title: "Failed to update book type",
-        description: "Please try again.",
+        title: t('book.failedToUpdateBookType'),
+        description: t('common.tryAgain'),
         variant: "destructive",
       });
       return;
     }
 
     toast({
-      title: "Book type updated",
-      description: "Regenerate a chapter to apply the new style.",
+      title: t('book.bookTypeUpdated'),
+      description: t('book.regenerateToApply'),
     });
   };
 
@@ -502,8 +502,8 @@ export default function BookDetail() {
                           {coverThemes.map((theme) => (
                             <SelectItem key={theme.value} value={theme.value}>
                               <div className="flex flex-col">
-                                <span>{theme.label}</span>
-                                <span className="text-xs text-muted-foreground">{theme.description}</span>
+                                <span>{t(theme.labelKey)}</span>
+                                <span className="text-xs text-muted-foreground">{t(theme.descKey)}</span>
                               </div>
                             </SelectItem>
                           ))}
