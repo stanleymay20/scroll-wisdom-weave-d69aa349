@@ -21,7 +21,7 @@ import {
   Mic
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
-import { TextToSpeechPlayer } from "@/components/audio/TextToSpeechPlayer";
+import { TTSMiniPlayer } from "@/components/audio/TTSMiniPlayer";
 import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
 import { CognitiveLevelSelector, COGNITIVE_LEVELS } from "@/components/reader/CognitiveLevelSelector";
@@ -75,10 +75,10 @@ export default function Reader() {
   const [fontSize, setFontSize] = useState(18);
   const [readingTheme, setReadingTheme] = useState<ReadingTheme>('default');
   const [showSettings, setShowSettings] = useState(false);
-  const [showTTS, setShowTTS] = useState(false);
+  const [showTTS, setShowTTS] = useState(true); // TTS mini-player visible by default
   const [showLevelSelector, setShowLevelSelector] = useState(false);
   const [showReferences, setShowReferences] = useState(false);
-  const [isTtsPlaying, setIsTtsPlaying] = useState(false);
+  const [selectedTextForTTS, setSelectedTextForTTS] = useState("");
   const [book, setBook] = useState<BookData | null>(null);
   const [chapter, setChapter] = useState<ChapterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -330,16 +330,10 @@ export default function Reader() {
               variant="ghost" 
               size="icon"
               onClick={() => {
-                if (showTTS && !isTtsPlaying) {
-                  setShowTTS(false);
-                  return;
-                }
-                openExclusive('tts');
-                setShowQA(false);
-                setShowQuiz(false);
-                setShowVoiceConversation(false);
+                setShowTTS(!showTTS);
               }}
               className={showTTS ? "text-primary" : ""}
+              title="Toggle Audio Player"
             >
               <Volume2 className="h-5 w-5" />
             </Button>
@@ -498,25 +492,25 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* TTS Player */}
-      {showTTS && chapter?.content && (
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="fixed top-32 left-1/2 -translate-x-1/2 z-40"
-        >
-          <TextToSpeechPlayer
-            text={chapter.content}
-            language={book?.language || "en"}
-            stopKey={`${bookId}-${currentChapter}`}
-            onPlayingChange={(playing) => {
-              setIsTtsPlaying(playing);
-              // Keep controls visible while playing; allow manual close when not playing.
-              if (playing) setShowTTS(true);
-            }}
-          />
-        </motion.div>
-      )}
+      {/* TTS Mini Player - Persistent at bottom */}
+      <AnimatePresence>
+        {showTTS && chapter?.content && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40"
+          >
+            <TTSMiniPlayer
+              chapterText={chapter.content}
+              selectedText={selectedTextForTTS}
+              language={book?.language || "en"}
+              stopKey={`${bookId}-${currentChapter}`}
+              onClose={() => setShowTTS(false)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* References/Citations Panel - Using new ResearchPanel */}
       <AnimatePresence>
@@ -571,15 +565,26 @@ export default function Reader() {
             </div>
             
             <TextHighlighter onAskAboutSelection={(text) => {
+              // Update TTS selection text
+              setSelectedTextForTTS(text);
               setHighlightedText(text);
               closeTopPanels();
               setShowQuiz(false);
               setShowVoiceConversation(false);
               setShowQA(true);
+              // Show TTS player if hidden
+              setShowTTS(true);
             }}>
               <div 
                 className={`reading-content ${currentTheme.text}`}
                 style={{ fontSize: `${fontSize}px` }}
+                onMouseUp={() => {
+                  // Capture selected text for TTS
+                  const selection = window.getSelection();
+                  if (selection && selection.toString().trim().length > 10) {
+                    setSelectedTextForTTS(selection.toString().trim());
+                  }
+                }}
               >
                 {renderContent()}
               </div>
