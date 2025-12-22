@@ -59,15 +59,24 @@ export function TTSMiniPlayer({
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopRef = useRef(false);
-  const abortControllerRef = useRef<AbortController | null>(null);
+  const isStoppingRef = useRef(false);
   const activeBlobUrlsRef = useRef<string[]>([]);
   const prevStopKeyRef = useRef<string | number | undefined>(undefined);
+  const isMountedRef = useRef(true);
 
   const { toast } = useToast();
   const entitlements = useEntitlements();
 
   const hasAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || 
                    entitlements.isScrollStudent || entitlements.isPaid || entitlements.canUseTTS;
+
+  // Track mounted state for async operations
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const sanitizeText = useCallback((raw: string) => {
     return raw
@@ -125,10 +134,10 @@ export function TTSMiniPlayer({
     return URL.createObjectURL(blob);
   }, []);
 
-  const playUrl = useCallback(async (url: string) => {
-    return new Promise<void>((resolve) => {
-      if (stopRef.current) {
-        resolve();
+  const playUrl = useCallback((url: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (stopRef.current || isStoppingRef.current) {
+        resolve(false);
         return;
       }
 
@@ -136,59 +145,104 @@ export function TTSMiniPlayer({
       audioRef.current = audio;
       audio.volume = volume;
 
-      audio.onplay = () => setIsPlaying(true);
-      audio.onended = () => resolve();
-      audio.onpause = () => { if (stopRef.current) resolve(); };
-      audio.onerror = () => resolve();
+      const cleanup = () => {
+        audio.onplay = null;
+        audio.onended = null;
+        audio.onpause = null;
+        audio.onerror = null;
+        audio.ontimeupdate = null;
+      };
+
+      audio.onplay = () => {
+        if (isMountedRef.current) setIsPlaying(true);
+      };
+      
+      audio.onended = () => {
+        cleanup();
+        resolve(true);
+      };
+      
+      audio.onpause = () => {
+        if (stopRef.current || isStoppingRef.current) {
+          cleanup();
+          resolve(false);
+        }
+      };
+      
+      audio.onerror = () => {
+        cleanup();
+        resolve(false);
+      };
+      
       audio.ontimeupdate = () => {
-        if (audio.duration) setProgress((audio.currentTime / audio.duration) * 100);
+        if (audio.duration && isMountedRef.current) {
+          setProgress((audio.currentTime / audio.duration) * 100);
+        }
       };
 
       audio.src = url;
-      audio.play().catch(() => resolve());
+      audio.play().catch((err) => {
+        cleanup();
+        // AbortError is expected when stopping
+        if (err?.name !== "AbortError") {
+          console.error("[TTS] Play error:", err);
+        }
+        resolve(false);
+      });
     });
   }, [volume]);
 
   const stop = useCallback(() => {
+    if (isStoppingRef.current) return;
+    isStoppingRef.current = true;
     stopRef.current = true;
 
-    // Cancel any in-flight requests
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-      abortControllerRef.current = null;
-    }
-
     if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+      try {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      } catch { /* ignore */ }
       audioRef.current = null;
     }
 
     cleanupBlobUrls();
-    setIsLoading(false);
-    setIsPlaying(false);
-    setProgress(0);
-    setCurrentChunk(0);
-    setError(null);
+    
+    if (isMountedRef.current) {
+      setIsLoading(false);
+      setIsPlaying(false);
+      setProgress(0);
+      setCurrentChunk(0);
+      setError(null);
+    }
+    
+    // Reset stopping flag after a short delay to allow any pending callbacks
+    setTimeout(() => {
+      isStoppingRef.current = false;
+    }, 50);
   }, [cleanupBlobUrls]);
 
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
+    // Stop any existing playback first
+    stop();
+    
+    // Wait for stop to complete
+    await new Promise(resolve => setTimeout(resolve, 100));
+    
     const cleaned = sanitizeText(textToRead);
     if (!cleaned) {
       toast({ title: "No text", description: "No readable text found", variant: "destructive" });
       return;
     }
 
+    // Reset state for new playback
+    stopRef.current = false;
+    isStoppingRef.current = false;
+    
     setError(null);
     setIsLoading(true);
-    stopRef.current = false;
     setProgress(0);
     setMode(isSelection ? "selection" : "chapter");
 
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
     cleanupBlobUrls();
 
     // For selection, use a single small chunk
@@ -204,22 +258,31 @@ export function TTSMiniPlayer({
     }
 
     setTotalChunks(chunks.length);
+    console.log("[TTS] Starting playback with", chunks.length, "chunks");
 
     try {
       for (let i = 0; i < chunks.length; i++) {
-        if (stopRef.current) break;
+        // Check stop flag before each chunk
+        if (stopRef.current || isStoppingRef.current) {
+          console.log("[TTS] Playback stopped at chunk", i);
+          break;
+        }
 
         setCurrentChunk(i + 1);
         const chunk = chunks[i];
 
-        // Create abort controller for this request
-        abortControllerRef.current = new AbortController();
+        console.log("[TTS] Generating chunk", i + 1, "/", chunks.length);
 
         const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
           body: { text: chunk, voice: selectedVoice, language },
         });
 
-        if (stopRef.current) break;
+        // Check stop flag after API call
+        if (stopRef.current || isStoppingRef.current) {
+          console.log("[TTS] Playback stopped after API call");
+          break;
+        }
+        
         if (invokeError) throw new Error(invokeError.message || "TTS failed");
         if (data?.error) throw new Error(data.error);
         if (!data?.audioContent) throw new Error("No audio received");
@@ -227,9 +290,14 @@ export function TTSMiniPlayer({
         const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
         activeBlobUrlsRef.current.push(url);
 
-        if (i === 0) setIsLoading(false);
+        if (i === 0 && isMountedRef.current) setIsLoading(false);
 
-        await playUrl(url);
+        const success = await playUrl(url);
+        
+        if (!success) {
+          console.log("[TTS] Playback of chunk", i + 1, "was interrupted");
+          break;
+        }
       }
     } catch (err) {
       if (err instanceof Error && (err.name === "AbortError" || err.message.includes("aborted"))) {
@@ -237,21 +305,27 @@ export function TTSMiniPlayer({
       } else {
         console.error("[TTS] Error:", err);
         const msg = err instanceof Error ? err.message : "TTS failed";
-        setError(msg);
-        toast({ title: "TTS Error", description: msg, variant: "destructive" });
+        if (isMountedRef.current) {
+          setError(msg);
+          toast({ title: "TTS Error", description: msg, variant: "destructive" });
+        }
       }
     } finally {
-      setIsLoading(false);
-      setIsPlaying(false);
-      setProgress(0);
-      setCurrentChunk(0);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setIsPlaying(false);
+        setProgress(0);
+        setCurrentChunk(0);
+      }
+      cleanupBlobUrls();
     }
-  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast]);
+  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, stop]);
 
   // Stop on stopKey change (page navigation)
   useEffect(() => {
     if (stopKey === undefined) return;
     if (prevStopKeyRef.current !== undefined && prevStopKeyRef.current !== stopKey) {
+      console.log("[TTS] Stop key changed, stopping playback");
       stop();
     }
     prevStopKeyRef.current = stopKey;
@@ -259,8 +333,25 @@ export function TTSMiniPlayer({
 
   // Cleanup on unmount
   useEffect(() => {
-    return () => stop();
-  }, [stop]);
+    return () => {
+      stopRef.current = true;
+      isStoppingRef.current = true;
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.src = "";
+        } catch { /* ignore */ }
+      }
+      cleanupBlobUrls();
+    };
+  }, [cleanupBlobUrls]);
+
+  // Update volume on active audio
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
 
   const handlePlayChapter = () => {
     if (isLoading) return;
@@ -276,8 +367,7 @@ export function TTSMiniPlayer({
     if (isPlaying && mode === "selection") {
       stop();
     } else {
-      stop();
-      setTimeout(() => generateSpeech(selectedText, true), 50);
+      generateSpeech(selectedText, true);
     }
   };
 
@@ -371,10 +461,7 @@ export function TTSMiniPlayer({
                 )}
                 <Slider
                   value={[volume * 100]}
-                  onValueChange={([v]) => {
-                    setVolume(v / 100);
-                    if (audioRef.current) audioRef.current.volume = v / 100;
-                  }}
+                  onValueChange={([v]) => setVolume(v / 100)}
                   max={100}
                   step={10}
                   className="flex-1"

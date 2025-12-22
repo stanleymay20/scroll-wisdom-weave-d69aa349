@@ -40,12 +40,24 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   const entitlements = useEntitlements();
   
   // FAIL-OPEN: Admin, Prophet, Premium, Student, or any paid user has TTS access
-  // NEVER block paid users - if in doubt, allow
   const hasFullAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent || entitlements.isPaid;
   const canUseTTS = hasFullAccess || entitlements.canUseTTS;
 
+  const stopRef = useRef(false);
+  const isStoppingRef = useRef(false);
+  const activeBlobUrlsRef = useRef<string[]>([]);
+  const prevStopKeyRef = useRef<string | number | undefined>(undefined);
+  const isMountedRef = useRef(true);
+
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
   const base64ToBlobUrl = useCallback((base64: string, mimeType = "audio/mpeg") => {
-    // Convert base64 → Blob URL (faster + avoids massive data: URIs)
     const binary = atob(base64);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -55,21 +67,14 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
 
   const sanitizeTextForTTS = useCallback((raw: string) => {
     return raw
-      // Remove markdown images entirely
       .replace(/!\[[^\]]*\]\([^)]+\)/g, " ")
-      // Remove base64 data urls if they appear inline
       .replace(/data:image\/[a-zA-Z+.-]+;base64,[A-Za-z0-9+/=]+/g, " ")
-      // Remove headings markers
       .replace(/#{1,6}\s*/g, "")
-      // Remove code blocks + inline code
       .replace(/```[\s\S]*?```/g, " ")
       .replace(/`[^`]+`/g, " ")
-      // Links: [text](url) → text
       .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
-      // Bullets
       .replace(/^\s*[-*]\s+/gm, "")
       .replace(/^\s*\d+\.\s+/gm, "")
-      // Collapse whitespace
       .replace(/\n{2,}/g, ". ")
       .replace(/\n/g, " ")
       .replace(/\s{2,}/g, " ")
@@ -104,72 +109,114 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
 
     if (current) chunks.push(current);
 
-    // Fallback if no punctuation-based split happened
     if (chunks.length === 0) return [text.slice(0, maxChars)];
 
     return chunks;
   }, []);
 
-  const stopRef = useRef(false);
-  const activeBlobUrlsRef = useRef<string[]>([]);
-  const prevStopKeyRef = useRef<string | number | undefined>(undefined);
-  const isStoppingRef = useRef(false);
-
   const cleanupBlobUrls = useCallback(() => {
     for (const url of activeBlobUrlsRef.current) {
       try {
         URL.revokeObjectURL(url);
-      } catch {
-        // ignore
-      }
+      } catch { /* ignore */ }
     }
     activeBlobUrlsRef.current = [];
   }, []);
 
-  const playUrl = useCallback(async (url: string) => {
-    return new Promise<void>((resolve, reject) => {
-      if (stopRef.current) {
-        resolve();
+  const playUrl = useCallback((url: string): Promise<boolean> => {
+    return new Promise((resolve) => {
+      if (stopRef.current || isStoppingRef.current) {
+        resolve(false);
         return;
       }
 
       const audio = new Audio();
       audioRef.current = audio;
-
       audio.volume = volume;
 
+      const cleanup = () => {
+        audio.onplay = null;
+        audio.onended = null;
+        audio.onpause = null;
+        audio.onerror = null;
+        audio.ontimeupdate = null;
+      };
+
       audio.onplay = () => {
-        setIsPlaying(true);
-        setError(null);
-        onPlayingChange?.(true);
+        if (isMountedRef.current) {
+          setIsPlaying(true);
+          setError(null);
+          onPlayingChange?.(true);
+        }
       };
 
-      audio.onended = () => resolve();
+      audio.onended = () => {
+        cleanup();
+        resolve(true);
+      };
 
-      // When stop() pauses the element, onended won't fire; resolve to unblock the loop.
       audio.onpause = () => {
-        if (stopRef.current || isStoppingRef.current) resolve();
+        if (stopRef.current || isStoppingRef.current) {
+          cleanup();
+          resolve(false);
+        }
       };
 
-      audio.onerror = (e) => reject(e);
+      audio.onerror = () => {
+        cleanup();
+        resolve(false);
+      };
+
       audio.ontimeupdate = () => {
-        if (audio.duration) setProgress((audio.currentTime / audio.duration) * 100);
+        if (audio.duration && isMountedRef.current) {
+          setProgress((audio.currentTime / audio.duration) * 100);
+        }
       };
 
       audio.src = url;
-
-      // Handle AbortError gracefully when play is interrupted by pause
       audio.play().catch((err) => {
-        if (err?.name === "AbortError") {
-          resolve();
-        } else {
-          reject(err);
+        cleanup();
+        if (err?.name !== "AbortError") {
+          console.error("[TTS] Play error:", err);
         }
+        resolve(false);
       });
     });
   }, [onPlayingChange, volume]);
 
+  const stop = useCallback(() => {
+    if (isStoppingRef.current) return;
+    isStoppingRef.current = true;
+    stopRef.current = true;
+
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      } catch { /* ignore */ }
+      audioRef.current = null;
+    }
+
+    cleanupBlobUrls();
+
+    if (isMountedRef.current) {
+      setIsLoading(false);
+      setIsPlaying(false);
+      setProgress(0);
+      setError(null);
+      onPlayingChange?.(false);
+    }
+
+    setTimeout(() => {
+      isStoppingRef.current = false;
+    }, 50);
+  }, [cleanupBlobUrls, onPlayingChange]);
+
   const generateSpeech = useCallback(async () => {
+    // Stop any existing playback
+    stop();
+    await new Promise(resolve => setTimeout(resolve, 100));
+
     const cleaned = sanitizeTextForTTS(text || "");
 
     if (!cleaned) {
@@ -181,21 +228,19 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       return;
     }
 
+    // Reset state for new playback
+    stopRef.current = false;
+    isStoppingRef.current = false;
+
     setError(null);
     setIsLoading(true);
-    stopRef.current = false;
     setProgress(0);
 
-    // Stop any existing audio
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current = null;
-    }
     cleanupBlobUrls();
 
     let chunks = chunkText(cleaned, 800);
 
-    // Faster “time to first audio”: make the first chunk smaller.
+    // Faster "time to first audio": make the first chunk smaller.
     if (chunks[0] && chunks[0].length > 260) {
       const first = chunks[0].slice(0, 260);
       const rest = chunks[0].slice(260).trim();
@@ -206,7 +251,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
 
     try {
       for (let i = 0; i < chunks.length; i++) {
-        if (stopRef.current) break;
+        if (stopRef.current || isStoppingRef.current) break;
 
         const chunk = chunks[i];
         console.log("[TTS Client] Generating chunk", i + 1, "/", chunks.length, { len: chunk.length });
@@ -219,6 +264,8 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
           },
         });
 
+        if (stopRef.current || isStoppingRef.current) break;
+
         if (invokeError) throw new Error(invokeError.message || "Failed to invoke TTS function");
         if (data?.error) throw new Error(data.error);
         if (!data?.audioContent) throw new Error("No audio content received from server");
@@ -227,29 +274,34 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         activeBlobUrlsRef.current.push(url);
 
         // First audio should start ASAP
-        if (i === 0) setIsLoading(false);
+        if (i === 0 && isMountedRef.current) setIsLoading(false);
 
-        await playUrl(url);
+        const success = await playUrl(url);
+        if (!success) break;
       }
     } catch (err) {
-      // Don't log or show toast for AbortError - it's expected when user stops playback
       if (err instanceof Error && err.name === "AbortError") {
         console.log("[TTS Client] Playback stopped by user");
       } else {
         console.error("[TTS Client] Error:", err);
         const errorMessage = err instanceof Error ? err.message : "Failed to generate speech";
-        setError(errorMessage);
-        toast({
-          title: "TTS Failed",
-          description: errorMessage,
-          variant: "destructive",
-        });
+        if (isMountedRef.current) {
+          setError(errorMessage);
+          toast({
+            title: "TTS Failed",
+            description: errorMessage,
+            variant: "destructive",
+          });
+        }
       }
     } finally {
-      setIsLoading(false);
-      setIsPlaying(false);
-      setProgress(0);
-      onPlayingChange?.(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setIsPlaying(false);
+        setProgress(0);
+        onPlayingChange?.(false);
+      }
+      cleanupBlobUrls();
     }
   }, [
     base64ToBlobUrl,
@@ -262,32 +314,10 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     selectedVoice,
     text,
     toast,
+    stop,
   ]);
 
-  const stop = useCallback(() => {
-    isStoppingRef.current = true;
-    stopRef.current = true;
-
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
-      audioRef.current = null;
-    }
-
-    cleanupBlobUrls();
-
-    setIsLoading(false);
-    setIsPlaying(false);
-    setProgress(0);
-    setError(null);
-    onPlayingChange?.(false);
-
-    // allow future playback
-    isStoppingRef.current = false;
-  }, [cleanupBlobUrls, onPlayingChange]);
-
-  // Stop audio when changing pages (or any parent-controlled stopKey changes)
-  // NOTE: don't stop on initial mount (it would immediately cancel playback when opening the player).
+  // Stop audio when changing pages
   useEffect(() => {
     if (stopKey === undefined) return;
 
@@ -302,15 +332,31 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     }
   }, [stopKey, stop]);
 
-  // Cleanup on unmount to avoid “audio continues after navigation”
+  // Cleanup on unmount
   useEffect(() => {
-    return () => stop();
-  }, [stop]);
+    return () => {
+      stopRef.current = true;
+      isStoppingRef.current = true;
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.src = "";
+        } catch { /* ignore */ }
+      }
+      cleanupBlobUrls();
+    };
+  }, [cleanupBlobUrls]);
+
+  // Update volume on active audio
+  useEffect(() => {
+    if (audioRef.current) {
+      audioRef.current.volume = volume;
+    }
+  }, [volume]);
 
   const togglePlayPause = useCallback(() => {
     if (isLoading) return;
 
-    // For chunked playback, "pause" behaves like stop (to avoid hanging the generation loop).
     if (isPlaying) {
       stop();
       return;
@@ -319,15 +365,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     generateSpeech();
   }, [generateSpeech, isLoading, isPlaying, stop]);
 
-  const handleVolumeChange = useCallback((newVolume: number) => {
-    setVolume(newVolume);
-    if (audioRef.current) {
-      audioRef.current.volume = newVolume;
-    }
-  }, []);
-
-  // Don't render if user doesn't have TTS access - but FAIL-OPEN during loading
-  // If entitlements indicate paid status, always show
+  // Don't render if user doesn't have TTS access
   if (!canUseTTS && !entitlements.isPaid && !entitlements.isAdmin) {
     return null;
   }
@@ -401,7 +439,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
                 )}
                 <Slider
                   value={[volume * 100]}
-                  onValueChange={([v]) => handleVolumeChange(v / 100)}
+                  onValueChange={([v]) => setVolume(v / 100)}
                   max={100}
                   step={10}
                   className="flex-1"
