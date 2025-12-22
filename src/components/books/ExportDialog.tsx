@@ -20,12 +20,14 @@ import {
   Shield, 
   Award,
   AlertCircle,
-  Image as ImageIcon
+  Image as ImageIcon,
+  GraduationCap
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
 
 interface ExportDialogProps {
   bookId: string;
@@ -33,6 +35,8 @@ interface ExportDialogProps {
   hasGeneratedChapters: boolean;
   coverImageUrl?: string | null;
   authorName?: string;
+  isAcademicMode?: boolean;
+  citationStyle?: string;
 }
 
 type ExportFormat = "pdf" | "epub" | "docx";
@@ -42,7 +46,9 @@ export function ExportDialog({
   title, 
   hasGeneratedChapters, 
   coverImageUrl,
-  authorName: defaultAuthorName 
+  authorName: defaultAuthorName,
+  isAcademicMode = false,
+  citationStyle = 'APA'
 }: ExportDialogProps) {
   const [isExporting, setIsExporting] = useState<ExportFormat | null>(null);
   const [authorName, setAuthorName] = useState(defaultAuthorName || "");
@@ -103,6 +109,8 @@ export function ExportDialog({
           format,
           authorName: authorName.trim(),
           isbn: isbn.trim() || undefined,
+          isAcademicMode,
+          citationStyle,
         },
       });
 
@@ -257,6 +265,21 @@ export function ExportDialog({
           </p>
         </div>
 
+
+        {/* Academic Mode Notice */}
+        {isAcademicMode && (
+          <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
+            <div className="flex items-center gap-2 mb-2">
+              <GraduationCap className="h-4 w-4 text-green-500" />
+              <span className="text-sm font-medium text-green-400">Academic Export</span>
+              <span className="text-xs text-muted-foreground">({citationStyle})</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This export includes a full bibliography with DOI links. All references are from verified academic databases.
+            </p>
+          </div>
+        )}
+
         {/* Export Formats */}
         <div className="space-y-2">
           <Label>{t('export.format')}</Label>
@@ -316,6 +339,11 @@ export function ExportDialog({
               <p className="text-xs text-muted-foreground">
                 {t('export.ownershipDesc')}
               </p>
+              {isAcademicMode && (
+                <p className="text-xs text-green-400 mt-2">
+                  All references in this document are retrieved from verifiable academic databases.
+                </p>
+              )}
             </div>
           </div>
         </div>
