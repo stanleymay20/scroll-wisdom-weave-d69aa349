@@ -57,8 +57,11 @@ export default function Library() {
   const { toast } = useToast();
 
   useEffect(() => {
+    let mounted = true;
+    
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!mounted) return;
         setUser(session?.user ?? null);
         if (!session?.user) {
           navigate("/auth");
@@ -67,22 +70,21 @@ export default function Library() {
     );
 
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
       setUser(session?.user ?? null);
       if (!session?.user) {
         navigate("/auth");
+      } else {
+        // Fetch library immediately after getting session
+        fetchLibrary(0, true);
       }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, [navigate]);
-
-  useEffect(() => {
-    if (user) {
-      // Small delay to let auth settle, then fetch immediately
-      const timer = setTimeout(() => fetchLibrary(0, true), 50);
-      return () => clearTimeout(timer);
-    }
-  }, [user]);
 
   const fetchLibrary = async (pageNum: number, reset = false, retry = 0) => {
     if (reset) {

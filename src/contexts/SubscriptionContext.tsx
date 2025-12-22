@@ -1,4 +1,4 @@
-import { createContext, useContext, useState, useEffect, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { SubscriptionTier, getTierFromProductId, SUBSCRIPTION_TIERS } from '@/lib/subscription';
 import { LAUNCH_MODE_CONFIG, isLaunchModeActive } from '@/lib/config';
@@ -38,6 +38,10 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     canGenerateToday: true,
   });
   const [ttsMinutesUsed, setTtsMinutesUsed] = useState(0);
+
+  // Track last fetch time to prevent redundant calls
+  const lastFetchRef = useRef<number>(0);
+  const FETCH_COOLDOWN = 30000; // 30 seconds between fetches
 
   const checkDailyLimits = useCallback(async (userId: string) => {
     try {
@@ -87,7 +91,14 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
-  const checkSubscription = useCallback(async () => {
+  const checkSubscription = useCallback(async (force = false) => {
+    // Prevent redundant fetches within cooldown period
+    const now = Date.now();
+    if (!force && now - lastFetchRef.current < FETCH_COOLDOWN) {
+      return;
+    }
+    lastFetchRef.current = now;
+
     try {
       const { data: { session } } = await supabase.auth.getSession();
       
@@ -95,37 +106,48 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setUser(null);
         setTier('free');
         setSubscriptionEnd(null);
+        setIsLoading(false);
         return;
       }
 
       setUser(session.user);
       
-      // Check daily limits and TTS usage
-      await Promise.all([
-        checkDailyLimits(session.user.id),
-        checkTTSUsage(session.user.id),
-      ]);
-
-      // Check subscription status via edge function, but FAIL-OPEN to profile plan
-      // (prevents paid/admin users being incorrectly downgraded when Stripe lookup fails)
-      const [{ data: subData, error: subError }, { data: profileData, error: profileError }] = await Promise.all([
-        supabase.functions.invoke('check-subscription'),
+      // Batch all profile data in a single query for efficiency
+      const [profileResult, subResult] = await Promise.all([
         supabase
           .from('profiles')
-          .select('plan')
+          .select('daily_book_count, last_book_date, plan')
           .eq('id', session.user.id)
           .maybeSingle(),
+        supabase.functions.invoke('check-subscription'),
       ]);
 
-      if (profileError) {
-        console.error('Error reading profile plan:', profileError);
+      // Process profile data (daily limits + plan)
+      if (profileResult.data) {
+        const profile = profileResult.data;
+        const today = new Date().toISOString().split('T')[0];
+        const lastDate = profile.last_book_date;
+        const count = lastDate === today ? (profile.daily_book_count || 0) : 0;
+
+        setDailyLimitInfo({
+          dailyBookCount: count,
+          lastBookDate: lastDate,
+          canGenerateToday: count < LAUNCH_MODE_CONFIG.freeBookLimit,
+        });
       }
+
+      // Check TTS usage separately (less critical)
+      checkTTSUsage(session.user.id);
+
+      const { data: subData, error: subError } = subResult;
+      const profileData = profileResult.data;
 
       if (subError) {
         console.error('Error checking subscription:', subError);
         if (profileData?.plan) {
           setTier(profileData.plan as SubscriptionTier);
         }
+        setIsLoading(false);
         return;
       }
 
@@ -135,14 +157,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setTier(detectedTier);
         setSubscriptionEnd(subData.subscription_end);
 
-        // Update profile plan to keep things consistent
+        // Update profile plan to keep things consistent (fire and forget)
         const validPlans = ['free', 'premium', 'prophet_tier', 'student'] as const;
         const planToSave = validPlans.includes(detectedTier as any) ? detectedTier : 'premium';
 
-        await supabase
+        supabase
           .from('profiles')
           .update({ plan: planToSave })
-          .eq('id', session.user.id);
+          .eq('id', session.user.id)
+          .then(() => {});
       } else {
         // FAIL-OPEN: if profile shows a paid plan, do NOT downgrade to free
         if (profileData?.plan && profileData.plan !== 'free') {
@@ -157,7 +180,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     } finally {
       setIsLoading(false);
     }
-  }, [checkDailyLimits, checkTTSUsage]);
+  }, [checkTTSUsage]);
 
   const incrementDailyBookCount = useCallback(async () => {
     if (!user) return;
@@ -209,7 +232,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       (event, session) => {
         setUser(session?.user ?? null);
         if (session?.user) {
-          setTimeout(() => checkSubscription(), 0);
+          // Force check on auth state change
+          setTimeout(() => checkSubscription(true), 0);
         } else {
           setTier('free');
           setSubscriptionEnd(null);
@@ -218,11 +242,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Initial check
-    checkSubscription();
+    // Initial check (forced)
+    checkSubscription(true);
 
-    // Periodic check every minute
-    const interval = setInterval(checkSubscription, 60000);
+    // Periodic check every 5 minutes (reduced from 1 minute)
+    const interval = setInterval(() => checkSubscription(false), 300000);
 
     return () => {
       subscription.unsubscribe();

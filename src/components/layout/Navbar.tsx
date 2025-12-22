@@ -22,18 +22,29 @@ export function Navbar() {
   const { isAdmin } = useIsAdmin();
 
   useEffect(() => {
+    let mounted = true;
+    
     supabase.auth.getSession().then(({ data: { session } }) => {
+      if (!mounted) return;
       setUser(session?.user ?? null);
       if (session?.user) fetchProfile(session.user.id);
     });
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
-      else setProfile(null);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
+      const newUser = session?.user ?? null;
+      // Only update if user actually changed
+      if (newUser?.id !== user?.id) {
+        setUser(newUser);
+        if (newUser) fetchProfile(newUser.id);
+        else setProfile(null);
+      }
     });
 
-    return () => subscription.unsubscribe();
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
   }, []);
 
   const fetchProfile = async (userId: string) => {
