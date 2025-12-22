@@ -226,33 +226,34 @@ export default function Auth() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4">
-      <div className="absolute inset-0 bg-hero-pattern opacity-30" />
-      <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-scroll-gold/10 rounded-full blur-3xl" />
-      <div className="absolute bottom-1/4 right-1/4 w-80 h-80 bg-scroll-bronze/10 rounded-full blur-3xl" />
+    <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <div className="absolute inset-0 bg-hero-pattern opacity-20" />
+      <div className="absolute top-1/4 left-1/4 w-64 h-64 sm:w-96 sm:h-96 bg-primary/5 rounded-full blur-3xl" />
+      <div className="absolute bottom-1/4 right-1/4 w-48 h-48 sm:w-80 sm:h-80 bg-accent/5 rounded-full blur-3xl" />
 
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.4, ease: "easeOut" }}
         className="relative z-10 w-full max-w-md"
       >
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 sm:mb-8">
           <div className="inline-flex items-center gap-3 mb-4">
-            <div className="bg-gradient-gold p-3 rounded-xl">
-              <Book className="h-8 w-8 text-primary-foreground" />
+            <div className="bg-gradient-gold p-2.5 sm:p-3 rounded-xl shadow-gold">
+              <Book className="h-6 w-6 sm:h-8 sm:w-8 text-primary-foreground" />
             </div>
           </div>
-          <h1 className="font-display text-3xl font-bold text-gradient-gold">ScrollLibrary</h1>
-          <p className="text-muted-foreground mt-2">{getTitle()}</p>
+          <h1 className="font-display text-2xl sm:text-3xl font-bold text-gradient-gold">ScrollLibrary</h1>
+          <p className="text-muted-foreground mt-2 text-sm sm:text-base">{getTitle()}</p>
         </div>
 
-        <div className="bg-gradient-card rounded-2xl border border-border/50 p-6 sm:p-8 shadow-card">
+        <div className="bg-card/80 backdrop-blur-xl rounded-2xl border border-border/50 p-5 sm:p-8 shadow-card">
           {authError && (
             <Alert variant="destructive" className="mb-4">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>
                 <div className="space-y-3">
-                  <p>{authError}</p>
+                  <p className="text-sm">{authError}</p>
                   {authError.includes("Invalid email or password") && email.trim().length > 0 && (
                     <div className="flex flex-col sm:flex-row gap-2">
                       <Button
@@ -261,6 +262,7 @@ export default function Auth() {
                         variant="outline"
                         onClick={() => handleSendPasswordReset(email)}
                         disabled={isLoading}
+                        className="text-xs"
                       >
                         Forgot password
                       </Button>
@@ -270,6 +272,7 @@ export default function Auth() {
                         variant="outline"
                         onClick={() => handleSendMagicLink(email)}
                         disabled={isLoading}
+                        className="text-xs"
                       >
                         Send magic link
                       </Button>
@@ -280,10 +283,10 @@ export default function Auth() {
             </Alert>
           )}
           
-          <form onSubmit={handleSubmit} className="space-y-5">
+          <form onSubmit={handleSubmit} className="space-y-4">
             {mode === "signup" && (
               <div className="space-y-2">
-                <Label htmlFor="fullName">{t('auth.fullname')}</Label>
+                <Label htmlFor="fullName" className="text-sm">{t('auth.fullname')}</Label>
                 <div className="relative">
                   <User className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -292,7 +295,7 @@ export default function Auth() {
                     placeholder={t('auth.fullname')}
                     value={fullName}
                     onChange={(e) => setFullName(e.target.value)}
-                    className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
+                    className="pl-10 bg-background/50 border-border focus:border-primary h-11"
                     required
                   />
                 </div>
@@ -301,7 +304,7 @@ export default function Auth() {
 
             {mode !== "reset-password" && (
               <div className="space-y-2">
-                <Label htmlFor="email">{t('auth.email')}</Label>
+                <Label htmlFor="email" className="text-sm">{t('auth.email')}</Label>
                 <div className="relative">
                   <Mail className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -310,7 +313,7 @@ export default function Auth() {
                     placeholder={t('auth.email')}
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
-                    className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
+                    className="pl-10 bg-background/50 border-border focus:border-primary h-11"
                     required
                   />
                 </div>
@@ -320,9 +323,9 @@ export default function Auth() {
             {(mode === "login" || mode === "signup") && (
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label htmlFor="password">{t('auth.password')}</Label>
+                  <Label htmlFor="password" className="text-sm">{t('auth.password')}</Label>
                   {mode === "login" && (
-                    <button type="button" onClick={() => setMode("forgot-password")} className="text-xs text-scroll-gold hover:underline">
+                    <button type="button" onClick={() => setMode("forgot-password")} className="text-xs text-primary hover:underline font-medium">
                       {t('auth.forgot')}
                     </button>
                   )}
@@ -335,7 +338,7 @@ export default function Auth() {
                     placeholder={t('auth.password')}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
+                    className="pl-10 bg-background/50 border-border focus:border-primary h-11"
                     required
                     minLength={6}
                   />
@@ -345,7 +348,7 @@ export default function Auth() {
 
             {mode === "reset-password" && (
               <div className="space-y-2">
-                <Label htmlFor="newPassword">New Password</Label>
+                <Label htmlFor="newPassword" className="text-sm">New Password</Label>
                 <div className="relative">
                   <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                   <Input
@@ -354,7 +357,7 @@ export default function Auth() {
                     placeholder="Enter new password"
                     value={newPassword}
                     onChange={(e) => setNewPassword(e.target.value)}
-                    className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
+                    className="pl-10 bg-background/50 border-border focus:border-primary h-11"
                     required
                     minLength={6}
                   />
@@ -362,7 +365,7 @@ export default function Auth() {
               </div>
             )}
 
-            <Button type="submit" variant="hero" className="w-full" disabled={isLoading}>
+            <Button type="submit" variant="gold" className="w-full h-11" disabled={isLoading}>
               {isLoading && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
               {getButtonText()}
             </Button>
@@ -373,7 +376,7 @@ export default function Auth() {
             <Button
               type="button"
               variant="ghost"
-              className="w-full mt-3"
+              className="w-full mt-3 text-muted-foreground hover:text-foreground"
               onClick={() => setMode("magic-link")}
             >
               <Wand2 className="h-4 w-4 mr-2" />
@@ -383,14 +386,14 @@ export default function Auth() {
 
           <div className="mt-6 text-center space-y-2">
             {mode === "forgot-password" || mode === "magic-link" ? (
-              <button type="button" onClick={() => setMode("login")} className="text-sm text-muted-foreground hover:text-scroll-gold transition-colors">
+              <button type="button" onClick={() => setMode("login")} className="text-sm text-muted-foreground hover:text-primary transition-colors">
                 ← {t('common.back')}
               </button>
             ) : mode !== "reset-password" && (
               <button
                 type="button"
                 onClick={() => setMode(mode === "login" ? "signup" : "login")}
-                className="text-sm text-muted-foreground hover:text-scroll-gold transition-colors"
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
               >
                 {mode === "login" ? t('auth.noaccount') : t('auth.hasaccount')}
               </button>
@@ -399,7 +402,9 @@ export default function Auth() {
         </div>
 
         <div className="text-center mt-6">
-          <Button variant="ghost" onClick={() => navigate("/")}>← {t('auth.backhome')}</Button>
+          <Button variant="ghost" size="sm" onClick={() => navigate("/")} className="text-muted-foreground">
+            ← {t('auth.backhome')}
+          </Button>
         </div>
       </motion.div>
     </div>
