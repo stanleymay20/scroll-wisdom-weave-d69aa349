@@ -26,13 +26,14 @@ import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
 import { CognitiveLevelSelector, COGNITIVE_LEVELS } from "@/components/reader/CognitiveLevelSelector";
 import { GuidedReadingMode, CognitiveLevelIndicator } from "@/components/reader/GuidedReadingMode";
-import { ResearchPanel } from "@/components/academic/ResearchPanel";
-import { AcademicModeIndicator, AcademicDisclaimer } from "@/components/academic/AcademicModeIndicator";
+import { DeepResearchPanel } from "@/components/academic/DeepResearchPanel";
+import { AcademicModeIndicator } from "@/components/academic/AcademicModeIndicator";
+import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
 import { InteractiveQA, InteractiveQAButton } from "@/components/reader/InteractiveQA";
 import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode, QuizModeButton } from "@/components/reader/QuizMode";
 import { VoiceConversation, VoiceConversationButton } from "@/components/reader/VoiceConversation";
-import { CitationStyle } from "@/lib/academicCategories";
+import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface BookData {
@@ -512,16 +513,38 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* References/Citations Panel - Using new ResearchPanel */}
+      {/* References/Citations Panel - Using DeepResearchPanel */}
       <AnimatePresence>
-        {showReferences && (
-          <ResearchPanel
+        {showReferences && chapter?.chapter_references && (
+          <DeepResearchPanel
             isOpen={showReferences}
             onClose={() => setShowReferences(false)}
-            references={chapter?.chapter_references || []}
-            metadata={chapter?.research_metadata || {}}
+            sources={(chapter.chapter_references || []).map((ref: any) => ({
+              id: ref.id || `ref-${Math.random()}`,
+              title: ref.title || 'Unknown',
+              authors: ref.authors || (ref.author ? [ref.author] : ['Unknown']),
+              year: ref.year || new Date().getFullYear(),
+              type: ref.type || 'article',
+              doi: ref.doi,
+              url: ref.url || ref.sourceUrl,
+              journal: ref.journal,
+              publisher: ref.publisher,
+              abstract: ref.abstract,
+              citationCount: ref.citationCount,
+              verified: ref.verified ?? !!ref.doi,
+              database: ref.database || 'Unknown',
+              peerReviewed: ref.peerReviewed ?? !!ref.doi,
+            } as AcademicSource))}
+            metadata={{
+              totalSources: chapter.chapter_references?.length || 0,
+              verifiedSources: (chapter.chapter_references || []).filter((r: any) => r.doi || r.verified).length,
+              peerReviewedSources: (chapter.chapter_references || []).filter((r: any) => r.peerReviewed).length,
+              databasesCovered: [...new Set((chapter.chapter_references || []).map((r: any) => r.database || 'Unknown'))] as string[],
+              researchDate: chapter.research_metadata?.research_date || new Date().toISOString(),
+              confidenceScore: chapter.research_metadata?.confidence_score || 'moderate',
+              topicCoverage: chapter.research_metadata?.topic_coverage || 50,
+            }}
             citationStyle={(chapter?.citation_style || 'APA') as CitationStyle}
-            isAcademicMode={chapter?.academic_mode || false}
           />
         )}
       </AnimatePresence>
@@ -545,7 +568,7 @@ export default function Reader() {
 
             {/* AI Disclaimer */}
             {chapter?.academic_mode ? (
-              <AcademicDisclaimer className="mb-6" />
+              <AcademicDisclaimer variant="compact" className="mb-6" />
             ) : (
               <ContentDisclaimer type="ai" className="mb-6" />
             )}

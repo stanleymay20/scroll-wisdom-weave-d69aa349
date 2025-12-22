@@ -15,9 +15,11 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown, Rocket, ImageIcon, BookImage, GraduationCap, AlertTriangle } from "lucide-react";
+import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown, Rocket, ImageIcon, BookImage, GraduationCap, AlertTriangle, Database } from "lucide-react";
 import { isAcademicCategory, CITATION_STYLES } from "@/lib/academicCategories";
-import { AcademicModeIndicator, AcademicDisclaimer } from "@/components/academic/AcademicModeIndicator";
+import { ContentModeSelector, ContentMode } from "@/components/academic/ContentModeSelector";
+import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
+import { CitationStyle } from "@/lib/citations";
 import { Switch } from "@/components/ui/switch";
 import { CoverUpload } from "@/components/books/CoverUpload";
 import { useToast } from "@/hooks/use-toast";
@@ -77,16 +79,16 @@ export default function Generate() {
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<string[]>([]);
   const [bookType, setBookType] = useState<"text" | "illustrated" | "comic">("text");
-  const [enableReferences, setEnableReferences] = useState(false);
-  const [citationStyle, setCitationStyle] = useState("APA");
-  const [generationMode, setGenerationMode] = useState<"learning" | "academic">("learning");
+  const [contentMode, setContentMode] = useState<ContentMode>("creative");
+  const [citationStyle, setCitationStyle] = useState<CitationStyle>("APA");
+  const [isResearching, setIsResearching] = useState(false);
+  const [researchConfidence, setResearchConfidence] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Auto-enable academic mode for academic categories
   useEffect(() => {
     if (category && isAcademicCategory(category) && bookType === "text") {
-      setGenerationMode("academic");
-      setEnableReferences(true);
+      setContentMode("academic");
     }
   }, [category, bookType]);
 
@@ -171,9 +173,10 @@ export default function Generate() {
           userId: user.id,
           customCover: coverOption === "upload" ? customCover : null,
           bookType,
-          enableReferences: generationMode === "academic",
+          enableReferences: contentMode === "academic",
           citationStyle,
-          academicMode: generationMode === "academic",
+          academicMode: contentMode === "academic",
+          deepResearch: contentMode === "academic", // Enable deep research pipeline
         },
       });
 
@@ -467,93 +470,28 @@ export default function Generate() {
                 </div>
               </div>
 
-              {/* Generation Mode Selection */}
+              {/* Content Mode Selection - Creative vs Academic */}
               {bookType === "text" && (
                 <div className="space-y-4">
-                  <Label className="text-foreground">{t('generate.generationMode')}</Label>
-                  
-                  <RadioGroup
-                    value={generationMode}
-                    onValueChange={(v) => {
-                      setGenerationMode(v as "learning" | "academic");
-                      setEnableReferences(v === "academic");
-                    }}
-                    className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+                  <ContentModeSelector
+                    mode={contentMode}
+                    onModeChange={setContentMode}
+                    citationStyle={citationStyle}
+                    onCitationStyleChange={setCitationStyle}
                     disabled={isGenerating}
-                  >
-                    <div 
-                      className={`flex items-start space-x-3 p-4 rounded-lg border transition-colors cursor-pointer ${
-                        generationMode === "learning" 
-                          ? "border-primary bg-primary/5" 
-                          : "border-border/50 hover:border-primary/50"
-                      }`}
-                      onClick={() => {
-                        setGenerationMode("learning");
-                        setEnableReferences(false);
-                      }}
-                    >
-                      <RadioGroupItem value="learning" id="mode-learning" className="mt-1" />
-                      <Label htmlFor="mode-learning" className="cursor-pointer flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <BookOpen className="h-4 w-4 text-scroll-gold" />
-                          <span className="font-medium">{t('generate.learningMode')}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {t('generate.learningModeDesc')}
-                        </p>
-                      </Label>
-                    </div>
-                    
-                    <div 
-                      className={`flex items-start space-x-3 p-4 rounded-lg border transition-colors cursor-pointer ${
-                        generationMode === "academic" 
-                          ? "border-green-500 bg-green-500/5" 
-                          : "border-border/50 hover:border-green-500/50"
-                      }`}
-                      onClick={() => {
-                        setGenerationMode("academic");
-                        setEnableReferences(true);
-                      }}
-                    >
-                      <RadioGroupItem value="academic" id="mode-academic" className="mt-1" />
-                      <Label htmlFor="mode-academic" className="cursor-pointer flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <GraduationCap className="h-4 w-4 text-green-500" />
-                          <span className="font-medium">{t('generate.academicMode')}</span>
-                        </div>
-                        <p className="text-xs text-muted-foreground">
-                          {t('generate.academicModeDesc')}
-                        </p>
-                      </Label>
-                    </div>
-                  </RadioGroup>
+                  />
 
-                  {/* Citation Style Selector - only show in academic mode */}
-                  {generationMode === "academic" && (
-                    <div className="space-y-3 p-4 rounded-lg bg-green-500/5 border border-green-500/20">
-                      <div className="flex items-center justify-between">
-                        <AcademicModeIndicator isAcademicMode={true} citationStyle={citationStyle} />
+                  {/* Deep Research Info for Academic Mode */}
+                  {contentMode === "academic" && (
+                    <div className="p-4 rounded-lg bg-green-500/5 border border-green-500/20 space-y-3">
+                      <div className="flex items-center gap-2">
+                        <Database className="h-4 w-4 text-green-500" />
+                        <span className="text-sm font-medium text-green-400">Deep Research Pipeline</span>
                       </div>
-                      
-                      <div className="space-y-2">
-                        <Label className="text-sm">{t('generate.citationStyle')}</Label>
-                        <Select value={citationStyle} onValueChange={setCitationStyle} disabled={isGenerating}>
-                          <SelectTrigger className="bg-background/50">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {CITATION_STYLES.map((style) => (
-                              <SelectItem key={style.value} value={style.value}>
-                                <div className="flex items-center justify-between gap-4">
-                                  <span>{style.label}</span>
-                                  <span className="text-xs text-muted-foreground">{style.example}</span>
-                                </div>
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-
+                      <p className="text-xs text-muted-foreground">
+                        Academic mode will query real academic databases (OpenAlex, CrossRef, Semantic Scholar, arXiv, PubMed) 
+                        before generating content. Only verified, DOI-linked sources will be used.
+                      </p>
                       <div className="flex items-start gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/20">
                         <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
                         <p className="text-xs text-muted-foreground">
@@ -564,7 +502,7 @@ export default function Generate() {
                   )}
 
                   {/* Academic category auto-detection notice */}
-                  {category && isAcademicCategory(category) && generationMode !== "academic" && (
+                  {category && isAcademicCategory(category) && contentMode !== "academic" && (
                     <div className="flex items-center gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/30">
                       <AlertTriangle className="h-4 w-4 text-amber-500" />
                       <p className="text-xs text-amber-400">

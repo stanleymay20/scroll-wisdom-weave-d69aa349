@@ -34,6 +34,10 @@ interface ResearchResult {
     source_types: Record<string, number>;
     confidence_score: string;
     research_date: string;
+    verified_count?: number;
+    peer_reviewed_count?: number;
+    databases_covered?: string[];
+    topic_coverage?: number;
   };
 }
 
@@ -56,8 +60,109 @@ function formatInTextCitation(ref: Reference, style: string): string {
   }
 }
 
-// Research pipeline using Perplexity
-async function conductResearch(
+// Deep Research pipeline - calls deep-research edge function for verified sources
+async function conductDeepResearch(
+  topic: string,
+  category: string,
+  keyTopics: string[],
+  citationStyle: string,
+  authToken: string
+): Promise<ResearchResult> {
+  const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+  
+  console.log("[DEEP-RESEARCH] Starting deep research pipeline for:", topic.slice(0, 50));
+
+  try {
+    // Call the deep-research edge function
+    const response = await fetch(`${SUPABASE_URL}/functions/v1/deep-research`, {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${authToken}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        topic: `${topic}`,
+        category,
+        keyTopics,
+        mode: 'full', // 'quick' | 'full' | 'exhaustive'
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      console.error("[DEEP-RESEARCH] Error from deep-research function:", response.status, errorText);
+      
+      // Fallback to Perplexity-only research
+      return await conductFallbackResearch(topic, category, keyTopics, citationStyle);
+    }
+
+    const data = await response.json();
+    console.log("[DEEP-RESEARCH] Received sources:", data.sources?.length || 0);
+
+    // Check if we have sufficient sources
+    if (!data.sources || data.sources.length === 0) {
+      console.log("[DEEP-RESEARCH] No sources found, using fallback");
+      return await conductFallbackResearch(topic, category, keyTopics, citationStyle);
+    }
+
+    // Check confidence - if insufficient, add warning
+    if (data.metadata?.confidenceScore === 'insufficient') {
+      console.log("[DEEP-RESEARCH] Insufficient sources, may need topic refinement");
+    }
+
+    // Convert sources to Reference format and generate in-text citations
+    const references: Reference[] = data.sources.map((s: any) => ({
+      author: s.authors?.join(', ') || 'Unknown',
+      title: s.title || 'Unknown',
+      year: s.year || new Date().getFullYear(),
+      type: s.type || 'article',
+      doi: s.doi,
+      url: s.url || (s.doi ? `https://doi.org/${s.doi}` : undefined),
+      journal: s.journal,
+      publisher: s.publisher,
+      requires_verification: !s.verified,
+      database: s.database,
+      peerReviewed: s.peerReviewed,
+      citationCount: s.citationCount,
+    }));
+
+    const inTextCitations = references.map((ref: Reference) => 
+      formatInTextCitation(ref, citationStyle)
+    );
+
+    // Map confidence score
+    const confidenceMap: Record<string, string> = {
+      'high': 'High citation density',
+      'moderate': 'Moderate',
+      'low': 'Introductory overview',
+      'insufficient': 'Insufficient sources - verification needed',
+    };
+
+    return {
+      references,
+      inTextCitations,
+      metadata: {
+        source_count: references.length,
+        source_types: data.metadata?.databasesCovered?.reduce((acc: Record<string, number>, db: string) => {
+          acc[db] = (acc[db] || 0) + 1;
+          return acc;
+        }, {}) || {},
+        confidence_score: confidenceMap[data.metadata?.confidenceScore] || 'Unknown',
+        research_date: data.metadata?.researchDate || new Date().toISOString(),
+        verified_count: data.metadata?.verifiedSources || 0,
+        peer_reviewed_count: data.metadata?.peerReviewedSources || 0,
+        databases_covered: data.metadata?.databasesCovered || [],
+        topic_coverage: data.metadata?.topicCoverage || 0,
+      },
+    };
+  } catch (error) {
+    console.error("[DEEP-RESEARCH] Error:", error);
+    return await conductFallbackResearch(topic, category, keyTopics, citationStyle);
+  }
+}
+
+// Fallback to Perplexity-only research if deep-research fails
+async function conductFallbackResearch(
   topic: string,
   category: string,
   keyTopics: string[],
@@ -66,45 +171,25 @@ async function conductResearch(
   const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
   
   if (!PERPLEXITY_API_KEY) {
-    console.log("[RESEARCH] Perplexity not configured, returning empty research");
+    console.log("[RESEARCH-FALLBACK] Perplexity not configured, returning empty research");
     return {
       references: [],
       inTextCitations: [],
       metadata: {
         source_count: 0,
         source_types: {},
-        confidence_score: "No citations",
+        confidence_score: "No citations available",
         research_date: new Date().toISOString(),
       },
     };
   }
 
-  console.log("[RESEARCH] Conducting academic research with Perplexity...");
+  console.log("[RESEARCH-FALLBACK] Using Perplexity as fallback...");
 
   try {
-    // Topic decomposition and source retrieval
     const searchQuery = `Find peer-reviewed academic sources for: "${topic}" in ${category.replace(/_/g, " ")}.
-    
-Key areas to research:
-${keyTopics.map(t => `- ${t}`).join('\n')}
-
-Requirements:
-1. Find peer-reviewed journal articles
-2. Find academic textbooks and scholarly books  
-3. Find university publications and institutional reports
-4. Find reputable publisher materials
-
-For each source, provide:
-- Full author name(s)
-- Complete title
-- Publication year
-- Type (journal, book, article, report)
-- DOI if available
-- URL if available
-- Journal name or publisher
-
-Return ONLY real, verifiable sources. Do not fabricate any citations.
-Return as JSON array.`;
+Key areas: ${keyTopics.join(', ')}
+Return ONLY real, verifiable sources with DOIs when available.`;
 
     const response = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
@@ -117,11 +202,8 @@ Return as JSON array.`;
         messages: [
           { 
             role: "system", 
-            content: `You are an academic research assistant. Find REAL, VERIFIABLE academic references only.
-Return as JSON array with format:
-[{"author": "Last, First", "title": "Full Title", "year": 2023, "type": "journal|book|article|report", "doi": "optional", "url": "optional", "journal": "optional", "publisher": "optional"}]
-Only include sources that actually exist and can be verified. If uncertain about a source, add "requires_verification": true.
-Return between 5-15 high-quality sources.`
+            content: `Find REAL academic references. Return as JSON array:
+[{"author": "Last, First", "title": "Title", "year": 2023, "type": "journal", "doi": "optional", "url": "optional"}]`
           },
           { role: "user", content: searchQuery }
         ],
@@ -130,7 +212,6 @@ Return between 5-15 high-quality sources.`
     });
 
     if (!response.ok) {
-      console.error("[RESEARCH] Perplexity error:", response.status);
       throw new Error("Perplexity API error");
     }
 
@@ -138,17 +219,13 @@ Return between 5-15 high-quality sources.`
     const content = data.choices?.[0]?.message?.content || "";
     const citations = data.citations || [];
 
-    console.log("[RESEARCH] Perplexity response received, citations:", citations.length);
-
-    // Parse references from response
     let references: Reference[] = [];
     try {
       const jsonMatch = content.match(/\[[\s\S]*\]/);
       if (jsonMatch) {
         references = JSON.parse(jsonMatch[0]);
       }
-    } catch (parseError) {
-      console.log("[RESEARCH] Could not parse JSON, using citation URLs");
+    } catch {
       references = citations.slice(0, 10).map((url: string, i: number) => ({
         author: "Source",
         title: `Reference ${i + 1}`,
@@ -159,28 +236,6 @@ Return between 5-15 high-quality sources.`
       }));
     }
 
-    // Add citation URLs from Perplexity
-    if (citations.length > 0) {
-      references = references.map((ref: Reference, i: number) => ({
-        ...ref,
-        url: ref.url || citations[i] || undefined,
-      }));
-    }
-
-    // Calculate source type counts
-    const sourceTypes: Record<string, number> = {};
-    references.forEach((ref: Reference) => {
-      const type = ref.type || 'article';
-      sourceTypes[type] = (sourceTypes[type] || 0) + 1;
-    });
-
-    // Determine confidence score
-    let confidenceScore = "No citations";
-    if (references.length >= 10) confidenceScore = "High citation density";
-    else if (references.length >= 5) confidenceScore = "Moderate";
-    else if (references.length >= 1) confidenceScore = "Introductory overview";
-
-    // Generate in-text citations
     const inTextCitations = references.map((ref: Reference) => 
       formatInTextCitation(ref, citationStyle)
     );
@@ -190,13 +245,13 @@ Return between 5-15 high-quality sources.`
       inTextCitations,
       metadata: {
         source_count: references.length,
-        source_types: sourceTypes,
-        confidence_score: confidenceScore,
+        source_types: {},
+        confidence_score: references.length >= 5 ? "Moderate (Perplexity fallback)" : "Low",
         research_date: new Date().toISOString(),
       },
     };
   } catch (error) {
-    console.error("[RESEARCH] Error:", error);
+    console.error("[RESEARCH-FALLBACK] Error:", error);
     return {
       references: [],
       inTextCitations: [],
@@ -318,21 +373,25 @@ serve(async (req) => {
     console.log(`[GENERATE-CHAPTER] Target words: ${effectiveWordCount}, Language: ${languageName}, Type: ${bookType}, Plan: ${userPlan}`);
     console.log(`[GENERATE-CHAPTER] Academic Mode: ${academicMode}, Citation Style: ${citationStyle}`);
 
-    // ACADEMIC RESEARCH MODE - Conduct research first
+    // ACADEMIC RESEARCH MODE - Conduct deep research first
     let researchResult: ResearchResult | null = null;
     if (academicMode && bookType === 'text') {
-      console.log("[GENERATE-CHAPTER] Academic mode enabled, conducting research pipeline...");
-      researchResult = await conductResearch(
+      console.log("[GENERATE-CHAPTER] Academic mode enabled, conducting deep research pipeline...");
+      researchResult = await conductDeepResearch(
         `${chapterTitle} - ${bookTitle}`,
         category,
         keyTopics || [chapterTitle],
-        citationStyle
+        citationStyle,
+        token // Pass auth token for deep-research function
       );
-      console.log(`[GENERATE-CHAPTER] Research complete: ${researchResult.metadata.source_count} sources found`);
+      
+      if (researchResult) {
+        console.log(`[GENERATE-CHAPTER] Research complete: ${researchResult.metadata.source_count} sources found`);
 
-      // If no sources found and academic mode is mandatory, warn but continue
-      if (researchResult.references.length === 0) {
-        console.log("[GENERATE-CHAPTER] Warning: No sources found, generating with verification notice");
+        // If no sources found and academic mode is mandatory, warn but continue
+        if (researchResult.references.length === 0) {
+          console.log("[GENERATE-CHAPTER] Warning: No sources found, generating with verification notice");
+        }
       }
     }
 
