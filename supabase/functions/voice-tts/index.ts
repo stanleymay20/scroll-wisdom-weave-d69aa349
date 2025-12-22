@@ -7,13 +7,13 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const logStep = (step: string, details?: any) => {
+const logStep = (step: string, details?: Record<string, unknown>) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
   console.log(`[VOICE-TTS] ${step}${detailsStr}`);
 };
 
 // ElevenLabs voices
-const VOICES: Record<string, string> = {
+const ELEVEN_VOICES: Record<string, string> = {
   alloy: "EXAVITQu4vr4xnSDxMaL", // Sarah
   echo: "JBFqnCBsd6RMkjVDRZzb", // George
   nova: "FGY2WhTYpPnrIDTdsKH5", // Laura
@@ -31,13 +31,17 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
+    const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error("Supabase configuration is missing");
     }
 
-    if (!ELEVENLABS_API_KEY) {
-      throw new Error("ELEVENLABS_API_KEY is not configured");
+    const useElevenLabs = !!ELEVENLABS_API_KEY;
+    const useOpenAI = !!OPENAI_API_KEY;
+
+    if (!useElevenLabs && !useOpenAI) {
+      throw new Error("No TTS service configured");
     }
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
@@ -73,55 +77,105 @@ serve(async (req) => {
       });
     }
 
-    // Limit text length
-    const cleanText = text.slice(0, 5000);
+    // Limit and clean text
+    const cleanText = text.slice(0, 5000).trim();
     logStep("Processing text", { textLength: cleanText.length, voice });
 
-    // Map voice name to ElevenLabs voice ID
-    const voiceId = VOICES[voice] || VOICES.nova;
+    let audioBuffer: ArrayBuffer | null = null;
 
-    logStep("Sending to ElevenLabs TTS", { voiceId });
+    // Try ElevenLabs first (higher quality)
+    if (useElevenLabs) {
+      try {
+        const voiceId = ELEVEN_VOICES[voice] || ELEVEN_VOICES.nova;
+        logStep("Sending to ElevenLabs TTS", { voiceId });
 
-    const response = await fetch(
-      `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-      {
+        const response = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+          {
+            method: "POST",
+            headers: {
+              "xi-api-key": ELEVENLABS_API_KEY!,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              text: cleanText,
+              model_id: "eleven_turbo_v2_5",
+              output_format: "mp3_44100_128",
+              voice_settings: {
+                stability: 0.5,
+                similarity_boost: 0.75,
+                style: 0.3,
+                use_speaker_boost: true,
+              },
+            }),
+          }
+        );
+
+        if (response.ok) {
+          audioBuffer = await response.arrayBuffer();
+          logStep("ElevenLabs TTS successful", { audioSize: audioBuffer.byteLength });
+        } else {
+          const errorText = await response.text();
+          logStep("ElevenLabs TTS failed", { status: response.status, error: errorText });
+          
+          if (response.status === 429) {
+            return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again." }), {
+              status: 429,
+              headers: { ...corsHeaders, "Content-Type": "application/json" },
+            });
+          }
+          
+          if (!useOpenAI) {
+            throw new Error(`ElevenLabs TTS error: ${response.status}`);
+          }
+        }
+      } catch (elevenLabsError) {
+        if (!useOpenAI) throw elevenLabsError;
+        logStep("ElevenLabs failed, trying OpenAI fallback");
+      }
+    }
+
+    // Fallback to OpenAI TTS
+    if (!audioBuffer && useOpenAI) {
+      logStep("Sending to OpenAI TTS");
+      
+      const response = await fetch("https://api.openai.com/v1/audio/speech", {
         method: "POST",
         headers: {
-          "xi-api-key": ELEVENLABS_API_KEY,
+          "Authorization": `Bearer ${OPENAI_API_KEY}`,
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          text: cleanText,
-          model_id: "eleven_multilingual_v2",
-          output_format: "mp3_44100_128",
-          voice_settings: {
-            stability: 0.5,
-            similarity_boost: 0.75,
-            style: 0.5,
-            use_speaker_boost: true,
-          },
+          model: "tts-1",
+          input: cleanText,
+          voice: voice === "nova" ? "nova" : voice === "shimmer" ? "shimmer" : "alloy",
+          response_format: "mp3",
         }),
-      }
-    );
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      logStep("ElevenLabs TTS error", { status: response.status, error: errorText });
-      
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again." }), {
-          status: 429,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      if (!response.ok) {
+        const errorText = await response.text();
+        logStep("OpenAI TTS error", { status: response.status, error: errorText });
+        
+        if (response.status === 429) {
+          return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again." }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        throw new Error(`OpenAI TTS error: ${response.status}`);
       }
-      
-      throw new Error(`ElevenLabs TTS error: ${response.status}`);
+
+      audioBuffer = await response.arrayBuffer();
+      logStep("OpenAI TTS successful", { audioSize: audioBuffer.byteLength });
     }
 
-    const audioBuffer = await response.arrayBuffer();
-    const base64Audio = base64Encode(audioBuffer);
+    if (!audioBuffer) {
+      throw new Error("Failed to generate audio");
+    }
 
-    logStep("TTS successful", { audioSize: audioBuffer.byteLength });
+    const base64Audio = base64Encode(audioBuffer);
 
     return new Response(
       JSON.stringify({

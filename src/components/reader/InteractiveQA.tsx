@@ -59,8 +59,17 @@ export function InteractiveQA({
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const isMountedRef = useRef(true);
   const { toast } = useToast();
   const { t } = useLanguage();
+
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const SUGGESTED_QUESTIONS = [
     t('qa.explain'),
@@ -76,16 +85,34 @@ export function InteractiveQA({
     }
   }, [messages]);
 
+  // Cleanup audio on unmount
+  useEffect(() => {
+    return () => {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+        audioRef.current = null;
+      }
+    };
+  }, []);
+
   // Play audio response
   const playAudio = useCallback((audioContent: string) => {
     if (audioRef.current) {
       audioRef.current.pause();
+      audioRef.current.src = "";
     }
 
     const audio = new Audio(`data:audio/mpeg;base64,${audioContent}`);
-    audio.onplay = () => setIsPlayingAudio(true);
-    audio.onended = () => setIsPlayingAudio(false);
-    audio.onerror = () => setIsPlayingAudio(false);
+    audio.onplay = () => {
+      if (isMountedRef.current) setIsPlayingAudio(true);
+    };
+    audio.onended = () => {
+      if (isMountedRef.current) setIsPlayingAudio(false);
+    };
+    audio.onerror = () => {
+      if (isMountedRef.current) setIsPlayingAudio(false);
+    };
     audioRef.current = audio;
     audio.play().catch(console.error);
   }, []);
@@ -93,6 +120,7 @@ export function InteractiveQA({
   const stopAudio = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
+      audioRef.current.src = "";
       audioRef.current = null;
     }
     setIsPlayingAudio(false);
@@ -124,6 +152,8 @@ export function InteractiveQA({
         },
       });
 
+      if (!isMountedRef.current) return;
+
       if (error) throw error;
 
       if (data?.error) {
@@ -140,7 +170,7 @@ export function InteractiveQA({
       setMessages(prev => [...prev, assistantMessage]);
 
       // Auto-play audio if enabled
-      if (speakResponses && data?.audioContent) {
+      if (speakResponses && data?.audioContent && isMountedRef.current) {
         playAudio(data.audioContent);
       }
 
@@ -149,6 +179,8 @@ export function InteractiveQA({
         onClearHighlight();
       }
     } catch (err) {
+      if (!isMountedRef.current) return;
+      
       console.error("[InteractiveQA] Error:", err);
       const errorMessage = err instanceof Error ? err.message : "Failed to get answer";
       
@@ -172,7 +204,9 @@ export function InteractiveQA({
         });
       }
     } finally {
-      setIsLoading(false);
+      if (isMountedRef.current) {
+        setIsLoading(false);
+      }
     }
   };
 
@@ -194,7 +228,15 @@ export function InteractiveQA({
         return;
       }
 
-      await (supabase.from("study_notes") as any).insert({
+      const noteData: {
+        user_id: string;
+        book_id: string;
+        chapter_id: string | null;
+        note_type: string;
+        title: string;
+        content: { messages: Message[] };
+        highlighted_text: string | null;
+      } = {
         user_id: user.id,
         book_id: bookId,
         chapter_id: chapterId || null,
@@ -202,7 +244,12 @@ export function InteractiveQA({
         title: `Q&A: ${messages[0]?.content.slice(0, 50)}...`,
         content: { messages },
         highlighted_text: highlightedText || null,
-      });
+      };
+
+      // Use type assertion to bypass strict typing since Json type is flexible
+      const { error } = await supabase.from("study_notes").insert([noteData as any]);
+
+      if (error) throw error;
 
       toast({ title: t('qa.saved'), description: t('qa.savedDesc') });
     } catch (err) {

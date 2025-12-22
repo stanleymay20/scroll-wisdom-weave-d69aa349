@@ -75,9 +75,19 @@ export function VoiceConversation({
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const audioChunksRef = useRef<Blob[]>([]);
+  const streamRef = useRef<MediaStream | null>(null);
+  const isMountedRef = useRef(true);
   const { toast } = useToast();
   const entitlements = useEntitlements();
   const { t } = useLanguage();
+
+  // Track mounted state
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
 
   const levelData = COGNITIVE_LEVELS.find(l => l.id === cognitiveLevel) || COGNITIVE_LEVELS[1];
   const LevelIcon = levelData.icon;
@@ -107,9 +117,14 @@ export function VoiceConversation({
         },
       });
 
-      const mediaRecorder = new MediaRecorder(stream, {
-        mimeType: "audio/webm;codecs=opus",
-      });
+      streamRef.current = stream;
+
+      // Check for supported MIME types
+      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+        ? "audio/webm;codecs=opus"
+        : "audio/webm";
+
+      const mediaRecorder = new MediaRecorder(stream, { mimeType });
 
       audioChunksRef.current = [];
 
@@ -120,14 +135,29 @@ export function VoiceConversation({
       };
 
       mediaRecorder.onstop = async () => {
+        // Clean up stream
+        if (streamRef.current) {
+          streamRef.current.getTracks().forEach(track => track.stop());
+          streamRef.current = null;
+        }
+        
+        if (!isMountedRef.current || audioChunksRef.current.length === 0) return;
+        
         const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        stream.getTracks().forEach(track => track.stop());
         
         // Convert to base64 and send for transcription
         const reader = new FileReader();
         reader.onloadend = async () => {
+          if (!isMountedRef.current) return;
           const base64 = (reader.result as string).split(",")[1];
           await processAudio(base64);
+        };
+        reader.onerror = () => {
+          console.error("FileReader error");
+          if (isMountedRef.current) {
+            setIsProcessing(false);
+            setTranscript("");
+          }
         };
         reader.readAsDataURL(audioBlob);
       };
@@ -157,6 +187,8 @@ export function VoiceConversation({
 
   // Process recorded audio
   const processAudio = async (base64Audio: string) => {
+    if (!isMountedRef.current) return;
+    
     setIsProcessing(true);
     setTranscript(t('voice.processing'));
 
@@ -165,6 +197,8 @@ export function VoiceConversation({
       const { data: sttData, error: sttError } = await supabase.functions.invoke("voice-stt", {
         body: { audio: base64Audio },
       });
+
+      if (!isMountedRef.current) return;
 
       if (sttError || !sttData?.text) {
         throw new Error(sttData?.error || "Failed to transcribe audio");
@@ -181,7 +215,7 @@ export function VoiceConversation({
       const { data: convData, error: convError } = await supabase.functions.invoke("voice-conversation", {
         body: {
           userMessage,
-          chapterContent,
+          chapterContent: chapterContent.slice(0, 8000), // Limit content size
           chapterTitle,
           bookTitle,
           cognitiveLevel,
@@ -191,8 +225,21 @@ export function VoiceConversation({
         },
       });
 
-      if (convError || !convData?.text) {
-        throw new Error(convData?.error || "Failed to get response");
+      if (!isMountedRef.current) return;
+
+      if (convError) {
+        const errorMsg = convData?.error || convError.message || "Failed to get response";
+        if (errorMsg.includes("429") || errorMsg.includes("Rate limit")) {
+          throw new Error(t('voice.rateLimited'));
+        }
+        if (errorMsg.includes("402") || errorMsg.includes("Payment")) {
+          throw new Error(t('voice.creditsRequired'));
+        }
+        throw new Error(errorMsg);
+      }
+
+      if (!convData?.text) {
+        throw new Error("No response received");
       }
 
       // Add assistant message
@@ -203,7 +250,7 @@ export function VoiceConversation({
       }]);
 
       // Play audio response
-      if (convData.audio) {
+      if (convData.audio && isMountedRef.current) {
         playAudio(convData.audio);
       }
 
@@ -211,65 +258,92 @@ export function VoiceConversation({
 
     } catch (error) {
       console.error("Voice processing error:", error);
-      toast({
-        title: t('common.error'),
-        description: error instanceof Error ? error.message : t('voice.processingFailed'),
-        variant: "destructive",
-      });
-      setTranscript("");
+      if (isMountedRef.current) {
+        toast({
+          title: t('common.error'),
+          description: error instanceof Error ? error.message : t('voice.processingFailed'),
+          variant: "destructive",
+        });
+        setTranscript("");
+      }
     } finally {
-      setIsProcessing(false);
+      if (isMountedRef.current) {
+        setIsProcessing(false);
+      }
     }
   };
 
   // Play audio response
-  const playAudio = (base64Audio: string) => {
+  const playAudio = useCallback((base64Audio: string) => {
     try {
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.src = "";
       }
 
       const audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
       const audio = new Audio(audioUrl);
       
-      audio.onplay = () => setIsSpeaking(true);
-      audio.onended = () => setIsSpeaking(false);
-      audio.onerror = () => setIsSpeaking(false);
+      audio.onplay = () => {
+        if (isMountedRef.current) setIsSpeaking(true);
+      };
+      audio.onended = () => {
+        if (isMountedRef.current) setIsSpeaking(false);
+      };
+      audio.onerror = () => {
+        if (isMountedRef.current) setIsSpeaking(false);
+      };
       
       audioRef.current = audio;
-      audio.play();
+      audio.play().catch(console.error);
     } catch (error) {
       console.error("Audio playback error:", error);
     }
-  };
+  }, []);
 
   // Stop audio
-  const stopAudio = () => {
+  const stopAudio = useCallback(() => {
     if (audioRef.current) {
       audioRef.current.pause();
+      audioRef.current.src = "";
       audioRef.current = null;
-      setIsSpeaking(false);
     }
-  };
+    setIsSpeaking(false);
+  }, []);
 
   // Toggle recording
-  const toggleRecording = () => {
+  const toggleRecording = useCallback(() => {
     if (isListening) {
       stopRecording();
     } else {
       if (isSpeaking) stopAudio();
       startRecording();
     }
-  };
+  }, [isListening, isSpeaking, stopRecording, stopAudio, startRecording]);
 
   // Cleanup on unmount
   useEffect(() => {
     return () => {
+      isMountedRef.current = false;
+      
+      // Clean up audio
       if (audioRef.current) {
         audioRef.current.pause();
+        audioRef.current.src = "";
+        audioRef.current = null;
       }
-      if (mediaRecorderRef.current) {
-        mediaRecorderRef.current.stop();
+      
+      // Clean up media recorder
+      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+        try {
+          mediaRecorderRef.current.stop();
+        } catch { /* ignore */ }
+      }
+      
+      // Clean up stream
+      if (streamRef.current) {
+        streamRef.current.getTracks().forEach(track => track.stop());
+        streamRef.current = null;
       }
     };
   }, []);
