@@ -1,11 +1,16 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSubscription } from '@/contexts/SubscriptionContext';
+
+// Cache admin status to prevent repeated queries
+const adminCache = new Map<string, { isAdmin: boolean; timestamp: number }>();
+const CACHE_DURATION = 300000; // 5 minutes
 
 export function useIsAdmin() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useSubscription();
+  const checkedRef = useRef(false);
 
   useEffect(() => {
     async function checkAdminRole() {
@@ -15,8 +20,19 @@ export function useIsAdmin() {
         return;
       }
 
+      // Check cache first
+      const cached = adminCache.get(user.id);
+      if (cached && Date.now() - cached.timestamp < CACHE_DURATION) {
+        setIsAdmin(cached.isAdmin);
+        setIsLoading(false);
+        return;
+      }
+
+      // Prevent duplicate checks in same render cycle
+      if (checkedRef.current) return;
+      checkedRef.current = true;
+
       try {
-        // Check user_roles table for admin role - secure server-side check
         const { data, error } = await supabase
           .from('user_roles')
           .select('role')
@@ -28,13 +44,17 @@ export function useIsAdmin() {
           console.error('Error checking admin role:', error);
           setIsAdmin(false);
         } else {
-          setIsAdmin(!!data);
+          const adminStatus = !!data;
+          setIsAdmin(adminStatus);
+          // Cache the result
+          adminCache.set(user.id, { isAdmin: adminStatus, timestamp: Date.now() });
         }
       } catch (err) {
         console.error('Admin check failed:', err);
         setIsAdmin(false);
       } finally {
         setIsLoading(false);
+        checkedRef.current = false;
       }
     }
 
