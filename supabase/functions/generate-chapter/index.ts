@@ -14,6 +14,18 @@ const TIER_WORD_LIMITS = {
   prophet_tier: 16000,
 };
 
+// Domain-specific minimum sources
+const DOMAIN_MIN_SOURCES: Record<string, number> = {
+  medicine: 5,
+  law: 3,
+  science: 5,
+  technology: 3,
+  business: 3,
+  history: 5,
+  philosophy: 4,
+  default: 3,
+};
+
 interface Reference {
   author: string;
   title: string;
@@ -24,6 +36,9 @@ interface Reference {
   journal?: string;
   publisher?: string;
   requires_verification?: boolean;
+  verified?: boolean;
+  peerReviewed?: boolean;
+  database?: string;
 }
 
 interface ResearchResult {
@@ -41,6 +56,110 @@ interface ResearchResult {
   };
 }
 
+interface ValidationResult {
+  valid: boolean;
+  errors: { code: string; message: string; severity: string }[];
+  warnings: { code: string; message: string }[];
+}
+
+// ===========================================
+// AUTHORITY-GRADE ACADEMIC VALIDATION
+// Hard failure conditions from the contract
+// ===========================================
+
+function validateAcademicRequirements(
+  content: string,
+  sources: Reference[],
+  category: string,
+  citationStyle: string
+): ValidationResult {
+  const errors: { code: string; message: string; severity: string }[] = [];
+  const warnings: { code: string; message: string }[] = [];
+  
+  const minSources = DOMAIN_MIN_SOURCES[category.toLowerCase()] || DOMAIN_MIN_SOURCES.default;
+  
+  // HARD FAIL: Insufficient sources
+  if (sources.length < minSources) {
+    errors.push({
+      code: 'INSUFFICIENT_SOURCES',
+      message: `${category} requires minimum ${minSources} verified sources, found ${sources.length}. Topic refinement suggested.`,
+      severity: 'critical',
+    });
+  }
+  
+  // HARD FAIL: No verified sources
+  const verifiedSources = sources.filter(s => s.doi || s.url);
+  if (sources.length > 0 && verifiedSources.length === 0) {
+    errors.push({
+      code: 'UNVERIFIED_SOURCES',
+      message: 'All sources must have DOI or stable academic URL',
+      severity: 'critical',
+    });
+  }
+  
+  // HARD FAIL for medicine: requires peer-reviewed sources
+  if (category.toLowerCase() === 'medicine') {
+    const peerReviewed = sources.filter(s => s.peerReviewed);
+    if (peerReviewed.length < 3) {
+      errors.push({
+        code: 'INSUFFICIENT_PEER_REVIEWED',
+        message: 'Medical content requires at least 3 peer-reviewed sources',
+        severity: 'critical',
+      });
+    }
+  }
+  
+  // Check for in-text citations in content
+  const citationPatterns: Record<string, RegExp> = {
+    APA: /\([A-Z][a-z]+(?:\s+(?:et\s+al\.?|&\s+[A-Z][a-z]+))?,?\s*\d{4}[a-z]?\)/g,
+    Harvard: /\([A-Z][a-z]+(?:\s+(?:et\s+al\.?|and\s+[A-Z][a-z]+))?\s+\d{4}[a-z]?\)/g,
+    IEEE: /\[\d+(?:,\s*\d+)*\]/g,
+    Chicago: /\[[A-Z][a-z]+,?\s*\d{4}\]/g,
+  };
+  
+  const pattern = citationPatterns[citationStyle] || citationPatterns.APA;
+  const citations = content.match(pattern) || [];
+  
+  if (citations.length === 0 && sources.length > 0) {
+    errors.push({
+      code: 'NO_IN_TEXT_CITATIONS',
+      message: 'Academic content must include in-text citations',
+      severity: 'critical',
+    });
+  }
+  
+  // Check for References section
+  if (!/(?:^|\n)##+\s*(?:references?|bibliography|works?\s*cited)/i.test(content)) {
+    errors.push({
+      code: 'MISSING_REFERENCES_SECTION',
+      message: 'Academic content must include a References section',
+      severity: 'critical',
+    });
+  }
+  
+  return {
+    valid: errors.length === 0,
+    errors,
+    warnings,
+  };
+}
+
+function formatValidationError(result: ValidationResult): string {
+  let message = '**ACADEMIC GENERATION STOPPED**\n\n';
+  message += 'The following requirements were not met:\n\n';
+  
+  result.errors.forEach(e => {
+    message += `❌ **${e.code}**: ${e.message}\n`;
+  });
+  
+  message += '\n**To proceed:**\n';
+  message += '1. Try a more specific topic with available academic literature\n';
+  message += '2. Ensure the topic has peer-reviewed sources in academic databases\n';
+  message += '3. Consider refining your search terms\n';
+  
+  return message;
+}
+
 // Format in-text citation based on style
 function formatInTextCitation(ref: Reference, style: string): string {
   const { author, year } = ref;
@@ -55,6 +174,8 @@ function formatInTextCitation(ref: Reference, style: string): string {
       return `(${lastName} ${year})`;
     case 'Chicago':
       return `[${lastName}, ${year}]`;
+    case 'IEEE':
+      return `[1]`; // Will be numbered in order
     default:
       return `(${lastName}, ${year})`;
   }
@@ -121,13 +242,13 @@ async function conductDeepResearch(
       journal: s.journal,
       publisher: s.publisher,
       requires_verification: !s.verified,
-      database: s.database,
+      verified: s.verified,
       peerReviewed: s.peerReviewed,
-      citationCount: s.citationCount,
+      database: s.database,
     }));
 
-    const inTextCitations = references.map((ref: Reference) => 
-      formatInTextCitation(ref, citationStyle)
+    const inTextCitations = references.map((ref: Reference, index: number) => 
+      citationStyle === 'IEEE' ? `[${index + 1}]` : formatInTextCitation(ref, citationStyle)
     );
 
     // Map confidence score
@@ -236,8 +357,8 @@ Return ONLY real, verifiable sources with DOIs when available.`;
       }));
     }
 
-    const inTextCitations = references.map((ref: Reference) => 
-      formatInTextCitation(ref, citationStyle)
+    const inTextCitations = references.map((ref: Reference, index: number) => 
+      citationStyle === 'IEEE' ? `[${index + 1}]` : formatInTextCitation(ref, citationStyle)
     );
 
     return {
@@ -263,6 +384,153 @@ Return ONLY real, verifiable sources with DOIs when available.`;
       },
     };
   }
+}
+
+// ===========================================
+// ACADEMIC PROMPT TEMPLATES
+// Authority-grade with mandatory structure
+// ===========================================
+
+function buildAcademicSystemPrompt(language: string, category: string, citationStyle: string): string {
+  return `You are ScrollLibrary Authority Engine — an academic production system for university-grade content.
+
+ROLE: You generate scholarly, pedagogically sound, publishable learning material.
+PRIORITY: Correctness > Speed. Trust > Novelty. Understanding > Volume.
+
+LANGUAGE: Write EXCLUSIVELY in ${language}. No other languages permitted.
+
+AUTHORSHIP RULES:
+- You are an AI-assisted author, not a sole author
+- Never imply credentials or authority beyond the content
+- Maintain neutral, scholarly tone throughout
+
+CITATION REQUIREMENTS (${citationStyle} format):
+- EVERY factual claim must have an in-text citation
+- NEVER fabricate citations — only use sources provided
+- If making a claim without a source, mark it as "[requires verification]"
+- Include proper ${citationStyle} formatted in-text citations
+
+COGNITIVE STRUCTURE (MANDATORY for each chapter):
+1. **Concept Introduction** — Hook the reader, provide context
+2. **Structured Explanation** — Clear, logical progression of ideas
+3. **Applied Examples** — Real-world case studies, practical applications
+4. **Critical Reflection** — Analysis, implications, connections
+5. **Key Takeaways** — Summary of main points
+
+CODE FORMATTING (CRITICAL):
+- ALL multi-line code MUST be in fenced code blocks
+- ALWAYS specify language: \`\`\`python, \`\`\`typescript, etc.
+- Preserve indentation exactly
+- NEVER inline multi-line code in paragraphs
+
+TABLE FORMATTING:
+- Use proper markdown tables with header rows
+- Ensure consistent column counts
+- Tables must be readable and structured
+
+FIELD-SPECIFIC (${category}):
+${getFieldSpecificInstructions(category)}
+
+QUALITY STANDARD: Content must be acceptable to university lecturers, graduate students, and academic reviewers.`;
+}
+
+function getFieldSpecificInstructions(category: string): string {
+  const instructions: Record<string, string> = {
+    medicine: `- Maintain evidence hierarchy (meta-analyses > RCTs > cohort studies)
+- Include medical disclaimers
+- Cite PubMed/clinical sources preferentially
+- Distinguish between established evidence, interpretation, and hypothesis`,
+    
+    law: `- Cite case law and statutes where relevant
+- Include jurisdictional disclaimers
+- Note when laws may vary by jurisdiction`,
+    
+    science: `- Include reproducibility statements where relevant
+- Cite methodology and findings separately
+- Distinguish between peer-reviewed and preprint sources`,
+    
+    technology: `- All code must be runnable and properly formatted
+- Include version information for libraries/frameworks
+- Cite official documentation where possible`,
+    
+    business: `- Use established frameworks (Porter, SWOT, etc.) with citations
+- Include tables for comparative data
+- Cite case studies and research`,
+    
+    history: `- Distinguish between primary and secondary sources
+- Include dates and contexts
+- Cite historical documents where relevant`,
+    
+    philosophy: `- Structure arguments clearly with premises and conclusions
+- Cite original philosophical texts
+- Present multiple perspectives fairly`,
+    
+    default: `- Maintain academic rigor
+- Support claims with citations
+- Use clear, structured arguments`,
+  };
+  
+  return instructions[category.toLowerCase()] || instructions.default;
+}
+
+function buildAcademicChapterPrompt(
+  chapterTitle: string,
+  bookTitle: string,
+  category: string,
+  keyTopics: string[],
+  targetWords: number,
+  language: string,
+  citationStyle: string,
+  references: Reference[],
+  inTextCitations: string[]
+): string {
+  const sourceList = references.slice(0, 15).map((ref, i) => 
+    `${i + 1}. ${ref.author} (${ref.year}). "${ref.title}"${ref.journal ? ` — ${ref.journal}` : ''}${ref.doi ? ` DOI: ${ref.doi}` : ''} — Citation: ${inTextCitations[i]}`
+  ).join('\n');
+
+  return `Write Chapter: "${chapterTitle}" for the book "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+**VERIFIED SOURCES TO CITE (USE ONLY THESE):**
+${sourceList}
+
+**KEY TOPICS TO COVER:**
+${keyTopics?.map((t: string) => `- ${t}`).join('\n') || '- Comprehensive coverage of the chapter topic'}
+
+**REQUIREMENTS:**
+1. Write approximately ${targetWords} words in ${language}
+2. Include in-text citations using ${citationStyle} format for ALL claims
+3. Use ONLY the sources listed above — no fabricated citations
+4. Mark unsupported claims with "[requires verification]"
+
+**MANDATORY STRUCTURE:**
+## Introduction
+[Hook + context + chapter overview]
+
+## [Main Section 1: Key Concept]
+[Structured explanation with citations]
+
+## [Main Section 2: Applied Examples]
+[Real-world applications with evidence]
+
+## [Main Section 3: Critical Analysis]
+[Deeper analysis, implications, connections]
+
+## Key Takeaways
+[Bullet point summary of main insights]
+
+## Conclusion
+[Synthesis and transition]
+
+## References
+[Full ${citationStyle} formatted bibliography of all sources cited]
+
+**FORMAT REQUIREMENTS:**
+- Use ## for main sections, ### for subsections
+- Code in fenced blocks with language: \`\`\`python
+- Tables in proper markdown format
+- Every claim needs a citation from the source list
+
+BEGIN WRITING THE COMPLETE ACADEMIC CHAPTER:`;
 }
 
 serve(async (req) => {
@@ -302,6 +570,14 @@ serve(async (req) => {
 
     console.log(`[GENERATE-CHAPTER] Authenticated user: ${user.id.slice(0, 8)}...`);
 
+    // Check if user is admin (admins bypass all restrictions)
+    const { data: userRoles } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id);
+    
+    const isAdmin = userRoles?.some(r => r.role === 'admin') || false;
+
     // Get user's subscription plan
     const { data: profile } = await supabase
       .from("profiles")
@@ -340,7 +616,7 @@ serve(async (req) => {
         .eq("id", chapter.book_id)
         .single();
 
-      if (book && book.creator_id !== user.id) {
+      if (book && book.creator_id !== user.id && !isAdmin) {
         console.log(`[GENERATE-CHAPTER] User ${user.id.slice(0, 8)}... not authorized for book`);
         return new Response(JSON.stringify({ error: "Not authorized to modify this book" }), {
           status: 403,
@@ -349,9 +625,9 @@ serve(async (req) => {
       }
     }
 
-    // Enforce word count limit based on subscription
-    const effectiveWordCount = Math.min(wordCount, maxWordCount);
-    if (wordCount > maxWordCount) {
+    // Enforce word count limit based on subscription (admins bypass)
+    const effectiveWordCount = isAdmin ? wordCount : Math.min(wordCount, maxWordCount);
+    if (wordCount > maxWordCount && !isAdmin) {
       console.log(`[GENERATE-CHAPTER] Capping word count from ${wordCount} to ${maxWordCount} for ${userPlan} plan`);
     }
     
@@ -370,28 +646,70 @@ serve(async (req) => {
     const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
 
     console.log(`[GENERATE-CHAPTER] Generating chapter ${chapterNumber}: ${chapterTitle}`);
-    console.log(`[GENERATE-CHAPTER] Target words: ${effectiveWordCount}, Language: ${languageName}, Type: ${bookType}, Plan: ${userPlan}`);
+    console.log(`[GENERATE-CHAPTER] Target words: ${effectiveWordCount}, Language: ${languageName}, Type: ${bookType}, Plan: ${userPlan}, Admin: ${isAdmin}`);
     console.log(`[GENERATE-CHAPTER] Academic Mode: ${academicMode}, Citation Style: ${citationStyle}`);
 
-    // ACADEMIC RESEARCH MODE - Conduct deep research first
+    // ===========================================
+    // ACADEMIC RESEARCH MODE - HARD FAILURE PATH
+    // Research MUST happen before writing
+    // ===========================================
     let researchResult: ResearchResult | null = null;
+    
     if (academicMode && bookType === 'text') {
-      console.log("[GENERATE-CHAPTER] Academic mode enabled, conducting deep research pipeline...");
+      console.log("[GENERATE-CHAPTER] Academic mode enabled, conducting deep research pipeline FIRST...");
+      
       researchResult = await conductDeepResearch(
         `${chapterTitle} - ${bookTitle}`,
         category,
         keyTopics || [chapterTitle],
         citationStyle,
-        token // Pass auth token for deep-research function
+        token
       );
       
-      if (researchResult) {
-        console.log(`[GENERATE-CHAPTER] Research complete: ${researchResult.metadata.source_count} sources found`);
+      console.log(`[GENERATE-CHAPTER] Research complete: ${researchResult.metadata.source_count} sources found`);
 
-        // If no sources found and academic mode is mandatory, warn but continue
-        if (researchResult.references.length === 0) {
-          console.log("[GENERATE-CHAPTER] Warning: No sources found, generating with verification notice");
-        }
+      // HARD FAILURE CHECK: Validate academic requirements BEFORE generation
+      const minSources = DOMAIN_MIN_SOURCES[category.toLowerCase()] || DOMAIN_MIN_SOURCES.default;
+      
+      if (researchResult.references.length < minSources && !isAdmin) {
+        console.log(`[GENERATE-CHAPTER] HARD FAIL: Insufficient sources (${researchResult.references.length} < ${minSources})`);
+        
+        const errorMessage = {
+          error: "Insufficient verified sources for academic content",
+          code: "INSUFFICIENT_SOURCES",
+          details: {
+            found: researchResult.references.length,
+            required: minSources,
+            category: category,
+            suggestion: "Topic refinement needed. Try a more specific topic with available academic literature, or select a different category.",
+            suggestedRefinements: researchResult.metadata.topic_coverage 
+              ? [`Try more specific terms within: ${keyTopics?.join(', ')}`, `Search in related academic databases`, `Consider broader academic context`]
+              : undefined,
+          },
+        };
+        
+        return new Response(JSON.stringify(errorMessage), {
+          status: 422, // Unprocessable Entity
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      // Check for verified sources (DOI or URL)
+      const verifiedSources = researchResult.references.filter(s => s.doi || s.url);
+      if (verifiedSources.length === 0 && researchResult.references.length > 0 && !isAdmin) {
+        console.log("[GENERATE-CHAPTER] HARD FAIL: No verifiable sources");
+        
+        return new Response(JSON.stringify({
+          error: "No verifiable sources found",
+          code: "UNVERIFIED_SOURCES",
+          details: {
+            message: "All sources must have DOI or stable academic URL for academic mode",
+            suggestion: "Try a more established academic topic with published research",
+          },
+        }), {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
     }
 
@@ -594,7 +912,9 @@ CRITICAL REQUIREMENTS:
     }
 
 
+    // ===========================================
     // STANDARD TEXT / ILLUSTRATED BOOK GENERATION
+    // ===========================================
 
     // Validate and cap word count
     const targetWords = Math.min(Math.max(effectiveWordCount, 2000), 6000);
@@ -606,64 +926,29 @@ CRITICAL REQUIREMENTS:
     const useDeepSeek = !!DEEPSEEK_API_KEY;
     console.log(`[GENERATE-CHAPTER] Using AI provider: ${useDeepSeek ? 'DeepSeek' : 'Lovable AI (Gemini)'}`);
 
-    // Build the chapter prompt - include academic requirements if in academic mode
-    let academicInstructions = '';
-    let referenceSection = '';
+    // Build prompts based on mode
+    let systemPrompt: string;
+    let chapterPrompt: string;
     
     if (academicMode && researchResult && researchResult.references.length > 0) {
-      const citationExamples = researchResult.inTextCitations.slice(0, 5).join(', ');
-      academicInstructions = `
-
-ACADEMIC RESEARCH MODE REQUIREMENTS (MANDATORY):
-This is academic content requiring verified citations.
-
-Available sources to cite (USE THESE):
-${researchResult.references.slice(0, 10).map((ref, i) => 
-  `${i + 1}. ${ref.author} (${ref.year}). "${ref.title}" - Citation: ${researchResult.inTextCitations[i]}`
-).join('\n')}
-
-CITATION REQUIREMENTS:
-1. Include in-text citations using ${citationStyle} format: ${citationExamples}
-2. Cite sources when making claims, stating facts, or referencing research
-3. Every major claim MUST have a citation
-4. Do NOT fabricate citations - only use the sources provided above
-5. If making a claim without a source, mark it as "[requires verification]"
-
-`;
+      // ACADEMIC MODE: Use authority-grade prompts
+      systemPrompt = buildAcademicSystemPrompt(languageName, category, citationStyle);
+      chapterPrompt = buildAcademicChapterPrompt(
+        chapterTitle,
+        bookTitle,
+        category,
+        keyTopics,
+        targetWords,
+        languageName,
+        citationStyle,
+        researchResult.references,
+        researchResult.inTextCitations
+      );
+    } else {
+      // CREATIVE MODE: Standard generation
+      systemPrompt = `You are ScrollAuthorGPT, an elite AI author. You write EXCLUSIVELY in ${languageName}. You NEVER use any other language. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers. ALL your output must be in ${languageName} only.`;
       
-      referenceSection = `
-
----
-
-## References
-
-${researchResult.references.map((ref) => {
-        const lastName = ref.author.split(',')[0] || ref.author.split(' ').pop() || ref.author;
-        switch (citationStyle) {
-          case 'APA':
-            return `${ref.author} (${ref.year}). *${ref.title}*.${ref.journal ? ` ${ref.journal}.` : ref.publisher ? ` ${ref.publisher}.` : ''}${ref.doi ? ` https://doi.org/${ref.doi}` : ref.url ? ` ${ref.url}` : ''}`;
-          case 'MLA':
-            return `${ref.author}. "${ref.title}."${ref.journal ? ` *${ref.journal}*,` : ''} ${ref.year}.${ref.url ? ` ${ref.url}` : ''}`;
-          case 'Harvard':
-            return `${ref.author} (${ref.year}) ${ref.title}.${ref.journal ? ` ${ref.journal}.` : ref.publisher ? ` ${ref.publisher}.` : ''}${ref.url ? ` Available at: ${ref.url}` : ''}`;
-          case 'Chicago':
-            return `${ref.author}. ${ref.title}.${ref.publisher ? ` ${ref.publisher},` : ''} ${ref.year}.${ref.url ? ` ${ref.url}.` : ''}`;
-          default:
-            return `${ref.author} (${ref.year}). ${ref.title}.`;
-        }
-      }).join('\n\n')}
-`;
-    } else if (academicMode) {
-      academicInstructions = `
-
-ACADEMIC RESEARCH MODE:
-This is academic content. Include proper citations where possible.
-Mark claims without sources as "[requires verification]".
-Use ${citationStyle} citation format.
-`;
-    }
-
-    const chapterPrompt = `You are ScrollAuthorGPT, an elite AI author renowned for creating comprehensive, scholarly book chapters.
+      chapterPrompt = `You are ScrollAuthorGPT, an elite AI author renowned for creating comprehensive, scholarly book chapters.
 
 Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${bookTitle}" in the ${category.replace(/_/g, " ")} category.
 
@@ -671,10 +956,8 @@ CRITICAL LANGUAGE REQUIREMENT - MANDATORY:
 Generate ALL content strictly in ${languageName}.
 Do NOT use English (unless ${languageName} IS English).
 Do NOT mix languages.
-Do NOT explain language choices.
-Do NOT include any text in any language other than ${languageName}.
 Every word, heading, example, and reference must be in ${languageName}.
-${academicInstructions}
+
 Key topics to cover:
 ${keyTopics?.map((t: string) => `- ${t}`).join('\n') || '- Comprehensive coverage of the chapter topic'}
 
@@ -700,7 +983,7 @@ CRITICAL REQUIREMENTS:
 8. This is a COMPLETE chapter - do not truncate or summarize
 
 BEGIN WRITING THE FULL CHAPTER NOW IN ${languageName}:`;
-
+    }
 
     let chapterContent: string = "";
     let retryCount = 0;
@@ -719,10 +1002,7 @@ BEGIN WRITING THE FULL CHAPTER NOW IN ${languageName}:`;
             body: JSON.stringify({
               model: "deepseek-chat",
               messages: [
-                { 
-                  role: "system", 
-                  content: `You are ScrollAuthorGPT, an elite AI author. You write EXCLUSIVELY in ${languageName}. You NEVER use any other language. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers. ALL your output must be in ${languageName} only.${academicMode ? ' You always include proper academic citations.' : ''}` 
-                },
+                { role: "system", content: systemPrompt },
                 { role: "user", content: chapterPrompt }
               ],
               max_tokens: maxTokens,
@@ -770,10 +1050,7 @@ BEGIN WRITING THE FULL CHAPTER NOW IN ${languageName}:`;
             body: JSON.stringify({
               model: "google/gemini-2.5-flash",
               messages: [
-                { 
-                  role: "system", 
-                  content: `You are ScrollAuthorGPT, an elite AI author. You write EXCLUSIVELY in ${languageName}. You NEVER use any other language. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers. ALL your output must be in ${languageName} only.${academicMode ? ' You always include proper academic citations.' : ''}` 
-                },
+                { role: "system", content: systemPrompt },
                 { role: "user", content: chapterPrompt }
               ],
             }),
@@ -816,176 +1093,181 @@ BEGIN WRITING THE FULL CHAPTER NOW IN ${languageName}:`;
 
     let finalContent = chapterContent;
 
-    // Add reference section for academic mode
-    if (academicMode && referenceSection) {
-      finalContent += referenceSection;
+    // Add academic front matter and reference section for academic mode
+    if (academicMode && researchResult && researchResult.references.length > 0) {
+      // Add front matter disclaimer
+      const frontMatter = `> **Academic Content Notice**
+> This chapter is an AI-assisted academic synthesis. All citations are from verified academic databases.
+> Users remain responsible for verification before academic submission.
+
+---
+
+`;
+      
+      // Check if References section exists, if not add it
+      if (!/(?:^|\n)##+\s*references/i.test(finalContent)) {
+        const referenceSection = `
+
+---
+
+## References
+
+${researchResult.references.map((ref) => {
+  switch (citationStyle) {
+    case 'APA':
+      return `${ref.author} (${ref.year}). *${ref.title}*.${ref.journal ? ` ${ref.journal}.` : ref.publisher ? ` ${ref.publisher}.` : ''}${ref.doi ? ` https://doi.org/${ref.doi}` : ref.url ? ` ${ref.url}` : ''}`;
+    case 'Harvard':
+      return `${ref.author} (${ref.year}) ${ref.title}.${ref.journal ? ` ${ref.journal}.` : ref.publisher ? ` ${ref.publisher}.` : ''}${ref.url ? ` Available at: ${ref.url}` : ''}`;
+    case 'IEEE':
+      return `[${researchResult.references.indexOf(ref) + 1}] ${ref.author}, "${ref.title},"${ref.journal ? ` ${ref.journal},` : ''} ${ref.year}.${ref.doi ? ` DOI: ${ref.doi}` : ''}`;
+    case 'Chicago':
+      return `${ref.author}. ${ref.title}.${ref.publisher ? ` ${ref.publisher},` : ''} ${ref.year}.${ref.url ? ` ${ref.url}.` : ''}`;
+    default:
+      return `${ref.author} (${ref.year}). ${ref.title}.`;
+  }
+}).join('\n\n')}
+`;
+        finalContent = frontMatter + finalContent + referenceSection;
+      } else {
+        finalContent = frontMatter + finalContent;
+      }
     }
 
+    // ILLUSTRATED BOOK - Add context-aware illustrations
     if (bookType === 'illustrated') {
       const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-      if (!LOVABLE_API_KEY) {
-        throw new Error("LOVABLE_API_KEY is not configured");
-      }
+      if (LOVABLE_API_KEY) {
+        console.log("[GENERATE-CHAPTER] Generating context-aware illustration prompts...");
 
-      console.log("[GENERATE-CHAPTER] Generating context-aware illustration prompts...");
+        // Extract key concepts from the generated content for relevant illustrations
+        const contentSummary = chapterContent.slice(0, 2000);
 
-      // Extract key concepts from the generated content for relevant illustrations
-      const contentSummary = chapterContent.slice(0, 2000);
-
-      const illustrationPrompt = `Analyze this chapter content and create 4 HIGHLY RELEVANT illustration ideas that directly visualize the key concepts discussed.
+        const illustrationPrompt = `Analyze this chapter content and create 3 HIGHLY RELEVANT illustration ideas that directly visualize the key concepts discussed.
 
 CHAPTER CONTENT EXCERPT:
 ${contentSummary}
 
 CHAPTER: "${chapterTitle}" from "${bookTitle}"
 CATEGORY: ${category.replace(/_/g, " ")}
-KEY TOPICS: ${keyTopics?.join(', ') || chapterTitle}
 
 CRITICAL REQUIREMENTS:
-1. Each illustration MUST directly relate to specific concepts, examples, or ideas mentioned in the chapter
-2. Reference actual content from the text (people, events, concepts, examples mentioned)
-3. Create educational visuals that help readers understand the material
-4. NO generic or abstract imagery - be SPECIFIC to the chapter content
-5. Each prompt must be safe, non-violent, and suitable for general audiences
-6. NO text inside the image
+1. Each illustration MUST directly relate to specific concepts mentioned in the chapter
+2. Create educational visuals that help readers understand the material
+3. Each prompt must be safe and suitable for general audiences
+4. NO text inside the image
 
 FORMAT EXACTLY:
-
 ---
-
 [ILLUSTRATION 1]
-**Concept:** [Which specific topic/section this illustrates]
-**Visual:** [2-3 sentence detailed scene description for AI image generator, referencing actual chapter content]
+**Concept:** [Which specific topic this illustrates]
+**Visual:** [2-3 sentence detailed scene description]
+---`;
 
----
+        try {
+          const illustrationResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash",
+              messages: [
+                { role: "system", content: "You create illustration concepts for educational books. Be concise." },
+                { role: "user", content: illustrationPrompt }
+              ],
+            }),
+          });
 
-[ILLUSTRATION 2]
-**Concept:** [Which specific topic/section this illustrates]
-**Visual:** [Scene description...]
-
----
-
-[ILLUSTRATION 3]
-**Concept:** [Which specific topic/section this illustrates]
-**Visual:** [Scene description...]
-
----
-
-[ILLUSTRATION 4]
-**Concept:** [Which specific topic/section this illustrates]
-**Visual:** [Scene description...]`;
-
-      try {
-        const illustrationResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              { role: "system", content: "You create illustration concepts for educational books. Be concise." },
-              { role: "user", content: illustrationPrompt }
-            ],
-          }),
-        });
-
-        if (illustrationResponse.ok) {
-          const illustrationData = await illustrationResponse.json();
-          const illustrationContent = illustrationData.choices?.[0]?.message?.content || "";
-          
-          // Parse illustration prompts with concept context
-          const illustrationRegex = /\[ILLUSTRATION\s*(\d+)\]\s*(?:\*\*Concept:\*\*\s*([\s\S]*?))?\*\*Visual:\*\*\s*([\s\S]*?)(?=\s*---|\s*\[ILLUSTRATION|\s*$)/gi;
-          const illustrations: { num: number; concept: string; visual: string; imageUrl?: string }[] = [];
-          let illMatch;
-          
-          while ((illMatch = illustrationRegex.exec(illustrationContent)) !== null) {
-            illustrations.push({
-              num: parseInt(illMatch[1]),
-              concept: (illMatch[2] || '').trim(),
-              visual: illMatch[3].trim(),
-            });
-          }
-
-          console.log(`[GENERATE-CHAPTER] Found ${illustrations.length} illustration prompts`);
-
-          // Generate images for each illustration (limit to 3 to avoid rate limits)
-          for (let i = 0; i < Math.min(illustrations.length, 3); i++) {
-            const ill = illustrations[i];
-            try {
-              console.log(`[GENERATE-CHAPTER] Generating illustration ${ill.num} for: ${ill.concept || 'chapter content'}...`);
-              
-              // Include category context for more relevant imagery
-              const imagePrompt = `Educational book illustration for ${category.replace(/_/g, " ")} topic. ${ill.visual} Context: ${ill.concept || chapterTitle}. Style: Professional, clean, educational, realistic, suitable for scholarly publication. Accurate depiction of the subject matter. No text in image.`;
-              
-              const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  model: "google/gemini-2.5-flash-image-preview",
-                  messages: [{ role: "user", content: imagePrompt }],
-                  modalities: ["image", "text"],
-                }),
+          if (illustrationResponse.ok) {
+            const illustrationData = await illustrationResponse.json();
+            const illustrationContent = illustrationData.choices?.[0]?.message?.content || "";
+            
+            // Parse illustration prompts
+            const illustrationRegex = /\[ILLUSTRATION\s*(\d+)\]\s*(?:\*\*Concept:\*\*\s*([\s\S]*?))?\*\*Visual:\*\*\s*([\s\S]*?)(?=\s*---|\s*\[ILLUSTRATION|\s*$)/gi;
+            const illustrations: { num: number; concept: string; visual: string; imageUrl?: string }[] = [];
+            let illMatch;
+            
+            while ((illMatch = illustrationRegex.exec(illustrationContent)) !== null) {
+              illustrations.push({
+                num: parseInt(illMatch[1]),
+                concept: (illMatch[2] || '').trim(),
+                visual: illMatch[3].trim(),
               });
+            }
 
-              if (imageResponse.ok) {
-                const imageData = await imageResponse.json();
-                const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-                if (imageUrl) {
-                  ill.imageUrl = imageUrl;
-                  console.log(`[GENERATE-CHAPTER] Illustration ${ill.num} generated`);
+            console.log(`[GENERATE-CHAPTER] Found ${illustrations.length} illustration prompts`);
+
+            // Generate images for each illustration (limit to 3)
+            for (let i = 0; i < Math.min(illustrations.length, 3); i++) {
+              const ill = illustrations[i];
+              try {
+                console.log(`[GENERATE-CHAPTER] Generating illustration ${ill.num}...`);
+                
+                const imagePrompt = `Educational book illustration for ${category.replace(/_/g, " ")}. ${ill.visual} Style: Professional, educational, clear, detailed. No text in image.`;
+                
+                const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    model: "google/gemini-2.5-flash-image-preview",
+                    messages: [{ role: "user", content: imagePrompt }],
+                    modalities: ["image", "text"],
+                  }),
+                });
+
+                if (imageResponse.ok) {
+                  const imageData = await imageResponse.json();
+                  const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+                  if (imageUrl) {
+                    ill.imageUrl = imageUrl;
+                    console.log(`[GENERATE-CHAPTER] Illustration ${ill.num} generated`);
+                  }
+                }
+                
+                await new Promise(r => setTimeout(r, 1000));
+              } catch (imgError) {
+                console.error(`[GENERATE-CHAPTER] Illustration error:`, imgError);
+              }
+            }
+
+            // Insert illustrations at relevant points in the content
+            if (illustrations.some(ill => ill.imageUrl)) {
+              let illustrationSection = '\n\n---\n\n## Chapter Illustrations\n\n';
+              for (const ill of illustrations) {
+                if (ill.imageUrl) {
+                  illustrationSection += `### ${ill.concept || `Illustration ${ill.num}`}\n\n`;
+                  illustrationSection += `![${ill.concept || `Illustration ${ill.num}`}](${ill.imageUrl})\n\n`;
+                  illustrationSection += `*${ill.visual.slice(0, 150)}*\n\n`;
                 }
               }
-              
-              await new Promise(r => setTimeout(r, 1000));
-            } catch (imgError) {
-              console.error(`[GENERATE-CHAPTER] Illustration ${ill.num} error:`, imgError);
+              finalContent += illustrationSection;
             }
           }
-
-          // Insert illustrations into chapter content
-          if (illustrations.some(ill => ill.imageUrl)) {
-            const sections = finalContent.split(/(?=## )/);
-            const insertPoints = [1, Math.floor(sections.length / 2), sections.length - 1];
-            
-            let illustrationIndex = 0;
-            for (const point of insertPoints) {
-              if (illustrationIndex < illustrations.length && illustrations[illustrationIndex].imageUrl && point < sections.length) {
-                const ill = illustrations[illustrationIndex];
-                const caption = ill.concept ? `${ill.concept}: ${ill.visual.slice(0, 80)}` : ill.visual.slice(0, 100);
-                sections[point] += `\n\n![Illustration: ${ill.concept || 'Chapter concept'}](${ill.imageUrl})\n*${caption}*\n\n`;
-                illustrationIndex++;
-              }
-            }
-            
-            finalContent = sections.join('');
-          }
+        } catch (illustrationError) {
+          console.error("[GENERATE-CHAPTER] Illustration generation failed:", illustrationError);
         }
-      } catch (illError) {
-        console.error("[GENERATE-CHAPTER] Illustration generation failed:", illError);
       }
     }
 
-    // Calculate word count
     const actualWordCount = finalContent.split(/\s+/).filter((word: string) => word.length > 0).length;
-    console.log(`[GENERATE-CHAPTER] Chapter word count: ${actualWordCount}`);
+    console.log(`[GENERATE-CHAPTER] Final chapter word count: ${actualWordCount}`);
 
-    // Prepare update object with academic metadata
-    const updateData: Record<string, any> = {
+    // Prepare chapter update data
+    const updateData: any = {
       content: finalContent,
       word_count: actualWordCount,
       is_generated: true,
       updated_at: new Date().toISOString(),
+      academic_mode: academicMode,
+      citation_style: academicMode ? citationStyle : null,
     };
 
-    // Add academic metadata if in academic mode
+    // Store research metadata and references for academic mode
     if (academicMode && researchResult) {
-      updateData.academic_mode = true;
-      updateData.citation_style = citationStyle;
       updateData.chapter_references = researchResult.references;
       updateData.research_metadata = researchResult.metadata;
     }
@@ -1008,17 +1290,19 @@ FORMAT EXACTLY:
         success: true,
         wordCount: actualWordCount,
         provider: useDeepSeek ? 'DeepSeek' : 'Lovable AI (Gemini)',
-        bookType,
-        academicMode,
-        referenceCount: researchResult?.references.length || 0,
-        researchMetadata: researchResult?.metadata || null,
+        academicMode: academicMode,
+        researchMetadata: academicMode ? researchResult?.metadata : undefined,
+        sourceCount: researchResult?.references.length || 0,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error) {
     console.error("[GENERATE-CHAPTER] Error:", error);
     return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
+      JSON.stringify({ 
+        error: error instanceof Error ? error.message : "Unknown error",
+        code: error instanceof Error && error.message.includes('Insufficient') ? 'INSUFFICIENT_SOURCES' : 'GENERATION_ERROR',
+      }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
