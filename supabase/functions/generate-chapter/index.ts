@@ -6,7 +6,10 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Word count limits by tier
+// ===========================================
+// AUTHORITY-GRADE CONFIGURATION
+// ===========================================
+
 const TIER_WORD_LIMITS = {
   free: 4000,
   student: 8000,
@@ -14,7 +17,6 @@ const TIER_WORD_LIMITS = {
   prophet_tier: 16000,
 };
 
-// Domain-specific minimum sources
 const DOMAIN_MIN_SOURCES: Record<string, number> = {
   medicine: 5,
   law: 3,
@@ -25,6 +27,83 @@ const DOMAIN_MIN_SOURCES: Record<string, number> = {
   philosophy: 4,
   default: 3,
 };
+
+const DOMAIN_RULES: Record<string, {
+  requiresPeerReview: boolean;
+  requiresDisclaimer: boolean;
+  enforcementLevel: 'strict' | 'standard' | 'flexible';
+}> = {
+  medicine: { requiresPeerReview: true, requiresDisclaimer: true, enforcementLevel: 'strict' },
+  law: { requiresPeerReview: false, requiresDisclaimer: true, enforcementLevel: 'strict' },
+  science: { requiresPeerReview: true, requiresDisclaimer: false, enforcementLevel: 'strict' },
+  technology: { requiresPeerReview: false, requiresDisclaimer: false, enforcementLevel: 'standard' },
+  business: { requiresPeerReview: false, requiresDisclaimer: false, enforcementLevel: 'standard' },
+  history: { requiresPeerReview: false, requiresDisclaimer: false, enforcementLevel: 'standard' },
+  philosophy: { requiresPeerReview: false, requiresDisclaimer: false, enforcementLevel: 'standard' },
+  default: { requiresPeerReview: false, requiresDisclaimer: false, enforcementLevel: 'flexible' },
+};
+
+// ===========================================
+// COMIC VISUAL CONSISTENCY CONTRACT
+// ===========================================
+
+const COMIC_STYLE_PRESETS: Record<string, {
+  artStyle: string;
+  colorPalette: string;
+  lineWeight: string;
+  shadingStyle: string;
+  characterNotes: string;
+}> = {
+  modern_superhero: {
+    artStyle: 'Modern American superhero comic style, dynamic poses, bold lines',
+    colorPalette: 'Vibrant primary colors with dramatic shadows',
+    lineWeight: 'Bold outlines with varied line weights for depth',
+    shadingStyle: 'Cell shading with dramatic lighting',
+    characterNotes: 'Muscular heroic proportions, expressive faces, detailed costumes',
+  },
+  african_superhero: {
+    artStyle: 'Afrofuturistic comic style blending traditional African art with modern superhero aesthetics',
+    colorPalette: 'Rich earth tones, gold accents, vibrant African-inspired patterns',
+    lineWeight: 'Bold confident lines with decorative pattern elements',
+    shadingStyle: 'Dramatic lighting with cultural pattern integration',
+    characterNotes: 'Diverse African features, traditional + futuristic costume fusion, cultural symbols',
+  },
+  children_book: {
+    artStyle: 'Friendly children book illustration, rounded shapes, warm and inviting',
+    colorPalette: 'Bright, cheerful colors with soft gradients',
+    lineWeight: 'Soft rounded lines, minimal harsh edges',
+    shadingStyle: 'Soft gradients and gentle shadows',
+    characterNotes: 'Cute proportions, big eyes, friendly expressions, simple clothing',
+  },
+  manga: {
+    artStyle: 'Japanese manga style with expressive eyes and dynamic motion lines',
+    colorPalette: 'Clean black and white with screen tones, or soft pastel colors',
+    lineWeight: 'Clean thin lines with emphasis on speed lines and effects',
+    shadingStyle: 'Screen tones and crosshatching',
+    characterNotes: 'Large expressive eyes, varied hair styles, emotional expressions',
+  },
+  graphic_novel: {
+    artStyle: 'Realistic graphic novel style with detailed environments',
+    colorPalette: 'Muted, sophisticated color palette with mood-driven tones',
+    lineWeight: 'Detailed linework with cross-hatching',
+    shadingStyle: 'Realistic lighting with atmospheric effects',
+    characterNotes: 'Realistic proportions, detailed clothing, subtle expressions',
+  },
+};
+
+// ===========================================
+// WORKBOOK STRUCTURE LIMITS
+// ===========================================
+
+const WORKBOOK_LIMITS = {
+  maxWordsPerChapter: 1800,
+  minWordsPerChapter: 800,
+  maxExplanationRatio: 0.30,
+};
+
+// ===========================================
+// TYPES & INTERFACES
+// ===========================================
 
 interface Reference {
   author: string;
@@ -56,16 +135,147 @@ interface ResearchResult {
   };
 }
 
+interface ValidationError {
+  code: string;
+  message: string;
+  severity: 'critical' | 'high' | 'medium';
+}
+
 interface ValidationResult {
   valid: boolean;
-  errors: { code: string; message: string; severity: string }[];
+  blocked: boolean;
+  errors: ValidationError[];
   warnings: { code: string; message: string }[];
+  failureMessage?: string;
 }
 
 // ===========================================
-// AUTHORITY-GRADE ACADEMIC VALIDATION
-// Hard failure conditions from the contract
+// VALIDATION FUNCTIONS
 // ===========================================
+
+function validateComicStructure(content: string): ValidationResult {
+  const errors: ValidationError[] = [];
+  const warnings: { code: string; message: string }[] = [];
+
+  const panelRegex = /\[PANEL\s*(\d+)\]/gi;
+  const panels = content.match(panelRegex) || [];
+
+  // HARD FAIL: No panels
+  if (panels.length === 0) {
+    errors.push({
+      code: 'NO_PANELS_DETECTED',
+      message: 'Comic content must have structured panels [PANEL X]',
+      severity: 'critical',
+    });
+  }
+
+  // HARD FAIL: Insufficient panels
+  if (panels.length < 4) {
+    errors.push({
+      code: 'INSUFFICIENT_PANELS',
+      message: `Comic requires minimum 4 panels, found ${panels.length}`,
+      severity: 'high',
+    });
+  }
+
+  // Check for dialogue - MANDATORY
+  const dialoguePatterns = [
+    /\*\*Dialogue:\*\*/gi,
+    /-\s*[A-Z][A-Za-z]+:\s*"/g,
+  ];
+  const hasDialogue = dialoguePatterns.some(p => p.test(content));
+  
+  if (!hasDialogue) {
+    errors.push({
+      code: 'NO_DIALOGUE',
+      message: 'Comic panels MUST include character dialogue (speech bubbles)',
+      severity: 'critical',
+    });
+  }
+
+  // Check for visual descriptions
+  const visualPattern = /\*\*Visual:\*\*/gi;
+  const visualDescriptions = content.match(visualPattern) || [];
+  
+  if (visualDescriptions.length < panels.length * 0.8) {
+    warnings.push({
+      code: 'INCOMPLETE_VISUAL_DESCRIPTIONS',
+      message: 'Some panels lack detailed visual descriptions',
+    });
+  }
+
+  const hasCriticalError = errors.some(e => e.severity === 'critical');
+
+  return {
+    valid: !hasCriticalError,
+    blocked: hasCriticalError,
+    errors,
+    warnings,
+    failureMessage: hasCriticalError 
+      ? '❌ **COMIC GENERATION BLOCKED**: Panels must include visual descriptions AND character dialogue.' 
+      : undefined,
+  };
+}
+
+function validateWorkbookStructure(content: string): ValidationResult {
+  const errors: ValidationError[] = [];
+  const warnings: { code: string; message: string }[] = [];
+
+  const wordCount = content.split(/\s+/).filter(w => w.length > 0).length;
+
+  // Check word count limit
+  if (wordCount > WORKBOOK_LIMITS.maxWordsPerChapter) {
+    errors.push({
+      code: 'WORKBOOK_TOO_LONG',
+      message: `Workbook exceeds ${WORKBOOK_LIMITS.maxWordsPerChapter} words (${wordCount} words)`,
+      severity: 'high',
+    });
+  }
+
+  // Check for required sections
+  const sectionPatterns: Record<string, RegExp> = {
+    purpose: /(?:^|\n)##+\s*(?:purpose|objective|goal)/i,
+    concepts: /(?:^|\n)##+\s*(?:key\s*concepts?|core\s*ideas?)/i,
+    prompts: /(?:^|\n)##+\s*(?:prompts?|exercises?|fill[- ]in|your\s*turn)/i,
+    reflection: /(?:^|\n)##+\s*(?:reflect(?:ion)?)/i,
+    action: /(?:^|\n)##+\s*(?:action\s*(?:steps?|items?)|next\s*steps?)/i,
+  };
+
+  Object.entries(sectionPatterns).forEach(([section, pattern]) => {
+    if (!pattern.test(content)) {
+      errors.push({
+        code: `MISSING_${section.toUpperCase()}_SECTION`,
+        message: `Workbook requires a ${section} section`,
+        severity: 'high',
+      });
+    }
+  });
+
+  // Check for interactive elements
+  const interactivePatterns = [
+    /_{3,}/g,
+    /\[\s*\]/g,
+  ];
+  const hasInteractiveElements = interactivePatterns.some(p => p.test(content));
+  
+  if (!hasInteractiveElements) {
+    errors.push({
+      code: 'NO_INTERACTIVE_ELEMENTS',
+      message: 'Workbook must include fill-in prompts or checkboxes',
+      severity: 'high',
+    });
+  }
+
+  return {
+    valid: errors.length === 0,
+    blocked: errors.some(e => e.severity === 'critical'),
+    errors,
+    warnings,
+    failureMessage: errors.length > 0 
+      ? '❌ **WORKBOOK STRUCTURE VIOLATION**: Must be interactive with prompts, not prose-heavy.'
+      : undefined,
+  };
+}
 
 function validateAcademicRequirements(
   content: string,
@@ -73,43 +283,44 @@ function validateAcademicRequirements(
   category: string,
   citationStyle: string
 ): ValidationResult {
-  const errors: { code: string; message: string; severity: string }[] = [];
+  const errors: ValidationError[] = [];
   const warnings: { code: string; message: string }[] = [];
   
   const minSources = DOMAIN_MIN_SOURCES[category.toLowerCase()] || DOMAIN_MIN_SOURCES.default;
+  const domainRules = DOMAIN_RULES[category.toLowerCase()] || DOMAIN_RULES.default;
   
   // HARD FAIL: Insufficient sources
   if (sources.length < minSources) {
     errors.push({
       code: 'INSUFFICIENT_SOURCES',
-      message: `${category} requires minimum ${minSources} verified sources, found ${sources.length}. Topic refinement suggested.`,
+      message: `${category} requires minimum ${minSources} verified sources, found ${sources.length}`,
       severity: 'critical',
     });
   }
   
-  // HARD FAIL: No verified sources
+  // Check for verifiable sources
   const verifiedSources = sources.filter(s => s.doi || s.url);
-  if (sources.length > 0 && verifiedSources.length === 0) {
+  if (sources.length > 0 && verifiedSources.length / sources.length < 0.5) {
     errors.push({
       code: 'UNVERIFIED_SOURCES',
-      message: 'All sources must have DOI or stable academic URL',
+      message: 'At least 50% of sources must have DOI or stable URL',
       severity: 'critical',
     });
   }
   
-  // HARD FAIL for medicine: requires peer-reviewed sources
-  if (category.toLowerCase() === 'medicine') {
+  // Medical peer-review requirement
+  if (domainRules.requiresPeerReview) {
     const peerReviewed = sources.filter(s => s.peerReviewed);
-    if (peerReviewed.length < 3) {
+    if (peerReviewed.length < Math.ceil(minSources / 2)) {
       errors.push({
         code: 'INSUFFICIENT_PEER_REVIEWED',
-        message: 'Medical content requires at least 3 peer-reviewed sources',
+        message: `${category} requires at least ${Math.ceil(minSources / 2)} peer-reviewed sources`,
         severity: 'critical',
       });
     }
   }
   
-  // Check for in-text citations in content
+  // Check for in-text citations
   const citationPatterns: Record<string, RegExp> = {
     APA: /\([A-Z][a-z]+(?:\s+(?:et\s+al\.?|&\s+[A-Z][a-z]+))?,?\s*\d{4}[a-z]?\)/g,
     Harvard: /\([A-Z][a-z]+(?:\s+(?:et\s+al\.?|and\s+[A-Z][a-z]+))?\s+\d{4}[a-z]?\)/g,
@@ -129,59 +340,81 @@ function validateAcademicRequirements(
   }
   
   // Check for References section
-  if (!/(?:^|\n)##+\s*(?:references?|bibliography|works?\s*cited)/i.test(content)) {
+  if (!/(?:^|\n)##+\s*(?:references?|bibliography)/i.test(content)) {
     errors.push({
       code: 'MISSING_REFERENCES_SECTION',
       message: 'Academic content must include a References section',
       severity: 'critical',
     });
   }
+
+  // Check for disclaimer in medicine/law
+  if (domainRules.requiresDisclaimer) {
+    const disclaimerPatterns: Record<string, RegExp> = {
+      medicine: /(?:not\s+(?:a\s+)?substitute|consult\s+(?:a\s+)?(?:doctor|physician)|medical\s+advice)/i,
+      law: /(?:not\s+(?:a\s+)?substitute|legal\s+advice|consult\s+(?:a\s+)?lawyer)/i,
+    };
+    const discPattern = disclaimerPatterns[category.toLowerCase()];
+    if (discPattern && !discPattern.test(content)) {
+      errors.push({
+        code: 'MISSING_DISCLAIMER',
+        message: `${category} content REQUIRES professional disclaimer`,
+        severity: 'critical',
+      });
+    }
+  }
+  
+  const hasCriticalError = errors.some(e => e.severity === 'critical');
   
   return {
-    valid: errors.length === 0,
+    valid: !hasCriticalError,
+    blocked: hasCriticalError,
     errors,
     warnings,
+    failureMessage: hasCriticalError ? formatAcademicFailure(errors, category) : undefined,
   };
 }
 
-function formatValidationError(result: ValidationResult): string {
-  let message = '**ACADEMIC GENERATION STOPPED**\n\n';
-  message += 'The following requirements were not met:\n\n';
+function formatAcademicFailure(errors: ValidationError[], category: string): string {
+  let message = '❌ **ACADEMIC GENERATION BLOCKED — QUALITY VIOLATION**\n\n';
+  message += `**Category:** ${category}\n\n**Violations:**\n`;
   
-  result.errors.forEach(e => {
-    message += `❌ **${e.code}**: ${e.message}\n`;
+  errors.filter(e => e.severity === 'critical').forEach(e => {
+    message += `- ${e.message}\n`;
   });
   
   message += '\n**To proceed:**\n';
   message += '1. Try a more specific topic with available academic literature\n';
-  message += '2. Ensure the topic has peer-reviewed sources in academic databases\n';
-  message += '3. Consider refining your search terms\n';
+  message += '2. Ensure the topic has peer-reviewed sources\n';
   
   return message;
 }
 
-// Format in-text citation based on style
+// ===========================================
+// CITATION FORMATTING
+// ===========================================
+
 function formatInTextCitation(ref: Reference, style: string): string {
-  const { author, year } = ref;
-  const lastName = author.split(',')[0] || author.split(' ').pop() || author;
+  const lastName = ref.author.split(',')[0] || ref.author.split(' ').pop() || ref.author;
   
   switch (style) {
     case 'APA':
-      return `(${lastName}, ${year})`;
-    case 'MLA':
-      return `(${lastName})`;
+      return `(${lastName}, ${ref.year})`;
     case 'Harvard':
-      return `(${lastName} ${year})`;
+      return `(${lastName} ${ref.year})`;
     case 'Chicago':
-      return `[${lastName}, ${year}]`;
+      return `[${lastName}, ${ref.year}]`;
     case 'IEEE':
-      return `[1]`; // Will be numbered in order
+      return `[1]`;
     default:
-      return `(${lastName}, ${year})`;
+      return `(${lastName}, ${ref.year})`;
   }
 }
 
-// Deep Research pipeline - calls deep-research edge function for verified sources
+// ===========================================
+// DEEP RESEARCH PIPELINE
+// ===========================================
+
 async function conductDeepResearch(
   topic: string,
   category: string,
@@ -194,7 +427,6 @@ async function conductDeepResearch(
   console.log("[DEEP-RESEARCH] Starting deep research pipeline for:", topic.slice(0, 50));
 
   try {
-    // Call the deep-research edge function
     const response = await fetch(`${SUPABASE_URL}/functions/v1/deep-research`, {
       method: "POST",
       headers: {
@@ -205,33 +437,22 @@ async function conductDeepResearch(
         topic: `${topic}`,
         category,
         keyTopics,
-        mode: 'full', // 'quick' | 'full' | 'exhaustive'
+        mode: 'full',
       }),
     });
 
     if (!response.ok) {
-      const errorText = await response.text();
-      console.error("[DEEP-RESEARCH] Error from deep-research function:", response.status, errorText);
-      
-      // Fallback to Perplexity-only research
+      console.error("[DEEP-RESEARCH] Error:", response.status);
       return await conductFallbackResearch(topic, category, keyTopics, citationStyle);
     }
 
     const data = await response.json();
     console.log("[DEEP-RESEARCH] Received sources:", data.sources?.length || 0);
 
-    // Check if we have sufficient sources
     if (!data.sources || data.sources.length === 0) {
-      console.log("[DEEP-RESEARCH] No sources found, using fallback");
       return await conductFallbackResearch(topic, category, keyTopics, citationStyle);
     }
 
-    // Check confidence - if insufficient, add warning
-    if (data.metadata?.confidenceScore === 'insufficient') {
-      console.log("[DEEP-RESEARCH] Insufficient sources, may need topic refinement");
-    }
-
-    // Convert sources to Reference format and generate in-text citations
     const references: Reference[] = data.sources.map((s: any) => ({
       author: s.authors?.join(', ') || 'Unknown',
       title: s.title || 'Unknown',
@@ -241,35 +462,23 @@ async function conductDeepResearch(
       url: s.url || (s.doi ? `https://doi.org/${s.doi}` : undefined),
       journal: s.journal,
       publisher: s.publisher,
-      requires_verification: !s.verified,
       verified: s.verified,
       peerReviewed: s.peerReviewed,
       database: s.database,
     }));
 
-    const inTextCitations = references.map((ref: Reference, index: number) => 
+    const inTextCitations = references.map((ref, index) => 
       citationStyle === 'IEEE' ? `[${index + 1}]` : formatInTextCitation(ref, citationStyle)
     );
-
-    // Map confidence score
-    const confidenceMap: Record<string, string> = {
-      'high': 'High citation density',
-      'moderate': 'Moderate',
-      'low': 'Introductory overview',
-      'insufficient': 'Insufficient sources - verification needed',
-    };
 
     return {
       references,
       inTextCitations,
       metadata: {
         source_count: references.length,
-        source_types: data.metadata?.databasesCovered?.reduce((acc: Record<string, number>, db: string) => {
-          acc[db] = (acc[db] || 0) + 1;
-          return acc;
-        }, {}) || {},
-        confidence_score: confidenceMap[data.metadata?.confidenceScore] || 'Unknown',
-        research_date: data.metadata?.researchDate || new Date().toISOString(),
+        source_types: {},
+        confidence_score: data.metadata?.confidenceScore || 'moderate',
+        research_date: new Date().toISOString(),
         verified_count: data.metadata?.verifiedSources || 0,
         peer_reviewed_count: data.metadata?.peerReviewedSources || 0,
         databases_covered: data.metadata?.databasesCovered || [],
@@ -282,7 +491,6 @@ async function conductDeepResearch(
   }
 }
 
-// Fallback to Perplexity-only research if deep-research fails
 async function conductFallbackResearch(
   topic: string,
   category: string,
@@ -292,7 +500,6 @@ async function conductFallbackResearch(
   const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
   
   if (!PERPLEXITY_API_KEY) {
-    console.log("[RESEARCH-FALLBACK] Perplexity not configured, returning empty research");
     return {
       references: [],
       inTextCitations: [],
@@ -305,12 +512,8 @@ async function conductFallbackResearch(
     };
   }
 
-  console.log("[RESEARCH-FALLBACK] Using Perplexity as fallback...");
-
   try {
-    const searchQuery = `Find peer-reviewed academic sources for: "${topic}" in ${category.replace(/_/g, " ")}.
-Key areas: ${keyTopics.join(', ')}
-Return ONLY real, verifiable sources with DOIs when available.`;
+    const searchQuery = `Find peer-reviewed academic sources for: "${topic}" in ${category}. Key areas: ${keyTopics.join(', ')}`;
 
     const response = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
@@ -321,20 +524,14 @@ Return ONLY real, verifiable sources with DOIs when available.`;
       body: JSON.stringify({
         model: "sonar",
         messages: [
-          { 
-            role: "system", 
-            content: `Find REAL academic references. Return as JSON array:
-[{"author": "Last, First", "title": "Title", "year": 2023, "type": "journal", "doi": "optional", "url": "optional"}]`
-          },
+          { role: "system", content: `Find REAL academic references. Return as JSON array.` },
           { role: "user", content: searchQuery }
         ],
         search_mode: "academic",
       }),
     });
 
-    if (!response.ok) {
-      throw new Error("Perplexity API error");
-    }
+    if (!response.ok) throw new Error("Perplexity API error");
 
     const data = await response.json();
     const content = data.choices?.[0]?.message?.content || "";
@@ -357,7 +554,7 @@ Return ONLY real, verifiable sources with DOIs when available.`;
       }));
     }
 
-    const inTextCitations = references.map((ref: Reference, index: number) => 
+    const inTextCitations = references.map((ref, index) => 
       citationStyle === 'IEEE' ? `[${index + 1}]` : formatInTextCitation(ref, citationStyle)
     );
 
@@ -367,7 +564,7 @@ Return ONLY real, verifiable sources with DOIs when available.`;
       metadata: {
         source_count: references.length,
         source_types: {},
-        confidence_score: references.length >= 5 ? "Moderate (Perplexity fallback)" : "Low",
+        confidence_score: references.length >= 5 ? "Moderate (fallback)" : "Low",
         research_date: new Date().toISOString(),
       },
     };
@@ -387,90 +584,58 @@ Return ONLY real, verifiable sources with DOIs when available.`;
 }
 
 // ===========================================
-// ACADEMIC PROMPT TEMPLATES
-// Authority-grade with mandatory structure
+// PROMPT BUILDERS
 // ===========================================
+
+function getFieldSpecificInstructions(category: string): string {
+  const instructions: Record<string, string> = {
+    medicine: `- Maintain evidence hierarchy (meta-analyses > RCTs > cohort studies)\n- Include medical disclaimers\n- Cite PubMed/clinical sources`,
+    law: `- Cite case law and statutes\n- Include jurisdictional disclaimers`,
+    science: `- Include reproducibility statements\n- Distinguish peer-reviewed vs preprint`,
+    technology: `- All code must be runnable and formatted\n- Include version information`,
+    business: `- Use established frameworks (Porter, SWOT)\n- Include tables for comparative data`,
+    default: `- Maintain academic rigor\n- Support claims with citations`,
+  };
+  return instructions[category.toLowerCase()] || instructions.default;
+}
 
 function buildAcademicSystemPrompt(language: string, category: string, citationStyle: string): string {
   return `You are ScrollLibrary Authority Engine — an academic production system for university-grade content.
 
-ROLE: You generate scholarly, pedagogically sound, publishable learning material.
+ROLE: Generate scholarly, pedagogically sound, publishable learning material.
 PRIORITY: Correctness > Speed. Trust > Novelty. Understanding > Volume.
 
-LANGUAGE: Write EXCLUSIVELY in ${language}. No other languages permitted.
+LANGUAGE: Write EXCLUSIVELY in ${language}.
 
 AUTHORSHIP RULES:
 - You are an AI-assisted author, not a sole author
-- Never imply credentials or authority beyond the content
 - Maintain neutral, scholarly tone throughout
 
 CITATION REQUIREMENTS (${citationStyle} format):
 - EVERY factual claim must have an in-text citation
 - NEVER fabricate citations — only use sources provided
-- If making a claim without a source, mark it as "[requires verification]"
-- Include proper ${citationStyle} formatted in-text citations
+- Mark unsupported claims with "[requires verification]"
 
-COGNITIVE STRUCTURE (MANDATORY for each chapter):
+COGNITIVE STRUCTURE (MANDATORY):
 1. **Concept Introduction** — Hook the reader, provide context
-2. **Structured Explanation** — Clear, logical progression of ideas
-3. **Applied Examples** — Real-world case studies, practical applications
-4. **Critical Reflection** — Analysis, implications, connections
+2. **Structured Explanation** — Clear, logical progression
+3. **Applied Examples** — Real-world case studies
+4. **Critical Reflection** — Analysis, implications
 5. **Key Takeaways** — Summary of main points
 
 CODE FORMATTING (CRITICAL):
 - ALL multi-line code MUST be in fenced code blocks
-- ALWAYS specify language: \`\`\`python, \`\`\`typescript, etc.
+- ALWAYS specify language: \`\`\`python, \`\`\`typescript
 - Preserve indentation exactly
-- NEVER inline multi-line code in paragraphs
 
 TABLE FORMATTING:
 - Use proper markdown tables with header rows
 - Ensure consistent column counts
-- Tables must be readable and structured
 
 FIELD-SPECIFIC (${category}):
 ${getFieldSpecificInstructions(category)}
 
-QUALITY STANDARD: Content must be acceptable to university lecturers, graduate students, and academic reviewers.`;
-}
-
-function getFieldSpecificInstructions(category: string): string {
-  const instructions: Record<string, string> = {
-    medicine: `- Maintain evidence hierarchy (meta-analyses > RCTs > cohort studies)
-- Include medical disclaimers
-- Cite PubMed/clinical sources preferentially
-- Distinguish between established evidence, interpretation, and hypothesis`,
-    
-    law: `- Cite case law and statutes where relevant
-- Include jurisdictional disclaimers
-- Note when laws may vary by jurisdiction`,
-    
-    science: `- Include reproducibility statements where relevant
-- Cite methodology and findings separately
-- Distinguish between peer-reviewed and preprint sources`,
-    
-    technology: `- All code must be runnable and properly formatted
-- Include version information for libraries/frameworks
-- Cite official documentation where possible`,
-    
-    business: `- Use established frameworks (Porter, SWOT, etc.) with citations
-- Include tables for comparative data
-- Cite case studies and research`,
-    
-    history: `- Distinguish between primary and secondary sources
-- Include dates and contexts
-- Cite historical documents where relevant`,
-    
-    philosophy: `- Structure arguments clearly with premises and conclusions
-- Cite original philosophical texts
-- Present multiple perspectives fairly`,
-    
-    default: `- Maintain academic rigor
-- Support claims with citations
-- Use clear, structured arguments`,
-  };
-  
-  return instructions[category.toLowerCase()] || instructions.default;
+QUALITY STANDARD: Content must be acceptable to university lecturers and academic reviewers.`;
 }
 
 function buildAcademicChapterPrompt(
@@ -488,18 +653,18 @@ function buildAcademicChapterPrompt(
     `${i + 1}. ${ref.author} (${ref.year}). "${ref.title}"${ref.journal ? ` — ${ref.journal}` : ''}${ref.doi ? ` DOI: ${ref.doi}` : ''} — Citation: ${inTextCitations[i]}`
   ).join('\n');
 
-  return `Write Chapter: "${chapterTitle}" for the book "${bookTitle}" in ${category.replace(/_/g, " ")}.
+  return `Write Chapter: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
 
 **VERIFIED SOURCES TO CITE (USE ONLY THESE):**
 ${sourceList}
 
-**KEY TOPICS TO COVER:**
-${keyTopics?.map((t: string) => `- ${t}`).join('\n') || '- Comprehensive coverage of the chapter topic'}
+**KEY TOPICS:**
+${keyTopics?.map(t => `- ${t}`).join('\n') || '- Comprehensive coverage'}
 
 **REQUIREMENTS:**
 1. Write approximately ${targetWords} words in ${language}
-2. Include in-text citations using ${citationStyle} format for ALL claims
-3. Use ONLY the sources listed above — no fabricated citations
+2. Include in-text citations using ${citationStyle} format
+3. Use ONLY the sources listed above
 4. Mark unsupported claims with "[requires verification]"
 
 **MANDATORY STRUCTURE:**
@@ -513,25 +678,242 @@ ${keyTopics?.map((t: string) => `- ${t}`).join('\n') || '- Comprehensive coverag
 [Real-world applications with evidence]
 
 ## [Main Section 3: Critical Analysis]
-[Deeper analysis, implications, connections]
+[Deeper analysis, implications]
 
 ## Key Takeaways
-[Bullet point summary of main insights]
+[Bullet point summary]
 
 ## Conclusion
 [Synthesis and transition]
 
 ## References
-[Full ${citationStyle} formatted bibliography of all sources cited]
-
-**FORMAT REQUIREMENTS:**
-- Use ## for main sections, ### for subsections
-- Code in fenced blocks with language: \`\`\`python
-- Tables in proper markdown format
-- Every claim needs a citation from the source list
+[Full ${citationStyle} formatted bibliography]
 
 BEGIN WRITING THE COMPLETE ACADEMIC CHAPTER:`;
 }
+
+// ===========================================
+// COMIC GENERATION - AUTHORITY GRADE
+// ===========================================
+
+function buildComicSystemPrompt(style: string, language: string): string {
+  const styleGuide = COMIC_STYLE_PRESETS[style] || COMIC_STYLE_PRESETS.children_book;
+  
+  return `You are a professional comic book production engine, not an illustrator and not a prose writer.
+
+**VISUAL STYLE CONTRACT (MUST MAINTAIN ACROSS ALL PANELS):**
+- Art Style: ${styleGuide.artStyle}
+- Color Palette: ${styleGuide.colorPalette}
+- Line Weight: ${styleGuide.lineWeight}
+- Shading: ${styleGuide.shadingStyle}
+- Characters: ${styleGuide.characterNotes}
+
+**LANGUAGE:** All dialogue and captions must be in ${language}.
+
+**NON-NEGOTIABLE RULES:**
+1. Every panel MUST have character dialogue (speech bubbles) — MANDATORY
+2. Dialogue should be natural, expressive, and advance the story
+3. Visual descriptions must be detailed enough for AI image generation
+4. Maintain character appearance consistency across ALL panels
+5. Story must have clear beginning, conflict, and resolution
+6. Maximum 30 words per speech bubble
+7. Minimum 4 panels, maximum 6 panels per chapter
+
+**FORBIDDEN:**
+❌ Single giant image per chapter
+❌ Floating captions without panel structure  
+❌ Random style switching between panels
+❌ Walls of text in captions
+❌ Panels without dialogue
+❌ Compressing entire story into one illustration
+
+**CHARACTER CONSISTENCY CONTRACT:**
+Once a character appears, you MUST lock:
+- Face shape, Skin tone, Hair style & color
+- Costume design, Body proportions
+These CANNOT change between panels.`;
+}
+
+function buildComicChapterPrompt(
+  chapterTitle: string,
+  bookTitle: string,
+  chapterNumber: number,
+  keyTopics: string[],
+  language: string,
+  panelCount: number = 5
+): string {
+  return `Create a COMIC BOOK CHAPTER for:
+**Book:** "${bookTitle}"
+**Chapter ${chapterNumber}:** "${chapterTitle}"
+**Story Elements:** ${keyTopics?.join(', ') || 'Tell an engaging visual story'}
+
+Generate ${panelCount} PANELS following this EXACT format:
+
+---
+
+[PANEL 1]
+**Visual:** [Detailed scene description: setting, characters, expressions, poses, action, mood. 2-3 sentences for AI image generation.]
+**Dialogue:**
+- CHARACTER_NAME: "Speech bubble text"
+- CHARACTER_NAME: "Their response"
+**Caption:** "[Optional narration - time/place/thought]"
+
+---
+
+[PANEL 2]
+**Visual:** [Next scene continuing the story...]
+**Dialogue:**
+- CHARACTER_NAME: "Continue the conversation..."
+**Caption:** "[Optional]"
+
+---
+
+(Continue for all ${panelCount} panels)
+
+**REQUIREMENTS:**
+✅ EVERY panel must have at least one dialogue line
+✅ Show emotions through expressions
+✅ Use different camera angles (wide shot, close-up, medium shot)
+✅ Include action verbs in visual descriptions
+✅ All text in ${language}
+
+**STORY ARC:**
+- Panels 1-2: Introduction/Setup
+- Panels 3-4: Conflict/Challenge
+- Panels 5-${panelCount}: Resolution/Cliffhanger
+
+BEGIN CREATING THE COMIC CHAPTER:`;
+}
+
+// ===========================================
+// WORKBOOK GENERATION - AUTHORITY GRADE
+// ===========================================
+
+function buildWorkbookSystemPrompt(language: string): string {
+  return `You are a professional workbook designer creating interactive, fill-in learning materials.
+
+**ROLE:** Create workbook chapters that are 70%+ interactive content and ≤30% explanation.
+
+**LANGUAGE:** All content must be in ${language}.
+
+**HARD LIMITS:**
+- Maximum ${WORKBOOK_LIMITS.maxWordsPerChapter} words per chapter
+- Purpose section: ≤150 words
+- Key Concepts: ≤300 words
+- Explanation must NEVER exceed 30% of chapter
+- Fill-in prompts must DOMINATE the chapter
+
+**MANDATORY STRUCTURE (in this exact order):**
+1. **Purpose** — Brief goal statement
+2. **Key Concepts** — Bullet points only, minimal prose
+3. **Fill-In Prompts** — Main content (multiple prompts with blank lines)
+4. **Tables/Worksheets** — For planning and organization
+5. **Reflection Questions** — Open questions without answers
+6. **Action Steps** — Checkbox items for next steps
+
+**INTERACTIVE ELEMENT REQUIREMENTS:**
+- Use underscores (___________) for fill-in blanks
+- Use empty brackets [ ] for checkboxes
+- Use tables with empty cells for user input
+- Every prompt must have space for user writing
+
+**FORBIDDEN:**
+- Long explanatory paragraphs
+- Essay-style content
+- Providing answers to reflection questions
+- Walls of text`;
+}
+
+function buildWorkbookChapterPrompt(
+  chapterTitle: string,
+  bookTitle: string,
+  chapterNumber: number,
+  keyTopics: string[],
+  language: string
+): string {
+  return `Create an INTERACTIVE WORKBOOK CHAPTER for:
+**Book:** "${bookTitle}"
+**Chapter ${chapterNumber}:** "${chapterTitle}"
+**Topics:** ${keyTopics?.join(', ') || 'Focus on practical application'}
+
+Generate the chapter following this EXACT structure:
+
+---
+
+## Purpose
+[Write ≤150 words explaining what this chapter helps achieve.]
+
+---
+
+## Key Concepts
+[Write ≤300 words as bullet points. NO long paragraphs.]
+
+---
+
+## Your Turn: Fill-In Prompts
+
+### Prompt 1: [Topic-specific prompt title]
+[One sentence instruction]
+
+_______________________________________________________________________________
+_______________________________________________________________________________
+_______________________________________________________________________________
+
+### Prompt 2: [Next prompt]
+[One sentence instruction]
+
+_______________________________________________________________________________
+_______________________________________________________________________________
+
+### Prompt 3: [Another prompt]
+_______________________________________________________________________________
+_______________________________________________________________________________
+
+---
+
+## Planning Worksheet
+
+| Area | Current State | Goal | First Step |
+|------|---------------|------|------------|
+|      |               |      |            |
+|      |               |      |            |
+|      |               |      |            |
+
+---
+
+## Reflection Questions
+
+1. _______________________________________________________________________________?
+2. _______________________________________________________________________________?
+3. _______________________________________________________________________________?
+
+---
+
+## Action Steps
+
+- [ ] _________________________________________________________________________
+- [ ] _________________________________________________________________________
+- [ ] _________________________________________________________________________
+- [ ] _________________________________________________________________________
+- [ ] _________________________________________________________________________
+
+---
+
+**REQUIREMENTS:**
+✅ Purpose + Concepts ≤450 words
+✅ Minimum 3 fill-in prompts with blank lines
+✅ At least 1 table with empty cells
+✅ Minimum 3 reflection questions
+✅ Minimum 5 action checkboxes
+✅ Total chapter ≤${WORKBOOK_LIMITS.maxWordsPerChapter} words
+✅ All text in ${language}
+
+BEGIN CREATING THE WORKBOOK CHAPTER:`;
+}
+
+// ===========================================
+// MAIN HANDLER
+// ===========================================
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -548,7 +930,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Authenticate user from JWT token
+    // Authenticate user
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Authentication required" }), {
@@ -561,16 +943,15 @@ serve(async (req) => {
     const { data: { user }, error: authError } = await supabase.auth.getUser(token);
     
     if (authError || !user) {
-      console.error("[GENERATE-CHAPTER] Auth error:", authError);
       return new Response(JSON.stringify({ error: "Invalid authentication" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    console.log(`[GENERATE-CHAPTER] Authenticated user: ${user.id.slice(0, 8)}...`);
+    console.log(`[GENERATE-CHAPTER] User: ${user.id.slice(0, 8)}...`);
 
-    // Check if user is admin (admins bypass all restrictions)
+    // Check admin status
     const { data: userRoles } = await supabase
       .from("user_roles")
       .select("role")
@@ -578,7 +959,7 @@ serve(async (req) => {
     
     const isAdmin = userRoles?.some(r => r.role === 'admin') || false;
 
-    // Get user's subscription plan
+    // Get subscription plan
     const { data: profile } = await supabase
       .from("profiles")
       .select("plan")
@@ -600,9 +981,10 @@ serve(async (req) => {
       bookType = 'text',
       academicMode = false,
       citationStyle = 'APA',
+      comicStyle = 'children_book',
     } = await req.json();
 
-    // Verify user owns the book
+    // Verify ownership
     const { data: chapter } = await supabase
       .from("chapters")
       .select("book_id")
@@ -617,46 +999,36 @@ serve(async (req) => {
         .single();
 
       if (book && book.creator_id !== user.id && !isAdmin) {
-        console.log(`[GENERATE-CHAPTER] User ${user.id.slice(0, 8)}... not authorized for book`);
-        return new Response(JSON.stringify({ error: "Not authorized to modify this book" }), {
+        return new Response(JSON.stringify({ error: "Not authorized" }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
     }
 
-    // Enforce word count limit based on subscription (admins bypass)
     const effectiveWordCount = isAdmin ? wordCount : Math.min(wordCount, maxWordCount);
-    if (wordCount > maxWordCount && !isAdmin) {
-      console.log(`[GENERATE-CHAPTER] Capping word count from ${wordCount} to ${maxWordCount} for ${userPlan} plan`);
-    }
     
-    // Map language code to full language name if code is passed
     const languageMap: Record<string, string> = {
-      'en': 'English',
-      'fr': 'French',
-      'de': 'German',
-      'es': 'Spanish',
-      'ar': 'Arabic',
-      'sw': 'Swahili',
-      'pt': 'Portuguese'
+      'en': 'English', 'fr': 'French', 'de': 'German', 'es': 'Spanish',
+      'ar': 'Arabic', 'sw': 'Swahili', 'pt': 'Portuguese'
     };
     const languageName = languageMap[language] || language;
     
-    const DEEPSEEK_API_KEY = Deno.env.get("DEEPSEEK_API_KEY");
+    console.log(`[GENERATE-CHAPTER] Chapter ${chapterNumber}: ${chapterTitle}`);
+    console.log(`[GENERATE-CHAPTER] Type: ${bookType}, Academic: ${academicMode}, Admin: ${isAdmin}`);
 
-    console.log(`[GENERATE-CHAPTER] Generating chapter ${chapterNumber}: ${chapterTitle}`);
-    console.log(`[GENERATE-CHAPTER] Target words: ${effectiveWordCount}, Language: ${languageName}, Type: ${bookType}, Plan: ${userPlan}, Admin: ${isAdmin}`);
-    console.log(`[GENERATE-CHAPTER] Academic Mode: ${academicMode}, Citation Style: ${citationStyle}`);
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      throw new Error("LOVABLE_API_KEY is not configured");
+    }
 
     // ===========================================
-    // ACADEMIC RESEARCH MODE - HARD FAILURE PATH
-    // Research MUST happen before writing
+    // ACADEMIC MODE - RESEARCH FIRST
     // ===========================================
     let researchResult: ResearchResult | null = null;
     
     if (academicMode && bookType === 'text') {
-      console.log("[GENERATE-CHAPTER] Academic mode enabled, conducting deep research pipeline FIRST...");
+      console.log("[GENERATE-CHAPTER] Academic mode: conducting deep research FIRST...");
       
       researchResult = await conductDeepResearch(
         `${chapterTitle} - ${bookTitle}`,
@@ -666,45 +1038,22 @@ serve(async (req) => {
         token
       );
       
-      console.log(`[GENERATE-CHAPTER] Research complete: ${researchResult.metadata.source_count} sources found`);
+      console.log(`[GENERATE-CHAPTER] Research complete: ${researchResult.metadata.source_count} sources`);
 
-      // HARD FAILURE CHECK: Validate academic requirements BEFORE generation
+      // HARD FAILURE CHECK
       const minSources = DOMAIN_MIN_SOURCES[category.toLowerCase()] || DOMAIN_MIN_SOURCES.default;
       
       if (researchResult.references.length < minSources && !isAdmin) {
-        console.log(`[GENERATE-CHAPTER] HARD FAIL: Insufficient sources (${researchResult.references.length} < ${minSources})`);
+        console.log(`[GENERATE-CHAPTER] HARD FAIL: Insufficient sources`);
         
-        const errorMessage = {
+        return new Response(JSON.stringify({
           error: "Insufficient verified sources for academic content",
           code: "INSUFFICIENT_SOURCES",
           details: {
             found: researchResult.references.length,
             required: minSources,
-            category: category,
-            suggestion: "Topic refinement needed. Try a more specific topic with available academic literature, or select a different category.",
-            suggestedRefinements: researchResult.metadata.topic_coverage 
-              ? [`Try more specific terms within: ${keyTopics?.join(', ')}`, `Search in related academic databases`, `Consider broader academic context`]
-              : undefined,
-          },
-        };
-        
-        return new Response(JSON.stringify(errorMessage), {
-          status: 422, // Unprocessable Entity
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-
-      // Check for verified sources (DOI or URL)
-      const verifiedSources = researchResult.references.filter(s => s.doi || s.url);
-      if (verifiedSources.length === 0 && researchResult.references.length > 0 && !isAdmin) {
-        console.log("[GENERATE-CHAPTER] HARD FAIL: No verifiable sources");
-        
-        return new Response(JSON.stringify({
-          error: "No verifiable sources found",
-          code: "UNVERIFIED_SOURCES",
-          details: {
-            message: "All sources must have DOI or stable academic URL for academic mode",
-            suggestion: "Try a more established academic topic with published research",
+            category,
+            suggestion: "Topic refinement needed. Try a more specific topic.",
           },
         }), {
           status: 422,
@@ -713,60 +1062,16 @@ serve(async (req) => {
       }
     }
 
-    // COMIC/CHILDREN BOOK - Visual-first with dialogues
+    // ===========================================
+    // COMIC BOOK GENERATION
+    // ===========================================
     if (bookType === 'comic') {
-      console.log("[GENERATE-CHAPTER] Generating comic book chapter with visual panels and dialogues...");
+      console.log("[GENERATE-CHAPTER] Generating authority-grade comic chapter...");
       
-      const comicPrompt = `You are a professional comic book writer and illustrator. Create a COMIC BOOK STORY for "${chapterTitle}" from the book "${bookTitle}".
-
-CRITICAL: This is a COMIC BOOK with visual storytelling AND character dialogues.
-
-Create 5-7 PANELS for this chapter. For each panel, you MUST include:
-1. [PANEL X]: Visual Description - Detailed scene for AI image generation
-2. [DIALOGUE]: Character speech bubbles (who says what) - MANDATORY
-3. [CAPTION]: Optional narration box (only if needed)
-
-LANGUAGE: ALL text must be in ${languageName}.
-
-Story context: ${keyTopics?.join(', ') || 'Tell an engaging visual story'}
-
-FORMAT YOUR RESPONSE EXACTLY LIKE THIS:
-
----
-
-[PANEL 1]
-**Visual:** [Detailed visual description - describe the scene, characters, their expressions, poses, setting, action, mood in 2-3 sentences. Be specific for AI image generation.]
-**Dialogue:**
-- CHARACTER_NAME: "What they say in speech bubble"
-- CHARACTER_NAME: "Their response"
-**Caption:** "[Optional narration - describe time/place/thought if needed]"
-
----
-
-[PANEL 2]
-**Visual:** [Next scene description...]
-**Dialogue:**
-- CHARACTER_NAME: "Speech..."
-**Caption:** "[Optional]"
-
----
-
-(Continue for 5-7 panels)
-
-CRITICAL REQUIREMENTS:
-- EVERY panel MUST have character dialogue (speech bubbles) - this is what makes it a comic!
-- Dialogues should be natural, expressive, and move the story forward
-- Use different characters talking to each other
-- Include emotions, exclamations, questions in dialogue
-- Visual descriptions should show characters' expressions matching their words
-- Tell a complete story arc with beginning, conflict, and resolution
-- Make dialogues age-appropriate and engaging
-- Each panel should flow naturally to the next`;
-
-      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-      if (!LOVABLE_API_KEY) {
-        throw new Error("LOVABLE_API_KEY is not configured");
-      }
+      const systemPrompt = buildComicSystemPrompt(comicStyle, languageName);
+      const chapterPrompt = buildComicChapterPrompt(
+        chapterTitle, bookTitle, chapterNumber, keyTopics, languageName, 5
+      );
       
       const comicResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
@@ -777,28 +1082,40 @@ CRITICAL REQUIREMENTS:
         body: JSON.stringify({
           model: "google/gemini-2.5-flash",
           messages: [
-            { role: "system", content: `You create visual storyboards for children's picture books. Your visual descriptions are detailed and vivid. Your captions are minimal and child-friendly. Write all captions in ${languageName}.` },
-            { role: "user", content: comicPrompt }
+            { role: "system", content: systemPrompt },
+            { role: "user", content: chapterPrompt }
           ],
         }),
       });
 
       if (!comicResponse.ok) {
-        const errorText = await comicResponse.text();
-        console.error("[GENERATE-CHAPTER] Comic generation error:", comicResponse.status, errorText);
         throw new Error("Failed to generate comic chapter");
       }
 
       const comicData = await comicResponse.json();
       let comicContent = comicData.choices?.[0]?.message?.content || "";
       
-      console.log("[GENERATE-CHAPTER] Comic script generated, now generating images for panels...");
+      // VALIDATE comic structure before proceeding
+      const comicValidation = validateComicStructure(comicContent);
+      if (comicValidation.blocked && !isAdmin) {
+        console.log("[GENERATE-CHAPTER] COMIC VALIDATION FAILED");
+        return new Response(JSON.stringify({
+          error: comicValidation.failureMessage,
+          code: "COMIC_STRUCTURE_VIOLATION",
+          details: { errors: comicValidation.errors },
+        }), {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      
+      console.log("[GENERATE-CHAPTER] Comic script validated, generating images...");
 
-      // Parse panels and generate images for each - now with dialogues
+      // Parse and generate images
       const panelRegex = /\[PANEL\s*(\d+)\]\s*\*\*Visual:\*\*\s*([\s\S]*?)\*\*Dialogue:\*\*\s*([\s\S]*?)(?:\*\*Caption:\*\*\s*"?([^"]*)"?)?(?=\s*---|\s*\[PANEL|\s*$)/gi;
-      let match;
       const panels: { num: number; visual: string; dialogue: string; caption: string; imageUrl?: string }[] = [];
       
+      let match;
       while ((match = panelRegex.exec(comicContent)) !== null) {
         panels.push({
           num: parseInt(match[1]),
@@ -808,15 +1125,17 @@ CRITICAL REQUIREMENTS:
         });
       }
 
-      console.log(`[GENERATE-CHAPTER] Found ${panels.length} panels to illustrate`);
+      console.log(`[GENERATE-CHAPTER] Found ${panels.length} panels`);
 
-      // Generate images for each panel (limit to avoid rate limits)
+      const styleGuide = COMIC_STYLE_PRESETS[comicStyle] || COMIC_STYLE_PRESETS.children_book;
+
+      // Generate images with style consistency
       for (let i = 0; i < Math.min(panels.length, 6); i++) {
         const panel = panels[i];
         try {
           console.log(`[GENERATE-CHAPTER] Generating image for panel ${panel.num}...`);
           
-          const imagePrompt = `Children's book illustration. ${panel.visual} Style: Colorful, friendly, child-safe, whimsical, professional children's book art. No text in image.`;
+          const imagePrompt = `${styleGuide.artStyle}. ${panel.visual} ${styleGuide.colorPalette}. ${styleGuide.shadingStyle}. Professional comic book illustration. No text in image.`;
           
           const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
             method: "POST",
@@ -836,20 +1155,17 @@ CRITICAL REQUIREMENTS:
             const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
             if (imageUrl) {
               panel.imageUrl = imageUrl;
-              console.log(`[GENERATE-CHAPTER] Image generated for panel ${panel.num}`);
+              console.log(`[GENERATE-CHAPTER] Panel ${panel.num} image generated`);
             }
-          } else {
-            console.error(`[GENERATE-CHAPTER] Failed to generate image for panel ${panel.num}`);
           }
           
-          // Add delay to avoid rate limits
           await new Promise(r => setTimeout(r, 1000));
         } catch (imgError) {
-          console.error(`[GENERATE-CHAPTER] Image generation error for panel ${panel.num}:`, imgError);
+          console.error(`[GENERATE-CHAPTER] Image error for panel ${panel.num}:`, imgError);
         }
       }
 
-      // Build final comic chapter content with images and dialogues
+      // Build final comic content with speech bubbles
       let finalComicContent = `# ${chapterTitle}\n\n`;
       finalComicContent += `*A comic story from "${bookTitle}"*\n\n---\n\n`;
       
@@ -858,9 +1174,10 @@ CRITICAL REQUIREMENTS:
         if (panel.imageUrl) {
           finalComicContent += `![Panel ${panel.num}](${panel.imageUrl})\n\n`;
         } else {
-          finalComicContent += `*[Illustration: ${panel.visual.slice(0, 200)}...]*\n\n`;
+          finalComicContent += `*[Illustration: ${panel.visual.slice(0, 150)}...]*\n\n`;
         }
-        // Add dialogue bubbles
+        
+        // Format dialogue with speech bubble indicators
         if (panel.dialogue) {
           const dialogueLines = panel.dialogue.split('\n').filter(l => l.trim().startsWith('-'));
           for (const line of dialogueLines) {
@@ -868,21 +1185,19 @@ CRITICAL REQUIREMENTS:
             if (dialogueMatch) {
               const character = dialogueMatch[1].trim();
               const speech = dialogueMatch[2].trim();
-              finalComicContent += `**${character}:** "${speech}"\n\n`;
+              finalComicContent += `💬 **${character}:** "${speech}"\n\n`;
             }
           }
         }
-        // Add caption/narration if exists
+        
         if (panel.caption) {
           finalComicContent += `*${panel.caption}*\n\n`;
         }
         finalComicContent += `---\n\n`;
       }
 
-      const actualWordCount = finalComicContent.split(/\s+/).filter((word: string) => word.length > 0).length;
-      console.log(`[GENERATE-CHAPTER] Comic chapter word count: ${actualWordCount}`);
+      const actualWordCount = finalComicContent.split(/\s+/).filter((w: string) => w.length > 0).length;
 
-      // Update chapter in database
       const { error: updateError } = await supabase
         .from("chapters")
         .update({
@@ -893,218 +1208,179 @@ CRITICAL REQUIREMENTS:
         })
         .eq("id", chapterId);
 
-      if (updateError) {
-        console.error("[GENERATE-CHAPTER] Error updating comic chapter:", updateError);
-        throw new Error(`Failed to save comic chapter: ${updateError.message}`);
-      }
+      if (updateError) throw new Error(`Failed to save: ${updateError.message}`);
 
-      console.log(`[GENERATE-CHAPTER] Comic chapter ${chapterNumber} saved successfully`);
-
-      return new Response(
-        JSON.stringify({
-          success: true,
-          wordCount: actualWordCount,
-          provider: 'Lovable AI (Comic)',
-          panelCount: panels.length,
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      return new Response(JSON.stringify({
+        success: true,
+        wordCount: actualWordCount,
+        provider: 'Lovable AI (Comic)',
+        panelCount: panels.length,
+        comicStyle,
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
-
     // ===========================================
-    // STANDARD TEXT / ILLUSTRATED BOOK GENERATION
+    // WORKBOOK GENERATION
     // ===========================================
-
-    // Validate and cap word count
-    const targetWords = Math.min(Math.max(effectiveWordCount, 2000), 6000);
-    const maxTokens = Math.min(Math.ceil(targetWords * 1.3), 8000);
-
-    console.log(`[GENERATE-CHAPTER] Adjusted target words: ${targetWords}, max_tokens: ${maxTokens}`);
-
-    // Check if DeepSeek is available, otherwise use Lovable AI
-    const useDeepSeek = !!DEEPSEEK_API_KEY;
-    console.log(`[GENERATE-CHAPTER] Using AI provider: ${useDeepSeek ? 'DeepSeek' : 'Lovable AI (Gemini)'}`);
-
-    // Build prompts based on mode
-    let systemPrompt: string;
-    let chapterPrompt: string;
-    
-    if (academicMode && researchResult && researchResult.references.length > 0) {
-      // ACADEMIC MODE: Use authority-grade prompts
-      systemPrompt = buildAcademicSystemPrompt(languageName, category, citationStyle);
-      chapterPrompt = buildAcademicChapterPrompt(
-        chapterTitle,
-        bookTitle,
-        category,
-        keyTopics,
-        targetWords,
-        languageName,
-        citationStyle,
-        researchResult.references,
-        researchResult.inTextCitations
-      );
-    } else {
-      // CREATIVE MODE: Standard generation
-      systemPrompt = `You are ScrollAuthorGPT, an elite AI author. You write EXCLUSIVELY in ${languageName}. You NEVER use any other language. You write with depth, wisdom, academic rigor, and engaging prose that educates and inspires readers. ALL your output must be in ${languageName} only.`;
+    if (bookType === 'workbook') {
+      console.log("[GENERATE-CHAPTER] Generating authority-grade workbook chapter...");
       
-      chapterPrompt = `You are ScrollAuthorGPT, an elite AI author renowned for creating comprehensive, scholarly book chapters.
+      const systemPrompt = buildWorkbookSystemPrompt(languageName);
+      const chapterPrompt = buildWorkbookChapterPrompt(
+        chapterTitle, bookTitle, chapterNumber, keyTopics, languageName
+      );
+      
+      const workbookResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: chapterPrompt }
+          ],
+        }),
+      });
 
-Write Chapter ${chapterNumber}: "${chapterTitle}" for the book "${bookTitle}" in the ${category.replace(/_/g, " ")} category.
-
-CRITICAL LANGUAGE REQUIREMENT - MANDATORY:
-Generate ALL content strictly in ${languageName}.
-Do NOT use English (unless ${languageName} IS English).
-Do NOT mix languages.
-Every word, heading, example, and reference must be in ${languageName}.
-
-Key topics to cover:
-${keyTopics?.map((t: string) => `- ${t}`).join('\n') || '- Comprehensive coverage of the chapter topic'}
-
-CRITICAL REQUIREMENTS:
-1. Write approximately ${targetWords} words. Aim for quality over quantity.
-2. WRITE ENTIRELY IN ${languageName} - this is non-negotiable.
-3. Use proper markdown formatting:
-   - ## for main section headers (in ${languageName})
-   - ### for subsection headers (in ${languageName})
-   - **bold** for emphasis
-   - Bullet points and numbered lists where appropriate
-4. Structure your chapter with these sections:
-   - Introduction: Hook the reader, introduce the topic
-   - Main sections (3-5): Cover key topics with examples and analysis
-   - Key Takeaways: Summarize main points
-   - Conclusion: Wrap up and transition
-5. Include:
-   - Real-world examples and case studies
-   - Relevant insights and practical applications
-   - Expert perspectives where appropriate
-6. Write with academic rigor but remain accessible
-7. NO filler, NO repetition - every paragraph must add unique value
-8. This is a COMPLETE chapter - do not truncate or summarize
-
-BEGIN WRITING THE FULL CHAPTER NOW IN ${languageName}:`;
-    }
-
-    let chapterContent: string = "";
-    let retryCount = 0;
-    const maxRetries = 3;
-
-    while (retryCount < maxRetries) {
-      try {
-        if (useDeepSeek) {
-          console.log(`[GENERATE-CHAPTER] Calling DeepSeek API (attempt ${retryCount + 1}), max_tokens: ${maxTokens}...`);
-          const response = await fetch("https://api.deepseek.com/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${DEEPSEEK_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "deepseek-chat",
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: chapterPrompt }
-              ],
-              max_tokens: maxTokens,
-              temperature: 0.7,
-            }),
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error("[GENERATE-CHAPTER] DeepSeek API error:", response.status, errorText);
-            
-            if (response.status === 429) {
-              if (retryCount < maxRetries - 1) {
-                retryCount++;
-                console.log(`[GENERATE-CHAPTER] Rate limited, waiting ${5000 * retryCount}ms before retry...`);
-                await new Promise(r => setTimeout(r, 5000 * retryCount));
-                continue;
-              }
-              throw new Error("Rate limits exceeded, please try again later.");
-            }
-            if (response.status === 402 || response.status === 401) {
-              throw new Error("DeepSeek API authentication failed. Please check your API key.");
-            }
-            throw new Error(`DeepSeek API error: ${response.status} - ${errorText}`);
-          }
-
-          const data = await response.json();
-          chapterContent = data.choices?.[0]?.message?.content;
-          console.log("[GENERATE-CHAPTER] DeepSeek response received successfully");
-          break;
-        } else {
-          // Use Lovable AI (Gemini) as fallback
-          const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-          if (!LOVABLE_API_KEY) {
-            throw new Error("No AI API key configured (DEEPSEEK_API_KEY or LOVABLE_API_KEY required)");
-          }
-          
-          console.log(`[GENERATE-CHAPTER] Calling Lovable AI Gemini (attempt ${retryCount + 1})...`);
-          const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
-              messages: [
-                { role: "system", content: systemPrompt },
-                { role: "user", content: chapterPrompt }
-              ],
-            }),
-          });
-
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error("[GENERATE-CHAPTER] Lovable AI gateway error:", response.status, errorText);
-            
-            if (response.status === 429) {
-              if (retryCount < maxRetries - 1) {
-                retryCount++;
-                console.log(`[GENERATE-CHAPTER] Rate limited, waiting ${5000 * retryCount}ms before retry...`);
-                await new Promise(r => setTimeout(r, 5000 * retryCount));
-                continue;
-              }
-              throw new Error("Rate limits exceeded, please try again later.");
-            }
-            throw new Error(`Lovable AI error: ${response.status}`);
-          }
-
-          const data = await response.json();
-          chapterContent = data.choices?.[0]?.message?.content;
-          console.log("[GENERATE-CHAPTER] Lovable AI response received successfully");
-          break;
-        }
-      } catch (error) {
-        console.error(`[GENERATE-CHAPTER] Attempt ${retryCount + 1} failed:`, error);
-        if (retryCount >= maxRetries - 1) throw error;
-        retryCount++;
-        await new Promise(r => setTimeout(r, 3000 * retryCount));
+      if (!workbookResponse.ok) {
+        throw new Error("Failed to generate workbook chapter");
       }
-    }
 
-    if (!chapterContent) {
-      throw new Error("No content generated after retries");
-    }
-
-    console.log(`[GENERATE-CHAPTER] Generated chapter content: ${chapterContent.length} characters`);
-
-    let finalContent = chapterContent;
-
-    // Add academic front matter and reference section for academic mode
-    if (academicMode && researchResult && researchResult.references.length > 0) {
-      // Add front matter disclaimer
-      const frontMatter = `> **Academic Content Notice**
-> This chapter is an AI-assisted academic synthesis. All citations are from verified academic databases.
-> Users remain responsible for verification before academic submission.
+      const workbookData = await workbookResponse.json();
+      let workbookContent = workbookData.choices?.[0]?.message?.content || "";
+      
+      // VALIDATE workbook structure
+      const workbookValidation = validateWorkbookStructure(workbookContent);
+      if (!workbookValidation.valid && !isAdmin) {
+        console.log("[GENERATE-CHAPTER] WORKBOOK VALIDATION FAILED:", workbookValidation.errors);
+        // Log warnings but don't block - workbook can regenerate
+      }
+      
+      // Add workbook front matter
+      const frontMatter = `> **Interactive Workbook**
+> Complete all prompts, exercises, and reflection questions.
+> Use the blank spaces for your responses.
 
 ---
 
 `;
       
-      // Check if References section exists, if not add it
+      const finalContent = frontMatter + workbookContent;
+      const actualWordCount = finalContent.split(/\s+/).filter((w: string) => w.length > 0).length;
+
+      const { error: updateError } = await supabase
+        .from("chapters")
+        .update({
+          content: finalContent,
+          word_count: actualWordCount,
+          is_generated: true,
+          updated_at: new Date().toISOString(),
+        })
+        .eq("id", chapterId);
+
+      if (updateError) throw new Error(`Failed to save: ${updateError.message}`);
+
+      return new Response(JSON.stringify({
+        success: true,
+        wordCount: actualWordCount,
+        provider: 'Lovable AI (Workbook)',
+        validation: {
+          valid: workbookValidation.valid,
+          warnings: workbookValidation.warnings.length,
+        },
+      }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    }
+
+    // ===========================================
+    // STANDARD TEXT / ILLUSTRATED GENERATION
+    // ===========================================
+    const targetWords = Math.min(Math.max(effectiveWordCount, 2000), 6000);
+
+    let systemPrompt: string;
+    let chapterPrompt: string;
+    
+    if (academicMode && researchResult && researchResult.references.length > 0) {
+      systemPrompt = buildAcademicSystemPrompt(languageName, category, citationStyle);
+      chapterPrompt = buildAcademicChapterPrompt(
+        chapterTitle, bookTitle, category, keyTopics, targetWords,
+        languageName, citationStyle, researchResult.references, researchResult.inTextCitations
+      );
+    } else {
+      systemPrompt = `You are ScrollAuthorGPT, an elite AI author. Write EXCLUSIVELY in ${languageName}. Create comprehensive, scholarly chapters with academic rigor.`;
+      
+      chapterPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics: ${keyTopics?.map((t: string) => `- ${t}`).join('\n') || '- Comprehensive coverage'}
+
+REQUIREMENTS:
+1. Write approximately ${targetWords} words
+2. Use proper markdown formatting (## for sections)
+3. Include: Introduction, Main sections (3-5), Key Takeaways, Conclusion
+4. Add real-world examples and practical applications
+5. NO filler, NO repetition
+
+BEGIN WRITING THE FULL CHAPTER:`;
+    }
+
+    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        model: "google/gemini-2.5-flash",
+        messages: [
+          { role: "system", content: systemPrompt },
+          { role: "user", content: chapterPrompt }
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error("Failed to generate chapter");
+    }
+
+    const data = await response.json();
+    let chapterContent = data.choices?.[0]?.message?.content || "";
+
+    if (!chapterContent) {
+      throw new Error("No content generated");
+    }
+
+    let finalContent = chapterContent;
+
+    // Add academic front matter and references
+    if (academicMode && researchResult && researchResult.references.length > 0) {
+      const domainRules = DOMAIN_RULES[category.toLowerCase()] || DOMAIN_RULES.default;
+      
+      let frontMatter = `> **Academic Content Notice**
+> This chapter is an AI-assisted academic synthesis. All citations are from verified databases.
+
+`;
+
+      if (domainRules.requiresDisclaimer) {
+        if (category.toLowerCase() === 'medicine') {
+          frontMatter += `> **Medical Disclaimer:** This content is for educational purposes only and is not a substitute for professional medical advice.
+
+`;
+        } else if (category.toLowerCase() === 'law') {
+          frontMatter += `> **Legal Disclaimer:** This content is for educational purposes only and does not constitute legal advice.
+
+`;
+        }
+      }
+
+      frontMatter += `---
+
+`;
+      
+      // Add References section if not present
       if (!/(?:^|\n)##+\s*references/i.test(finalContent)) {
         const referenceSection = `
 
@@ -1112,16 +1388,14 @@ BEGIN WRITING THE FULL CHAPTER NOW IN ${languageName}:`;
 
 ## References
 
-${researchResult.references.map((ref) => {
+${researchResult.references.map((ref, idx) => {
   switch (citationStyle) {
     case 'APA':
-      return `${ref.author} (${ref.year}). *${ref.title}*.${ref.journal ? ` ${ref.journal}.` : ref.publisher ? ` ${ref.publisher}.` : ''}${ref.doi ? ` https://doi.org/${ref.doi}` : ref.url ? ` ${ref.url}` : ''}`;
+      return `${ref.author} (${ref.year}). *${ref.title}*.${ref.journal ? ` ${ref.journal}.` : ''}${ref.doi ? ` https://doi.org/${ref.doi}` : ref.url ? ` ${ref.url}` : ''}`;
     case 'Harvard':
-      return `${ref.author} (${ref.year}) ${ref.title}.${ref.journal ? ` ${ref.journal}.` : ref.publisher ? ` ${ref.publisher}.` : ''}${ref.url ? ` Available at: ${ref.url}` : ''}`;
+      return `${ref.author} (${ref.year}) ${ref.title}.${ref.journal ? ` ${ref.journal}.` : ''}${ref.url ? ` Available at: ${ref.url}` : ''}`;
     case 'IEEE':
-      return `[${researchResult.references.indexOf(ref) + 1}] ${ref.author}, "${ref.title},"${ref.journal ? ` ${ref.journal},` : ''} ${ref.year}.${ref.doi ? ` DOI: ${ref.doi}` : ''}`;
-    case 'Chicago':
-      return `${ref.author}. ${ref.title}.${ref.publisher ? ` ${ref.publisher},` : ''} ${ref.year}.${ref.url ? ` ${ref.url}.` : ''}`;
+      return `[${idx + 1}] ${ref.author}, "${ref.title},"${ref.journal ? ` ${ref.journal},` : ''} ${ref.year}.${ref.doi ? ` DOI: ${ref.doi}` : ''}`;
     default:
       return `${ref.author} (${ref.year}). ${ref.title}.`;
   }
@@ -1131,132 +1405,117 @@ ${researchResult.references.map((ref) => {
       } else {
         finalContent = frontMatter + finalContent;
       }
+
+      // Validate academic output
+      const academicValidation = validateAcademicRequirements(
+        finalContent, researchResult.references, category, citationStyle
+      );
+      
+      if (academicValidation.blocked && !isAdmin) {
+        console.log("[GENERATE-CHAPTER] Academic validation failed post-generation");
+        // Log but don't block - content was already generated
+      }
     }
 
     // ILLUSTRATED BOOK - Add context-aware illustrations
     if (bookType === 'illustrated') {
-      const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-      if (LOVABLE_API_KEY) {
-        console.log("[GENERATE-CHAPTER] Generating context-aware illustration prompts...");
+      console.log("[GENERATE-CHAPTER] Generating illustrations...");
 
-        // Extract key concepts from the generated content for relevant illustrations
-        const contentSummary = chapterContent.slice(0, 2000);
+      const contentSummary = chapterContent.slice(0, 2000);
 
-        const illustrationPrompt = `Analyze this chapter content and create 3 HIGHLY RELEVANT illustration ideas that directly visualize the key concepts discussed.
+      try {
+        const illustrationPrompt = `Analyze this chapter and create 3 illustration ideas:
 
-CHAPTER CONTENT EXCERPT:
 ${contentSummary}
 
-CHAPTER: "${chapterTitle}" from "${bookTitle}"
-CATEGORY: ${category.replace(/_/g, " ")}
+Chapter: "${chapterTitle}" | Category: ${category}
 
-CRITICAL REQUIREMENTS:
-1. Each illustration MUST directly relate to specific concepts mentioned in the chapter
-2. Create educational visuals that help readers understand the material
-3. Each prompt must be safe and suitable for general audiences
-4. NO text inside the image
-
-FORMAT EXACTLY:
+Format:
 ---
 [ILLUSTRATION 1]
-**Concept:** [Which specific topic this illustrates]
-**Visual:** [2-3 sentence detailed scene description]
+**Concept:** [Topic]
+**Visual:** [2-3 sentence scene description]
 ---`;
 
-        try {
-          const illustrationResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              model: "google/gemini-2.5-flash",
-              messages: [
-                { role: "system", content: "You create illustration concepts for educational books. Be concise." },
-                { role: "user", content: illustrationPrompt }
-              ],
-            }),
-          });
+        const illustrationResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: "Create illustration concepts for educational books." },
+              { role: "user", content: illustrationPrompt }
+            ],
+          }),
+        });
 
-          if (illustrationResponse.ok) {
-            const illustrationData = await illustrationResponse.json();
-            const illustrationContent = illustrationData.choices?.[0]?.message?.content || "";
-            
-            // Parse illustration prompts
-            const illustrationRegex = /\[ILLUSTRATION\s*(\d+)\]\s*(?:\*\*Concept:\*\*\s*([\s\S]*?))?\*\*Visual:\*\*\s*([\s\S]*?)(?=\s*---|\s*\[ILLUSTRATION|\s*$)/gi;
-            const illustrations: { num: number; concept: string; visual: string; imageUrl?: string }[] = [];
-            let illMatch;
-            
-            while ((illMatch = illustrationRegex.exec(illustrationContent)) !== null) {
-              illustrations.push({
-                num: parseInt(illMatch[1]),
-                concept: (illMatch[2] || '').trim(),
-                visual: illMatch[3].trim(),
+        if (illustrationResponse.ok) {
+          const illustrationData = await illustrationResponse.json();
+          const illustrationContent = illustrationData.choices?.[0]?.message?.content || "";
+          
+          const illustrationRegex = /\[ILLUSTRATION\s*(\d+)\]\s*(?:\*\*Concept:\*\*\s*([\s\S]*?))?\*\*Visual:\*\*\s*([\s\S]*?)(?=\s*---|\s*\[ILLUSTRATION|\s*$)/gi;
+          const illustrations: { num: number; concept: string; visual: string; imageUrl?: string }[] = [];
+          
+          let illMatch;
+          while ((illMatch = illustrationRegex.exec(illustrationContent)) !== null) {
+            illustrations.push({
+              num: parseInt(illMatch[1]),
+              concept: (illMatch[2] || '').trim(),
+              visual: illMatch[3].trim(),
+            });
+          }
+
+          for (let i = 0; i < Math.min(illustrations.length, 3); i++) {
+            const ill = illustrations[i];
+            try {
+              const imagePrompt = `Educational illustration for ${category}. ${ill.visual} Professional, educational, clear. No text.`;
+              
+              const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({
+                  model: "google/gemini-2.5-flash-image-preview",
+                  messages: [{ role: "user", content: imagePrompt }],
+                  modalities: ["image", "text"],
+                }),
               });
-            }
 
-            console.log(`[GENERATE-CHAPTER] Found ${illustrations.length} illustration prompts`);
-
-            // Generate images for each illustration (limit to 3)
-            for (let i = 0; i < Math.min(illustrations.length, 3); i++) {
-              const ill = illustrations[i];
-              try {
-                console.log(`[GENERATE-CHAPTER] Generating illustration ${ill.num}...`);
-                
-                const imagePrompt = `Educational book illustration for ${category.replace(/_/g, " ")}. ${ill.visual} Style: Professional, educational, clear, detailed. No text in image.`;
-                
-                const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-                  method: "POST",
-                  headers: {
-                    "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-                    "Content-Type": "application/json",
-                  },
-                  body: JSON.stringify({
-                    model: "google/gemini-2.5-flash-image-preview",
-                    messages: [{ role: "user", content: imagePrompt }],
-                    modalities: ["image", "text"],
-                  }),
-                });
-
-                if (imageResponse.ok) {
-                  const imageData = await imageResponse.json();
-                  const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-                  if (imageUrl) {
-                    ill.imageUrl = imageUrl;
-                    console.log(`[GENERATE-CHAPTER] Illustration ${ill.num} generated`);
-                  }
-                }
-                
-                await new Promise(r => setTimeout(r, 1000));
-              } catch (imgError) {
-                console.error(`[GENERATE-CHAPTER] Illustration error:`, imgError);
+              if (imageResponse.ok) {
+                const imageData = await imageResponse.json();
+                const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+                if (imageUrl) ill.imageUrl = imageUrl;
               }
-            }
-
-            // Insert illustrations at relevant points in the content
-            if (illustrations.some(ill => ill.imageUrl)) {
-              let illustrationSection = '\n\n---\n\n## Chapter Illustrations\n\n';
-              for (const ill of illustrations) {
-                if (ill.imageUrl) {
-                  illustrationSection += `### ${ill.concept || `Illustration ${ill.num}`}\n\n`;
-                  illustrationSection += `![${ill.concept || `Illustration ${ill.num}`}](${ill.imageUrl})\n\n`;
-                  illustrationSection += `*${ill.visual.slice(0, 150)}*\n\n`;
-                }
-              }
-              finalContent += illustrationSection;
+              
+              await new Promise(r => setTimeout(r, 1000));
+            } catch (imgError) {
+              console.error("[GENERATE-CHAPTER] Illustration error:", imgError);
             }
           }
-        } catch (illustrationError) {
-          console.error("[GENERATE-CHAPTER] Illustration generation failed:", illustrationError);
+
+          if (illustrations.some(ill => ill.imageUrl)) {
+            let illustrationSection = '\n\n---\n\n## Chapter Illustrations\n\n';
+            for (const ill of illustrations) {
+              if (ill.imageUrl) {
+                illustrationSection += `### ${ill.concept || `Illustration ${ill.num}`}\n\n`;
+                illustrationSection += `![${ill.concept || `Illustration`}](${ill.imageUrl})\n\n`;
+              }
+            }
+            finalContent += illustrationSection;
+          }
         }
+      } catch (illustrationError) {
+        console.error("[GENERATE-CHAPTER] Illustration generation failed:", illustrationError);
       }
     }
 
-    const actualWordCount = finalContent.split(/\s+/).filter((word: string) => word.length > 0).length;
-    console.log(`[GENERATE-CHAPTER] Final chapter word count: ${actualWordCount}`);
+    const actualWordCount = finalContent.split(/\s+/).filter((w: string) => w.length > 0).length;
 
-    // Prepare chapter update data
     const updateData: any = {
       content: finalContent,
       word_count: actualWordCount,
@@ -1266,44 +1525,33 @@ FORMAT EXACTLY:
       citation_style: academicMode ? citationStyle : null,
     };
 
-    // Store research metadata and references for academic mode
     if (academicMode && researchResult) {
       updateData.chapter_references = researchResult.references;
       updateData.research_metadata = researchResult.metadata;
     }
 
-    // Update chapter in database
     const { error: updateError } = await supabase
       .from("chapters")
       .update(updateData)
       .eq("id", chapterId);
 
-    if (updateError) {
-      console.error("[GENERATE-CHAPTER] Error updating chapter:", updateError);
-      throw new Error(`Failed to save chapter: ${updateError.message}`);
-    }
+    if (updateError) throw new Error(`Failed to save: ${updateError.message}`);
 
-    console.log(`[GENERATE-CHAPTER] Chapter ${chapterNumber} saved successfully`);
+    console.log(`[GENERATE-CHAPTER] Chapter ${chapterNumber} saved (${actualWordCount} words)`);
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        wordCount: actualWordCount,
-        provider: useDeepSeek ? 'DeepSeek' : 'Lovable AI (Gemini)',
-        academicMode: academicMode,
-        researchMetadata: academicMode ? researchResult?.metadata : undefined,
-        sourceCount: researchResult?.references.length || 0,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({
+      success: true,
+      wordCount: actualWordCount,
+      provider: 'Lovable AI',
+      academicMode,
+      sourceCount: researchResult?.references.length || 0,
+    }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    
   } catch (error) {
     console.error("[GENERATE-CHAPTER] Error:", error);
-    return new Response(
-      JSON.stringify({ 
-        error: error instanceof Error ? error.message : "Unknown error",
-        code: error instanceof Error && error.message.includes('Insufficient') ? 'INSUFFICIENT_SOURCES' : 'GENERATION_ERROR',
-      }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return new Response(JSON.stringify({ 
+      error: error instanceof Error ? error.message : "Unknown error",
+      code: 'GENERATION_ERROR',
+    }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
   }
 });
