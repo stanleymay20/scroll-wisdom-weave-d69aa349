@@ -14,8 +14,9 @@ import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { 
   Settings as SettingsIcon, Palette, Bell, Brain, Shield, CreditCard,
-  Loader2, Save, Trash2, Download, Moon, Sun, Type, Volume2, Crown
+  Loader2, Save, Trash2, Download, Moon, Sun, Type, Volume2, Crown, HardDrive
 } from "lucide-react";
+import { StorageManager } from "@/components/pwa/StorageManager";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
@@ -210,6 +211,10 @@ export default function Settings() {
                   <CreditCard className="h-4 w-4 mr-2" />
                   {t('settings.billing')}
                 </TabsTrigger>
+                <TabsTrigger value="storage" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
+                  <HardDrive className="h-4 w-4 mr-2" />
+                  Storage
+                </TabsTrigger>
               </TabsList>
 
               {/* Billing Tab */}
@@ -258,6 +263,11 @@ export default function Settings() {
                     )}
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              {/* Storage Tab */}
+              <TabsContent value="storage" className="space-y-6">
+                <StorageManager />
               </TabsContent>
 
               <TabsContent value="system" className="space-y-6">

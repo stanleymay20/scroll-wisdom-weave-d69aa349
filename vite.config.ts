@@ -66,146 +66,160 @@ export default defineConfig(({ mode }) => ({
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
+          // ===== DO NOT CACHE: Auth, Stripe, Generation, Export endpoints =====
           {
-            // Cache-first for book chapters (reading content)
-            urlPattern: /\/api\/.*\/chapters\/.*/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "book-chapters-cache",
-              expiration: {
-                maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
+            // Auth endpoints - NEVER cache
+            urlPattern: /\/auth\/.*/i,
+            handler: "NetworkOnly",
           },
           {
-            // Cache-first for user library data
+            // Stripe endpoints - NEVER cache
+            urlPattern: /\/functions\/v1\/create-checkout|\/functions\/v1\/customer-portal|\/functions\/v1\/stripe-webhook|\/functions\/v1\/check-subscription/i,
+            handler: "NetworkOnly",
+          },
+          {
+            // Generation endpoints - NEVER cache (require online)
+            urlPattern: /\/functions\/v1\/generate-book|\/functions\/v1\/generate-chapter|\/functions\/v1\/generate-cover|\/functions\/v1\/generate-image|\/functions\/v1\/generate-references|\/functions\/v1\/deep-research/i,
+            handler: "NetworkOnly",
+          },
+          {
+            // Export endpoints - NEVER cache the function call itself
+            urlPattern: /\/functions\/v1\/export-book/i,
+            handler: "NetworkOnly",
+          },
+
+          // ===== NetworkFirst with short timeout for user-specific data =====
+          {
+            // User profiles - NetworkFirst with fallback
+            urlPattern: /\/rest\/v1\/profiles.*/i,
+            handler: "NetworkFirst",
+            options: {
+              cacheName: "profiles-cache",
+              networkTimeoutSeconds: 3,
+              expiration: {
+                maxEntries: 10,
+                maxAgeSeconds: 60 * 60, // 1 hour
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
+          },
+          {
+            // User library - NetworkFirst with fallback
             urlPattern: /\/rest\/v1\/user_library.*/i,
-            handler: "CacheFirst",
+            handler: "NetworkFirst",
             options: {
               cacheName: "user-library-cache",
+              networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
+                maxAgeSeconds: 60 * 60 * 24, // 24 hours
               },
               cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
+                statuses: [0, 200],
+              },
+            },
           },
+
+          // ===== CacheFirst for reading content (already fetched) =====
           {
-            // Cache-first for books data
+            // Books metadata - CacheFirst
             urlPattern: /\/rest\/v1\/books.*/i,
             handler: "CacheFirst",
             options: {
               cacheName: "books-cache",
               expiration: {
                 maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24 * 7 // 7 days
+                maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
               },
               cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
+                statuses: [0, 200],
+              },
+            },
           },
           {
-            // Cache-first for chapter content
+            // Chapter content - CacheFirst (main offline reading)
             urlPattern: /\/rest\/v1\/chapters.*/i,
             handler: "CacheFirst",
             options: {
               cacheName: "chapters-cache",
               expiration: {
                 maxEntries: 500,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
               },
               cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
+                statuses: [0, 200],
+              },
+            },
           },
           {
-            // Cache-first for audio files (TTS)
+            // Audio files (TTS) - CacheFirst
             urlPattern: /\.mp3$|\/functions\/v1\/text-to-speech/i,
             handler: "CacheFirst",
             options: {
               cacheName: "audio-cache",
               expiration: {
                 maxEntries: 100,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
               },
               cacheableResponse: {
-                statuses: [0, 200]
+                statuses: [0, 200],
               },
-              rangeRequests: true
-            }
+              rangeRequests: true,
+            },
           },
           {
-            // Cache-first for exported files (PDF, EPUB)
-            urlPattern: /\.pdf$|\.epub$|\.docx$|\/functions\/v1\/export-book/i,
+            // Downloaded export files (PDF/EPUB/DOCX) - CacheFirst
+            urlPattern: /\.pdf$|\.epub$|\.docx$/i,
             handler: "CacheFirst",
             options: {
               cacheName: "exports-cache",
               expiration: {
                 maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
               },
               cacheableResponse: {
-                statuses: [0, 200]
-              }
-            }
+                statuses: [0, 200],
+              },
+            },
           },
           {
-            // Cache-first for images
+            // Images (covers, illustrations) - CacheFirst
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
             handler: "CacheFirst",
             options: {
               cacheName: "images-cache",
               expiration: {
                 maxEntries: 200,
-                maxAgeSeconds: 60 * 60 * 24 * 30 // 30 days
-              }
-            }
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+            },
           },
           {
-            // Network-first for generation actions (must be online)
-            urlPattern: /\/functions\/v1\/generate-book|\/functions\/v1\/generate-chapter|\/functions\/v1\/generate-cover/i,
-            handler: "NetworkOnly",
+            // Supabase storage URLs - CacheFirst
+            urlPattern: /supabase\.co\/storage\/v1\/object\/public\/.*/i,
+            handler: "CacheFirst",
             options: {
-              backgroundSync: {
-                name: "generation-queue",
-                options: {
-                  maxRetentionTime: 24 * 60 // 24 hours
-                }
-              }
-            }
-          },
-          {
-            // Network-first for auth
-            urlPattern: /\/auth\/.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "auth-cache",
-              networkTimeoutSeconds: 10,
+              cacheName: "storage-cache",
               expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60 // 1 hour
-              }
-            }
+                maxEntries: 200,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+            },
           },
+
+          // ===== Fonts =====
           {
-            // Stale-while-revalidate for fonts
             urlPattern: /^https:\/\/fonts\.googleapis\.com\/.*/i,
             handler: "StaleWhileRevalidate",
             options: {
               cacheName: "google-fonts-cache",
               expiration: {
                 maxEntries: 10,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              }
-            }
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+            },
           },
           {
             urlPattern: /^https:\/\/fonts\.gstatic\.com\/.*/i,
@@ -214,11 +228,11 @@ export default defineConfig(({ mode }) => ({
               cacheName: "google-fonts-webfonts-cache",
               expiration: {
                 maxEntries: 30,
-                maxAgeSeconds: 60 * 60 * 24 * 365 // 1 year
-              }
-            }
-          }
-        ]
+                maxAgeSeconds: 60 * 60 * 24 * 365, // 1 year
+              },
+            },
+          },
+        ],
       },
       devOptions: {
         enabled: false
