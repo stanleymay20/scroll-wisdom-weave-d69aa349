@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { useEffect } from "react";
+import { PWAInstallPrompt, OfflineIndicator } from "@/components/pwa";
 import Index from "./pages/Index";
 import Explore from "./pages/Explore";
 import Auth from "./pages/Auth";
@@ -26,6 +27,7 @@ import TermsOfService from "./pages/TermsOfService";
 import ModerationDashboard from "./pages/ModerationDashboard";
 import Pricing from "./pages/Pricing";
 import AdminPanel from "./pages/AdminPanel";
+import Install from "./pages/Install";
 import { CookieConsent } from "./components/legal/CookieConsent";
 
 const queryClient = new QueryClient();
@@ -52,6 +54,7 @@ const App = () => (
         <TooltipProvider>
           <Toaster />
           <Sonner />
+          <OfflineIndicator />
           <BrowserRouter>
             <Routes>
               <Route path="/" element={<Index />} />
@@ -71,10 +74,12 @@ const App = () => (
               <Route path="/moderation" element={<ModerationDashboard />} />
               <Route path="/pricing" element={<Pricing />} />
               <Route path="/admin" element={<AdminPanel />} />
+              <Route path="/install" element={<Install />} />
               <Route path="/book/:id" element={<BookDetail />} />
               <Route path="/read/:bookId/:chapterId" element={<Reader />} />
               <Route path="*" element={<NotFound />} />
             </Routes>
+            <PWAInstallPrompt />
             <CookieConsent />
           </BrowserRouter>
         </TooltipProvider>
