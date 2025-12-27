@@ -19,6 +19,8 @@ export type Database = {
           author_ai_agent: string | null
           book_type: string
           category: Database["public"]["Enums"]["book_category"]
+          character_sheet: Json | null
+          comic_style_id: string | null
           cover_image_url: string | null
           created_at: string | null
           creator_id: string | null
@@ -27,14 +29,20 @@ export type Database = {
           is_featured: boolean | null
           is_published: boolean | null
           language: string | null
+          layout_template: number | null
+          line_weight_hint: string | null
+          palette_hint: string | null
           title: string
           total_chapters: number | null
           updated_at: string | null
+          workbook_density: string | null
         }
         Insert: {
           author_ai_agent?: string | null
           book_type?: string
           category: Database["public"]["Enums"]["book_category"]
+          character_sheet?: Json | null
+          comic_style_id?: string | null
           cover_image_url?: string | null
           created_at?: string | null
           creator_id?: string | null
@@ -43,14 +51,20 @@ export type Database = {
           is_featured?: boolean | null
           is_published?: boolean | null
           language?: string | null
+          layout_template?: number | null
+          line_weight_hint?: string | null
+          palette_hint?: string | null
           title: string
           total_chapters?: number | null
           updated_at?: string | null
+          workbook_density?: string | null
         }
         Update: {
           author_ai_agent?: string | null
           book_type?: string
           category?: Database["public"]["Enums"]["book_category"]
+          character_sheet?: Json | null
+          comic_style_id?: string | null
           cover_image_url?: string | null
           created_at?: string | null
           creator_id?: string | null
@@ -59,9 +73,13 @@ export type Database = {
           is_featured?: boolean | null
           is_published?: boolean | null
           language?: string | null
+          layout_template?: number | null
+          line_weight_hint?: string | null
+          palette_hint?: string | null
           title?: string
           total_chapters?: number | null
           updated_at?: string | null
+          workbook_density?: string | null
         }
         Relationships: []
       }

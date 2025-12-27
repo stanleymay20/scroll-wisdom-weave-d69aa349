@@ -15,12 +15,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown, Rocket, ImageIcon, BookImage, GraduationCap, AlertTriangle, Database } from "lucide-react";
-import { isAcademicCategory, CITATION_STYLES } from "@/lib/academicCategories";
+import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown, Rocket, AlertTriangle, Database } from "lucide-react";
+import { isAcademicCategory } from "@/lib/academicCategories";
 import { ContentModeSelector, ContentMode } from "@/components/academic/ContentModeSelector";
-import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
 import { CitationStyle } from "@/lib/citations";
-import { Switch } from "@/components/ui/switch";
 import { CoverUpload } from "@/components/books/CoverUpload";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -31,6 +29,9 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { LaunchBanner } from "@/components/subscription/LaunchBanner";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { BookTypeSelector, ExtendedBookType } from "@/components/generate/BookTypeSelector";
+import { WorkbookPreview } from "@/components/generate/WorkbookPreview";
+import { ComicStyleSelector, ComicStyleConfig } from "@/components/generate/ComicStyleSelector";
 
 const CATEGORIES = [
   { value: "theology", labelKey: "categories.theology" },
@@ -66,7 +67,6 @@ export default function Generate() {
     maxWordCount 
   } = useSubscription();
   
-  // Use centralized entitlements - SINGLE SOURCE OF TRUTH
   const entitlements = useEntitlements();
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
@@ -78,23 +78,31 @@ export default function Generate() {
   const [customCover, setCustomCover] = useState<string | null>(null);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generationProgress, setGenerationProgress] = useState<string[]>([]);
-  const [bookType, setBookType] = useState<"text" | "illustrated" | "comic">("text");
+  
+  // New book type state
+  const [extendedBookType, setExtendedBookType] = useState<ExtendedBookType>("text");
+  const [workbookDensity, setWorkbookDensity] = useState<"low" | "medium" | "high">("medium");
+  const [comicStyleConfig, setComicStyleConfig] = useState<ComicStyleConfig>({
+    styleId: "modern_superhero",
+    paletteHint: "Vibrant primary colors with dramatic shadows",
+    lineWeightHint: "bold",
+    characterSheet: "",
+    layoutTemplate: 5,
+  });
+  
   const [contentMode, setContentMode] = useState<ContentMode>("creative");
   const [citationStyle, setCitationStyle] = useState<CitationStyle>("APA");
-  const [isResearching, setIsResearching] = useState(false);
-  const [researchConfidence, setResearchConfidence] = useState<string | null>(null);
   const { toast } = useToast();
 
   // Auto-enable academic mode for academic categories
   useEffect(() => {
-    if (category && isAcademicCategory(category) && bookType === "text") {
+    if (category && isAcademicCategory(category) && extendedBookType === "text") {
       setContentMode("academic");
     }
-  }, [category, bookType]);
+  }, [category, extendedBookType]);
 
   // Get word count options based on tier and launch mode
   const wordCountOptions = (() => {
-    // Trial mode, Admin, and Prophet get all word count options
     if (entitlements.isTrialMode || entitlements.isAdmin || entitlements.isProphet) return [2000, 3000, 4000, 5000, 6000];
     if (LAUNCH_MODE && tier === 'free') {
       return [2000, 3000, 4000].filter(w => w <= LAUNCH_MODE_CONFIG.freeMaxWordCount);
@@ -111,6 +119,31 @@ export default function Generate() {
     { code: "sw", label: t('language.swahili') },
     { code: "pt", label: t('language.portuguese') },
   ];
+
+  // Map extended book type to legacy format for backend
+  const getLegacyBookType = (): "text" | "illustrated" | "comic" => {
+    switch (extendedBookType) {
+      case "comic": return "comic";
+      case "workbook":
+      case "academic":
+      case "professional":
+      case "reference":
+      case "text":
+      default:
+        return "text";
+    }
+  };
+
+  // Calculate word count for workbooks (enforced 1200-1800)
+  const getEffectiveWordCount = (): number => {
+    if (extendedBookType === "workbook") {
+      return 1500; // Fixed for workbooks
+    }
+    if (extendedBookType === "comic") {
+      return 500; // Fixed for comics
+    }
+    return parseInt(wordCount);
+  };
 
   const handleGenerate = async () => {
     if (!title || !category) {
@@ -131,10 +164,8 @@ export default function Generate() {
       return;
     }
 
-    // During trial mode, everyone can generate - skip all subscription checks
     const trialActive = isTrialActive();
     
-    // Admin, Prophet, or Trial Mode ALWAYS can generate - no upgrade prompts
     if (!trialActive && !entitlements.canGenerateBooks && !entitlements.isAdmin && !entitlements.isProphet) {
       toast({
         title: t('generate.subscriptionRequired'),
@@ -145,7 +176,6 @@ export default function Generate() {
       return;
     }
 
-    // Check daily limit for free tier in launch mode (admin/prophet/paid/trial bypass)
     if (!trialActive && !entitlements.isPaid && isLaunchModeActive() && tier === 'free' && !dailyLimitInfo.canGenerateToday) {
       toast({
         title: t('generate.dailyLimitReached'),
@@ -168,15 +198,24 @@ export default function Generate() {
           description,
           category,
           numChapters: parseInt(numChapters),
-          wordCount: bookType === "comic" ? 500 : parseInt(wordCount),
+          wordCount: getEffectiveWordCount(),
           language,
           userId: user.id,
           customCover: coverOption === "upload" ? customCover : null,
-          bookType,
+          bookType: getLegacyBookType(),
+          extendedBookType,
           enableReferences: contentMode === "academic",
           citationStyle,
           academicMode: contentMode === "academic",
-          deepResearch: contentMode === "academic", // Enable deep research pipeline
+          deepResearch: contentMode === "academic",
+          // Workbook-specific fields
+          workbookDensity: extendedBookType === "workbook" ? workbookDensity : null,
+          // Comic-specific fields
+          comicStyleId: extendedBookType === "comic" ? comicStyleConfig.styleId : null,
+          paletteHint: extendedBookType === "comic" ? comicStyleConfig.paletteHint : null,
+          lineWeightHint: extendedBookType === "comic" ? comicStyleConfig.lineWeightHint : null,
+          characterSheet: extendedBookType === "comic" ? comicStyleConfig.characterSheet : null,
+          layoutTemplate: extendedBookType === "comic" ? comicStyleConfig.layoutTemplate : null,
         },
       });
 
@@ -189,7 +228,6 @@ export default function Generate() {
         t('generate.bookSaved'),
       ]);
 
-      // Increment daily count for free tier in launch mode (paid/trial users don't count)
       if (!trialActive && !entitlements.isPaid && LAUNCH_MODE && tier === 'free') {
         await incrementDailyBookCount();
       }
@@ -199,7 +237,6 @@ export default function Generate() {
         description: t('generate.successDesc'),
       });
 
-      // Navigate to the new book
       if (data?.bookId) {
         setTimeout(() => {
           navigate(`/book/${data.bookId}`);
@@ -218,8 +255,7 @@ export default function Generate() {
     }
   };
 
-  // Show upgrade prompt ONLY for free users who cannot generate
-  // NEVER show for admin, prophet, any paid user, OR during trial mode
+  // Show upgrade prompt for free users who cannot generate
   if (!subLoading && !canGenerateBooks && user && !entitlements.isAdmin && !entitlements.isProphet && !entitlements.isPaid && !entitlements.isTrialMode) {
     return (
       <div className="min-h-screen">
@@ -264,7 +300,7 @@ export default function Generate() {
       <LaunchBanner />
       <main className="flex-1 pt-20 pb-16">
         <div className="container mx-auto px-4 max-w-3xl">
-          {/* Launch Mode Info for Free Users Only - HIDE during trial mode */}
+          {/* Launch Mode Info for Free Users Only */}
           {isLaunchModeActive() && tier === 'free' && !entitlements.isPaid && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
@@ -287,6 +323,7 @@ export default function Generate() {
               </div>
             </motion.div>
           )}
+          
           {/* Header */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
@@ -321,7 +358,7 @@ export default function Generate() {
               {/* Title */}
               <div className="space-y-2">
                 <Label htmlFor="title" className="text-foreground">
-                  {t('generate.bookTitle')}
+                  {t('generate.bookTitle')} *
                 </Label>
                 <Input
                   id="title"
@@ -349,9 +386,9 @@ export default function Generate() {
               </div>
 
               {/* Category & Chapters */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label className="text-foreground">{t('generate.category')}</Label>
+                  <Label className="text-foreground">{t('generate.category')} *</Label>
                   <Select value={category} onValueChange={setCategory} disabled={isGenerating}>
                     <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
                       <SelectValue placeholder={t('generate.selectCategory')} />
@@ -383,56 +420,34 @@ export default function Generate() {
                 </div>
               </div>
 
-              {/* Book Type Selection */}
-              <div className="space-y-3">
-                <Label className="text-foreground">{t('generate.bookType')}</Label>
-                <RadioGroup
-                  value={bookType}
-                  onValueChange={(v) => setBookType(v as "text" | "illustrated" | "comic")}
-                  className="grid grid-cols-1 sm:grid-cols-3 gap-3"
-                  disabled={isGenerating}
-                >
-                  <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors cursor-pointer" onClick={() => setBookType("text")}>
-                    <RadioGroupItem value="text" id="type-text" />
-                    <Label htmlFor="type-text" className="flex items-center gap-2 cursor-pointer flex-1">
-                      <BookOpen className="h-4 w-4 text-scroll-gold flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{t('generate.textOnly')}</p>
-                        <p className="text-xs text-muted-foreground truncate">{t('generate.textOnlyDesc')}</p>
-                      </div>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors cursor-pointer" onClick={() => setBookType("illustrated")}>
-                    <RadioGroupItem value="illustrated" id="type-illustrated" />
-                    <Label htmlFor="type-illustrated" className="flex items-center gap-2 cursor-pointer flex-1">
-                      <BookImage className="h-4 w-4 text-scroll-gold flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{t('generate.illustrated')}</p>
-                        <p className="text-xs text-muted-foreground truncate">{t('generate.illustratedDesc')}</p>
-                      </div>
-                    </Label>
-                  </div>
-                  <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors cursor-pointer" onClick={() => setBookType("comic")}>
-                    <RadioGroupItem value="comic" id="type-comic" />
-                    <Label htmlFor="type-comic" className="flex items-center gap-2 cursor-pointer flex-1">
-                      <ImageIcon className="h-4 w-4 text-scroll-gold flex-shrink-0" />
-                      <div className="min-w-0">
-                        <p className="text-sm font-medium">{t('generate.comic')}</p>
-                        <p className="text-xs text-muted-foreground truncate">{t('generate.comicDesc')}</p>
-                      </div>
-                    </Label>
-                  </div>
-                </RadioGroup>
-                {bookType === "comic" && (
-                  <p className="text-xs text-scroll-gold">
-                    {t('generate.comicNote')}
-                  </p>
-                )}
-              </div>
+              {/* Book Type Selector - NEW REQUIRED FIELD */}
+              <BookTypeSelector
+                value={extendedBookType}
+                onChange={setExtendedBookType}
+                disabled={isGenerating}
+              />
 
-              {/* Word Count & Language - hide word count for comics */}
+              {/* Workbook Preview - shows when workbook selected */}
+              {extendedBookType === "workbook" && (
+                <WorkbookPreview
+                  title={title}
+                  numChapters={parseInt(numChapters)}
+                  onDensityChange={setWorkbookDensity}
+                />
+              )}
+
+              {/* Comic Style Selector - shows when comic selected */}
+              {extendedBookType === "comic" && (
+                <ComicStyleSelector
+                  value={comicStyleConfig}
+                  onChange={setComicStyleConfig}
+                  disabled={isGenerating}
+                />
+              )}
+
+              {/* Word Count & Language - hide word count for comics/workbooks */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {bookType !== "comic" && (
+                {extendedBookType !== "comic" && extendedBookType !== "workbook" && (
                   <div className="space-y-2">
                     <Label className="text-foreground">{t('generate.wordsPerChapter')}</Label>
                     <Select value={wordCount} onValueChange={setWordCount} disabled={isGenerating}>
@@ -470,8 +485,8 @@ export default function Generate() {
                 </div>
               </div>
 
-              {/* Content Mode Selection - Creative vs Academic */}
-              {bookType === "text" && (
+              {/* Content Mode Selection - Creative vs Academic (only for text types) */}
+              {(extendedBookType === "text" || extendedBookType === "academic" || extendedBookType === "reference") && (
                 <div className="space-y-4">
                   <ContentModeSelector
                     mode={contentMode}
