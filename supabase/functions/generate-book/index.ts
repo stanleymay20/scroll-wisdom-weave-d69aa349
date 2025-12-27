@@ -107,6 +107,14 @@ serve(async (req) => {
       customCover,
       bookType = 'text',
       enableReferences = false,
+      // Workbook fields
+      workbookDensity = 'medium',
+      // Comic fields
+      comicStyleId = 'children_book',
+      paletteHint = '',
+      lineWeightHint = '',
+      characterSheet = {},
+      layoutTemplate = 5,
     } = await req.json();
 
     // Validate chapter limit based on plan (trial uses effectivePlan)
@@ -284,6 +292,14 @@ Format your response as a JSON object with this structure:
         creator_id: user.id,
         language: language,
         book_type: bookType,
+        // Workbook fields
+        workbook_density: bookType === 'workbook' ? workbookDensity : null,
+        // Comic fields
+        comic_style_id: bookType === 'comic' ? comicStyleId : null,
+        palette_hint: bookType === 'comic' ? paletteHint : null,
+        line_weight_hint: bookType === 'comic' ? lineWeightHint : null,
+        character_sheet: bookType === 'comic' ? characterSheet : null,
+        layout_template: bookType === 'comic' ? layoutTemplate : null,
       })
       .select()
       .single();

@@ -29,6 +29,7 @@ import Pricing from "./pages/Pricing";
 import AdminPanel from "./pages/AdminPanel";
 import Install from "./pages/Install";
 import PWATest from "./pages/PWATest";
+import Diagnostics from "./pages/Diagnostics";
 import { CookieConsent } from "./components/legal/CookieConsent";
 
 const queryClient = new QueryClient();
@@ -77,6 +78,7 @@ const App = () => (
               <Route path="/admin" element={<AdminPanel />} />
               <Route path="/install" element={<Install />} />
               <Route path="/pwa-test" element={<PWATest />} />
+              <Route path="/diagnostics" element={<Diagnostics />} />
               <Route path="/book/:id" element={<BookDetail />} />
               <Route path="/read/:bookId/:chapterId" element={<Reader />} />
               <Route path="*" element={<NotFound />} />
