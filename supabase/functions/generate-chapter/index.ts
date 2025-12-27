@@ -984,19 +984,33 @@ serve(async (req) => {
       comicStyle = 'children_book',
     } = await req.json();
 
-    // Verify ownership
+    // Verify ownership and get book details for style/workbook settings
     const { data: chapter } = await supabase
       .from("chapters")
       .select("book_id")
       .eq("id", chapterId)
       .single();
 
+    // Get book with all style/workbook fields
+    let bookDetails: {
+      creator_id: string;
+      book_type: string;
+      workbook_density: string | null;
+      comic_style_id: string | null;
+      palette_hint: string | null;
+      line_weight_hint: string | null;
+      character_sheet: any;
+      layout_template: number | null;
+    } | null = null;
+
     if (chapter) {
       const { data: book } = await supabase
         .from("books")
-        .select("creator_id")
+        .select("creator_id, book_type, workbook_density, comic_style_id, palette_hint, line_weight_hint, character_sheet, layout_template")
         .eq("id", chapter.book_id)
         .single();
+
+      bookDetails = book;
 
       if (book && book.creator_id !== user.id && !isAdmin) {
         return new Response(JSON.stringify({ error: "Not authorized" }), {
@@ -1005,6 +1019,15 @@ serve(async (req) => {
         });
       }
     }
+
+    // Use book-level settings if available, otherwise use request params
+    const effectiveBookType = bookDetails?.book_type || bookType;
+    const effectiveComicStyle = bookDetails?.comic_style_id || comicStyle;
+    const effectiveLayoutTemplate = bookDetails?.layout_template || 5;
+    const effectiveWorkbookDensity = bookDetails?.workbook_density || 'medium';
+    const effectiveCharacterSheet = bookDetails?.character_sheet || {};
+    const effectivePaletteHint = bookDetails?.palette_hint || '';
+    const effectiveLineWeightHint = bookDetails?.line_weight_hint || '';
 
     const effectiveWordCount = isAdmin ? wordCount : Math.min(wordCount, maxWordCount);
     
@@ -1065,12 +1088,29 @@ serve(async (req) => {
     // ===========================================
     // COMIC BOOK GENERATION
     // ===========================================
-    if (bookType === 'comic') {
+    if (effectiveBookType === 'comic') {
       console.log("[GENERATE-CHAPTER] Generating authority-grade comic chapter...");
+      console.log(`[GENERATE-CHAPTER] Comic style: ${effectiveComicStyle}, Panels: ${effectiveLayoutTemplate}`);
       
-      const systemPrompt = buildComicSystemPrompt(comicStyle, languageName);
+      // Build enhanced system prompt with character sheet if provided
+      let enhancedSystemPrompt = buildComicSystemPrompt(effectiveComicStyle, languageName);
+      
+      // Add character consistency from character sheet
+      if (effectiveCharacterSheet && Object.keys(effectiveCharacterSheet).length > 0) {
+        enhancedSystemPrompt += `\n\n**CHARACTER SHEET (MUST MAINTAIN CONSISTENCY):**\n${JSON.stringify(effectiveCharacterSheet, null, 2)}`;
+      }
+      
+      // Add custom palette/line hints if provided
+      if (effectivePaletteHint) {
+        enhancedSystemPrompt += `\n\n**CUSTOM PALETTE:** ${effectivePaletteHint}`;
+      }
+      if (effectiveLineWeightHint) {
+        enhancedSystemPrompt += `\n\n**CUSTOM LINE WEIGHT:** ${effectiveLineWeightHint}`;
+      }
+      
+      const systemPrompt = enhancedSystemPrompt;
       const chapterPrompt = buildComicChapterPrompt(
-        chapterTitle, bookTitle, chapterNumber, keyTopics, languageName, 5
+        chapterTitle, bookTitle, chapterNumber, keyTopics, languageName, effectiveLayoutTemplate
       );
       
       const comicResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -1222,13 +1262,25 @@ serve(async (req) => {
     // ===========================================
     // WORKBOOK GENERATION
     // ===========================================
-    if (bookType === 'workbook') {
+    if (effectiveBookType === 'workbook') {
       console.log("[GENERATE-CHAPTER] Generating authority-grade workbook chapter...");
+      console.log(`[GENERATE-CHAPTER] Workbook density: ${effectiveWorkbookDensity}`);
+      
+      // Adjust prompts based on density
+      const densityMultipliers: Record<string, { prompts: number; tables: number }> = {
+        low: { prompts: 2, tables: 1 },
+        medium: { prompts: 4, tables: 2 },
+        high: { prompts: 6, tables: 3 },
+      };
+      const density = densityMultipliers[effectiveWorkbookDensity] || densityMultipliers.medium;
       
       const systemPrompt = buildWorkbookSystemPrompt(languageName);
-      const chapterPrompt = buildWorkbookChapterPrompt(
+      const baseChapterPrompt = buildWorkbookChapterPrompt(
         chapterTitle, bookTitle, chapterNumber, keyTopics, languageName
       );
+      
+      // Enhance prompt with density requirements
+      const chapterPrompt = baseChapterPrompt + `\n\n**DENSITY REQUIREMENTS:**\n- Include at least ${density.prompts} fill-in prompts\n- Include at least ${density.tables} tables/worksheets`;
       
       const workbookResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
