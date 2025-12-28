@@ -80,7 +80,8 @@ export default function Generate() {
   const [generationProgress, setGenerationProgress] = useState<string[]>([]);
   
   // New book type state
-  const [extendedBookType, setExtendedBookType] = useState<ExtendedBookType>("text");
+  const [extendedBookType, setExtendedBookType] = useState<ExtendedBookType | null>(null);
+  const [showBookTypeError, setShowBookTypeError] = useState(false);
   const [workbookDensity, setWorkbookDensity] = useState<"low" | "medium" | "high">("medium");
   const [comicStyleConfig, setComicStyleConfig] = useState<ComicStyleConfig>({
     styleId: "modern_superhero",
@@ -121,10 +122,14 @@ export default function Generate() {
   ];
 
   // Map extended book type to legacy format for backend
-  const getLegacyBookType = (): "text" | "illustrated" | "comic" => {
+  const getLegacyBookType = (): "text" | "illustrated" | "comic" | "workbook" => {
     switch (extendedBookType) {
-      case "comic": return "comic";
+      case "comic":
+        return "comic";
       case "workbook":
+        return "workbook";
+      case "illustrated":
+        return "illustrated";
       case "academic":
       case "professional":
       case "reference":
@@ -146,10 +151,22 @@ export default function Generate() {
   };
 
   const handleGenerate = async () => {
+    setShowBookTypeError(false);
+
     if (!title || !category) {
       toast({
         title: t('generate.missingInfo'),
         description: t('generate.provideTitleCategory'),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (!extendedBookType) {
+      setShowBookTypeError(true);
+      toast({
+        title: "Select a book type",
+        description: "Book type is required before you can generate.",
         variant: "destructive",
       });
       return;
@@ -420,11 +437,15 @@ export default function Generate() {
                 </div>
               </div>
 
-              {/* Book Type Selector - NEW REQUIRED FIELD */}
+              {/* Book Type Selector - REQUIRED */}
               <BookTypeSelector
-                value={extendedBookType}
-                onChange={setExtendedBookType}
+                value={extendedBookType ?? undefined}
+                onChange={(v) => {
+                  setExtendedBookType(v);
+                  setShowBookTypeError(false);
+                }}
                 disabled={isGenerating}
+                showError={showBookTypeError}
               />
 
               {/* Workbook Preview - shows when workbook selected */}
@@ -438,6 +459,12 @@ export default function Generate() {
 
               {/* Comic Style Selector - shows when comic selected */}
               {extendedBookType === "comic" && (
+                <ComicStyleSelector
+                  value={comicStyleConfig}
+                  onChange={setComicStyleConfig}
+                  disabled={isGenerating}
+                />
+              )}
                 <ComicStyleSelector
                   value={comicStyleConfig}
                   onChange={setComicStyleConfig}
@@ -563,7 +590,7 @@ export default function Generate() {
                 variant="hero"
                 className="w-full"
                 onClick={handleGenerate}
-                disabled={isGenerating}
+                disabled={isGenerating || !extendedBookType}
               >
                 {isGenerating ? (
                   <>

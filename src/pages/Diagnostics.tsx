@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -8,7 +8,8 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/hooks/useAdmin";
-import { Loader2, CheckCircle, XCircle, ExternalLink, Zap, BookOpen, Image as ImageIcon } from "lucide-react";
+import { BUILD_INFO } from "@/lib/buildInfo";
+import { Loader2, CheckCircle, XCircle, ExternalLink, Zap, BookOpen, Image as ImageIcon, LogIn } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 
@@ -34,41 +35,67 @@ function EdgeFunctionHealth() {
     "generate-book": "pending",
     "generate-chapter": "pending",
   });
+  const [details, setDetails] = useState<Record<string, any>>({});
 
   const checkHealth = async (fn: string) => {
     try {
-      const { error } = await supabase.functions.invoke(fn, {
+      const { data, error } = await supabase.functions.invoke(fn, {
         body: { healthCheck: true },
       });
-      setHealth((h) => ({ ...h, [fn]: error ? "error" : "ok" }));
-    } catch {
+      if (error) {
+        setHealth((h) => ({ ...h, [fn]: "error" }));
+        setDetails((d) => ({ ...d, [fn]: { error: error.message } }));
+        return;
+      }
+      setHealth((h) => ({ ...h, [fn]: "ok" }));
+      setDetails((d) => ({ ...d, [fn]: data }));
+    } catch (e: any) {
       setHealth((h) => ({ ...h, [fn]: "error" }));
+      setDetails((d) => ({ ...d, [fn]: { error: e?.message || "Unknown error" } }));
     }
   };
 
   const runHealthChecks = () => {
     setHealth({ "generate-book": "pending", "generate-chapter": "pending" });
+    setDetails({});
     checkHealth("generate-book");
     checkHealth("generate-chapter");
   };
 
+  useEffect(() => {
+    runHealthChecks();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   return (
     <div className="space-y-3">
-      <div className="flex gap-4">
+      <div className="flex flex-col gap-3">
         {Object.entries(health).map(([fn, status]) => (
-          <div key={fn} className="flex items-center gap-2">
-            <span className={`h-2 w-2 rounded-full ${
-              status === "ok" ? "bg-green-500" : status === "error" ? "bg-red-500" : "bg-muted-foreground"
-            }`} />
-            <span className="text-sm font-mono">{fn}</span>
-            <Badge variant={status === "ok" ? "default" : status === "error" ? "destructive" : "secondary"} className="text-xs">
-              {status}
-            </Badge>
+          <div key={fn} className="flex items-center justify-between gap-3 rounded-lg border border-border/50 bg-muted/30 px-3 py-2">
+            <div className="flex items-center gap-2">
+              <span
+                className={`h-2 w-2 rounded-full ${
+                  status === "ok" ? "bg-green-500" : status === "error" ? "bg-red-500" : "bg-muted-foreground"
+                }`}
+              />
+              <span className="text-sm font-mono">{fn}</span>
+              <Badge
+                variant={status === "ok" ? "default" : status === "error" ? "destructive" : "secondary"}
+                className="text-xs"
+              >
+                {status}
+              </Badge>
+            </div>
+            {details[fn]?.buildId && (
+              <span className="text-xs text-muted-foreground font-mono">
+                {details[fn].buildId}
+              </span>
+            )}
           </div>
         ))}
       </div>
       <Button variant="outline" size="sm" onClick={runHealthChecks}>
-        Check Health
+        Re-check
       </Button>
     </div>
   );
@@ -82,11 +109,11 @@ export default function Diagnostics() {
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [comicResult, setComicResult] = useState<ComicTestResult | null>(null);
 
-  // Redirect non-admins
-  if (!adminLoading && !isAdmin) {
-    navigate("/");
-    return null;
-  }
+  const accessState = useMemo<"loading" | "unauth" | "forbidden" | "ok">(() => {
+    if (adminLoading) return "loading";
+    if (!isAdmin) return "forbidden";
+    return "ok";
+  }, [adminLoading, isAdmin]);
 
   const updateTest = (name: string, update: Partial<TestResult>) => {
     setTestResults((prev) =>
@@ -230,22 +257,26 @@ export default function Diagnostics() {
         .single();
 
       const content = chapterContent?.content || "";
-      const hasDialogue = content.includes("💬") || /\*\*[A-Z][a-z]+:\*\*/.test(content);
-      
-      updateTest("Verify dialogue present", { 
-        status: hasDialogue ? "passed" : "failed", 
-        message: hasDialogue ? "Dialogue found in panels" : "No dialogue detected" 
+      const hasDialogue = /\*\*Dialogue:\*\*/i.test(content) || /-\s*[A-Z][A-Za-z]+:\s*"/g.test(content);
+
+      updateTest("Verify dialogue present", {
+        status: hasDialogue ? "passed" : "failed",
+        message: hasDialogue ? "Dialogue found in panels" : "No dialogue detected",
       });
 
       // Step 5: Verify images
       updateTest("Verify images stored", { status: "running" });
 
-      const imageUrls = content.match(/!\[Panel \d+\]\((data:image\/[^)]+|https?:\/\/[^)]+)\)/g) || [];
+      const imageUrls = content
+        .match(/!\[Panel\s*\d+\]\(([^)]+)\)/g)
+        ?.map((m) => m.match(/\(([^)]+)\)/)?.[1] || "")
+        .filter(Boolean) || [];
+
       const imageCount = imageUrls.length;
 
-      updateTest("Verify images stored", { 
-        status: imageCount > 0 ? "passed" : "failed", 
-        message: `${imageCount} panel images found` 
+      updateTest("Verify images stored", {
+        status: imageCount > 0 ? "passed" : "failed",
+        message: `${imageCount} panel images found`,
       });
 
       // Step 6: Render check
@@ -324,17 +355,17 @@ export default function Diagnostics() {
       
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
         <div className="space-y-6">
-        <div className="flex items-center justify-between">
-          <div>
-            <h1 className="text-3xl font-bold">Admin Diagnostics</h1>
-            <p className="text-muted-foreground mt-1">
-              Run automated smoke tests and verify system functionality
-            </p>
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-3xl font-bold">Diagnostics</h1>
+              <p className="text-muted-foreground mt-1">
+                Production verification: health checks, build ID, and smoke tests
+              </p>
+            </div>
+            <Badge variant="outline" className="text-xs font-mono">
+              {BUILD_INFO.id}
+            </Badge>
           </div>
-          <Badge variant="outline" className="text-xs">
-            Build: {new Date().toISOString().split('T')[0]} | v1.0.0
-          </Badge>
-        </div>
 
           <Separator />
 
@@ -436,7 +467,7 @@ export default function Diagnostics() {
                       </div>
 
                       {/* Links */}
-                      <div className="flex gap-3">
+                      <div className="flex gap-3 flex-wrap">
                         {comicResult.bookId && (
                           <Button
                             variant="outline"
@@ -449,13 +480,37 @@ export default function Diagnostics() {
                         {comicResult.bookId && comicResult.chapterId && (
                           <Button
                             variant="outline"
-                            onClick={() => navigate(`/reader/${comicResult.bookId}?chapter=1`)}
+                            onClick={() => navigate(`/read/${comicResult.bookId}/${comicResult.chapterId}`)}
                           >
                             <ExternalLink className="mr-2 h-4 w-4" />
-                            Open in Reader
+                            Open Reader
                           </Button>
                         )}
                       </div>
+
+                      {/* Panel Image URLs (first 3) */}
+                      {comicResult.imageUrls && comicResult.imageUrls.length > 0 && (
+                        <div className="space-y-2">
+                          <h4 className="text-sm font-medium flex items-center gap-2">
+                            <ImageIcon className="h-4 w-4" />
+                            Panel image URLs (first 3)
+                          </h4>
+                          <div className="space-y-1">
+                            {comicResult.imageUrls.slice(0, 3).map((url, idx) => (
+                              <a
+                                key={idx}
+                                href={url}
+                                target="_blank"
+                                rel="noreferrer"
+                                className="block text-xs font-mono text-primary underline truncate"
+                                title={url}
+                              >
+                                {url}
+                              </a>
+                            ))}
+                          </div>
+                        </div>
+                      )}
 
                       {/* Panel Images Preview */}
                       {comicResult.imageUrls && comicResult.imageUrls.length > 0 && (
