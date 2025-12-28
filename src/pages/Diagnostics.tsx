@@ -29,6 +29,51 @@ interface ComicTestResult {
   error?: string;
 }
 
+function EdgeFunctionHealth() {
+  const [health, setHealth] = useState<Record<string, "pending" | "ok" | "error">>({
+    "generate-book": "pending",
+    "generate-chapter": "pending",
+  });
+
+  const checkHealth = async (fn: string) => {
+    try {
+      const { error } = await supabase.functions.invoke(fn, {
+        body: { healthCheck: true },
+      });
+      setHealth((h) => ({ ...h, [fn]: error ? "error" : "ok" }));
+    } catch {
+      setHealth((h) => ({ ...h, [fn]: "error" }));
+    }
+  };
+
+  const runHealthChecks = () => {
+    setHealth({ "generate-book": "pending", "generate-chapter": "pending" });
+    checkHealth("generate-book");
+    checkHealth("generate-chapter");
+  };
+
+  return (
+    <div className="space-y-3">
+      <div className="flex gap-4">
+        {Object.entries(health).map(([fn, status]) => (
+          <div key={fn} className="flex items-center gap-2">
+            <span className={`h-2 w-2 rounded-full ${
+              status === "ok" ? "bg-green-500" : status === "error" ? "bg-red-500" : "bg-muted-foreground"
+            }`} />
+            <span className="text-sm font-mono">{fn}</span>
+            <Badge variant={status === "ok" ? "default" : status === "error" ? "destructive" : "secondary"} className="text-xs">
+              {status}
+            </Badge>
+          </div>
+        ))}
+      </div>
+      <Button variant="outline" size="sm" onClick={runHealthChecks}>
+        Check Health
+      </Button>
+    </div>
+  );
+}
+
 export default function Diagnostics() {
   const navigate = useNavigate();
   const { toast } = useToast();
@@ -279,14 +324,29 @@ export default function Diagnostics() {
       
       <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
         <div className="space-y-6">
+        <div className="flex items-center justify-between">
           <div>
             <h1 className="text-3xl font-bold">Admin Diagnostics</h1>
             <p className="text-muted-foreground mt-1">
               Run automated smoke tests and verify system functionality
             </p>
           </div>
+          <Badge variant="outline" className="text-xs">
+            Build: {new Date().toISOString().split('T')[0]} | v1.0.0
+          </Badge>
+        </div>
 
           <Separator />
+
+          {/* Edge Function Health Check */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Edge Function Health</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <EdgeFunctionHealth />
+            </CardContent>
+          </Card>
 
           {/* African Superhero Comic Test */}
           <Card>
