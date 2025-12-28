@@ -28,6 +28,21 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Minimal health check (no auth required)
+  if (req.method === "POST") {
+    try {
+      const body = await req.clone().json().catch(() => null);
+      if (body?.healthCheck) {
+        return new Response(
+          JSON.stringify({ ok: true, function: "generate-book", buildId: `fn:${new Date().toISOString()}` }),
+          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    } catch {
+      // ignore
+    }
+  }
+
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");

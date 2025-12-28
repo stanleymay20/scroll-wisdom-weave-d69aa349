@@ -16,9 +16,11 @@ export type ExtendedBookType =
   | "illustrated";
 
 interface BookTypeSelectorProps {
-  value: ExtendedBookType;
+  value?: ExtendedBookType;
   onChange: (value: ExtendedBookType) => void;
   disabled?: boolean;
+  required?: boolean;
+  showError?: boolean;
 }
 
 const BOOK_TYPES = [
@@ -60,17 +62,31 @@ const BOOK_TYPES = [
   },
 ];
 
-export function BookTypeSelector({ value, onChange, disabled }: BookTypeSelectorProps) {
+export function BookTypeSelector({
+  value,
+  onChange,
+  disabled,
+  required = true,
+  showError,
+}: BookTypeSelectorProps) {
   const { t } = useLanguage();
 
   return (
     <div className="space-y-3">
-      <Label className="text-foreground font-medium">Book Type *</Label>
+      <div className="flex items-center justify-between">
+        <Label className="text-foreground font-medium">
+          Book Type {required ? "*" : ""}
+        </Label>
+        {showError && (
+          <span className="text-xs text-destructive">Required</span>
+        )}
+      </div>
       <RadioGroup
         value={value}
         onValueChange={(v) => onChange(v as ExtendedBookType)}
         className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3"
         disabled={disabled}
+        aria-invalid={showError ? true : undefined}
       >
         {BOOK_TYPES.map((type) => (
           <div
@@ -78,7 +94,9 @@ export function BookTypeSelector({ value, onChange, disabled }: BookTypeSelector
             className={`flex items-center space-x-2 p-3 rounded-lg border transition-colors cursor-pointer ${
               value === type.value
                 ? "border-primary bg-primary/10"
-                : "border-border/50 hover:border-primary/50"
+                : showError
+                  ? "border-destructive/50"
+                  : "border-border/50 hover:border-primary/50"
             }`}
             onClick={() => !disabled && onChange(type.value)}
           >
