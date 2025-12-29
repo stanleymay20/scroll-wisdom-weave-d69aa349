@@ -146,6 +146,8 @@ serve(async (req) => {
       lineWeightHint = '',
       characterSheet = {},
       layoutTemplate = 5,
+      textInImage = true,
+      scenesPerPanel = 1,
     } = await req.json();
 
     // Validate chapter limit based on plan (trial uses effectivePlan)
@@ -331,6 +333,8 @@ Format your response as a JSON object with this structure:
         line_weight_hint: bookType === 'comic' ? lineWeightHint : null,
         character_sheet: bookType === 'comic' ? characterSheet : null,
         layout_template: bookType === 'comic' ? layoutTemplate : null,
+        text_in_image: bookType === 'comic' ? textInImage : null,
+        scenes_per_panel: bookType === 'comic' ? scenesPerPanel : null,
       })
       .select()
       .single();

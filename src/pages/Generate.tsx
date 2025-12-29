@@ -89,6 +89,8 @@ export default function Generate() {
     lineWeightHint: "bold",
     characterSheet: "",
     layoutTemplate: 5,
+    textInImage: true,
+    scenesPerPanel: 1,
   });
   
   const [contentMode, setContentMode] = useState<ContentMode>("creative");
@@ -233,6 +235,8 @@ export default function Generate() {
           lineWeightHint: extendedBookType === "comic" ? comicStyleConfig.lineWeightHint : null,
           characterSheet: extendedBookType === "comic" ? comicStyleConfig.characterSheet : null,
           layoutTemplate: extendedBookType === "comic" ? comicStyleConfig.layoutTemplate : null,
+          textInImage: extendedBookType === "comic" ? comicStyleConfig.textInImage : null,
+          scenesPerPanel: extendedBookType === "comic" ? comicStyleConfig.scenesPerPanel : null,
         },
       });
 

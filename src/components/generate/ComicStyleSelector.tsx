@@ -21,6 +21,8 @@ export interface ComicStyleConfig {
   lineWeightHint: "thin" | "medium" | "bold";
   characterSheet: string;
   layoutTemplate: number; // 3-6 panels per page
+  textInImage: boolean; // true = bake text into image, false = overlay in Reader
+  scenesPerPanel: 1 | 2 | 3; // number of scenes per panel
 }
 
 interface ComicStyleSelectorProps {
@@ -212,6 +214,70 @@ export function ComicStyleSelector({ value, onChange, disabled }: ComicStyleSele
           <p className="text-xs text-muted-foreground">
             Character descriptions ensure consistent appearance across all panels
           </p>
+        </div>
+
+        {/* Scenes Per Panel */}
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <Label className="flex items-center gap-2">
+              <LayoutGrid className="h-4 w-4" />
+              Scenes Per Panel
+            </Label>
+            <Badge variant="secondary">{value.scenesPerPanel} scene{value.scenesPerPanel > 1 ? "s" : ""}</Badge>
+          </div>
+          <Slider
+            value={[value.scenesPerPanel]}
+            onValueChange={(v) => onChange({ ...value, scenesPerPanel: v[0] as 1 | 2 | 3 })}
+            min={1}
+            max={3}
+            step={1}
+            disabled={disabled}
+          />
+          <div className="flex justify-between text-xs text-muted-foreground">
+            <span>1 (single scene)</span>
+            <span>3 (multi-scene panel)</span>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Multi-scene panels show action progression within a single image
+          </p>
+        </div>
+
+        {/* Text Rendering Mode */}
+        <div className="space-y-3">
+          <Label className="flex items-center gap-2">
+            <Palette className="h-4 w-4" />
+            Dialogue & Text Rendering
+          </Label>
+          <div className="flex gap-2">
+            <button
+              onClick={() => !disabled && onChange({ ...value, textInImage: true })}
+              className={`flex-1 py-3 px-3 rounded-lg border text-sm transition-colors ${
+                value.textInImage
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border/50 hover:border-primary/50"
+              }`}
+              disabled={disabled}
+            >
+              <div className="font-medium">In Image</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Speech bubbles baked into artwork
+              </p>
+            </button>
+            <button
+              onClick={() => !disabled && onChange({ ...value, textInImage: false })}
+              className={`flex-1 py-3 px-3 rounded-lg border text-sm transition-colors ${
+                !value.textInImage
+                  ? "border-primary bg-primary/10 text-primary"
+                  : "border-border/50 hover:border-primary/50"
+              }`}
+              disabled={disabled}
+            >
+              <div className="font-medium">Reader Overlay</div>
+              <p className="text-xs text-muted-foreground mt-1">
+                Text overlaid dynamically in Reader
+              </p>
+            </button>
+          </div>
         </div>
 
         {/* Consistency Lock Notice */}
