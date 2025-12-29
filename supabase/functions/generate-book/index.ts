@@ -6,6 +6,22 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// ===========================================
+// SCROLLLIBRARY MASTER GENERATION PROMPT v1.0
+// ===========================================
+
+const SYSTEM_ROLE = `You are ScrollLibrary Core Generator, a production-grade academic and creative publishing engine.
+
+You MUST obey all constraints below.
+If any rule is violated, you MUST rewrite the output until compliant.`;
+
+const OUTLINE_FORMATTING_RULES = `
+FORMATTING RULES:
+- Do NOT use Markdown syntax in titles or descriptions
+- Write plain text only (no **, ##, backticks)
+- All content must be publication-ready
+`;
+
 // Tier limits for book generation
 const TIER_LIMITS = {
   free: { booksPerDay: 1, maxChapters: 5 },
