@@ -1576,14 +1576,16 @@ This is MANDATORY. No exceptions.`;
           finalComicContent += `[Illustration: ${sanitizeMarkdown(panel.visual).slice(0, 150)}...]\n\n`;
         }
         
-        // Format dialogue with speech bubble indicators - sanitize any markdown
+        // Format dialogue for reader speech bubbles.
+        // Accept lines with optional bullet/hyphen and optional quotes (straight or smart).
         if (panel.dialogue) {
-          const dialogueLines = panel.dialogue.split('\n').filter(l => l.trim().startsWith('-'));
-          for (const line of dialogueLines) {
-            const dialogueMatch = line.match(/-\s*\*?\*?([^:*]+)\*?\*?:\s*"?([^"]+)"?/);
-            if (dialogueMatch) {
-              const character = sanitizeMarkdown(dialogueMatch[1].trim());
-              const speech = sanitizeMarkdown(dialogueMatch[2].trim());
+          const dialogueText = panel.dialogue.replace(/\r/g, "");
+          const dialogueRegex = /(?:^|\n)\s*(?:[-•]\s*)?([^:\n]{1,60}):\s*["“]?([^\n"”]{1,220})["”]?/g;
+          let dMatch: RegExpExecArray | null;
+          while ((dMatch = dialogueRegex.exec(dialogueText)) !== null) {
+            const character = sanitizeMarkdown(dMatch[1].trim());
+            const speech = sanitizeMarkdown(dMatch[2].trim());
+            if (character && speech) {
               finalComicContent += `${character}: "${speech}"\n\n`;
             }
           }
