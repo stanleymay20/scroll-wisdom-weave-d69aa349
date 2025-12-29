@@ -4,11 +4,11 @@ import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
-import { 
-  Book, 
-  BookOpen, 
-  Bookmark, 
-  Clock, 
+import {
+  Book,
+  BookOpen,
+  Bookmark,
+  Clock,
   User,
   ChevronRight,
   Play,
@@ -19,7 +19,7 @@ import {
   Globe,
   Lock,
   RefreshCw,
-  Palette
+  Palette,
 } from "lucide-react";
 import {
   Select,
@@ -31,6 +31,17 @@ import {
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ShareDialog } from "@/components/books/ShareDialog";
@@ -78,6 +89,11 @@ export default function BookDetail() {
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
   const [isUpdatingPublish, setIsUpdatingPublish] = useState(false);
   const [coverTheme, setCoverTheme] = useState("classic");
+
+  const [regenDialogOpen, setRegenDialogOpen] = useState(false);
+  const [regenTarget, setRegenTarget] = useState<ChapterData | null>(null);
+  const [editIntent, setEditIntent] = useState("");
+
   const isOwner = user && book?.creator_id === user.id;
 
   const coverThemes = [
@@ -214,21 +230,38 @@ export default function BookDetail() {
     }
   };
 
-  const handleGenerateChapter = async (chapter: ChapterData, e: React.MouseEvent) => {
-    e.stopPropagation();
-    
+  const openRegenerateDialog = (chapter: ChapterData) => {
+    setRegenTarget(chapter);
+    setEditIntent("");
+    setRegenDialogOpen(true);
+  };
+
+  const runChapterGeneration = async ({
+    chapter,
+    regenerate,
+    editIntentText,
+  }: {
+    chapter: ChapterData;
+    regenerate: boolean;
+    editIntentText?: string;
+  }) => {
     if (!book) return;
-    
+
     setGeneratingChapterId(chapter.id);
-    
+
     try {
       // Extract key topics from existing content if available
-      const keyTopicsMatch = chapter.content?.match(/### Key Topics\n([\s\S]*?)(?:\n\n|\*Full chapter)/);
-      const keyTopics = keyTopicsMatch 
-        ? keyTopicsMatch[1].split('\n').filter(t => t.startsWith('-')).map(t => t.replace('- ', ''))
+      const keyTopicsMatch = chapter.content?.match(
+        /### Key Topics\n([\s\S]*?)(?:\n\n|\*Full chapter)/
+      );
+      const keyTopics = keyTopicsMatch
+        ? keyTopicsMatch[1]
+            .split("\n")
+            .filter((t) => t.startsWith("-"))
+            .map((t) => t.replace("- ", ""))
         : [];
 
-      const response = await supabase.functions.invoke('generate-chapter', {
+      const response = await supabase.functions.invoke("generate-chapter", {
         body: {
           chapterId: chapter.id,
           bookTitle: book.title,
@@ -236,40 +269,65 @@ export default function BookDetail() {
           chapterNumber: chapter.chapter_number,
           keyTopics,
           category: book.category,
-          language: book.language || 'en',
-          bookType: book.book_type || 'text', // Pass book type for comic/illustrated generation
-        }
+          language: book.language || "en",
+          bookType: book.book_type || "text",
+          ...(regenerate
+            ? {
+                regenerate: true,
+                originalContent: chapter.content,
+                editIntent: editIntentText,
+              }
+            : {}),
+        },
       });
 
-      if (response.error) {
-        throw new Error(response.error.message);
-      }
+      if (response.error) throw new Error(response.error.message);
+      if (response.data?.error) throw new Error(response.data.error);
 
-      if (response.data?.error) {
-        throw new Error(response.data.error);
-      }
-
-      // Update chapter in local state
-      setChapters(prev => prev.map(ch => 
-        ch.id === chapter.id 
-          ? { ...ch, is_generated: true, word_count: response.data.wordCount }
-          : ch
-      ));
+      setChapters((prev) =>
+        prev.map((ch) =>
+          ch.id === chapter.id
+            ? { ...ch, is_generated: true, word_count: response.data.wordCount }
+            : ch
+        )
+      );
 
       toast({
-        title: t('book.chapterGenerated'),
-        description: `${chapter.title} ${t('book.readyToRead')}`,
+        title: regenerate ? "Chapter updated" : t("book.chapterGenerated"),
+        description: `${chapter.title} ${t("book.readyToRead")}`,
       });
     } catch (error) {
+      const message = error instanceof Error ? error.message : t("book.failedToGenerateChapter");
+      const isMissingIntent = /EDIT_INTENT_REQUIRED/i.test(message);
+
       console.error("Error generating chapter:", error);
       toast({
-        title: t('book.generationFailed'),
-        description: error instanceof Error ? error.message : t('book.failedToGenerateChapter'),
+        title: t("book.generationFailed"),
+        description: isMissingIntent
+          ? "Please specify what you want to change before regeneration."
+          : message,
         variant: "destructive",
       });
+
+      if (isMissingIntent) {
+        openRegenerateDialog(chapter);
+      }
     } finally {
       setGeneratingChapterId(null);
     }
+  };
+
+  const handleGenerateChapter = async (chapter: ChapterData, e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (!book) return;
+
+    // Regeneration requires explicit user intent (contract)
+    if (chapter.is_generated) {
+      openRegenerateDialog(chapter);
+      return;
+    }
+
+    await runChapterGeneration({ chapter, regenerate: false });
   };
 
   const handleGenerateAllChapters = async () => {
@@ -465,6 +523,51 @@ export default function BookDetail() {
   return (
     <div className="min-h-screen">
       <Navbar />
+
+      <AlertDialog open={regenDialogOpen} onOpenChange={setRegenDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Regenerate chapter (revision)</AlertDialogTitle>
+            <AlertDialogDescription>
+              Describe exactly what you want changed. Without intent, regeneration is blocked.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+
+          <Textarea
+            value={editIntent}
+            onChange={(e) => setEditIntent(e.target.value)}
+            placeholder='e.g. "Shorten by 30%", "Make it more academic", "Fix formatting"'
+            className="min-h-[120px]"
+          />
+
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={async () => {
+                const intent = editIntent.trim();
+                if (!regenTarget) return;
+                if (!intent) {
+                  toast({
+                    title: "Edit intent required",
+                    description: "Please specify what you want to change before regeneration.",
+                    variant: "destructive",
+                  });
+                  return;
+                }
+                setRegenDialogOpen(false);
+                await runChapterGeneration({
+                  chapter: regenTarget,
+                  regenerate: true,
+                  editIntentText: intent,
+                });
+              }}
+            >
+              Regenerate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
       <main className="pt-24 pb-16">
         <div className="container mx-auto px-4">
           {/* Book Header */}
