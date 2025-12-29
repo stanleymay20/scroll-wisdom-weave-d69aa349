@@ -257,13 +257,20 @@ export default function Diagnostics() {
         .single();
 
       const content = chapterContent?.content || "";
-      // Check for dialogue patterns - supports both formats:
-      // Old markdown: **Dialogue:** / - CHARACTER: "text"
-      // New plain: CHARACTER: "text" / AMARA: "text"
-      const hasDialogue = 
-        /(?:\*\*)?Dialogue:?(?:\*\*)?/i.test(content) || 
-        /-?\s*[A-Z][A-Za-z_\s]+:\s*"[^"]+"/g.test(content) ||
-        /[A-Z][A-Z_]+:\s*"[^"]+"/g.test(content);
+      // Check for dialogue patterns - supports multiple formats:
+      // Format 1: - AMARA: "text" or -AMARA: "text"
+      // Format 2: ELDER VOICE: "text" (no hyphen)
+      // Format 3: Dialogue: header followed by lines
+      // Format 4: Any caps NAME followed by colon and quoted text
+      const dialoguePatterns = [
+        /Dialogue:/i,                                    // Has "Dialogue:" header
+        /-\s*[A-Z][A-Za-z_\s]+:\s*[""][^""]+[""]/.test(content),  // - CHARACTER: "text"
+        /[A-Z][A-Z_\s]+:\s*[""][^""]+[""]/.test(content),         // CAPS NAME: "text"
+        /[A-Z][a-z]+:\s*[""][^""]+[""]/.test(content),            // Name: "text"
+      ];
+      const hasDialogue = dialoguePatterns.some(p => 
+        p instanceof RegExp ? p.test(content) : p
+      );
 
       updateTest("Verify dialogue present", {
         status: hasDialogue ? "passed" : "failed",
