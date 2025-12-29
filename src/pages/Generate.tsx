@@ -465,12 +465,6 @@ export default function Generate() {
                   disabled={isGenerating}
                 />
               )}
-                <ComicStyleSelector
-                  value={comicStyleConfig}
-                  onChange={setComicStyleConfig}
-                  disabled={isGenerating}
-                />
-              )}
 
               {/* Word Count & Language - hide word count for comics/workbooks */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
