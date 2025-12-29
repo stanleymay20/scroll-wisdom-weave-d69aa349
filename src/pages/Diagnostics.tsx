@@ -257,7 +257,13 @@ export default function Diagnostics() {
         .single();
 
       const content = chapterContent?.content || "";
-      const hasDialogue = /\*\*Dialogue:\*\*/i.test(content) || /-\s*[A-Z][A-Za-z]+:\s*"/g.test(content);
+      // Check for dialogue patterns - supports both formats:
+      // Old markdown: **Dialogue:** / - CHARACTER: "text"
+      // New plain: CHARACTER: "text" / AMARA: "text"
+      const hasDialogue = 
+        /(?:\*\*)?Dialogue:?(?:\*\*)?/i.test(content) || 
+        /-?\s*[A-Z][A-Za-z_\s]+:\s*"[^"]+"/g.test(content) ||
+        /[A-Z][A-Z_]+:\s*"[^"]+"/g.test(content);
 
       updateTest("Verify dialogue present", {
         status: hasDialogue ? "passed" : "failed",
