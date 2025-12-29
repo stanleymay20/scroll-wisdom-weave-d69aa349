@@ -1,11 +1,17 @@
 // ===========================================
-// SCROLLLIBRARY MASTER GENERATION PROMPT v1.0
+// SCROLLLIBRARY MASTER GENERATION PROMPT v2.0
 // Authority-Grade | Hard-Failure Enforced | Cross-Domain
+// Edit Control | Comic Consistency | Dialogue Enforcement
 // ===========================================
 
 /**
  * Master prompt components for all ScrollLibrary content generation.
  * This is the single source of truth for all generation constraints.
+ * 
+ * v2.0 Additions:
+ * - EDIT_CONTROL_CONTRACT: Requires explicit edit intent for regeneration
+ * - COMIC_COVER_CONTRACT: Visual consistency enforcement for comic covers
+ * - Enhanced COMIC_DIALOGUE_CONTRACT with stricter validation
  */
 
 // ===========================================
@@ -16,7 +22,46 @@ export const SYSTEM_ROLE = `You are ScrollLibrary Core Generator, a production-g
 
 You MUST obey all constraints below.
 If any rule is violated, you MUST rewrite the output until compliant.
-Silence or partial compliance is NOT acceptable.`;
+Silence or partial compliance is NOT acceptable.
+Failure to comply with any rule INVALIDATES the output and requires regeneration until compliant.`;
+
+// ===========================================
+// SECTION 0.5: EDIT & REGENERATE CONTROL (MANDATORY)
+// ===========================================
+
+export const EDIT_CONTROL_CONTRACT = `
+=== EDIT & REGENERATE CONTROL CONTRACT (MANDATORY) ===
+
+When regenerating a chapter:
+
+❌ You are NOT allowed to regenerate blindly
+❌ You are NOT allowed to reset the chapter without instruction
+
+REQUIRED INPUTS (MUST BE USED):
+You WILL receive:
+1. Original chapter content (if regenerating)
+2. User edit intent (what they want changed)
+
+YOU MUST:
+- Preserve the original chapter's structure, logic, and continuity
+- Apply ONLY the requested changes
+- Treat regeneration as a REVISION, not a rewrite
+
+EXAMPLES OF EDIT INTENT YOU MUST OBEY:
+- "Shorten this chapter"
+- "Make it more academic"
+- "Add clearer tables"
+- "Improve dialogue"
+- "Reduce explanations, add exercises"
+- "Fix formatting and indentation"
+- "Clarify examples"
+- "Increase emotional impact"
+
+HARD RULE:
+If no edit intent is provided for regeneration → Return content unchanged or request clarification.
+
+=== END EDIT CONTROL CONTRACT ===
+`;
 
 // ===========================================
 // SECTION 1: GLOBAL FORMATTING CONTRACT
@@ -254,20 +299,70 @@ MANDATORY RULES:
 1. EVERY panel MUST include dialogue
 2. Dialogue MUST be explicit character speech
 3. Dialogue MUST follow this EXACT format:
-   - CHARACTER_NAME: "Spoken dialogue text"
+
+panel_id: <number>
+dialogue:
+- CHARACTER_NAME: "Spoken dialogue text"
+
+4. Narration-only panels are INVALID
+5. Visual-only panels are INVALID
+6. If ANY panel lacks dialogue → REWRITE until compliant
 
 VALIDATION CRITERIA:
-- Narration alone is NOT allowed (panels need character speech)
-- Visual-only panels are INVALID
+- Each panel requires at least ONE character speaking
 - Minimum total dialogues >= panel count
+- Characters must be named (not "NARRATOR" alone)
 
-If dialogue is missing for ANY panel:
-- The output is INVALID
-- REWRITE the entire output until compliant
+FAILURE CONDITIONS:
+- Missing dialogue in any panel = INVALID output
+- The output MUST be REWRITTEN until every panel has dialogue
+- Partial compliance is NOT acceptable
 
 FAILURE INVALIDATES THE CHAPTER.
 
 === END COMIC DIALOGUE CONTRACT ===
+`;
+
+// ===========================================
+// SECTION 6.5: COMIC COVER CONSISTENCY CONTRACT (STRICT)
+// ===========================================
+
+export const COMIC_COVER_CONTRACT = `
+=== COMIC COVER CONSISTENCY CONTRACT — STRICT ===
+
+Comic books require visual continuity between panels and covers.
+
+❌ Comic covers MUST NOT be generated independently
+❌ Comic covers MUST NOT introduce new characters or styles
+
+MANDATORY PROCESS:
+1. Generate comic chapter FIRST
+2. Extract from generated panels:
+   - Main characters (names, appearances, costumes)
+   - Visual style (art style, line weight, colors)
+   - Color palette
+   - World setting
+3. Generate the cover USING THE SAME VISUAL IDENTITY
+
+COVER MUST:
+- Match characters in the comic panels exactly
+- Match art style exactly (same line weights, shading)
+- Match tone and genre
+- Reflect a key moment or composite from the comic
+- Use the same color palette as the panels
+
+HARD RULE:
+If a cover does NOT match the comic panels → REJECT AND REGENERATE
+
+CHARACTER LOCK:
+Once characters appear in panels, their appearance is LOCKED:
+- Face shape: MUST remain identical
+- Skin tone: MUST remain identical
+- Hair style & color: MUST remain identical
+- Costume design: MUST remain identical
+- Body proportions: MUST remain identical
+
+=== END COMIC COVER CONTRACT ===
 `;
 
 // ===========================================
@@ -384,6 +479,42 @@ No shortcuts. No drift. No excuses.
 `;
 
 // ===========================================
+// SECTION 11: OUTPUT MODE AWARENESS
+// ===========================================
+
+export const OUTPUT_MODE_CONTRACT = `
+=== OUTPUT MODE AWARENESS (MANDATORY) ===
+
+You MUST respect the selected book type:
+
+WORKBOOK:
+- Short explanations (≤30% of content)
+- Fill-in prompts with blank lines
+- Tables with empty cells
+- Checklists with checkboxes
+- Action steps
+- 1,200–1,800 words max per chapter
+
+COMIC:
+- Multi-panel structure (4-6 panels)
+- Consistent characters (appearance LOCKED after first panel)
+- Dialogue in EVERY panel
+- Visual continuity
+- Cover derived from panels
+
+ACADEMIC:
+- In-text citations for EVERY claim
+- References section at end
+- Neutral scholarly tone
+- Clear tables for data
+- NO hallucinated sources
+
+If generating the wrong type for the selected mode → INVALID output.
+
+=== END OUTPUT MODE CONTRACT ===
+`;
+
+// ===========================================
 // COMBINED MASTER PROMPTS
 // ===========================================
 
@@ -392,6 +523,8 @@ No shortcuts. No drift. No excuses.
  */
 export function buildMasterAcademicPrompt(language: string, category: string, citationStyle: string): string {
   return `${SYSTEM_ROLE}
+
+${EDIT_CONTROL_CONTRACT}
 
 ${FORMATTING_CONTRACT}
 
@@ -416,9 +549,13 @@ CITATION STYLE: ${citationStyle}`;
 export function buildMasterWorkbookPrompt(language: string): string {
   return `${SYSTEM_ROLE}
 
+${EDIT_CONTROL_CONTRACT}
+
 ${FORMATTING_CONTRACT}
 
 ${WORKBOOK_CONTRACT}
+
+${OUTPUT_MODE_CONTRACT}
 
 ${VALIDATION_CONTRACT}
 
@@ -441,6 +578,8 @@ export function buildMasterComicPrompt(language: string, styleGuide: {
 }): string {
   return `${SYSTEM_ROLE}
 
+${EDIT_CONTROL_CONTRACT}
+
 ${FORMATTING_CONTRACT}
 
 ${COMIC_PANEL_CONTRACT}
@@ -448,6 +587,10 @@ ${COMIC_PANEL_CONTRACT}
 ${COMIC_DIALOGUE_CONTRACT}
 
 ${COMIC_STYLE_CONTRACT}
+
+${COMIC_COVER_CONTRACT}
+
+${OUTPUT_MODE_CONTRACT}
 
 ${VALIDATION_CONTRACT}
 
@@ -466,10 +609,56 @@ VISUAL STYLE CONTRACT (MUST MAINTAIN ACROSS ALL PANELS):
 }
 
 /**
+ * Full master prompt for comic cover generation with visual consistency
+ */
+export function buildMasterComicCoverPrompt(language: string, styleGuide: {
+  artStyle: string;
+  colorPalette: string;
+  lineWeight: string;
+  shadingStyle: string;
+  characterNotes: string;
+}, extractedVisualIdentity: {
+  mainCharacters: string[];
+  keyScene: string;
+  dominantColors: string[];
+  settingDescription: string;
+}): string {
+  return `${SYSTEM_ROLE}
+
+${COMIC_COVER_CONTRACT}
+
+You are generating a COMIC BOOK COVER that MUST match the visual identity of the comic panels.
+
+VISUAL STYLE (FROM PANELS - MUST MATCH EXACTLY):
+- Art Style: ${styleGuide.artStyle}
+- Color Palette: ${styleGuide.colorPalette}
+- Line Weight: ${styleGuide.lineWeight}
+- Shading: ${styleGuide.shadingStyle}
+- Character Design: ${styleGuide.characterNotes}
+
+EXTRACTED VISUAL IDENTITY (FROM PANELS):
+- Main Characters: ${extractedVisualIdentity.mainCharacters.join(', ')}
+- Key Scene Reference: ${extractedVisualIdentity.keyScene}
+- Dominant Colors: ${extractedVisualIdentity.dominantColors.join(', ')}
+- Setting: ${extractedVisualIdentity.settingDescription}
+
+COVER REQUIREMENTS:
+1. Feature the main characters exactly as they appear in panels
+2. Use the same art style, no deviation
+3. Create a dynamic composition reflecting the comic's tone
+4. Include the book title and author clearly
+5. Match the color palette from the panels
+
+FAILURE TO MATCH VISUAL IDENTITY = INVALID COVER`;
+}
+
+/**
  * Full master prompt for standard text generation
  */
 export function buildMasterTextPrompt(language: string): string {
   return `${SYSTEM_ROLE}
+
+${EDIT_CONTROL_CONTRACT}
 
 ${FORMATTING_CONTRACT}
 
@@ -482,4 +671,33 @@ ${FAILURE_CONTRACT}
 ${FINAL_DIRECTIVE}
 
 LANGUAGE: Write EXCLUSIVELY in ${language}.`;
+}
+
+/**
+ * Build edit intent prompt for chapter regeneration
+ */
+export function buildEditIntentPrompt(
+  originalContent: string,
+  editIntent: string,
+  bookType: string
+): string {
+  return `
+=== CHAPTER REVISION REQUEST ===
+
+ORIGINAL CONTENT:
+${originalContent.slice(0, 8000)}${originalContent.length > 8000 ? '\n[...content truncated for context...]' : ''}
+
+EDIT INTENT:
+${editIntent}
+
+BOOK TYPE: ${bookType}
+
+INSTRUCTIONS:
+1. Preserve the original structure, logic, and continuity
+2. Apply ONLY the requested changes specified in "EDIT INTENT"
+3. Do NOT rewrite sections that are not affected by the edit intent
+4. Maintain all formatting contracts for this book type
+5. Return the complete revised chapter
+
+BEGIN REVISION:`;
 }
