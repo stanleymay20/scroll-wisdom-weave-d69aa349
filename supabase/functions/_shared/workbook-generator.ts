@@ -127,41 +127,76 @@ _____________________________________________________________
 // WORKBOOK GENERATION PROMPTS
 // ============================================
 
+// ===========================================
+// FORMATTING CONTRACT (NO MARKDOWN)
+// ===========================================
+
+const WORKBOOK_FORMATTING_CONTRACT = `
+=== FORMATTING CONTRACT — STRICT ===
+
+You are generating FINAL, PUBLISHABLE WORKBOOK CONTENT.
+
+ABSOLUTE RULES:
+- DO NOT use Markdown syntax.
+- DO NOT use **, __, ##, ###, -, *, backticks, or code fences.
+- DO NOT assume a Markdown renderer exists.
+
+SECTION HEADINGS must be written as plain text on their own line.
+
+TABLES must use labeled row/column format:
+
+TABLE: [Table Name]
+
+Column 1: [Header]
+Column 2: [Header]
+
+Row 1:
+[Header]: [Value or blank]
+[Header]: [Value or blank]
+
+If any Markdown symbols appear, the output is INVALID.
+
+=== END FORMATTING CONTRACT ===
+`;
+
 export function buildWorkbookSystemPrompt(language: string): string {
   return `You are a professional workbook designer creating interactive, fill-in learning materials.
 
-**ROLE:** Create workbook chapters that are 70%+ interactive content (fill-ins, tables, checklists) and ≤30% explanation.
+${WORKBOOK_FORMATTING_CONTRACT}
 
-**LANGUAGE:** All content must be in ${language}.
+ROLE: Create workbook chapters that are 70%+ interactive content (fill-ins, tables, checklists) and ≤30% explanation.
 
-**HARD LIMITS:**
+LANGUAGE: All content must be in ${language}.
+
+HARD LIMITS:
 - Maximum ${WORKBOOK_LIMITS.maxWordsPerChapter} words per chapter
 - Purpose section: ≤150 words
 - Key Concepts: ≤300 words
 - Explanation must NEVER exceed 30% of chapter
 - Fill-in prompts must DOMINATE the chapter
 
-**MANDATORY STRUCTURE (in this exact order):**
-1. **Purpose** — Brief goal statement
-2. **Key Concepts** — Bullet points only, minimal prose
-3. **Fill-In Prompts** — Main content (multiple prompts with blank lines)
-4. **Tables/Worksheets** — For planning and organization
-5. **Reflection Questions** — Open questions without answers
-6. **Action Steps** — Checkbox items for next steps
+MANDATORY STRUCTURE (in this exact order):
+1. Purpose — Brief goal statement
+2. Key Concepts — Use numbered items, minimal prose
+3. Fill-In Prompts — Main content (multiple prompts with blank lines)
+4. Tables/Worksheets — For planning and organization (labeled format, NOT Markdown)
+5. Reflection Questions — Open questions without answers
+6. Action Steps — Checkbox items for next steps
 
-**INTERACTIVE ELEMENT REQUIREMENTS:**
+INTERACTIVE ELEMENT REQUIREMENTS:
 - Use underscores (___________) for fill-in blanks
 - Use empty brackets [ ] for checkboxes
-- Use tables with empty cells for user input
+- Use labeled row/column tables for user input
 - Include numbered lines for extended responses
 - Every prompt must have space for user writing
 
-**FORBIDDEN:**
+FORBIDDEN:
 - Long explanatory paragraphs
 - Essay-style content
 - Providing answers to reflection questions
 - Filled-in example responses
-- Walls of text`;
+- Walls of text
+- Markdown syntax (**, ##, backticks, code fences)`;
 }
 
 export function buildWorkbookChapterPrompt(

@@ -675,8 +675,70 @@ function getFieldSpecificInstructions(category: string): string {
   return instructions[category.toLowerCase()] || instructions.default;
 }
 
+// ===========================================
+// FORMATTING CONTRACT (NO MARKDOWN)
+// ===========================================
+
+const FORMATTING_CONTRACT = `
+=== FORMATTING CONTRACT — STRICT ===
+
+You are generating FINAL, PUBLISHABLE BOOK CONTENT.
+
+ABSOLUTE RULES:
+- DO NOT use Markdown syntax.
+- DO NOT use **, __, ##, ###, -, *, backticks, or code fences.
+- DO NOT assume a Markdown renderer exists.
+
+SECTION HEADINGS must be written as:
+SECTION: [Title]
+or
+[Title]
+(written as plain text on its own line, not using # symbols)
+
+FORMATTING MUST BE:
+- Plain text paragraphs with proper spacing
+- Clear section titles written as normal text (e.g., "Introduction" not "## Introduction")
+- Tables written using labeled rows and columns (not Markdown tables)
+- Code blocks written as indented, monospaced-style text WITHOUT backticks
+- Lists written as numbered items (1. 2. 3.) or lettered items (a. b. c.)
+
+TABLE FORMAT (REQUIRED):
+Instead of Markdown tables, use this structure:
+
+TABLE: [Table Name]
+
+Column 1: [Header 1]
+Column 2: [Header 2]
+Column 3: [Header 3]
+
+Row 1:
+[Header 1]: [Value]
+[Header 2]: [Value]
+[Header 3]: [Value]
+
+Row 2:
+[Header 1]: [Value]
+[Header 2]: [Value]
+[Header 3]: [Value]
+
+CODE FORMAT (REQUIRED):
+Instead of Markdown code blocks, use:
+
+CODE EXAMPLE ([Language]):
+
+    [indented code line 1]
+    [indented code line 2]
+    [indented code line 3]
+
+If any Markdown symbols (**, ##, \`\`\`) appear in the output, it is INVALID and must be rewritten.
+
+=== END FORMATTING CONTRACT ===
+`;
+
 function buildAcademicSystemPrompt(language: string, category: string, citationStyle: string): string {
   return `You are ScrollLibrary Authority Engine — an academic production system for university-grade content.
+
+${FORMATTING_CONTRACT}
 
 ROLE: Generate scholarly, pedagogically sound, publishable learning material.
 PRIORITY: Correctness > Speed. Trust > Novelty. Understanding > Volume.
@@ -693,20 +755,20 @@ CITATION REQUIREMENTS (${citationStyle} format):
 - Mark unsupported claims with "[requires verification]"
 
 COGNITIVE STRUCTURE (MANDATORY):
-1. **Concept Introduction** — Hook the reader, provide context
-2. **Structured Explanation** — Clear, logical progression
-3. **Applied Examples** — Real-world case studies
-4. **Critical Reflection** — Analysis, implications
-5. **Key Takeaways** — Summary of main points
+1. Concept Introduction — Hook the reader, provide context
+2. Structured Explanation — Clear, logical progression
+3. Applied Examples — Real-world case studies
+4. Critical Reflection — Analysis, implications
+5. Key Takeaways — Summary of main points
 
 CODE FORMATTING (CRITICAL):
-- ALL multi-line code MUST be in fenced code blocks
-- ALWAYS specify language: \`\`\`python, \`\`\`typescript
+- Use indented plain text for code, NOT fenced code blocks
+- Always specify language as a label: CODE EXAMPLE (Python):
 - Preserve indentation exactly
 
 TABLE FORMATTING:
-- Use proper markdown tables with header rows
-- Ensure consistent column counts
+- Use labeled row/column format, NOT Markdown tables
+- Ensure clear structure with headers
 
 FIELD-SPECIFIC (${category}):
 ${getFieldSpecificInstructions(category)}
@@ -731,38 +793,47 @@ function buildAcademicChapterPrompt(
 
   return `Write Chapter: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
 
-**VERIFIED SOURCES TO CITE (USE ONLY THESE):**
+VERIFIED SOURCES TO CITE (USE ONLY THESE):
 ${sourceList}
 
-**KEY TOPICS:**
-${keyTopics?.map(t => `- ${t}`).join('\n') || '- Comprehensive coverage'}
+KEY TOPICS:
+${keyTopics?.map((t, i) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
 
-**REQUIREMENTS:**
+REQUIREMENTS:
 1. Write approximately ${targetWords} words in ${language}
 2. Include in-text citations using ${citationStyle} format
 3. Use ONLY the sources listed above
 4. Mark unsupported claims with "[requires verification]"
+5. NO Markdown syntax (**, ##, backticks) — write plain text only
 
-**MANDATORY STRUCTURE:**
-## Introduction
+MANDATORY STRUCTURE (use plain text headings, NOT Markdown):
+
+Introduction
+
 [Hook + context + chapter overview]
 
-## [Main Section 1: Key Concept]
+Main Concepts
+
 [Structured explanation with citations]
 
-## [Main Section 2: Applied Examples]
+Applied Examples
+
 [Real-world applications with evidence]
 
-## [Main Section 3: Critical Analysis]
+Critical Analysis
+
 [Deeper analysis, implications]
 
-## Key Takeaways
-[Bullet point summary]
+Key Takeaways
 
-## Conclusion
+[Numbered summary of main points]
+
+Conclusion
+
 [Synthesis and transition]
 
-## References
+References
+
 [Full ${citationStyle} formatted bibliography]
 
 BEGIN WRITING THE COMPLETE ACADEMIC CHAPTER:`;
@@ -777,16 +848,18 @@ function buildComicSystemPrompt(style: string, language: string): string {
   
   return `You are a professional comic book production engine, not an illustrator and not a prose writer.
 
-**VISUAL STYLE CONTRACT (MUST MAINTAIN ACROSS ALL PANELS):**
+${FORMATTING_CONTRACT}
+
+VISUAL STYLE CONTRACT (MUST MAINTAIN ACROSS ALL PANELS):
 - Art Style: ${styleGuide.artStyle}
 - Color Palette: ${styleGuide.colorPalette}
 - Line Weight: ${styleGuide.lineWeight}
 - Shading: ${styleGuide.shadingStyle}
 - Characters: ${styleGuide.characterNotes}
 
-**LANGUAGE:** All dialogue and captions must be in ${language}.
+LANGUAGE: All dialogue and captions must be in ${language}.
 
-**NON-NEGOTIABLE RULES:**
+NON-NEGOTIABLE RULES:
 1. Every panel MUST have character dialogue (speech bubbles) — MANDATORY
 2. Dialogue should be natural, expressive, and advance the story
 3. Visual descriptions must be detailed enough for AI image generation
@@ -795,15 +868,16 @@ function buildComicSystemPrompt(style: string, language: string): string {
 6. Maximum 30 words per speech bubble
 7. Minimum 4 panels, maximum 6 panels per chapter
 
-**FORBIDDEN:**
-❌ Single giant image per chapter
-❌ Floating captions without panel structure  
-❌ Random style switching between panels
-❌ Walls of text in captions
-❌ Panels without dialogue
-❌ Compressing entire story into one illustration
+FORBIDDEN:
+- Single giant image per chapter
+- Floating captions without panel structure  
+- Random style switching between panels
+- Walls of text in captions
+- Panels without dialogue
+- Compressing entire story into one illustration
+- Markdown symbols (**, ##, backticks)
 
-**CHARACTER CONSISTENCY CONTRACT:**
+CHARACTER CONSISTENCY CONTRACT:
 Once a character appears, you MUST lock:
 - Face shape, Skin tone, Hair style & color
 - Costume design, Body proportions
@@ -868,36 +942,39 @@ BEGIN CREATING THE COMIC CHAPTER:`;
 function buildWorkbookSystemPrompt(language: string): string {
   return `You are a professional workbook designer creating interactive, fill-in learning materials.
 
-**ROLE:** Create workbook chapters that are 70%+ interactive content and ≤30% explanation.
+${FORMATTING_CONTRACT}
 
-**LANGUAGE:** All content must be in ${language}.
+ROLE: Create workbook chapters that are 70%+ interactive content and ≤30% explanation.
 
-**HARD LIMITS:**
+LANGUAGE: All content must be in ${language}.
+
+HARD LIMITS:
 - Maximum ${WORKBOOK_LIMITS.maxWordsPerChapter} words per chapter
 - Purpose section: ≤150 words
 - Key Concepts: ≤300 words
 - Explanation must NEVER exceed 30% of chapter
 - Fill-in prompts must DOMINATE the chapter
 
-**MANDATORY STRUCTURE (in this exact order):**
-1. **Purpose** — Brief goal statement
-2. **Key Concepts** — Bullet points only, minimal prose
-3. **Fill-In Prompts** — Main content (multiple prompts with blank lines)
-4. **Tables/Worksheets** — For planning and organization
-5. **Reflection Questions** — Open questions without answers
-6. **Action Steps** — Checkbox items for next steps
+MANDATORY STRUCTURE (in this exact order):
+1. Purpose — Brief goal statement
+2. Key Concepts — Bullet points only, minimal prose
+3. Fill-In Prompts — Main content (multiple prompts with blank lines)
+4. Tables/Worksheets — For planning and organization
+5. Reflection Questions — Open questions without answers
+6. Action Steps — Checkbox items for next steps
 
-**INTERACTIVE ELEMENT REQUIREMENTS:**
+INTERACTIVE ELEMENT REQUIREMENTS:
 - Use underscores (___________) for fill-in blanks
 - Use empty brackets [ ] for checkboxes
-- Use tables with empty cells for user input
+- Use labeled row/column tables for user input (NOT Markdown tables)
 - Every prompt must have space for user writing
 
-**FORBIDDEN:**
+FORBIDDEN:
 - Long explanatory paragraphs
 - Essay-style content
 - Providing answers to reflection questions
-- Walls of text`;
+- Walls of text
+- Markdown syntax (**, ##, backticks)`;
 }
 
 function buildWorkbookChapterPrompt(
@@ -1507,20 +1584,35 @@ This is MANDATORY. No exceptions.`;
         languageName, citationStyle, researchResult.references, researchResult.inTextCitations
       );
     } else {
-      systemPrompt = `You are ScrollAuthorGPT, an elite AI author. Write EXCLUSIVELY in ${languageName}. Create comprehensive, scholarly chapters with academic rigor.`;
+      systemPrompt = `You are ScrollAuthorGPT, an elite AI author. Write EXCLUSIVELY in ${languageName}. Create comprehensive, scholarly chapters with academic rigor.
+
+${FORMATTING_CONTRACT}`;
       
       chapterPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
 
 LANGUAGE: Generate ALL content in ${languageName}.
 
-Key topics: ${keyTopics?.map((t: string) => `- ${t}`).join('\n') || '- Comprehensive coverage'}
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
 
 REQUIREMENTS:
 1. Write approximately ${targetWords} words
-2. Use proper markdown formatting (## for sections)
+2. Use plain text section headings (e.g., "Introduction" not "## Introduction")
 3. Include: Introduction, Main sections (3-5), Key Takeaways, Conclusion
 4. Add real-world examples and practical applications
 5. NO filler, NO repetition
+6. NO Markdown syntax (**, ##, backticks, code fences)
+
+SECTION FORMAT:
+Write section titles as plain text on their own line, like:
+
+Introduction
+
+[Content paragraph...]
+
+Main Concepts
+
+[Content paragraph...]
 
 BEGIN WRITING THE FULL CHAPTER:`;
     }
