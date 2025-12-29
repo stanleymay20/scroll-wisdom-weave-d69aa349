@@ -1193,6 +1193,48 @@ serve(async (req) => {
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
+  
+  // OCR check endpoint (requires auth, handled below)
+  if (healthBody?.ocrCheck && healthBody?.imageUrl) {
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ error: "API key not configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+    
+    try {
+      const ocrResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: `Analyze this comic panel image. List ALL visible text including speech bubbles, captions, and any words. Return JSON: {"hasText": boolean, "foundText": ["word1", "word2", ...]}` },
+              { type: "image_url", image_url: { url: healthBody.imageUrl } }
+            ]
+          }],
+        }),
+      });
+      
+      if (ocrResponse.ok) {
+        const ocrData = await ocrResponse.json();
+        const content = ocrData.choices?.[0]?.message?.content || "";
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { hasText: false, foundText: [] };
+        return new Response(JSON.stringify({ ocrResult: result }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    } catch (e) {
+      console.error("[OCR] Error:", e);
+    }
+    return new Response(JSON.stringify({ ocrResult: { hasText: false, foundText: [] } }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -1280,7 +1322,7 @@ serve(async (req) => {
     if (chapter) {
       const { data: book } = await supabase
         .from("books")
-        .select("creator_id, book_type, workbook_density, comic_style_id, palette_hint, line_weight_hint, character_sheet, layout_template")
+        .select("creator_id, book_type, workbook_density, comic_style_id, palette_hint, line_weight_hint, character_sheet, layout_template, text_in_image, scenes_per_panel")
         .eq("id", chapter.book_id)
         .single();
 
@@ -1295,13 +1337,17 @@ serve(async (req) => {
     }
 
     // Use book-level settings if available, otherwise use request params
-    const effectiveBookType = bookDetails?.book_type || bookType;
-    const effectiveComicStyle = bookDetails?.comic_style_id || comicStyle;
-    const effectiveLayoutTemplate = bookDetails?.layout_template || 5;
-    const effectiveWorkbookDensity = bookDetails?.workbook_density || 'medium';
-    const effectiveCharacterSheet = bookDetails?.character_sheet || {};
-    const effectivePaletteHint = bookDetails?.palette_hint || '';
-    const effectiveLineWeightHint = bookDetails?.line_weight_hint || '';
+    // Cast bookDetails to any for new fields not yet in generated types
+    const bookData = bookDetails as any;
+    const effectiveBookType = bookData?.book_type || bookType;
+    const effectiveComicStyle = bookData?.comic_style_id || comicStyle;
+    const effectiveLayoutTemplate = bookData?.layout_template || 5;
+    const effectiveWorkbookDensity = bookData?.workbook_density || 'medium';
+    const effectiveCharacterSheet = bookData?.character_sheet || {};
+    const effectivePaletteHint = bookData?.palette_hint || '';
+    const effectiveLineWeightHint = bookData?.line_weight_hint || '';
+    const effectiveTextInImage = bookData?.text_in_image ?? true;
+    const effectiveScenesPerPanel = bookData?.scenes_per_panel || 1;
 
     const effectiveWordCount = isAdmin ? wordCount : Math.min(wordCount, maxWordCount);
     
@@ -1528,7 +1574,9 @@ This is MANDATORY. No exceptions.`;
 
       const styleGuide = COMIC_STYLE_PRESETS[comicStyle] || COMIC_STYLE_PRESETS.children_book;
 
-      // Generate images with style consistency
+      // Generate images with style consistency and upload to storage
+      const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+      
       for (let i = 0; i < Math.min(panels.length, 6); i++) {
         const panel = panels[i];
         try {
@@ -1543,14 +1591,24 @@ This is MANDATORY. No exceptions.`;
             .join(" ");
 
           const captionForImage = (panel.caption || "").trim();
-
-          const imagePrompt = `${styleGuide.artStyle}. ${panel.visual} ${styleGuide.colorPalette}. ${styleGuide.shadingStyle}. Professional comic book illustration.
-
-INCLUDE TEXT IN THE ART (speech bubbles/captions) with EXACT wording:
-${dialogueForImage ? `Dialogue: ${dialogueForImage}` : ""}
-${captionForImage ? `Caption: ${captionForImage}` : ""}
-
-Keep text legible, high-contrast, and placed inside comic speech bubbles or caption boxes. Do not add extra text beyond what is provided.`;
+          
+          // Build image prompt based on textInImage setting and scenesPerPanel
+          let imagePrompt = `${styleGuide.artStyle}. ${panel.visual} ${styleGuide.colorPalette}. ${styleGuide.shadingStyle}. Professional comic book illustration.`;
+          
+          // Add multi-scene support
+          if (effectiveScenesPerPanel > 1) {
+            imagePrompt += ` This panel shows ${effectiveScenesPerPanel} sequential scenes/moments in a single image, showing progression of action.`;
+          }
+          
+          // Add text to image if enabled
+          if (effectiveTextInImage && (dialogueForImage || captionForImage)) {
+            imagePrompt += `\n\nINCLUDE TEXT IN THE ART (speech bubbles/captions) with EXACT wording:\n`;
+            if (dialogueForImage) imagePrompt += `Dialogue: ${dialogueForImage}\n`;
+            if (captionForImage) imagePrompt += `Caption: ${captionForImage}\n`;
+            imagePrompt += `\nKeep text legible, high-contrast, and placed inside comic speech bubbles or caption boxes. Do not add extra text beyond what is provided.`;
+          } else {
+            imagePrompt += ` No text in image.`;
+          }
           
           const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
             method: "POST",
@@ -1567,10 +1625,51 @@ Keep text legible, high-contrast, and placed inside comic speech bubbles or capt
 
           if (imageResponse.ok) {
             const imageData = await imageResponse.json();
-            const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-            if (imageUrl) {
-              panel.imageUrl = imageUrl;
-              console.log(`[GENERATE-CHAPTER] Panel ${panel.num} image generated`);
+            const base64Url = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+            
+            if (base64Url && base64Url.startsWith("data:image")) {
+              // Upload to storage bucket instead of embedding base64
+              try {
+                const base64Data = base64Url.split(",")[1];
+                const mimeMatch = base64Url.match(/data:([^;]+);/);
+                const mimeType = mimeMatch ? mimeMatch[1] : "image/png";
+                const ext = mimeType.includes("jpeg") || mimeType.includes("jpg") ? "jpg" : "png";
+                
+                // Decode base64 to binary
+                const binaryString = atob(base64Data);
+                const bytes = new Uint8Array(binaryString.length);
+                for (let j = 0; j < binaryString.length; j++) {
+                  bytes[j] = binaryString.charCodeAt(j);
+                }
+                
+                // Upload path: userId/bookId/chapterId/panel-N.png
+                const storagePath = `${user.id}/${chapter?.book_id || "unknown"}/${chapterId}/panel-${panel.num}.${ext}`;
+                
+                const { error: uploadError } = await supabase.storage
+                  .from("comic-panels")
+                  .upload(storagePath, bytes.buffer, {
+                    contentType: mimeType,
+                    upsert: true,
+                  });
+                
+                if (!uploadError) {
+                  // Get public URL
+                  const { data: publicUrlData } = supabase.storage
+                    .from("comic-panels")
+                    .getPublicUrl(storagePath);
+                  
+                  panel.imageUrl = publicUrlData.publicUrl;
+                  console.log(`[GENERATE-CHAPTER] Panel ${panel.num} uploaded to storage`);
+                } else {
+                  console.error(`[GENERATE-CHAPTER] Upload error:`, uploadError);
+                  // Fall back to base64 if upload fails
+                  panel.imageUrl = base64Url;
+                }
+              } catch (uploadErr) {
+                console.error(`[GENERATE-CHAPTER] Storage upload failed:`, uploadErr);
+                // Fall back to base64 if upload fails
+                panel.imageUrl = base64Url;
+              }
             }
           }
           

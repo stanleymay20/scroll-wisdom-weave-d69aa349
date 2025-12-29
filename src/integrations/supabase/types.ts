@@ -32,6 +32,8 @@ export type Database = {
           layout_template: number | null
           line_weight_hint: string | null
           palette_hint: string | null
+          scenes_per_panel: number | null
+          text_in_image: boolean | null
           title: string
           total_chapters: number | null
           updated_at: string | null
@@ -54,6 +56,8 @@ export type Database = {
           layout_template?: number | null
           line_weight_hint?: string | null
           palette_hint?: string | null
+          scenes_per_panel?: number | null
+          text_in_image?: boolean | null
           title: string
           total_chapters?: number | null
           updated_at?: string | null
@@ -76,6 +80,8 @@ export type Database = {
           layout_template?: number | null
           line_weight_hint?: string | null
           palette_hint?: string | null
+          scenes_per_panel?: number | null
+          text_in_image?: boolean | null
           title?: string
           total_chapters?: number | null
           updated_at?: string | null

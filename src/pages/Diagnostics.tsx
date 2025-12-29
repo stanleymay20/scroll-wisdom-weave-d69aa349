@@ -134,6 +134,7 @@ export default function Diagnostics() {
       { name: "Verify panel count (5)", status: "pending" },
       { name: "Verify dialogue present", status: "pending" },
       { name: "Verify images stored", status: "pending" },
+      { name: "OCR verify text in image", status: "pending" },
       { name: "Render in reader", status: "pending" },
     ];
     setTestResults(tests);
@@ -158,6 +159,8 @@ export default function Diagnostics() {
         comicStyleId: "african_superhero",
         paletteHint: "Rich earth tones, gold accents",
         lineWeightHint: "Bold confident lines",
+        textInImage: true, // Test with text in image enabled
+        scenesPerPanel: 1,
         characterSheet: {
           protagonist: {
             name: "Amara",
@@ -287,7 +290,53 @@ export default function Diagnostics() {
         message: `${imageCount} panel images found`,
       });
 
-      // Step 6: Render check
+      // Step 6: OCR verify text in image
+      updateTest("OCR verify text in image", { status: "running" });
+      
+      let ocrPassed = false;
+      let ocrMessage = "No images to verify";
+      
+      if (imageUrls.length > 0) {
+        try {
+          // Use Gemini to verify if text is present in the first panel image
+          const firstImageUrl = imageUrls[0];
+          
+          // Call an edge function to do OCR check (we'll use Gemini vision)
+          const { data: ocrResult, error: ocrError } = await supabase.functions.invoke(
+            "generate-chapter",
+            {
+              body: { 
+                ocrCheck: true,
+                imageUrl: firstImageUrl,
+                expectedText: ["AMARA", "Amara", "city", "calls", "tonight", "hero", "powers"],
+              },
+              headers: { Authorization: `Bearer ${session.access_token}` },
+            }
+          );
+          
+          if (ocrError) {
+            ocrMessage = `OCR check failed: ${ocrError.message}`;
+          } else if (ocrResult?.ocrResult) {
+            const foundText = ocrResult.ocrResult.foundText || [];
+            const hasText = ocrResult.ocrResult.hasText || false;
+            ocrPassed = hasText && foundText.length > 0;
+            ocrMessage = hasText 
+              ? `Found text: ${foundText.slice(0, 3).join(", ")}${foundText.length > 3 ? "..." : ""}`
+              : "No text detected in image";
+          } else {
+            ocrMessage = "OCR response invalid";
+          }
+        } catch (ocrErr) {
+          ocrMessage = `OCR error: ${ocrErr instanceof Error ? ocrErr.message : "unknown"}`;
+        }
+      }
+      
+      updateTest("OCR verify text in image", {
+        status: ocrPassed ? "passed" : "failed",
+        message: ocrMessage,
+      });
+
+      // Step 7: Render check
       updateTest("Render in reader", { status: "running" });
       updateTest("Render in reader", { 
         status: "passed", 
