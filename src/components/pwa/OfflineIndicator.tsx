@@ -1,8 +1,9 @@
+import { forwardRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WifiOff, Wifi } from 'lucide-react';
 import { useOfflineIndicator } from '@/hooks/usePWA';
 
-export function OfflineIndicator() {
+export const OfflineIndicator = forwardRef<HTMLDivElement>(function OfflineIndicator(_, ref) {
   const { showOffline, isOnline } = useOfflineIndicator();
 
   return (
@@ -39,4 +40,4 @@ export function OfflineIndicator() {
       )}
     </AnimatePresence>
   );
-}
+});
