@@ -394,10 +394,10 @@ export function VoiceConversation({
             </div>
             <div className="flex items-center gap-2">
               <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="ghost" size="icon" className="h-8 w-8">
+                <PopoverTrigger>
+                  <span className="inline-flex items-center justify-center h-8 w-8 rounded-md hover:bg-accent hover:text-accent-foreground cursor-pointer">
                     <Settings className="h-4 w-4" />
-                  </Button>
+                  </span>
                 </PopoverTrigger>
                 <PopoverContent className="w-64" align="end">
                   <div className="space-y-4">
