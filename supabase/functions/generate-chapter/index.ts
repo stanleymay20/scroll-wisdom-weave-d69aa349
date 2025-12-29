@@ -332,10 +332,11 @@ function extractPanelDialogues(content: string): PanelDialogueResult[] {
     const dialogues: DialogueObject[] = [];
     
     // Match dialogue patterns: - CHARACTER: "text" or - CHARACTER: text
-    const dialogueMatches = panelContent.matchAll(/-\s*([A-Z][A-Za-z_\s]+?):\s*"?([^"\n]+)"?/gi);
+    // Also handle **CHARACTER**: format from markdown
+    const dialogueMatches = panelContent.matchAll(/-\s*\*?\*?([A-Z][A-Za-z_\s]+?)\*?\*?:\s*"?([^"\n]+)"?/gi);
     
     for (const match of dialogueMatches) {
-      const speaker = match[1].trim();
+      const speaker = match[1].trim().replace(/\*+/g, ''); // Remove any asterisks
       const text = match[2].trim();
       
       // Determine dialogue type based on markers
@@ -365,9 +366,12 @@ function validateComicStructure(content: string): ValidationResult & { panelDial
   const errors: ValidationError[] = [];
   const warnings: { code: string; message: string }[] = [];
 
+  // Match [PANEL X] markers - the primary structure indicator
   const panelRegex = /\[PANEL\s*(\d+)\]/gi;
   const panels = content.match(panelRegex) || [];
   const panelCount = panels.length;
+  
+  console.log(`[VALIDATE-COMIC] Raw panel markers found: ${panelCount}`);
 
   // HARD FAIL: No panels
   if (panelCount === 0) {
@@ -418,8 +422,8 @@ function validateComicStructure(content: string): ValidationResult & { panelDial
     });
   }
 
-  // Check for visual descriptions
-  const visualPattern = /\*\*Visual:\*\*/gi;
+  // Check for visual descriptions - supports both plain and markdown format
+  const visualPattern = /(?:\*\*)?Visual:?(?:\*\*)?/gi;
   const visualDescriptions = content.match(visualPattern) || [];
   
   if (visualDescriptions.length < panelCount * 0.8) {
@@ -984,41 +988,41 @@ function buildComicChapterPrompt(
   panelCount: number = 5
 ): string {
   return `Create a COMIC BOOK CHAPTER for:
-**Book:** "${bookTitle}"
-**Chapter ${chapterNumber}:** "${chapterTitle}"
-**Story Elements:** ${keyTopics?.join(', ') || 'Tell an engaging visual story'}
+Book: "${bookTitle}"
+Chapter ${chapterNumber}: "${chapterTitle}"
+Story Elements: ${keyTopics?.join(', ') || 'Tell an engaging visual story'}
 
-Generate ${panelCount} PANELS following this EXACT format:
+Generate ${panelCount} PANELS following this EXACT format (NO markdown, use plain text labels):
 
 ---
 
 [PANEL 1]
-**Visual:** [Detailed scene description: setting, characters, expressions, poses, action, mood. 2-3 sentences for AI image generation.]
-**Dialogue:**
+Visual: [Detailed scene description: setting, characters, expressions, poses, action, mood. 2-3 sentences for AI image generation.]
+Dialogue:
 - CHARACTER_NAME: "Speech bubble text"
 - CHARACTER_NAME: "Their response"
-**Caption:** "[Optional narration - time/place/thought]"
+Caption: "[Optional narration - time/place/thought]"
 
 ---
 
 [PANEL 2]
-**Visual:** [Next scene continuing the story...]
-**Dialogue:**
+Visual: [Next scene continuing the story...]
+Dialogue:
 - CHARACTER_NAME: "Continue the conversation..."
-**Caption:** "[Optional]"
+Caption: "[Optional]"
 
 ---
 
 (Continue for all ${panelCount} panels)
 
-**REQUIREMENTS:**
-✅ EVERY panel must have at least one dialogue line
-✅ Show emotions through expressions
-✅ Use different camera angles (wide shot, close-up, medium shot)
-✅ Include action verbs in visual descriptions
-✅ All text in ${language}
+REQUIREMENTS:
+- EVERY panel must have at least one dialogue line
+- Show emotions through expressions
+- Use different camera angles (wide shot, close-up, medium shot)
+- Include action verbs in visual descriptions
+- All text in ${language}
 
-**STORY ARC:**
+STORY ARC:
 - Panels 1-2: Introduction/Setup
 - Panels 3-4: Conflict/Challenge
 - Panels 5-${panelCount}: Resolution/Cliffhanger
@@ -1451,8 +1455,8 @@ This is MANDATORY. No exceptions.`;
       
       console.log("[GENERATE-CHAPTER] Comic script validated, generating images...");
 
-      // Parse and generate images
-      const panelRegex = /\[PANEL\s*(\d+)\]\s*\*\*Visual:\*\*\s*([\s\S]*?)\*\*Dialogue:\*\*\s*([\s\S]*?)(?:\*\*Caption:\*\*\s*"?([^"]*)"?)?(?=\s*---|\s*\[PANEL|\s*$)/gi;
+      // Parse and generate images - supports both plain text and markdown formats
+      const panelRegex = /\[PANEL\s*(\d+)\]\s*(?:\*\*)?Visual:?(?:\*\*)?\s*([\s\S]*?)(?:\*\*)?Dialogue:?(?:\*\*)?\s*([\s\S]*?)(?:(?:\*\*)?Caption:?(?:\*\*)?\s*"?([^"\n]*)"?)?(?=\s*---|\s*\[PANEL|\s*$)/gi;
       const panels: { num: number; visual: string; dialogue: string; caption: string; imageUrl?: string }[] = [];
       
       let match;
