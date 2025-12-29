@@ -257,20 +257,14 @@ export default function Diagnostics() {
         .single();
 
       const content = chapterContent?.content || "";
-      // Check for dialogue patterns - supports multiple formats:
-      // Format 1: - AMARA: "text" or -AMARA: "text"
-      // Format 2: ELDER VOICE: "text" (no hyphen)
-      // Format 3: Dialogue: header followed by lines
-      // Format 4: Any caps NAME followed by colon and quoted text
-      const dialoguePatterns = [
-        /Dialogue:/i,                                    // Has "Dialogue:" header
-        /-\s*[A-Z][A-Za-z_\s]+:\s*[""][^""]+[""]/.test(content),  // - CHARACTER: "text"
-        /[A-Z][A-Z_\s]+:\s*[""][^""]+[""]/.test(content),         // CAPS NAME: "text"
-        /[A-Z][a-z]+:\s*[""][^""]+[""]/.test(content),            // Name: "text"
-      ];
-      const hasDialogue = dialoguePatterns.some(p => 
-        p instanceof RegExp ? p.test(content) : p
-      );
+      // Dialogue formats we generate in comics:
+      // Dialogue:\n- AMARA: "text"\n- ELDER VOICE: "text"
+      // Also tolerate smart quotes and optional leading hyphen.
+      const hasDialogue =
+        /\bDialogue\s*:/i.test(content) ||
+        /(^|\n)\s*-\s*[A-Z][A-Z0-9_\s-]{1,40}:\s*["“][^"”\n]{2,}["”]/m.test(content) ||
+        /(^|\n)\s*[A-Z][A-Z0-9_\s-]{1,40}:\s*["“][^"”\n]{2,}["”]/m.test(content) ||
+        /(^|\n)\s*-\s*[A-Z][A-Za-z_\s-]{1,40}:\s*["“][^"”\n]{2,}["”]/m.test(content);
 
       updateTest("Verify dialogue present", {
         status: hasDialogue ? "passed" : "failed",
