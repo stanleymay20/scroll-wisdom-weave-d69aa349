@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -12,7 +12,7 @@ import { Alert, AlertDescription } from "@/components/ui/alert";
 
 type AuthMode = "login" | "signup" | "forgot-password" | "magic-link" | "reset-password";
 
-export default function Auth() {
+const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   const [searchParams] = useSearchParams();
   const initialMode = searchParams.get("mode") as AuthMode || "login";
   const { t } = useLanguage();
@@ -409,4 +409,6 @@ export default function Auth() {
       </motion.div>
     </div>
   );
-}
+});
+
+export default Auth;

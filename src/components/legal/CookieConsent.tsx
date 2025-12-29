@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Cookie, Settings, X } from "lucide-react";
@@ -11,7 +11,7 @@ interface CookiePreferences {
   marketing: boolean;
 }
 
-export function CookieConsent() {
+export const CookieConsent = forwardRef<HTMLDivElement>(function CookieConsent(_, ref) {
   const [showBanner, setShowBanner] = useState(false);
   const [showSettings, setShowSettings] = useState(false);
   const [preferences, setPreferences] = useState<CookiePreferences>({
@@ -149,4 +149,4 @@ export function CookieConsent() {
       </motion.div>
     </AnimatePresence>
   );
-}
+});
