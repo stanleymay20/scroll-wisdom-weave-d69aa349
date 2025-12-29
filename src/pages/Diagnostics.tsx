@@ -9,9 +9,10 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/hooks/useAdmin";
 import { BUILD_INFO } from "@/lib/buildInfo";
-import { Loader2, CheckCircle, XCircle, ExternalLink, Zap, BookOpen, Image as ImageIcon, LogIn } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, ExternalLink, Zap, BookOpen, Image as ImageIcon, LogIn, ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 
 interface TestResult {
   name: string;
@@ -28,6 +29,7 @@ interface ComicTestResult {
   imageUrls?: string[];
   style?: string;
   error?: string;
+  savedContent?: string; // For debug drawer
 }
 
 function EdgeFunctionHealth() {
@@ -108,6 +110,7 @@ export default function Diagnostics() {
   const [isRunning, setIsRunning] = useState(false);
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [comicResult, setComicResult] = useState<ComicTestResult | null>(null);
+  const [debugOpen, setDebugOpen] = useState(false);
 
   const accessState = useMemo<"loading" | "unauth" | "forbidden" | "ok">(() => {
     if (adminLoading) return "loading";
@@ -294,7 +297,7 @@ export default function Diagnostics() {
         data: { bookId: bookData.bookId, chapterId }
       });
 
-      // Set final result
+      // Set final result with saved content for debug drawer
       setComicResult({
         bookId: bookData.bookId,
         chapterId,
@@ -302,6 +305,7 @@ export default function Diagnostics() {
         hasDialogue,
         imageUrls: imageUrls.map(url => url.match(/\(([^)]+)\)/)?.[1] || "").filter(Boolean),
         style: "african_superhero",
+        savedContent: content, // Store saved content for debug
       });
 
       toast({
@@ -546,6 +550,32 @@ export default function Diagnostics() {
                             </div>
                           </ScrollArea>
                         </div>
+                      )}
+
+                      {/* Debug Drawer: Saved Chapter Content */}
+                      {comicResult.savedContent && (
+                        <Collapsible open={debugOpen} onOpenChange={setDebugOpen}>
+                          <CollapsibleTrigger asChild>
+                            <Button variant="outline" size="sm" className="w-full justify-between">
+                              <span className="flex items-center gap-2">
+                                <Eye className="h-4 w-4" />
+                                Debug: Saved Content Preview
+                              </span>
+                              {debugOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+                            </Button>
+                          </CollapsibleTrigger>
+                          <CollapsibleContent className="mt-2">
+                            <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
+                              <p className="text-xs text-muted-foreground mb-2">
+                                First 500 characters of saved chapter content:
+                              </p>
+                              <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-background/50 p-2 rounded border max-h-64 overflow-auto">
+                                {comicResult.savedContent.slice(0, 500)}
+                                {comicResult.savedContent.length > 500 && '...'}
+                              </pre>
+                            </div>
+                          </CollapsibleContent>
+                        </Collapsible>
                       )}
                     </div>
                   </>
