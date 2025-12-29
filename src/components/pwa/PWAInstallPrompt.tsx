@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, forwardRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Download, X, Smartphone, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -15,7 +15,7 @@ const MIN_BOOKS_OPENED = 2;
 const SHOW_DELAY_MS = 5000;
 const IOS_SHOW_DELAY_MS = 8000;
 
-export function PWAInstallPrompt() {
+export const PWAInstallPrompt = forwardRef<HTMLDivElement>(function PWAInstallPrompt(_, ref) {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [showPrompt, setShowPrompt] = useState(false);
   const [isIOS, setIsIOS] = useState(false);
@@ -195,7 +195,7 @@ export function PWAInstallPrompt() {
       </motion.div>
     </AnimatePresence>
   );
-}
+});
 
 /**
  * Track book opening for engagement-based install prompt

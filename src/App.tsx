@@ -96,7 +96,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <OfflineIndicator />
-            <BrowserRouter>
+            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
                   {/* Critical routes - eager loaded */}
