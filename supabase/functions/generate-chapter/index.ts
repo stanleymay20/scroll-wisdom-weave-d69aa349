@@ -7,6 +7,160 @@ const corsHeaders = {
 };
 
 // ===========================================
+// SCROLLLIBRARY MASTER GENERATION PROMPT v1.0
+// Authority-Grade | Hard-Failure Enforced | Cross-Domain
+// ===========================================
+
+const SYSTEM_ROLE = `You are ScrollLibrary Core Generator, a production-grade academic and creative publishing engine.
+
+You MUST obey all constraints below.
+If any rule is violated, you MUST rewrite the output until compliant.
+Silence or partial compliance is NOT acceptable.`;
+
+const MASTER_FORMATTING_CONTRACT = `
+=== FORMATTING & RENDERING CONTRACT (HARD) ===
+
+MARKDOWN IS FORBIDDEN IN FINAL OUTPUT
+
+Do NOT output:
+- Asterisks for bold (**text**)
+- Asterisks for italics (*text*)
+- Underscores for emphasis (__text__)
+- Hash symbols for headings (## or ###)
+- Backticks for code
+- Pipe-based markdown tables
+
+REQUIRED INSTEAD:
+- Section headings: Write as plain text on its own line (e.g., "Introduction" not "## Introduction")
+- Emphasis: Express through word choice and sentence structure, not symbols
+- Tables: Use labeled row/column format (see TABLE FORMAT below)
+- Code: Use indented plain text with language label prefix
+
+TABLE FORMAT (REQUIRED):
+
+TABLE: [Table Name]
+
+Column 1: [Header]
+Column 2: [Header]
+Column 3: [Header]
+
+Row 1:
+[Header 1]: [Value]
+[Header 2]: [Value]
+[Header 3]: [Value]
+
+CODE FORMAT (REQUIRED):
+
+CODE EXAMPLE ([Language]):
+
+    [properly indented line 1]
+    [properly indented line 2]
+    [blank line between logical blocks]
+    [properly indented line 3]
+
+If any markdown symbols (**, ##, \`\`\`) appear in output, the output is INVALID and must be REWRITTEN.
+
+=== END FORMATTING CONTRACT ===
+`;
+
+const ACADEMIC_CONTRACT = `
+=== ACADEMIC COMPLIANCE CONTRACT ===
+
+MANDATORY REQUIREMENTS:
+1. Use ONLY verified sources provided
+2. Include in-text citations for EVERY factual claim
+3. Include complete reference list at chapter end
+4. Follow citation style strictly (APA / Harvard / IEEE as selected)
+5. Mark unverified claims with "[requires verification]"
+
+FAILURE CONDITIONS (output is INVALID if any apply):
+- Unverified claims without marking
+- No references section
+- Fabricated or invented citations
+
+DOMAIN-SPECIFIC REQUIREMENTS:
+- Medicine: Include medical disclaimer, prioritize peer-reviewed sources
+- Law: Include legal disclaimer, cite case law and statutes
+- Science: Distinguish peer-reviewed vs preprint
+- Technology: Ensure code examples are runnable
+
+=== END ACADEMIC CONTRACT ===
+`;
+
+const WORKBOOK_MASTER_CONTRACT = `
+=== WORKBOOK CONTRACT (STRICT) ===
+
+HARD LIMITS:
+- 1,200–1,800 words per chapter MAXIMUM
+- NO essays, NO long narratives
+- 70%+ interactive content, ≤30% explanation
+
+REQUIRED CHAPTER STRUCTURE (NON-NEGOTIABLE):
+1. Purpose (≤150 words)
+2. Key Concepts (≤300 words, numbered points)
+3. Fill-In Prompts (main content with blank lines)
+4. Tables/Worksheets (labeled format, empty cells)
+5. Reflection Questions (without answers)
+6. Action Steps (checkboxes)
+
+If a section cannot be written into by the user, REMOVE IT.
+
+=== END WORKBOOK CONTRACT ===
+`;
+
+const COMIC_MASTER_CONTRACT = `
+=== COMIC GENERATION CONTRACT ===
+
+PANEL STRUCTURE:
+- Each chapter MUST have 4–6 panels
+- Each panel MUST have: visual description + dialogue
+- No caption-only panels, no visual-only panels
+
+DIALOGUE CONTRACT (MANDATORY):
+- EVERY panel MUST include character dialogue
+- Format: - CHARACTER_NAME: "Spoken text"
+- Narration alone is NOT allowed
+- If dialogue missing for ANY panel, output is INVALID
+
+STYLE CONSISTENCY:
+- Character appearance MUST remain consistent across panels
+- Art style, lighting, colors must be uniform
+
+=== END COMIC CONTRACT ===
+`;
+
+const VALIDATION_CONTRACT = `
+=== SELF-VALIDATION (AUTO) ===
+
+Before finalizing, verify:
+[ ] No markdown symbols (**, ##, backticks)
+[ ] Proper section structure
+[ ] For comics: dialogue in every panel
+[ ] For academic: citations present
+[ ] For workbooks: 6 sections present
+
+If ANY check fails → REWRITE.
+
+=== END VALIDATION CONTRACT ===
+`;
+
+const FINAL_DIRECTIVE = `
+=== FINAL DIRECTIVE ===
+
+ScrollLibrary is a PUBLISHING SYSTEM, not a chat generator.
+
+Output MUST be:
+- Reader-ready (clean, no artifacts)
+- Print-ready (proper structure)
+- Academic-ready (citations if applicable)
+- Diagnostics-passable
+
+No shortcuts. No drift. No excuses.
+
+=== END FINAL DIRECTIVE ===
+`;
+
+// ===========================================
 // AUTHORITY-GRADE CONFIGURATION
 // ===========================================
 
@@ -675,70 +829,16 @@ function getFieldSpecificInstructions(category: string): string {
   return instructions[category.toLowerCase()] || instructions.default;
 }
 
-// ===========================================
-// FORMATTING CONTRACT (NO MARKDOWN)
-// ===========================================
-
-const FORMATTING_CONTRACT = `
-=== FORMATTING CONTRACT — STRICT ===
-
-You are generating FINAL, PUBLISHABLE BOOK CONTENT.
-
-ABSOLUTE RULES:
-- DO NOT use Markdown syntax.
-- DO NOT use **, __, ##, ###, -, *, backticks, or code fences.
-- DO NOT assume a Markdown renderer exists.
-
-SECTION HEADINGS must be written as:
-SECTION: [Title]
-or
-[Title]
-(written as plain text on its own line, not using # symbols)
-
-FORMATTING MUST BE:
-- Plain text paragraphs with proper spacing
-- Clear section titles written as normal text (e.g., "Introduction" not "## Introduction")
-- Tables written using labeled rows and columns (not Markdown tables)
-- Code blocks written as indented, monospaced-style text WITHOUT backticks
-- Lists written as numbered items (1. 2. 3.) or lettered items (a. b. c.)
-
-TABLE FORMAT (REQUIRED):
-Instead of Markdown tables, use this structure:
-
-TABLE: [Table Name]
-
-Column 1: [Header 1]
-Column 2: [Header 2]
-Column 3: [Header 3]
-
-Row 1:
-[Header 1]: [Value]
-[Header 2]: [Value]
-[Header 3]: [Value]
-
-Row 2:
-[Header 1]: [Value]
-[Header 2]: [Value]
-[Header 3]: [Value]
-
-CODE FORMAT (REQUIRED):
-Instead of Markdown code blocks, use:
-
-CODE EXAMPLE ([Language]):
-
-    [indented code line 1]
-    [indented code line 2]
-    [indented code line 3]
-
-If any Markdown symbols (**, ##, \`\`\`) appear in the output, it is INVALID and must be rewritten.
-
-=== END FORMATTING CONTRACT ===
-`;
-
 function buildAcademicSystemPrompt(language: string, category: string, citationStyle: string): string {
-  return `You are ScrollLibrary Authority Engine — an academic production system for university-grade content.
+  return `${SYSTEM_ROLE}
 
-${FORMATTING_CONTRACT}
+${MASTER_FORMATTING_CONTRACT}
+
+${ACADEMIC_CONTRACT}
+
+${VALIDATION_CONTRACT}
+
+${FINAL_DIRECTIVE}
 
 ROLE: Generate scholarly, pedagogically sound, publishable learning material.
 PRIORITY: Correctness > Speed. Trust > Novelty. Understanding > Volume.
@@ -760,15 +860,6 @@ COGNITIVE STRUCTURE (MANDATORY):
 3. Applied Examples — Real-world case studies
 4. Critical Reflection — Analysis, implications
 5. Key Takeaways — Summary of main points
-
-CODE FORMATTING (CRITICAL):
-- Use indented plain text for code, NOT fenced code blocks
-- Always specify language as a label: CODE EXAMPLE (Python):
-- Preserve indentation exactly
-
-TABLE FORMATTING:
-- Use labeled row/column format, NOT Markdown tables
-- Ensure clear structure with headers
 
 FIELD-SPECIFIC (${category}):
 ${getFieldSpecificInstructions(category)}
@@ -846,11 +937,11 @@ BEGIN WRITING THE COMPLETE ACADEMIC CHAPTER:`;
 function buildComicSystemPrompt(style: string, language: string): string {
   const styleGuide = COMIC_STYLE_PRESETS[style] || COMIC_STYLE_PRESETS.children_book;
   
-  return `You are a professional comic book production engine, not an illustrator and not a prose writer.
+  return `${SYSTEM_ROLE}
 
-${FORMATTING_CONTRACT}
+${MASTER_FORMATTING_CONTRACT}
 
-VISUAL STYLE CONTRACT (MUST MAINTAIN ACROSS ALL PANELS):
+${COMIC_MASTER_CONTRACT}
 - Art Style: ${styleGuide.artStyle}
 - Color Palette: ${styleGuide.colorPalette}
 - Line Weight: ${styleGuide.lineWeight}
@@ -940,11 +1031,11 @@ BEGIN CREATING THE COMIC CHAPTER:`;
 // ===========================================
 
 function buildWorkbookSystemPrompt(language: string): string {
-  return `You are a professional workbook designer creating interactive, fill-in learning materials.
+  return `${SYSTEM_ROLE}
 
-${FORMATTING_CONTRACT}
+${MASTER_FORMATTING_CONTRACT}
 
-ROLE: Create workbook chapters that are 70%+ interactive content and ≤30% explanation.
+${WORKBOOK_MASTER_CONTRACT}
 
 LANGUAGE: All content must be in ${language}.
 
@@ -1584,9 +1675,15 @@ This is MANDATORY. No exceptions.`;
         languageName, citationStyle, researchResult.references, researchResult.inTextCitations
       );
     } else {
-      systemPrompt = `You are ScrollAuthorGPT, an elite AI author. Write EXCLUSIVELY in ${languageName}. Create comprehensive, scholarly chapters with academic rigor.
+      systemPrompt = `${SYSTEM_ROLE}
 
-${FORMATTING_CONTRACT}`;
+${MASTER_FORMATTING_CONTRACT}
+
+${VALIDATION_CONTRACT}
+
+${FINAL_DIRECTIVE}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}. Create comprehensive, scholarly chapters with academic rigor.`;
       
       chapterPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
 
