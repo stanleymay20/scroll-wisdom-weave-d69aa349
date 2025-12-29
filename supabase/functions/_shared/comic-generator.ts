@@ -353,14 +353,24 @@ export function buildImagePrompt(
   const characterDesc = panel.visual.characters
     .map(c => `${c.name} (${c.expression} expression, ${c.pose})`)
     .join(', ');
-  
+
+  const dialogueText = panel.dialogue
+    ?.map(d => `${d.character}: "${d.speech}"`)
+    .slice(0, 8)
+    .join(' | ') || '';
+
+  const captionText = panel.caption ? panel.caption.trim() : '';
+
   return `${styleGuide.artStyle}. ${panel.visual.scene}. ` +
     `Camera angle: ${panel.visual.cameraAngle}. ` +
     `Mood: ${panel.visual.mood}. ` +
     `${characterDesc ? `Characters: ${characterDesc}. ` : ''}` +
     `${styleGuide.colorPalette}. ` +
     `Category: ${category.replace(/_/g, ' ')}. ` +
-    `Professional comic book illustration. No text in image.`;
+    `Professional comic book illustration. ` +
+    `Include the following text IN the image using speech bubbles and/or caption boxes (legible, high-contrast; no extra words): ` +
+    `${dialogueText ? `Dialogue: ${dialogueText}. ` : ''}` +
+    `${captionText ? `Caption: ${captionText}. ` : ''}`;
 }
 
 // ============================================

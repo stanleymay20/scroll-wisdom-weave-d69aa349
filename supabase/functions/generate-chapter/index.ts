@@ -1534,7 +1534,23 @@ This is MANDATORY. No exceptions.`;
         try {
           console.log(`[GENERATE-CHAPTER] Generating image for panel ${panel.num}...`);
           
-          const imagePrompt = `${styleGuide.artStyle}. ${panel.visual} ${styleGuide.colorPalette}. ${styleGuide.shadingStyle}. Professional comic book illustration. No text in image.`;
+          const dialogueForImage = (panel.dialogue || "")
+            .replace(/\r/g, "")
+            .split("\n")
+            .map(l => l.trim())
+            .filter(Boolean)
+            .slice(0, 8)
+            .join(" ");
+
+          const captionForImage = (panel.caption || "").trim();
+
+          const imagePrompt = `${styleGuide.artStyle}. ${panel.visual} ${styleGuide.colorPalette}. ${styleGuide.shadingStyle}. Professional comic book illustration.
+
+INCLUDE TEXT IN THE ART (speech bubbles/captions) with EXACT wording:
+${dialogueForImage ? `Dialogue: ${dialogueForImage}` : ""}
+${captionForImage ? `Caption: ${captionForImage}` : ""}
+
+Keep text legible, high-contrast, and placed inside comic speech bubbles or caption boxes. Do not add extra text beyond what is provided.`;
           
           const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
             method: "POST",
