@@ -146,24 +146,8 @@ export const PANEL_LAYOUTS = {
 // ============================================
 
 // ===========================================
-// FORMATTING CONTRACT (NO MARKDOWN)
+// COMIC PROMPT BUILDERS (SIMPLIFIED)
 // ===========================================
-
-const COMIC_FORMATTING_CONTRACT = `
-=== FORMATTING CONTRACT — STRICT ===
-
-You are generating FINAL, PUBLISHABLE COMIC CONTENT.
-
-ABSOLUTE RULES:
-- DO NOT use Markdown syntax for headings or emphasis.
-- DO NOT use **, __, ##, ###, backticks, or code fences.
-- Use [PANEL X] markers for panel structure.
-- Use plain text labels like "Visual:" and "Dialogue:" and "Caption:"
-
-If any Markdown symbols (**, ##) appear in dialogue or descriptions, the output is INVALID.
-
-=== END FORMATTING CONTRACT ===
-`;
 
 export function buildComicSystemPrompt(
   style: keyof typeof STYLE_PRESETS,
@@ -171,13 +155,9 @@ export function buildComicSystemPrompt(
 ): string {
   const styleGuide = STYLE_PRESETS[style] || STYLE_PRESETS.children_book;
   
-  return `You are a professional comic book writer and visual storyteller.
+  return `You are a professional comic book writer creating structured comic panels.
 
-${COMIC_FORMATTING_CONTRACT}
-
-ROLE: Create structured comic book content with proper panel layouts, dialogue, and visual descriptions.
-
-VISUAL STYLE CONTRACT (MUST MAINTAIN ACROSS ALL PANELS):
+VISUAL STYLE:
 - Art Style: ${styleGuide.artStyle}
 - Color Palette: ${styleGuide.colorPalette}
 - Line Weight: ${styleGuide.lineWeight}
@@ -186,22 +166,12 @@ VISUAL STYLE CONTRACT (MUST MAINTAIN ACROSS ALL PANELS):
 
 LANGUAGE: All dialogue and captions must be in ${language}.
 
-NON-NEGOTIABLE RULES:
-1. Every panel MUST have character dialogue (speech bubbles) — this is what makes it a comic
-2. Dialogue should be natural, expressive, and advance the story
-3. Visual descriptions must be detailed enough for AI image generation
-4. Maintain character appearance consistency across ALL panels
-5. Story must have clear beginning, conflict, and resolution
-6. Maximum 30 words per speech bubble
-7. Captions/narration boxes are optional, dialogue is MANDATORY
-
-FORBIDDEN:
-- Single giant image per chapter
-- Floating captions without panel structure
-- Random style switching between panels
-- Walls of text in captions
-- Panels without dialogue
-- Markdown syntax (**, ##, backticks)`;
+CRITICAL RULES:
+1. Use [PANEL 1], [PANEL 2], etc. markers for each panel
+2. Every panel MUST have character dialogue
+3. Visual descriptions must be detailed for image generation
+4. Maintain character consistency across panels
+5. Maximum 30 words per speech bubble`;
 }
 
 export function buildComicChapterPrompt(
@@ -212,48 +182,33 @@ export function buildComicChapterPrompt(
   language: string,
   panelCount: number = 6
 ): string {
-  return `Create a COMIC BOOK CHAPTER for:
+  return `Create a COMIC BOOK CHAPTER.
+
 Book: "${bookTitle}"
 Chapter ${chapterNumber}: "${chapterTitle}"
 Story Elements: ${keyTopics?.join(', ') || 'Tell an engaging visual story'}
 
-Generate ${panelCount} PANELS following this EXACT format (NO markdown, use plain text labels):
-
----
+Generate exactly ${panelCount} panels using this EXACT format:
 
 [PANEL 1]
-Visual: [Detailed scene description: setting, characters, their positions, expressions, poses, lighting, mood. 2-3 sentences for AI image generation.]
+Visual: A wide shot of a bustling African city at sunset. Golden light bathes modern skyscrapers mixed with traditional architecture. Our hero AMARA stands on a rooftop surveying the city.
 Dialogue:
-- CHARACTER_NAME: "What they say in their speech bubble"
-- CHARACTER_NAME: "Their response or reaction"
-Caption: "[Optional narration - time/place/internal thought]"
-
----
+- AMARA: "The city calls to me tonight."
+- ELDER VOICE: "Remember your training, child."
+Caption: Lagos, Nigeria - Present Day
 
 [PANEL 2]
-Visual: [Next scene continuing the story...]
+Visual: Close-up of the hero's face showing determination and focus.
 Dialogue:
-- CHARACTER_NAME: "Continue the conversation..."
-Caption: "[Optional]"
-
----
+- AMARA: "I sense danger approaching."
 
 (Continue for all ${panelCount} panels)
 
-REQUIREMENTS:
-- EVERY panel must have at least one dialogue line
-- Show emotions through expressions (smiling, frowning, surprised, etc.)
-- Use different camera angles (wide shot, close-up, medium shot)
-- Include action verbs in visual descriptions
-- End with a satisfying conclusion or cliffhanger
-- All text in ${language}
+Now create ${panelCount} original panels for "${chapterTitle}" following the EXACT same format.
+Each panel MUST have: [PANEL X] marker, Visual description, Dialogue with character names.
+All text in ${language}.
 
-STORY ARC:
-- Panels 1-2: Introduction/Setup
-- Panels 3-4: Conflict/Challenge
-- Panels 5-${panelCount}: Resolution/Cliffhanger
-
-BEGIN CREATING THE COMIC CHAPTER:`;
+BEGIN:`;
 }
 
 // ============================================
