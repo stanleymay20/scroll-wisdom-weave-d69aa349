@@ -145,6 +145,26 @@ export const PANEL_LAYOUTS = {
 // COMIC GENERATION PROMPTS
 // ============================================
 
+// ===========================================
+// FORMATTING CONTRACT (NO MARKDOWN)
+// ===========================================
+
+const COMIC_FORMATTING_CONTRACT = `
+=== FORMATTING CONTRACT — STRICT ===
+
+You are generating FINAL, PUBLISHABLE COMIC CONTENT.
+
+ABSOLUTE RULES:
+- DO NOT use Markdown syntax for headings or emphasis.
+- DO NOT use **, __, ##, ###, backticks, or code fences.
+- Use [PANEL X] markers for panel structure.
+- Use plain text labels like "Visual:" and "Dialogue:" and "Caption:"
+
+If any Markdown symbols (**, ##) appear in dialogue or descriptions, the output is INVALID.
+
+=== END FORMATTING CONTRACT ===
+`;
+
 export function buildComicSystemPrompt(
   style: keyof typeof STYLE_PRESETS,
   language: string
@@ -153,18 +173,20 @@ export function buildComicSystemPrompt(
   
   return `You are a professional comic book writer and visual storyteller.
 
-**ROLE:** Create structured comic book content with proper panel layouts, dialogue, and visual descriptions.
+${COMIC_FORMATTING_CONTRACT}
 
-**VISUAL STYLE CONTRACT (MUST MAINTAIN ACROSS ALL PANELS):**
+ROLE: Create structured comic book content with proper panel layouts, dialogue, and visual descriptions.
+
+VISUAL STYLE CONTRACT (MUST MAINTAIN ACROSS ALL PANELS):
 - Art Style: ${styleGuide.artStyle}
 - Color Palette: ${styleGuide.colorPalette}
 - Line Weight: ${styleGuide.lineWeight}
 - Shading: ${styleGuide.shadingStyle}
 - Characters: ${styleGuide.characterDesignNotes}
 
-**LANGUAGE:** All dialogue and captions must be in ${language}.
+LANGUAGE: All dialogue and captions must be in ${language}.
 
-**NON-NEGOTIABLE RULES:**
+NON-NEGOTIABLE RULES:
 1. Every panel MUST have character dialogue (speech bubbles) — this is what makes it a comic
 2. Dialogue should be natural, expressive, and advance the story
 3. Visual descriptions must be detailed enough for AI image generation
@@ -173,12 +195,13 @@ export function buildComicSystemPrompt(
 6. Maximum 30 words per speech bubble
 7. Captions/narration boxes are optional, dialogue is MANDATORY
 
-**FORBIDDEN:**
+FORBIDDEN:
 - Single giant image per chapter
 - Floating captions without panel structure
 - Random style switching between panels
 - Walls of text in captions
-- Panels without dialogue`;
+- Panels without dialogue
+- Markdown syntax (**, ##, backticks)`;
 }
 
 export function buildComicChapterPrompt(

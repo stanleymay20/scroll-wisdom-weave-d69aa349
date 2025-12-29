@@ -202,7 +202,7 @@ For each chapter, provide:
 1. Chapter number
 2. Chapter title (in ${languageName})
 3. Brief description (2-3 sentences, in ${languageName})
-4. Key topics to cover (4-5 bullet points, in ${languageName})
+4. Key topics to cover (4-5 items, in ${languageName})
 ${bookType === 'comic' ? '5. Scene descriptions for illustrations (3-5 per chapter)' : ''}
 ${enableReferences ? '5. Suggested references (will be verified later)' : ''}
 
@@ -238,7 +238,7 @@ Format your response as a JSON object with this structure:
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: "You are a scholarly AI that creates detailed, well-structured book outlines. Always respond with valid JSON." },
+          { role: "system", content: "You are a scholarly AI that creates detailed, well-structured book outlines. Always respond with valid JSON. Do NOT use Markdown syntax in titles or descriptions - use plain text only." },
           { role: "user", content: outlinePrompt }
         ],
       }),
