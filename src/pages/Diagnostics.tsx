@@ -260,14 +260,12 @@ export default function Diagnostics() {
         .single();
 
       const content = chapterContent?.content || "";
-      // Dialogue formats we generate in comics:
-      // Dialogue:\n- AMARA: "text"\n- ELDER VOICE: "text"
+      // Dialogue formats we generate in comics (post-sanitization):
+      // - AMARA: "text"  OR  AMARA: text  (quotes may vary)
       // Also tolerate smart quotes and optional leading hyphen.
       const hasDialogue =
         /\bDialogue\s*:/i.test(content) ||
-        /(^|\n)\s*-\s*[A-Z][A-Z0-9_\s-]{1,40}:\s*["“][^"”\n]{2,}["”]/m.test(content) ||
-        /(^|\n)\s*[A-Z][A-Z0-9_\s-]{1,40}:\s*["“][^"”\n]{2,}["”]/m.test(content) ||
-        /(^|\n)\s*-\s*[A-Z][A-Za-z_\s-]{1,40}:\s*["“][^"”\n]{2,}["”]/m.test(content);
+        /(^|\n)\s*-?\s*(?!Visual\b)(?!Caption\b)(?!Scene\b)[A-Z][A-Za-z0-9_\s-]{1,40}:\s*["“]?[\s\S]{2,80}?["”]?(?=\n|$)/m.test(content);
 
       updateTest("Verify dialogue present", {
         status: hasDialogue ? "passed" : "failed",
@@ -303,7 +301,7 @@ export default function Diagnostics() {
         chapterId,
         panelCount,
         hasDialogue,
-        imageUrls: imageUrls.map(url => url.match(/\(([^)]+)\)/)?.[1] || "").filter(Boolean),
+        imageUrls,
         style: "african_superhero",
         savedContent: content, // Store saved content for debug
       });
