@@ -74,6 +74,99 @@ Spiritual, awe-inspiring aesthetic.`
   }
 };
 
+// Comic style presets for visual consistency
+const COMIC_STYLE_PRESETS: Record<string, {
+  artStyle: string;
+  colorPalette: string;
+  lineWeight: string;
+  shadingStyle: string;
+  characterNotes: string;
+}> = {
+  modern_superhero: {
+    artStyle: 'Modern American superhero comic style, dynamic poses, bold lines',
+    colorPalette: 'Vibrant primary colors with dramatic shadows',
+    lineWeight: 'Bold outlines with varied line weights for depth',
+    shadingStyle: 'Cell shading with dramatic lighting',
+    characterNotes: 'Muscular heroic proportions, expressive faces, detailed costumes',
+  },
+  african_superhero: {
+    artStyle: 'Afrofuturistic comic style blending traditional African art with modern superhero aesthetics',
+    colorPalette: 'Rich earth tones, gold accents, vibrant African-inspired patterns',
+    lineWeight: 'Bold confident lines with decorative pattern elements',
+    shadingStyle: 'Dramatic lighting with cultural pattern integration',
+    characterNotes: 'Diverse African features, traditional + futuristic costume fusion, cultural symbols',
+  },
+  children_book: {
+    artStyle: 'Friendly children book illustration, rounded shapes, warm and inviting',
+    colorPalette: 'Bright, cheerful colors with soft gradients',
+    lineWeight: 'Soft rounded lines, minimal harsh edges',
+    shadingStyle: 'Soft gradients and gentle shadows',
+    characterNotes: 'Cute proportions, big eyes, friendly expressions, simple clothing',
+  },
+  manga: {
+    artStyle: 'Japanese manga style with expressive eyes and dynamic motion lines',
+    colorPalette: 'Clean black and white with screen tones, or soft pastel colors',
+    lineWeight: 'Clean thin lines with emphasis on speed lines and effects',
+    shadingStyle: 'Screen tones and crosshatching',
+    characterNotes: 'Large expressive eyes, varied hair styles, emotional expressions',
+  },
+  graphic_novel: {
+    artStyle: 'Realistic graphic novel style with detailed environments',
+    colorPalette: 'Muted, sophisticated color palette with mood-driven tones',
+    lineWeight: 'Detailed linework with cross-hatching',
+    shadingStyle: 'Realistic lighting with atmospheric effects',
+    characterNotes: 'Realistic proportions, detailed clothing, subtle expressions',
+  },
+};
+
+// Extract visual identity from comic chapter content
+function extractVisualIdentityFromContent(content: string): {
+  mainCharacters: string[];
+  keyScene: string;
+  dominantColors: string[];
+  settingDescription: string;
+} {
+  const characters: string[] = [];
+  const scenes: string[] = [];
+  const colors: string[] = [];
+  
+  // Extract character names from dialogue patterns
+  const dialoguePattern = /-\s*([A-Z][A-Za-z_\s]+?):\s*"/g;
+  let match;
+  while ((match = dialoguePattern.exec(content)) !== null) {
+    const charName = match[1].trim().replace(/\*+/g, '');
+    if (!characters.includes(charName) && charName.length < 30) {
+      characters.push(charName);
+    }
+  }
+  
+  // Extract visual descriptions
+  const visualPattern = /Visual:?\s*([^D\n]+)/gi;
+  while ((match = visualPattern.exec(content)) !== null) {
+    scenes.push(match[1].trim().slice(0, 200));
+  }
+  
+  // Extract color mentions
+  const colorPattern = /\b(golden|blue|red|green|amber|purple|orange|yellow|black|white|silver|bronze|crimson|emerald|azure|violet|pink|brown|grey|gray)\b/gi;
+  while ((match = colorPattern.exec(content)) !== null) {
+    const color = match[1].toLowerCase();
+    if (!colors.includes(color)) {
+      colors.push(color);
+    }
+  }
+  
+  // Extract setting from first visual
+  const settingMatch = content.match(/Visual:?\s*([^.]+\.)/i);
+  const setting = settingMatch ? settingMatch[1].trim() : 'A dynamic scene from the story';
+  
+  return {
+    mainCharacters: characters.slice(0, 5),
+    keyScene: scenes[0] || 'A dramatic moment featuring the main characters',
+    dominantColors: colors.slice(0, 5),
+    settingDescription: setting,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -113,10 +206,10 @@ serve(async (req) => {
 
     const { bookId, title, category, description, theme = "classic" } = await req.json();
 
-    // Verify user owns the book
+    // Get book details including comic-specific fields
     const { data: book } = await supabase
       .from("books")
-      .select("creator_id")
+      .select("creator_id, book_type, comic_style_id, palette_hint, line_weight_hint, character_sheet")
       .eq("id", bookId)
       .single();
 
@@ -134,12 +227,88 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Get theme style or default to classic
-    const selectedTheme = coverThemes[theme] || coverThemes.classic;
-    console.log(`[GENERATE-COVER] Generating ${selectedTheme.name} cover for book: ${title}`);
+    // ===========================================
+    // COMIC COVER CONSISTENCY CONTRACT
+    // ===========================================
+    
+    const isComic = book?.book_type === 'comic';
+    let coverPrompt: string;
+    
+    if (isComic) {
+      console.log("[GENERATE-COVER] Comic book detected - extracting visual identity from chapters...");
+      
+      // Get the first generated chapter to extract visual identity
+      const { data: chapters } = await supabase
+        .from("chapters")
+        .select("content")
+        .eq("book_id", bookId)
+        .eq("is_generated", true)
+        .order("chapter_number", { ascending: true })
+        .limit(2);
+      
+      const combinedContent = chapters?.map(c => c.content).join('\n\n') || '';
+      const visualIdentity = extractVisualIdentityFromContent(combinedContent);
+      
+      // Get comic style
+      const comicStyleId = book?.comic_style_id || 'children_book';
+      const styleGuide = COMIC_STYLE_PRESETS[comicStyleId] || COMIC_STYLE_PRESETS.children_book;
+      
+      // Use character sheet if available
+      const characterSheet = book?.character_sheet || {};
+      const characterDescriptions = Object.entries(characterSheet)
+        .map(([name, desc]) => `${name}: ${desc}`)
+        .join('; ');
+      
+      console.log(`[GENERATE-COVER] Extracted ${visualIdentity.mainCharacters.length} characters, style: ${comicStyleId}`);
+      
+      // Build comic-consistent cover prompt
+      coverPrompt = `Create a professional COMIC BOOK COVER that matches the visual identity of the comic panels.
 
-    // Create a detailed prompt for the book cover WITH relevant text
-    const coverPrompt = `Create a professional, elegant book cover design with the title and author clearly visible.
+=== COMIC COVER CONSISTENCY CONTRACT ===
+
+BOOK DETAILS:
+- Title: "${title}"
+- Category: ${category.replace(/_/g, " ")}
+- Author: "ScrollAuthor AI"
+
+VISUAL STYLE (MUST MATCH COMIC PANELS EXACTLY):
+- Art Style: ${styleGuide.artStyle}
+- Color Palette: ${styleGuide.colorPalette}${book?.palette_hint ? ` with custom hints: ${book.palette_hint}` : ''}
+- Line Weight: ${styleGuide.lineWeight}${book?.line_weight_hint ? ` (${book.line_weight_hint})` : ''}
+- Shading: ${styleGuide.shadingStyle}
+- Character Design: ${styleGuide.characterNotes}
+
+EXTRACTED VISUAL IDENTITY FROM PANELS:
+- Main Characters: ${visualIdentity.mainCharacters.length > 0 ? visualIdentity.mainCharacters.join(', ') : 'Feature the protagonist prominently'}
+${characterDescriptions ? `- Character Details: ${characterDescriptions}` : ''}
+- Key Scene Reference: ${visualIdentity.keyScene}
+- Dominant Colors: ${visualIdentity.dominantColors.length > 0 ? visualIdentity.dominantColors.join(', ') : styleGuide.colorPalette}
+- Setting: ${visualIdentity.settingDescription}
+
+MANDATORY COVER REQUIREMENTS:
+1. Feature the main characters EXACTLY as they appear in the panels
+2. Use the SAME art style as the comic panels - NO deviation
+3. Create a dynamic, action-packed composition reflecting the comic's tone
+4. Include the title "${title}" prominently displayed
+5. Include "By ScrollAuthor AI" as author credit
+6. Match the color palette from the panels exactly
+7. The cover should look like it belongs to the same comic
+
+FORBIDDEN:
+- Different art style from panels
+- New characters not in the comic
+- Different character appearances (costume, face, body)
+- Conflicting color palettes
+
+Aspect ratio: vertical book cover (3:4)
+Ultra high resolution, professional comic book cover quality.`;
+      
+    } else {
+      // Standard book cover generation
+      const selectedTheme = coverThemes[theme] || coverThemes.classic;
+      console.log(`[GENERATE-COVER] Generating ${selectedTheme.name} cover for book: ${title}`);
+
+      coverPrompt = `Create a professional, elegant book cover design with the title and author clearly visible.
 
 BOOK DETAILS:
 - Title: "${title}"
@@ -167,6 +336,7 @@ DESIGN REQUIREMENTS:
 - The background should complement and not compete with the text
 - Create visual hierarchy: Title first, then imagery, then author name
 - Include appropriate symbolic or thematic imagery for the topic`;
+    }
 
     // Retry logic for image generation
     const maxRetries = 3;
@@ -290,7 +460,8 @@ DESIGN REQUIREMENTS:
       JSON.stringify({
         success: true,
         coverUrl: imageUrl,
-        theme: selectedTheme.name,
+        theme: isComic ? 'comic-consistent' : (coverThemes[theme]?.name || 'Classic'),
+        isComicCover: isComic,
       }),
       {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

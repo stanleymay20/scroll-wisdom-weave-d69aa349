@@ -1298,7 +1298,55 @@ serve(async (req) => {
       academicMode = false,
       citationStyle = 'APA',
       comicStyle = 'children_book',
+      // NEW: Edit control parameters
+      editIntent = null,
+      isRegeneration = false,
     } = await req.json();
+
+    // ===========================================
+    // EDIT CONTROL CONTRACT ENFORCEMENT
+    // ===========================================
+    
+    // Check if this is a regeneration and enforce edit intent requirement
+    let existingContent: string | null = null;
+    
+    if (chapterId) {
+      const { data: existingChapter } = await supabase
+        .from("chapters")
+        .select("content, is_generated")
+        .eq("id", chapterId)
+        .single();
+      
+      existingContent = existingChapter?.content || null;
+      const wasGenerated = existingChapter?.is_generated || false;
+      
+      // EDIT CONTROL: If regenerating existing content, require edit intent
+      if (wasGenerated && existingContent && existingContent.length > 100) {
+        if (isRegeneration && !editIntent) {
+          console.log("[GENERATE-CHAPTER] EDIT CONTROL: Regeneration blocked - no edit intent provided");
+          return new Response(JSON.stringify({
+            error: "Edit intent required for regeneration",
+            code: "EDIT_INTENT_REQUIRED",
+            message: "Please specify what you want to change before regenerating this chapter.",
+            suggestions: [
+              "Shorten this chapter",
+              "Make it more academic",
+              "Add clearer examples",
+              "Improve dialogue",
+              "Fix formatting",
+              "Add more interactive elements",
+            ],
+          }), {
+            status: 400,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        
+        if (editIntent) {
+          console.log(`[GENERATE-CHAPTER] EDIT MODE: Applying edit intent: "${editIntent.slice(0, 100)}..."`);
+        }
+      }
+    }
 
     // Verify ownership and get book details for style/workbook settings
     const { data: chapter } = await supabase
@@ -1359,10 +1407,37 @@ serve(async (req) => {
     
     console.log(`[GENERATE-CHAPTER] Chapter ${chapterNumber}: ${chapterTitle}`);
     console.log(`[GENERATE-CHAPTER] Type: ${bookType}, Academic: ${academicMode}, Admin: ${isAdmin}`);
+    console.log(`[GENERATE-CHAPTER] Edit mode: ${editIntent ? 'YES' : 'NO'}${editIntent ? ` - Intent: ${editIntent.slice(0, 50)}` : ''}`);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
+    }
+
+    // ===========================================
+    // BUILD EDIT INTENT PROMPT IF REGENERATING
+    // ===========================================
+    
+    let editIntentPrompt = '';
+    if (editIntent && existingContent) {
+      editIntentPrompt = `
+
+=== CHAPTER REVISION REQUEST ===
+
+ORIGINAL CONTENT (PRESERVE STRUCTURE):
+${existingContent.slice(0, 6000)}${existingContent.length > 6000 ? '\n[...content truncated...]' : ''}
+
+EDIT INTENT - APPLY ONLY THESE CHANGES:
+${editIntent}
+
+INSTRUCTIONS:
+1. PRESERVE the original structure, logic, and continuity
+2. Apply ONLY the changes specified above
+3. Do NOT rewrite sections unaffected by the edit intent
+4. Maintain all quality contracts for this content type
+5. Return the COMPLETE revised chapter
+
+BEGIN REVISION:`;
     }
 
     // ===========================================
