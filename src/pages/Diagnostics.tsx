@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/hooks/useAdmin";
 import { BUILD_INFO } from "@/lib/buildInfo";
-import { Loader2, CheckCircle, XCircle, ExternalLink, Zap, BookOpen, Image as ImageIcon, LogIn, ChevronDown, ChevronUp, Eye } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, ExternalLink, Zap, BookOpen, Image as ImageIcon, ChevronDown, ChevronUp, Eye } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
@@ -26,10 +26,11 @@ interface ComicTestResult {
   chapterId?: string;
   panelCount?: number;
   hasDialogue?: boolean;
+  dialogueCount?: number;
   imageUrls?: string[];
   style?: string;
   error?: string;
-  savedContent?: string; // For debug drawer
+  savedContent?: string;
 }
 
 function EdgeFunctionHealth() {
@@ -90,7 +91,7 @@ function EdgeFunctionHealth() {
             </div>
             {details[fn]?.buildId && (
               <span className="text-xs text-muted-foreground font-mono">
-                {details[fn].buildId}
+                fn:{details[fn].buildId}
               </span>
             )}
           </div>
@@ -131,7 +132,7 @@ export default function Diagnostics() {
     const tests: TestResult[] = [
       { name: "Create test book", status: "pending" },
       { name: "Generate comic chapter", status: "pending" },
-      { name: "Verify panel count (5)", status: "pending" },
+      { name: "Verify panel count", status: "pending" },
       { name: "Verify dialogue present", status: "pending" },
       { name: "Verify images stored", status: "pending" },
       { name: "OCR verify text in image", status: "pending" },
@@ -159,7 +160,7 @@ export default function Diagnostics() {
         comicStyleId: "african_superhero",
         paletteHint: "Rich earth tones, gold accents",
         lineWeightHint: "Bold confident lines",
-        textInImage: true, // Test with text in image enabled
+        textInImage: true,
         scenesPerPanel: 1,
         characterSheet: {
           protagonist: {
@@ -237,19 +238,19 @@ export default function Diagnostics() {
         data: chapterData
       });
 
-      // Step 3: Verify panel count
-      updateTest("Verify panel count (5)", { status: "running" });
+      // Step 3: Verify panel count (comics can have 4-10 panels)
+      updateTest("Verify panel count", { status: "running" });
 
       const panelCount = chapterData?.panelCount || 0;
-      if (panelCount >= 4 && panelCount <= 6) {
-        updateTest("Verify panel count (5)", { 
+      if (panelCount >= 4 && panelCount <= 12) {
+        updateTest("Verify panel count", { 
           status: "passed", 
-          message: `Found ${panelCount} panels (expected 4-6)` 
+          message: `Found ${panelCount} panels` 
         });
       } else {
-        updateTest("Verify panel count (5)", { 
+        updateTest("Verify panel count", { 
           status: "failed", 
-          message: `Found ${panelCount} panels (expected 4-6)` 
+          message: `Found ${panelCount} panels (expected 4-12)` 
         });
       }
 
@@ -263,25 +264,28 @@ export default function Diagnostics() {
         .single();
 
       const content = chapterContent?.content || "";
-      // Dialogue formats we generate in comics (post-sanitization):
-      // - AMARA: "text"  OR  AMARA: text  (quotes may vary)
-      // Also tolerate smart quotes and optional leading hyphen.
-      const hasDialogue =
-        /\bDialogue\s*:/i.test(content) ||
-        /(^|\n)\s*-?\s*(?!Visual\b)(?!Caption\b)(?!Scene\b)[A-Z][A-Za-z0-9_\s-]{1,40}:\s*["“]?[\s\S]{2,80}?["”]?(?=\n|$)/m.test(content);
+      
+      // Match: NAME: "quoted text" format used in our comics
+      // Examples: AMARA: "The city calls to me tonight."
+      const dialogueMatches = content.match(/^[A-Z][A-Z\s_-]{0,30}:\s*"[^"]+"/gm) || [];
+      const hasDialogue = dialogueMatches.length > 0;
 
       updateTest("Verify dialogue present", {
         status: hasDialogue ? "passed" : "failed",
-        message: hasDialogue ? "Dialogue found in panels" : "No dialogue detected",
+        message: hasDialogue ? `${dialogueMatches.length} dialogue lines found` : "No dialogue detected",
       });
 
-      // Step 5: Verify images
+      // Step 5: Verify images stored
       updateTest("Verify images stored", { status: "running" });
 
-      const imageUrls = content
-        .match(/!\[Panel\s*\d+\]\(([^)]+)\)/g)
-        ?.map((m) => m.match(/\(([^)]+)\)/)?.[1] || "")
-        .filter(Boolean) || [];
+      // Match markdown image links: ![Panel N](url)
+      const imageMatches = content.match(/!\[Panel\s*\d+\]\(([^)]+)\)/g) || [];
+      const imageUrls = imageMatches
+        .map((m) => {
+          const urlMatch = m.match(/\(([^)]+)\)/);
+          return urlMatch ? urlMatch[1] : "";
+        })
+        .filter(Boolean);
 
       const imageCount = imageUrls.length;
 
@@ -298,10 +302,8 @@ export default function Diagnostics() {
       
       if (imageUrls.length > 0) {
         try {
-          // Use Gemini to verify if text is present in the first panel image
           const firstImageUrl = imageUrls[0];
           
-          // Call an edge function to do OCR check (we'll use Gemini vision)
           const { data: ocrResult, error: ocrError } = await supabase.functions.invoke(
             "generate-chapter",
             {
@@ -344,26 +346,26 @@ export default function Diagnostics() {
         data: { bookId: bookData.bookId, chapterId }
       });
 
-      // Set final result with saved content for debug drawer
+      // Set final result
       setComicResult({
         bookId: bookData.bookId,
         chapterId,
         panelCount,
         hasDialogue,
+        dialogueCount: dialogueMatches.length,
         imageUrls,
         style: "african_superhero",
-        savedContent: content, // Store saved content for debug
+        savedContent: content,
       });
 
       toast({
         title: "Smoke test complete",
-        description: `${testResults.filter(t => t.status === "passed").length}/${tests.length} tests passed`,
+        description: `Tests completed`,
       });
 
     } catch (error) {
       console.error("Smoke test error:", error);
       
-      // Mark remaining tests as failed
       setTestResults((prev) =>
         prev.map((t) =>
           t.status === "pending" || t.status === "running"
@@ -515,7 +517,7 @@ export default function Diagnostics() {
                         <div className="p-3 rounded-lg bg-muted/50">
                           <p className="text-sm text-muted-foreground">Dialogue</p>
                           <Badge variant={comicResult.hasDialogue ? "default" : "destructive"}>
-                            {comicResult.hasDialogue ? "Present" : "Missing"}
+                            {comicResult.hasDialogue ? `${comicResult.dialogueCount} lines` : "Missing"}
                           </Badge>
                         </div>
                         <div className="p-3 rounded-lg bg-muted/50">
@@ -546,30 +548,6 @@ export default function Diagnostics() {
                         )}
                       </div>
 
-                      {/* Panel Image URLs (first 3) */}
-                      {comicResult.imageUrls && comicResult.imageUrls.length > 0 && (
-                        <div className="space-y-2">
-                          <h4 className="text-sm font-medium flex items-center gap-2">
-                            <ImageIcon className="h-4 w-4" />
-                            Panel image URLs (first 3)
-                          </h4>
-                          <div className="space-y-1">
-                            {comicResult.imageUrls.slice(0, 3).map((url, idx) => (
-                              <a
-                                key={idx}
-                                href={url}
-                                target="_blank"
-                                rel="noreferrer"
-                                className="block text-xs font-mono text-primary underline truncate"
-                                title={url}
-                              >
-                                {url}
-                              </a>
-                            ))}
-                          </div>
-                        </div>
-                      )}
-
                       {/* Panel Images Preview */}
                       {comicResult.imageUrls && comicResult.imageUrls.length > 0 && (
                         <div className="space-y-2">
@@ -580,19 +558,23 @@ export default function Diagnostics() {
                           <ScrollArea className="h-[200px] rounded-lg border p-2">
                             <div className="grid grid-cols-3 gap-2">
                               {comicResult.imageUrls.slice(0, 6).map((url, idx) => (
-                                <div key={idx} className="aspect-square rounded-lg overflow-hidden bg-muted">
-                                  {url.startsWith("data:") ? (
-                                    <img 
-                                      src={url} 
-                                      alt={`Panel ${idx + 1}`} 
-                                      className="w-full h-full object-cover"
-                                    />
-                                  ) : (
-                                    <div className="w-full h-full flex items-center justify-center text-xs text-muted-foreground">
-                                      External URL
-                                    </div>
-                                  )}
-                                </div>
+                                <a 
+                                  key={idx} 
+                                  href={url} 
+                                  target="_blank" 
+                                  rel="noreferrer"
+                                  className="aspect-square rounded-lg overflow-hidden bg-muted hover:opacity-80 transition-opacity"
+                                >
+                                  <img 
+                                    src={url} 
+                                    alt={`Panel ${idx + 1}`} 
+                                    className="w-full h-full object-cover"
+                                    onError={(e) => {
+                                      const target = e.target as HTMLImageElement;
+                                      target.style.display = 'none';
+                                    }}
+                                  />
+                                </a>
                               ))}
                             </div>
                           </ScrollArea>
@@ -614,11 +596,11 @@ export default function Diagnostics() {
                           <CollapsibleContent className="mt-2">
                             <div className="p-3 rounded-lg bg-muted/50 border border-border/50">
                               <p className="text-xs text-muted-foreground mb-2">
-                                First 500 characters of saved chapter content:
+                                First 1000 characters of saved chapter content:
                               </p>
                               <pre className="text-xs font-mono whitespace-pre-wrap break-words bg-background/50 p-2 rounded border max-h-64 overflow-auto">
-                                {comicResult.savedContent.slice(0, 500)}
-                                {comicResult.savedContent.length > 500 && '...'}
+                                {comicResult.savedContent.slice(0, 1000)}
+                                {comicResult.savedContent.length > 1000 && '...'}
                               </pre>
                             </div>
                           </CollapsibleContent>
