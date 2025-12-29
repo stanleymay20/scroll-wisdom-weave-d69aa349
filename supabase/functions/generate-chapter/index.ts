@@ -153,42 +153,113 @@ interface ValidationResult {
 // VALIDATION FUNCTIONS
 // ===========================================
 
-function validateComicStructure(content: string): ValidationResult {
+interface DialogueObject {
+  speaker: string;
+  text: string;
+  type: 'speech' | 'thought' | 'narration';
+}
+
+interface PanelDialogueResult {
+  panelNumber: number;
+  dialogues: DialogueObject[];
+  hasDialogue: boolean;
+}
+
+function extractPanelDialogues(content: string): PanelDialogueResult[] {
+  const results: PanelDialogueResult[] = [];
+  
+  // Split content by panels
+  const panelSections = content.split(/\[PANEL\s*(\d+)\]/gi);
+  
+  for (let i = 1; i < panelSections.length; i += 2) {
+    const panelNumber = parseInt(panelSections[i]);
+    const panelContent = panelSections[i + 1] || '';
+    
+    const dialogues: DialogueObject[] = [];
+    
+    // Match dialogue patterns: - CHARACTER: "text" or - CHARACTER: text
+    const dialogueMatches = panelContent.matchAll(/-\s*([A-Z][A-Za-z_\s]+?):\s*"?([^"\n]+)"?/gi);
+    
+    for (const match of dialogueMatches) {
+      const speaker = match[1].trim();
+      const text = match[2].trim();
+      
+      // Determine dialogue type based on markers
+      let type: 'speech' | 'thought' | 'narration' = 'speech';
+      if (text.startsWith('(') && text.endsWith(')')) {
+        type = 'thought';
+      } else if (speaker.toLowerCase().includes('narrator') || speaker.toLowerCase().includes('caption')) {
+        type = 'narration';
+      }
+      
+      if (text.length > 0) {
+        dialogues.push({ speaker, text, type });
+      }
+    }
+    
+    results.push({
+      panelNumber,
+      dialogues,
+      hasDialogue: dialogues.length > 0,
+    });
+  }
+  
+  return results;
+}
+
+function validateComicStructure(content: string): ValidationResult & { panelDialogues?: PanelDialogueResult[]; totalDialogueCount?: number } {
   const errors: ValidationError[] = [];
   const warnings: { code: string; message: string }[] = [];
 
   const panelRegex = /\[PANEL\s*(\d+)\]/gi;
   const panels = content.match(panelRegex) || [];
+  const panelCount = panels.length;
 
   // HARD FAIL: No panels
-  if (panels.length === 0) {
+  if (panelCount === 0) {
     errors.push({
       code: 'NO_PANELS_DETECTED',
       message: 'Comic content must have structured panels [PANEL X]',
       severity: 'critical',
     });
+    return {
+      valid: false,
+      blocked: true,
+      errors,
+      warnings,
+      failureMessage: '❌ **COMIC GENERATION BLOCKED**: No panels detected.',
+    };
   }
 
   // HARD FAIL: Insufficient panels
-  if (panels.length < 4) {
+  if (panelCount < 4) {
     errors.push({
       code: 'INSUFFICIENT_PANELS',
-      message: `Comic requires minimum 4 panels, found ${panels.length}`,
+      message: `Comic requires minimum 4 panels, found ${panelCount}`,
       severity: 'high',
     });
   }
 
-  // Check for dialogue - MANDATORY
-  const dialoguePatterns = [
-    /\*\*Dialogue:\*\*/gi,
-    /-\s*[A-Z][A-Za-z]+:\s*"/g,
-  ];
-  const hasDialogue = dialoguePatterns.some(p => p.test(content));
-  
-  if (!hasDialogue) {
+  // Extract and validate dialogue per panel - MANDATORY
+  const panelDialogues = extractPanelDialogues(content);
+  const panelsWithoutDialogue = panelDialogues.filter(p => !p.hasDialogue);
+  const totalDialogueCount = panelDialogues.reduce((sum, p) => sum + p.dialogues.length, 0);
+
+  // HARD FAIL: Any panel without dialogue
+  if (panelsWithoutDialogue.length > 0) {
+    const missingPanels = panelsWithoutDialogue.map(p => p.panelNumber).join(', ');
     errors.push({
-      code: 'NO_DIALOGUE',
-      message: 'Comic panels MUST include character dialogue (speech bubbles)',
+      code: 'DIALOGUE_MISSING_IN_PANELS',
+      message: `Dialogue missing in panel(s): ${missingPanels}. EVERY panel MUST have at least one dialogue.`,
+      severity: 'critical',
+    });
+  }
+
+  // HARD FAIL: Total dialogue count must be >= panel count
+  if (totalDialogueCount < panelCount) {
+    errors.push({
+      code: 'INSUFFICIENT_DIALOGUE_COUNT',
+      message: `Total dialogue count (${totalDialogueCount}) must be >= panel count (${panelCount})`,
       severity: 'critical',
     });
   }
@@ -197,7 +268,7 @@ function validateComicStructure(content: string): ValidationResult {
   const visualPattern = /\*\*Visual:\*\*/gi;
   const visualDescriptions = content.match(visualPattern) || [];
   
-  if (visualDescriptions.length < panels.length * 0.8) {
+  if (visualDescriptions.length < panelCount * 0.8) {
     warnings.push({
       code: 'INCOMPLETE_VISUAL_DESCRIPTIONS',
       message: 'Some panels lack detailed visual descriptions',
@@ -205,14 +276,19 @@ function validateComicStructure(content: string): ValidationResult {
   }
 
   const hasCriticalError = errors.some(e => e.severity === 'critical');
+  const panelsMissingList = panelsWithoutDialogue.length > 0 
+    ? `Panels without dialogue: ${panelsWithoutDialogue.map(p => p.panelNumber).join(', ')}`
+    : '';
 
   return {
     valid: !hasCriticalError,
     blocked: hasCriticalError,
     errors,
     warnings,
+    panelDialogues,
+    totalDialogueCount,
     failureMessage: hasCriticalError 
-      ? '❌ **COMIC GENERATION BLOCKED**: Panels must include visual descriptions AND character dialogue.' 
+      ? `❌ **COMIC GENERATION BLOCKED**: Every panel MUST include character dialogue.\n${panelsMissingList}\nTotal dialogues: ${totalDialogueCount}, Required: ${panelCount}` 
       : undefined,
   };
 }
@@ -1113,36 +1189,92 @@ serve(async (req) => {
         chapterTitle, bookTitle, chapterNumber, keyTopics, languageName, effectiveLayoutTemplate
       );
       
-      const comicResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
-          messages: [
-            { role: "system", content: systemPrompt },
-            { role: "user", content: chapterPrompt }
-          ],
-        }),
-      });
-
-      if (!comicResponse.ok) {
-        throw new Error("Failed to generate comic chapter");
-      }
-
-      const comicData = await comicResponse.json();
-      let comicContent = comicData.choices?.[0]?.message?.content || "";
+      // Comic generation with retry logic for dialogue validation
+      const MAX_COMIC_ATTEMPTS = 2;
+      let comicContent = "";
+      let comicValidation: ReturnType<typeof validateComicStructure> | null = null;
       
-      // VALIDATE comic structure before proceeding
-      const comicValidation = validateComicStructure(comicContent);
-      if (comicValidation.blocked && !isAdmin) {
-        console.log("[GENERATE-CHAPTER] COMIC VALIDATION FAILED");
+      for (let attempt = 1; attempt <= MAX_COMIC_ATTEMPTS; attempt++) {
+        console.log(`[GENERATE-CHAPTER] Comic generation attempt ${attempt}/${MAX_COMIC_ATTEMPTS}...`);
+        
+        // Build prompt with stronger dialogue emphasis on retry
+        let attemptPrompt = chapterPrompt;
+        if (attempt > 1) {
+          attemptPrompt = chapterPrompt + `
+
+**CRITICAL RETRY - DIALOGUE ENFORCEMENT:**
+Your previous attempt FAILED because panels were missing dialogue.
+EVERY SINGLE PANEL **MUST** have at least ONE dialogue line in this format:
+- CHARACTER_NAME: "Speech text here"
+
+WITHOUT dialogue in EVERY panel, generation will FAIL AGAIN.
+This is MANDATORY. No exceptions.`;
+        }
+        
+        const comicResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: attemptPrompt }
+            ],
+          }),
+        });
+
+        if (!comicResponse.ok) {
+          throw new Error("Failed to generate comic chapter");
+        }
+
+        const comicData = await comicResponse.json();
+        comicContent = comicData.choices?.[0]?.message?.content || "";
+        
+        // VALIDATE comic structure with per-panel dialogue check
+        comicValidation = validateComicStructure(comicContent);
+        
+        console.log(`[GENERATE-CHAPTER] Attempt ${attempt} validation: panels=${comicValidation.panelDialogues?.length || 0}, dialogues=${comicValidation.totalDialogueCount || 0}, valid=${comicValidation.valid}`);
+        
+        if (comicValidation.valid) {
+          console.log(`[GENERATE-CHAPTER] Comic script validated on attempt ${attempt}`);
+          break;
+        }
+        
+        // Log which panels are missing dialogue
+        if (comicValidation.panelDialogues) {
+          const missingDialogue = comicValidation.panelDialogues.filter(p => !p.hasDialogue);
+          if (missingDialogue.length > 0) {
+            console.log(`[GENERATE-CHAPTER] Panels missing dialogue: ${missingDialogue.map(p => p.panelNumber).join(', ')}`);
+          }
+        }
+        
+        if (attempt < MAX_COMIC_ATTEMPTS) {
+          console.log(`[GENERATE-CHAPTER] Retrying due to dialogue validation failure...`);
+          await new Promise(r => setTimeout(r, 500));
+        }
+      }
+      
+      // Final validation check after all retries
+      if (comicValidation && comicValidation.blocked && !isAdmin) {
+        console.log("[GENERATE-CHAPTER] COMIC VALIDATION FAILED after all retries");
+        
+        const missingPanels = comicValidation.panelDialogues
+          ?.filter(p => !p.hasDialogue)
+          .map(p => `Panel ${p.panelNumber}`) || [];
+        
         return new Response(JSON.stringify({
           error: comicValidation.failureMessage,
-          code: "COMIC_STRUCTURE_VIOLATION",
-          details: { errors: comicValidation.errors },
+          code: "COMIC_DIALOGUE_MISSING",
+          details: { 
+            errors: comicValidation.errors,
+            panelsWithoutDialogue: missingPanels,
+            totalDialogueCount: comicValidation.totalDialogueCount || 0,
+            requiredDialogueCount: comicValidation.panelDialogues?.length || 0,
+            attempts: MAX_COMIC_ATTEMPTS,
+          },
         }), {
           status: 422,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1250,12 +1382,26 @@ serve(async (req) => {
 
       if (updateError) throw new Error(`Failed to save: ${updateError.message}`);
 
+      // Count total dialogues from the validated content
+      const finalDialogueCount = comicValidation?.totalDialogueCount || 0;
+      
       return new Response(JSON.stringify({
         success: true,
         wordCount: actualWordCount,
         provider: 'Lovable AI (Comic)',
         panelCount: panels.length,
+        dialogueCount: finalDialogueCount,
+        dialoguePerPanel: comicValidation?.panelDialogues?.map(p => ({
+          panel: p.panelNumber,
+          count: p.dialogues.length,
+          dialogues: p.dialogues,
+        })) || [],
         comicStyle,
+        validation: {
+          valid: comicValidation?.valid || false,
+          totalDialogueCount: finalDialogueCount,
+          panelsWithDialogue: comicValidation?.panelDialogues?.filter(p => p.hasDialogue).length || 0,
+        },
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
