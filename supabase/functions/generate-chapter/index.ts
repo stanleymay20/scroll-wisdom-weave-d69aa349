@@ -161,6 +161,27 @@ No shortcuts. No drift. No excuses.
 `;
 
 // ===========================================
+// MARKDOWN SANITIZER - Strip markdown from final output
+// ===========================================
+
+function sanitizeMarkdown(content: string): string {
+  return content
+    // Remove bold markers **text** or __text__
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/__([^_]+)__/g, '$1')
+    // Remove italic markers *text* or _text_
+    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1')
+    .replace(/(?<!_)_([^_]+)_(?!_)/g, '$1')
+    // Remove heading markers ## or ###
+    .replace(/^#{1,6}\s*/gm, '')
+    // Remove backticks
+    .replace(/`([^`]+)`/g, '$1')
+    .replace(/```[\s\S]*?```/g, (match) => match.replace(/```\w*\n?/g, '').trim())
+    // Clean up excessive whitespace
+    .replace(/\n{3,}/g, '\n\n');
+}
+
+// ===========================================
 // AUTHORITY-GRADE CONFIGURATION
 // ===========================================
 
@@ -941,11 +962,9 @@ BEGIN WRITING THE COMPLETE ACADEMIC CHAPTER:`;
 function buildComicSystemPrompt(style: string, language: string): string {
   const styleGuide = COMIC_STYLE_PRESETS[style] || COMIC_STYLE_PRESETS.children_book;
   
-  return `${SYSTEM_ROLE}
+  return `You are a professional comic book writer creating structured comic panels.
 
-${MASTER_FORMATTING_CONTRACT}
-
-${COMIC_MASTER_CONTRACT}
+VISUAL STYLE:
 - Art Style: ${styleGuide.artStyle}
 - Color Palette: ${styleGuide.colorPalette}
 - Line Weight: ${styleGuide.lineWeight}
@@ -954,29 +973,12 @@ ${COMIC_MASTER_CONTRACT}
 
 LANGUAGE: All dialogue and captions must be in ${language}.
 
-NON-NEGOTIABLE RULES:
-1. Every panel MUST have character dialogue (speech bubbles) — MANDATORY
-2. Dialogue should be natural, expressive, and advance the story
-3. Visual descriptions must be detailed enough for AI image generation
-4. Maintain character appearance consistency across ALL panels
-5. Story must have clear beginning, conflict, and resolution
-6. Maximum 30 words per speech bubble
-7. Minimum 4 panels, maximum 6 panels per chapter
-
-FORBIDDEN:
-- Single giant image per chapter
-- Floating captions without panel structure  
-- Random style switching between panels
-- Walls of text in captions
-- Panels without dialogue
-- Compressing entire story into one illustration
-- Markdown symbols (**, ##, backticks)
-
-CHARACTER CONSISTENCY CONTRACT:
-Once a character appears, you MUST lock:
-- Face shape, Skin tone, Hair style & color
-- Costume design, Body proportions
-These CANNOT change between panels.`;
+CRITICAL RULES:
+1. Use [PANEL 1], [PANEL 2], etc. markers for each panel
+2. Every panel MUST have character dialogue
+3. Visual descriptions must be detailed for image generation
+4. Maintain character consistency across panels
+5. Maximum 30 words per speech bubble`;
 }
 
 function buildComicChapterPrompt(
@@ -987,47 +989,49 @@ function buildComicChapterPrompt(
   language: string,
   panelCount: number = 5
 ): string {
-  return `Create a COMIC BOOK CHAPTER for:
+  return `Create a COMIC BOOK CHAPTER.
+
 Book: "${bookTitle}"
 Chapter ${chapterNumber}: "${chapterTitle}"
 Story Elements: ${keyTopics?.join(', ') || 'Tell an engaging visual story'}
 
-Generate ${panelCount} PANELS following this EXACT format (NO markdown, use plain text labels):
-
----
+Generate exactly ${panelCount} panels using this EXACT format:
 
 [PANEL 1]
-Visual: [Detailed scene description: setting, characters, expressions, poses, action, mood. 2-3 sentences for AI image generation.]
+Visual: A wide shot of a bustling African city at sunset. Golden light bathes modern skyscrapers mixed with traditional architecture. Our hero AMARA, a young woman with glowing amber eyes and a flowing cape made of golden light, stands on a rooftop surveying the city. Her expression is determined.
 Dialogue:
-- CHARACTER_NAME: "Speech bubble text"
-- CHARACTER_NAME: "Their response"
-Caption: "[Optional narration - time/place/thought]"
-
----
+- AMARA: "The city calls to me tonight."
+- ELDER VOICE: "Remember your training, child."
+Caption: Lagos, Nigeria - Present Day
 
 [PANEL 2]
-Visual: [Next scene continuing the story...]
+Visual: Close-up of Amara's face as she senses danger. Her amber eyes glow brighter. Behind her, dark shadows begin to form.
 Dialogue:
-- CHARACTER_NAME: "Continue the conversation..."
-Caption: "[Optional]"
+- AMARA: "I feel them... the shadow creatures are near."
 
----
+[PANEL 3]
+Visual: Dynamic action shot - Amara leaps from the rooftop, her cape trailing golden particles. Below, shadow creatures emerge from the darkness between buildings.
+Dialogue:
+- AMARA: "You will not harm my people!"
+- SHADOW CREATURE: "Foolish child... we are eternal."
 
-(Continue for all ${panelCount} panels)
+[PANEL 4]
+Visual: Medium shot of Amara landing in a fighting stance, fists glowing with golden energy. Three shadow creatures surround her.
+Dialogue:
+- AMARA: "Then I will fight for eternity!"
+Caption: The battle begins...
 
-REQUIREMENTS:
-- EVERY panel must have at least one dialogue line
-- Show emotions through expressions
-- Use different camera angles (wide shot, close-up, medium shot)
-- Include action verbs in visual descriptions
-- All text in ${language}
+[PANEL 5]
+Visual: Amara unleashes a burst of golden light from her hands, the shadow creatures recoiling in pain. The light illuminates the entire street.
+Dialogue:
+- AMARA: "Light always defeats darkness!"
+- SHADOW CREATURE: "This is not over, child of light..."
 
-STORY ARC:
-- Panels 1-2: Introduction/Setup
-- Panels 3-4: Conflict/Challenge
-- Panels 5-${panelCount}: Resolution/Cliffhanger
+Now create ${panelCount} original panels for "${chapterTitle}" following the EXACT same format above.
+Each panel MUST have: [PANEL X] marker, Visual description, Dialogue with character names, and optional Caption.
+All text in ${language}.
 
-BEGIN CREATING THE COMIC CHAPTER:`;
+BEGIN:`;
 }
 
 // ===========================================
@@ -1454,22 +1458,51 @@ This is MANDATORY. No exceptions.`;
       }
       
       console.log("[GENERATE-CHAPTER] Comic script validated, generating images...");
+      console.log("[GENERATE-CHAPTER] Raw content preview:", comicContent.slice(0, 500));
 
-      // Parse and generate images - supports both plain text and markdown formats
-      const panelRegex = /\[PANEL\s*(\d+)\]\s*(?:\*\*)?Visual:?(?:\*\*)?\s*([\s\S]*?)(?:\*\*)?Dialogue:?(?:\*\*)?\s*([\s\S]*?)(?:(?:\*\*)?Caption:?(?:\*\*)?\s*"?([^"\n]*)"?)?(?=\s*---|\s*\[PANEL|\s*$)/gi;
+      // Parse panels using multiple strategies
       const panels: { num: number; visual: string; dialogue: string; caption: string; imageUrl?: string }[] = [];
       
-      let match;
-      while ((match = panelRegex.exec(comicContent)) !== null) {
-        panels.push({
-          num: parseInt(match[1]),
-          visual: match[2].trim(),
-          dialogue: match[3].trim(),
-          caption: (match[4] || '').trim(),
-        });
+      // Strategy 1: Split by [PANEL X] markers
+      const panelSections = comicContent.split(/\[PANEL\s*(\d+)\]/gi);
+      
+      for (let i = 1; i < panelSections.length; i += 2) {
+        const panelNum = parseInt(panelSections[i]);
+        const section = panelSections[i + 1] || '';
+        
+        // Extract Visual - flexible patterns
+        const visualMatch = section.match(/(?:\*\*)?Visual:?\*?\*?\s*([^\n]*(?:\n(?!(?:\*\*)?Dialogue|Caption|-).*)*)/i);
+        const visual = visualMatch ? visualMatch[1].trim().replace(/\*+/g, '') : '';
+        
+        // Extract Dialogue section
+        const dialogueMatch = section.match(/(?:\*\*)?Dialogue:?\*?\*?\s*([\s\S]*?)(?=(?:\*\*)?Caption:|$|\[PANEL)/i);
+        const dialogue = dialogueMatch ? dialogueMatch[1].trim() : '';
+        
+        // Extract Caption
+        const captionMatch = section.match(/(?:\*\*)?Caption:?\*?\*?\s*"?([^"\n]*)"?/i);
+        const caption = captionMatch ? captionMatch[1].trim() : '';
+        
+        if (visual || dialogue) {
+          panels.push({ num: panelNum, visual, dialogue, caption });
+        }
       }
 
-      console.log(`[GENERATE-CHAPTER] Found ${panels.length} panels`);
+      console.log(`[GENERATE-CHAPTER] Found ${panels.length} panels via split method`);
+      
+      // If no panels found, try regex fallback
+      if (panels.length === 0) {
+        const panelRegex = /\[PANEL\s*(\d+)\][\s\S]*?(?:\*\*)?Visual:?\*?\*?\s*([\s\S]*?)(?:\*\*)?Dialogue:?\*?\*?\s*([\s\S]*?)(?:(?:\*\*)?Caption:?\*?\*?\s*"?([^"\n]*)"?)?(?=\[PANEL|\s*$)/gi;
+        let match;
+        while ((match = panelRegex.exec(comicContent)) !== null) {
+          panels.push({
+            num: parseInt(match[1]),
+            visual: (match[2] || '').trim().replace(/\*+/g, ''),
+            dialogue: (match[3] || '').trim(),
+            caption: (match[4] || '').trim(),
+          });
+        }
+        console.log(`[GENERATE-CHAPTER] Found ${panels.length} panels via regex fallback`);
+      }
 
       const styleGuide = COMIC_STYLE_PRESETS[comicStyle] || COMIC_STYLE_PRESETS.children_book;
 
@@ -1509,36 +1542,39 @@ This is MANDATORY. No exceptions.`;
         }
       }
 
-      // Build final comic content with speech bubbles
-      let finalComicContent = `# ${chapterTitle}\n\n`;
-      finalComicContent += `*A comic story from "${bookTitle}"*\n\n---\n\n`;
+      // Build final comic content - plain text, no markdown artifacts
+      let finalComicContent = `${chapterTitle}\n\n`;
+      finalComicContent += `A comic story from "${bookTitle}"\n\n`;
       
       for (const panel of panels) {
-        finalComicContent += `## Panel ${panel.num}\n\n`;
+        finalComicContent += `Panel ${panel.num}\n\n`;
         if (panel.imageUrl) {
           finalComicContent += `![Panel ${panel.num}](${panel.imageUrl})\n\n`;
         } else {
-          finalComicContent += `*[Illustration: ${panel.visual.slice(0, 150)}...]*\n\n`;
+          finalComicContent += `[Illustration: ${sanitizeMarkdown(panel.visual).slice(0, 150)}...]\n\n`;
         }
         
-        // Format dialogue with speech bubble indicators
+        // Format dialogue with speech bubble indicators - sanitize any markdown
         if (panel.dialogue) {
           const dialogueLines = panel.dialogue.split('\n').filter(l => l.trim().startsWith('-'));
           for (const line of dialogueLines) {
-            const dialogueMatch = line.match(/-\s*([^:]+):\s*"?([^"]+)"?/);
+            const dialogueMatch = line.match(/-\s*\*?\*?([^:*]+)\*?\*?:\s*"?([^"]+)"?/);
             if (dialogueMatch) {
-              const character = dialogueMatch[1].trim();
-              const speech = dialogueMatch[2].trim();
-              finalComicContent += `💬 **${character}:** "${speech}"\n\n`;
+              const character = sanitizeMarkdown(dialogueMatch[1].trim());
+              const speech = sanitizeMarkdown(dialogueMatch[2].trim());
+              finalComicContent += `${character}: "${speech}"\n\n`;
             }
           }
         }
         
         if (panel.caption) {
-          finalComicContent += `*${panel.caption}*\n\n`;
+          finalComicContent += `${sanitizeMarkdown(panel.caption)}\n\n`;
         }
         finalComicContent += `---\n\n`;
       }
+      
+      // Final sanitization pass
+      finalComicContent = sanitizeMarkdown(finalComicContent);
 
       const actualWordCount = finalComicContent.split(/\s+/).filter((w: string) => w.length > 0).length;
 
@@ -1905,6 +1941,9 @@ Format:
       }
     }
 
+    // Sanitize all markdown from final content before saving
+    finalContent = sanitizeMarkdown(finalContent);
+    
     const actualWordCount = finalContent.split(/\s+/).filter((w: string) => w.length > 0).length;
 
     const updateData: any = {
