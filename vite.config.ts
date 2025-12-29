@@ -19,19 +19,31 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
-      includeAssets: ["favicon.png", "logo.png"],
+      includeAssets: ["favicon.png", "logo.png", "offline.html"],
       manifest: {
-        name: "ScrollLibrary™ - The World's Infinite AI Library",
+        name: "ScrollLibrary",
         short_name: "ScrollLibrary",
-        description: "Generate unlimited AI-powered books across theology, science, history, and beyond.",
-        theme_color: "#C4981F",
-        background_color: "#1A1508",
+        description: "AI-powered academic, comic, and guided learning library",
+        theme_color: "#1e293b",
+        background_color: "#0f172a",
         display: "standalone",
-        orientation: "portrait-primary",
+        orientation: "portrait",
         scope: "/",
         start_url: "/",
         categories: ["books", "education", "productivity"],
         icons: [
+          {
+            src: "/icons/icon-192.png",
+            sizes: "192x192",
+            type: "image/png",
+            purpose: "any"
+          },
+          {
+            src: "/icons/icon-512.png",
+            sizes: "512x512",
+            type: "image/png",
+            purpose: "any"
+          },
           {
             src: "/pwa-192x192.png",
             sizes: "192x192",
@@ -236,6 +248,15 @@ export default defineConfig(({ mode }) => ({
               },
             },
           },
+        ],
+        // Offline fallback
+        navigateFallback: "/offline.html",
+        navigateFallbackDenylist: [
+          // Don't fallback for API calls
+          /^\/functions\//,
+          /^\/rest\//,
+          /^\/auth\//,
+          /^\/storage\//,
         ],
       },
       devOptions: {
