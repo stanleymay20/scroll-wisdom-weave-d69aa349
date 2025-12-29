@@ -68,24 +68,78 @@ Every output MUST include:
 `;
 
 // ===========================================
-// SECTION 2: BESTSELLER QUALITY STANDARD (MANDATORY)
+// SECTION 2: MASTERPIECE & BESTSELLER QUALITY STANDARD (MANDATORY)
 // ===========================================
 
 export const BESTSELLER_CONTRACT = `
-=== BESTSELLER QUALITY STANDARD (MANDATORY) ===
+=== MASTERPIECE & BESTSELLER QUALITY STANDARD (MANDATORY) ===
 
-Every chapter MUST satisfy at least 3 of the following:
-- Strong opening hook (within first 150 words)
-- Clear promise of value
-- Concrete examples or scenarios
-- Emotional engagement or intellectual tension
-- Quotable insights (highlight-worthy)
-- Clear reader transformation
+You are creating content worthy of a BESTSELLING BOOK.
+This is not a draft. This is not an outline. This is PUBLISHABLE content.
 
-❌ Generic explanations
-❌ Wikipedia-style summaries
-❌ Overly neutral tone
-❌ AI "fatigue writing" (repetitive filler)
+MASTERPIECE REQUIREMENTS — EVERY chapter MUST satisfy ALL of the following:
+
+1. OPENING HOOK (First 100 words)
+   - Grab attention IMMEDIATELY with a compelling story, question, or bold statement
+   - Create an "I must keep reading" feeling
+   - No generic introductions like "In this chapter we will discuss..."
+
+2. VALUE PROMISE
+   - Within the first 200 words, clearly state what the reader will gain
+   - Make it specific and tangible
+   - Connect to reader's goals, fears, or desires
+
+3. CONCRETE EXAMPLES & STORIES
+   - Every abstract concept MUST have a concrete example
+   - Use real-world scenarios, case studies, analogies
+   - Show, don't just tell
+
+4. EMOTIONAL ENGAGEMENT
+   - Create intellectual tension (paradoxes, challenges, surprises)
+   - Appeal to emotions where appropriate
+   - Make the reader FEEL something
+
+5. QUOTABLE INSIGHTS
+   - Include 2-3 "highlighter moments" per chapter
+   - Memorable phrases that readers will want to share
+   - Original insights, not clichés
+
+6. READER TRANSFORMATION
+   - End each chapter with the reader changed
+   - Provide clear actionable takeaways
+   - Bridge to the next chapter
+
+WRITING QUALITY STANDARDS:
+- Every sentence must earn its place — ruthlessly cut filler
+- Vary sentence length and rhythm for engaging prose
+- Use active voice (passive voice only when necessary)
+- Be specific and vivid, not vague and abstract
+- Create smooth transitions between ideas
+- End sections with impact, not whimper
+
+❌ ABSOLUTELY FORBIDDEN:
+- Generic explanations that could be in any book
+- Wikipedia-style summaries with no personality
+- Overly neutral, boring, academic-dry tone
+- AI "fatigue writing" (repetitive filler content)
+- Obvious statements that waste reader's time
+- Overuse of passive voice
+- Weak transitions ("Next, we will discuss...")
+- Placeholder content ("This is important because...")
+- List dumps without context or explanation
+- Excessive hedging ("might", "could potentially", "some experts say")
+
+QUALITY CHECK — Before finalizing, verify:
+□ Would a reader pay $20+ for this content?
+□ Are there 2-3 passages worth highlighting?
+□ Does the opening hook grab attention immediately?
+□ Does every paragraph add clear value?
+□ Would a publisher accept this without major edits?
+□ Does this compete with bestselling books in its category?
+
+If ANY check fails → REWRITE until it passes.
+
+This is a MASTERPIECE. Act like it.
 
 === END BESTSELLER CONTRACT ===
 `;
