@@ -1185,10 +1185,19 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Health check (no auth required)
+  const healthBody = await req.clone().json().catch(() => null);
+  if (healthBody?.healthCheck) {
+    return new Response(
+      JSON.stringify({ ok: true, function: "generate-chapter", buildId: `fn:${new Date().toISOString()}` }),
+      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    
+
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error("Supabase configuration is missing");
     }
