@@ -213,42 +213,42 @@ export function buildComicChapterPrompt(
   panelCount: number = 6
 ): string {
   return `Create a COMIC BOOK CHAPTER for:
-**Book:** "${bookTitle}"
-**Chapter ${chapterNumber}:** "${chapterTitle}"
-**Story Elements:** ${keyTopics?.join(', ') || 'Tell an engaging visual story'}
+Book: "${bookTitle}"
+Chapter ${chapterNumber}: "${chapterTitle}"
+Story Elements: ${keyTopics?.join(', ') || 'Tell an engaging visual story'}
 
-Generate ${panelCount} PANELS following this EXACT format:
+Generate ${panelCount} PANELS following this EXACT format (NO markdown, use plain text labels):
 
 ---
 
 [PANEL 1]
-**Visual:** [Detailed scene description: setting, characters, their positions, expressions, poses, lighting, mood. 2-3 sentences for AI image generation.]
-**Dialogue:**
+Visual: [Detailed scene description: setting, characters, their positions, expressions, poses, lighting, mood. 2-3 sentences for AI image generation.]
+Dialogue:
 - CHARACTER_NAME: "What they say in their speech bubble"
 - CHARACTER_NAME: "Their response or reaction"
-**Caption:** "[Optional narration - time/place/internal thought]"
+Caption: "[Optional narration - time/place/internal thought]"
 
 ---
 
 [PANEL 2]
-**Visual:** [Next scene continuing the story...]
-**Dialogue:**
+Visual: [Next scene continuing the story...]
+Dialogue:
 - CHARACTER_NAME: "Continue the conversation..."
-**Caption:** "[Optional]"
+Caption: "[Optional]"
 
 ---
 
 (Continue for all ${panelCount} panels)
 
-**REQUIREMENTS:**
-✅ EVERY panel must have at least one dialogue line
-✅ Show emotions through expressions (smiling, frowning, surprised, etc.)
-✅ Use different camera angles (wide shot, close-up, medium shot)
-✅ Include action verbs in visual descriptions
-✅ End with a satisfying conclusion or cliffhanger
-✅ All text in ${language}
+REQUIREMENTS:
+- EVERY panel must have at least one dialogue line
+- Show emotions through expressions (smiling, frowning, surprised, etc.)
+- Use different camera angles (wide shot, close-up, medium shot)
+- Include action verbs in visual descriptions
+- End with a satisfying conclusion or cliffhanger
+- All text in ${language}
 
-**STORY ARC:**
+STORY ARC:
 - Panels 1-2: Introduction/Setup
 - Panels 3-4: Conflict/Challenge
 - Panels 5-${panelCount}: Resolution/Cliffhanger
@@ -263,8 +263,9 @@ BEGIN CREATING THE COMIC CHAPTER:`;
 export function parseComicPanels(content: string): ComicPanel[] {
   const panels: ComicPanel[] = [];
   
-  // Primary pattern: [PANEL X] format
-  const panelRegex = /\[PANEL\s*(\d+)\]\s*\*\*Visual:\*\*\s*([\s\S]*?)\*\*Dialogue:\*\*\s*([\s\S]*?)(?:\*\*Caption:\*\*\s*"?([^"]*)"?)?(?=\s*---|\s*\[PANEL|\s*$)/gi;
+  // Updated pattern: supports both plain text and markdown formats
+  // [PANEL X] followed by Visual: or **Visual:**
+  const panelRegex = /\[PANEL\s*(\d+)\]\s*(?:\*\*)?Visual:?(?:\*\*)?\s*([\s\S]*?)(?:\*\*)?Dialogue:?(?:\*\*)?\s*([\s\S]*?)(?:(?:\*\*)?Caption:?(?:\*\*)?\s*"?([^"\n]*)"?)?(?=\s*---|\s*\[PANEL|\s*$)/gi;
   
   let match;
   while ((match = panelRegex.exec(content)) !== null) {
