@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -189,6 +190,48 @@ export default function Reader() {
     );
   }
 
+  // Render a single dialogue line as a speech bubble
+  const renderSpeechBubble = (character: string, speech: string, key: string) => {
+    // Determine bubble color based on character name hash
+    const charColors = [
+      'bg-blue-500/20 border-blue-500/50',
+      'bg-purple-500/20 border-purple-500/50', 
+      'bg-emerald-500/20 border-emerald-500/50',
+      'bg-amber-500/20 border-amber-500/50',
+      'bg-rose-500/20 border-rose-500/50',
+      'bg-cyan-500/20 border-cyan-500/50',
+    ];
+    const colorIndex = character.split('').reduce((acc, c) => acc + c.charCodeAt(0), 0) % charColors.length;
+    const bubbleColor = charColors[colorIndex];
+    
+    return (
+      <div key={key} className={`relative my-3 p-4 rounded-2xl border-2 ${bubbleColor} max-w-[85%] ${colorIndex % 2 === 0 ? 'ml-auto' : 'mr-auto'}`}>
+        <span className="absolute -top-3 left-4 px-2 py-0.5 bg-background text-xs font-bold uppercase tracking-wide text-foreground/70 rounded">
+          {character}
+        </span>
+        <p className="text-foreground leading-relaxed pt-1">{speech}</p>
+        {/* Speech bubble tail */}
+        <div className={`absolute -bottom-2 ${colorIndex % 2 === 0 ? 'right-6' : 'left-6'} w-4 h-4 rotate-45 ${bubbleColor.split(' ')[0]} border-b-2 border-r-2 ${bubbleColor.split(' ')[1]}`} />
+      </div>
+    );
+  };
+
+  // Parse dialogue lines and return speech bubbles
+  const parseDialogueBlock = (text: string, baseKey: number) => {
+    const lines = text.split('\n').filter(l => l.trim());
+    const elements: React.ReactNode[] = [];
+    
+    lines.forEach((line, idx) => {
+      // Match: - CHARACTER: "text" or CHARACTER: "text"
+      const dialogueMatch = line.match(/^-?\s*([A-Z][A-Za-z0-9_\s-]+):\s*[""]([^""]+)[""]/);
+      if (dialogueMatch) {
+        elements.push(renderSpeechBubble(dialogueMatch[1].trim(), dialogueMatch[2].trim(), `${baseKey}-dialogue-${idx}`));
+      }
+    });
+    
+    return elements.length > 0 ? elements : null;
+  };
+
   const renderContent = () => {
     if (!chapter?.content) {
       return (
@@ -199,15 +242,25 @@ export default function Reader() {
     }
 
     // Check if this is comic content (contains base64 images or panel markers)
-    const isComicContent = chapter.content.includes('![Panel') || chapter.content.includes('## Page');
+    const isComicContent = chapter.content.includes('![Panel') || chapter.content.includes('Panel 1') || chapter.content.includes('[PANEL');
 
     return chapter.content.split('\n\n').map((paragraph, index) => {
       // Handle comic page headers
-      if (paragraph.startsWith('## Page')) {
+      if (paragraph.startsWith('## Page') || paragraph.match(/^Page\s+\d+/i)) {
         return (
           <h4 key={index} className="text-xl sm:text-2xl font-display font-bold text-scroll-gold mt-8 sm:mt-12 mb-4 sm:mb-6 text-center">
-            {paragraph.replace('## ', '')}
+            {paragraph.replace(/^##\s*/, '')}
           </h4>
+        );
+      }
+      // Handle panel markers
+      if (paragraph.match(/^(?:\[PANEL\s*\d+\]|Panel\s+\d+)/i)) {
+        return (
+          <div key={index} className="text-center my-6">
+            <Badge variant="outline" className="text-sm px-4 py-1 border-scroll-gold/50 text-scroll-gold">
+              {paragraph.match(/(?:\[PANEL\s*\d+\]|Panel\s+\d+)/i)?.[0] || paragraph}
+            </Badge>
+          </div>
         );
       }
       // Handle comic images (base64 or URL)
@@ -226,11 +279,30 @@ export default function Reader() {
           );
         }
       }
+      // Handle dialogue blocks with speech bubbles (for comic content)
+      if (isComicContent && (paragraph.includes('Dialogue:') || paragraph.match(/-?\s*[A-Z][A-Za-z0-9_\s-]+:\s*[""][^""]+[""]/) )) {
+        const dialogueBubbles = parseDialogueBlock(paragraph, index);
+        if (dialogueBubbles) {
+          return (
+            <div key={index} className="my-6 space-y-2">
+              {dialogueBubbles}
+            </div>
+          );
+        }
+      }
       // Handle comic captions (blockquotes)
       if (paragraph.startsWith('>')) {
         return (
           <div key={index} className="comic-caption text-center text-xl sm:text-2xl font-medium text-foreground my-4 sm:my-6 px-6 sm:px-12 py-4 bg-scroll-gold/10 rounded-xl border border-scroll-gold/30 max-w-md mx-auto">
             {paragraph.replace(/^>\s*/, '')}
+          </div>
+        );
+      }
+      // Handle captions (Caption: text)
+      if (paragraph.match(/^Caption:\s*/i)) {
+        return (
+          <div key={index} className="comic-caption text-center text-lg italic text-foreground/80 my-4 px-8 py-3 bg-muted/30 rounded-lg border border-border/50 max-w-md mx-auto">
+            {paragraph.replace(/^Caption:\s*/i, '')}
           </div>
         );
       }
@@ -250,6 +322,15 @@ export default function Reader() {
           <h5 key={index} className="text-lg sm:text-xl font-display font-semibold text-foreground/90 mt-6 sm:mt-8 mb-3 sm:mb-4">
             {paragraph.replace('### ', '')}
           </h5>
+        );
+      }
+      // Handle Visual: descriptions in comics (show as scene description)
+      if (paragraph.match(/^Visual:\s*/i)) {
+        return (
+          <div key={index} className="my-4 p-4 bg-muted/20 rounded-lg border-l-4 border-scroll-gold/50 text-sm text-foreground/70 italic">
+            <span className="font-semibold text-foreground/90 not-italic">Scene: </span>
+            {paragraph.replace(/^Visual:\s*/i, '')}
+          </div>
         );
       }
       if (paragraph.startsWith('- ')) {

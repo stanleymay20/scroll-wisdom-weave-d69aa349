@@ -163,22 +163,35 @@ No shortcuts. No drift. No excuses.
 // ===========================================
 // MARKDOWN SANITIZER - Strip markdown from final output
 // ===========================================
+// GLOBAL PLAIN-TEXT SANITIZER
+// Strips all markdown formatting for clean output
+// ===========================================
 
 function sanitizeMarkdown(content: string): string {
   return content
     // Remove bold markers **text** or __text__
     .replace(/\*\*([^*]+)\*\*/g, '$1')
     .replace(/__([^_]+)__/g, '$1')
-    // Remove italic markers *text* or _text_
-    .replace(/(?<!\*)\*([^*]+)\*(?!\*)/g, '$1')
-    .replace(/(?<!_)_([^_]+)_(?!_)/g, '$1')
-    // Remove heading markers ## or ###
+    // Remove italic markers *text* or _text_ (careful with underscores in names)
+    .replace(/(?<![*\w])\*([^*\n]+)\*(?![*\w])/g, '$1')
+    .replace(/(?<![_\w])_([^_\n]+)_(?![_\w])/g, '$1')
+    // Remove strikethrough ~~text~~
+    .replace(/~~([^~]+)~~/g, '$1')
+    // Remove heading markers ## or ### at line start
     .replace(/^#{1,6}\s*/gm, '')
-    // Remove backticks
+    // Remove inline code backticks
     .replace(/`([^`]+)`/g, '$1')
+    // Remove code blocks but keep content
     .replace(/```[\s\S]*?```/g, (match) => match.replace(/```\w*\n?/g, '').trim())
+    // Remove horizontal rules made of asterisks or underscores
+    .replace(/^[\*_]{3,}\s*$/gm, '---')
+    // Clean up any remaining stray asterisks used for emphasis
+    .replace(/\*{1,2}([^*\n]+)\*{1,2}/g, '$1')
+    // Clean up any remaining stray underscores used for emphasis
+    .replace(/_{1,2}([^_\n]+)_{1,2}/g, '$1')
     // Clean up excessive whitespace
-    .replace(/\n{3,}/g, '\n\n');
+    .replace(/\n{3,}/g, '\n\n')
+    .trim();
 }
 
 // ===========================================
