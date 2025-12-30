@@ -32,6 +32,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { BookTypeSelector, ExtendedBookType } from "@/components/generate/BookTypeSelector";
 import { WorkbookPreview } from "@/components/generate/WorkbookPreview";
 import { ComicStyleSelector, ComicStyleConfig } from "@/components/generate/ComicStyleSelector";
+import { BestsellerModeToggle } from "@/components/generate/BestsellerModeToggle";
 
 const CATEGORIES = [
   { value: "theology", labelKey: "categories.theology" },
@@ -95,6 +96,7 @@ export default function Generate() {
   
   const [contentMode, setContentMode] = useState<ContentMode>("creative");
   const [citationStyle, setCitationStyle] = useState<CitationStyle>("APA");
+  const [bestsellerMode, setBestsellerMode] = useState(true); // Default ON for paid tiers
   const { toast } = useToast();
 
   // Auto-enable academic mode for academic categories
@@ -227,6 +229,7 @@ export default function Generate() {
           citationStyle,
           academicMode: contentMode === "academic",
           deepResearch: contentMode === "academic",
+          bestsellerMode: entitlements.isPaid || entitlements.isTrialMode ? bestsellerMode : false,
           // Workbook-specific fields
           workbookDensity: extendedBookType === "workbook" ? workbookDensity : null,
           // Comic-specific fields
@@ -552,6 +555,14 @@ export default function Generate() {
                   )}
                 </div>
               )}
+
+              {/* Bestseller Mode Toggle - Premium Feature */}
+              <BestsellerModeToggle
+                enabled={bestsellerMode}
+                onToggle={setBestsellerMode}
+                isPaidTier={entitlements.isPaid || entitlements.isTrialMode || entitlements.isAdmin || entitlements.isProphet}
+                disabled={isGenerating}
+              />
 
               {/* Cover Option */}
               <div className="space-y-3">
