@@ -111,8 +111,12 @@ export function MobileHome() {
     fetchData();
   }, []);
 
+  // Calculate header height (56px) + safe area
   return (
-    <div className="min-h-screen bg-background pt-[calc(env(safe-area-inset-top)+56px)] pb-24 px-4">
+    <div 
+      className="min-h-screen bg-background pb-24 px-4"
+      style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px + 16px)" }}
+    >
       {/* Continue Reading Section */}
       {userId && continueReading.length > 0 && (
         <section className="mb-8">
