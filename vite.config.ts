@@ -20,7 +20,7 @@ export default defineConfig(({ mode }) => ({
     VitePWA({
       registerType: "autoUpdate",
       injectRegister: "auto",
-      includeAssets: ["favicon.png", "logo.png", "offline.html"],
+      includeAssets: ["favicon.png", "favicon-16x16.png", "favicon-32x32.png", "apple-touch-icon.png", "logo.png", "offline.html"],
       manifest: {
         name: "ScrollLibrary",
         short_name: "ScrollLibrary",
