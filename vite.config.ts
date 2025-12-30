@@ -19,6 +19,7 @@ export default defineConfig(({ mode }) => ({
     mode === "development" && componentTagger(),
     VitePWA({
       registerType: "autoUpdate",
+      injectRegister: "auto",
       includeAssets: ["favicon.png", "logo.png", "offline.html"],
       manifest: {
         name: "ScrollLibrary",
