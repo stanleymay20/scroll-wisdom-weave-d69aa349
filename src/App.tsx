@@ -7,6 +7,7 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { useEffect, Suspense, lazy } from "react";
 import { PWAInstallPrompt, OfflineIndicator } from "@/components/pwa";
+import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { createLogger, setTraceId } from "@/lib/logger";
 import { Loader2 } from "lucide-react";
@@ -96,6 +97,7 @@ const App = () => (
             <Toaster />
             <Sonner />
             <OfflineIndicator />
+            <PWAUpdateNotification />
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               <Suspense fallback={<PageLoader />}>
                 <Routes>
