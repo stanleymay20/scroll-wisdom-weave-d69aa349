@@ -64,9 +64,9 @@ export function Navbar() {
   };
 
   return (
-    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/90 backdrop-blur-xl shadow-sm">
+    <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/90 backdrop-blur-xl shadow-sm pt-[env(safe-area-inset-top)]">
       <div className="container mx-auto px-4">
-        <div className="flex h-16 items-center justify-between">
+        <div className="flex h-14 md:h-16 items-center justify-between">
           <Link to="/" className="flex items-center gap-2 group">
             <img src={logo} alt="ScrollLibrary" className="h-9 w-auto md:h-11 lg:h-12 transition-transform group-hover:scale-105" />
           </Link>
