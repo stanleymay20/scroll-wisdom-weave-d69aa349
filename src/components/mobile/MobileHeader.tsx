@@ -1,13 +1,18 @@
+import React from "react";
 import { Search, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import logo from "@/assets/logo.png";
 
-export function MobileHeader() {
+export const MobileHeader = React.forwardRef<HTMLElement>((_, ref) => {
   const navigate = useNavigate();
 
   return (
-    <header className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-lg border-b border-border/20 pt-[env(safe-area-inset-top)]">
+    <header 
+      ref={ref}
+      className="fixed top-0 left-0 right-0 z-50 bg-background border-b border-border/20"
+      style={{ paddingTop: "env(safe-area-inset-top)" }}
+    >
       <div className="flex items-center justify-between h-14 px-4">
         {/* Logo */}
         <Link to="/" className="flex items-center">
@@ -38,4 +43,6 @@ export function MobileHeader() {
       </div>
     </header>
   );
-}
+});
+
+MobileHeader.displayName = "MobileHeader";

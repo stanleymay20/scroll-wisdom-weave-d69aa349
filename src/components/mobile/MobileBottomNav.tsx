@@ -1,3 +1,4 @@
+import React from "react";
 import { Home, BookOpen, Headphones, Settings } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -9,11 +10,15 @@ const NAV_ITEMS = [
   { icon: Settings, label: "Settings", path: "/settings" },
 ];
 
-export function MobileBottomNav() {
+export const MobileBottomNav = React.forwardRef<HTMLElement>((_, ref) => {
   const location = useLocation();
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-lg border-t border-border/30 pb-[env(safe-area-inset-bottom)] md:hidden">
+    <nav 
+      ref={ref}
+      className="fixed bottom-0 left-0 right-0 z-50 bg-background border-t border-border/30 md:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
       <div className="flex items-center justify-around h-16">
         {NAV_ITEMS.map((item) => {
           const Icon = item.icon;
@@ -40,4 +45,6 @@ export function MobileBottomNav() {
       </div>
     </nav>
   );
-}
+});
+
+MobileBottomNav.displayName = "MobileBottomNav";
