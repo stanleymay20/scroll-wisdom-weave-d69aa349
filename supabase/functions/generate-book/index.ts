@@ -34,11 +34,32 @@ BESTSELLER STRUCTURE (APPLY TO CHAPTER DESCRIPTIONS):
 - Each chapter MUST start with a hook concept
 - Each chapter MUST introduce a named principle
 - Each chapter MUST end with actionable takeaways
+- Every chapter title must be compelling and memorable
+- Chapter descriptions must promise transformation
 
 LANGUAGE & VOICE:
 - Conversational authority — clear, confident, human
 - Written TO the reader, not AT the reader
 - NO AI-sounding phrases
+- Titles must be bold, not generic
+`;
+
+const BESTSELLER_OUTLINE_BOOST = `
+🔒 BESTSELLER MODE ACTIVE — CHAPTER QUALITY ENFORCEMENT
+
+For EACH chapter in the outline:
+1. OPENING HOOK: Describe a compelling hook or contradiction
+2. NAMED PRINCIPLE: Include a sticky, memorable concept name
+3. TRANSFORMATION: Describe what the reader will become/achieve
+4. QUOTABLE POTENTIAL: Note one potential quotable insight
+
+Chapter titles MUST be:
+- Provocative, not descriptive
+- Promise-driven, not topic-based
+- Memorable enough to share
+
+Example BAD titles: "Understanding Leadership", "The Basics of Finance"
+Example GOOD titles: "The Leadership Lie", "Why Rich People Don't Budget"
 `;
 
 // Tier limits for book generation
@@ -157,6 +178,7 @@ serve(async (req) => {
       customCover,
       bookType = 'text',
       enableReferences = false,
+      bestsellerMode = true, // Default ON
       // Workbook fields
       workbookDensity = 'medium',
       // Comic fields
@@ -168,6 +190,8 @@ serve(async (req) => {
       textInImage = true,
       scenesPerPanel = 1,
     } = await req.json();
+
+    console.log(`[GENERATE-BOOK] Bestseller Mode: ${bestsellerMode ? 'ENABLED' : 'disabled'}`);
 
     // Validate chapter limit based on plan (trial uses effectivePlan)
     const effectiveChapters = Math.min(numChapters, limits.maxChapters);
@@ -213,6 +237,9 @@ serve(async (req) => {
          Format: {"author": "Name", "title": "Work Title", "year": 2023, "type": "book|article|journal"}`
       : '';
 
+    // Build bestseller mode boost
+    const bestsellerBoost = bestsellerMode ? BESTSELLER_OUTLINE_BOOST : '';
+
     // First, generate the book outline
     const outlinePrompt = `You are ScrollResearchGPT, an AI agent specialized in creating comprehensive book outlines.
 
@@ -222,6 +249,10 @@ Do NOT use English (unless English is the selected language).
 Do NOT mix languages.
 Do NOT explain language choices.
 Every title, description, and topic must be in ${languageName}.
+
+${OUTLINE_FORMATTING_RULES}
+
+${bestsellerBoost}
 
 ${bookTypeInstructions}
 
@@ -234,14 +265,16 @@ Create a detailed outline for a book with the following specifications:
 - Number of Chapters: ${effectiveChapters}
 - Book Type: ${bookType}
 - Language: ${languageName} (ALL content must be in this language)
+${bestsellerMode ? '- BESTSELLER MODE: ACTIVE (apply all bestseller quality standards)' : ''}
 
 For each chapter, provide:
 1. Chapter number
-2. Chapter title (in ${languageName})
-3. Brief description (2-3 sentences, in ${languageName})
+2. Chapter title (in ${languageName}) ${bestsellerMode ? '- MUST be provocative and memorable' : ''}
+3. Brief description (2-3 sentences, in ${languageName}) ${bestsellerMode ? '- MUST include the hook and transformation promise' : ''}
 4. Key topics to cover (4-5 items, in ${languageName})
-${bookType === 'comic' ? '5. Scene descriptions for illustrations (3-5 per chapter)' : ''}
-${enableReferences ? '5. Suggested references (will be verified later)' : ''}
+${bestsellerMode ? '5. Named principle (a sticky concept readers will remember)' : ''}
+${bookType === 'comic' ? '6. Scene descriptions for illustrations (3-5 per chapter)' : ''}
+${enableReferences ? '6. Suggested references (will be verified later)' : ''}
 
 The book must be:
 - ${bookType === 'comic' ? 'Visually engaging with minimal text' : 'Academically rigorous'}
@@ -249,6 +282,7 @@ The book must be:
 - Each chapter should naturally lead to the next
 - ${bookType === 'text' ? 'Rich in depth and substance' : 'Visual and engaging'}
 - ENTIRELY in ${languageName}
+${bestsellerMode ? '- BESTSELLER-GRADE: Every chapter must be worthy of a top-selling book' : ''}
 
 Format your response as a JSON object with this structure:
 {
@@ -256,15 +290,20 @@ Format your response as a JSON object with this structure:
   "bookDescription": "string",
   "language": "${languageName}",
   "bookType": "${bookType}",
+  "bestsellerMode": ${bestsellerMode},
   "chapters": [
     {
       "chapterNumber": number,
       "title": "string",
       "description": "string",
-      "keyTopics": ["string", "string", ...]${bookType === 'comic' ? ',\n      "scenes": [{"description": "string", "caption": "string"}]' : ''}${enableReferences ? ',\n      "suggestedReferences": [{"topic": "string"}]' : ''}
+      "keyTopics": ["string", "string", ...]${bestsellerMode ? ',\n      "namedPrinciple": "string",\n      "hook": "string"' : ''}${bookType === 'comic' ? ',\n      "scenes": [{"description": "string", "caption": "string"}]' : ''}${enableReferences ? ',\n      "suggestedReferences": [{"topic": "string"}]' : ''}
     }
   ]
 }`;
+
+    const systemPrompt = bestsellerMode 
+      ? `You are a scholarly AI that creates detailed, well-structured book outlines with BESTSELLER-GRADE quality. Every title must be compelling and provocative. Every description must promise transformation. Always respond with valid JSON. Do NOT use Markdown syntax in titles or descriptions - use plain text only.`
+      : `You are a scholarly AI that creates detailed, well-structured book outlines. Always respond with valid JSON. Do NOT use Markdown syntax in titles or descriptions - use plain text only.`;
 
     const outlineResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -275,7 +314,7 @@ Format your response as a JSON object with this structure:
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: "You are a scholarly AI that creates detailed, well-structured book outlines. Always respond with valid JSON. Do NOT use Markdown syntax in titles or descriptions - use plain text only." },
+          { role: "system", content: systemPrompt },
           { role: "user", content: outlinePrompt }
         ],
       }),
