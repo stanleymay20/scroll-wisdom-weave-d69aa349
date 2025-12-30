@@ -423,3 +423,13 @@
 .container {
   @apply px-4 sm:px-6 lg:px-8;
 }
+
+/* Hide scrollbar utility */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
