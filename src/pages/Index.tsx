@@ -1,11 +1,33 @@
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Navbar } from "@/components/layout/Navbar";
 import { HeroSection } from "@/components/home/HeroSection";
 import { FeaturedBooks } from "@/components/home/FeaturedBooks";
 import { CategoriesSection } from "@/components/home/CategoriesSection";
 import { Footer } from "@/components/layout/Footer";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
+import { 
+  MobileHeader, 
+  MobileBottomNav, 
+  MobileHome, 
+  MobileGenerateButton 
+} from "@/components/mobile";
 
 const Index = () => {
+  const isMobile = useIsMobile();
+
+  // Mobile-first: Completely different experience
+  if (isMobile) {
+    return (
+      <div className="min-h-screen bg-background">
+        <MobileHeader />
+        <MobileHome />
+        <MobileGenerateButton />
+        <MobileBottomNav />
+      </div>
+    );
+  }
+
+  // Desktop experience
   return (
     <div className="min-h-screen">
       <Navbar />
