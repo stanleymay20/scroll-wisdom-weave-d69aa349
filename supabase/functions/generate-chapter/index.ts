@@ -2070,21 +2070,221 @@ This is MANDATORY. No exceptions.`;
     }
 
     // ===========================================
-    // STANDARD TEXT / ILLUSTRATED GENERATION
+    // STANDARD TEXT / ILLUSTRATED / ACADEMIC GENERATION
     // ===========================================
     const targetWords = Math.min(Math.max(effectiveWordCount, 2000), 6000);
 
     let systemPrompt: string;
     let chapterPrompt: string;
     
-    if (academicMode && researchResult && researchResult.references.length > 0) {
-      systemPrompt = buildAcademicSystemPrompt(languageName, category, citationStyle);
-      chapterPrompt = buildAcademicChapterPrompt(
-        chapterTitle, bookTitle, category, keyTopics, targetWords,
-        languageName, citationStyle, researchResult.references, researchResult.inTextCitations
-      );
+    // PIPELINE ROUTING: Determine if this is Academic/Technical or Bestseller
+    const isAcademicPipeline = academicMode || 
+      effectiveBookType === 'academic' || 
+      effectiveBookType === 'reference' ||
+      (effectiveBookType === 'professional' && ['technology', 'science', 'medicine', 'law'].includes(category?.toLowerCase()));
+    
+    if (isAcademicPipeline && researchResult && researchResult.references.length > 0) {
+      // ACADEMIC/TECHNICAL PIPELINE - NO metaphors, NO storytelling
+      console.log("[GENERATE-CHAPTER] Using ACADEMIC/TECHNICAL pipeline (code-heavy, literal)");
+      
+      systemPrompt = `You are ScrollLibrary — ACADEMIC/TECHNICAL PIPELINE.
+
+===========================================
+GENERATOR IDENTITY: Lecturer · Engineer · Researcher
+===========================================
+
+You are writing a university-grade textbook or technical manual.
+You are NOT a storyteller. You are NOT motivational. You are INSTRUCTIONAL.
+
+STRICTLY FORBIDDEN:
+❌ Metaphors of any kind (e.g., "Alchemist", "Wizard", "Journey", "Dark Arts")
+❌ Storytelling or narrative framing
+❌ Motivational language ("You can do it!", "Believe in yourself")
+❌ Hero's journey framing
+❌ Analogies to unrelated domains
+❌ Emotional appeals
+❌ Rhetorical questions for effect
+
+REQUIRED:
+✅ Literal, technical language only
+✅ Learning objectives at chapter start (3-5 specific, measurable points)
+✅ Code examples with proper formatting (40% minimum for technical topics)
+✅ Step-by-step explanations
+✅ Exercises at chapter end (3-5 practice problems)
+✅ Mini-project at chapter end
+✅ In-text citations for ALL factual claims
+✅ References section at end
+
+CODE FORMAT (MANDATORY):
+CODE EXAMPLE (Python):
+
+    def example_function():
+        # Comment explaining purpose
+        pass
+
+Tables must be formatted with clear headers and aligned columns.
+
+${MASTER_FORMATTING_CONTRACT}
+
+${ACADEMIC_CONTRACT}
+
+${VALIDATION_CONTRACT}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.
+CATEGORY: ${category}
+CITATION STYLE: ${citationStyle}
+
+If ANY metaphor, storytelling, or motivational language appears → OUTPUT IS INVALID.
+Teach by DOING, not by INSPIRING.`;
+
+      chapterPrompt = `Write an ACADEMIC/TECHNICAL Chapter: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+VERIFIED SOURCES TO CITE (USE ONLY THESE):
+${researchResult.references.slice(0, 15).map((ref, i) => 
+  `${i + 1}. ${ref.author} (${ref.year}). "${ref.title}"${ref.journal ? ` — ${ref.journal}` : ''}${ref.doi ? ` DOI: ${ref.doi}` : ''}`
+).join('\n')}
+
+KEY TOPICS:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+REQUIREMENTS:
+1. Write approximately ${targetWords} words in ${languageName}
+2. Include in-text citations using ${citationStyle} format
+3. Use ONLY the sources listed above
+4. Mark unsupported claims with "[requires verification]"
+5. NO Markdown syntax (**, ##, backticks) — write plain text only
+6. NO metaphors, storytelling, or motivational content
+
+MANDATORY STRUCTURE (ACADEMIC/TECHNICAL):
+
+Learning Objectives
+
+By the end of this chapter, you will be able to:
+1. [Specific, measurable objective]
+2. [Specific, measurable objective]
+3. [Specific, measurable objective]
+
+Introduction
+
+[Technical context and scope - NO storytelling, NO emotional hooks]
+
+Core Concepts
+
+[Structured technical explanation with citations and proper terminology]
+
+Implementation
+
+[Code examples with proper formatting, step-by-step explanations]
+
+CODE EXAMPLE (${category.toLowerCase().includes('python') ? 'Python' : 'Language'}):
+
+    # Properly indented code
+    # With explanatory comments
+
+Practical Exercises
+
+Exercise 1: [Specific task with clear requirements]
+Exercise 2: [Intermediate difficulty]
+Exercise 3: [Advanced application]
+
+Mini-Project
+
+[Complete hands-on project applying chapter concepts with specifications]
+
+Summary
+
+[Key points in numbered list]
+
+References
+
+[Full ${citationStyle} formatted bibliography]
+
+BEGIN WRITING THE COMPLETE ACADEMIC/TECHNICAL CHAPTER:`;
+
+    } else if (isAcademicPipeline) {
+      // Academic mode but no research results - still use technical pipeline
+      console.log("[GENERATE-CHAPTER] Using ACADEMIC/TECHNICAL pipeline (no sources available)");
+      
+      systemPrompt = `You are ScrollLibrary — ACADEMIC/TECHNICAL PIPELINE.
+
+GENERATOR IDENTITY: Lecturer · Engineer · Researcher
+
+You are writing a university-grade textbook. NO metaphors, NO storytelling, NO motivational content.
+
+STRICTLY FORBIDDEN:
+❌ Metaphors (e.g., "Alchemist", "Wizard", "Journey")
+❌ Storytelling or narrative framing  
+❌ Motivational language
+❌ Hero's journey framing
+
+REQUIRED:
+✅ Learning objectives at chapter start
+✅ Step-by-step technical explanations
+✅ Code examples with proper formatting (for technical topics)
+✅ Exercises and mini-project at chapter end
+✅ Plain text formatting only
+
+${MASTER_FORMATTING_CONTRACT}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.
+
+Teach by DOING, not by INSPIRING.`;
+
+      chapterPrompt = `Write an ACADEMIC/TECHNICAL Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+ACADEMIC/TECHNICAL STRUCTURE (MANDATORY):
+
+Learning Objectives
+
+By the end of this chapter, you will be able to:
+1. [Specific objective]
+2. [Specific objective]
+3. [Specific objective]
+
+Introduction
+
+[Technical overview - NO storytelling]
+
+Core Concepts
+
+[Detailed technical explanations]
+
+Implementation Examples
+
+[Code examples with proper formatting if applicable]
+
+Exercises
+
+1. [Practice problem - Easy]
+2. [Practice problem - Medium]
+3. [Practice problem - Advanced]
+
+Mini-Project
+
+[Hands-on project with clear specifications]
+
+Summary
+
+[Key points]
+
+REQUIREMENTS:
+- Approximately ${targetWords} words
+- Plain text headings ONLY
+- NO Markdown syntax
+- NO metaphors or storytelling
+- Technical, instructional tone
+
+BEGIN WRITING THE ACADEMIC/TECHNICAL CHAPTER:`;
+
     } else {
-      // STANDARD TEXT - BESTSELLER STRUCTURE ENFORCED
+      // BESTSELLER PIPELINE - for non-technical books
+      console.log("[GENERATE-CHAPTER] Using BESTSELLER pipeline (narrative, engaging)");
+      
       systemPrompt = `${SYSTEM_ROLE}
 
 ${MASTER_FORMATTING_CONTRACT}
@@ -2122,31 +2322,6 @@ REQUIREMENTS:
 - NO AI-sounding phrases ("Let's dive in", "In this chapter we will explore")
 - Include real-world examples
 - Every paragraph must deliver VALUE
-
-SECTION FORMAT:
-Write section titles as plain text on their own line:
-
-Introduction
-
-[Hook the reader immediately - story, question, or insight]
-
-Core Concepts
-
-[The main idea with clear explanation and named principle]
-
-Real-World Application
-
-[Concrete story or scenario that illustrates the concept]
-
-Key Takeaways
-
-- Takeaway 1
-- Takeaway 2
-- Takeaway 3
-
-Conclusion
-
-[Synthesis and transition to next chapter]
 
 BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
     }
