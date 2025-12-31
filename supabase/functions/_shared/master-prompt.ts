@@ -778,38 +778,109 @@ Academic bestsellers exist — aim for them.
 // ===========================================
 
 export const CODE_CONTRACT = `
-=== CODE & TECHNICAL CONTENT CONTRACT ===
+=== CODE STRUCTURE ENFORCEMENT — NON-NEGOTIABLE ===
 
-For ALL programming examples:
+This book contains executable code.
 
-MANDATORY FORMATTING:
-1. Proper indentation (consistent 2 or 4 spaces)
-2. Line-by-line formatting (one statement per line)
-3. Blank lines between logical blocks
-4. Syntax-valid examples only
-5. Language label prefix: "CODE EXAMPLE (Python):"
+MANDATORY RULES (HARD FAILURE IF VIOLATED):
+
+1. ALL code MUST be placed inside fenced code blocks
+2. Language identifier is REQUIRED (e.g., \`\`\`python)
+3. Indentation MUST be preserved exactly as executable code
+4. Blank lines between logical sections are REQUIRED
+5. Inline code for multi-line logic is FORBIDDEN
+6. Collapsed, flattened, or paragraph-style code is INVALID
+
+CODE FORMAT (REQUIRED):
+
+CODE EXAMPLE ([Language]):
+
+\`\`\`python
+def calculate_total(items):
+    """Calculate total price from items list."""
+    total = 0
+    
+    for item in items:
+        total += item.price
+    
+    return total
+\`\`\`
+
+VALIDATION RULE:
+If any code block would raise a syntax or indentation error
+when copied into a real interpreter,
+the entire chapter MUST be rewritten.
+
+FAILURE MODE:
+If indentation, spacing, or line structure is incorrect,
+DO NOT output — regenerate until compliant.
 
 FORBIDDEN:
 - One-line code blobs
-- Inline code paragraphs
-- Backtick-wrapped code blocks
-- Unindented code
+- Inline code paragraphs for multi-line logic
+- Unindented or poorly indented code
+- Code without language identifier
+- Code embedded in prose without block formatting
 
-EXAMPLE OF CORRECT FORMAT:
-
-CODE EXAMPLE (Python):
-
-    def calculate_total(items):
-        total = 0
-        
-        for item in items:
-            total += item.price
-        
-        return total
-
-If code is unreadable or improperly formatted, REWRITE.
+If code is unreadable or improperly formatted, REWRITE ENTIRE SECTION.
 
 === END CODE CONTRACT ===
+`;
+
+// ===========================================
+// SECTION 6.1: TABLE FORMATTING ENFORCEMENT
+// ===========================================
+
+export const TABLE_CONTRACT = `
+=== TABLE FORMATTING ENFORCEMENT — NON-NEGOTIABLE ===
+
+MANDATORY RULES:
+
+1. All tables MUST include:
+   - Clear header row
+   - Aligned columns
+   - Consistent row spacing
+
+2. No paragraph-style tables allowed
+
+3. Tables MUST render clearly in PDF and EPUB
+
+4. If a table cannot be read without guessing column alignment,
+   it is INVALID.
+
+REQUIRED TABLE FORMAT:
+
+TABLE: [Table Name]
+
+| Header 1    | Header 2    | Header 3    |
+|-------------|-------------|-------------|
+| Value 1.1   | Value 1.2   | Value 1.3   |
+| Value 2.1   | Value 2.2   | Value 2.3   |
+
+ALTERNATIVE ROW FORMAT (for complex tables):
+
+TABLE: [Table Name]
+
+Row 1:
+[Header 1]: [Value]
+[Header 2]: [Value]
+[Header 3]: [Value]
+
+Row 2:
+[Header 1]: [Value]
+[Header 2]: [Value]
+[Header 3]: [Value]
+
+VALIDATION RULE:
+Unreadable tables require REWRITE until compliant.
+
+FAILURE CONDITIONS:
+- Missing header row
+- Misaligned columns
+- Paragraph-style data dumps
+- Invisible cell boundaries
+
+=== END TABLE CONTRACT ===
 `;
 
 // ===========================================
@@ -1594,6 +1665,8 @@ ${EDIT_CONTROL_CONTRACT}
 ${FORMATTING_CONTRACT}
 
 ${CODE_CONTRACT}
+
+${TABLE_CONTRACT}
 
 ${READABILITY_CONTRACT}
 

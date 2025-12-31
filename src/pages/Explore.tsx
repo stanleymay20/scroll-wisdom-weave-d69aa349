@@ -1,8 +1,10 @@
 import { useState, useEffect } from "react";
-import { useSearchParams } from "react-router-dom";
+import { useSearchParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { MobileLayout, MobileBookCard } from "@/components/mobile";
 import { BookCard } from "@/components/books/BookCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,10 +41,109 @@ interface Book {
   category: string;
   cover_image_url: string | null;
   total_chapters: number | null;
+  book_type: string;
+}
+
+// Mobile Explore Content
+function MobileExploreContent({
+  books,
+  filteredBooks,
+  isLoading,
+  searchQuery,
+  setSearchQuery,
+  selectedCategory,
+  handleCategoryChange,
+  getCategoryLabel
+}: {
+  books: Book[];
+  filteredBooks: Book[];
+  isLoading: boolean;
+  searchQuery: string;
+  setSearchQuery: (v: string) => void;
+  selectedCategory: string;
+  handleCategoryChange: (c: string) => void;
+  getCategoryLabel: (c: string) => string;
+}) {
+  const { t } = useLanguage();
+
+  return (
+    <div className="px-4 py-4">
+      {/* Header */}
+      <div className="mb-6">
+        <h1 className="font-display text-2xl font-bold text-foreground mb-2">
+          Explore
+        </h1>
+        <p className="text-muted-foreground text-sm">
+          Discover books across all categories
+        </p>
+      </div>
+
+      {/* Search */}
+      <div className="relative mb-4">
+        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+        <Input
+          placeholder="Search books..."
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          className="pl-10"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2"
+          >
+            <X className="h-4 w-4 text-muted-foreground" />
+          </button>
+        )}
+      </div>
+
+      {/* Categories - Horizontal scroll */}
+      <div className="flex gap-2 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide mb-4">
+        {CATEGORIES.slice(0, 10).map((category) => (
+          <Button
+            key={category}
+            variant={selectedCategory === category ? "gold" : "muted"}
+            size="sm"
+            onClick={() => handleCategoryChange(category)}
+            className="flex-shrink-0 capitalize text-xs"
+          >
+            {getCategoryLabel(category)}
+          </Button>
+        ))}
+      </div>
+
+      {/* Content */}
+      {isLoading ? (
+        <div className="flex items-center justify-center py-20">
+          <Loader2 className="h-8 w-8 animate-spin text-scroll-gold" />
+        </div>
+      ) : filteredBooks.length > 0 ? (
+        <div className="grid grid-cols-2 gap-4">
+          {filteredBooks.map((book) => (
+            <MobileBookCard
+              key={book.id}
+              id={book.id}
+              title={book.title}
+              coverImageUrl={book.cover_image_url || undefined}
+              category={book.category}
+              bookType={book.book_type}
+            />
+          ))}
+        </div>
+      ) : (
+        <div className="text-center py-12">
+          <p className="text-muted-foreground">
+            {books.length === 0 ? "No books yet" : "No books match your search"}
+          </p>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function Explore() {
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
   const [searchParams, setSearchParams] = useSearchParams();
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedCategory, setSelectedCategory] = useState(
@@ -64,7 +165,7 @@ export default function Explore() {
       try {
         const { data, error } = await supabase
           .from("books")
-          .select("id, title, description, category, cover_image_url, total_chapters")
+          .select("id, title, description, category, cover_image_url, total_chapters, book_type")
           .eq("is_published", true)
           .order("created_at", { ascending: false });
 
@@ -103,6 +204,25 @@ export default function Explore() {
     return t(key);
   };
 
+  // Mobile layout with persistent shell
+  if (isMobile) {
+    return (
+      <MobileLayout>
+        <MobileExploreContent
+          books={books}
+          filteredBooks={filteredBooks}
+          isLoading={isLoading}
+          searchQuery={searchQuery}
+          setSearchQuery={setSearchQuery}
+          selectedCategory={selectedCategory}
+          handleCategoryChange={handleCategoryChange}
+          getCategoryLabel={getCategoryLabel}
+        />
+      </MobileLayout>
+    );
+  }
+
+  // Desktop layout
   return (
     <div className="min-h-screen">
       <Navbar />

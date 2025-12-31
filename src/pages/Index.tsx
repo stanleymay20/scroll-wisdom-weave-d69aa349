@@ -5,25 +5,17 @@ import { FeaturedBooks } from "@/components/home/FeaturedBooks";
 import { CategoriesSection } from "@/components/home/CategoriesSection";
 import { Footer } from "@/components/layout/Footer";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
-import { 
-  MobileHeader, 
-  MobileBottomNav, 
-  MobileHome, 
-  MobileGenerateButton 
-} from "@/components/mobile";
+import { MobileLayout, MobileHome } from "@/components/mobile";
 
 const Index = () => {
   const isMobile = useIsMobile();
 
-  // Mobile-first: Completely different experience
+  // Mobile-first: Use persistent mobile layout
   if (isMobile) {
     return (
-      <div className="min-h-screen bg-background">
-        <MobileHeader />
+      <MobileLayout>
         <MobileHome />
-        <MobileGenerateButton />
-        <MobileBottomNav />
-      </div>
+      </MobileLayout>
     );
   }
 
