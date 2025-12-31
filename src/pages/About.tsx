@@ -3,7 +3,8 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { 
   Book, Brain, Sparkles, Users, Globe, Award,
-  Target, Lightbulb, Shield
+  Target, Lightbulb, Shield, GraduationCap, AlertTriangle,
+  FileText, Mail, Check, X
 } from "lucide-react";
 
 export default function About() {
@@ -54,12 +55,87 @@ export default function About() {
               animate={{ opacity: 1, y: 0 }}
               className="text-center max-w-4xl mx-auto"
             >
+              <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/30 text-primary text-sm font-medium mb-6">
+                <GraduationCap className="h-4 w-4" />
+                AI-Powered Digital Publishing Platform
+              </span>
               <h1 className="text-5xl md:text-6xl font-display font-bold text-gradient-gold mb-6">
                 About ScrollLibrary™
               </h1>
               <p className="text-xl text-muted-foreground mb-8">
-                The AI-Powered Learning Universe—Where Ancient Wisdom Meets Modern Technology
+                The AI-Powered Digital Publishing & Learning Platform — Where structured AI meets academic rigor
               </p>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Platform Clarification - Authority Signal */}
+        <section className="py-16 bg-muted/20">
+          <div className="container mx-auto px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="max-w-4xl mx-auto"
+            >
+              <div className="text-center mb-10">
+                <h2 className="text-3xl font-display font-bold text-foreground mb-4">
+                  Platform Classification
+                </h2>
+                <p className="text-muted-foreground">
+                  Understanding exactly what ScrollLibrary is and what it is not
+                </p>
+              </div>
+
+              <div className="grid md:grid-cols-2 gap-8">
+                {/* What ScrollLibrary IS */}
+                <div className="bg-gradient-card rounded-xl border border-border/50 p-6">
+                  <h3 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-2">
+                    <span className="bg-primary/20 p-1.5 rounded-full">
+                      <Check className="h-4 w-4 text-primary" />
+                    </span>
+                    What ScrollLibrary IS
+                  </h3>
+                  <ul className="space-y-3">
+                    <li className="flex items-start gap-3">
+                      <Book className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <span className="text-muted-foreground">An AI-powered digital publishing platform for generating, reading, and interacting with books</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <GraduationCap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <span className="text-muted-foreground">A structured learning system for academic texts, professional manuals, and workbooks</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <Lightbulb className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
+                      <span className="text-muted-foreground">An educational technology platform with citations, references, and guided learning</span>
+                    </li>
+                  </ul>
+                </div>
+
+                {/* What ScrollLibrary IS NOT */}
+                <div className="bg-gradient-card rounded-xl border border-border/50 p-6">
+                  <h3 className="text-xl font-semibold text-foreground mb-4 flex items-center gap-2">
+                    <span className="bg-destructive/20 p-1.5 rounded-full">
+                      <X className="h-4 w-4 text-destructive" />
+                    </span>
+                    What ScrollLibrary IS NOT
+                  </h3>
+                  <ul className="space-y-3">
+                    <li className="flex items-start gap-3">
+                      <X className="h-5 w-5 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
+                      <span className="text-muted-foreground">Not a scrolling animation library or CSS utility</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <X className="h-5 w-5 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
+                      <span className="text-muted-foreground">Not a frontend developer tool or JavaScript framework</span>
+                    </li>
+                    <li className="flex items-start gap-3">
+                      <X className="h-5 w-5 text-muted-foreground/50 mt-0.5 flex-shrink-0" />
+                      <span className="text-muted-foreground">Not a UI animation or scroll-effect plugin</span>
+                    </li>
+                  </ul>
+                </div>
+              </div>
             </motion.div>
           </div>
         </section>
@@ -82,21 +158,72 @@ export default function About() {
                 </div>
                 <p className="text-lg text-muted-foreground leading-relaxed mb-6">
                   ScrollLibrary™ is designed to be more than a digital library—it's a comprehensive AI-powered 
-                  learning universe that exceeds Oxford Library in breadth while maintaining scroll-aligned accuracy 
-                  and academic rigor.
+                  digital publishing and learning platform that provides structured, rigorous content generation 
+                  with academic standards.
                 </p>
                 <p className="text-lg text-muted-foreground leading-relaxed">
                   We believe in democratizing access to deep, transformative knowledge. Through our multi-agent 
                   AI system, we generate books that don't just inform—they transform, equipping readers with 
-                  wisdom that spans millennia while speaking to contemporary challenges.
+                  structured learning experiences that span academic texts, professional manuals, workbooks, 
+                  and guided learning content.
                 </p>
               </div>
             </motion.div>
           </div>
         </section>
 
-        {/* Stats Section */}
+        {/* AI Transparency Section - Critical for Credibility */}
         <section className="py-16 bg-muted/20">
+          <div className="container mx-auto px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="max-w-4xl mx-auto"
+            >
+              <div className="bg-gradient-card rounded-2xl border border-border/50 p-8 md:p-12">
+                <div className="flex items-center gap-4 mb-6">
+                  <div className="bg-primary/20 p-3 rounded-xl">
+                    <AlertTriangle className="h-8 w-8 text-primary" />
+                  </div>
+                  <h2 className="text-3xl font-display font-bold text-foreground">AI Transparency & Authorship</h2>
+                </div>
+                
+                <div className="space-y-6">
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground mb-2">AI-Assisted Content Generation</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      All books generated through ScrollLibrary are created using advanced AI systems. While our 
+                      multi-agent approach ensures high-quality, structured content, users should understand that 
+                      this is AI-generated material and should be treated accordingly.
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground mb-2">Reference Generation</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      When Academic Mode is enabled, our system generates citations and references based on 
+                      training data and research patterns. While we strive for accuracy, users should verify 
+                      critical references independently, especially for academic submissions or professional use.
+                    </p>
+                  </div>
+                  
+                  <div>
+                    <h3 className="text-lg font-semibold text-foreground mb-2">Quality Commitment</h3>
+                    <p className="text-muted-foreground leading-relaxed">
+                      We employ type-aware pipelines (Academic, Professional, Workbook, Bestseller, Comic) with 
+                      strict quality controls. Each pipeline enforces different standards—academic content follows 
+                      scholarly conventions, while creative content follows narrative best practices.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Stats Section */}
+        <section className="py-16">
           <div className="container mx-auto px-4">
             <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
               {stats.map((stat, index) => (
@@ -119,7 +246,7 @@ export default function About() {
         </section>
 
         {/* Features Grid */}
-        <section className="py-16">
+        <section className="py-16 bg-muted/20">
           <div className="container mx-auto px-4">
             <motion.div
               initial={{ opacity: 0, y: 20 }}
@@ -131,8 +258,8 @@ export default function About() {
                 What Makes Us Different
               </h2>
               <p className="text-muted-foreground max-w-2xl mx-auto">
-                ScrollLibrary combines cutting-edge AI technology with timeless wisdom to deliver 
-                an unparalleled learning experience.
+                ScrollLibrary combines cutting-edge AI technology with structured learning methodologies 
+                to deliver an unparalleled educational publishing experience.
               </p>
             </motion.div>
 
@@ -179,9 +306,9 @@ export default function About() {
                 </div>
                 <p className="text-lg text-muted-foreground leading-relaxed mb-6">
                   We envision a world where every seeker of knowledge has access to comprehensive, 
-                  scroll-aligned wisdom across every discipline. From theology to technology, from 
-                  medicine to philosophy—ScrollLibrary aims to be the definitive source for 
-                  transformative learning.
+                  structured learning content across every discipline. From theology to technology, from 
+                  medicine to philosophy—ScrollLibrary aims to be the definitive platform for 
+                  AI-powered educational publishing.
                 </p>
                 <div className="grid sm:grid-cols-3 gap-4 mt-8">
                   <div className="text-center p-4 bg-muted/30 rounded-lg">
@@ -196,6 +323,49 @@ export default function About() {
                     <Users className="h-8 w-8 mx-auto mb-2 text-primary" />
                     <p className="font-medium">Community Driven</p>
                   </div>
+                </div>
+              </div>
+            </motion.div>
+          </div>
+        </section>
+
+        {/* Contact & Trust Section */}
+        <section className="py-16 bg-muted/20">
+          <div className="container mx-auto px-4">
+            <motion.div
+              initial={{ opacity: 0, y: 20 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true }}
+              className="max-w-4xl mx-auto text-center"
+            >
+              <div className="bg-gradient-card rounded-2xl border border-border/50 p-8 md:p-12">
+                <div className="flex items-center justify-center gap-4 mb-6">
+                  <div className="bg-primary/20 p-3 rounded-xl">
+                    <Mail className="h-8 w-8 text-primary" />
+                  </div>
+                </div>
+                <h2 className="text-3xl font-display font-bold text-foreground mb-4">
+                  Questions or Feedback?
+                </h2>
+                <p className="text-lg text-muted-foreground mb-6">
+                  We're committed to transparency and continuous improvement. Reach out to our team 
+                  for institutional partnerships, academic inquiries, or general feedback.
+                </p>
+                <div className="flex flex-wrap justify-center gap-4">
+                  <a 
+                    href="/contact" 
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
+                  >
+                    <Mail className="h-5 w-5" />
+                    Contact Us
+                  </a>
+                  <a 
+                    href="/help" 
+                    className="inline-flex items-center gap-2 px-6 py-3 bg-muted text-foreground rounded-lg hover:bg-muted/80 transition-colors"
+                  >
+                    <FileText className="h-5 w-5" />
+                    Help Center
+                  </a>
                 </div>
               </div>
             </motion.div>

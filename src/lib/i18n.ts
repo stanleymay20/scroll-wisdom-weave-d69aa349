@@ -30,8 +30,10 @@ export const translations: Record<Language, Record<string, string>> = {
     'nav.settings': 'Settings',
     'nav.dashboard': 'Dashboard',
     
-    // Home/Hero
-    'home.badge': 'AI-Powered Infinite Library',
+    // Home/Hero - Authority Signals
+    'home.badge': 'AI-Powered Digital Publishing Platform',
+    'home.authorityTitle': 'AI-Powered Digital Publishing & Learning Platform',
+    'home.authoritySubtitle': 'Generate, publish, and study books with structured AI — from academic texts to comics and guided learning experiences.',
     'home.title1': "The World's",
     'home.title2': 'Infinite Library',
     'home.subtitle': 'Generate unlimited books across theology, science, history, and beyond. Each with chapters of 8,000+ words, scroll-aligned accuracy, and academic rigor.',
@@ -40,6 +42,29 @@ export const translations: Record<Language, Record<string, string>> = {
     'home.stats.books': 'Books',
     'home.stats.words': 'Words/Chapter',
     'home.stats.categories': 'Categories',
+    
+    // Platform Clarification Section
+    'clarification.title': 'Understanding ScrollLibrary',
+    'clarification.subtitle': 'A clear definition of what our platform offers',
+    'clarification.isTitle': 'What ScrollLibrary IS',
+    'clarification.is1': 'AI-powered book publishing platform for generating academic texts, manuals, and learning content',
+    'clarification.is2': 'Digital reading and learning system with structured study features',
+    'clarification.is3': 'Academic, professional, and creative publishing tool with citations and references',
+    'clarification.isNotTitle': 'What ScrollLibrary IS NOT',
+    'clarification.isNot1': 'Not a scrolling animation library or CSS utility',
+    'clarification.isNot2': 'Not a frontend developer tool or JavaScript framework',
+    'clarification.isNot3': 'Not a UI animation or scroll-effect plugin',
+    
+    // Academic Credibility Section
+    'academic.badge': 'Built for Scholars',
+    'academic.title': 'Built for Students, Researchers, and Educators',
+    'academic.subtitle': 'Professional-grade features designed for academic rigor and structured learning',
+    'academic.citations': 'Citations & References',
+    'academic.objectives': 'Learning Objectives',
+    'academic.codeBlocks': 'Formatted Code',
+    'academic.tables': 'Data Tables',
+    'academic.deepResearch': 'Deep Research',
+    'academic.export': 'PDF/EPUB Export',
     
     // Featured Books Section
     'featured.title': 'Featured',
@@ -732,8 +757,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'footer.support': 'Support',
     'footer.library': 'Library',
     'footer.legal': 'Legal',
-    'footer.tagline': "The world's first AI-powered infinite library. Generate unlimited books with scroll-aligned accuracy and academic rigor.",
-    'footer.copyright': '© 2025 ScrollLibrary™. Scroll-aligned wisdom for the ages.',
+    'footer.tagline': 'AI-powered digital publishing & learning platform. Generate, publish, and study books with structured AI.',
+    'footer.copyright': '© 2025 ScrollLibrary™. AI-Powered Digital Publishing Platform.',
     'footer.quickLinks': 'Quick Links',
     
     // Cover Themes

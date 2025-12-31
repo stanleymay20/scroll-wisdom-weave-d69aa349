@@ -1,6 +1,8 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Navbar } from "@/components/layout/Navbar";
 import { HeroSection } from "@/components/home/HeroSection";
+import { PlatformClarification } from "@/components/home/PlatformClarification";
+import { AcademicCredibility } from "@/components/home/AcademicCredibility";
 import { FeaturedBooks } from "@/components/home/FeaturedBooks";
 import { CategoriesSection } from "@/components/home/CategoriesSection";
 import { Footer } from "@/components/layout/Footer";
@@ -26,6 +28,8 @@ const Index = () => {
       <TrialBanner />
       <main>
         <HeroSection />
+        <PlatformClarification />
+        <AcademicCredibility />
         <FeaturedBooks />
         <CategoriesSection />
       </main>
