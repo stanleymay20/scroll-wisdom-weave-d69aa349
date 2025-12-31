@@ -29,27 +29,29 @@ export function HeroSection() {
             </span>
           </motion.div>
 
-          {/* Headline */}
+          {/* Primary Headline (H1) - Authority Signal */}
           <motion.h1
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.6, delay: 0.1 }}
-            className="font-display text-5xl md:text-7xl lg:text-8xl font-bold mb-6"
+            className="font-display text-4xl md:text-5xl lg:text-6xl font-bold mb-4"
           >
-            <span className="text-foreground">{t('home.title1')}</span>
-            <br />
-            <span className="text-gradient-gold">{t('home.title2')}</span>
+            <span className="text-foreground">ScrollLibrary</span>
+            <span className="text-gradient-gold"> — </span>
+            <span className="text-gradient-gold">{t('home.authorityTitle')}</span>
           </motion.h1>
 
-          {/* Subheadline */}
-          <motion.p
+          {/* Secondary Headline (H2) - Classification Signal */}
+          <motion.h2
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
-            transition={{ duration: 0.6, delay: 0.2 }}
-            className="text-xl md:text-2xl text-muted-foreground max-w-2xl mx-auto mb-10 leading-relaxed"
+            transition={{ duration: 0.6, delay: 0.15 }}
+            className="text-xl md:text-2xl text-muted-foreground font-medium mb-6"
           >
-            {t('home.subtitle')}
-          </motion.p>
+            {t('home.authoritySubtitle')}
+          </motion.h2>
+
+          {/* CTA Buttons */}
 
           {/* CTA Buttons */}
           <motion.div
