@@ -97,12 +97,15 @@ export type Database = {
           chapter_references: Json | null
           citation_style: string | null
           content: string | null
+          content_ownership: Json | null
           created_at: string | null
           id: string
           is_generated: boolean | null
+          last_ai_content: string | null
           research_metadata: Json | null
           title: string
           updated_at: string | null
+          user_locked: boolean | null
           word_count: number | null
         }
         Insert: {
@@ -112,12 +115,15 @@ export type Database = {
           chapter_references?: Json | null
           citation_style?: string | null
           content?: string | null
+          content_ownership?: Json | null
           created_at?: string | null
           id?: string
           is_generated?: boolean | null
+          last_ai_content?: string | null
           research_metadata?: Json | null
           title: string
           updated_at?: string | null
+          user_locked?: boolean | null
           word_count?: number | null
         }
         Update: {
@@ -127,12 +133,15 @@ export type Database = {
           chapter_references?: Json | null
           citation_style?: string | null
           content?: string | null
+          content_ownership?: Json | null
           created_at?: string | null
           id?: string
           is_generated?: boolean | null
+          last_ai_content?: string | null
           research_metadata?: Json | null
           title?: string
           updated_at?: string | null
+          user_locked?: boolean | null
           word_count?: number | null
         }
         Relationships: [
