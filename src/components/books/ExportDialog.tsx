@@ -59,8 +59,24 @@ export function ExportDialog({
   const [authorName, setAuthorName] = useState(defaultAuthorName || "");
   const [isbn, setIsbn] = useState("");
   const [isOpen, setIsOpen] = useState(false);
+  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const { toast } = useToast();
   const { t } = useLanguage();
+  
+  // Check authentication status
+  useEffect(() => {
+    const checkAuth = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      setIsAuthenticated(!!session?.user);
+    };
+    checkAuth();
+    
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
+      setIsAuthenticated(!!session?.user);
+    });
+    
+    return () => subscription.unsubscribe();
+  }, []);
   
   // Use centralized entitlements - SINGLE SOURCE OF TRUTH
   const entitlements = useEntitlements();
@@ -91,6 +107,16 @@ export function ExportDialog({
   }, [defaultAuthorName]);
 
   const handleExport = async (format: ExportFormat) => {
+    // Check if user is authenticated before export
+    if (!isAuthenticated) {
+      toast({
+        title: "Authentication Required",
+        description: "Please sign in to export your book.",
+        variant: "destructive",
+      });
+      return;
+    }
+
     if (!hasGeneratedChapters) {
       toast({
         title: t('export.noChapters'),
@@ -121,6 +147,13 @@ export function ExportDialog({
     setIsExporting(format);
 
     try {
+      // Get the current session to ensure we have a valid token
+      const { data: { session } } = await supabase.auth.getSession();
+      
+      if (!session?.access_token) {
+        throw new Error("No active session. Please sign in again.");
+      }
+
       const response = await supabase.functions.invoke("export-book", {
         body: { 
           bookId, 
@@ -206,7 +239,7 @@ export function ExportDialog({
   ];
 
   const hasCover = !!coverImageUrl;
-  const canProceed = hasGeneratedChapters && hasCover && !isComicBlocked;
+  const canProceed = hasGeneratedChapters && hasCover && !isComicBlocked && isAuthenticated;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -326,14 +359,21 @@ export function ExportDialog({
         </div>
 
         {/* Validation Messages */}
-        {!hasGeneratedChapters && (
+        {!isAuthenticated && (
+          <p className="text-sm text-amber-500 flex items-center gap-2">
+            <AlertCircle className="h-4 w-4" />
+            Please sign in to export your book
+          </p>
+        )}
+
+        {!hasGeneratedChapters && isAuthenticated && (
           <p className="text-sm text-amber-500 flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
             {t('export.generateFirst')}
           </p>
         )}
         
-        {!hasCover && hasGeneratedChapters && (
+        {!hasCover && hasGeneratedChapters && isAuthenticated && (
           <p className="text-sm text-amber-500 flex items-center gap-2">
             <AlertCircle className="h-4 w-4" />
             {t('export.addCover')}
