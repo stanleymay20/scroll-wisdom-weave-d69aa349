@@ -21,13 +21,14 @@ import {
   Award,
   AlertCircle,
   Image as ImageIcon,
-  GraduationCap
+  GraduationCap,
+  XCircle
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
+import { validateComicContent, ComicValidationResult } from "@/lib/systemDiagnostics";
 
 interface ExportDialogProps {
   bookId: string;
@@ -37,6 +38,8 @@ interface ExportDialogProps {
   authorName?: string;
   isAcademicMode?: boolean;
   citationStyle?: string;
+  bookType?: string;
+  chapterContents?: string[];
 }
 
 type ExportFormat = "pdf" | "epub" | "docx";
@@ -48,7 +51,9 @@ export function ExportDialog({
   coverImageUrl,
   authorName: defaultAuthorName,
   isAcademicMode = false,
-  citationStyle = 'APA'
+  citationStyle = 'APA',
+  bookType = 'text',
+  chapterContents = []
 }: ExportDialogProps) {
   const [isExporting, setIsExporting] = useState<ExportFormat | null>(null);
   const [authorName, setAuthorName] = useState(defaultAuthorName || "");
@@ -65,6 +70,19 @@ export function ExportDialog({
   
   // Fail-safe: paid users ALWAYS have export access - no exceptions
   const canExport = hasFullAccess || entitlements.canExport || entitlements.canDownload;
+
+  // Comic validation - HARD RULE: comics must have matching panels and images
+  const [comicValidation, setComicValidation] = useState<ComicValidationResult | null>(null);
+  
+  useEffect(() => {
+    if (bookType === 'comic' && chapterContents.length > 0) {
+      const allContent = chapterContents.join('\n\n');
+      const validation = validateComicContent(allContent);
+      setComicValidation(validation);
+    }
+  }, [bookType, chapterContents]);
+
+  const isComicBlocked = bookType === 'comic' && comicValidation && !comicValidation.canExport;
 
   useEffect(() => {
     if (defaultAuthorName) {
@@ -188,7 +206,7 @@ export function ExportDialog({
   ];
 
   const hasCover = !!coverImageUrl;
-  const canProceed = hasGeneratedChapters && hasCover;
+  const canProceed = hasGeneratedChapters && hasCover && !isComicBlocked;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -320,6 +338,24 @@ export function ExportDialog({
             <AlertCircle className="h-4 w-4" />
             {t('export.addCover')}
           </p>
+        )}
+
+        {/* Comic Export Blocker - HARD RULE */}
+        {isComicBlocked && comicValidation && (
+          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30">
+            <div className="flex items-start gap-2">
+              <XCircle className="h-4 w-4 text-destructive mt-0.5" />
+              <div className="text-sm">
+                <p className="font-medium text-destructive">Comic Export Blocked</p>
+                <p className="text-muted-foreground mt-1">
+                  Panels: {comicValidation.panelCount} | Images: {comicValidation.imageCount}
+                </p>
+                {comicValidation.errors.map((error, i) => (
+                  <p key={i} className="text-xs text-destructive mt-1">• {error}</p>
+                ))}
+              </div>
+            </div>
+          </div>
         )}
 
         {/* Only show upgrade prompt for FREE tier users */}
