@@ -63,17 +63,29 @@ function sanitizeFilename(title: string): string {
   return title.replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").substring(0, 50);
 }
 
-// Enhanced markdown processing that preserves code blocks
-function processMarkdownContent(text: string): { paragraphs: string[]; codeBlocks: { lang: string; code: string }[]; tables: string[][] } {
-  if (!text) return { paragraphs: [], codeBlocks: [], tables: [] };
+// Enhanced markdown processing that preserves code blocks and images
+function processMarkdownContent(text: string): { 
+  paragraphs: string[]; 
+  codeBlocks: { lang: string; code: string }[]; 
+  tables: string[][];
+  images: { alt: string; url: string }[];
+} {
+  if (!text) return { paragraphs: [], codeBlocks: [], tables: [], images: [] };
   
   const codeBlocks: { lang: string; code: string }[] = [];
   const tables: string[][] = [];
+  const images: { alt: string; url: string }[] = [];
   
   // Extract code blocks first
   let processedText = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
     codeBlocks.push({ lang: lang || 'text', code: code.trim() });
     return `[CODE_BLOCK_${codeBlocks.length - 1}]`;
+  });
+  
+  // Extract images (especially comic panels) - MUST happen before stripping markdown
+  processedText = processedText.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+    images.push({ alt: alt || 'Image', url: url.trim() });
+    return `[IMAGE_${images.length - 1}]`;
   });
   
   // Extract tables
@@ -87,13 +99,13 @@ function processMarkdownContent(text: string): { paragraphs: string[]; codeBlock
     return `[TABLE_${tables.length - 1}]`;
   });
   
-  // Strip remaining markdown
+  // Strip remaining markdown (but NOT image placeholders)
   const stripped = processedText
     .replace(/^#{1,6}\s+/gm, "")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")
     .replace(/`[^`]+`/g, (match) => match.slice(1, -1))
-    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Regular links (not images)
     .replace(/^\s*[-*]\s+/gm, "• ")
     .replace(/^\s*\d+\.\s+/gm, "")
     .replace(/\n{3,}/g, "\n\n")
@@ -101,7 +113,7 @@ function processMarkdownContent(text: string): { paragraphs: string[]; codeBlock
   
   const paragraphs = stripped.split(/\n\n+/).filter(p => p.trim());
   
-  return { paragraphs, codeBlocks, tables };
+  return { paragraphs, codeBlocks, tables, images };
 }
 
 function stripMarkdown(text: string): string {
@@ -641,11 +653,111 @@ async function generatePDF(
     }
     y -= 30;
     
-    // Process content with code block handling
-    const { paragraphs, codeBlocks } = processMarkdownContent(chapter.content || "");
+    // Process content with code block and image handling
+    const { paragraphs, codeBlocks, images } = processMarkdownContent(chapter.content || "");
+    
+    // Pre-fetch all images for this chapter (for comics)
+    const fetchedImages: Map<number, { bytes: Uint8Array; type: 'png' | 'jpg' }> = new Map();
+    for (let i = 0; i < images.length; i++) {
+      const imgData = images[i];
+      if (imgData.url) {
+        console.log(`[EXPORT] Fetching image ${i + 1}/${images.length}: ${imgData.alt}`);
+        const imageBytes = await fetchImageBytes(imgData.url);
+        if (imageBytes) {
+          // Detect image type
+          const isPng = imageBytes[0] === 0x89 && imageBytes[1] === 0x50;
+          fetchedImages.set(i, { bytes: imageBytes, type: isPng ? 'png' : 'jpg' });
+        }
+      }
+    }
     
     for (const paragraph of paragraphs) {
       if (!paragraph.trim()) continue;
+      
+      // Check if this is an image placeholder (for comics)
+      const imageMatch = paragraph.match(/\[IMAGE_(\d+)\]/);
+      if (imageMatch) {
+        const imgIndex = parseInt(imageMatch[1]);
+        const imgInfo = fetchedImages.get(imgIndex);
+        const imgMeta = images[imgIndex];
+        
+        if (imgInfo) {
+          // Add new page if needed for image
+          const imgHeight = 300; // Fixed height for comic panels
+          if (y - imgHeight < margin + 30) {
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            addPageNumber(page, pageNumber);
+            y = pageHeight - margin - 30;
+          }
+          
+          try {
+            let image;
+            if (imgInfo.type === 'png') {
+              image = await pdfDoc.embedPng(imgInfo.bytes);
+            } else {
+              image = await pdfDoc.embedJpg(imgInfo.bytes);
+            }
+            
+            // Calculate dimensions to fit in page width while maintaining aspect ratio
+            const imgAspect = image.width / image.height;
+            let drawWidth = textWidth;
+            let drawHeight = drawWidth / imgAspect;
+            
+            // Limit max height
+            if (drawHeight > 350) {
+              drawHeight = 350;
+              drawWidth = drawHeight * imgAspect;
+            }
+            
+            // Center the image
+            const drawX = margin + (textWidth - drawWidth) / 2;
+            
+            page.drawImage(image, {
+              x: drawX,
+              y: y - drawHeight,
+              width: drawWidth,
+              height: drawHeight,
+            });
+            
+            y -= drawHeight + 10;
+            
+            // Add caption if available
+            if (imgMeta?.alt && imgMeta.alt !== 'Image') {
+              page.drawText(imgMeta.alt, {
+                x: margin,
+                y,
+                size: 9,
+                font: helvetica,
+                color: rgb(0.4, 0.4, 0.4),
+              });
+              y -= 20;
+            }
+          } catch (error) {
+            console.error(`[EXPORT] Failed to embed image ${imgIndex}:`, error);
+            // Draw placeholder text
+            page.drawText(`[Image: ${imgMeta?.alt || 'Panel'}]`, {
+              x: margin,
+              y,
+              size: 10,
+              font: helvetica,
+              color: rgb(0.6, 0.6, 0.6),
+            });
+            y -= 20;
+          }
+        } else {
+          // Image not found - draw placeholder
+          page.drawText(`[Image not available: ${imgMeta?.alt || 'Panel'}]`, {
+            x: margin,
+            y,
+            size: 10,
+            font: helvetica,
+            color: rgb(0.6, 0.6, 0.6),
+          });
+          y -= 20;
+        }
+        continue;
+      }
       
       // Check if this is a code block placeholder
       const codeMatch = paragraph.match(/\[CODE_BLOCK_(\d+)\]/);
@@ -815,7 +927,7 @@ function escapeXml(text: string): string {
     .replace(/'/g, '&#39;');
 }
 
-// ===== EPUB Generation with Cover and References =====
+// ===== EPUB Generation with Cover, Images, and References =====
 async function generateEPUB(
   book: any, 
   chapters: any[], 
@@ -854,6 +966,77 @@ async function generateEPUB(
 
   // Add references as separate document for academic
   const hasRefs = isAcademic && bibliography.length > 0;
+  
+  // First, process all chapters to collect images and generate XHTML
+  let imageCounter = 0;
+  const chapterImages: { id: string; path: string; bytes: Uint8Array }[] = [];
+  const processedChapters: { id: string; href: string; xhtml: string }[] = [];
+  
+  for (const item of chapterItems) {
+    let content = item.chapter.content || "";
+    
+    // Extract and process images first
+    const imageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
+    const imageMap: Map<string, string> = new Map();
+    
+    for (const match of imageMatches) {
+      const [fullMatch, alt, url] = match;
+      const imageName = `panel-${imageCounter}.jpg`;
+      const imageId = `panel-img-${imageCounter}`;
+      imageCounter++;
+      
+      console.log(`[EXPORT] Fetching EPUB image: ${alt || 'panel'}`);
+      const imageBytes = await fetchImageBytes(url);
+      if (imageBytes) {
+        chapterImages.push({ id: imageId, path: `OEBPS/images/${imageName}`, bytes: imageBytes });
+        imageMap.set(fullMatch, `<figure><img src="images/${imageName}" alt="${escapeXml(alt || 'Panel')}" style="max-width:100%;"/><figcaption>${escapeXml(alt || '')}</figcaption></figure>`);
+      } else {
+        imageMap.set(fullMatch, `<p><em>[Image not available: ${escapeXml(alt || 'Panel')}]</em></p>`);
+      }
+    }
+    
+    // Replace image markdown with HTML
+    for (const [original, replacement] of imageMap) {
+      content = content.replace(original, replacement);
+    }
+    
+    // Convert markdown code blocks to HTML
+    content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match: string, lang: string, code: string) => {
+      return `<pre><code class="${lang || 'text'}">${escapeXml(code.trim())}</code></pre>`;
+    });
+    
+    // Convert inline code
+    content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
+    
+    // Convert paragraphs (skip already processed HTML)
+    const htmlContent = content
+      .split(/\n\n+/)
+      .map((p: string) => {
+        p = p.trim();
+        if (!p) return '';
+        if (p.startsWith('<pre>') || p.startsWith('<code>') || p.startsWith('<figure>') || p.startsWith('<p>')) return p;
+        return `<p>${escapeXml(p)}</p>`;
+      })
+      .filter((p: string) => p)
+      .join('\n');
+    
+    const chapterXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>${escapeXml(item.chapter.title)}</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<h1>Chapter ${item.chapter.chapter_number}: ${escapeXml(item.chapter.title)}</h1>
+${htmlContent}
+</body>
+</html>`;
+    
+    processedChapters.push({ id: item.id, href: item.href, xhtml: chapterXhtml });
+  }
+  
+  // Now generate manifest with all collected images
+  const imageManifestItems = chapterImages.map((img, i) => 
+    `<item id="${img.id}" href="images/panel-${i}.jpg" media-type="image/jpeg"/>`
+  ).join('\n    ');
 
   const contentOpf = `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
@@ -874,6 +1057,7 @@ async function generateEPUB(
     <item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>
     ${chapterItems.map(c => `<item id="${c.id}" href="${c.href}" media-type="application/xhtml+xml"/>`).join('\n    ')}
     ${hasRefs ? '<item id="references" href="references.xhtml" media-type="application/xhtml+xml"/>' : ''}
+    ${imageManifestItems}
     <item id="css" href="style.css" media-type="text/css"/>
   </manifest>
   <spine>
@@ -956,37 +1140,14 @@ All references in this document are retrieved from verifiable academic databases
 </html>`;
   await zipWriter.add("OEBPS/title.xhtml", new zip.TextReader(titleContent));
 
-  // Process chapters with proper code block handling
-  for (const item of chapterItems) {
-    let content = item.chapter.content || "";
-    
-    // Convert markdown code blocks to HTML
-    content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match: string, lang: string, code: string) => {
-      return `<pre><code class="${lang || 'text'}">${escapeXml(code.trim())}</code></pre>`;
-    });
-    
-    // Convert inline code
-    content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
-    
-    // Convert paragraphs
-    const htmlContent = content
-      .split(/\n\n+/)
-      .map((p: string) => {
-        if (p.startsWith('<pre>') || p.startsWith('<code>')) return p;
-        return `<p>${escapeXml(p.trim())}</p>`;
-      })
-      .join('\n');
-    
-    const chapterXhtml = `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE html>
-<html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>${escapeXml(item.chapter.title)}</title><link rel="stylesheet" href="style.css"/></head>
-<body>
-<h1>Chapter ${item.chapter.chapter_number}: ${escapeXml(item.chapter.title)}</h1>
-${htmlContent}
-</body>
-</html>`;
-    await zipWriter.add(`OEBPS/${item.href}`, new zip.TextReader(chapterXhtml));
+  // Write all processed chapters
+  for (const chapter of processedChapters) {
+    await zipWriter.add(`OEBPS/${chapter.href}`, new zip.TextReader(chapter.xhtml));
+  }
+  
+  // Add all collected panel images to the EPUB
+  for (const img of chapterImages) {
+    await zipWriter.add(img.path, new zip.Uint8ArrayReader(img.bytes));
   }
 
   // References page for academic exports
