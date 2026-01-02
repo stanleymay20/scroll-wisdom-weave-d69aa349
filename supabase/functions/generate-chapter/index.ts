@@ -1872,8 +1872,10 @@ This is MANDATORY. No exceptions.`;
                   bytes[j] = binaryString.charCodeAt(j);
                 }
                 
-                // Upload path: userId/bookId/chapterId/panel-N.png
+                // Upload path: userId/bookId/chapterId/panel-N.ext
                 const storagePath = `${user.id}/${chapter?.book_id || "unknown"}/${chapterId}/panel-${panel.num}.${ext}`;
+                
+                console.log(`[GENERATE-CHAPTER] Uploading panel ${panel.num} to storage: ${storagePath}`);
                 
                 const { error: uploadError } = await supabase.storage
                   .from("comic-panels")
@@ -1888,18 +1890,25 @@ This is MANDATORY. No exceptions.`;
                     .from("comic-panels")
                     .getPublicUrl(storagePath);
                   
-                  panel.imageUrl = publicUrlData.publicUrl;
-                  console.log(`[GENERATE-CHAPTER] Panel ${panel.num} uploaded to storage`);
+                  if (publicUrlData?.publicUrl) {
+                    panel.imageUrl = publicUrlData.publicUrl;
+                    console.log(`[GENERATE-CHAPTER] Panel ${panel.num} uploaded successfully: ${publicUrlData.publicUrl.slice(0, 80)}...`);
+                  } else {
+                    console.error(`[GENERATE-CHAPTER] No public URL returned for panel ${panel.num}`);
+                    panel.imageUrl = base64Url;
+                  }
                 } else {
-                  console.error(`[GENERATE-CHAPTER] Upload error:`, uploadError);
+                  console.error(`[GENERATE-CHAPTER] Upload error for panel ${panel.num}:`, uploadError.message);
                   // Fall back to base64 if upload fails
                   panel.imageUrl = base64Url;
                 }
               } catch (uploadErr) {
-                console.error(`[GENERATE-CHAPTER] Storage upload failed:`, uploadErr);
+                console.error(`[GENERATE-CHAPTER] Storage upload failed for panel ${panel.num}:`, uploadErr);
                 // Fall back to base64 if upload fails
                 panel.imageUrl = base64Url;
               }
+            } else {
+              console.log(`[GENERATE-CHAPTER] No valid image URL returned for panel ${panel.num}`);
             }
           }
           

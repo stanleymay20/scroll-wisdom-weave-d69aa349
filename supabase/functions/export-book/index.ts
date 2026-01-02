@@ -64,6 +64,7 @@ function sanitizeFilename(title: string): string {
 }
 
 // Enhanced markdown processing that preserves code blocks and images
+// Handles BOTH markdown image format AND comic "Panel N" format with storage URLs
 function processMarkdownContent(text: string): { 
   paragraphs: string[]; 
   codeBlocks: { lang: string; code: string }[]; 
@@ -82,8 +83,12 @@ function processMarkdownContent(text: string): {
     return `[CODE_BLOCK_${codeBlocks.length - 1}]`;
   });
   
-  // Extract images (especially comic panels) - MUST happen before stripping markdown
+  // Extract markdown images (![alt](url)) - MUST happen before stripping markdown
   processedText = processedText.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_, alt, url) => {
+    // Skip placeholder text that isn't a real URL
+    if (url.startsWith('[') || url.includes('Illustration:')) {
+      return `[Illustration: ${alt}]`;
+    }
     images.push({ alt: alt || 'Image', url: url.trim() });
     return `[IMAGE_${images.length - 1}]`;
   });
@@ -113,6 +118,8 @@ function processMarkdownContent(text: string): {
   
   const paragraphs = stripped.split(/\n\n+/).filter(p => p.trim());
   
+  console.log(`[EXPORT] processMarkdownContent found ${images.length} images`);
+  
   return { paragraphs, codeBlocks, tables, images };
 }
 
@@ -133,19 +140,38 @@ function stripMarkdown(text: string): string {
 
 async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
   try {
+    // Handle base64 data URIs
     if (url.startsWith("data:image")) {
+      console.log("[EXPORT] Decoding base64 image data...");
       const base64Data = url.split(",")[1];
+      if (!base64Data) {
+        console.error("[EXPORT] Invalid base64 data URI");
+        return null;
+      }
       const binaryString = atob(base64Data);
       const bytes = new Uint8Array(binaryString.length);
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
+      console.log(`[EXPORT] Decoded base64 image: ${bytes.length} bytes`);
       return bytes;
     }
     
-    const response = await fetch(url);
-    if (!response.ok) return null;
+    // Handle remote URLs (storage URLs, etc.)
+    console.log(`[EXPORT] Fetching remote image: ${url.slice(0, 100)}...`);
+    const response = await fetch(url, {
+      headers: {
+        'Accept': 'image/*',
+      },
+    });
+    
+    if (!response.ok) {
+      console.error(`[EXPORT] Failed to fetch image: ${response.status} ${response.statusText}`);
+      return null;
+    }
+    
     const arrayBuffer = await response.arrayBuffer();
+    console.log(`[EXPORT] Fetched remote image: ${arrayBuffer.byteLength} bytes`);
     return new Uint8Array(arrayBuffer);
   } catch (error) {
     console.error("[EXPORT] Error fetching image:", error);
@@ -1033,10 +1059,11 @@ ${htmlContent}
     processedChapters.push({ id: item.id, href: item.href, xhtml: chapterXhtml });
   }
   
-  // Now generate manifest with all collected images
-  const imageManifestItems = chapterImages.map((img, i) => 
-    `<item id="${img.id}" href="images/panel-${i}.jpg" media-type="image/jpeg"/>`
-  ).join('\n    ');
+  // Now generate manifest with all collected images - use the actual stored path
+  const imageManifestItems = chapterImages.map((img) => {
+    const filename = img.path.split('/').pop() || 'panel.jpg';
+    return `<item id="${img.id}" href="images/${filename}" media-type="image/jpeg"/>`;
+  }).join('\n    ');
 
   const contentOpf = `<?xml version="1.0" encoding="UTF-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
