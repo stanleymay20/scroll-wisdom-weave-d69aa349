@@ -9,6 +9,7 @@ import { useEffect, Suspense, lazy } from "react";
 import { PWAInstallPrompt, OfflineIndicator } from "@/components/pwa";
 import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { DiagnosticsPanel } from "@/components/system/DiagnosticsPanel";
 import { createLogger, setTraceId } from "@/lib/logger";
 import { Loader2 } from "lucide-react";
 
@@ -132,6 +133,7 @@ const App = () => (
                 </Routes>
               </Suspense>
               <PWAInstallPrompt />
+              <DiagnosticsPanel />
               <Suspense fallback={null}>
                 <CookieConsent />
               </Suspense>
