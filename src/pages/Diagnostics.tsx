@@ -9,10 +9,11 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/hooks/useAdmin";
 import { BUILD_INFO } from "@/lib/buildInfo";
-import { Loader2, CheckCircle, XCircle, ExternalLink, Zap, BookOpen, Image as ImageIcon, ChevronDown, ChevronUp, Eye } from "lucide-react";
+import { Loader2, CheckCircle, XCircle, ExternalLink, Zap, BookOpen, Image as ImageIcon, ChevronDown, ChevronUp, Eye, FileDown } from "lucide-react";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
+import { SystemDoctor } from "@/components/diagnostics/SystemDoctor";
 
 interface TestResult {
   name: string;
@@ -426,6 +427,11 @@ export default function Diagnostics() {
               {BUILD_INFO.id}
             </Badge>
           </div>
+
+          <Separator />
+
+          {/* System Doctor - Comprehensive Diagnostics */}
+          <SystemDoctor />
 
           <Separator />
 
