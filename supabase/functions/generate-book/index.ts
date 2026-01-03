@@ -179,6 +179,11 @@ serve(async (req) => {
       bookType = 'text',
       enableReferences = false,
       bestsellerMode = true, // Default ON
+      // Author & Imprint fields
+      authorMode = 'ai',
+      authorDisplayName = null,
+      penName = null,
+      publisherImprint = null,
       // Workbook fields
       workbookDensity = 'medium',
       // Comic fields
@@ -190,6 +195,22 @@ serve(async (req) => {
       textInImage = true,
       scenesPerPanel = 1,
     } = await req.json();
+
+    // Resolve author display name based on mode
+    const resolveAuthorName = (): string => {
+      switch (authorMode) {
+        case 'user_name':
+          return authorDisplayName || 'ScrollLibrary Author';
+        case 'pen_name':
+          return penName || 'Anonymous';
+        case 'hidden':
+          return 'Anonymous';
+        case 'ai':
+        default:
+          return 'ScrollAuthorGPT';
+      }
+    };
+    const resolvedAuthorName = resolveAuthorName();
 
     console.log(`[GENERATE-BOOK] Bestseller Mode: ${bestsellerMode ? 'ENABLED' : 'disabled'}`);
 
@@ -369,6 +390,7 @@ Format your response as a JSON object with this structure:
 
     // Save book to database
     console.log("[GENERATE-BOOK] Saving book to database...");
+    console.log(`[GENERATE-BOOK] Author mode: ${authorMode}, Resolved name: ${resolvedAuthorName}`);
     const { data: book, error: bookError } = await supabase
       .from("books")
       .insert({
@@ -378,7 +400,12 @@ Format your response as a JSON object with this structure:
         total_chapters: effectiveChapters,
         is_published: false,
         is_featured: false,
-        author_ai_agent: "ScrollAuthorGPT",
+        author_ai_agent: resolvedAuthorName,
+        // New author fields
+        author_mode: authorMode,
+        author_display_name: resolvedAuthorName,
+        pen_name: penName || null,
+        publisher_imprint: publisherImprint || null,
         cover_image_url: customCover || null,
         creator_id: user.id,
         language: language,

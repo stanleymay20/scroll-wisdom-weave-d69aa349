@@ -17,6 +17,8 @@ export type Database = {
       books: {
         Row: {
           author_ai_agent: string | null
+          author_display_name: string | null
+          author_mode: string | null
           book_type: string
           category: Database["public"]["Enums"]["book_category"]
           character_sheet: Json | null
@@ -32,6 +34,8 @@ export type Database = {
           layout_template: number | null
           line_weight_hint: string | null
           palette_hint: string | null
+          pen_name: string | null
+          publisher_imprint: string | null
           scenes_per_panel: number | null
           text_in_image: boolean | null
           title: string
@@ -41,6 +45,8 @@ export type Database = {
         }
         Insert: {
           author_ai_agent?: string | null
+          author_display_name?: string | null
+          author_mode?: string | null
           book_type?: string
           category: Database["public"]["Enums"]["book_category"]
           character_sheet?: Json | null
@@ -56,6 +62,8 @@ export type Database = {
           layout_template?: number | null
           line_weight_hint?: string | null
           palette_hint?: string | null
+          pen_name?: string | null
+          publisher_imprint?: string | null
           scenes_per_panel?: number | null
           text_in_image?: boolean | null
           title: string
@@ -65,6 +73,8 @@ export type Database = {
         }
         Update: {
           author_ai_agent?: string | null
+          author_display_name?: string | null
+          author_mode?: string | null
           book_type?: string
           category?: Database["public"]["Enums"]["book_category"]
           character_sheet?: Json | null
@@ -80,6 +90,8 @@ export type Database = {
           layout_template?: number | null
           line_weight_hint?: string | null
           palette_hint?: string | null
+          pen_name?: string | null
+          publisher_imprint?: string | null
           scenes_per_panel?: number | null
           text_in_image?: boolean | null
           title?: string
@@ -96,6 +108,7 @@ export type Database = {
           chapter_number: number
           chapter_references: Json | null
           citation_style: string | null
+          comic_metadata: Json | null
           content: string | null
           content_ownership: Json | null
           created_at: string | null
@@ -114,6 +127,7 @@ export type Database = {
           chapter_number: number
           chapter_references?: Json | null
           citation_style?: string | null
+          comic_metadata?: Json | null
           content?: string | null
           content_ownership?: Json | null
           created_at?: string | null
@@ -132,6 +146,7 @@ export type Database = {
           chapter_number?: number
           chapter_references?: Json | null
           citation_style?: string | null
+          comic_metadata?: Json | null
           content?: string | null
           content_ownership?: Json | null
           created_at?: string | null

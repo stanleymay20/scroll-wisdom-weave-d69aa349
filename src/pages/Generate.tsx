@@ -33,6 +33,7 @@ import { BookTypeSelector, ExtendedBookType } from "@/components/generate/BookTy
 import { WorkbookPreview } from "@/components/generate/WorkbookPreview";
 import { ComicStyleSelector, ComicStyleConfig } from "@/components/generate/ComicStyleSelector";
 import { BestsellerModeToggle } from "@/components/generate/BestsellerModeToggle";
+import { AuthorImprint, AuthorMode } from "@/components/generate/AuthorImprint";
 
 const CATEGORIES = [
   { value: "theology", labelKey: "categories.theology" },
@@ -97,6 +98,13 @@ export default function Generate() {
   const [contentMode, setContentMode] = useState<ContentMode>("creative");
   const [citationStyle, setCitationStyle] = useState<CitationStyle>("APA");
   const [bestsellerMode, setBestsellerMode] = useState(true); // Default ON for paid tiers
+  
+  // Author & Imprint state
+  const [authorMode, setAuthorMode] = useState<AuthorMode>("ai");
+  const [authorDisplayName, setAuthorDisplayName] = useState("");
+  const [penName, setPenName] = useState("");
+  const [publisherImprint, setPublisherImprint] = useState("");
+  
   const { toast } = useToast();
 
   // Auto-enable academic mode for academic categories
@@ -230,6 +238,11 @@ export default function Generate() {
           academicMode: contentMode === "academic",
           deepResearch: contentMode === "academic",
           bestsellerMode: entitlements.isPaid || entitlements.isTrialMode ? bestsellerMode : false,
+          // Author & Imprint fields
+          authorMode,
+          authorDisplayName: authorDisplayName || undefined,
+          penName: penName || undefined,
+          publisherImprint: publisherImprint || undefined,
           // Workbook-specific fields
           workbookDensity: extendedBookType === "workbook" ? workbookDensity : null,
           // Comic-specific fields
@@ -555,6 +568,19 @@ export default function Generate() {
                   )}
                 </div>
               )}
+
+              {/* Author & Imprint Section */}
+              <AuthorImprint
+                authorMode={authorMode}
+                authorDisplayName={authorDisplayName}
+                penName={penName}
+                publisherImprint={publisherImprint}
+                onAuthorModeChange={setAuthorMode}
+                onAuthorDisplayNameChange={setAuthorDisplayName}
+                onPenNameChange={setPenName}
+                onPublisherImprintChange={setPublisherImprint}
+                disabled={isGenerating}
+              />
 
               {/* Bestseller Mode Toggle - Premium Feature */}
               <BestsellerModeToggle
