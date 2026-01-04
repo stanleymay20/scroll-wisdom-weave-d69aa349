@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { Link } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { 
@@ -352,20 +353,20 @@ export default function About() {
                   for institutional partnerships, academic inquiries, or general feedback.
                 </p>
                 <div className="flex flex-wrap justify-center gap-4">
-                  <a 
-                    href="/contact" 
+                  <Link 
+                    to="/contact" 
                     className="inline-flex items-center gap-2 px-6 py-3 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors"
                   >
                     <Mail className="h-5 w-5" />
                     Contact Us
-                  </a>
-                  <a 
-                    href="/help" 
+                  </Link>
+                  <Link 
+                    to="/help" 
                     className="inline-flex items-center gap-2 px-6 py-3 bg-muted text-foreground rounded-lg hover:bg-muted/80 transition-colors"
                   >
                     <FileText className="h-5 w-5" />
                     Help Center
-                  </a>
+                  </Link>
                 </div>
               </div>
             </motion.div>

@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { motion } from 'framer-motion';
+import { Link } from 'react-router-dom';
 import { Download, Smartphone, Monitor, Check, ArrowRight, Wifi, WifiOff, BookOpen, Headphones, FileText } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Navbar } from '@/components/layout/Navbar';
@@ -229,13 +230,13 @@ export default function Install() {
               transition={{ delay: 0.6 }}
               className="mt-12 text-center"
             >
-              <a 
-                href="/" 
+              <Link 
+                to="/" 
                 className="inline-flex items-center gap-2 text-primary hover:underline"
               >
                 Continue to ScrollLibrary
                 <ArrowRight className="w-4 h-4" />
-              </a>
+              </Link>
             </motion.div>
           )}
         </div>

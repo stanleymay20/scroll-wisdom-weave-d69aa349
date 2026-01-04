@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
-import { Book, Bookmark, ChevronRight } from "lucide-react";
+import { Book, Bookmark, BookmarkCheck, ChevronRight, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "sonner";
 
 interface BookCardProps {
   id: string;
@@ -22,7 +25,53 @@ export function BookCard({
   totalChapters = 0,
   index = 0,
 }: BookCardProps) {
+  const [isAddingToLibrary, setIsAddingToLibrary] = useState(false);
+  const [isInLibrary, setIsInLibrary] = useState(false);
   const categoryFormatted = category.replace(/_/g, " ").replace(/\b\w/g, (l) => l.toUpperCase());
+
+  const handleAddToLibrary = async (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    if (isAddingToLibrary || isInLibrary) return;
+    
+    setIsAddingToLibrary(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        toast.error("Please sign in to add books to your library");
+        return;
+      }
+      
+      // Check if already in library
+      const { data: existing } = await supabase
+        .from("user_library")
+        .select("id")
+        .eq("user_id", user.id)
+        .eq("book_id", id)
+        .maybeSingle();
+      
+      if (existing) {
+        setIsInLibrary(true);
+        toast.info("This book is already in your library");
+        return;
+      }
+      
+      const { error } = await supabase
+        .from("user_library")
+        .insert({ user_id: user.id, book_id: id });
+      
+      if (error) throw error;
+      
+      setIsInLibrary(true);
+      toast.success("Added to your library!");
+    } catch (error) {
+      console.error("Error adding to library:", error);
+      toast.error("Failed to add to library");
+    } finally {
+      setIsAddingToLibrary(false);
+    }
+  };
 
   return (
     <motion.div
@@ -62,15 +111,20 @@ export function BookCard({
             <Button
               variant="ghost"
               size="icon-sm"
-              className="absolute top-3 right-3 opacity-0 group-hover:opacity-100 transition-all duration-200 bg-background/80 backdrop-blur-md hover:bg-background shadow-sm z-10"
-              onClick={(e) => {
-                e.preventDefault();
-                e.stopPropagation();
-                // TODO: Add to library
-              }}
-              aria-label="Add to library"
+              className={`absolute top-3 right-3 transition-all duration-200 bg-background/80 backdrop-blur-md hover:bg-background shadow-sm z-10 ${
+                isInLibrary ? 'opacity-100 text-scroll-gold' : 'opacity-0 group-hover:opacity-100'
+              }`}
+              onClick={handleAddToLibrary}
+              disabled={isAddingToLibrary}
+              aria-label={isInLibrary ? "In library" : "Add to library"}
             >
-              <Bookmark className="h-4 w-4" />
+              {isAddingToLibrary ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isInLibrary ? (
+                <BookmarkCheck className="h-4 w-4" />
+              ) : (
+                <Bookmark className="h-4 w-4" />
+              )}
             </Button>
           </div>
 

@@ -194,7 +194,7 @@ export function RegenerationIntentDialog({
           <Button 
             onClick={handleConfirm}
             disabled={!validation.allowed}
-            className="bg-scroll-gold hover:bg-scroll-gold/90 text-black"
+            className="bg-scroll-gold hover:bg-scroll-gold/90 text-background"
           >
             <Wand2 className="h-4 w-4 mr-2" />
             {isSurgicalEdit ? 'Apply Targeted Edit' : 'Regenerate'}
