@@ -1,4 +1,4 @@
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
@@ -22,6 +22,7 @@ import {
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { PasteProtectionDialog } from "@/components/system/PasteProtectionDialog";
 
 interface ChapterEditorProps {
   chapterId: string;
@@ -55,13 +56,17 @@ export function ChapterEditor({
   const [isSaving, setIsSaving] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
   const [showRegenDialog, setShowRegenDialog] = useState(false);
+  const [showPasteDialog, setShowPasteDialog] = useState(false);
+  const [pendingPasteContent, setPendingPasteContent] = useState<string | null>(null);
   const [editIntent, setEditIntent] = useState("");
   const [isLocked, setIsLocked] = useState(false);
   const [lastSavedContent, setLastSavedContent] = useState(content);
+  const hasAskedForPaste = useRef(false);
 
   useEffect(() => {
     setLocalContent(content);
     setLastSavedContent(content);
+    hasAskedForPaste.current = false; // Reset on content change
   }, [content]);
 
   // Check if chapter is locked
@@ -89,6 +94,76 @@ export function ChapterEditor({
     const union = new Set([...originalWords, ...modifiedWords]).size;
     return union > 0 ? Math.round((1 - intersection / union) * 100) : 0;
   }, []);
+
+  // Handle paste event - ask user what to do with pasted content
+  const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    // If already asked or locked, let paste proceed normally
+    if (hasAskedForPaste.current || isLocked) return;
+    
+    const pastedText = e.clipboardData.getData('text');
+    if (!pastedText || pastedText.length < 50) return; // Ignore small pastes
+    
+    // Calculate difference if we were to apply this paste
+    const textArea = e.target as HTMLTextAreaElement;
+    const start = textArea.selectionStart;
+    const end = textArea.selectionEnd;
+    const newContent = localContent.slice(0, start) + pastedText + localContent.slice(end);
+    
+    const diffPercent = calculateDifference(lastSavedContent, newContent);
+    
+    // Only show dialog for significant changes (>30% different)
+    if (diffPercent > 30) {
+      e.preventDefault();
+      setPendingPasteContent(newContent);
+      setShowPasteDialog(true);
+    }
+  }, [localContent, lastSavedContent, calculateDifference, isLocked]);
+
+  // Handle paste protection dialog result
+  const handlePasteResult = useCallback(async (result: { action: 'lock' | 'allow_regen' | 'cancel' }) => {
+    hasAskedForPaste.current = true;
+    setShowPasteDialog(false);
+    
+    if (result.action === 'cancel') {
+      setPendingPasteContent(null);
+      return;
+    }
+    
+    // Apply the pending paste
+    if (pendingPasteContent) {
+      setLocalContent(pendingPasteContent);
+    }
+    
+    const shouldLock = result.action === 'lock';
+    
+    try {
+      await supabase
+        .from("chapters")
+        .update({ 
+          user_locked: shouldLock,
+          content_ownership: {
+            isUserAuthored: shouldLock,
+            isAIGenerated: !shouldLock,
+            isHybrid: false,
+            lockedAt: shouldLock ? new Date().toISOString() : null,
+          },
+        })
+        .eq("id", chapterId);
+      
+      setIsLocked(shouldLock);
+      
+      toast({
+        title: shouldLock ? "Content protected" : "Ready for regeneration",
+        description: shouldLock 
+          ? "Your writing is now protected from full regeneration."
+          : "This content can be regenerated when needed.",
+      });
+    } catch (error) {
+      console.error("Error updating lock status:", error);
+    }
+    
+    setPendingPasteContent(null);
+  }, [chapterId, pendingPasteContent, toast]);
 
   // Save Draft (No AI) - saves directly without regeneration
   const handleSaveDraft = async () => {
@@ -300,6 +375,7 @@ export function ChapterEditor({
       <Textarea
         value={localContent}
         onChange={(e) => setLocalContent(e.target.value)}
+        onPaste={handlePaste}
         className="min-h-[400px] font-mono text-sm bg-background/50"
         placeholder="Chapter content..."
       />
@@ -309,6 +385,13 @@ export function ChapterEditor({
         <strong>Save Draft</strong> saves your changes directly without AI regeneration.
         <strong> Regenerate With Instructions</strong> uses AI to apply specific edits while preserving your structure.
       </p>
+
+      {/* Paste Protection Dialog */}
+      <PasteProtectionDialog
+        open={showPasteDialog}
+        onResult={handlePasteResult}
+        contentPreview={pendingPasteContent?.slice(0, 200)}
+      />
 
       {/* Regenerate Dialog */}
       <Dialog open={showRegenDialog} onOpenChange={setShowRegenDialog}>

@@ -53,20 +53,30 @@ export default function Profile() {
   const { t } = useLanguage();
 
   useEffect(() => {
+    let mounted = true;
+    
+    const checkAuth = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!mounted) return;
+      
+      if (!user) {
+        navigate("/auth");
+        return;
+      }
+      setUser(user);
+      
+      // Fetch in parallel for faster load
+      await Promise.all([
+        fetchProfile(user.id),
+        fetchUserBooks(user.id)
+      ]);
+      
+      if (mounted) setIsLoading(false);
+    };
+    
     checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      navigate("/auth");
-      return;
-    }
-    setUser(user);
-    await fetchProfile(user.id);
-    await fetchUserBooks(user.id);
-    setIsLoading(false);
-  };
+    return () => { mounted = false; };
+  }, [navigate]);
 
   const fetchProfile = async (userId: string) => {
     const { data, error } = await supabase
