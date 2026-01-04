@@ -423,9 +423,7 @@ export default function Library() {
       const from = pageNum * ITEMS_PER_PAGE;
       const to = from + ITEMS_PER_PAGE - 1;
 
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 8000);
-
+      // Optimized query - only select needed fields for cards
       const { data, error } = await supabase
         .from("user_library")
         .select(`
@@ -434,7 +432,7 @@ export default function Library() {
           progress_percent,
           last_read_chapter,
           created_at,
-          books (
+          books!inner (
             id,
             title,
             description,
@@ -445,8 +443,6 @@ export default function Library() {
         `)
         .order("created_at", { ascending: false })
         .range(from, to);
-
-      clearTimeout(timeoutId);
 
       if (error) throw error;
       

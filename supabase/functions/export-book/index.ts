@@ -1203,7 +1203,7 @@ ${refsContent}
   return await blob.arrayBuffer();
 }
 
-// ===== DOCX Generation with Cover and References =====
+// ===== DOCX Generation with Cover, Images, and References =====
 async function generateDOCX(
   book: any, 
   chapters: any[], 
@@ -1219,11 +1219,42 @@ async function generateDOCX(
   const blobWriter = new zip.BlobWriter("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   const zipWriter = new zip.ZipWriter(blobWriter);
 
-  const contentTypes = `<?xml version="1.0" encoding="UTF-8"?>
+  // Process all chapters to extract images first
+  let imageCounter = 0;
+  const docxImages: { id: string; bytes: Uint8Array }[] = [];
+  const processedChapters: { chapter: any; processedContent: string[]; imageRefs: { index: number; alt: string }[] }[] = [];
+  
+  for (const chapter of chapters) {
+    const content = chapter.content || "";
+    const imageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
+    const imageRefs: { index: number; alt: string }[] = [];
+    
+    for (const match of imageMatches) {
+      const [, alt, url] = match;
+      console.log(`[EXPORT] Fetching DOCX image: ${alt || 'panel'}`);
+      const imageBytes = await fetchImageBytes(url);
+      if (imageBytes) {
+        imageCounter++;
+        docxImages.push({ id: `image${imageCounter}`, bytes: imageBytes });
+        imageRefs.push({ index: imageCounter, alt: alt || 'Panel' });
+      }
+    }
+    
+    // Strip images from content for text processing
+    const textContent = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '[IMAGE_PLACEHOLDER]');
+    const paragraphs = stripMarkdown(textContent).split(/\n\n+/);
+    
+    processedChapters.push({ chapter, processedContent: paragraphs, imageRefs });
+  }
+
+  // Build content types with all images
+  let contentTypes = `<?xml version="1.0" encoding="UTF-8"?>
 <Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
   <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
   <Default Extension="xml" ContentType="application/xml"/>
-  ${coverImageBytes ? '<Default Extension="jpeg" ContentType="image/jpeg"/>' : ''}
+  <Default Extension="jpeg" ContentType="image/jpeg"/>
+  <Default Extension="jpg" ContentType="image/jpeg"/>
+  <Default Extension="png" ContentType="image/png"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
 </Types>`;
   await zipWriter.add("[Content_Types].xml", new zip.TextReader(contentTypes));
@@ -1234,15 +1265,30 @@ async function generateDOCX(
 </Relationships>`;
   await zipWriter.add("_rels/.rels", new zip.TextReader(rels));
 
-  let imageRel = '';
+  // Add cover and all panel images to media folder
+  let imageRelId = 2;
+  let imageRels = '';
+  
   if (coverImageBytes) {
     await zipWriter.add("word/media/cover.jpeg", new zip.Uint8ArrayReader(coverImageBytes));
-    imageRel = '<Relationship Id="rId2" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/cover.jpeg"/>';
+    imageRels += `<Relationship Id="rId${imageRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/cover.jpeg"/>`;
+    imageRelId++;
+  }
+  
+  // Add all chapter images
+  const imageRelMap: Map<number, number> = new Map();
+  for (const img of docxImages) {
+    const isPng = img.bytes[0] === 0x89 && img.bytes[1] === 0x50;
+    const ext = isPng ? 'png' : 'jpeg';
+    await zipWriter.add(`word/media/${img.id}.${ext}`, new zip.Uint8ArrayReader(img.bytes));
+    imageRels += `<Relationship Id="rId${imageRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${img.id}.${ext}"/>`;
+    imageRelMap.set(parseInt(img.id.replace('image', '')), imageRelId);
+    imageRelId++;
   }
 
   const documentRels = `<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
-  ${imageRel}
+  ${imageRels}
 </Relationships>`;
   await zipWriter.add("word/_rels/document.xml.rels", new zip.TextReader(documentRels));
 
@@ -1254,6 +1300,7 @@ async function generateDOCX(
             xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
 <w:body>`;
 
+  // Cover image
   if (coverImageBytes) {
     documentContent += `
 <w:p>
@@ -1318,15 +1365,60 @@ async function generateDOCX(
 
   documentContent += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
 
-  // Chapters
-  for (const chapter of chapters) {
+  // Chapters with embedded images
+  let docPicId = 2;
+  for (const { chapter, processedContent, imageRefs } of processedChapters) {
     documentContent += `
 <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter ${chapter.chapter_number}: ${escapeXml(chapter.title)}</w:t></w:r></w:p>`;
     
-    const paragraphs = stripMarkdown(chapter.content || "").split(/\n\n+/);
-    for (const para of paragraphs) {
-      if (para.trim()) {
-        documentContent += `<w:p><w:r><w:t>${escapeXml(para.trim())}</w:t></w:r></w:p>`;
+    let imageIdx = 0;
+    for (const para of processedContent) {
+      const trimmed = para.trim();
+      if (!trimmed) continue;
+      
+      // Check for image placeholder
+      if (trimmed.includes('[IMAGE_PLACEHOLDER]') && imageIdx < imageRefs.length) {
+        const imgRef = imageRefs[imageIdx];
+        const relId = imageRelMap.get(imgRef.index);
+        if (relId) {
+          docPicId++;
+          documentContent += `
+<w:p>
+  <w:r>
+    <w:drawing>
+      <wp:inline>
+        <wp:extent cx="4572000" cy="3429000"/>
+        <wp:docPr id="${docPicId}" name="${escapeXml(imgRef.alt)}"/>
+        <a:graphic>
+          <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
+            <pic:pic>
+              <pic:nvPicPr>
+                <pic:cNvPr id="${docPicId}" name="image${imgRef.index}"/>
+                <pic:cNvPicPr/>
+              </pic:nvPicPr>
+              <pic:blipFill>
+                <a:blip r:embed="rId${relId}"/>
+                <a:stretch><a:fillRect/></a:stretch>
+              </pic:blipFill>
+              <pic:spPr>
+                <a:xfrm>
+                  <a:off x="0" y="0"/>
+                  <a:ext cx="4572000" cy="3429000"/>
+                </a:xfrm>
+                <a:prstGeom prst="rect"><a:avLst/></a:prstGeom>
+              </pic:spPr>
+            </pic:pic>
+          </a:graphicData>
+        </a:graphic>
+      </wp:inline>
+    </w:drawing>
+  </w:r>
+</w:p>
+<w:p><w:r><w:rPr><w:i/><w:sz w:val="18"/></w:rPr><w:t>${escapeXml(imgRef.alt)}</w:t></w:r></w:p>`;
+        }
+        imageIdx++;
+      } else if (!trimmed.includes('[IMAGE_PLACEHOLDER]')) {
+        documentContent += `<w:p><w:r><w:t>${escapeXml(trimmed)}</w:t></w:r></w:p>`;
       }
     }
     documentContent += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;

@@ -1,9 +1,10 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileBookCard } from "./MobileBookCard";
 import { Skeleton } from "@/components/ui/skeleton";
+import { apiCache, cacheKeys } from "@/lib/cache";
 
 interface Book {
   id: string;
@@ -55,61 +56,67 @@ export function MobileHome() {
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
-  useEffect(() => {
-    const fetchData = async () => {
-      try {
-        // Check if user is logged in
-        const { data: { user } } = await supabase.auth.getUser();
-        setUserId(user?.id || null);
+  const fetchData = useCallback(async () => {
+    try {
+      // Check if user is logged in
+      const { data: { user } } = await supabase.auth.getUser();
+      setUserId(user?.id || null);
 
+      // Parallel fetch for faster loading
+      const [libraryResult, booksResult] = await Promise.all([
         // Fetch continue reading (user's library with progress)
-        if (user) {
-          const { data: libraryData } = await supabase
-            .from("user_library")
-            .select(`
-              book_id,
-              progress_percent,
-              last_read_chapter,
-              books (
-                id,
-                title,
-                cover_image_url,
-                category,
-                book_type,
-                created_at
-              )
-            `)
-            .eq("user_id", user.id)
-            .gt("progress_percent", 0)
-            .lt("progress_percent", 100)
-            .order("created_at", { ascending: false })
-            .limit(4);
-
-          if (libraryData) {
-            setContinueReading(libraryData as unknown as LibraryItem[]);
-          }
-        }
-
-        // Fetch last added books (public, published)
-        const { data: booksData } = await supabase
-          .from("books")
-          .select("id, title, cover_image_url, category, book_type, created_at")
-          .eq("is_published", true)
+        user ? supabase
+          .from("user_library")
+          .select(`
+            book_id,
+            progress_percent,
+            last_read_chapter,
+            books!inner (
+              id,
+              title,
+              cover_image_url,
+              category,
+              book_type,
+              created_at
+            )
+          `)
+          .eq("user_id", user.id)
+          .gt("progress_percent", 0)
+          .lt("progress_percent", 100)
           .order("created_at", { ascending: false })
-          .limit(6);
+          .limit(4) : Promise.resolve({ data: null }),
+        
+        // Check cache first for last added books
+        apiCache.getOrSet<Book[]>(
+          cacheKeys.featuredBooks(),
+          async () => {
+            const { data } = await supabase
+              .from("books")
+              .select("id, title, cover_image_url, category, book_type, created_at")
+              .eq("is_published", true)
+              .order("created_at", { ascending: false })
+              .limit(6);
+            return data || [];
+          },
+          60000 // 60 second cache
+        )
+      ]);
 
-        if (booksData) {
-          setLastAdded(booksData);
-        }
-      } catch (error) {
-        console.error("Error fetching mobile home data:", error);
-      } finally {
-        setLoading(false);
+      if (libraryResult.data) {
+        setContinueReading(libraryResult.data as unknown as LibraryItem[]);
       }
-    };
-
-    fetchData();
+      
+      setLastAdded(booksResult);
+    } catch (error) {
+      console.error("Error fetching mobile home data:", error);
+    } finally {
+      setLoading(false);
+    }
   }, []);
+
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
 
   // Calculate header height (56px) + safe area
   return (

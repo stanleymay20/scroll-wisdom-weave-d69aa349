@@ -153,6 +153,7 @@ export const cacheKeys = {
   faqs: () => `faqs`,
   featuredBooks: () => `books:featured`,
   categoryBooks: (category: string) => `books:category:${category}`,
+  libraryItems: (userId: string, page: number) => `user:${userId}:library:page:${page}`,
 };
 
 // ============= Cache Invalidation Helpers =============
