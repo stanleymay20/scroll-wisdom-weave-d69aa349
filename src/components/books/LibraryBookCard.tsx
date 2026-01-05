@@ -150,7 +150,7 @@ export function LibraryBookCard({
                 </DropdownMenuItem>
                 <DropdownMenuItem asChild>
                   <Link 
-                    to={`/reader/${bookId}/${lastReadChapter || 1}`} 
+                    to={`/read/${bookId}/${lastReadChapter || 1}`} 
                     className="flex items-center gap-2"
                   >
                     <BookOpen className="h-4 w-4" />
@@ -252,7 +252,7 @@ export function LibraryBookCard({
                 className="w-full" 
                 asChild
               >
-                <Link to={`/reader/${bookId}/${lastReadChapter || 1}`}>
+                <Link to={`/read/${bookId}/${lastReadChapter || 1}`}>
                   <BookOpen className="h-4 w-4 mr-2" />
                   {isComplete 
                     ? (t('library.readAgain') || "Read Again")
