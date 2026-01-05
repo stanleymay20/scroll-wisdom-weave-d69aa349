@@ -118,12 +118,9 @@ export function MobileHome() {
     fetchData();
   }, [fetchData]);
 
-  // Calculate header height (56px) + safe area
+  // Main content - note: padding-top is handled by MobileLayout wrapper
   return (
-    <div 
-      className="min-h-screen bg-background pb-24 px-4"
-      style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px + 16px)" }}
-    >
+    <div className="min-h-screen bg-background pb-24 px-4 pt-4">
       {/* Continue Reading Section */}
       {userId && continueReading.length > 0 && (
         <section className="mb-8">

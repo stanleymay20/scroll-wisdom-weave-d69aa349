@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, forwardRef } from "react";
 import { X, AlertTriangle, CheckCircle, RefreshCw, ChevronDown, ChevronUp, Bug, Wifi, FileWarning, Shield, Layout } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,7 +22,7 @@ const severityColors: Record<DiagnosticEvent['severity'], string> = {
   critical: "bg-red-500/10 text-red-500 border-red-500/20",
 };
 
-export function DiagnosticsPanel() {
+export const DiagnosticsPanel = forwardRef<HTMLDivElement>(function DiagnosticsPanel(_, ref) {
   const [isOpen, setIsOpen] = useState(false);
   const [isMinimized, setIsMinimized] = useState(true);
   const [events, setEvents] = useState<DiagnosticEvent[]>([]);
@@ -75,10 +75,12 @@ export function DiagnosticsPanel() {
   }
 
   return (
-    <div className={cn(
-      "fixed bottom-4 right-4 z-50 bg-background border rounded-lg shadow-xl transition-all",
-      isMinimized ? "w-72" : "w-96"
-    )}>
+    <div 
+      ref={ref}
+      className={cn(
+        "fixed bottom-4 right-4 z-50 bg-background border rounded-lg shadow-xl transition-all",
+        isMinimized ? "w-72" : "w-96"
+      )}>
       {/* Header */}
       <div className="flex items-center justify-between p-3 border-b">
         <div className="flex items-center gap-2">
@@ -184,4 +186,6 @@ export function DiagnosticsPanel() {
       )}
     </div>
   );
-}
+});
+
+DiagnosticsPanel.displayName = "DiagnosticsPanel";
