@@ -11,7 +11,7 @@ import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { DiagnosticsPanel } from "@/components/system/DiagnosticsPanel";
 import { createLogger, setTraceId } from "@/lib/logger";
-import { Loader2 } from "lucide-react";
+import { SkeletonPage } from "@/components/ui/page-shell";
 
 // Eager load critical pages
 import Index from "./pages/Index";
@@ -61,15 +61,6 @@ const queryClient = new QueryClient({
   },
 });
 
-// Loading fallback component
-function PageLoader() {
-  return (
-    <div className="min-h-screen flex items-center justify-center bg-background">
-      <Loader2 className="h-8 w-8 animate-spin text-primary" />
-    </div>
-  );
-}
-
 function ThemeInitializer() {
   useEffect(() => {
     const themeMode = localStorage.getItem('theme-mode') || 'dark';
@@ -100,7 +91,8 @@ const App = () => (
             <OfflineIndicator />
             <PWAUpdateNotification />
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-              <Suspense fallback={<PageLoader />}>
+              {/* PERFORMANCE: Use SkeletonPage for instant visual feedback during lazy load */}
+              <Suspense fallback={<SkeletonPage />}>
                 <Routes>
                   {/* Critical routes - eager loaded */}
                   <Route path="/" element={<Index />} />

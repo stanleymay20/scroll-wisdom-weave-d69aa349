@@ -5,6 +5,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useIsAdmin } from "@/hooks/useAdmin";
@@ -14,6 +15,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { SystemDoctor } from "@/components/diagnostics/SystemDoctor";
+import { usePagePerformance } from "@/lib/performance";
 
 interface TestResult {
   name: string;
@@ -113,6 +115,9 @@ export default function Diagnostics() {
   const [testResults, setTestResults] = useState<TestResult[]>([]);
   const [comicResult, setComicResult] = useState<ComicTestResult | null>(null);
   const [debugOpen, setDebugOpen] = useState(false);
+
+  // PERFORMANCE: Track TTI
+  usePagePerformance('Diagnostics');
 
   const accessState = useMemo<"loading" | "unauth" | "forbidden" | "ok">(() => {
     if (adminLoading) return "loading";
@@ -402,10 +407,34 @@ export default function Diagnostics() {
     }
   };
 
+  // PERFORMANCE: Show skeleton UI immediately instead of blocking loader
   if (adminLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin" />
+      <div className="min-h-screen flex flex-col bg-background">
+        <Navbar />
+        <main className="flex-1 container mx-auto px-4 py-8 max-w-4xl">
+          <div className="space-y-6">
+            <div className="flex items-center justify-between">
+              <div>
+                <Skeleton className="h-8 w-48 mb-2" />
+                <Skeleton className="h-4 w-72" />
+              </div>
+              <Skeleton className="h-6 w-20" />
+            </div>
+            <Separator />
+            <Card>
+              <CardHeader>
+                <Skeleton className="h-6 w-40" />
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {Array.from({ length: 3 }).map((_, i) => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
+              </CardContent>
+            </Card>
+          </div>
+        </main>
+        <Footer />
       </div>
     );
   }

@@ -12,9 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Settings as SettingsIcon, Palette, Bell, Brain, Shield, CreditCard,
-  Loader2, Save, Trash2, Download, Moon, Sun, Type, Volume2, Crown, HardDrive
+  Save, Trash2, Download, Moon, Sun, Type, Volume2, Crown, HardDrive, Loader2
 } from "lucide-react";
 import { StorageManager } from "@/components/pwa/StorageManager";
 import { useToast } from "@/hooks/use-toast";
@@ -22,6 +23,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { SUBSCRIPTION_TIERS } from "@/lib/subscription";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePagePerformance } from "@/lib/performance";
 
 interface SettingsData {
   theme_preference: string;
@@ -66,6 +68,9 @@ export default function Settings() {
   const navigate = useNavigate();
   const { tier, ttsMinutesUsed, subscriptionEnd } = useSubscription();
   const ttsLimit = SUBSCRIPTION_TIERS[tier].features.ttsMinutes;
+  
+  // PERFORMANCE: Track TTI
+  usePagePerformance('Settings');
 
   const handleManageBilling = async () => {
     setPortalLoading(true);
@@ -161,13 +166,36 @@ export default function Settings() {
     });
   };
 
+  // PERFORMANCE: Show skeleton UI immediately instead of blocking loader
   if (isLoading) {
     return (
-      <div className="min-h-screen flex items-center justify-center bg-background">
-        <div className="flex flex-col items-center gap-4">
-          <Loader2 className="h-10 w-10 animate-spin text-primary" />
-          <p className="text-muted-foreground animate-pulse">{t('settings.loading')}</p>
-        </div>
+      <div className="min-h-screen flex flex-col">
+        <Navbar />
+        <main className="flex-1 pt-24 pb-16">
+          <div className="container mx-auto px-4 max-w-4xl">
+            <div className="mb-8">
+              <Skeleton className="h-8 w-48 mb-2" />
+              <Skeleton className="h-4 w-64" />
+            </div>
+            <div className="space-y-6">
+              <Skeleton className="h-12 w-full" />
+              <div className="space-y-4">
+                {Array.from({ length: 5 }).map((_, i) => (
+                  <Card key={i} className="bg-gradient-card border-border/50">
+                    <CardHeader>
+                      <Skeleton className="h-5 w-32" />
+                    </CardHeader>
+                    <CardContent className="space-y-4">
+                      <Skeleton className="h-10 w-full" />
+                      <Skeleton className="h-10 w-full" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </div>
+          </div>
+        </main>
+        <Footer />
       </div>
     );
   }
