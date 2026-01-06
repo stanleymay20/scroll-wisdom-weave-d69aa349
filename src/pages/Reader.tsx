@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -11,7 +12,6 @@ import {
   Bookmark,
   X,
   Home,
-  Loader2,
   Flag,
   Volume2,
   Brain,
@@ -36,6 +36,7 @@ import { QuizMode, QuizModeButton } from "@/components/reader/QuizMode";
 import { VoiceConversation, VoiceConversationButton } from "@/components/reader/VoiceConversation";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { usePagePerformance } from "@/lib/performance";
 
 interface BookData {
   id: string;
@@ -68,10 +69,48 @@ const READING_THEMES = {
 
 type ReadingTheme = keyof typeof READING_THEMES;
 
+// PERFORMANCE: Skeleton for reader page - shown IMMEDIATELY
+function ReaderSkeleton() {
+  return (
+    <div className="min-h-screen bg-scroll-indigo-deep">
+      {/* Header skeleton */}
+      <header className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50">
+        <div className="container mx-auto px-4 h-14 flex items-center justify-between">
+          <div className="flex items-center gap-4">
+            <Skeleton className="h-10 w-10 rounded" />
+            <div>
+              <Skeleton className="h-4 w-32 mb-1" />
+              <Skeleton className="h-3 w-20" />
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-10 rounded" />
+            ))}
+          </div>
+        </div>
+      </header>
+      
+      {/* Content skeleton */}
+      <main className="pt-20 pb-24 max-w-3xl mx-auto px-4 sm:px-8">
+        <div className="animate-pulse space-y-4">
+          <Skeleton className="h-8 w-3/4 mb-6" />
+          {Array.from({ length: 8 }).map((_, i) => (
+            <Skeleton key={i} className="h-4 w-full" style={{ width: `${85 + Math.random() * 15}%` }} />
+          ))}
+        </div>
+      </main>
+    </div>
+  );
+}
+
 export default function Reader() {
   const { t } = useLanguage();
   const { bookId, chapterId } = useParams();
   const navigate = useNavigate();
+  
+  // PERFORMANCE: Track TTI
+  usePagePerformance('Reader');
   const contentRef = useRef<HTMLDivElement>(null);
   
   const [fontSize, setFontSize] = useState(18);
@@ -182,12 +221,9 @@ export default function Reader() {
   const wordCount = chapter?.word_count || 0;
   const estimatedReadingTime = Math.ceil(wordCount / 200); // 200 wpm average
 
+  // PERFORMANCE: Show skeleton UI immediately instead of blocking loader
   if (isLoading) {
-    return (
-      <div className="min-h-screen bg-scroll-indigo-deep flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-scroll-gold" />
-      </div>
-    );
+    return <ReaderSkeleton />;
   }
 
   // Render a single dialogue line as a speech bubble
