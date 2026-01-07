@@ -140,11 +140,13 @@ export default function Generate() {
         return "comic";
       case "workbook":
         return "workbook";
-      case "illustrated":
-        return "illustrated";
+      case "children":
+        return "illustrated"; // Children's books are visual-first
       case "academic":
       case "professional":
       case "reference":
+      case "technical":
+      case "bestseller":
       case "text":
       default:
         return "text";
