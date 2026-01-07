@@ -1,28 +1,41 @@
+/**
+ * CONTRACT 2 — ChapterEditor with Output Determinism
+ * 
+ * Enforces:
+ * - Rule 1: User text is authoritative
+ * - Rule 2: No silent regeneration
+ * - Rule 3: Explicit edit instructions required
+ * - Rule 4: Partial editing only
+ * - Rule 6: User-authored content mode
+ * - Rule 7: Change preview mandatory
+ * - Rule 8: Fail loudly, not quietly
+ */
+
 import { useState, useCallback, useEffect, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import { 
   Save, 
   RefreshCw, 
   Loader2, 
-  Check,
   AlertTriangle,
   Lock,
-  Unlock
+  Unlock,
+  Shield
 } from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { PasteProtectionDialog } from "@/components/system/PasteProtectionDialog";
+import { EditScopeDialog } from "@/components/system/EditScopeDialog";
+import { ChangePreviewDialog } from "@/components/system/ChangePreviewDialog";
+import { 
+  checkRegenerationGuard,
+  detectContentOwnership,
+  verifyContentIntegrity,
+  logContractViolation,
+  type EditScope,
+  type ContentOwnershipState,
+} from "@/lib/contentDeterminism";
 
 interface ChapterEditorProps {
   chapterId: string;
@@ -55,37 +68,65 @@ export function ChapterEditor({
   const [localContent, setLocalContent] = useState(content);
   const [isSaving, setIsSaving] = useState(false);
   const [isRegenerating, setIsRegenerating] = useState(false);
-  const [showRegenDialog, setShowRegenDialog] = useState(false);
+  
+  // Contract 2 Dialogs
   const [showPasteDialog, setShowPasteDialog] = useState(false);
+  const [showEditScopeDialog, setShowEditScopeDialog] = useState(false);
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false);
+  
   const [pendingPasteContent, setPendingPasteContent] = useState<string | null>(null);
-  const [editIntent, setEditIntent] = useState("");
-  const [isLocked, setIsLocked] = useState(false);
-  const [lastSavedContent, setLastSavedContent] = useState(content);
+  const [pendingEditScope, setPendingEditScope] = useState<EditScope | null>(null);
+  const [proposedContent, setProposedContent] = useState<string>('');
+  
+  // Content ownership tracking
+  const [ownership, setOwnership] = useState<ContentOwnershipState>({
+    isUserAuthored: false,
+    isAIGenerated: true,
+    isHybrid: false,
+    userLocked: false,
+    differencePercentage: 0,
+    lastAIContent: null,
+    lastSavedContent: content,
+    lockedAt: null,
+  });
+  
+  const lastSavedContent = useRef(content);
   const hasAskedForPaste = useRef(false);
 
+  // Initialize content and ownership state
   useEffect(() => {
     setLocalContent(content);
-    setLastSavedContent(content);
-    hasAskedForPaste.current = false; // Reset on content change
+    lastSavedContent.current = content;
+    hasAskedForPaste.current = false;
   }, [content]);
 
-  // Check if chapter is locked
+  // Load ownership state from database
   useEffect(() => {
-    const checkLocked = async () => {
+    const loadOwnership = async () => {
       const { data } = await supabase
         .from("chapters")
-        .select("user_locked")
+        .select("user_locked, last_ai_content, content_ownership")
         .eq("id", chapterId)
         .single();
       
       if (data) {
-        setIsLocked(data.user_locked || false);
+        const ownershipData = data.content_ownership as Record<string, unknown> | null;
+        const newOwnership = detectContentOwnership(
+          content,
+          data.last_ai_content,
+          data.user_locked || false
+        );
+        
+        setOwnership({
+          ...newOwnership,
+          differencePercentage: ownershipData?.differencePercentage as number ?? newOwnership.differencePercentage,
+        });
       }
     };
-    checkLocked();
-  }, [chapterId]);
+    loadOwnership();
+  }, [chapterId, content]);
 
-  // Calculate content difference percentage
+  // Calculate content difference
   const calculateDifference = useCallback((original: string, modified: string): number => {
     if (!original || !modified) return 100;
     const originalWords = new Set(original.toLowerCase().split(/\s+/));
@@ -95,29 +136,26 @@ export function ChapterEditor({
     return union > 0 ? Math.round((1 - intersection / union) * 100) : 0;
   }, []);
 
-  // Handle paste event - ask user what to do with pasted content
+  // Handle paste event - CONTRACT 2 Rule 1
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    // If already asked or locked, let paste proceed normally
-    if (hasAskedForPaste.current || isLocked) return;
+    if (hasAskedForPaste.current || ownership.userLocked) return;
     
     const pastedText = e.clipboardData.getData('text');
-    if (!pastedText || pastedText.length < 50) return; // Ignore small pastes
+    if (!pastedText || pastedText.length < 50) return;
     
-    // Calculate difference if we were to apply this paste
     const textArea = e.target as HTMLTextAreaElement;
     const start = textArea.selectionStart;
     const end = textArea.selectionEnd;
     const newContent = localContent.slice(0, start) + pastedText + localContent.slice(end);
     
-    const diffPercent = calculateDifference(lastSavedContent, newContent);
+    const diffPercent = calculateDifference(lastSavedContent.current, newContent);
     
-    // Only show dialog for significant changes (>30% different)
     if (diffPercent > 30) {
       e.preventDefault();
       setPendingPasteContent(newContent);
       setShowPasteDialog(true);
     }
-  }, [localContent, lastSavedContent, calculateDifference, isLocked]);
+  }, [localContent, calculateDifference, ownership.userLocked]);
 
   // Handle paste protection dialog result
   const handlePasteResult = useCallback(async (result: { action: 'lock' | 'allow_regen' | 'cancel' }) => {
@@ -129,7 +167,6 @@ export function ChapterEditor({
       return;
     }
     
-    // Apply the pending paste
     if (pendingPasteContent) {
       setLocalContent(pendingPasteContent);
     }
@@ -150,26 +187,35 @@ export function ChapterEditor({
         })
         .eq("id", chapterId);
       
-      setIsLocked(shouldLock);
+      setOwnership(prev => ({
+        ...prev,
+        userLocked: shouldLock,
+        isUserAuthored: shouldLock,
+        isAIGenerated: !shouldLock,
+      }));
       
       toast({
-        title: shouldLock ? "Content protected" : "Ready for regeneration",
+        title: shouldLock ? "Content protected" : "Ready for editing",
         description: shouldLock 
           ? "Your writing is now protected from full regeneration."
-          : "This content can be regenerated when needed.",
+          : "This content can be edited with explicit instructions.",
       });
     } catch (error) {
       console.error("Error updating lock status:", error);
+      logContractViolation('Failed to update content lock status', { error, chapterId });
     }
     
     setPendingPasteContent(null);
   }, [chapterId, pendingPasteContent, toast]);
 
-  // Save Draft (No AI) - saves directly without regeneration
+  // Save Draft (No AI) - CONTRACT 2 Rule 2: No silent regeneration
   const handleSaveDraft = async () => {
     setIsSaving(true);
+    const contentBefore = lastSavedContent.current;
+    
     try {
       const wordCount = localContent.split(/\s+/).filter(w => w.length > 0).length;
+      const diffPercent = calculateDifference(contentBefore, localContent);
       
       const { error } = await supabase
         .from("chapters")
@@ -177,20 +223,47 @@ export function ChapterEditor({
           content: localContent,
           word_count: wordCount,
           updated_at: new Date().toISOString(),
-          // Mark as user-modified if content differs significantly
-          user_locked: calculateDifference(lastSavedContent, localContent) > 30,
+          user_locked: diffPercent > 30 || ownership.userLocked,
         })
         .eq("id", chapterId);
 
       if (error) throw error;
 
-      setLastSavedContent(localContent);
+      // Verify content integrity - CONTRACT 2 Rule 8
+      const { data: savedChapter } = await supabase
+        .from("chapters")
+        .select("content")
+        .eq("id", chapterId)
+        .single();
+      
+      if (savedChapter) {
+        const integrity = verifyContentIntegrity(localContent, savedChapter.content || '', true);
+        if (!integrity.intact) {
+          logContractViolation('Content modified unexpectedly during save', { 
+            chapterId, 
+            error: integrity.error 
+          });
+          throw new Error(integrity.error);
+        }
+      }
+
+      lastSavedContent.current = localContent;
+      
+      if (diffPercent > 30) {
+        setOwnership(prev => ({
+          ...prev,
+          userLocked: true,
+          isUserAuthored: true,
+          differencePercentage: diffPercent,
+        }));
+      }
+      
       onContentChange(localContent);
       onSave();
       
       toast({
         title: "Draft saved",
-        description: "Your changes have been saved without regeneration.",
+        description: "Your changes have been saved. No AI modifications applied.",
       });
     } catch (error) {
       console.error("Save error:", error);
@@ -204,24 +277,33 @@ export function ChapterEditor({
     }
   };
 
-  // Regenerate With Instructions - requires edit intent
-  const handleRegenerate = async () => {
-    if (!editIntent.trim()) {
+  // Handle regeneration request - CONTRACT 2 Rules 2, 3, 7
+  const handleRegenerateClick = () => {
+    // Check regeneration guard first
+    const guard = checkRegenerationGuard(ownership, null, 'user_action');
+    
+    if (!guard.allowed && guard.requiresScope) {
+      // Show edit scope dialog
+      setShowEditScopeDialog(true);
+    } else if (!guard.allowed) {
       toast({
-        title: "Edit intent required",
-        description: "Please describe what changes you want to make.",
+        title: "Regeneration blocked",
+        description: guard.reason,
         variant: "destructive",
       });
-      return;
     }
+  };
 
+  // Handle edit scope confirmation - CONTRACT 2 Rule 3
+  const handleEditScopeConfirm = async (scope: EditScope) => {
+    setPendingEditScope(scope);
     setIsRegenerating(true);
-    setShowRegenDialog(false);
-
+    
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) throw new Error("Not authenticated");
 
+      // Generate with explicit scope
       const response = await supabase.functions.invoke("generate-chapter", {
         body: {
           chapterId,
@@ -232,15 +314,18 @@ export function ChapterEditor({
           category,
           language,
           bookType,
-          editIntent: editIntent.trim(),
+          editIntent: scope.description,
+          editType: scope.type,
+          targetSection: scope.targetText,
           isRegeneration: true,
+          preserveUserContent: ownership.userLocked,
         },
       });
 
       if (response.error) throw response.error;
       if (response.data?.error) throw new Error(response.data.error);
 
-      // Fetch updated content
+      // Fetch proposed content for preview - CONTRACT 2 Rule 7
       const { data: updatedChapter } = await supabase
         .from("chapters")
         .select("content")
@@ -248,17 +333,9 @@ export function ChapterEditor({
         .single();
 
       if (updatedChapter?.content) {
-        setLocalContent(updatedChapter.content);
-        setLastSavedContent(updatedChapter.content);
-        onContentChange(updatedChapter.content);
+        setProposedContent(updatedChapter.content);
+        setShowPreviewDialog(true);
       }
-
-      toast({
-        title: "Chapter regenerated",
-        description: `Applied edit: "${editIntent.slice(0, 50)}..."`,
-      });
-      
-      setEditIntent("");
     } catch (error) {
       console.error("Regeneration error:", error);
       toast({
@@ -266,51 +343,90 @@ export function ChapterEditor({
         description: error instanceof Error ? error.message : "Could not regenerate chapter",
         variant: "destructive",
       });
-    } finally {
       setIsRegenerating(false);
     }
+  };
+
+  // Handle preview confirmation - CONTRACT 2 Rule 7
+  const handlePreviewResult = async (result: { confirmed: boolean }) => {
+    setShowPreviewDialog(false);
+    
+    if (result.confirmed) {
+      setLocalContent(proposedContent);
+      lastSavedContent.current = proposedContent;
+      onContentChange(proposedContent);
+      
+      // Save the last AI content for future comparison
+      await supabase
+        .from("chapters")
+        .update({ last_ai_content: proposedContent })
+        .eq("id", chapterId);
+      
+      toast({
+        title: "Changes applied",
+        description: `Edit applied: "${pendingEditScope?.description.slice(0, 40)}..."`,
+      });
+    } else {
+      // Revert to previous content
+      await supabase
+        .from("chapters")
+        .update({ content: lastSavedContent.current })
+        .eq("id", chapterId);
+      
+      toast({
+        title: "Changes cancelled",
+        description: "Content restored to previous version.",
+      });
+    }
+    
+    setIsRegenerating(false);
+    setPendingEditScope(null);
+    setProposedContent('');
   };
 
   // Toggle lock status
   const handleToggleLock = async () => {
     try {
+      const newLocked = !ownership.userLocked;
+      
       const { error } = await supabase
         .from("chapters")
-        .update({ user_locked: !isLocked })
+        .update({ user_locked: newLocked })
         .eq("id", chapterId);
 
       if (error) throw error;
 
-      setIsLocked(!isLocked);
+      setOwnership(prev => ({ ...prev, userLocked: newLocked }));
+      
       toast({
-        title: isLocked ? "Chapter unlocked" : "Chapter locked",
-        description: isLocked 
-          ? "This chapter can now be fully regenerated."
-          : "This chapter is now protected from full regeneration.",
+        title: newLocked ? "Chapter protected" : "Chapter unlocked",
+        description: newLocked 
+          ? "Your content is now protected from full regeneration."
+          : "This chapter can now be fully regenerated.",
       });
     } catch (error) {
       console.error("Lock toggle error:", error);
     }
   };
 
-  const hasChanges = localContent !== lastSavedContent;
-  const diffPercent = calculateDifference(lastSavedContent, localContent);
+  const hasChanges = localContent !== lastSavedContent.current;
+  const diffPercent = calculateDifference(lastSavedContent.current, localContent);
 
   return (
     <div className="space-y-4">
-      {/* Status bar */}
+      {/* Contract 2 Status bar */}
       <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30 border border-border/50">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 flex-wrap">
           <Button
             variant="ghost"
             size="sm"
             onClick={handleToggleLock}
-            className={isLocked ? "text-amber-500" : "text-muted-foreground"}
+            className={ownership.userLocked ? "text-amber-500" : "text-muted-foreground"}
           >
-            {isLocked ? (
+            {ownership.userLocked ? (
               <>
                 <Lock className="h-4 w-4 mr-1" />
-                Locked (Protected)
+                Protected
               </>
             ) : (
               <>
@@ -320,16 +436,22 @@ export function ChapterEditor({
             )}
           </Button>
           
+          {ownership.isUserAuthored && (
+            <span className="text-xs bg-amber-500/10 text-amber-600 px-2 py-1 rounded flex items-center gap-1">
+              <Shield className="h-3 w-3" />
+              User-Authored
+            </span>
+          )}
+          
           {hasChanges && (
             <span className="text-sm text-muted-foreground flex items-center gap-1">
               <AlertTriangle className="h-3 w-3 text-amber-500" />
-              Unsaved changes ({diffPercent}% different)
+              Unsaved ({diffPercent}% different)
             </span>
           )}
         </div>
 
         <div className="flex items-center gap-2">
-          {/* Save Draft Button */}
           <Button
             variant="outline"
             size="sm"
@@ -344,27 +466,26 @@ export function ChapterEditor({
             ) : (
               <>
                 <Save className="h-4 w-4 mr-1" />
-                Save Draft (No AI)
+                Save (No AI)
               </>
             )}
           </Button>
 
-          {/* Regenerate Button */}
           <Button
             variant="default"
             size="sm"
-            onClick={() => setShowRegenDialog(true)}
+            onClick={handleRegenerateClick}
             disabled={isRegenerating || !isGenerated}
           >
             {isRegenerating ? (
               <>
                 <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                Regenerating...
+                Processing...
               </>
             ) : (
               <>
                 <RefreshCw className="h-4 w-4 mr-1" />
-                Regenerate With Instructions
+                Edit With AI
               </>
             )}
           </Button>
@@ -380,75 +501,36 @@ export function ChapterEditor({
         placeholder="Chapter content..."
       />
 
-      {/* Info */}
+      {/* Contract 2 Info */}
       <p className="text-xs text-muted-foreground">
-        <strong>Save Draft</strong> saves your changes directly without AI regeneration.
-        <strong> Regenerate With Instructions</strong> uses AI to apply specific edits while preserving your structure.
+        <strong>Save (No AI)</strong> preserves your exact text without any AI modifications.
+        <strong> Edit With AI</strong> requires you to specify exactly what changes you want before preview and confirmation.
       </p>
 
-      {/* Paste Protection Dialog */}
+      {/* CONTRACT 2 Dialogs */}
       <PasteProtectionDialog
         open={showPasteDialog}
         onResult={handlePasteResult}
         contentPreview={pendingPasteContent?.slice(0, 200)}
       />
 
-      {/* Regenerate Dialog */}
-      <Dialog open={showRegenDialog} onOpenChange={setShowRegenDialog}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Regenerate With Instructions</DialogTitle>
-            <DialogDescription>
-              Describe what you want to change. The AI will apply your edits while preserving the chapter structure.
-            </DialogDescription>
-          </DialogHeader>
+      <EditScopeDialog
+        open={showEditScopeDialog}
+        onOpenChange={setShowEditScopeDialog}
+        onConfirm={handleEditScopeConfirm}
+        isUserLocked={ownership.userLocked}
+        differencePercentage={ownership.differencePercentage}
+        chapterTitle={chapterTitle}
+      />
 
-          <div className="space-y-4">
-            <div className="space-y-2">
-              <Label>Edit Instruction (Required)</Label>
-              <Input
-                value={editIntent}
-                onChange={(e) => setEditIntent(e.target.value)}
-                placeholder="e.g., Make the tone more academic, add more examples..."
-              />
-            </div>
-
-            <div className="flex flex-wrap gap-2">
-              <span className="text-xs text-muted-foreground">Quick options:</span>
-              {["Shorten by 20%", "Make more academic", "Add examples", "Fix formatting", "Improve clarity"].map((suggestion) => (
-                <Button
-                  key={suggestion}
-                  variant="outline"
-                  size="sm"
-                  className="text-xs h-7"
-                  onClick={() => setEditIntent(suggestion)}
-                >
-                  {suggestion}
-                </Button>
-              ))}
-            </div>
-
-            {isLocked && (
-              <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />
-                <p className="text-sm text-muted-foreground">
-                  This chapter is locked. Regeneration will apply targeted edits only, preserving your modifications.
-                </p>
-              </div>
-            )}
-          </div>
-
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setShowRegenDialog(false)}>
-              Cancel
-            </Button>
-            <Button onClick={handleRegenerate} disabled={!editIntent.trim()}>
-              <RefreshCw className="h-4 w-4 mr-1" />
-              Apply Changes
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <ChangePreviewDialog
+        open={showPreviewDialog}
+        onResult={handlePreviewResult}
+        originalContent={lastSavedContent.current}
+        proposedContent={proposedContent}
+        editDescription={pendingEditScope?.description || ''}
+        chapterTitle={chapterTitle}
+      />
     </div>
   );
 }
