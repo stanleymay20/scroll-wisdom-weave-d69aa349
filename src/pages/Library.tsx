@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -41,6 +41,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLibraryLimits } from "@/hooks/useLibraryLimits";
+import { apiCache, cacheKeys } from "@/lib/cache";
 
 interface Book {
   id: string;
@@ -338,16 +339,44 @@ export default function Library() {
   const { toast } = useToast();
   const libraryLimits = useLibraryLimits();
 
-  // Calculate stats
-  const stats = {
+  // Calculate stats with memoization
+  const stats = useMemo(() => ({
     total: libraryItems.length,
     reading: libraryItems.filter(i => (i.progress_percent || 0) > 0 && (i.progress_percent || 0) < 100).length,
     completed: libraryItems.filter(i => (i.progress_percent || 0) >= 100).length,
-  };
+  }), [libraryItems]);
 
+  // CONTRACT 4A: Cache-first, render-first strategy
+  // Show cached data immediately, then fetch fresh data in background
   useEffect(() => {
     let mounted = true;
     
+    // INSTANT: Check cache first and render immediately
+    const cachedData = apiCache.get<LibraryItem[]>('library:items:0');
+    if (cachedData && cachedData.length > 0) {
+      setLibraryItems(cachedData);
+      setIsLoading(false);
+    }
+    
+    // BACKGROUND: Check auth and fetch fresh data
+    const initLibrary = async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!mounted) return;
+      
+      if (!session?.user) {
+        navigate("/auth");
+        return;
+      }
+      
+      setUser(session.user);
+      // Fetch fresh data (will update cache)
+      fetchLibrary(0, true);
+    };
+    
+    // Defer auth check to not block render
+    setTimeout(initLibrary, 0);
+
+    // Auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (!mounted) return;
@@ -357,16 +386,6 @@ export default function Library() {
         }
       }
     );
-
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      setUser(session?.user ?? null);
-      if (!session?.user) {
-        navigate("/auth");
-      } else {
-        fetchLibrary(0, true);
-      }
-    });
 
     return () => {
       mounted = false;
@@ -412,16 +431,21 @@ export default function Library() {
   }, [libraryItems, searchQuery, filterStatus, sortBy]);
 
   const fetchLibrary = async (pageNum: number, reset = false, retry = 0) => {
-    if (reset) {
+    // CONTRACT 4A: Don't block UI if we have cached data
+    const hasCachedData = apiCache.get<LibraryItem[]>(`library:items:${pageNum}`) !== null;
+    
+    if (reset && !hasCachedData) {
       setIsLoading(true);
       setLoadError(null);
-    } else {
+    } else if (!reset) {
       setIsLoadingMore(true);
     }
 
     try {
       const from = pageNum * ITEMS_PER_PAGE;
-      const to = from + ITEMS_PER_PAGE - 1;
+      // CONTRACT 4A: Mobile gets fewer items for faster load
+      const limit = isMobile ? 8 : ITEMS_PER_PAGE;
+      const to = from + limit - 1;
 
       // Optimized query - only select needed fields for cards
       const { data, error } = await supabase
@@ -448,13 +472,16 @@ export default function Library() {
       
       const newItems = (data as any) || [];
       
+      // Cache the results
+      apiCache.set(`library:items:${pageNum}`, newItems, 60 * 1000); // 1 min cache
+      
       if (reset) {
         setLibraryItems(newItems);
       } else {
         setLibraryItems(prev => [...prev, ...newItems]);
       }
       
-      setHasMore(newItems.length === ITEMS_PER_PAGE);
+      setHasMore(newItems.length === limit);
       setPage(pageNum);
       setLoadError(null);
       setRetryCount(0);

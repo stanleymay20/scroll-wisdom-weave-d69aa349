@@ -88,6 +88,17 @@ export default function Settings() {
     checkAuth();
   }, []);
 
+  // Auto-save settings when they change (debounced)
+  useEffect(() => {
+    if (!user || isLoading) return;
+    
+    const saveTimeout = setTimeout(() => {
+      handleSaveSettings();
+    }, 1000); // Debounce 1 second
+    
+    return () => clearTimeout(saveTimeout);
+  }, [settings]);
+
   const checkAuth = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -126,7 +137,7 @@ export default function Settings() {
   };
 
   const handleSaveSettings = async () => {
-    if (!user) return;
+    if (!user || isSaving) return;
     setIsSaving(true);
 
     const { error } = await supabase
@@ -138,16 +149,7 @@ export default function Settings() {
       .eq("id", user.id);
 
     if (error) {
-      toast({
-        title: t('common.error'),
-        description: t('settings.saveFailed'),
-        variant: "destructive",
-      });
-    } else {
-      toast({
-        title: t('settings.saved'),
-        description: t('settings.savedDesc'),
-      });
+      console.error("Settings save error:", error);
     }
     setIsSaving(false);
   };
@@ -700,7 +702,10 @@ export default function Settings() {
               </TabsContent>
             </Tabs>
 
-            <div className="mt-6 flex justify-end">
+            <div className="mt-6 flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">
+                {isSaving ? t('settings.saving') : "Changes auto-save"}
+              </p>
               <Button onClick={handleSaveSettings} disabled={isSaving} variant="gold">
                 {isSaving ? (
                   <>
