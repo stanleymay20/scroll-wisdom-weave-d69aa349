@@ -50,38 +50,38 @@ const NavItem = memo(function NavItem({
  * Pure UI component - NO data fetching, NO auth checks
  * This is critical for Contract 4A compliance
  */
-export const MobileBottomNav = memo(
-  React.forwardRef<HTMLElement>((_, ref) => {
-    // Only hook allowed: location for active state
-    const location = useLocation();
-    const pathname = location.pathname;
+const MobileBottomNavInner = React.forwardRef<HTMLElement>((_, ref) => {
+  // Only hook allowed: location for active state
+  const location = useLocation();
+  const pathname = location.pathname;
 
-    return (
-      <nav 
-        ref={ref}
-        className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border/30 md:hidden"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-      >
-        <div className="flex items-center justify-around h-16">
-          {NAV_ITEMS.map((item) => {
-            const isActive = pathname === item.path || 
-              (item.path === "/" && pathname === "/") ||
-              (item.path !== "/" && pathname.startsWith(item.path.split("?")[0]));
+  return (
+    <nav 
+      ref={ref}
+      className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border/30 md:hidden"
+      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+    >
+      <div className="flex items-center justify-around h-16">
+        {NAV_ITEMS.map((item) => {
+          const isActive = pathname === item.path || 
+            (item.path === "/" && pathname === "/") ||
+            (item.path !== "/" && pathname.startsWith(item.path.split("?")[0]));
 
-            return (
-              <NavItem
-                key={item.path}
-                icon={item.icon}
-                label={item.label}
-                path={item.path}
-                isActive={isActive}
-              />
-            );
-          })}
-        </div>
-      </nav>
-    );
-  })
-);
+          return (
+            <NavItem
+              key={item.path}
+              icon={item.icon}
+              label={item.label}
+              path={item.path}
+              isActive={isActive}
+            />
+          );
+        })}
+      </div>
+    </nav>
+  );
+});
 
-MobileBottomNav.displayName = "MobileBottomNav";
+MobileBottomNavInner.displayName = "MobileBottomNav";
+
+export const MobileBottomNav = memo(MobileBottomNavInner);
