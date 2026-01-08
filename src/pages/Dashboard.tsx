@@ -6,11 +6,13 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   BookOpen, Sparkles, Download, Clock, TrendingUp, 
-  Library, Plus, ChevronRight, Loader2
+  Library, Plus, ChevronRight
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { apiCache } from "@/lib/cache";
 
 interface DashboardStats {
   totalBooks: number;
@@ -27,6 +29,79 @@ interface RecentBook {
   cover_image_url: string | null;
 }
 
+// Skeleton component for instant render
+function DashboardSkeleton() {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      <main className="flex-1 pt-24 pb-16">
+        <div className="container mx-auto px-4 max-w-6xl">
+          {/* Welcome Header skeleton */}
+          <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
+            <div>
+              <Skeleton className="h-9 w-64 mb-2" />
+              <Skeleton className="h-5 w-48" />
+            </div>
+            <Skeleton className="h-10 w-40 mt-4 md:mt-0" />
+          </div>
+
+          {/* Stats Grid skeleton */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-8">
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="bg-gradient-card border-border/50">
+                <CardContent className="p-4">
+                  <Skeleton className="h-6 w-6 mb-2" />
+                  <Skeleton className="h-8 w-16 mb-1" />
+                  <Skeleton className="h-3 w-20" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+
+          <div className="grid lg:grid-cols-3 gap-6">
+            {/* Recent Books skeleton */}
+            <div className="lg:col-span-2">
+              <Card className="bg-gradient-card border-border/50">
+                <CardHeader>
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-4 w-48" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  {[1, 2, 3].map((i) => (
+                    <div key={i} className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg">
+                      <Skeleton className="w-12 h-16 rounded" />
+                      <div className="flex-1 space-y-2">
+                        <Skeleton className="h-4 w-3/4" />
+                        <Skeleton className="h-3 w-1/4" />
+                        <Skeleton className="h-1.5 w-full" />
+                      </div>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+
+            {/* Quick Actions skeleton */}
+            <div className="space-y-6">
+              <Card className="bg-gradient-card border-border/50">
+                <CardHeader>
+                  <Skeleton className="h-5 w-28" />
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  {[1, 2, 3, 4].map((i) => (
+                    <Skeleton key={i} className="h-10 w-full" />
+                  ))}
+                </CardContent>
+              </Card>
+            </div>
+          </div>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
@@ -35,39 +110,89 @@ export default function Dashboard() {
   const [isLoading, setIsLoading] = useState(true);
   const navigate = useNavigate();
 
+  // CONTRACT 4A: Cache-first, skeleton-first strategy
   useEffect(() => {
-    checkAuth();
-  }, []);
-
-  const checkAuth = async () => {
-    const { data: { user } } = await supabase.auth.getUser();
-    if (!user) {
-      navigate("/auth");
-      return;
+    let mounted = true;
+    
+    // INSTANT: Check cache and render immediately
+    const cachedProfile = apiCache.get<any>('dashboard:profile');
+    const cachedStats = apiCache.get<DashboardStats>('dashboard:stats');
+    const cachedBooks = apiCache.get<RecentBook[]>('dashboard:recent');
+    
+    if (cachedProfile) setProfile(cachedProfile);
+    if (cachedStats) setStats(cachedStats);
+    if (cachedBooks) setRecentBooks(cachedBooks);
+    
+    // If we have cached data, show it immediately
+    if (cachedProfile && cachedStats) {
+      setIsLoading(false);
     }
-    setUser(user);
-    await Promise.all([fetchProfile(user.id), fetchStats(user.id), fetchRecentBooks(user.id)]);
-    setIsLoading(false);
-  };
+    
+    // BACKGROUND: Check auth and fetch fresh data
+    const initDashboard = async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!mounted) return;
+      
+      if (!user) {
+        navigate("/auth");
+        return;
+      }
+      setUser(user);
+      
+      // Fetch fresh data in parallel
+      await Promise.all([
+        fetchProfile(user.id),
+        fetchStats(user.id),
+        fetchRecentBooks(user.id)
+      ]);
+      
+      if (mounted) setIsLoading(false);
+    };
+    
+    // Defer to not block render
+    setTimeout(initDashboard, 0);
+    
+    return () => { mounted = false; };
+  }, [navigate]);
 
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
-    if (data) setProfile(data);
+    if (data) {
+      setProfile(data);
+      apiCache.set('dashboard:profile', data, 2 * 60 * 1000);
+    }
   };
 
   const fetchStats = async (userId: string) => {
-    const { data: library } = await supabase.from("user_library").select("book_id, progress_percent").eq("user_id", userId);
+    const { data: library } = await supabase
+      .from("user_library")
+      .select("book_id, progress_percent")
+      .eq("user_id", userId)
+      .limit(50); // Limit for performance
+      
     if (!library) return;
 
     const bookIds = library.map(l => l.book_id);
-    if (bookIds.length === 0) return;
+    if (bookIds.length === 0) {
+      const emptyStats = { totalBooks: 0, totalChapters: 0, totalWords: 0, booksInProgress: 0 };
+      setStats(emptyStats);
+      apiCache.set('dashboard:stats', emptyStats, 2 * 60 * 1000);
+      return;
+    }
 
-    const { data: chapters } = await supabase.from("chapters").select("word_count").in("book_id", bookIds);
+    const { data: chapters } = await supabase
+      .from("chapters")
+      .select("word_count")
+      .in("book_id", bookIds)
+      .limit(200); // Limit for performance
+      
     const totalWords = chapters?.reduce((sum, ch) => sum + (ch.word_count || 0), 0) || 0;
     const totalChapters = chapters?.length || 0;
     const booksInProgress = library.filter(l => l.progress_percent > 0 && l.progress_percent < 100).length;
 
-    setStats({ totalBooks: library.length, totalChapters, totalWords, booksInProgress });
+    const newStats = { totalBooks: library.length, totalChapters, totalWords, booksInProgress };
+    setStats(newStats);
+    apiCache.set('dashboard:stats', newStats, 2 * 60 * 1000);
   };
 
   const fetchRecentBooks = async (userId: string) => {
@@ -81,7 +206,10 @@ export default function Dashboard() {
     if (!library || library.length === 0) return;
 
     const bookIds = library.map(l => l.book_id);
-    const { data: books } = await supabase.from("books").select("id, title, category, cover_image_url").in("id", bookIds);
+    const { data: books } = await supabase
+      .from("books")
+      .select("id, title, category, cover_image_url")
+      .in("id", bookIds);
 
     if (books) {
       const booksWithProgress = books.map(book => {
@@ -89,15 +217,13 @@ export default function Dashboard() {
         return { ...book, progress_percent: libItem?.progress_percent || 0 };
       });
       setRecentBooks(booksWithProgress);
+      apiCache.set('dashboard:recent', booksWithProgress, 2 * 60 * 1000);
     }
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+  // Show skeleton immediately, not blocking spinner
+  if (isLoading && !profile) {
+    return <DashboardSkeleton />;
   }
 
   const statCards = [
@@ -135,7 +261,7 @@ export default function Dashboard() {
                   key={stat.label}
                   initial={{ opacity: 0, y: 20 }}
                   animate={{ opacity: 1, y: 0 }}
-                  transition={{ delay: index * 0.1 }}
+                  transition={{ delay: index * 0.05 }}
                 >
                   <Card className="bg-gradient-card border-border/50">
                     <CardContent className="p-4">
