@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
@@ -11,6 +11,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   User, Camera, BookOpen, Download, Award, Clock, 
   Loader2, Save, History
@@ -18,6 +19,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { apiCache } from "@/lib/cache";
 
 interface ProfileData {
   id: string;
@@ -37,6 +39,57 @@ interface UserBook {
   cover_image_url: string | null;
 }
 
+// Skeleton component for instant render
+function ProfileSkeleton() {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      <main className="flex-1 pt-24 pb-16">
+        <div className="container mx-auto px-4 max-w-4xl">
+          {/* Header skeleton */}
+          <div className="flex flex-col md:flex-row items-center gap-6 mb-8">
+            <Skeleton className="h-24 w-24 rounded-full" />
+            <div className="text-center md:text-left space-y-2">
+              <Skeleton className="h-8 w-48" />
+              <Skeleton className="h-4 w-32" />
+              <Skeleton className="h-6 w-20" />
+            </div>
+          </div>
+          
+          {/* Tabs skeleton */}
+          <Skeleton className="h-10 w-full max-w-md mb-6" />
+          
+          {/* Content skeleton */}
+          <Card className="bg-gradient-card border-border/50">
+            <CardHeader>
+              <Skeleton className="h-6 w-40" />
+              <Skeleton className="h-4 w-60" />
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="grid gap-4 md:grid-cols-2">
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+                <div className="space-y-2">
+                  <Skeleton className="h-4 w-20" />
+                  <Skeleton className="h-10 w-full" />
+                </div>
+              </div>
+              <div className="space-y-2">
+                <Skeleton className="h-4 w-12" />
+                <Skeleton className="h-24 w-full" />
+              </div>
+              <Skeleton className="h-10 w-32" />
+            </CardContent>
+          </Card>
+        </div>
+      </main>
+      <Footer />
+    </div>
+  );
+}
+
 export default function Profile() {
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<ProfileData | null>(null);
@@ -52,10 +105,29 @@ export default function Profile() {
   const navigate = useNavigate();
   const { t } = useLanguage();
 
+  // CONTRACT 4A: Cache-first, skeleton-first strategy
   useEffect(() => {
     let mounted = true;
     
-    const checkAuth = async () => {
+    // INSTANT: Check cache and render immediately
+    const cachedProfile = apiCache.get<ProfileData>('profile:current');
+    const cachedBooks = apiCache.get<UserBook[]>('profile:books');
+    
+    if (cachedProfile) {
+      setProfile(cachedProfile);
+      setEditedProfile({
+        full_name: cachedProfile.full_name || "",
+        bio: cachedProfile.bio || "",
+        country: cachedProfile.country || "",
+      });
+      setIsLoading(false);
+    }
+    if (cachedBooks) {
+      setUserBooks(cachedBooks);
+    }
+    
+    // BACKGROUND: Check auth and fetch fresh data
+    const initProfile = async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!mounted) return;
       
@@ -65,7 +137,7 @@ export default function Profile() {
       }
       setUser(user);
       
-      // Fetch in parallel for faster load
+      // Fetch fresh data in parallel
       await Promise.all([
         fetchProfile(user.id),
         fetchUserBooks(user.id)
@@ -74,7 +146,9 @@ export default function Profile() {
       if (mounted) setIsLoading(false);
     };
     
-    checkAuth();
+    // Defer to not block render
+    setTimeout(initProfile, 0);
+    
     return () => { mounted = false; };
   }, [navigate]);
 
@@ -92,6 +166,8 @@ export default function Profile() {
         bio: data.bio || "",
         country: data.country || "",
       });
+      // Cache for 2 minutes
+      apiCache.set('profile:current', data, 2 * 60 * 1000);
     }
   };
 
@@ -99,7 +175,8 @@ export default function Profile() {
     const { data: libraryData } = await supabase
       .from("user_library")
       .select("book_id")
-      .eq("user_id", userId);
+      .eq("user_id", userId)
+      .limit(10); // Limit for performance
 
     if (libraryData && libraryData.length > 0) {
       const bookIds = libraryData.map(l => l.book_id);
@@ -111,6 +188,8 @@ export default function Profile() {
 
       if (books) {
         setUserBooks(books);
+        // Cache for 2 minutes
+        apiCache.set('profile:books', books, 2 * 60 * 1000);
       }
     }
   };
@@ -140,6 +219,8 @@ export default function Profile() {
         title: t('profile.title'),
         description: "Your profile has been saved successfully",
       });
+      // Invalidate cache and refetch
+      apiCache.delete('profile:current');
       await fetchProfile(user.id);
     }
     setIsSaving(false);
@@ -166,12 +247,9 @@ export default function Profile() {
     return t('profile.freePlan');
   };
 
-  if (isLoading) {
-    return (
-      <div className="min-h-screen flex items-center justify-center">
-        <Loader2 className="h-8 w-8 animate-spin text-primary" />
-      </div>
-    );
+  // Show skeleton immediately, not blocking spinner
+  if (isLoading && !profile) {
+    return <ProfileSkeleton />;
   }
 
   return (
