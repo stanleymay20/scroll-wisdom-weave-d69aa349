@@ -5,7 +5,7 @@
  * No blocking calls allowed in this component.
  */
 
-import React, { memo, useCallback } from "react";
+import { memo, useCallback } from "react";
 import { Search, User } from "lucide-react";
 import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
@@ -15,7 +15,7 @@ import logo from "@/assets/logo.png";
  * Pure UI component - NO data fetching, NO auth checks
  * This is critical for Contract 4A compliance
  */
-const MobileHeaderInner = React.forwardRef<HTMLElement>((_, ref) => {
+function MobileHeaderComponent() {
   const navigate = useNavigate();
 
   // Memoize navigation handlers
@@ -24,7 +24,6 @@ const MobileHeaderInner = React.forwardRef<HTMLElement>((_, ref) => {
 
   return (
     <header 
-      ref={ref}
       className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border/20"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
     >
@@ -63,8 +62,6 @@ const MobileHeaderInner = React.forwardRef<HTMLElement>((_, ref) => {
       </div>
     </header>
   );
-});
+}
 
-MobileHeaderInner.displayName = "MobileHeader";
-
-export const MobileHeader = memo(MobileHeaderInner);
+export const MobileHeader = memo(MobileHeaderComponent);
