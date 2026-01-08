@@ -1,10 +1,19 @@
-import { useEffect, useState, useCallback } from "react";
+/**
+ * CONTRACT 4A — MOBILE HOME PERFORMANCE
+ * 
+ * Renders INSTANTLY with skeletons.
+ * Data fetches in background AFTER first paint.
+ * Uses cache-first strategy.
+ */
+
+import { useEffect, useState, useCallback, memo } from "react";
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileBookCard } from "./MobileBookCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiCache, cacheKeys } from "@/lib/cache";
+import { MOBILE_DATA_LIMITS } from "@/lib/performanceContracts";
 
 interface Book {
   id: string;
@@ -22,7 +31,8 @@ interface LibraryItem {
   books: Book;
 }
 
-function BookGridSkeleton({ count = 4 }: { count?: number }) {
+// Memoized skeleton for performance
+const BookGridSkeleton = memo(function BookGridSkeleton({ count = 4 }: { count?: number }) {
   return (
     <div className="grid grid-cols-2 gap-4">
       {Array.from({ length: count }).map((_, i) => (
@@ -33,38 +43,51 @@ function BookGridSkeleton({ count = 4 }: { count?: number }) {
       ))}
     </div>
   );
-}
+});
 
-function SectionHeader({ title, linkTo }: { title: string; linkTo: string }) {
+// Memoized section header
+const SectionHeader = memo(function SectionHeader({ title, linkTo }: { title: string; linkTo: string }) {
   return (
     <div className="flex items-center justify-between mb-4">
       <h2 className="text-lg font-display font-semibold text-foreground">{title}</h2>
       <Link 
         to={linkTo} 
-        className="flex items-center gap-1 text-sm text-scroll-gold hover:text-scroll-gold-light"
+        className="flex items-center gap-1 text-sm text-scroll-gold active:text-scroll-gold-light"
       >
         See all
         <ChevronRight className="h-4 w-4" />
       </Link>
     </div>
   );
-}
+});
+
+// Static categories - no computation needed
+const QUICK_CATEGORIES = ["Theology", "Science", "History", "Fiction", "Philosophy", "Arts"] as const;
 
 export function MobileHome() {
+  // UI shell renders immediately with these defaults
   const [continueReading, setContinueReading] = useState<LibraryItem[]>([]);
   const [lastAdded, setLastAdded] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
   const [userId, setUserId] = useState<string | null>(null);
 
+  // Deferred data fetch - runs AFTER first paint
   const fetchData = useCallback(async () => {
     try {
-      // Check if user is logged in
+      // Try cache first for instant display
+      const cachedBooks = apiCache.get<Book[]>(cacheKeys.featuredBooks());
+      if (cachedBooks) {
+        setLastAdded(cachedBooks);
+        setLoading(false);
+      }
+
+      // Background auth check - don't block render
       const { data: { user } } = await supabase.auth.getUser();
       setUserId(user?.id || null);
 
-      // Parallel fetch for faster loading
+      // Parallel fetch with reduced data limits for mobile
       const [libraryResult, booksResult] = await Promise.all([
-        // Fetch continue reading (user's library with progress)
+        // Fetch continue reading (user's library with progress) - REDUCED COUNT
         user ? supabase
           .from("user_library")
           .select(`
@@ -84,9 +107,9 @@ export function MobileHome() {
           .gt("progress_percent", 0)
           .lt("progress_percent", 100)
           .order("created_at", { ascending: false })
-          .limit(4) : Promise.resolve({ data: null }),
+          .limit(MOBILE_DATA_LIMITS.continueReadingCount) : Promise.resolve({ data: null }),
         
-        // Check cache first for last added books
+        // Cache-first for last added books - REDUCED COUNT
         apiCache.getOrSet<Book[]>(
           cacheKeys.featuredBooks(),
           async () => {
@@ -95,7 +118,7 @@ export function MobileHome() {
               .select("id, title, cover_image_url, category, book_type, created_at")
               .eq("is_published", true)
               .order("created_at", { ascending: false })
-              .limit(6);
+              .limit(MOBILE_DATA_LIMITS.recentBooksCount);
             return data || [];
           },
           60000 // 60 second cache
@@ -114,8 +137,11 @@ export function MobileHome() {
     }
   }, []);
 
+  // Defer data fetch to after first paint
   useEffect(() => {
-    fetchData();
+    // Use requestIdleCallback or setTimeout to not block paint
+    const timeoutId = setTimeout(fetchData, 0);
+    return () => clearTimeout(timeoutId);
   }, [fetchData]);
 
   // Main content - note: padding-top is handled by MobileLayout wrapper
