@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Book,
   BookOpen,
@@ -49,7 +50,8 @@ import { ExportDialog } from "@/components/books/ExportDialog";
 import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
 import { useLanguage } from "@/contexts/LanguageContext";
-
+import { usePagePerformance } from "@/lib/performance";
+import { apiCache, cacheKeys } from "@/lib/cache";
 interface BookData {
   id: string;
   title: string;
@@ -78,6 +80,10 @@ export default function BookDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  
+  // CONTRACT 4: Track TTI
+  usePagePerformance('BookDetail');
+  
   const [book, setBook] = useState<BookData | null>(null);
   const [chapters, setChapters] = useState<ChapterData[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -501,12 +507,43 @@ export default function BookDetail() {
     });
   };
 
+  // CONTRACT 4: Skeleton-first loading instead of blocking spinner
   if (isLoading) {
     return (
       <div className="min-h-screen">
         <Navbar />
-        <main className="pt-24 pb-16 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-scroll-gold" />
+        <main className="pt-24 pb-16">
+          <div className="container mx-auto px-4">
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
+              {/* Cover skeleton */}
+              <div className="lg:col-span-1">
+                <Skeleton className="aspect-[3/4] rounded-xl" />
+              </div>
+              {/* Info skeleton */}
+              <div className="lg:col-span-2 space-y-4">
+                <Skeleton className="h-4 w-24" />
+                <Skeleton className="h-10 w-3/4" />
+                <Skeleton className="h-20 w-full" />
+                <div className="flex gap-4">
+                  <Skeleton className="h-6 w-32" />
+                  <Skeleton className="h-6 w-24" />
+                  <Skeleton className="h-6 w-28" />
+                </div>
+                <div className="flex gap-3 pt-4">
+                  <Skeleton className="h-12 w-32" />
+                  <Skeleton className="h-12 w-32" />
+                  <Skeleton className="h-12 w-12" />
+                </div>
+              </div>
+            </div>
+            {/* Chapters skeleton */}
+            <Skeleton className="h-8 w-48 mb-6" />
+            <div className="space-y-3">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-16 w-full rounded-lg" />
+              ))}
+            </div>
+          </div>
         </main>
         <Footer />
       </div>

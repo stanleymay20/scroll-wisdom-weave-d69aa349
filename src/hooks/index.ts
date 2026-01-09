@@ -5,4 +5,5 @@ export { usePWAUpdate } from './usePWAUpdate';
 export { useLibraryLimits } from './useLibraryLimits';
 export { useContentProtection } from './useContentProtection';
 export { usePasteProtection } from './usePasteProtection';
+export { useNetworkAction, useGracefulDegradation } from './useNetworkAction';
 export type { Entitlements } from './useEntitlements';
