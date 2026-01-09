@@ -76,10 +76,47 @@ export default function Settings() {
     setPortalLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("customer-portal");
-      if (error) throw error;
-      if (data?.url) window.open(data.url, "_blank");
+      
+      if (error) {
+        // Check if it's a "no customer" error
+        if (error.message?.includes("No Stripe customer")) {
+          toast({ 
+            title: "No Subscription Found", 
+            description: "You don't have an active subscription yet. Subscribe first to manage billing.", 
+            variant: "default" 
+          });
+          navigate("/pricing");
+          return;
+        }
+        throw error;
+      }
+      
+      if (data?.error) {
+        // Handle server-side error response
+        if (data.error.includes("No Stripe customer")) {
+          toast({ 
+            title: "No Subscription Found", 
+            description: "You don't have an active subscription yet. Subscribe first to manage billing.", 
+            variant: "default" 
+          });
+          navigate("/pricing");
+          return;
+        }
+        throw new Error(data.error);
+      }
+      
+      if (data?.url) {
+        window.open(data.url, "_blank");
+      } else {
+        throw new Error("No portal URL returned");
+      }
     } catch (error: any) {
-      toast({ title: t('common.error'), description: t('settings.billingError'), variant: "destructive" });
+      console.error("Billing portal error:", error);
+      toast({ 
+        title: t('common.error'), 
+        description: error.message || t('settings.billingError'), 
+        variant: "destructive" 
+      });
     } finally {
       setPortalLoading(false);
     }
