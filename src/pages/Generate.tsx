@@ -34,6 +34,8 @@ import { WorkbookPreview } from "@/components/generate/WorkbookPreview";
 import { ComicStyleSelector, ComicStyleConfig } from "@/components/generate/ComicStyleSelector";
 import { BestsellerModeToggle } from "@/components/generate/BestsellerModeToggle";
 import { AuthorImprint, AuthorMode } from "@/components/generate/AuthorImprint";
+import { usePagePerformance } from "@/lib/performance";
+import { useGracefulDegradation } from "@/hooks/useNetworkAction";
 
 const CATEGORIES = [
   { value: "theology", labelKey: "categories.theology" },
@@ -59,6 +61,13 @@ const CATEGORIES = [
 export default function Generate() {
   const { t, language: uiLanguage } = useLanguage();
   const navigate = useNavigate();
+  
+  // CONTRACT 4: Track TTI
+  usePagePerformance('Generate');
+  
+  // CONTRACT 4.5: Graceful degradation
+  const { canGenerate, isOnline } = useGracefulDegradation();
+  
   const { 
     user, 
     tier, 
@@ -166,6 +175,16 @@ export default function Generate() {
 
   const handleGenerate = async () => {
     setShowBookTypeError(false);
+
+    // CONTRACT 4.3: Block generation when offline
+    if (!canGenerate) {
+      toast({
+        title: "Generation unavailable",
+        description: "Book generation requires an internet connection. Please check your connection and try again.",
+        variant: "default",
+      });
+      return;
+    }
 
     if (!title || !category) {
       toast({
@@ -339,8 +358,29 @@ export default function Generate() {
       <LaunchBanner />
       <main className="flex-1 pt-20 pb-16">
         <div className="container mx-auto px-4 max-w-3xl">
+          {/* CONTRACT 4.3: Offline warning banner */}
+          {!isOnline && (
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30"
+            >
+              <div className="flex items-center gap-3">
+                <AlertTriangle className="h-5 w-5 text-amber-600 dark:text-amber-400" />
+                <div className="flex-1">
+                  <p className="text-sm font-medium text-amber-700 dark:text-amber-300">
+                    You're offline
+                  </p>
+                  <p className="text-xs text-amber-600/80 dark:text-amber-400/80">
+                    Book generation requires an internet connection. Please reconnect to continue.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+          
           {/* Launch Mode Info for Free Users Only */}
-          {isLaunchModeActive() && tier === 'free' && !entitlements.isPaid && (
+          {isLaunchModeActive() && tier === 'free' && !entitlements.isPaid && isOnline && (
             <motion.div
               initial={{ opacity: 0, y: -10 }}
               animate={{ opacity: 1, y: 0 }}

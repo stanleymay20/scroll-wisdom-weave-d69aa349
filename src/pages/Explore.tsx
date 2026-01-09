@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -8,9 +8,12 @@ import { MobileLayout, MobileBookCard } from "@/components/mobile";
 import { BookCard } from "@/components/books/BookCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Search, X, Loader2 } from "lucide-react";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Search, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { apiCache } from "@/lib/cache";
+import { usePagePerformance } from "@/lib/performance";
 
 const CATEGORIES = [
   "all",
@@ -42,6 +45,35 @@ interface Book {
   cover_image_url: string | null;
   total_chapters: number | null;
   book_type: string;
+}
+
+// CONTRACT 4: Skeleton-first loading for book grids
+function BookGridSkeleton({ count = 8, mobile = false }: { count?: number; mobile?: boolean }) {
+  if (mobile) {
+    return (
+      <div className="grid grid-cols-2 gap-4">
+        {Array.from({ length: count }).map((_, i) => (
+          <div key={i} className="space-y-2">
+            <Skeleton className="aspect-[3/4] rounded-xl" />
+            <Skeleton className="h-4 w-3/4" />
+            <Skeleton className="h-3 w-1/2" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      {Array.from({ length: count }).map((_, i) => (
+        <div key={i} className="space-y-3">
+          <Skeleton className="aspect-[3/4] rounded-xl" />
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-3 w-1/2" />
+        </div>
+      ))}
+    </div>
+  );
 }
 
 // Mobile Explore Content
@@ -112,11 +144,9 @@ function MobileExploreContent({
         ))}
       </div>
 
-      {/* Content */}
+      {/* CONTRACT 4: Skeleton-first loading */}
       {isLoading ? (
-        <div className="flex items-center justify-center py-20">
-          <Loader2 className="h-8 w-8 animate-spin text-scroll-gold" />
-        </div>
+        <BookGridSkeleton count={6} mobile />
       ) : filteredBooks.length > 0 ? (
         <div className="grid grid-cols-2 gap-4">
           {filteredBooks.map((book) => (
@@ -151,6 +181,9 @@ export default function Explore() {
   );
   const [books, setBooks] = useState<Book[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  
+  // CONTRACT 4: Track TTI
+  usePagePerformance('Explore');
 
   useEffect(() => {
     const category = searchParams.get("category");
@@ -159,27 +192,42 @@ export default function Explore() {
     }
   }, [searchParams]);
 
+  // CONTRACT 4: Cache-first data fetching
+  const fetchBooks = useCallback(async () => {
+    const cacheKey = 'explore:books:published';
+    
+    // Try cache first for instant display
+    const cached = apiCache.get<Book[]>(cacheKey);
+    if (cached) {
+      setBooks(cached);
+      setIsLoading(false);
+    }
+    
+    // Fetch fresh data in background
+    try {
+      const { data, error } = await supabase
+        .from("books")
+        .select("id, title, description, category, cover_image_url, total_chapters, book_type")
+        .eq("is_published", true)
+        .order("created_at", { ascending: false })
+        .limit(isMobile ? 20 : 50); // CONTRACT 4: Reduced limits for mobile
+
+      if (error) throw error;
+      
+      const newBooks = data || [];
+      setBooks(newBooks);
+      apiCache.set(cacheKey, newBooks, 2 * 60 * 1000); // 2 min cache
+    } catch (error) {
+      console.error("Error fetching books:", error);
+      // CONTRACT 4: Graceful degradation - keep cached data if fetch fails
+    } finally {
+      setIsLoading(false);
+    }
+  }, [isMobile]);
+
   useEffect(() => {
-    const fetchBooks = async () => {
-      setIsLoading(true);
-      try {
-        const { data, error } = await supabase
-          .from("books")
-          .select("id, title, description, category, cover_image_url, total_chapters, book_type")
-          .eq("is_published", true)
-          .order("created_at", { ascending: false });
-
-        if (error) throw error;
-        setBooks(data || []);
-      } catch (error) {
-        console.error("Error fetching books:", error);
-      } finally {
-        setIsLoading(false);
-      }
-    };
-
     fetchBooks();
-  }, []);
+  }, [fetchBooks]);
 
   const filteredBooks = books.filter((book) => {
     const matchesCategory = selectedCategory === "all" || book.category === selectedCategory;
@@ -285,11 +333,9 @@ export default function Explore() {
             </div>
           </motion.div>
 
-          {/* Books Grid */}
+          {/* CONTRACT 4: Skeleton-first loading */}
           {isLoading ? (
-            <div className="flex items-center justify-center py-20">
-              <Loader2 className="h-8 w-8 animate-spin text-scroll-gold" />
-            </div>
+            <BookGridSkeleton count={8} />
           ) : filteredBooks.length > 0 ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
               {filteredBooks.map((book, index) => (
