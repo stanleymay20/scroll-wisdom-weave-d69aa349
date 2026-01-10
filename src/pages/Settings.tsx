@@ -92,6 +92,15 @@ export default function Settings() {
       }
       
       if (data?.error) {
+        // Handle Stripe permission errors gracefully
+        if (data.error.includes("rak_customer_portal_write") || data.error.includes("does not have the required permissions")) {
+          toast({ 
+            title: "Billing Portal Unavailable", 
+            description: "The billing portal is temporarily unavailable. Please contact support or visit your email for subscription management links.", 
+            variant: "default" 
+          });
+          return;
+        }
         // Handle server-side error response
         if (data.error.includes("No Stripe customer")) {
           toast({ 
@@ -112,6 +121,15 @@ export default function Settings() {
       }
     } catch (error: any) {
       console.error("Billing portal error:", error);
+      // Handle Stripe permission errors at catch level too
+      if (error.message?.includes("rak_customer_portal_write") || error.message?.includes("does not have the required permissions")) {
+        toast({ 
+          title: "Billing Portal Unavailable", 
+          description: "The billing portal is temporarily unavailable. Please contact support for subscription management.", 
+          variant: "default" 
+        });
+        return;
+      }
       toast({ 
         title: t('common.error'), 
         description: error.message || t('settings.billingError'), 

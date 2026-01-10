@@ -1,12 +1,13 @@
+import { forwardRef } from "react";
 import { Link } from "react-router-dom";
 import { Book, Github, Twitter, Mail } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 
-export function Footer() {
+export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
   const { t } = useLanguage();
 
   return (
-    <footer className="border-t border-border/50 bg-background/50 backdrop-blur-sm">
+    <footer ref={ref} className="border-t border-border/50 bg-background/50 backdrop-blur-sm">
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
@@ -96,4 +97,6 @@ export function Footer() {
       </div>
     </footer>
   );
-}
+});
+
+Footer.displayName = "Footer";
