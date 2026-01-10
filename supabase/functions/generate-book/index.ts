@@ -177,7 +177,9 @@ serve(async (req) => {
       language = 'en', 
       customCover,
       bookType = 'text',
+      extendedBookType = null,  // Contract 3: Extended book type for pipeline routing
       enableReferences = false,
+      academicMode = false,
       bestsellerMode = true, // Default ON
       // Author & Imprint fields
       authorMode = 'ai',
@@ -195,6 +197,16 @@ serve(async (req) => {
       textInImage = true,
       scenesPerPanel = 1,
     } = await req.json();
+
+    // ===========================================
+    // CONTRACT 3: Book type determines generation pipeline
+    // The extendedBookType is the GOVERNING type that controls
+    // how chapters are generated (academic vs bestseller pipeline)
+    // ===========================================
+    const effectiveBookType = extendedBookType || bookType;
+    const isAcademicType = ['academic', 'technical', 'reference', 'professional'].includes(effectiveBookType);
+    
+    console.log(`[GENERATE-BOOK] Extended Book Type: ${effectiveBookType}, Is Academic: ${isAcademicType}`);
 
     // Resolve author display name based on mode
     const resolveAuthorName = (): string => {
@@ -240,26 +252,59 @@ serve(async (req) => {
     }
 
     console.log(`[GENERATE-BOOK] Generating: ${title} with ${effectiveChapters} chapters`);
-    console.log(`[GENERATE-BOOK] Language: ${languageName}, Book type: ${bookType}, Plan: ${userPlan}`);
+    console.log(`[GENERATE-BOOK] Language: ${languageName}, Book type: ${effectiveBookType}, Plan: ${userPlan}`);
 
-    // Build outline prompt based on book type
-    const bookTypeInstructions = bookType === 'comic' 
-      ? `This is a COMIC/CHILDREN'S BOOK. Each chapter is a visual scene/page with minimal text (1-2 sentences max per scene).
+    // ===========================================
+    // CONTRACT 3: Book type determines outline style
+    // ===========================================
+    let bookTypeInstructions: string;
+    
+    if (effectiveBookType === 'comic') {
+      bookTypeInstructions = `This is a COMIC/CHILDREN'S BOOK. Each chapter is a visual scene/page with minimal text (1-2 sentences max per scene).
          Focus on visual descriptions that can be illustrated.
-         Structure: Scene number, Scene description (visual), Short dialogue or caption.`
-      : bookType === 'illustrated'
-      ? `This is an ILLUSTRATED BOOK. Include image placement suggestions within chapters.
-         After key sections, note [IMAGE: description of illustration needed].`
-      : `This is a TEXT-ONLY academic book. Focus on depth, rigor, and scholarly content.`;
+         Structure: Scene number, Scene description (visual), Short dialogue or caption.`;
+    } else if (effectiveBookType === 'workbook') {
+      bookTypeInstructions = `This is a WORKBOOK. Each chapter MUST be interactive with:
+         - Fill-in prompts with blank lines
+         - Tables and worksheets for user input
+         - Reflection questions
+         - Action step checkboxes
+         MAXIMUM 1800 words per chapter. Focus on interactivity, not exposition.`;
+    } else if (isAcademicType) {
+      // CONTRACT 3: Academic/Technical/Professional/Reference books use academic pipeline
+      bookTypeInstructions = `This is an ACADEMIC/TECHNICAL TEXTBOOK. 
+         
+         STRICTLY FORBIDDEN:
+         ❌ Metaphorical chapter titles (e.g., "The Alchemist's Path", "Journey to Mastery")
+         ❌ Storytelling or narrative framing
+         ❌ Motivational language
+         ❌ Hero's journey structure
+         
+         REQUIRED:
+         ✅ Literal, descriptive chapter titles (e.g., "Introduction to ${category}", "Fundamentals of...")
+         ✅ Learning objectives for each chapter
+         ✅ Technical, instructional tone
+         ✅ Exercises and mini-projects
+         ✅ Academic rigor and depth
+         
+         Chapter titles MUST be literal and technical, NOT metaphorical.
+         Example BAD title: "The Wizard's Guide to Data Science"
+         Example GOOD title: "Statistical Methods for Data Analysis"`;
+    } else if (bookType === 'illustrated') {
+      bookTypeInstructions = `This is an ILLUSTRATED BOOK. Include image placement suggestions within chapters.
+         After key sections, note [IMAGE: description of illustration needed].`;
+    } else {
+      bookTypeInstructions = `This is a BESTSELLER/TRADE BOOK. Focus on engaging narrative and transformation.`;
+    }
 
-    const referenceInstructions = enableReferences
+    const referenceInstructions = (enableReferences || academicMode || isAcademicType)
       ? `IMPORTANT: This book requires VERIFIED ACADEMIC REFERENCES.
          For each chapter, include a "references" array with real, verifiable sources.
          Format: {"author": "Name", "title": "Work Title", "year": 2023, "type": "book|article|journal"}`
       : '';
 
-    // Build bestseller mode boost
-    const bestsellerBoost = bestsellerMode ? BESTSELLER_OUTLINE_BOOST : '';
+    // Build bestseller mode boost (only for non-academic types)
+    const bestsellerBoost = (bestsellerMode && !isAcademicType) ? BESTSELLER_OUTLINE_BOOST : '';
 
     // First, generate the book outline
     const outlinePrompt = `You are ScrollResearchGPT, an AI agent specialized in creating comprehensive book outlines.
@@ -409,7 +454,8 @@ Format your response as a JSON object with this structure:
         cover_image_url: customCover || null,
         creator_id: user.id,
         language: language,
-        book_type: bookType,
+        // CONTRACT 3: Store the extended book type for chapter generation pipeline routing
+        book_type: effectiveBookType,
         // Workbook fields
         workbook_density: bookType === 'workbook' ? workbookDensity : null,
         // Comic fields

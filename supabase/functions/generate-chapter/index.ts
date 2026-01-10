@@ -2086,11 +2086,32 @@ This is MANDATORY. No exceptions.`;
     let systemPrompt: string;
     let chapterPrompt: string;
     
-    // PIPELINE ROUTING: Determine if this is Academic/Technical or Bestseller
-    const isAcademicPipeline = academicMode || 
+    // ===========================================
+    // PIPELINE ROUTING: BOOK TYPE IS THE GOVERNING CONSTITUTION
+    // ===========================================
+    // 
+    // CONTRACT 3: Book type GOVERNS the generation pipeline.
+    // The book_type field is NOT a suggestion - it's a hard rule.
+    // 
+    // Academic pipeline triggers:
+    // 1. book_type === 'academic' (ALWAYS - regardless of academicMode flag)
+    // 2. book_type === 'technical' (ALWAYS - code-heavy, literal)
+    // 3. book_type === 'professional' + academic categories
+    // 4. book_type === 'reference' (ALWAYS - structured, no narrative)
+    // 5. academicMode flag is TRUE (explicit user choice)
+    // ===========================================
+    
+    const ACADEMIC_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'economics', 'finance', 'governance', 'history', 'philosophy'];
+    
+    const isAcademicPipeline = 
+      // Book type IS academic or technical - ALWAYS use academic pipeline
       effectiveBookType === 'academic' || 
+      effectiveBookType === 'technical' ||
       effectiveBookType === 'reference' ||
-      (effectiveBookType === 'professional' && ['technology', 'science', 'medicine', 'law'].includes(category?.toLowerCase()));
+      // Professional book in academic category
+      (effectiveBookType === 'professional' && ACADEMIC_CATEGORIES.includes(category?.toLowerCase())) ||
+      // Explicit academic mode flag
+      academicMode === true;
     
     if (isAcademicPipeline && researchResult && researchResult.references.length > 0) {
       // ACADEMIC/TECHNICAL PIPELINE - NO metaphors, NO storytelling
