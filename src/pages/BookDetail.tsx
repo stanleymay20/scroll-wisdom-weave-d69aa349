@@ -21,6 +21,8 @@ import {
   Lock,
   RefreshCw,
   Palette,
+  Trash2,
+  Archive,
 } from "lucide-react";
 import {
   Select,
@@ -42,6 +44,13 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -99,6 +108,8 @@ export default function BookDetail() {
   const [regenDialogOpen, setRegenDialogOpen] = useState(false);
   const [regenTarget, setRegenTarget] = useState<ChapterData | null>(null);
   const [editIntent, setEditIntent] = useState("");
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const isOwner = user && book?.creator_id === user.id;
 
@@ -507,6 +518,84 @@ export default function BookDetail() {
     });
   };
 
+  // Delete book handler (for book creators only)
+  const handleDeleteBook = async () => {
+    if (!book || !isOwner) return;
+    
+    setIsDeleting(true);
+    try {
+      // First, delete all chapters
+      const { error: chaptersError } = await supabase
+        .from("chapters")
+        .delete()
+        .eq("book_id", book.id);
+      
+      if (chaptersError) throw chaptersError;
+
+      // Delete all library entries for this book
+      const { error: libraryError } = await supabase
+        .from("user_library")
+        .delete()
+        .eq("book_id", book.id);
+      
+      if (libraryError) throw libraryError;
+
+      // Finally, delete the book
+      const { error: bookError } = await supabase
+        .from("books")
+        .delete()
+        .eq("id", book.id);
+      
+      if (bookError) throw bookError;
+
+      toast({
+        title: "Book Deleted",
+        description: `"${book.title}" has been permanently deleted.`,
+      });
+
+      // Navigate to library
+      navigate("/library");
+    } catch (error) {
+      console.error("Error deleting book:", error);
+      toast({
+        title: "Failed to Delete Book",
+        description: "An error occurred while deleting the book. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setIsDeleting(false);
+      setDeleteDialogOpen(false);
+    }
+  };
+
+  // Archive book (unpublish and hide)
+  const handleArchiveBook = async () => {
+    if (!book || !isOwner) return;
+    
+    try {
+      const { error } = await supabase
+        .from("books")
+        .update({ is_published: false })
+        .eq("id", book.id);
+
+      if (error) throw error;
+
+      setBook(prev => prev ? { ...prev, is_published: false } : null);
+      
+      toast({
+        title: "Book Archived",
+        description: `"${book.title}" has been archived and is now private.`,
+      });
+    } catch (error) {
+      console.error("Error archiving book:", error);
+      toast({
+        title: "Failed to Archive",
+        description: "Could not archive the book. Please try again.",
+        variant: "destructive",
+      });
+    }
+  };
+
   // CONTRACT 4: Skeleton-first loading instead of blocking spinner
   if (isLoading) {
     return (
@@ -560,6 +649,40 @@ export default function BookDetail() {
   return (
     <div className="min-h-screen">
       <Navbar />
+
+      {/* Delete Book Confirmation Dialog */}
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle className="text-destructive">Delete Book Permanently?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will permanently delete "{book.title}" and all its chapters. This action cannot be undone.
+              <br /><br />
+              <strong>Note:</strong> All reading progress from other users will also be removed.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isDeleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleDeleteBook}
+              disabled={isDeleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {isDeleting ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete Permanently
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={regenDialogOpen} onOpenChange={setRegenDialogOpen}>
         <AlertDialogContent>
@@ -820,6 +943,35 @@ export default function BookDetail() {
                         </Label>
                       </div>
                     </RadioGroup>
+                  </div>
+
+                  {/* Danger Zone - Delete/Archive */}
+                  <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/20 mt-4">
+                    <Label className="text-destructive font-medium">Danger Zone</Label>
+                    <p className="text-sm text-muted-foreground mt-1 mb-4">
+                      Irreversible actions for this book.
+                    </p>
+                    <div className="flex flex-wrap gap-3">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={handleArchiveBook}
+                        disabled={!book.is_published}
+                        className="text-muted-foreground hover:text-foreground"
+                      >
+                        <Archive className="h-4 w-4 mr-2" />
+                        Archive Book
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setDeleteDialogOpen(true)}
+                        className="text-destructive border-destructive/50 hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Book
+                      </Button>
+                    </div>
                   </div>
                 </>
               )}

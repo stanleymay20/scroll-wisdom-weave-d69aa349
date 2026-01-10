@@ -215,11 +215,33 @@ export default function Pricing() {
 
       if (error) throw error;
 
+      if (data?.error) {
+        // Handle Stripe permission errors gracefully
+        if (data.error.includes("rak_customer_portal_write") || data.error.includes("does not have the required permissions")) {
+          toast({ 
+            title: "Billing Portal Unavailable", 
+            description: "The billing portal is temporarily unavailable. Please contact support or check your email for subscription management links.", 
+            variant: "default" 
+          });
+          return;
+        }
+        throw new Error(data.error);
+      }
+
       if (data?.url) {
         window.open(data.url, "_blank");
       }
     } catch (error: any) {
       console.error("Portal error:", error);
+      // Handle Stripe permission errors at catch level too
+      if (error.message?.includes("rak_customer_portal_write") || error.message?.includes("does not have the required permissions")) {
+        toast({ 
+          title: "Billing Portal Unavailable", 
+          description: "The billing portal is temporarily unavailable. Please contact support for subscription management.", 
+          variant: "default" 
+        });
+        return;
+      }
       toast({
         title: t('common.error'),
         description: error.message || "Unable to open subscription portal.",
