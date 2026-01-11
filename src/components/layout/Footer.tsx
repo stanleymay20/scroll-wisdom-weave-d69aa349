@@ -24,13 +24,25 @@ export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
               {t('footer.tagline')}
             </p>
             <div className="flex items-center gap-4">
-              <a href="#" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+              <Link
+                to="/contact"
+                aria-label="Twitter"
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <Twitter className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+              </Link>
+              <Link
+                to="/contact"
+                aria-label="GitHub"
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <Github className="h-5 w-5" />
-              </a>
-              <a href="#" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+              </Link>
+              <a
+                href="mailto:support@scrolllibrary.com"
+                aria-label="Email"
+                className="text-muted-foreground hover:text-foreground transition-colors"
+              >
                 <Mail className="h-5 w-5" />
               </a>
             </div>
@@ -41,21 +53,21 @@ export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
             <h4 className="font-display font-semibold mb-4 text-foreground">{t('footer.library')}</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link to="/explore" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+                <Link to="/explore" className="text-muted-foreground hover:text-foreground transition-colors">
                   {t('nav.explore')}
                 </Link>
               </li>
               <li>
-                <Link to="/generate" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+                <Link to="/generate" className="text-muted-foreground hover:text-foreground transition-colors">
                   {t('nav.generate')}
                 </Link>
               </li>
               <li>
-                <Link to="/library" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+                <Link to="/library" className="text-muted-foreground hover:text-foreground transition-colors">
                   {t('nav.library')}
                 </Link>
               </li>
-          </ul>
+            </ul>
           </div>
 
           {/* Legal */}
@@ -63,22 +75,22 @@ export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
             <h4 className="font-display font-semibold mb-4 text-foreground">{t('footer.legal')}</h4>
             <ul className="space-y-2 text-sm">
               <li>
-                <Link to="/privacy" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+                <Link to="/privacy" className="text-muted-foreground hover:text-foreground transition-colors">
                   {t('footer.privacy')}
                 </Link>
               </li>
               <li>
-                <Link to="/terms" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+                <Link to="/terms" className="text-muted-foreground hover:text-foreground transition-colors">
                   {t('footer.terms')}
                 </Link>
               </li>
               <li>
-                <Link to="/support" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+                <Link to="/support" className="text-muted-foreground hover:text-foreground transition-colors">
                   {t('footer.support')}
                 </Link>
               </li>
               <li>
-                <Link to="/help" className="text-muted-foreground hover:text-scroll-gold transition-colors">
+                <Link to="/help" className="text-muted-foreground hover:text-foreground transition-colors">
                   {t('footer.help')}
                 </Link>
               </li>
@@ -89,9 +101,9 @@ export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
         <div className="border-t border-border/50 mt-8 pt-8 flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-muted-foreground">
           <p>{t('footer.copyright')}</p>
           <div className="flex items-center gap-4">
-            <Link to="/privacy" className="hover:text-scroll-gold transition-colors">{t('footer.privacy')}</Link>
-            <Link to="/terms" className="hover:text-scroll-gold transition-colors">{t('footer.terms')}</Link>
-            <Link to="/contact" className="hover:text-scroll-gold transition-colors">{t('footer.contact')}</Link>
+            <Link to="/privacy" className="hover:text-foreground transition-colors">{t('footer.privacy')}</Link>
+            <Link to="/terms" className="hover:text-foreground transition-colors">{t('footer.terms')}</Link>
+            <Link to="/contact" className="hover:text-foreground transition-colors">{t('footer.contact')}</Link>
           </div>
         </div>
       </div>
