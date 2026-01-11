@@ -3,7 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { Volume2, VolumeX, Play, Pause, Settings, Loader2, Square, AlertCircle } from "lucide-react";
+import { Volume2, VolumeX, Play, Pause, Settings, Loader2, Square, AlertCircle, Lock } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEntitlements } from "@/hooks/useEntitlements";
@@ -363,9 +363,16 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     generateSpeech();
   }, [generateSpeech, isLoading, isPlaying, stop]);
 
-  // Don't render if user doesn't have TTS access
+  // Render a disabled control when the user doesn't have TTS access (never render nothing)
   if (!canUseTTS && !entitlements.isPaid && !entitlements.isAdmin) {
-    return null;
+    return (
+      <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-2 border border-border/50 opacity-75">
+        <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Upgrade to enable audio">
+          <Lock className="h-4 w-4" />
+        </Button>
+        <p className="text-xs text-muted-foreground">Audio playback is unavailable on your plan.</p>
+      </div>
+    );
   }
 
   return (
