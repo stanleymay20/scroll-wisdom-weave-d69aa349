@@ -234,7 +234,6 @@ export function usePWA(): PWAState {
 export function useOfflineIndicator() {
   const [showOffline, setShowOffline] = useState(false);
   const { isOnline } = usePWA();
-  const wasOfflineRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
@@ -245,20 +244,14 @@ export function useOfflineIndicator() {
     }
 
     if (!isOnline) {
-      wasOfflineRef.current = true;
-      // Longer delay (1.5s) to prevent flickering on transient network issues
+      // VERY long delay (3s) to prevent flickering on transient network issues
+      // Only show offline banner if we've been offline for 3 full seconds
       timerRef.current = setTimeout(() => {
         setShowOffline(true);
-      }, 1500);
+      }, 3000);
     } else {
       // Immediately hide offline banner when online
       setShowOffline(false);
-      
-      // Show "back online" toast only if we were really offline for a while
-      if (wasOfflineRef.current) {
-        wasOfflineRef.current = false;
-        // The OfflineIndicator component can handle showing "back online" message
-      }
     }
 
     return () => {

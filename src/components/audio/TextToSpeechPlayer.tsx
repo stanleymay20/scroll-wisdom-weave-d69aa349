@@ -58,11 +58,13 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   }, []);
 
   const base64ToBlobUrl = useCallback((base64: string, mimeType = "audio/mpeg") => {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: mimeType });
-    return URL.createObjectURL(blob);
+    try {
+      // Use data URI for maximum browser compatibility - avoids atob() corruption issues
+      return `data:${mimeType};base64,${base64}`;
+    } catch (err) {
+      console.error("[TTS] Failed to create audio URL:", err);
+      throw new Error("Failed to process audio data");
+    }
   }, []);
 
   const sanitizeTextForTTS = useCallback((raw: string) => {
@@ -115,11 +117,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   }, []);
 
   const cleanupBlobUrls = useCallback(() => {
-    for (const url of activeBlobUrlsRef.current) {
-      try {
-        URL.revokeObjectURL(url);
-      } catch { /* ignore */ }
-    }
+    // Data URIs don't need revocation, but clear the array anyway
     activeBlobUrlsRef.current = [];
   }, []);
 
