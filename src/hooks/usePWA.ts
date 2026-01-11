@@ -24,30 +24,33 @@ interface PWAState {
  * - Timeout quickly to avoid blocking UI
  */
 async function verifyConnectivity(): Promise<boolean> {
-  // Fast path: if navigator says offline, trust it
-  if (!navigator.onLine) {
-    return false;
-  }
+  // IMPORTANT: navigator.onLine is unreliable (especially iOS/PWA).
+  // We ALWAYS attempt an actual fetch before declaring offline.
 
-  // Try multiple endpoints with fast timeouts
+  // Try multiple same-origin endpoints with fast timeouts.
+  // Using GET (not HEAD) improves compatibility with some SW/proxies/CDNs.
   const endpoints = [
-    { url: '/manifest.webmanifest', timeout: 2000 },
-    { url: '/favicon.png', timeout: 2000 },
+    { url: '/manifest.webmanifest', timeout: 2500 },
+    { url: '/favicon.png', timeout: 2500 },
   ];
 
   for (const endpoint of endpoints) {
     try {
       const controller = new AbortController();
       const timeoutId = setTimeout(() => controller.abort(), endpoint.timeout);
-      
+
       const response = await fetch(endpoint.url, {
-        method: 'HEAD',
+        method: 'GET',
         cache: 'no-store',
         signal: controller.signal,
+        headers: {
+          'cache-control': 'no-cache',
+          pragma: 'no-cache',
+        },
       });
-      
+
       clearTimeout(timeoutId);
-      
+
       if (response.ok || response.status === 304) {
         return true;
       }
@@ -56,23 +59,22 @@ async function verifyConnectivity(): Promise<boolean> {
     }
   }
 
-  // Final fallback: try external endpoint with no-cors
-  // This is aggressive but prevents false offline states
+  // Final fallback: external reachability check.
+  // no-cors returns an opaque response on success; it only throws on network failure.
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 1500);
-    
-    // no-cors mode: won't throw for network success, only for actual network failure
+    const timeoutId = setTimeout(() => controller.abort(), 2000);
+
     await fetch('https://www.gstatic.com/generate_204', {
-      method: 'HEAD',
+      method: 'GET',
       mode: 'no-cors',
+      cache: 'no-store',
       signal: controller.signal,
     });
-    
+
     clearTimeout(timeoutId);
     return true;
   } catch {
-    // If all attempts fail, we're truly offline
     return false;
   }
 }
@@ -84,6 +86,7 @@ export function usePWA(): PWAState {
   const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
   const verifyIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastVerifyRef = useRef<number>(0);
+  const isOnlineRef = useRef<boolean>(true);
 
   // Debounced connectivity verification with optimistic default
   const checkConnectivity = useCallback(async (immediate = false) => {
@@ -92,24 +95,16 @@ export function usePWA(): PWAState {
     if (!immediate && now - lastVerifyRef.current < 3000) return;
     lastVerifyRef.current = now;
 
-    // Quick synchronous check first - be optimistic
-    if (navigator.onLine) {
-      // Set online immediately, then verify in background
-      setIsOnline(true);
-      
-      // Background verification (non-blocking)
-      verifyConnectivity().then(actuallyOnline => {
-        if (!actuallyOnline) {
-          // Only set offline if verification definitively fails
-          setIsOnline(false);
-        }
-      });
-    } else {
-      // Navigator says offline - verify before committing
-      const actuallyOnline = await verifyConnectivity();
-      setIsOnline(actuallyOnline);
-    }
+    // Optimistic: assume online while we verify in the background.
+    setIsOnline(true);
+
+    const actuallyOnline = await verifyConnectivity();
+    setIsOnline(actuallyOnline);
   }, []);
+
+  useEffect(() => {
+    isOnlineRef.current = isOnline;
+  }, [isOnline]);
 
   useEffect(() => {
     // Detect platform
@@ -173,27 +168,25 @@ export function usePWA(): PWAState {
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Initial state: trust navigator, verify later
-    setIsOnline(navigator.onLine);
-    
-    // Background verification after 2 seconds (gives app time to load)
-    const initialVerifyTimer = setTimeout(() => {
-      if (!navigator.onLine) {
-        checkConnectivity(true);
-      }
-    }, 2000);
+    // Initial state: optimistic, then verify quickly.
+    // This prevents iOS/PWA false negatives from navigator.onLine.
+    setIsOnline(true);
 
-    // Periodic verification every 60 seconds (less aggressive)
+    // Verify shortly after mount (gives the app time to paint first)
+    const initialVerifyTimer = setTimeout(() => {
+      checkConnectivity(true);
+    }, 800);
+
+    // Periodic verification every 60 seconds - only when we're showing offline.
     verifyIntervalRef.current = setInterval(() => {
-      if (!document.hidden && !navigator.onLine) {
-        // Only verify if navigator thinks we're offline
-        checkConnectivity();
+      if (!document.hidden && !isOnlineRef.current) {
+        checkConnectivity(true);
       }
     }, 60000);
 
     // Verify on visibility change (tab becomes active) - only if we think we're offline
     const handleVisibilityChange = () => {
-      if (!document.hidden && !isOnline) {
+      if (!document.hidden && !isOnlineRef.current) {
         // Only re-verify when coming back to tab AND we're showing offline
         checkConnectivity(true);
       }
