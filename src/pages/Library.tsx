@@ -339,12 +339,12 @@ export default function Library() {
   const { toast } = useToast();
   const libraryLimits = useLibraryLimits();
 
-  // Calculate stats with memoization
-  const stats = useMemo(() => ({
-    total: libraryItems.length,
-    reading: libraryItems.filter(i => (i.progress_percent || 0) > 0 && (i.progress_percent || 0) < 100).length,
-    completed: libraryItems.filter(i => (i.progress_percent || 0) >= 100).length,
-  }), [libraryItems]);
+  // Stats must represent the FULL library (not just the currently paged items)
+  const [stats, setStats] = useState<{ total: number; reading: number; completed: number }>({
+    total: 0,
+    reading: 0,
+    completed: 0,
+  });
 
   // CONTRACT 4A: Cache-first, render-first strategy
   // Show cached data immediately, then fetch fresh data in background
@@ -371,6 +371,7 @@ export default function Library() {
       setUser(session.user);
       // Fetch fresh data (will update cache)
       fetchLibrary(0, true);
+      fetchStats(session.user.id);
     };
     
     // Defer auth check to not block render
@@ -430,6 +431,40 @@ export default function Library() {
     setFilteredItems(result);
   }, [libraryItems, searchQuery, filterStatus, sortBy]);
 
+  const fetchStats = useCallback(async (userId: string) => {
+    try {
+      const [totalRes, readingRes, completedRes] = await Promise.all([
+        supabase
+          .from("user_library")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId),
+        supabase
+          .from("user_library")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .gt("progress_percent", 0)
+          .lt("progress_percent", 100),
+        supabase
+          .from("user_library")
+          .select("id", { count: "exact", head: true })
+          .eq("user_id", userId)
+          .gte("progress_percent", 100),
+      ]);
+
+      if (totalRes.error) throw totalRes.error;
+      if (readingRes.error) throw readingRes.error;
+      if (completedRes.error) throw completedRes.error;
+
+      setStats({
+        total: totalRes.count ?? 0,
+        reading: readingRes.count ?? 0,
+        completed: completedRes.count ?? 0,
+      });
+    } catch (e) {
+      console.error("Error fetching library stats:", e);
+    }
+  }, []);
+
   const fetchLibrary = async (pageNum: number, reset = false, retry = 0) => {
     // CONTRACT 4A: Don't block UI if we have cached data
     const hasCachedData = apiCache.get<LibraryItem[]>(`library:items:${pageNum}`) !== null;
@@ -446,6 +481,11 @@ export default function Library() {
       // CONTRACT 4A: Mobile gets fewer items for faster load
       const limit = isMobile ? 8 : ITEMS_PER_PAGE;
       const to = from + limit - 1;
+
+      const userId = user?.id;
+      if (!userId) {
+        throw new Error("Not authenticated");
+      }
 
       // Optimized query - only select needed fields for cards
       const { data, error } = await supabase
@@ -465,6 +505,7 @@ export default function Library() {
             total_chapters
           )
         `)
+        .eq("user_id", userId)
         .order("created_at", { ascending: false })
         .range(from, to);
 
@@ -480,6 +521,9 @@ export default function Library() {
       } else {
         setLibraryItems(prev => [...prev, ...newItems]);
       }
+
+      // Keep stats in sync (total/reading/completed)
+      fetchStats(userId);
       
       setHasMore(newItems.length === limit);
       setPage(pageNum);
@@ -523,9 +567,10 @@ export default function Library() {
 
   const handleRemoveBook = useCallback((libraryId: string) => {
     setLibraryItems(prev => prev.filter(item => item.id !== libraryId));
-    // Refresh library limits after removal
+    // Refresh library limits + stats after removal
     libraryLimits.refresh();
-  }, [libraryLimits]);
+    if (user?.id) fetchStats(user.id);
+  }, [libraryLimits, user?.id, fetchStats]);
 
   // Mobile layout with persistent shell
   if (isMobile) {
