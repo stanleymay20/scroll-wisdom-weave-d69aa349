@@ -34,6 +34,7 @@ import { InteractiveQA, InteractiveQAButton } from "@/components/reader/Interact
 import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode, QuizModeButton } from "@/components/reader/QuizMode";
 import { VoiceConversation, VoiceConversationButton } from "@/components/reader/VoiceConversation";
+import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagePerformance } from "@/lib/performance";
@@ -120,6 +121,7 @@ export default function Reader() {
   const [showLevelSelector, setShowLevelSelector] = useState(false);
   const [showReferences, setShowReferences] = useState(false);
   const [selectedTextForTTS, setSelectedTextForTTS] = useState("");
+  const [userId, setUserId] = useState<string | null>(null);
   const [book, setBook] = useState<BookData | null>(null);
   const [chapter, setChapter] = useState<ChapterData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -156,6 +158,10 @@ export default function Reader() {
     const fetchData = async () => {
       setIsLoading(true);
 
+      // Auth (for progress tracking)
+      const { data: { session } } = await supabase.auth.getSession();
+      setUserId(session?.user?.id ?? null);
+
       // Fetch book
       const { data: bookData, error: bookError } = await supabase
         .from("books")
@@ -184,10 +190,10 @@ export default function Reader() {
       } else if (chapterData) {
         setChapter({
           ...chapterData,
-          chapter_references: Array.isArray(chapterData.chapter_references) 
-            ? chapterData.chapter_references 
+          chapter_references: Array.isArray(chapterData.chapter_references)
+            ? chapterData.chapter_references
             : [],
-          research_metadata: chapterData.research_metadata as Record<string, any> || {}
+          research_metadata: (chapterData.research_metadata as Record<string, any>) || {},
         });
       }
 

@@ -88,18 +88,29 @@ export function usePWA(): PWAState {
   const lastVerifyRef = useRef<number>(0);
   const isOnlineRef = useRef<boolean>(true);
 
-  // Debounced connectivity verification with optimistic default
+  // Debounced connectivity verification with hysteresis (prevents false-offline)
+  const consecutiveFailuresRef = useRef(0);
+
   const checkConnectivity = useCallback(async (immediate = false) => {
     const now = Date.now();
     // Throttle: don't check more than once per 3 seconds unless immediate
     if (!immediate && now - lastVerifyRef.current < 3000) return;
     lastVerifyRef.current = now;
 
-    // Optimistic: assume online while we verify in the background.
-    setIsOnline(true);
-
     const actuallyOnline = await verifyConnectivity();
-    setIsOnline(actuallyOnline);
+
+    if (actuallyOnline) {
+      consecutiveFailuresRef.current = 0;
+      setIsOnline(true);
+      return;
+    }
+
+    // Require 2 consecutive failed verifications before declaring offline.
+    // This avoids SW/cache quirks and transient network blips causing "false offline".
+    consecutiveFailuresRef.current += 1;
+    if (consecutiveFailuresRef.current >= 2) {
+      setIsOnline(false);
+    }
   }, []);
 
   useEffect(() => {
@@ -144,25 +155,22 @@ export function usePWA(): PWAState {
 
     // Online/offline status with verification
     const handleOnline = () => {
-      // Immediately set online - no verification needed for online event
-      // This prevents false offline states
+      consecutiveFailuresRef.current = 0;
       setIsOnline(true);
       console.log('[PWA] Network: online event received');
     };
     
     const handleOffline = () => {
-      // Don't immediately trust offline - verify first
-      // This prevents false offline states from transient network blips
+      // Don't trust the browser offline event. Verify twice before declaring offline.
       console.log('[PWA] Network: offline event received, verifying...');
-      setTimeout(async () => {
-        const actuallyOffline = !(await verifyConnectivity());
-        if (actuallyOffline) {
-          setIsOnline(false);
-          console.log('[PWA] Network: confirmed offline');
-        } else {
-          console.log('[PWA] Network: false alarm, still online');
-        }
+      // First check quickly...
+      setTimeout(() => {
+        checkConnectivity(true);
       }, 500);
+      // ...then confirm with a second check shortly after.
+      setTimeout(() => {
+        checkConnectivity(true);
+      }, 1800);
     };
     
     window.addEventListener('online', handleOnline);
