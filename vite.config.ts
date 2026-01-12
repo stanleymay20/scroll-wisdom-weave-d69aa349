@@ -250,8 +250,9 @@ export default defineConfig(({ mode }) => ({
             },
           },
         ],
-        // Offline fallback
-        navigateFallback: "/offline.html",
+        // App Shell routing: serve the SPA shell for navigations.
+        // NOTE: Using offline.html here causes "false offline" pages for normal routes.
+        navigateFallback: "/index.html",
         navigateFallbackDenylist: [
           // Don't fallback for API calls
           /^\/functions\//,
