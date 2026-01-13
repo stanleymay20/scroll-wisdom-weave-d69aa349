@@ -154,6 +154,24 @@ export default function Reader() {
 
   const currentChapter = parseInt(chapterId || "1");
 
+  // Save reading progress to database
+  const saveProgress = useCallback(async (chapterNum: number, progressPercent: number) => {
+    if (!userId || !bookId) return;
+    
+    try {
+      await supabase
+        .from("user_library")
+        .update({
+          last_read_chapter: chapterNum,
+          progress_percent: Math.round(progressPercent)
+        })
+        .eq("user_id", userId)
+        .eq("book_id", bookId);
+    } catch (error) {
+      console.error("Error saving progress:", error);
+    }
+  }, [userId, bookId]);
+
   useEffect(() => {
     const fetchData = async () => {
       setIsLoading(true);
@@ -205,6 +223,20 @@ export default function Reader() {
       setReadingProgress(0); // Reset progress on chapter change
     }
   }, [bookId, currentChapter, navigate]);
+
+  // Save progress when chapter changes or user leaves
+  useEffect(() => {
+    // Save on chapter change (when user navigates away)
+    return () => {
+      if (userId && bookId && book?.total_chapters) {
+        // Calculate overall book progress: (completed chapters + current chapter progress) / total
+        const completedChapters = currentChapter - 1;
+        const currentChapterContribution = readingProgress / 100;
+        const overallProgress = ((completedChapters + currentChapterContribution) / book.total_chapters) * 100;
+        saveProgress(currentChapter, overallProgress);
+      }
+    };
+  }, [userId, bookId, currentChapter, readingProgress, book?.total_chapters, saveProgress]);
 
   // Track scroll progress
   const handleScroll = useCallback(() => {
@@ -286,6 +318,12 @@ export default function Reader() {
     // Check if this is comic content (contains base64 images or panel markers)
     const isComicContent = chapter.content.includes('![Panel') || chapter.content.includes('Panel 1') || chapter.content.includes('[PANEL');
 
+    // For non-comic content, use MarkdownRenderer for proper table/code rendering
+    if (!isComicContent) {
+      return <MarkdownRenderer content={chapter.content} className={currentTheme.text} />;
+    }
+
+    // Comic content rendering with speech bubbles
     return chapter.content.split('\n\n').map((paragraph, index) => {
       // Handle comic page headers
       if (paragraph.startsWith('## Page') || paragraph.match(/^Page\s+\d+/i)) {
@@ -322,7 +360,7 @@ export default function Reader() {
         }
       }
       // Handle dialogue blocks with speech bubbles (for comic content)
-      if (isComicContent && (paragraph.includes('Dialogue:') || paragraph.match(/-?\s*[A-Z][A-Za-z0-9_\s-]+:\s*[""][^""]+[""]/) )) {
+      if (paragraph.includes('Dialogue:') || paragraph.match(/-?\s*[A-Z][A-Za-z0-9_\s-]+:\s*[""][^""]+[""]/)) {
         const dialogueBubbles = parseDialogueBlock(paragraph, index);
         if (dialogueBubbles) {
           return (
@@ -825,7 +863,16 @@ export default function Reader() {
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Button
             variant="ghost"
-            onClick={() => navigate(`/read/${bookId}/${currentChapter - 1}`)}
+            onClick={async () => {
+              // Save progress before navigating
+              if (userId && book?.total_chapters) {
+                const completedChapters = currentChapter - 1;
+                const currentChapterContribution = readingProgress / 100;
+                const overallProgress = ((completedChapters + currentChapterContribution) / book.total_chapters) * 100;
+                await saveProgress(currentChapter, overallProgress);
+              }
+              navigate(`/read/${bookId}/${currentChapter - 1}`);
+            }}
             disabled={currentChapter <= 1}
             className="gap-2"
           >
@@ -842,7 +889,14 @@ export default function Reader() {
 
           <Button
             variant="ghost"
-            onClick={() => navigate(`/read/${bookId}/${currentChapter + 1}`)}
+            onClick={async () => {
+              // Save progress before navigating (mark current chapter as complete)
+              if (userId && book?.total_chapters) {
+                const overallProgress = (currentChapter / book.total_chapters) * 100;
+                await saveProgress(currentChapter, overallProgress);
+              }
+              navigate(`/read/${bookId}/${currentChapter + 1}`);
+            }}
             disabled={currentChapter >= totalChapters}
             className="gap-2"
           >
