@@ -27,6 +27,7 @@ interface RecentBook {
   category: string;
   progress_percent: number;
   cover_image_url: string | null;
+  last_read_chapter: number;
 }
 
 // Skeleton component for instant render
@@ -198,7 +199,7 @@ export default function Dashboard() {
   const fetchRecentBooks = async (userId: string) => {
     const { data: library } = await supabase
       .from("user_library")
-      .select("book_id, progress_percent")
+      .select("book_id, progress_percent, last_read_chapter")
       .eq("user_id", userId)
       .order("created_at", { ascending: false })
       .limit(4);
@@ -214,7 +215,11 @@ export default function Dashboard() {
     if (books) {
       const booksWithProgress = books.map(book => {
         const libItem = library.find(l => l.book_id === book.id);
-        return { ...book, progress_percent: libItem?.progress_percent || 0 };
+        return { 
+          ...book, 
+          progress_percent: libItem?.progress_percent || 0,
+          last_read_chapter: libItem?.last_read_chapter || 1
+        };
       });
       setRecentBooks(booksWithProgress);
       apiCache.set('dashboard:recent', booksWithProgress, 2 * 60 * 1000);
@@ -299,26 +304,47 @@ export default function Dashboard() {
                       </div>
                     ) : (
                       <div className="space-y-4">
-                        {recentBooks.map((book) => (
-                          <div
-                            key={book.id}
-                            className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer"
-                            onClick={() => navigate(`/book/${book.id}`)}
-                          >
-                            <div className="w-12 h-16 bg-gradient-gold rounded flex items-center justify-center flex-shrink-0">
-                              <BookOpen className="h-6 w-6 text-primary-foreground" />
-                            </div>
-                            <div className="flex-1 min-w-0">
-                              <h3 className="font-medium text-foreground truncate">{book.title}</h3>
-                              <p className="text-xs text-muted-foreground capitalize mb-2">{book.category.replace(/_/g, " ")}</p>
-                              <div className="flex items-center gap-2">
-                                <Progress value={book.progress_percent} className="h-1.5 flex-1" />
-                                <span className="text-xs text-muted-foreground">{book.progress_percent}%</span>
+                        {recentBooks.map((book) => {
+                          const isInProgress = book.progress_percent > 0 && book.progress_percent < 100;
+                          return (
+                            <div
+                              key={book.id}
+                              className="flex items-center gap-4 p-3 bg-muted/30 rounded-lg hover:bg-muted/50 transition-colors cursor-pointer group"
+                              onClick={() => navigate(`/book/${book.id}`)}
+                            >
+                              <div className="w-12 h-16 bg-gradient-gold rounded flex items-center justify-center flex-shrink-0 overflow-hidden">
+                                {book.cover_image_url ? (
+                                  <img src={book.cover_image_url} alt={book.title} className="w-full h-full object-cover" />
+                                ) : (
+                                  <BookOpen className="h-6 w-6 text-primary-foreground" />
+                                )}
                               </div>
+                              <div className="flex-1 min-w-0">
+                                <h3 className="font-medium text-foreground truncate">{book.title}</h3>
+                                <p className="text-xs text-muted-foreground capitalize mb-2">{book.category.replace(/_/g, " ")}</p>
+                                <div className="flex items-center gap-2">
+                                  <Progress value={book.progress_percent} className="h-1.5 flex-1" />
+                                  <span className="text-xs text-muted-foreground">{Math.round(book.progress_percent)}%</span>
+                                </div>
+                              </div>
+                              {isInProgress ? (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="opacity-0 group-hover:opacity-100 transition-opacity bg-scroll-gold/10 hover:bg-scroll-gold/20 text-scroll-gold"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    navigate(`/read/${book.id}/${book.last_read_chapter}`);
+                                  }}
+                                >
+                                  Resume
+                                </Button>
+                              ) : (
+                                <ChevronRight className="h-5 w-5 text-muted-foreground" />
+                              )}
                             </div>
-                            <ChevronRight className="h-5 w-5 text-muted-foreground" />
-                          </div>
-                        ))}
+                          );
+                        })}
                       </div>
                     )}
                   </CardContent>
