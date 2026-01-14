@@ -15,7 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown, Rocket, AlertTriangle, Database } from "lucide-react";
+import { Sparkles, BookOpen, Loader2, CheckCircle, Upload, Wand2, Lock, Crown, Rocket, AlertTriangle, Database, XCircle } from "lucide-react";
 import { isAcademicCategory } from "@/lib/academicCategories";
 import { ContentModeSelector, ContentMode } from "@/components/academic/ContentModeSelector";
 import { CitationStyle } from "@/lib/citations";
@@ -239,9 +239,25 @@ export default function Generate() {
     setIsGenerating(true);
     setGenerationProgress([]);
 
+    // Simulated progress stages with estimated times
+    const progressStages = [
+      { message: t('generate.initializingAI'), delay: 0 },
+      { message: "Analyzing your topic...", delay: 2000 },
+      { message: "Creating book structure...", delay: 4000 },
+      { message: "Generating chapter outlines...", delay: 6000 },
+      { message: "Finalizing your book...", delay: 10000 },
+    ];
+
+    // Start progress simulation
+    const progressTimers: NodeJS.Timeout[] = [];
+    progressStages.forEach((stage, index) => {
+      const timer = setTimeout(() => {
+        setGenerationProgress((prev) => [...prev, stage.message]);
+      }, stage.delay);
+      progressTimers.push(timer);
+    });
+
     try {
-      setGenerationProgress((prev) => [...prev, t('generate.initializingAI')]);
-      
       const { data, error } = await supabase.functions.invoke("generate-book", {
         body: {
           title,
@@ -277,10 +293,13 @@ export default function Generate() {
         },
       });
 
+      // Clear any pending progress timers
+      progressTimers.forEach(clearTimeout);
+
       if (error) throw error;
 
       setGenerationProgress((prev) => [
-        ...prev,
+        ...prev.filter(p => !p.includes("Finalizing")),
         t('generate.outlineCreated'),
         t('generate.chaptersDefined'),
         t('generate.bookSaved'),
@@ -302,7 +321,11 @@ export default function Generate() {
       }
 
     } catch (error: any) {
+      // Clear any pending progress timers
+      progressTimers.forEach(clearTimeout);
+      
       console.error("Generation error:", error);
+      setGenerationProgress((prev) => [...prev, "❌ Generation failed"]);
       toast({
         title: t('generate.failed'),
         description: error.message || t('generate.failedDesc'),
@@ -684,18 +707,62 @@ export default function Generate() {
 
               {/* Progress */}
               {generationProgress.length > 0 && (
-                <div className="mt-6 space-y-2">
-                  {generationProgress.map((step, index) => (
-                    <motion.div
-                      key={index}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      className="flex items-center gap-2 text-sm text-muted-foreground"
-                    >
-                      <CheckCircle className="h-4 w-4 text-scroll-gold" />
-                      {step}
-                    </motion.div>
-                  ))}
+                <div className="mt-6 space-y-3">
+                  {/* Progress bar */}
+                  <div className="relative h-2 w-full rounded-full bg-muted overflow-hidden">
+                    <motion.div 
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-scroll-gold to-amber-500"
+                      initial={{ width: 0 }}
+                      animate={{ 
+                        width: `${Math.min(100, (generationProgress.length / 5) * 100)}%` 
+                      }}
+                      transition={{ duration: 0.5, ease: "easeOut" }}
+                    />
+                  </div>
+                  
+                  {/* Estimated time */}
+                  <div className="flex items-center justify-between text-xs text-muted-foreground">
+                    <span>
+                      {isGenerating ? "Generating your book..." : "Complete!"}
+                    </span>
+                    <span>
+                      {isGenerating 
+                        ? `~${Math.max(0, 20 - generationProgress.length * 4)} seconds remaining`
+                        : "Done"
+                      }
+                    </span>
+                  </div>
+                  
+                  {/* Progress steps */}
+                  <div className="space-y-2">
+                    {generationProgress.map((step, index) => (
+                      <motion.div
+                        key={index}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        className="flex items-center gap-2 text-sm text-muted-foreground"
+                      >
+                        {step.includes("❌") ? (
+                          <XCircle className="h-4 w-4 text-destructive" />
+                        ) : (
+                          <CheckCircle className="h-4 w-4 text-scroll-gold" />
+                        )}
+                        {step}
+                      </motion.div>
+                    ))}
+                    
+                    {/* Current operation spinner */}
+                    {isGenerating && (
+                      <motion.div
+                        initial={{ opacity: 0 }}
+                        animate={{ opacity: 1 }}
+                        className="flex items-center gap-2 text-sm text-primary"
+                      >
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        Processing...
+                      </motion.div>
+                    )}
+                  </div>
                 </div>
               )}
             </div>

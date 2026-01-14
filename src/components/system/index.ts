@@ -1,5 +1,6 @@
 export { BookTypeContractStatus } from './BookTypeContractStatus';
 export { ChangePreviewDialog } from './ChangePreviewDialog';
+export { Contract5Dashboard } from './Contract5Dashboard';
 export { DiagnosticsPanel } from './DiagnosticsPanel';
 export { EditScopeDialog } from './EditScopeDialog';
 export { ExportValidationStatus } from './ExportValidationStatus';

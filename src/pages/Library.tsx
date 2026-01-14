@@ -346,7 +346,7 @@ export default function Library() {
     completed: 0,
   });
 
-  // CONTRACT 4A: Cache-first, render-first strategy
+  // CONTRACT 5: Cache-first, render-first strategy with improved error handling
   // Show cached data immediately, then fetch fresh data in background
   useEffect(() => {
     let mounted = true;
@@ -360,18 +360,35 @@ export default function Library() {
     
     // BACKGROUND: Check auth and fetch fresh data
     const initLibrary = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!mounted) return;
-      
-      if (!session?.user) {
-        navigate("/auth");
-        return;
+      try {
+        const { data: { session }, error: authError } = await supabase.auth.getSession();
+        if (!mounted) return;
+        
+        if (authError) {
+          console.error("Auth error:", authError);
+          setLoadError(null); // Don't show error, just redirect
+          navigate("/auth");
+          return;
+        }
+        
+        if (!session?.user) {
+          navigate("/auth");
+          return;
+        }
+        
+        setUser(session.user);
+        // Fetch fresh data (will update cache)
+        fetchLibrary(0, true);
+        fetchStats(session.user.id);
+      } catch (error) {
+        console.error("Init library error:", error);
+        if (!mounted) return;
+        // Only show error if no cached data
+        if (!cachedData || cachedData.length === 0) {
+          setLoadError(t('library.loadError'));
+        }
+        setIsLoading(false);
       }
-      
-      setUser(session.user);
-      // Fetch fresh data (will update cache)
-      fetchLibrary(0, true);
-      fetchStats(session.user.id);
     };
     
     // Defer auth check to not block render
@@ -392,7 +409,7 @@ export default function Library() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [navigate]);
+  }, [navigate, t]);
 
   // Filter and sort items
   useEffect(() => {

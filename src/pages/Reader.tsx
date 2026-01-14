@@ -19,9 +19,11 @@ import {
   Palette,
   GraduationCap,
   MessageCircle,
-  Mic
+  Mic,
+  Save
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
 import { TTSMiniPlayer } from "@/components/audio/TTSMiniPlayer";
 import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
@@ -153,13 +155,19 @@ export default function Reader() {
   const [highlightedText, setHighlightedText] = useState("");
 
   const currentChapter = parseInt(chapterId || "1");
+  const { toast } = useToast();
+  const lastSavedProgress = useRef<number>(0);
+  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Save reading progress to database
-  const saveProgress = useCallback(async (chapterNum: number, progressPercent: number) => {
+  // Save reading progress to database with debounce and toast
+  const saveProgress = useCallback(async (chapterNum: number, progressPercent: number, showToast = false) => {
     if (!userId || !bookId) return;
     
+    // Skip if progress hasn't changed significantly (< 5%)
+    if (Math.abs(progressPercent - lastSavedProgress.current) < 5 && !showToast) return;
+    
     try {
-      await supabase
+      const { error } = await supabase
         .from("user_library")
         .update({
           last_read_chapter: chapterNum,
@@ -167,10 +175,22 @@ export default function Reader() {
         })
         .eq("user_id", userId)
         .eq("book_id", bookId);
+      
+      if (!error) {
+        lastSavedProgress.current = progressPercent;
+        
+        if (showToast) {
+          toast({
+            title: "Progress saved",
+            description: `Chapter ${chapterNum} • ${Math.round(progressPercent)}% complete`,
+            duration: 2000,
+          });
+        }
+      }
     } catch (error) {
       console.error("Error saving progress:", error);
     }
-  }, [userId, bookId]);
+  }, [userId, bookId, toast]);
 
   useEffect(() => {
     const fetchData = async () => {
@@ -224,21 +244,26 @@ export default function Reader() {
     }
   }, [bookId, currentChapter, navigate]);
 
-  // Save progress when chapter changes or user leaves
+  // Save progress when chapter changes or user leaves - with toast
   useEffect(() => {
     // Save on chapter change (when user navigates away)
     return () => {
       if (userId && bookId && book?.total_chapters) {
+        // Clear any pending save timeout
+        if (saveTimeoutRef.current) {
+          clearTimeout(saveTimeoutRef.current);
+        }
+        
         // Calculate overall book progress: (completed chapters + current chapter progress) / total
         const completedChapters = currentChapter - 1;
         const currentChapterContribution = readingProgress / 100;
         const overallProgress = ((completedChapters + currentChapterContribution) / book.total_chapters) * 100;
-        saveProgress(currentChapter, overallProgress);
+        saveProgress(currentChapter, overallProgress, true); // Show toast on exit
       }
     };
   }, [userId, bookId, currentChapter, readingProgress, book?.total_chapters, saveProgress]);
 
-  // Track scroll progress
+  // Track scroll progress and auto-save periodically
   const handleScroll = useCallback(() => {
     if (!contentRef.current) return;
     
@@ -248,7 +273,21 @@ export default function Reader() {
     const progress = Math.min(100, Math.max(0, (scrollTop / scrollHeight) * 100));
     
     setReadingProgress(progress);
-  }, []);
+    
+    // Debounced auto-save every significant progress change
+    if (saveTimeoutRef.current) {
+      clearTimeout(saveTimeoutRef.current);
+    }
+    
+    saveTimeoutRef.current = setTimeout(() => {
+      if (userId && bookId && book?.total_chapters) {
+        const completedChapters = currentChapter - 1;
+        const currentChapterContribution = progress / 100;
+        const overallProgress = ((completedChapters + currentChapterContribution) / book.total_chapters) * 100;
+        saveProgress(currentChapter, overallProgress, false); // Silent save during reading
+      }
+    }, 3000); // Save 3 seconds after scrolling stops
+  }, [userId, bookId, book?.total_chapters, currentChapter, saveProgress]);
 
   useEffect(() => {
     window.addEventListener("scroll", handleScroll);
