@@ -15,6 +15,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Collapsible, CollapsibleTrigger, CollapsibleContent } from "@/components/ui/collapsible";
 import { SystemDoctor } from "@/components/diagnostics/SystemDoctor";
+import { Contract5Dashboard } from "@/components/system/Contract5Dashboard";
 import { usePagePerformance } from "@/lib/performance";
 
 interface TestResult {
@@ -456,6 +457,11 @@ export default function Diagnostics() {
               {BUILD_INFO.id}
             </Badge>
           </div>
+
+          <Separator />
+
+          {/* Contract 5 Compliance Dashboard */}
+          <Contract5Dashboard />
 
           <Separator />
 
