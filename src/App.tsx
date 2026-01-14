@@ -8,10 +8,11 @@ import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { useEffect, Suspense, lazy } from "react";
 import { PWAInstallPrompt, OfflineIndicator } from "@/components/pwa";
 import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
-import { ErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorBoundary, SectionErrorBoundary } from "@/components/ErrorBoundary";
 import { DiagnosticsPanel } from "@/components/system/DiagnosticsPanel";
 import { createLogger, setTraceId } from "@/lib/logger";
 import { SkeletonPage } from "@/components/ui/page-shell";
+import { initContract5 } from "@/lib/contract5";
 
 // Eager load critical pages
 import Index from "./pages/Index";
@@ -74,6 +75,10 @@ function ThemeInitializer() {
     
     // Initialize trace ID for session correlation
     setTraceId();
+    
+    // CONTRACT 5: Initialize performance monitoring
+    initContract5();
+    
     logger.info('Application initialized', { themeMode, colorTheme });
   }, []);
   return null;

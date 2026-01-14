@@ -160,6 +160,8 @@ export function MobileHome() {
                 coverImageUrl={item.books.cover_image_url || undefined}
                 category={item.books.category}
                 bookType={item.books.book_type}
+                lastReadChapter={item.last_read_chapter}
+                progressPercent={item.progress_percent}
               />
             ))}
           </div>
