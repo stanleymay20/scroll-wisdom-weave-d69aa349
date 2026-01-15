@@ -124,15 +124,22 @@ export default function BookDetail() {
     { value: "prophetic", labelKey: "coverTheme.prophetic", descKey: "coverTheme.propheticDesc" },
   ];
 
+  // CONTRACT 5: Cache-first data fetching for instant display
   useEffect(() => {
     const fetchData = async () => {
-      setIsLoading(true);
+      // Try cache first for instant display (CONTRACT 5 SLA compliance)
+      const bookCacheKey = `book:detail:${id}`;
+      const cachedBook = apiCache.get<BookData>(bookCacheKey);
+      if (cachedBook) {
+        setBook(cachedBook);
+        setIsLoading(false); // Show cached data immediately
+      }
       
-      // Get current user
+      // Get current user (non-blocking)
       const { data: { user: currentUser } } = await supabase.auth.getUser();
       setUser(currentUser);
 
-      // Fetch book
+      // Fetch book (background refresh if cached)
       const { data: bookData, error: bookError } = await supabase
         .from("books")
         .select("*")
@@ -141,18 +148,28 @@ export default function BookDetail() {
 
       if (bookError) {
         console.error("Error fetching book:", bookError);
-        toast({
-          title: t('common.error'),
-          description: t('book.notFound'),
-          variant: "destructive",
-        });
-        navigate("/explore");
+        // Only show error if no cached data
+        if (!cachedBook) {
+          toast({
+            title: t('common.error'),
+            description: t('book.notFound'),
+            variant: "destructive",
+          });
+          navigate("/explore");
+        }
         return;
       }
 
       setBook(bookData);
+      apiCache.set(bookCacheKey, bookData, 5 * 60 * 1000); // 5 min cache
 
-      // Fetch chapters
+      // Fetch chapters with cache
+      const chaptersCacheKey = `book:chapters:${id}`;
+      const cachedChapters = apiCache.get<ChapterData[]>(chaptersCacheKey);
+      if (cachedChapters) {
+        setChapters(cachedChapters);
+      }
+      
       const { data: chaptersData, error: chaptersError } = await supabase
         .from("chapters")
         .select("id, chapter_number, title, word_count, is_generated, content")
@@ -161,6 +178,7 @@ export default function BookDetail() {
 
       if (!chaptersError && chaptersData) {
         setChapters(chaptersData);
+        apiCache.set(chaptersCacheKey, chaptersData, 2 * 60 * 1000); // 2 min cache
       }
 
       // Check if book is in user's library

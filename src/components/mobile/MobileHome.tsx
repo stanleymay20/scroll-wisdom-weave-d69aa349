@@ -1,9 +1,10 @@
 /**
- * CONTRACT 4A — MOBILE HOME PERFORMANCE
+ * CONTRACT 5 — MOBILE HOME PERFORMANCE
  * 
  * Renders INSTANTLY with skeletons.
  * Data fetches in background AFTER first paint.
  * Uses cache-first strategy.
+ * SLA: First content ≤ 1.5s, Interactive ≤ 2.0s
  */
 
 import { useEffect, useState, useCallback, memo } from "react";
@@ -14,6 +15,7 @@ import { MobileBookCard } from "./MobileBookCard";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiCache, cacheKeys } from "@/lib/cache";
 import { MOBILE_DATA_LIMITS } from "@/lib/performanceContracts";
+import { markFirstContent, markInteractive } from "@/lib/contract5";
 
 interface Book {
   id: string;
@@ -137,10 +139,17 @@ export function MobileHome() {
     }
   }, []);
 
-  // Defer data fetch to after first paint
+  // CONTRACT 5: Defer data fetch to after first paint and track SLA
   useEffect(() => {
+    // Mark first content immediately (skeletons are visible)
+    markFirstContent('MobileHome');
+    
     // Use requestIdleCallback or setTimeout to not block paint
-    const timeoutId = setTimeout(fetchData, 0);
+    const timeoutId = setTimeout(() => {
+      fetchData().then(() => {
+        markInteractive('MobileHome');
+      });
+    }, 0);
     return () => clearTimeout(timeoutId);
   }, [fetchData]);
 

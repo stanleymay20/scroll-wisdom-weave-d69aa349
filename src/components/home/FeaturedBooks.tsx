@@ -1,45 +1,122 @@
+/**
+ * CONTRACT 5 — Featured Books Section
+ * 
+ * Uses cache-first strategy for real books.
+ * Falls back to sample data for instant display.
+ * Never blocks first paint.
+ */
+
+import { useState, useEffect, memo } from "react";
 import { motion } from "framer-motion";
 import { BookCard } from "@/components/books/BookCard";
 import { Button } from "@/components/ui/button";
 import { ArrowRight } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { supabase } from "@/integrations/supabase/client";
+import { apiCache, cacheKeys } from "@/lib/cache";
+import { FeaturedBooksSkeleton } from "@/components/ui/page-skeletons";
 
-// Sample featured books data
-const SAMPLE_BOOKS = [
+interface FeaturedBook {
+  id: string;
+  title: string;
+  description: string | null;
+  category: string;
+  cover_image_url: string | null;
+  total_chapters: number | null;
+}
+
+// Sample featured books data - shown instantly while real data loads
+const SAMPLE_BOOKS: FeaturedBook[] = [
   {
-    id: "1",
+    id: "sample-1",
     title: "The Prophetic Voice: Understanding Divine Communication",
     description: "A comprehensive exploration of prophetic utterances throughout history and their modern relevance.",
     category: "prophecy",
-    totalChapters: 12,
+    cover_image_url: null,
+    total_chapters: 12,
   },
   {
-    id: "2",
+    id: "sample-2",
     title: "Quantum Theology: Where Science Meets Spirit",
     description: "Bridging the gap between quantum physics and theological understanding of creation.",
     category: "science",
-    totalChapters: 8,
+    cover_image_url: null,
+    total_chapters: 8,
   },
   {
-    id: "3",
+    id: "sample-3",
     title: "The African Renaissance: Reclaiming Heritage",
     description: "An in-depth study of Africa's contribution to world civilization and its future trajectory.",
     category: "african_studies",
-    totalChapters: 15,
+    cover_image_url: null,
+    total_chapters: 15,
   },
   {
-    id: "4",
+    id: "sample-4",
     title: "Sacred Economics: Wealth and Divine Principles",
     description: "Exploring the intersection of financial wisdom and spiritual teachings.",
     category: "economics",
-    totalChapters: 10,
+    cover_image_url: null,
+    total_chapters: 10,
   },
 ];
 
-export function FeaturedBooks() {
+export const FeaturedBooks = memo(function FeaturedBooks() {
   const navigate = useNavigate();
   const { t } = useLanguage();
+  const [books, setBooks] = useState<FeaturedBook[]>(SAMPLE_BOOKS);
+  const [hasRealData, setHasRealData] = useState(false);
+
+  // CONTRACT 5: Cache-first background fetch
+  useEffect(() => {
+    const fetchFeaturedBooks = async () => {
+      // Try cache first
+      const cached = apiCache.get<FeaturedBook[]>(cacheKeys.featuredBooks());
+      if (cached && cached.length > 0) {
+        setBooks(cached);
+        setHasRealData(true);
+      }
+
+      // Fetch fresh data in background
+      try {
+        const { data, error } = await supabase
+          .from("books")
+          .select("id, title, description, category, cover_image_url, total_chapters")
+          .eq("is_published", true)
+          .eq("is_featured", true)
+          .order("created_at", { ascending: false })
+          .limit(4);
+
+        if (!error && data && data.length > 0) {
+          setBooks(data);
+          setHasRealData(true);
+          apiCache.set(cacheKeys.featuredBooks(), data, 5 * 60 * 1000); // 5 min cache
+        } else if (!cached || cached.length === 0) {
+          // No featured books, try recent books
+          const { data: recentData } = await supabase
+            .from("books")
+            .select("id, title, description, category, cover_image_url, total_chapters")
+            .eq("is_published", true)
+            .order("created_at", { ascending: false })
+            .limit(4);
+
+          if (recentData && recentData.length > 0) {
+            setBooks(recentData);
+            setHasRealData(true);
+            apiCache.set(cacheKeys.featuredBooks(), recentData, 5 * 60 * 1000);
+          }
+        }
+      } catch (error) {
+        console.error("Error fetching featured books:", error);
+        // Keep sample data on error
+      }
+    };
+
+    // Defer fetch to not block first paint
+    const timeoutId = setTimeout(fetchFeaturedBooks, 0);
+    return () => clearTimeout(timeoutId);
+  }, []);
 
   return (
     <section className="py-24 relative">
@@ -70,12 +147,17 @@ export function FeaturedBooks() {
           </Button>
         </motion.div>
 
-        {/* Books Grid */}
+        {/* Books Grid - renders immediately with sample or cached data */}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {SAMPLE_BOOKS.map((book, index) => (
+          {books.map((book, index) => (
             <BookCard
               key={book.id}
-              {...book}
+              id={book.id}
+              title={book.title}
+              description={book.description || undefined}
+              category={book.category}
+              coverImageUrl={book.cover_image_url || undefined}
+              totalChapters={book.total_chapters || 0}
               index={index}
             />
           ))}
@@ -83,4 +165,4 @@ export function FeaturedBooks() {
       </div>
     </section>
   );
-}
+});

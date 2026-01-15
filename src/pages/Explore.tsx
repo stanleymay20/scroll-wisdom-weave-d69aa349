@@ -1,3 +1,11 @@
+/**
+ * CONTRACT 5 — Explore Page Performance
+ * 
+ * Cache-first strategy with skeleton-first loading.
+ * First meaningful content ≤ 1.5s
+ * Fully interactive ≤ 2.0s
+ */
+
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -14,6 +22,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { apiCache } from "@/lib/cache";
 import { usePagePerformance } from "@/lib/performance";
+import { markFirstContent, markInteractive } from "@/lib/contract5";
 
 const CATEGORIES = [
   "all",
@@ -182,7 +191,7 @@ export default function Explore() {
   const [books, setBooks] = useState<Book[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
-  // CONTRACT 4: Track TTI
+  // CONTRACT 5: Track TTI
   usePagePerformance('Explore');
 
   useEffect(() => {
@@ -190,7 +199,16 @@ export default function Explore() {
     if (category) {
       setSelectedCategory(category);
     }
+    // CONTRACT 5: Mark first content when skeleton renders
+    markFirstContent('Explore');
   }, [searchParams]);
+
+  // CONTRACT 5: Mark interactive when data loads
+  useEffect(() => {
+    if (!isLoading) {
+      markInteractive('Explore');
+    }
+  }, [isLoading]);
 
   // CONTRACT 4: Cache-first data fetching
   const fetchBooks = useCallback(async () => {
