@@ -1,3 +1,12 @@
+/**
+ * CONTRACT 5 — Home Page Performance
+ * 
+ * All content renders INSTANTLY (static components).
+ * No async data fetching blocking first paint.
+ * TTI tracked for SLA compliance.
+ */
+
+import { useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Navbar } from "@/components/layout/Navbar";
 import { HeroSection } from "@/components/home/HeroSection";
@@ -8,9 +17,21 @@ import { CategoriesSection } from "@/components/home/CategoriesSection";
 import { Footer } from "@/components/layout/Footer";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { MobileLayout, MobileHome } from "@/components/mobile";
+import { usePagePerformance } from "@/lib/performance";
+import { markFirstContent, markInteractive } from "@/lib/contract5";
 
 const Index = () => {
   const isMobile = useIsMobile();
+  
+  // CONTRACT 5: Track page load performance
+  usePagePerformance('Home');
+  
+  // CONTRACT 5: Mark first content immediately on mount (static content)
+  useEffect(() => {
+    markFirstContent('Home');
+    // All content is static, so interactive immediately
+    markInteractive('Home');
+  }, []);
 
   // Mobile-first: Use persistent mobile layout
   if (isMobile) {
@@ -21,7 +42,7 @@ const Index = () => {
     );
   }
 
-  // Desktop experience
+  // Desktop experience - all static content, renders instantly
   return (
     <div className="min-h-screen">
       <Navbar />
