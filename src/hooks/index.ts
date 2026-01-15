@@ -6,4 +6,6 @@ export { useLibraryLimits } from './useLibraryLimits';
 export { useContentProtection } from './useContentProtection';
 export { usePasteProtection } from './usePasteProtection';
 export { useNetworkAction, useGracefulDegradation } from './useNetworkAction';
+export { useAutoHideFloatingActions } from './useAutoHideFloatingActions';
+export { useMediaSession } from './useMediaSession';
 export type { Entitlements } from './useEntitlements';

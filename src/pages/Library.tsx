@@ -23,7 +23,8 @@ import {
   BookCheck,
   Clock,
   Sparkles,
-  AlertTriangle
+  AlertTriangle,
+  CloudOff
 } from "lucide-react";
 import {
   Select,
@@ -42,6 +43,8 @@ import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLibraryLimits } from "@/hooks/useLibraryLimits";
 import { apiCache, cacheKeys } from "@/lib/cache";
+import { markCacheRender, markFirstContent, markInteractive, SLA } from "@/lib/contract5";
+import { GentleOfflineBanner } from "@/components/ui/gentle-offline-banner";
 
 interface Book {
   id: string;
@@ -180,6 +183,9 @@ function MobileLibraryContent({
 
   return (
     <div className="px-4 py-4">
+      {/* CONTRACT 5.5: Gentle Offline Banner */}
+      <GentleOfflineBanner showingCached={false} compact className="mb-4 rounded-lg" />
+      
       {/* Header */}
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-foreground mb-2">
@@ -252,8 +258,10 @@ function MobileLibraryContent({
         </div>
       ) : loadError ? (
         <div className="text-center py-12">
-          <AlertCircle className="h-12 w-12 text-destructive mx-auto mb-4" />
-          <p className="text-muted-foreground mb-4">{loadError}</p>
+          {/* CONTRACT 5.5: No red error screens for recoverable errors */}
+          <CloudOff className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground mb-2">Couldn't load library</p>
+          <p className="text-sm text-muted-foreground/70 mb-4">Check your connection and try again</p>
           <Button variant="outline" onClick={handleRetry}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Try Again
@@ -346,16 +354,28 @@ export default function Library() {
     completed: 0,
   });
 
-  // CONTRACT 5: Cache-first, render-first strategy with improved error handling
-  // Show cached data immediately, then fetch fresh data in background
+  // CONTRACT 5 (Enhanced): Rule 5.1 - Instant Library UX
+  // Cache-first, render-first strategy: Library must render cached content ≤300ms
+  const [showingCached, setShowingCached] = useState(false);
+  
   useEffect(() => {
     let mounted = true;
+    const startTime = performance.now();
     
-    // INSTANT: Check cache first and render immediately
+    // INSTANT: Check cache first and render immediately (Rule 5.1: ≤300ms)
     const cachedData = apiCache.get<LibraryItem[]>('library:items:0');
     if (cachedData && cachedData.length > 0) {
       setLibraryItems(cachedData);
       setIsLoading(false);
+      setShowingCached(true);
+      
+      // Track cache render time for Contract 5 compliance
+      const cacheRenderTime = performance.now() - startTime;
+      markCacheRender('Library');
+      markFirstContent('Library');
+    } else {
+      // No cache - mark first content when skeleton shows
+      markFirstContent('Library');
     }
     
     // BACKGROUND: Check auth and fetch fresh data
@@ -377,9 +397,13 @@ export default function Library() {
         }
         
         setUser(session.user);
-        // Fetch fresh data (will update cache)
+        // Fetch fresh data (will update cache) - background, no blocking
         fetchLibrary(0, true);
         fetchStats(session.user.id);
+        
+        // Mark interactive when fresh data starts loading
+        markInteractive('Library');
+        setShowingCached(false);
       } catch (error) {
         console.error("Init library error:", error);
         if (!mounted) return;

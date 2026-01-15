@@ -1,17 +1,26 @@
 /**
- * CONTRACT 5 — React Hooks for Performance, Reliability & Trust
+ * CONTRACT 5 (Enhanced) — React Hooks for Performance, Media, & UX Reliability
  */
 
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { 
   markFirstContent, 
   markInteractive,
+  markCacheRender,
   getConnectionState,
   recordConnectionCheck,
   setLoadingState,
+  setAudioState,
+  canPerformOnlineAction,
+  getConnectionMessage,
+  acknowledgeAction,
   type ConnectionState,
   type LoadingState,
-  SLA
+  type AudioState,
+  SLA,
+  READER_CONSTRAINTS,
+  AUDIO_CONSTRAINTS,
+  OFFLINE_MESSAGES
 } from '@/lib/contract5';
 
 /**
@@ -101,13 +110,16 @@ export function useSkeletonFirst<T>(
 }
 
 /**
- * Hook for honest connection state (Rule 5.3)
+ * Hook for honest connection state (Rule 5.5 - Honest Offline)
  */
 export function useConnectionState(): {
   state: ConnectionState;
   isOnline: boolean;
   isUnstable: boolean;
+  isOffline: boolean;
+  message: string | null;
   checkConnection: () => Promise<boolean>;
+  canPerformAction: () => { allowed: boolean; message?: string };
 } {
   const [state, setState] = useState<ConnectionState>(() => getConnectionState());
   
@@ -131,6 +143,10 @@ export function useConnectionState(): {
       setState(getConnectionState());
       return false;
     }
+  }, []);
+  
+  const canPerformAction = useCallback(() => {
+    return canPerformOnlineAction();
   }, []);
   
   // Periodic connection checks
@@ -160,13 +176,16 @@ export function useConnectionState(): {
     state,
     isOnline: state === 'online',
     isUnstable: state === 'unstable',
+    isOffline: state === 'offline',
+    message: getConnectionMessage(),
     checkConnection,
+    canPerformAction,
   };
 }
 
 /**
- * Hook for trust signals (Rule 5.7)
- * Shows loading/saving/generating states to users
+ * Hook for trust signals (Rule 5.7 - User Trust Signals)
+ * Shows loading/saving/generating/buffering states to users
  */
 export function useTrustSignal(id: string): {
   state: LoadingState;
@@ -174,6 +193,7 @@ export function useTrustSignal(id: string): {
   setLoading: () => void;
   setSaving: () => void;
   setGenerating: () => void;
+  setBuffering: () => void;
   setError: () => void;
 } {
   const [state, setLocalState] = useState<LoadingState>('idle');
@@ -189,8 +209,68 @@ export function useTrustSignal(id: string): {
     setLoading: () => updateState('loading'),
     setSaving: () => updateState('saving'),
     setGenerating: () => updateState('generating'),
+    setBuffering: () => updateState('buffering'),
     setError: () => updateState('error'),
   };
+}
+
+/**
+ * Hook for audio trust signals (Rule 5.3 - Audio First-Class)
+ */
+export function useAudioTrustSignal(id: string): {
+  state: AudioState;
+  setIdle: () => void;
+  setPlaying: () => void;
+  setPaused: () => void;
+  setBuffering: () => void;
+  setError: () => void;
+} {
+  const [state, setLocalState] = useState<AudioState>('idle');
+  
+  const updateState = useCallback((newState: AudioState) => {
+    setLocalState(newState);
+    setAudioState(id, newState);
+  }, [id]);
+  
+  return {
+    state,
+    setIdle: () => updateState('idle'),
+    setPlaying: () => updateState('playing'),
+    setPaused: () => updateState('paused'),
+    setBuffering: () => updateState('buffering'),
+    setError: () => updateState('error'),
+  };
+}
+
+/**
+ * Hook for immediate action acknowledgment (Rule 5.6 - Perceived Performance)
+ * Every user action must be acknowledged within 100ms
+ */
+export function useActionAcknowledgment(): {
+  acknowledge: (actionId: string) => () => void;
+  isAcknowledging: (actionId: string) => boolean;
+} {
+  const [activeActions, setActiveActions] = useState<Set<string>>(new Set());
+  
+  const acknowledge = useCallback((actionId: string) => {
+    setActiveActions(prev => new Set([...prev, actionId]));
+    const complete = acknowledgeAction(actionId);
+    
+    return () => {
+      complete();
+      setActiveActions(prev => {
+        const next = new Set(prev);
+        next.delete(actionId);
+        return next;
+      });
+    };
+  }, []);
+  
+  const isAcknowledging = useCallback((actionId: string) => {
+    return activeActions.has(actionId);
+  }, [activeActions]);
+  
+  return { acknowledge, isAcknowledging };
 }
 
 /**
