@@ -12,11 +12,13 @@ import {
   Loader2, 
   Square, 
   X,
-  AlertCircle 
+  AlertCircle,
+  Mic 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEntitlements } from "@/hooks/useEntitlements";
+import { useMediaSession } from "@/hooks/useMediaSession";
 import { cn } from "@/lib/utils";
 
 // OpenAI TTS voices
@@ -38,6 +40,12 @@ interface TTSMiniPlayerProps {
   onClose?: () => void;
   /** Force stop when this key changes (e.g. on chapter change) */
   stopKey?: string | number;
+  /** Book/chapter title for media session */
+  title?: string;
+  /** Book author for media session */
+  author?: string;
+  /** Callback when user wants to ask a question (Interactive Guard Mode) */
+  onInterrupt?: () => void;
 }
 
 export function TTSMiniPlayer({ 
@@ -45,7 +53,10 @@ export function TTSMiniPlayer({
   selectedText, 
   language = "en", 
   onClose,
-  stopKey 
+  stopKey,
+  title = "Chapter",
+  author = "ScrollLibrary",
+  onInterrupt 
 }: TTSMiniPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -56,6 +67,9 @@ export function TTSMiniPlayer({
   const [currentChunk, setCurrentChunk] = useState(0);
   const [totalChunks, setTotalChunks] = useState(0);
   const [mode, setMode] = useState<"chapter" | "selection">("chapter");
+  // Track current position for resume (Interactive Guard Mode - Rule 5.4)
+  const [currentPosition, setCurrentPosition] = useState(0);
+  const pausedAtChunkRef = useRef(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopRef = useRef(false);
@@ -63,9 +77,29 @@ export function TTSMiniPlayer({
   const activeBlobUrlsRef = useRef<string[]>([]);
   const prevStopKeyRef = useRef<string | number | undefined>(undefined);
   const isMountedRef = useRef(true);
+  const chunksRef = useRef<string[]>([]);
 
   const { toast } = useToast();
   const entitlements = useEntitlements();
+  
+  // CONTRACT 5 - Rule 5.3: Media Session API for OS-resilient audio
+  const mediaSession = useMediaSession({
+    id: 'tts-mini-player',
+    title,
+    artist: author,
+    album: 'ScrollLibrary Reading',
+    onPlay: () => {
+      if (!isPlaying && !isLoading) {
+        resumeFromPosition();
+      }
+    },
+    onPause: () => {
+      pauseForInteraction();
+    },
+    onStop: () => {
+      stop();
+    },
+  });
 
   const hasAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || 
                    entitlements.isScrollStudent || entitlements.isPaid || entitlements.canUseTTS;
@@ -94,7 +128,8 @@ export function TTSMiniPlayer({
       .trim();
   }, []);
 
-  const chunkText = useCallback((input: string, maxChars = 800) => {
+  // CONTRACT 5 - Rule 5.3: Smaller chunks for faster first audio (≤400 chars initial)
+  const chunkText = useCallback((input: string, maxChars = 600) => {
     const text = input.trim();
     if (!text) return [];
 
@@ -206,12 +241,15 @@ export function TTSMiniPlayer({
     }
 
     cleanupBlobUrls();
+    mediaSession.setPlaybackState('idle');
+    mediaSession.deactivate();
     
     if (isMountedRef.current) {
       setIsLoading(false);
       setIsPlaying(false);
       setProgress(0);
       setCurrentChunk(0);
+      setCurrentPosition(0);
       setError(null);
     }
     
@@ -219,7 +257,93 @@ export function TTSMiniPlayer({
     setTimeout(() => {
       isStoppingRef.current = false;
     }, 50);
-  }, [cleanupBlobUrls]);
+  }, [cleanupBlobUrls, mediaSession]);
+  
+  // CONTRACT 5 - Rule 5.4: Pause for interaction (Interactive Guard Mode)
+  const pauseForInteraction = useCallback(() => {
+    if (!isPlaying) return;
+    
+    pausedAtChunkRef.current = currentChunk;
+    
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+      } catch { /* ignore */ }
+    }
+    
+    stopRef.current = true;
+    mediaSession.setPlaybackState('paused');
+    
+    if (isMountedRef.current) {
+      setIsPlaying(false);
+    }
+    
+    console.log('[TTS] Paused for interaction at chunk', currentChunk);
+  }, [isPlaying, currentChunk, mediaSession]);
+  
+  // CONTRACT 5 - Rule 5.4: Resume from semantic position
+  const resumeFromPosition = useCallback(() => {
+    if (chunksRef.current.length === 0 || pausedAtChunkRef.current === 0) {
+      // No previous position, start fresh
+      return;
+    }
+    
+    console.log('[TTS] Resuming from chunk', pausedAtChunkRef.current);
+    
+    // Resume playback from the saved chunk position
+    const remainingChunks = chunksRef.current.slice(pausedAtChunkRef.current);
+    if (remainingChunks.length > 0) {
+      generateSpeechFromChunks(remainingChunks, pausedAtChunkRef.current);
+    }
+  }, []);
+
+  // Helper to generate speech from a list of chunks (for resume)
+  const generateSpeechFromChunks = useCallback(async (chunks: string[], startIndex: number) => {
+    stopRef.current = false;
+    isStoppingRef.current = false;
+    setIsLoading(true);
+    
+    mediaSession.activate();
+    mediaSession.setPlaybackState('playing');
+
+    try {
+      for (let i = 0; i < chunks.length; i++) {
+        if (stopRef.current || isStoppingRef.current) break;
+
+        const globalIndex = startIndex + i;
+        setCurrentChunk(globalIndex + 1);
+        setCurrentPosition(globalIndex);
+
+        const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
+          body: { text: chunks[i], voice: selectedVoice, language },
+        });
+
+        if (stopRef.current || isStoppingRef.current) break;
+        if (invokeError) throw new Error(invokeError.message || "TTS failed");
+        if (data?.error) throw new Error(data.error);
+        if (!data?.audioContent) throw new Error("No audio received");
+
+        const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
+        activeBlobUrlsRef.current.push(url);
+
+        if (i === 0 && isMountedRef.current) setIsLoading(false);
+
+        const success = await playUrl(url);
+        if (!success) break;
+      }
+    } catch (err) {
+      console.error("[TTS] Resume error:", err);
+      if (isMountedRef.current) {
+        setError(err instanceof Error ? err.message : "TTS failed");
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setIsPlaying(false);
+      }
+      mediaSession.setPlaybackState('idle');
+    }
+  }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession]);
 
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
     // Stop any existing playback first
@@ -237,6 +361,7 @@ export function TTSMiniPlayer({
     // Reset state for new playback
     stopRef.current = false;
     isStoppingRef.current = false;
+    pausedAtChunkRef.current = 0;
     
     setError(null);
     setIsLoading(true);
@@ -245,20 +370,27 @@ export function TTSMiniPlayer({
 
     cleanupBlobUrls();
 
-    // For selection, use a single small chunk
+    // CONTRACT 5 - Rule 5.3: For selection, use a single small chunk
+    // For chapter, use smaller first chunk (≤200 chars) for instant audio start
     let chunks = isSelection 
-      ? [cleaned.slice(0, 1500)] 
-      : chunkText(cleaned, 800);
+      ? [cleaned.slice(0, 1200)] 
+      : chunkText(cleaned, 600);
 
-    // Make first chunk smaller for faster start
-    if (!isSelection && chunks[0] && chunks[0].length > 260) {
-      const first = chunks[0].slice(0, 260);
-      const rest = chunks[0].slice(260).trim();
+    // Make first chunk even smaller for faster start (≤200 chars)
+    if (!isSelection && chunks[0] && chunks[0].length > 200) {
+      const first = chunks[0].slice(0, 200);
+      const rest = chunks[0].slice(200).trim();
       chunks = [first, ...(rest ? [rest] : []), ...chunks.slice(1)];
     }
 
+    // Store chunks for potential resume (Rule 5.4)
+    chunksRef.current = chunks;
     setTotalChunks(chunks.length);
-    console.log("[TTS] Starting playback with", chunks.length, "chunks");
+    console.log("[TTS] Starting playback with", chunks.length, "chunks (first:", chunks[0]?.length, "chars)");
+
+    // Activate media session for OS controls (Rule 5.3)
+    mediaSession.activate();
+    mediaSession.setPlaybackState('playing');
 
     try {
       for (let i = 0; i < chunks.length; i++) {
@@ -269,9 +401,10 @@ export function TTSMiniPlayer({
         }
 
         setCurrentChunk(i + 1);
+        setCurrentPosition(i);
         const chunk = chunks[i];
 
-        console.log("[TTS] Generating chunk", i + 1, "/", chunks.length);
+        console.log("[TTS] Generating chunk", i + 1, "/", chunks.length, `(${chunk.length} chars)`);
 
         const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
           body: { text: chunk, voice: selectedVoice, language },
@@ -290,7 +423,10 @@ export function TTSMiniPlayer({
         const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
         activeBlobUrlsRef.current.push(url);
 
-        if (i === 0 && isMountedRef.current) setIsLoading(false);
+        if (i === 0 && isMountedRef.current) {
+          setIsLoading(false);
+          mediaSession.setPlaybackState('playing');
+        }
 
         const success = await playUrl(url);
         
@@ -307,6 +443,7 @@ export function TTSMiniPlayer({
         const msg = err instanceof Error ? err.message : "TTS failed";
         if (isMountedRef.current) {
           setError(msg);
+          mediaSession.setPlaybackState('idle');
           toast({ title: "TTS Error", description: msg, variant: "destructive" });
         }
       }
@@ -317,9 +454,10 @@ export function TTSMiniPlayer({
         setProgress(0);
         setCurrentChunk(0);
       }
+      mediaSession.setPlaybackState('idle');
       cleanupBlobUrls();
     }
-  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, stop]);
+  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, stop, mediaSession]);
 
   // Stop on stopKey change (page navigation)
   useEffect(() => {
@@ -425,6 +563,23 @@ export function TTSMiniPlayer({
           title="Stop"
         >
           <Square className="h-4 w-4" />
+        </Button>
+      )}
+      
+      {/* Interactive Guard Mode - Ask Question Button (Rule 5.4) */}
+      {isPlaying && onInterrupt && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            pauseForInteraction();
+            onInterrupt();
+          }}
+          className="h-8 gap-1.5 text-xs border-primary/50 text-primary hover:bg-primary/10"
+          title="Ask a question"
+        >
+          <Mic className="h-3 w-3" />
+          Ask
         </Button>
       )}
 

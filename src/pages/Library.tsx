@@ -42,9 +42,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLibraryLimits } from "@/hooks/useLibraryLimits";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { apiCache, cacheKeys } from "@/lib/cache";
 import { markCacheRender, markFirstContent, markInteractive, SLA } from "@/lib/contract5";
 import { GentleOfflineBanner } from "@/components/ui/gentle-offline-banner";
+import { PullToRefreshIndicator } from "@/components/ui/pull-to-refresh";
 
 interface Book {
   id: string;
@@ -140,7 +142,7 @@ function LibraryLimitBanner({
   );
 }
 
-// Mobile Library Content Component
+// Mobile Library Content Component with Pull-to-Refresh
 function MobileLibraryContent({
   libraryItems,
   filteredItems,
@@ -158,7 +160,8 @@ function MobileLibraryContent({
   hasMore,
   isLoadingMore,
   loadMore,
-  libraryLimits
+  libraryLimits,
+  onRefresh
 }: {
   libraryItems: LibraryItem[];
   filteredItems: LibraryItem[];
@@ -177,12 +180,31 @@ function MobileLibraryContent({
   isLoadingMore: boolean;
   loadMore: () => void;
   libraryLimits: ReturnType<typeof useLibraryLimits>;
+  onRefresh: () => Promise<void>;
 }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  
+  // CONTRACT 5 - Rule 5.1: Pull-to-refresh for native mobile UX
+  const pullToRefresh = usePullToRefresh({
+    onRefresh,
+    threshold: 80,
+    enabled: !isLoading,
+  });
 
   return (
-    <div className="px-4 py-4">
+    <div 
+      ref={pullToRefresh.containerRef}
+      className="px-4 py-4 min-h-screen overflow-y-auto"
+    >
+      {/* Pull-to-refresh indicator */}
+      <PullToRefreshIndicator
+        pullDistance={pullToRefresh.pullDistance}
+        progress={pullToRefresh.progress}
+        isRefreshing={pullToRefresh.isRefreshing}
+        isPulling={pullToRefresh.isPulling}
+      />
+      
       {/* CONTRACT 5.5: Gentle Offline Banner */}
       <GentleOfflineBanner showingCached={false} compact className="mb-4 rounded-lg" />
       
@@ -613,6 +635,14 @@ export default function Library() {
     if (user?.id) fetchStats(user.id);
   }, [libraryLimits, user?.id, fetchStats]);
 
+  // CONTRACT 5 - Rule 5.1: Pull-to-refresh callback
+  const handlePullRefresh = useCallback(async () => {
+    if (user?.id) {
+      await fetchLibrary(0, true);
+      await fetchStats(user.id);
+    }
+  }, [user?.id, fetchStats]);
+
   // Mobile layout with persistent shell
   if (isMobile) {
     return (
@@ -635,6 +665,7 @@ export default function Library() {
           isLoadingMore={isLoadingMore}
           loadMore={loadMore}
           libraryLimits={libraryLimits}
+          onRefresh={handlePullRefresh}
         />
       </MobileLayout>
     );

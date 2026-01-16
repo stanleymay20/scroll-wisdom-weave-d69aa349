@@ -8,4 +8,5 @@ export { usePasteProtection } from './usePasteProtection';
 export { useNetworkAction, useGracefulDegradation } from './useNetworkAction';
 export { useAutoHideFloatingActions } from './useAutoHideFloatingActions';
 export { useMediaSession } from './useMediaSession';
+export { usePullToRefresh } from './usePullToRefresh';
 export type { Entitlements } from './useEntitlements';
