@@ -767,14 +767,15 @@ export default function Library() {
             animate={{ opacity: 1, y: 0 }}
             className="text-center py-20"
           >
-            <div className="bg-destructive/10 rounded-full p-6 w-24 h-24 mx-auto mb-6 flex items-center justify-center">
-              <AlertCircle className="h-12 w-12 text-destructive" />
+            {/* CONTRACT 5.5: No red error screens - use gentle messaging */}
+            <div className="bg-muted/50 rounded-full p-6 w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+              <CloudOff className="h-12 w-12 text-muted-foreground" />
             </div>
             <h2 className="font-display text-2xl font-semibold mb-3">
-              {t('library.failedToLoad')}
+              Couldn't load your library
             </h2>
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
-              {loadError}
+              Check your internet connection and try again. Your reading progress is safe.
             </p>
             <Button variant="outline" onClick={handleRetry}>
               <RefreshCw className="h-4 w-4 mr-2" />

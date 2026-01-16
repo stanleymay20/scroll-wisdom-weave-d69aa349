@@ -1,3 +1,13 @@
+/**
+ * CONTRACT 5 (ENHANCED) - Reader Page
+ * 
+ * Rule 5.2: Reader UI must be screen-safe
+ * - No horizontal overflow
+ * - Safe area insets respected
+ * - Floating actions auto-hide while scrolling
+ * - Controls never overlap text
+ */
+
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -40,6 +50,8 @@ import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagePerformance } from "@/lib/performance";
+import { useAutoHideFloatingActions } from "@/hooks/useAutoHideFloatingActions";
+import { cn } from "@/lib/utils";
 
 interface BookData {
   id: string;
@@ -72,12 +84,15 @@ const READING_THEMES = {
 
 type ReadingTheme = keyof typeof READING_THEMES;
 
-// PERFORMANCE: Skeleton for reader page - shown IMMEDIATELY
+// CONTRACT 5.2: Skeleton for reader page - shown IMMEDIATELY with proper safe areas
 function ReaderSkeleton() {
   return (
-    <div className="min-h-screen bg-scroll-indigo-deep">
-      {/* Header skeleton */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50">
+    <div className="min-h-screen bg-scroll-indigo-deep overflow-x-hidden">
+      {/* Header skeleton - respects safe area */}
+      <header 
+        className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Skeleton className="h-10 w-10 rounded" />
@@ -94,8 +109,13 @@ function ReaderSkeleton() {
         </div>
       </header>
       
-      {/* Content skeleton */}
-      <main className="pt-20 pb-24 max-w-3xl mx-auto px-4 sm:px-8">
+      {/* Content skeleton - proper padding for safe areas */}
+      <main 
+        className="pb-24 max-w-3xl mx-auto px-4 sm:px-8 overflow-x-hidden"
+        style={{ 
+          paddingTop: "calc(env(safe-area-inset-top) + 5rem)",
+        }}
+      >
         <div className="animate-pulse space-y-4">
           <Skeleton className="h-8 w-3/4 mb-6" />
           {Array.from({ length: 8 }).map((_, i) => (
@@ -115,6 +135,12 @@ export default function Reader() {
   // PERFORMANCE: Track TTI
   usePagePerformance('Reader');
   const contentRef = useRef<HTMLDivElement>(null);
+  
+  // CONTRACT 5.2: Auto-hide floating actions while scrolling
+  const { isVisible: floatingActionsVisible, show: showFloatingActions } = useAutoHideFloatingActions({
+    scrollThreshold: 30,
+    pauseMs: 1200,
+  });
   
   const [fontSize, setFontSize] = useState(18);
   const [readingTheme, setReadingTheme] = useState<ReadingTheme>('default');
@@ -487,9 +513,12 @@ export default function Reader() {
   const currentTheme = READING_THEMES[readingTheme];
 
   return (
-    <div className={`min-h-screen ${currentTheme.bg} transition-colors duration-300`}>
-      {/* Header */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50">
+    <div className={`min-h-screen ${currentTheme.bg} transition-colors duration-300 overflow-x-hidden`}>
+      {/* CONTRACT 5.2: Header with safe area inset */}
+      <header 
+        className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50"
+        style={{ paddingTop: "env(safe-area-inset-top)" }}
+      >
         <div className="container mx-auto px-4 h-14 flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Button 
@@ -596,9 +625,12 @@ export default function Reader() {
         </div>
       </header>
 
-      {/* Guided Reading Progress Bar */}
+      {/* CONTRACT 5.2: Guided Reading Progress Bar - offset for safe area */}
       {guidedModeActive && chapter?.content && (
-        <div className="fixed top-14 left-0 right-0 z-40">
+        <div 
+          className="fixed left-0 right-0 z-40"
+          style={{ top: "calc(env(safe-area-inset-top) + 3.5rem)" }}
+        >
           <GuidedReadingMode
             cognitiveLevel={cognitiveLevel}
             currentProgress={readingProgress}
@@ -693,14 +725,19 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* TTS Mini Player - Persistent at bottom */}
+      {/* CONTRACT 5.2: TTS Mini Player - respects safe areas */}
       <AnimatePresence>
         {showTTS && chapter?.content && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed bottom-20 left-1/2 -translate-x-1/2 z-40"
+            className="fixed z-40"
+            style={{ 
+              bottom: "calc(env(safe-area-inset-bottom) + 5rem)",
+              left: "50%",
+              transform: "translateX(-50%)"
+            }}
           >
             <TTSMiniPlayer
               chapterText={chapter.content}
@@ -749,9 +786,14 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* Content */}
-      <main className={`pt-${guidedModeActive ? '36' : '24'} pb-24`}>
-        <article className="container mx-auto px-4 max-w-3xl" ref={contentRef}>
+      {/* CONTRACT 5.2: Content area with proper safe area padding */}
+      <main 
+        className="pb-24 overflow-x-hidden"
+        style={{ 
+          paddingTop: guidedModeActive ? "calc(env(safe-area-inset-top) + 7rem)" : "calc(env(safe-area-inset-top) + 5rem)",
+        }}
+      >
+        <article className="container mx-auto px-4 max-w-3xl overflow-x-hidden" ref={contentRef}>
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -816,43 +858,69 @@ export default function Reader() {
         </article>
       </main>
 
-      {/* Floating Cognitive Level Indicator */}
-      {guidedModeActive && !showLevelSelector && !showQA && (
-        <div className="fixed bottom-20 left-1/2 -translate-x-1/2 z-30">
-          <CognitiveLevelIndicator
-            level={cognitiveLevel}
-            progress={readingProgress}
-            onClick={() => setShowLevelSelector(true)}
-          />
-        </div>
-      )}
+      {/* CONTRACT 5.2: Floating Cognitive Level Indicator - respects safe areas & auto-hides */}
+      <AnimatePresence>
+        {guidedModeActive && !showLevelSelector && !showQA && floatingActionsVisible && (
+          <motion.div 
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: 20 }}
+            className="fixed z-30"
+            style={{ 
+              bottom: "calc(env(safe-area-inset-bottom) + 5rem)",
+              left: "50%",
+              transform: "translateX(-50%)"
+            }}
+          >
+            <CognitiveLevelIndicator
+              level={cognitiveLevel}
+              progress={readingProgress}
+              onClick={() => setShowLevelSelector(true)}
+            />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
-      {/* Interactive Q&A Button + Quiz Button + Voice Button */}
-       {chapter?.content && !showQA && !showVoiceConversation && (
-         <div className="fixed bottom-20 right-4 z-40 flex flex-col gap-2">
-           <VoiceConversationButton 
-             onClick={() => {
-               closeTopPanels();
-               setShowQA(false);
-               setShowQuiz(false);
-               setShowVoiceConversation(true);
-             }} 
-             cognitiveLevel={cognitiveLevel}
-           />
-           <QuizModeButton onClick={() => {
-             closeTopPanels();
-             setShowQA(false);
-             setShowVoiceConversation(false);
-             setShowQuiz(true);
-           }} />
-           <InteractiveQAButton onClick={() => {
-             closeTopPanels();
-             setShowQuiz(false);
-             setShowVoiceConversation(false);
-             setShowQA(true);
-           }} />
-         </div>
-       )}
+      {/* CONTRACT 5.2: Interactive Q&A Button + Quiz Button + Voice Button - auto-hide on scroll */}
+      <AnimatePresence>
+        {chapter?.content && !showQA && !showVoiceConversation && floatingActionsVisible && (
+          <motion.div 
+            initial={{ opacity: 0, x: 20 }}
+            animate={{ opacity: 1, x: 0 }}
+            exit={{ opacity: 0, x: 20 }}
+            className="fixed z-40 flex flex-col gap-2"
+            style={{ 
+              bottom: "calc(env(safe-area-inset-bottom) + 5rem)",
+              right: "1rem"
+            }}
+          >
+            <VoiceConversationButton 
+              onClick={() => {
+                closeTopPanels();
+                setShowQA(false);
+                setShowQuiz(false);
+                setShowVoiceConversation(true);
+                showFloatingActions();
+              }} 
+              cognitiveLevel={cognitiveLevel}
+            />
+            <QuizModeButton onClick={() => {
+              closeTopPanels();
+              setShowQA(false);
+              setShowVoiceConversation(false);
+              setShowQuiz(true);
+              showFloatingActions();
+            }} />
+            <InteractiveQAButton onClick={() => {
+              closeTopPanels();
+              setShowQuiz(false);
+              setShowVoiceConversation(false);
+              setShowQA(true);
+              showFloatingActions();
+            }} />
+          </motion.div>
+        )}
+      </AnimatePresence>
 
       {/* Quiz Mode */}
       {chapter?.content && (
@@ -897,8 +965,11 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* Navigation Footer */}
-      <footer className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-border/50">
+      {/* CONTRACT 5.2: Navigation Footer with safe area inset */}
+      <footer 
+        className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-border/50"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Button
             variant="ghost"
