@@ -45,6 +45,7 @@ const CertificateVerify = lazy(() => import("./pages/CertificateVerify"));
 const OrganizationVerify = lazy(() => import("./pages/OrganizationVerify"));
 const VerificationDocs = lazy(() => import("./pages/VerificationDocs"));
 const TrustWhitepaper = lazy(() => import("./pages/TrustWhitepaper"));
+const AccountDelete = lazy(() => import("./pages/AccountDelete"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
@@ -133,6 +134,7 @@ const App = () => (
                   <Route path="/verify" element={<OrganizationVerify />} />
                   <Route path="/docs/verification" element={<VerificationDocs />} />
                   <Route path="/docs/trust-whitepaper" element={<TrustWhitepaper />} />
+                  <Route path="/account/delete" element={<AccountDelete />} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
