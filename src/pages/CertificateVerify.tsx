@@ -27,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { Logo } from '@/components/brand';
 import { CERTIFICATE_ISSUER, getIssuerSignature } from '@/lib/certificateAuthority';
+import { TrustBadgeGroup } from '@/components/certificates';
 import { toast } from 'sonner';
 
 interface CertificateData {
@@ -539,6 +540,20 @@ export default function CertificateVerify() {
           </CardContent>
         </Card>
 
+        {/* Trust Badges */}
+        {!isRevoked && (
+          <div className="mt-6 p-4 bg-muted/30 rounded-lg">
+            <p className="text-xs text-muted-foreground uppercase tracking-wider mb-3 text-center">
+              Trust Guarantees
+            </p>
+            <TrustBadgeGroup 
+              badges={["verifiable", "integrity-scored", "publicly-accessible", "authority-issued"]} 
+              size="sm" 
+              className="justify-center"
+            />
+          </div>
+        )}
+
         {/* Footer Note */}
         <p className="text-center text-xs text-muted-foreground mt-6">
           This certificate can be independently verified at{' '}
@@ -555,6 +570,14 @@ export default function CertificateVerify() {
           <code className="text-xs bg-background px-3 py-1.5 rounded border inline-block">
             GET /api/verify-certificate?number={certificateNumber}
           </code>
+          <div className="mt-3">
+            <Link 
+              to="/docs/verification" 
+              className="text-xs text-primary hover:underline inline-flex items-center gap-1"
+            >
+              View API Documentation <ExternalLink className="h-3 w-3" />
+            </Link>
+          </div>
         </div>
       </main>
     </div>

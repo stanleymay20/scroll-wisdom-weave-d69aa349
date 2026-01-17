@@ -7,6 +7,8 @@ export { CertificateDisplay } from './CertificateDisplay';
 export { CertificateGenerator } from './CertificateGenerator';
 export { CertificateStatusPanel } from './CertificateStatusPanel';
 export { PublishingCredibility } from './PublishingCredibility';
+export { TrustBadge, TrustBadgeGroup, EmbeddableTrustBadge, generateEmbedCode } from './TrustBadges';
+export type { TrustBadgeType } from './TrustBadges';
 
 export { 
   CERTIFICATE_ISSUER,
