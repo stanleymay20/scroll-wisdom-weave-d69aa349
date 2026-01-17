@@ -1,6 +1,15 @@
+/**
+ * CONTRACT 5C-1: Button Tap Feedback
+ * 
+ * RULE: Button tap feedback must be ≤100ms
+ * - active:scale-[0.98] provides instant visual feedback
+ * - Pending state shows immediate acknowledgement
+ */
+
 import * as React from "react";
 import { Slot } from "@radix-ui/react-slot";
 import { cva, type VariantProps } from "class-variance-authority";
+import { Loader2 } from "lucide-react";
 
 import { cn } from "@/lib/utils";
 
@@ -41,12 +50,47 @@ export interface ButtonProps
   extends React.ButtonHTMLAttributes<HTMLButtonElement>,
     VariantProps<typeof buttonVariants> {
   asChild?: boolean;
+  /**
+   * CONTRACT 5C-1: Show pending state with spinner
+   * Provides immediate visual acknowledgement for async actions
+   */
+  isPending?: boolean;
+  /**
+   * CONTRACT 5C-1: Text to show while pending
+   */
+  pendingText?: string;
 }
 
 const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
-  ({ className, variant, size, asChild = false, ...props }, ref) => {
+  ({ className, variant, size, asChild = false, isPending = false, pendingText, children, disabled, ...props }, ref) => {
     const Comp = asChild ? Slot : "button";
-    return <Comp className={cn(buttonVariants({ variant, size, className }))} ref={ref} {...props} />;
+    
+    // Contract 5C-1: Immediate feedback for pending state
+    if (isPending && !asChild) {
+      return (
+        <button
+          className={cn(buttonVariants({ variant, size, className }), "relative")}
+          ref={ref}
+          disabled
+          {...props}
+        >
+          <Loader2 className="h-4 w-4 animate-spin" />
+          {pendingText && <span className="ml-2">{pendingText}</span>}
+          {!pendingText && <span className="opacity-0">{children}</span>}
+        </button>
+      );
+    }
+    
+    return (
+      <Comp 
+        className={cn(buttonVariants({ variant, size, className }))} 
+        ref={ref} 
+        disabled={disabled || isPending}
+        {...props}
+      >
+        {children}
+      </Comp>
+    );
   },
 );
 Button.displayName = "Button";

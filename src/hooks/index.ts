@@ -14,4 +14,5 @@ export { useContract6Gate } from './useContract6Gate';
 export { useLibraryData } from './useLibraryData';
 export { useBookDetailData } from './useBookDetailData';
 export { useReaderData } from './useReaderData';
+export { useSpeedBudget, useButtonFeedback, useModalPreMount, useRouteChangeTimer } from './useSpeedBudget';
 export type { Entitlements } from './useEntitlements';
