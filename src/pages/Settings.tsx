@@ -3,6 +3,8 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { MobileLayout } from "@/components/layout/MobileLayout";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -59,6 +61,7 @@ const defaultSettings: SettingsData = {
 
 export default function Settings() {
   const { t } = useLanguage();
+  const isMobile = useIsMobile();
   const [user, setUser] = useState<any>(null);
   const [settings, setSettings] = useState<SettingsData>(defaultSettings);
   const [isLoading, setIsLoading] = useState(true);
@@ -225,82 +228,88 @@ export default function Settings() {
 
   // PERFORMANCE: Show skeleton UI immediately instead of blocking loader
   if (isLoading) {
+    const LoadingSkeleton = (
+      <div className={isMobile ? "px-4 py-4" : "container mx-auto px-4 max-w-4xl"}>
+        <div className="mb-8">
+          <Skeleton className="h-8 w-48 mb-2" />
+          <Skeleton className="h-4 w-64" />
+        </div>
+        <div className="space-y-6">
+          <Skeleton className="h-12 w-full" />
+          <div className="space-y-4">
+            {Array.from({ length: 3 }).map((_, i) => (
+              <Card key={i} className="bg-gradient-card border-border/50">
+                <CardHeader>
+                  <Skeleton className="h-5 w-32" />
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <Skeleton className="h-10 w-full" />
+                  <Skeleton className="h-10 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+    
+    if (isMobile) {
+      return <MobileLayout>{LoadingSkeleton}</MobileLayout>;
+    }
+    
     return (
       <div className="min-h-screen flex flex-col">
         <Navbar />
         <main className="flex-1 pt-24 pb-16">
-          <div className="container mx-auto px-4 max-w-4xl">
-            <div className="mb-8">
-              <Skeleton className="h-8 w-48 mb-2" />
-              <Skeleton className="h-4 w-64" />
-            </div>
-            <div className="space-y-6">
-              <Skeleton className="h-12 w-full" />
-              <div className="space-y-4">
-                {Array.from({ length: 5 }).map((_, i) => (
-                  <Card key={i} className="bg-gradient-card border-border/50">
-                    <CardHeader>
-                      <Skeleton className="h-5 w-32" />
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <Skeleton className="h-10 w-full" />
-                      <Skeleton className="h-10 w-full" />
-                    </CardContent>
-                  </Card>
-                ))}
-              </div>
-            </div>
-          </div>
+          {LoadingSkeleton}
         </main>
         <Footer />
       </div>
     );
   }
 
-  return (
-    <div className="min-h-screen flex flex-col">
-      <Navbar />
-      
-      <main className="flex-1 pt-24 pb-16">
-        <div className="container mx-auto px-4 max-w-4xl">
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-          >
-            <div className="mb-8">
-              <h1 className="text-3xl font-display font-bold text-gradient-gold mb-2">
-                {t('settings.title')}
-              </h1>
-              <p className="text-muted-foreground">{t('settings.subtitle')}</p>
-            </div>
+  // Settings content - shared between mobile and desktop
+  const SettingsContent = (
+    <div className={isMobile ? "px-4 py-4 pb-24" : ""}>
+      <motion.div
+        initial={{ opacity: 0, y: 20 }}
+        animate={{ opacity: 1, y: 0 }}
+      >
+        <div className="mb-6">
+          <h1 className={`font-display font-bold text-gradient-gold mb-2 ${isMobile ? 'text-2xl' : 'text-3xl'}`}>
+            {t('settings.title')}
+          </h1>
+          <p className="text-muted-foreground text-sm">{t('settings.subtitle')}</p>
+        </div>
 
-            <Tabs defaultValue="system" className="space-y-6">
-              <TabsList className="bg-muted/50 flex-wrap h-auto gap-1 p-1.5 w-full justify-start">
-                <TabsTrigger value="system" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                  <Palette className="h-4 w-4 mr-2" />
-                  {t('settings.system')}
-                </TabsTrigger>
-                <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                  <Bell className="h-4 w-4 mr-2" />
-                  {t('settings.notifications')}
-                </TabsTrigger>
-                <TabsTrigger value="ai" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                  <Brain className="h-4 w-4 mr-2" />
-                  {t('settings.ai')}
-                </TabsTrigger>
-                <TabsTrigger value="privacy" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                  <Shield className="h-4 w-4 mr-2" />
-                  {t('settings.privacy')}
-                </TabsTrigger>
-                <TabsTrigger value="billing" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                  <CreditCard className="h-4 w-4 mr-2" />
-                  {t('settings.billing')}
-                </TabsTrigger>
-                <TabsTrigger value="storage" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground">
-                  <HardDrive className="h-4 w-4 mr-2" />
-                  Storage
-                </TabsTrigger>
-              </TabsList>
+        <Tabs defaultValue="system" className="space-y-4">
+          <TabsList className="bg-muted/50 flex-wrap h-auto gap-1 p-1 w-full justify-start overflow-x-auto">
+            <TabsTrigger value="system" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
+              <Palette className="h-4 w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">{t('settings.system')}</span>
+              <span className="sm:hidden">Theme</span>
+            </TabsTrigger>
+            <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
+              <Bell className="h-4 w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">{t('settings.notifications')}</span>
+              <span className="sm:hidden">Alerts</span>
+            </TabsTrigger>
+            <TabsTrigger value="ai" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
+              <Brain className="h-4 w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">{t('settings.ai')}</span>
+              <span className="sm:hidden">AI</span>
+            </TabsTrigger>
+            <TabsTrigger value="billing" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
+              <CreditCard className="h-4 w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">{t('settings.billing')}</span>
+              <span className="sm:hidden">Plan</span>
+            </TabsTrigger>
+            <TabsTrigger value="storage" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
+              <HardDrive className="h-4 w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">Storage</span>
+              <span className="sm:hidden">Data</span>
+            </TabsTrigger>
+          </TabsList>
 
               {/* Billing Tab */}
               <TabsContent value="billing" className="space-y-6">
@@ -775,10 +784,24 @@ export default function Settings() {
                 )}
               </Button>
             </div>
-          </motion.div>
+          </Tabs>
+        </motion.div>
+      </div>
+    );
+
+  // Mobile uses MobileLayout wrapper, desktop uses traditional layout
+  if (isMobile) {
+    return <MobileLayout>{SettingsContent}</MobileLayout>;
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      <main className="flex-1 pt-24 pb-16">
+        <div className="container mx-auto px-4 max-w-4xl">
+          {SettingsContent}
         </div>
       </main>
-
       <Footer />
     </div>
   );

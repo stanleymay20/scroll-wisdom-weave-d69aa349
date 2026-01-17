@@ -4,12 +4,14 @@
  * Cache-first strategy with skeleton-first loading.
  * First meaningful content ≤ 1.5s
  * Fully interactive ≤ 2.0s
+ * Pull-to-refresh for native mobile UX
  */
 
 import { useState, useEffect, useCallback } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { usePullToRefresh } from "@/hooks/usePullToRefresh";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { MobileLayout, MobileBookCard } from "@/components/mobile";
@@ -17,6 +19,8 @@ import { BookCard } from "@/components/books/BookCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
+import { PullToRefreshIndicator } from "@/components/ui/pull-to-refresh";
+import { GentleOfflineBanner } from "@/components/ui/gentle-offline-banner";
 import { Search, X } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -85,7 +89,7 @@ function BookGridSkeleton({ count = 8, mobile = false }: { count?: number; mobil
   );
 }
 
-// Mobile Explore Content
+// Mobile Explore Content with Pull-to-Refresh
 function MobileExploreContent({
   books,
   filteredBooks,
@@ -94,7 +98,8 @@ function MobileExploreContent({
   setSearchQuery,
   selectedCategory,
   handleCategoryChange,
-  getCategoryLabel
+  getCategoryLabel,
+  onRefresh,
 }: {
   books: Book[];
   filteredBooks: Book[];
@@ -104,11 +109,33 @@ function MobileExploreContent({
   selectedCategory: string;
   handleCategoryChange: (c: string) => void;
   getCategoryLabel: (c: string) => string;
+  onRefresh: () => Promise<void>;
 }) {
   const { t } = useLanguage();
+  
+  // CONTRACT 5 - Rule 5.1: Pull-to-refresh for native mobile UX
+  const pullToRefresh = usePullToRefresh({
+    onRefresh,
+    threshold: 80,
+    enabled: !isLoading,
+  });
 
   return (
-    <div className="px-4 py-4">
+    <div 
+      ref={pullToRefresh.containerRef}
+      className="px-4 py-4 min-h-screen overflow-y-auto"
+    >
+      {/* Pull-to-refresh indicator */}
+      <PullToRefreshIndicator
+        pullDistance={pullToRefresh.pullDistance}
+        progress={pullToRefresh.progress}
+        isRefreshing={pullToRefresh.isRefreshing}
+        isPulling={pullToRefresh.isPulling}
+      />
+      
+      {/* CONTRACT 5.5: Gentle Offline Banner */}
+      <GentleOfflineBanner compact className="mb-4 rounded-lg" />
+      
       {/* Header */}
       <div className="mb-6">
         <h1 className="font-display text-2xl font-bold text-foreground mb-2">
@@ -270,7 +297,7 @@ export default function Explore() {
     return t(key);
   };
 
-  // Mobile layout with persistent shell
+  // Mobile layout with persistent shell and pull-to-refresh
   if (isMobile) {
     return (
       <MobileLayout>
@@ -283,6 +310,7 @@ export default function Explore() {
           selectedCategory={selectedCategory}
           handleCategoryChange={handleCategoryChange}
           getCategoryLabel={getCategoryLabel}
+          onRefresh={fetchBooks}
         />
       </MobileLayout>
     );

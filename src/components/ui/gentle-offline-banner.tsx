@@ -2,12 +2,12 @@
  * CONTRACT 5 - Rule 5.5: Honest Offline & Degraded Mode UX
  * 
  * Gentle banners instead of alerts. Users always know what works and what doesn't.
+ * FIXED: Only shows when truly offline (navigator.onLine is false)
  */
 
-import { forwardRef } from 'react';
+import { forwardRef, useState, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { WifiOff, CloudOff, RefreshCw } from 'lucide-react';
-import { useConnectionState } from '@/hooks/useContract5';
 import { OFFLINE_MESSAGES } from '@/lib/contract5';
 import { cn } from '@/lib/utils';
 
@@ -22,20 +22,30 @@ interface GentleOfflineBannerProps {
 
 export const GentleOfflineBanner = forwardRef<HTMLDivElement, GentleOfflineBannerProps>(
   function GentleOfflineBanner({ showingCached, className, compact }, ref) {
-    const { state, checkConnection } = useConnectionState();
+    // Use navigator.onLine directly for most reliable offline detection
+    const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
     
-    const isOffline = state === 'offline';
-    const isUnstable = state === 'unstable';
+    useEffect(() => {
+      const handleOnline = () => setIsOffline(false);
+      const handleOffline = () => setIsOffline(true);
+      
+      window.addEventListener('online', handleOnline);
+      window.addEventListener('offline', handleOffline);
+      
+      return () => {
+        window.removeEventListener('online', handleOnline);
+        window.removeEventListener('offline', handleOffline);
+      };
+    }, []);
     
-    if (state === 'online' && !showingCached) return null;
+    // Only show when truly offline or explicitly showing cached data
+    if (!isOffline && !showingCached) return null;
 
     const message = isOffline 
       ? OFFLINE_MESSAGES.offline
-      : isUnstable
-        ? OFFLINE_MESSAGES.unstable
-        : showingCached
-          ? OFFLINE_MESSAGES.showingCached
-          : null;
+      : showingCached
+        ? OFFLINE_MESSAGES.showingCached
+        : null;
 
     if (!message) return null;
 
@@ -49,9 +59,7 @@ export const GentleOfflineBanner = forwardRef<HTMLDivElement, GentleOfflineBanne
           className={cn(
             'overflow-hidden',
             compact ? 'rounded-lg' : 'border-b',
-            isOffline 
-              ? 'bg-muted/50 text-muted-foreground border-border/50' 
-              : 'bg-amber-50/50 dark:bg-amber-950/20 text-amber-700 dark:text-amber-400 border-amber-200/50 dark:border-amber-800/30',
+            'bg-muted/50 text-muted-foreground border-border/50',
             className
           )}
         >
@@ -59,21 +67,8 @@ export const GentleOfflineBanner = forwardRef<HTMLDivElement, GentleOfflineBanne
             'flex items-center justify-center gap-2',
             compact ? 'px-3 py-2 text-xs' : 'px-4 py-2 text-sm'
           )}>
-            {isOffline ? (
-              <WifiOff className={cn(compact ? 'h-3 w-3' : 'h-4 w-4')} />
-            ) : (
-              <CloudOff className={cn(compact ? 'h-3 w-3' : 'h-4 w-4')} />
-            )}
+            <WifiOff className={cn(compact ? 'h-3 w-3' : 'h-4 w-4')} />
             <span>{message}</span>
-            {!compact && (
-              <button
-                onClick={checkConnection}
-                className="ml-2 p-1 rounded hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-                title="Check connection"
-              >
-                <RefreshCw className="h-3 w-3" />
-              </button>
-            )}
           </div>
         </motion.div>
       </AnimatePresence>
@@ -83,22 +78,34 @@ export const GentleOfflineBanner = forwardRef<HTMLDivElement, GentleOfflineBanne
 
 /**
  * Inline badge version for use in headers/toolbars
+ * Only shows when actually offline
  */
 export function OfflineStatusBadge({ className }: { className?: string }) {
-  const { state } = useConnectionState();
+  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
   
-  if (state === 'online') return null;
+  useEffect(() => {
+    const handleOnline = () => setIsOffline(false);
+    const handleOffline = () => setIsOffline(true);
+    
+    window.addEventListener('online', handleOnline);
+    window.addEventListener('offline', handleOffline);
+    
+    return () => {
+      window.removeEventListener('online', handleOnline);
+      window.removeEventListener('offline', handleOffline);
+    };
+  }, []);
+  
+  if (!isOffline) return null;
   
   return (
     <span className={cn(
       'inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium',
-      state === 'offline' 
-        ? 'bg-muted text-muted-foreground' 
-        : 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-400',
+      'bg-muted text-muted-foreground',
       className
     )}>
       <WifiOff className="h-3 w-3" />
-      {state === 'offline' ? 'Offline' : 'Unstable'}
+      Offline
     </span>
   );
 }

@@ -111,6 +111,11 @@ export function useSkeletonFirst<T>(
 
 /**
  * Hook for honest connection state (Rule 5.5 - Honest Offline)
+ * 
+ * FIXED: Uses optimistic online detection to prevent false offline states.
+ * - Trusts navigator.onLine as primary indicator
+ * - Only marks as offline after confirmed failures
+ * - Avoids false positives that hurt UX
  */
 export function useConnectionState(): {
   state: ConnectionState;
@@ -121,46 +126,109 @@ export function useConnectionState(): {
   checkConnection: () => Promise<boolean>;
   canPerformAction: () => { allowed: boolean; message?: string };
 } {
-  const [state, setState] = useState<ConnectionState>(() => getConnectionState());
+  // Start with browser's online state (optimistic)
+  const [state, setState] = useState<ConnectionState>(() => 
+    navigator.onLine ? 'online' : 'offline'
+  );
+  
+  // Track consecutive failures to prevent false positives
+  const failureCountRef = useRef(0);
+  const lastCheckRef = useRef(0);
   
   const checkConnection = useCallback(async (): Promise<boolean> => {
+    // Throttle checks to prevent spam
+    const now = Date.now();
+    if (now - lastCheckRef.current < 5000) {
+      return state === 'online';
+    }
+    lastCheckRef.current = now;
+    
+    // If browser says offline, trust it
+    if (!navigator.onLine) {
+      setState('offline');
+      recordConnectionCheck(false, 'navigator');
+      return false;
+    }
+    
     const start = performance.now();
     try {
-      // Try to fetch a small resource
+      // Try to fetch a small resource with short timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 3000);
+      
       const response = await fetch('/manifest.webmanifest', {
         method: 'HEAD',
         cache: 'no-store',
+        signal: controller.signal,
       });
+      
+      clearTimeout(timeoutId);
       const latency = performance.now() - start;
       const success = response.ok;
       
-      recordConnectionCheck(success, '/manifest.webmanifest', latency);
-      setState(getConnectionState());
+      if (success) {
+        failureCountRef.current = 0;
+        setState('online');
+      } else {
+        failureCountRef.current++;
+        // Only mark as unstable/offline after multiple failures
+        if (failureCountRef.current >= 3) {
+          setState('offline');
+        } else if (failureCountRef.current >= 2) {
+          setState('unstable');
+        }
+      }
       
+      recordConnectionCheck(success, '/manifest.webmanifest', latency);
       return success;
     } catch {
+      failureCountRef.current++;
+      
+      // Only mark offline after 3+ consecutive failures
+      // This prevents false offline states from single failed requests
+      if (failureCountRef.current >= 3) {
+        setState('offline');
+      } else if (failureCountRef.current >= 2 && navigator.onLine) {
+        setState('unstable');
+      }
+      
       recordConnectionCheck(false, '/manifest.webmanifest');
-      setState(getConnectionState());
-      return false;
+      
+      // Still return true if browser says online and we haven't confirmed offline
+      return navigator.onLine && failureCountRef.current < 3;
     }
-  }, []);
+  }, [state]);
   
   const canPerformAction = useCallback(() => {
+    // Be optimistic - allow action if browser says online
+    if (navigator.onLine && state !== 'offline') {
+      return { allowed: true };
+    }
     return canPerformOnlineAction();
-  }, []);
+  }, [state]);
   
-  // Periodic connection checks
+  // Less aggressive connection checks - only every 60s
   useEffect(() => {
-    const interval = setInterval(checkConnection, 30000); // Check every 30s
+    // Initial check only if browser says offline
+    if (!navigator.onLine) {
+      checkConnection();
+    }
+    
+    const interval = setInterval(checkConnection, 60000);
     return () => clearInterval(interval);
   }, [checkConnection]);
   
-  // Listen to browser online/offline events
+  // Listen to browser online/offline events (most reliable)
   useEffect(() => {
-    const handleOnline = () => checkConnection();
+    const handleOnline = () => {
+      failureCountRef.current = 0;
+      setState('online');
+      recordConnectionCheck(true, 'browser-event');
+    };
+    
     const handleOffline = () => {
-      recordConnectionCheck(false, 'browser-event');
       setState('offline');
+      recordConnectionCheck(false, 'browser-event');
     };
     
     window.addEventListener('online', handleOnline);
@@ -170,14 +238,14 @@ export function useConnectionState(): {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
     };
-  }, [checkConnection]);
+  }, []);
   
   return {
     state,
-    isOnline: state === 'online',
+    isOnline: state === 'online' || navigator.onLine,
     isUnstable: state === 'unstable',
-    isOffline: state === 'offline',
-    message: getConnectionMessage(),
+    isOffline: state === 'offline' && !navigator.onLine,
+    message: state === 'online' ? null : getConnectionMessage(),
     checkConnection,
     canPerformAction,
   };
