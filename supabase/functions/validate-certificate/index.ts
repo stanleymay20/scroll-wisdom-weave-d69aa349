@@ -319,18 +319,144 @@ Deno.serve(async (req) => {
       .eq('user_id', user.id)
       .single();
 
-    // 4. Build progress object (in production, this would include quiz/integrity data)
+    // ============================================================
+    // 4. REAL QUIZ SCORE AGGREGATION (NO PLACEHOLDERS)
+    // ============================================================
+    
+    const { data: quizAttempts, error: quizError } = await supabase
+      .from('quiz_attempts')
+      .select('score, total_questions, correct_answers')
+      .eq('user_id', user.id)
+      .eq('book_id', bookId);
+
+    if (quizError) {
+      console.error('[validate-certificate] Error fetching quiz attempts:', quizError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch quiz data', code: 'DB_ERROR' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // CRITICAL: If no quiz attempts exist, certificate is BLOCKED
+    if (!quizAttempts || quizAttempts.length === 0) {
+      console.log('[validate-certificate] No quiz attempts found - certificate blocked');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'No quiz attempts found',
+          code: 'NO_QUIZ_DATA',
+          eligibility: {
+            eligible: false,
+            certificateType: null,
+            reasons: ['Complete at least one quiz assessment before requesting certificate'],
+            integrityScore: 0,
+            blockedByCooldown: false,
+            canRetryAt: null,
+          },
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Calculate real average score (normalize to 0-1 range)
+    const averageScore = quizAttempts.reduce((sum, q) => sum + q.score, 0) / quizAttempts.length / 100;
+    const quizzesSubmitted = quizAttempts.length;
+    const quizzesRequired = totalChapters; // One quiz per chapter required
+
+    console.log(`[validate-certificate] Quiz data: ${quizzesSubmitted} attempts, avg score: ${(averageScore * 100).toFixed(1)}%`);
+
+    // ============================================================
+    // 5. REAL INTEGRITY SCORE AGGREGATION (NO PLACEHOLDERS)
+    // ============================================================
+
+    const { data: integrityLogs, error: integrityError } = await supabase
+      .from('assessment_integrity_logs')
+      .select('integrity_score, severity')
+      .eq('user_id', user.id)
+      .eq('book_id', bookId);
+
+    if (integrityError) {
+      console.error('[validate-certificate] Error fetching integrity logs:', integrityError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to fetch integrity data', code: 'DB_ERROR' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // CRITICAL: If no integrity logs exist, certificate is BLOCKED
+    if (!integrityLogs || integrityLogs.length === 0) {
+      console.log('[validate-certificate] No integrity logs found - certificate blocked');
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'No integrity data available',
+          code: 'NO_INTEGRITY_DATA',
+          eligibility: {
+            eligible: false,
+            certificateType: null,
+            reasons: ['Integrity assessment data required before certificate issuance'],
+            integrityScore: 0,
+            blockedByCooldown: false,
+            canRetryAt: null,
+          },
+        }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Calculate real integrity score
+    const integrityScore = integrityLogs.reduce((sum, l) => sum + l.integrity_score, 0) / integrityLogs.length;
+    const hasRejectFlags = integrityLogs.some(l => l.severity === 'reject');
+    const hasReviewFlags = integrityLogs.some(l => l.severity === 'review');
+
+    console.log(`[validate-certificate] Integrity data: score=${(integrityScore * 100).toFixed(1)}%, reject=${hasRejectFlags}, review=${hasReviewFlags}`);
+
+    // ============================================================
+    // 6. REAL COOLDOWN ENFORCEMENT (NO PLACEHOLDERS)
+    // ============================================================
+
+    const { data: masteryAttempts, error: masteryError } = await supabase
+      .from('mastery_attempts')
+      .select('attempted_at, passed')
+      .eq('user_id', user.id)
+      .eq('book_id', bookId)
+      .order('attempted_at', { ascending: false })
+      .limit(1);
+
+    if (masteryError) {
+      console.error('[validate-certificate] Error fetching mastery attempts:', masteryError);
+      // Non-blocking - cooldown is optional
+    }
+
+    const lastMasteryAttempt = masteryAttempts?.[0]?.attempted_at 
+      ? new Date(masteryAttempts[0].attempted_at) 
+      : null;
+
+    // Check if mastery requirements are truly met (strict)
+    const masteryRequirementsMet = 
+      averageScore >= MASTERY_THRESHOLDS.MIN_SCORE &&
+      integrityScore >= MASTERY_THRESHOLDS.MIN_INTEGRITY &&
+      !hasRejectFlags &&
+      !hasReviewFlags &&
+      quizzesSubmitted >= quizzesRequired;
+
+    console.log(`[validate-certificate] Mastery requirements met: ${masteryRequirementsMet}`);
+
+    // ============================================================
+    // 7. BUILD PROGRESS OBJECT (NO DEFAULTS, NO FALLBACKS)
+    // ============================================================
+
     const progress: BookProgress = {
       totalChapters,
       completedChapters,
-      quizzesRequired: 0, // Would fetch from actual quiz system
-      quizzesSubmitted: 0, // Would fetch from actual quiz system
-      averageScore: libraryEntry?.progress_percent === 100 ? 0.85 : 0, // Placeholder
-      integrityScore: 1.0, // Would fetch from integrity tracking system
-      hasRejectFlags: false,
-      hasReviewFlags: false,
-      masteryRequirementsMet: false,
-      lastMasteryAttempt: null,
+      quizzesRequired,
+      quizzesSubmitted,
+      averageScore,         // REAL: from quiz_attempts
+      integrityScore,       // REAL: from assessment_integrity_logs
+      hasRejectFlags,       // REAL: from assessment_integrity_logs
+      hasReviewFlags,       // REAL: from assessment_integrity_logs
+      masteryRequirementsMet, // REAL: computed from actual data
+      lastMasteryAttempt,   // REAL: from mastery_attempts
     };
 
     // ============================================================
