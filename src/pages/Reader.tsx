@@ -1,11 +1,18 @@
 /**
  * CONTRACT 5 (ENHANCED) - Reader Page
+ * CONTRACT 5B-3: Reader Entry Speed
  * 
  * Rule 5.2: Reader UI must be screen-safe
  * - No horizontal overflow
  * - Safe area insets respected
  * - Floating actions auto-hide while scrolling
  * - Controls never overlap text
+ * 
+ * Rule 5B-3: Reader Entry Speed (≤100ms)
+ * - Instant shell rendering
+ * - Cache-primed entry from route state
+ * - Progressive hydration
+ * - Zero layout shift
  */
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -13,7 +20,6 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { 
   ChevronLeft, 
   ChevronRight, 
@@ -47,10 +53,12 @@ import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode, QuizModeButton } from "@/components/reader/QuizMode";
 import { VoiceConversation, VoiceConversationButton } from "@/components/reader/VoiceConversation";
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
+import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagePerformance } from "@/lib/performance";
 import { useAutoHideFloatingActions } from "@/hooks/useAutoHideFloatingActions";
+import { useReaderData } from "@/hooks/useReaderData";
 import { cn } from "@/lib/utils";
 
 interface BookData {
@@ -84,49 +92,6 @@ const READING_THEMES = {
 
 type ReadingTheme = keyof typeof READING_THEMES;
 
-// CONTRACT 5.2: Skeleton for reader page - shown IMMEDIATELY with proper safe areas
-function ReaderSkeleton() {
-  return (
-    <div className="min-h-screen bg-scroll-indigo-deep overflow-x-hidden">
-      {/* Header skeleton - respects safe area */}
-      <header 
-        className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50"
-        style={{ paddingTop: "env(safe-area-inset-top)" }}
-      >
-        <div className="container mx-auto px-4 h-14 flex items-center justify-between">
-          <div className="flex items-center gap-4">
-            <Skeleton className="h-10 w-10 rounded" />
-            <div>
-              <Skeleton className="h-4 w-32 mb-1" />
-              <Skeleton className="h-3 w-20" />
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-10 w-10 rounded" />
-            ))}
-          </div>
-        </div>
-      </header>
-      
-      {/* Content skeleton - proper padding for safe areas */}
-      <main 
-        className="pb-24 max-w-3xl mx-auto px-4 sm:px-8 overflow-x-hidden"
-        style={{ 
-          paddingTop: "calc(env(safe-area-inset-top) + 5rem)",
-        }}
-      >
-        <div className="animate-pulse space-y-4">
-          <Skeleton className="h-8 w-3/4 mb-6" />
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-4 w-full" style={{ width: `${85 + Math.random() * 15}%` }} />
-          ))}
-        </div>
-      </main>
-    </div>
-  );
-}
-
 export default function Reader() {
   const { t } = useLanguage();
   const { bookId, chapterId } = useParams();
@@ -141,6 +106,19 @@ export default function Reader() {
     scrollThreshold: 30,
     pauseMs: 1200,
   });
+
+  const currentChapter = parseInt(chapterId || "1");
+  
+  // CONTRACT 5B-3: Single source of truth for reader data
+  const {
+    book,
+    chapter,
+    previewContent,
+    loadState,
+    isLoading,
+    resumePosition,
+    userId,
+  } = useReaderData({ bookId, chapterNumber: currentChapter });
   
   const [fontSize, setFontSize] = useState(18);
   const [readingTheme, setReadingTheme] = useState<ReadingTheme>('default');
@@ -149,10 +127,6 @@ export default function Reader() {
   const [showLevelSelector, setShowLevelSelector] = useState(false);
   const [showReferences, setShowReferences] = useState(false);
   const [selectedTextForTTS, setSelectedTextForTTS] = useState("");
-  const [userId, setUserId] = useState<string | null>(null);
-  const [book, setBook] = useState<BookData | null>(null);
-  const [chapter, setChapter] = useState<ChapterData | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
 
   const closeTopPanels = useCallback(() => {
     setShowSettings(false);
@@ -183,7 +157,6 @@ export default function Reader() {
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
   const [shouldResumeTTS, setShouldResumeTTS] = useState(false);
 
-  const currentChapter = parseInt(chapterId || "1");
   const { toast } = useToast();
   const lastSavedProgress = useRef<number>(0);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -221,57 +194,10 @@ export default function Reader() {
     }
   }, [userId, bookId, toast]);
 
+  // Reset reading progress on chapter change
   useEffect(() => {
-    const fetchData = async () => {
-      setIsLoading(true);
-
-      // Auth (for progress tracking)
-      const { data: { session } } = await supabase.auth.getSession();
-      setUserId(session?.user?.id ?? null);
-
-      // Fetch book
-      const { data: bookData, error: bookError } = await supabase
-        .from("books")
-        .select("id, title, total_chapters, language")
-        .eq("id", bookId)
-        .single();
-
-      if (bookError) {
-        console.error("Error fetching book:", bookError);
-        navigate("/explore");
-        return;
-      }
-
-      setBook(bookData);
-
-      // Fetch chapter
-      const { data: chapterData, error: chapterError } = await supabase
-        .from("chapters")
-        .select("*")
-        .eq("book_id", bookId)
-        .eq("chapter_number", currentChapter)
-        .single();
-
-      if (chapterError) {
-        console.error("Error fetching chapter:", chapterError);
-      } else if (chapterData) {
-        setChapter({
-          ...chapterData,
-          chapter_references: Array.isArray(chapterData.chapter_references)
-            ? chapterData.chapter_references
-            : [],
-          research_metadata: (chapterData.research_metadata as Record<string, any>) || {},
-        });
-      }
-
-      setIsLoading(false);
-    };
-
-    if (bookId) {
-      fetchData();
-      setReadingProgress(0); // Reset progress on chapter change
-    }
-  }, [bookId, currentChapter, navigate]);
+    setReadingProgress(0);
+  }, [currentChapter]);
 
   // Save progress when chapter changes or user leaves - with toast
   useEffect(() => {
@@ -327,9 +253,18 @@ export default function Reader() {
   const wordCount = chapter?.word_count || 0;
   const estimatedReadingTime = Math.ceil(wordCount / 200); // 200 wpm average
 
-  // PERFORMANCE: Show skeleton UI immediately instead of blocking loader
-  if (isLoading) {
-    return <ReaderSkeleton />;
+  // CONTRACT 5B-3: Show skeleton with cached data for instant render
+  if (loadState === 'skeleton' || loadState === 'offline-empty') {
+    return (
+      <ReaderSkeleton 
+        chapterTitle={chapter?.title}
+        chapterNumber={currentChapter}
+        totalChapters={book?.total_chapters || undefined}
+        bookTitle={book?.title}
+        contentPreview={previewContent || undefined}
+        isOffline={loadState === 'offline-empty'}
+      />
+    );
   }
 
   // Render a single dialogue line as a speech bubble
