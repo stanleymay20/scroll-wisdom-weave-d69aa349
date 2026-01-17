@@ -16,4 +16,5 @@ export { useBookDetailData } from './useBookDetailData';
 export { useReaderData } from './useReaderData';
 export { useSpeedBudget, useButtonFeedback, useModalPreMount, useRouteChangeTimer } from './useSpeedBudget';
 export { useActionLifecycle, useSimpleAction } from './useActionLifecycle';
+export { useAssessmentIntegrity, useSimpleQuizValidation } from './useAssessmentIntegrity';
 export type { Entitlements } from './useEntitlements';

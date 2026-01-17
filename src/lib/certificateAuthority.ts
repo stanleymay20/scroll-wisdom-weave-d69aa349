@@ -143,6 +143,14 @@ export function createCertificate(
   recipient: CertificateRecipient,
   content: Omit<CertificateContent, 'certificateId'>
 ): Certificate {
+  // 6A SAFEGUARD: Prevent recipient from equaling issuer (anti-spoof)
+  if (recipient.name.toLowerCase() === CERTIFICATE_ISSUER.representative.toLowerCase()) {
+    throw new Error('CERTIFICATE_INTEGRITY_ERROR: Recipient cannot equal issuer');
+  }
+  if (recipient.name.toLowerCase().includes(CERTIFICATE_ISSUER.authority.toLowerCase())) {
+    throw new Error('CERTIFICATE_INTEGRITY_ERROR: Recipient name cannot contain issuer authority');
+  }
+  
   const certificateId = `CERT-${Date.now()}-${Math.random().toString(36).substring(2, 8).toUpperCase()}`;
   const issuedAt = new Date();
   
