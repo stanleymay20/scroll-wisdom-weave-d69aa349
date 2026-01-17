@@ -1,3 +1,16 @@
+/**
+ * CONTRACT 5B-1: Library Entry Speed
+ * 
+ * The Library screen must feel instant on mobile (PWA).
+ * 
+ * SUCCESS CRITERIA:
+ * - ≤100ms: user sees structure (skeleton)
+ * - ≤1.0s perceived: library looks usable (cached data)
+ * - ≤1.5s actual: data fully hydrated
+ * - 0 blank screens
+ * - 0 full-page spinners
+ */
+
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
@@ -7,17 +20,20 @@ import { Footer } from "@/components/layout/Footer";
 import { MobileLayout } from "@/components/mobile";
 import { LibraryBookCard } from "@/components/books/LibraryBookCard";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { 
+  LibraryPageSkeleton,
+  BookCardSkeleton,
+  LibraryStatsSkeleton,
+} from "@/components/ui/page-skeletons";
+import { 
   Library as LibraryIcon, 
   BookOpen, 
   Plus, 
   RefreshCw, 
-  AlertCircle,
   Search,
   SlidersHorizontal,
   BookCheck,
@@ -42,46 +58,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useLibraryLimits } from "@/hooks/useLibraryLimits";
+import { useLibraryData } from "@/hooks/useLibraryData";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
-import { apiCache, cacheKeys } from "@/lib/cache";
-import { markCacheRender, markFirstContent, markInteractive, SLA } from "@/lib/contract5";
 import { GentleOfflineBanner } from "@/components/ui/gentle-offline-banner";
 import { PullToRefreshIndicator } from "@/components/ui/pull-to-refresh";
-
-interface Book {
-  id: string;
-  title: string;
-  description: string | null;
-  category: string;
-  cover_image_url: string | null;
-  total_chapters: number | null;
-}
-
-interface LibraryItem {
-  id: string;
-  book_id: string;
-  progress_percent: number | null;
-  last_read_chapter: number | null;
-  created_at: string;
-  books: Book;
-}
-
-const ITEMS_PER_PAGE = 12;
-
-// Skeleton loader component
-function BookCardSkeleton() {
-  return (
-    <div className="rounded-xl overflow-hidden bg-card border border-border/50">
-      <Skeleton className="aspect-[3/4] w-full" />
-      <div className="p-4 space-y-3">
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-3 w-1/2" />
-        <Skeleton className="h-2 w-full" />
-        <Skeleton className="h-8 w-full" />
-      </div>
-    </div>
-  );
-}
+import { cn } from "@/lib/utils";
 
 // Stats card component
 function StatCard({ icon: Icon, label, value, color }: { 
@@ -92,7 +73,7 @@ function StatCard({ icon: Icon, label, value, color }: {
 }) {
   return (
     <div className="bg-card rounded-xl border border-border/50 p-4 flex items-center gap-4">
-      <div className={`p-3 rounded-lg ${color}`}>
+      <div className={cn("p-3 rounded-lg", color)}>
         <Icon className="h-5 w-5" />
       </div>
       <div>
@@ -144,46 +125,42 @@ function LibraryLimitBanner({
 
 // Mobile Library Content Component with Pull-to-Refresh
 function MobileLibraryContent({
-  libraryItems,
+  items,
   filteredItems,
-  isLoading,
-  loadError,
+  loadState,
   stats,
   searchQuery,
   setSearchQuery,
   filterStatus,
   setFilterStatus,
-  sortBy,
-  setSortBy,
-  handleRetry,
   handleRemoveBook,
   hasMore,
   isLoadingMore,
   loadMore,
   libraryLimits,
-  onRefresh
+  onRefresh,
+  error
 }: {
-  libraryItems: LibraryItem[];
-  filteredItems: LibraryItem[];
-  isLoading: boolean;
-  loadError: string | null;
+  items: any[];
+  filteredItems: any[];
+  loadState: string;
   stats: { total: number; reading: number; completed: number };
   searchQuery: string;
   setSearchQuery: (v: string) => void;
   filterStatus: "all" | "reading" | "completed";
   setFilterStatus: (v: "all" | "reading" | "completed") => void;
-  sortBy: "recent" | "title" | "progress";
-  setSortBy: (v: "recent" | "title" | "progress") => void;
-  handleRetry: () => void;
   handleRemoveBook: (id: string) => void;
   hasMore: boolean;
   isLoadingMore: boolean;
   loadMore: () => void;
   libraryLimits: ReturnType<typeof useLibraryLimits>;
   onRefresh: () => Promise<void>;
+  error: string | null;
 }) {
   const { t } = useLanguage();
   const navigate = useNavigate();
+  const isLoading = loadState === 'skeleton';
+  const isHydrating = loadState === 'hydrating';
   
   // CONTRACT 5 - Rule 5.1: Pull-to-refresh for native mobile UX
   const pullToRefresh = usePullToRefresh({
@@ -191,6 +168,11 @@ function MobileLibraryContent({
     threshold: 80,
     enabled: !isLoading,
   });
+
+  // RULE 5B-1.1: Show skeleton IMMEDIATELY
+  if (isLoading && items.length === 0) {
+    return <LibraryPageSkeleton isMobile />;
+  }
 
   return (
     <div 
@@ -206,7 +188,19 @@ function MobileLibraryContent({
       />
       
       {/* CONTRACT 5.5: Gentle Offline Banner */}
-      <GentleOfflineBanner showingCached={false} compact className="mb-4 rounded-lg" />
+      <GentleOfflineBanner 
+        showingCached={loadState === 'offline-with-cache'} 
+        compact 
+        className="mb-4 rounded-lg" 
+      />
+      
+      {/* Hydrating indicator - subtle, non-blocking */}
+      {isHydrating && (
+        <div className="flex items-center justify-center gap-2 mb-4 text-xs text-muted-foreground">
+          <RefreshCw className="h-3 w-3 animate-spin" />
+          <span>Updating...</span>
+        </div>
+      )}
       
       {/* Header */}
       <div className="mb-6">
@@ -230,7 +224,7 @@ function MobileLibraryContent({
       />
 
       {/* Quick Stats */}
-      {!isLoading && libraryItems.length > 0 && (
+      {items.length > 0 && (
         <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="bg-card rounded-lg p-3 text-center border border-border/50">
             <p className="text-lg font-bold">{stats.total}</p>
@@ -248,7 +242,7 @@ function MobileLibraryContent({
       )}
 
       {/* Search */}
-      {!isLoading && libraryItems.length > 0 && (
+      {items.length > 0 && (
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -261,7 +255,7 @@ function MobileLibraryContent({
       )}
 
       {/* Filter Tabs */}
-      {!isLoading && libraryItems.length > 0 && (
+      {items.length > 0 && (
         <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)} className="mb-6">
           <TabsList className="w-full">
             <TabsTrigger value="all" className="flex-1">All</TabsTrigger>
@@ -272,25 +266,24 @@ function MobileLibraryContent({
       )}
 
       {/* Content */}
-      {isLoading ? (
-        <div className="grid grid-cols-2 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <BookCardSkeleton key={i} />
-          ))}
-        </div>
-      ) : loadError && libraryItems.length === 0 ? (
+      {error && items.length === 0 ? (
         // CONTRACT 5.5: Only show error if we have NO data at all
-        // If we have cached items, show them instead of error
         <div className="text-center py-12">
           <CloudOff className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground mb-2">Couldn't load library</p>
           <p className="text-sm text-muted-foreground/70 mb-4">Check your connection and try again</p>
-          <Button variant="outline" onClick={handleRetry}>
+          <Button variant="outline" onClick={onRefresh}>
             <RefreshCw className="h-4 w-4 mr-2" />
             Try Again
           </Button>
         </div>
-      ) : libraryItems.length === 0 ? (
+      ) : loadState === 'offline-empty' ? (
+        <div className="text-center py-12">
+          <CloudOff className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
+          <p className="text-muted-foreground mb-2">You're offline</p>
+          <p className="text-sm text-muted-foreground/70">Your library will appear when you reconnect</p>
+        </div>
+      ) : items.length === 0 ? (
         <div className="text-center py-12">
           <Sparkles className="h-12 w-12 text-primary/50 mx-auto mb-4" />
           <h2 className="font-semibold text-lg mb-2">Your library is empty</h2>
@@ -337,12 +330,21 @@ function MobileLibraryContent({
             ))}
           </div>
           
-          {hasMore && !isLoadingMore && filteredItems.length === libraryItems.length && (
+          {/* Load More */}
+          {hasMore && !isLoadingMore && filteredItems.length === items.length && (
             <div className="flex justify-center mt-6">
               <Button variant="outline" onClick={loadMore}>
                 <RefreshCw className="h-4 w-4 mr-2" />
                 Load More
               </Button>
+            </div>
+          )}
+          
+          {isLoadingMore && (
+            <div className="grid grid-cols-2 gap-4 mt-4">
+              {[1, 2].map((i) => (
+                <BookCardSkeleton key={i} mobile />
+              ))}
             </div>
           )}
         </>
@@ -354,15 +356,7 @@ function MobileLibraryContent({
 export default function Library() {
   const { t } = useLanguage();
   const isMobile = useIsMobile();
-  const [libraryItems, setLibraryItems] = useState<LibraryItem[]>([]);
-  const [filteredItems, setFilteredItems] = useState<LibraryItem[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [loadError, setLoadError] = useState<string | null>(null);
   const [user, setUser] = useState<any>(null);
-  const [page, setPage] = useState(0);
-  const [hasMore, setHasMore] = useState(true);
-  const [isLoadingMore, setIsLoadingMore] = useState(false);
-  const [retryCount, setRetryCount] = useState(0);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "reading" | "completed">("all");
   const [sortBy, setSortBy] = useState<"recent" | "title" | "progress">("recent");
@@ -370,49 +364,32 @@ export default function Library() {
   const { toast } = useToast();
   const libraryLimits = useLibraryLimits();
 
-  // Stats must represent the FULL library (not just the currently paged items)
-  const [stats, setStats] = useState<{ total: number; reading: number; completed: number }>({
-    total: 0,
-    reading: 0,
-    completed: 0,
+  // CONTRACT 5B-1: Use new data hook with skeleton-first, cache-first strategy
+  const {
+    items,
+    stats,
+    loadState,
+    isLoading,
+    isHydrating,
+    error,
+    hasMore,
+    isLoadingMore,
+    loadMore,
+    refresh,
+    removeItem
+  } = useLibraryData({
+    isMobile,
+    userId: user?.id
   });
 
-  // CONTRACT 5 (Enhanced): Rule 5.1 - Instant Library UX
-  // Cache-first, render-first strategy: Library must render cached content ≤300ms
-  const [showingCached, setShowingCached] = useState(false);
-  
+  // Auth check - deferred to not block skeleton
   useEffect(() => {
     let mounted = true;
-    const startTime = performance.now();
     
-    // INSTANT: Check cache first and render immediately (Rule 5.1: ≤300ms)
-    const cachedData = apiCache.get<LibraryItem[]>('library:items:0');
-    if (cachedData && cachedData.length > 0) {
-      setLibraryItems(cachedData);
-      setIsLoading(false);
-      setShowingCached(true);
-      
-      // Track cache render time for Contract 5 compliance
-      const cacheRenderTime = performance.now() - startTime;
-      markCacheRender('Library');
-      markFirstContent('Library');
-    } else {
-      // No cache - mark first content when skeleton shows
-      markFirstContent('Library');
-    }
-    
-    // BACKGROUND: Check auth and fetch fresh data
-    const initLibrary = async () => {
+    const checkAuth = async () => {
       try {
-        const { data: { session }, error: authError } = await supabase.auth.getSession();
+        const { data: { session } } = await supabase.auth.getSession();
         if (!mounted) return;
-        
-        if (authError) {
-          console.error("Auth error:", authError);
-          setLoadError(null); // Don't show error, just redirect
-          navigate("/auth");
-          return;
-        }
         
         if (!session?.user) {
           navigate("/auth");
@@ -420,26 +397,14 @@ export default function Library() {
         }
         
         setUser(session.user);
-        // Fetch fresh data (will update cache) - background, no blocking
-        fetchLibrary(0, true);
-        fetchStats(session.user.id);
-        
-        // Mark interactive when fresh data starts loading
-        markInteractive('Library');
-        setShowingCached(false);
       } catch (error) {
-        console.error("Init library error:", error);
-        if (!mounted) return;
-        // Only show error if no cached data
-        if (!cachedData || cachedData.length === 0) {
-          setLoadError(t('library.loadError'));
-        }
-        setIsLoading(false);
+        console.error("Auth error:", error);
+        if (mounted) navigate("/auth");
       }
     };
     
-    // Defer auth check to not block render
-    setTimeout(initLibrary, 0);
+    // Defer auth check to not block skeleton render
+    setTimeout(checkAuth, 0);
 
     // Auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
@@ -456,11 +421,11 @@ export default function Library() {
       mounted = false;
       subscription.unsubscribe();
     };
-  }, [navigate, t]);
+  }, [navigate]);
 
   // Filter and sort items
-  useEffect(() => {
-    let result = [...libraryItems];
+  const filteredItems = useMemo(() => {
+    let result = [...items];
 
     // Search filter
     if (searchQuery) {
@@ -492,188 +457,56 @@ export default function Library() {
       }
     });
 
-    setFilteredItems(result);
-  }, [libraryItems, searchQuery, filterStatus, sortBy]);
-
-  const fetchStats = useCallback(async (userId: string) => {
-    try {
-      const [totalRes, readingRes, completedRes] = await Promise.all([
-        supabase
-          .from("user_library")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId),
-        supabase
-          .from("user_library")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .gt("progress_percent", 0)
-          .lt("progress_percent", 100),
-        supabase
-          .from("user_library")
-          .select("id", { count: "exact", head: true })
-          .eq("user_id", userId)
-          .gte("progress_percent", 100),
-      ]);
-
-      if (totalRes.error) throw totalRes.error;
-      if (readingRes.error) throw readingRes.error;
-      if (completedRes.error) throw completedRes.error;
-
-      setStats({
-        total: totalRes.count ?? 0,
-        reading: readingRes.count ?? 0,
-        completed: completedRes.count ?? 0,
-      });
-    } catch (e) {
-      console.error("Error fetching library stats:", e);
-    }
-  }, []);
-
-  const fetchLibrary = async (pageNum: number, reset = false, retry = 0) => {
-    // CONTRACT 4A: Don't block UI if we have cached data
-    const hasCachedData = apiCache.get<LibraryItem[]>(`library:items:${pageNum}`) !== null;
-    
-    if (reset && !hasCachedData) {
-      setIsLoading(true);
-      setLoadError(null);
-    } else if (!reset) {
-      setIsLoadingMore(true);
-    }
-
-    try {
-      const from = pageNum * ITEMS_PER_PAGE;
-      // CONTRACT 4A: Mobile gets fewer items for faster load
-      const limit = isMobile ? 8 : ITEMS_PER_PAGE;
-      const to = from + limit - 1;
-
-      const userId = user?.id;
-      if (!userId) {
-        throw new Error("Not authenticated");
-      }
-
-      // Optimized query - only select needed fields for cards
-      const { data, error } = await supabase
-        .from("user_library")
-        .select(`
-          id,
-          book_id,
-          progress_percent,
-          last_read_chapter,
-          created_at,
-          books!inner (
-            id,
-            title,
-            description,
-            category,
-            cover_image_url,
-            total_chapters
-          )
-        `)
-        .eq("user_id", userId)
-        .order("created_at", { ascending: false })
-        .range(from, to);
-
-      if (error) throw error;
-      
-      const newItems = (data as any) || [];
-      
-      // Cache the results
-      apiCache.set(`library:items:${pageNum}`, newItems, 60 * 1000); // 1 min cache
-      
-      if (reset) {
-        setLibraryItems(newItems);
-      } else {
-        setLibraryItems(prev => [...prev, ...newItems]);
-      }
-
-      // Keep stats in sync (total/reading/completed)
-      fetchStats(userId);
-      
-      setHasMore(newItems.length === limit);
-      setPage(pageNum);
-      setLoadError(null);
-      setRetryCount(0);
-    } catch (error: any) {
-      console.error("Error fetching library:", error);
-      
-      if (retry < 2) {
-        const delay = Math.pow(2, retry) * 500;
-        setTimeout(() => {
-          fetchLibrary(pageNum, reset, retry + 1);
-        }, delay);
-        return;
-      }
-      
-      // CONTRACT 5.5: Only set error if we don't have cached data
-      // This prevents false offline errors when we have items to show
-      const hasCachedItems = libraryItems.length > 0 || apiCache.get<LibraryItem[]>('library:items:0') !== null;
-      if (!hasCachedItems) {
-        setLoadError(t('library.loadError'));
-      }
-      if (!reset) {
-        toast({
-          title: t('common.error'),
-          description: t('library.loadMoreError'),
-          variant: "destructive",
-        });
-      }
-    } finally {
-      setIsLoading(false);
-      setIsLoadingMore(false);
-    }
-  };
-
-  const handleRetry = () => {
-    setRetryCount(prev => prev + 1);
-    fetchLibrary(0, true);
-  };
-
-  const loadMore = () => {
-    if (!isLoadingMore && hasMore) {
-      fetchLibrary(page + 1);
-    }
-  };
+    return result;
+  }, [items, searchQuery, filterStatus, sortBy]);
 
   const handleRemoveBook = useCallback((libraryId: string) => {
-    setLibraryItems(prev => prev.filter(item => item.id !== libraryId));
-    // Refresh library limits + stats after removal
+    removeItem(libraryId);
     libraryLimits.refresh();
-    if (user?.id) fetchStats(user.id);
-  }, [libraryLimits, user?.id, fetchStats]);
-
-  // CONTRACT 5 - Rule 5.1: Pull-to-refresh callback
-  const handlePullRefresh = useCallback(async () => {
-    if (user?.id) {
-      await fetchLibrary(0, true);
-      await fetchStats(user.id);
-    }
-  }, [user?.id, fetchStats]);
+  }, [removeItem, libraryLimits]);
 
   // Mobile layout with persistent shell
   if (isMobile) {
+    // RULE 5B-1.1: Show skeleton IMMEDIATELY if no user yet
+    if (!user) {
+      return (
+        <MobileLayout showGenerateButton={false}>
+          <LibraryPageSkeleton isMobile />
+        </MobileLayout>
+      );
+    }
+    
     return (
       <MobileLayout showGenerateButton={false}>
         <MobileLibraryContent
-          libraryItems={libraryItems}
+          items={items}
           filteredItems={filteredItems}
-          isLoading={isLoading}
-          loadError={loadError}
+          loadState={loadState}
           stats={stats}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
           filterStatus={filterStatus}
           setFilterStatus={setFilterStatus}
-          sortBy={sortBy}
-          setSortBy={setSortBy}
-          handleRetry={handleRetry}
           handleRemoveBook={handleRemoveBook}
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}
           loadMore={loadMore}
           libraryLimits={libraryLimits}
-          onRefresh={handlePullRefresh}
+          onRefresh={refresh}
+          error={error}
         />
       </MobileLayout>
+    );
+  }
+
+  // RULE 5B-1.1: Show skeleton IMMEDIATELY for desktop too
+  if (!user) {
+    return (
+      <div className="min-h-screen bg-background">
+        <Navbar />
+        <LibraryPageSkeleton />
+        <Footer />
+      </div>
     );
   }
 
@@ -683,6 +516,14 @@ export default function Library() {
       <Navbar />
       
       <main className="container mx-auto px-4 py-24">
+        {/* Hydrating indicator */}
+        {isHydrating && (
+          <div className="flex items-center justify-center gap-2 mb-4 text-sm text-muted-foreground">
+            <RefreshCw className="h-4 w-4 animate-spin" />
+            <span>Refreshing library...</span>
+          </div>
+        )}
+        
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -713,8 +554,10 @@ export default function Library() {
           isUnlimited={libraryLimits.isUnlimited}
         />
 
-        {/* Stats Section */}
-        {!isLoading && libraryItems.length > 0 && (
+        {/* Stats Section - show skeleton while loading */}
+        {isLoading ? (
+          <LibraryStatsSkeleton />
+        ) : items.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -743,7 +586,7 @@ export default function Library() {
         )}
 
         {/* Search & Filters */}
-        {!isLoading && libraryItems.length > 0 && (
+        {items.length > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -792,13 +635,13 @@ export default function Library() {
         )}
 
         {/* Library Content */}
-        {isLoading ? (
+        {isLoading && items.length === 0 ? (
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
             {Array.from({ length: 8 }).map((_, index) => (
               <BookCardSkeleton key={index} />
             ))}
           </div>
-        ) : loadError ? (
+        ) : error && items.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -814,12 +657,28 @@ export default function Library() {
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               Check your internet connection and try again. Your reading progress is safe.
             </p>
-            <Button variant="outline" onClick={handleRetry}>
+            <Button variant="outline" onClick={refresh}>
               <RefreshCw className="h-4 w-4 mr-2" />
               {t('common.tryAgain')}
             </Button>
           </motion.div>
-        ) : libraryItems.length === 0 ? (
+        ) : loadState === 'offline-empty' ? (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="text-center py-20"
+          >
+            <div className="bg-muted/50 rounded-full p-6 w-24 h-24 mx-auto mb-6 flex items-center justify-center">
+              <CloudOff className="h-12 w-12 text-muted-foreground" />
+            </div>
+            <h2 className="font-display text-2xl font-semibold mb-3">
+              You're offline
+            </h2>
+            <p className="text-muted-foreground mb-6 max-w-md mx-auto">
+              Your library will appear when you reconnect to the internet.
+            </p>
+          </motion.div>
+        ) : items.length === 0 ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -896,7 +755,7 @@ export default function Library() {
             </AnimatePresence>
 
             {/* Load More Button */}
-            {hasMore && !isLoadingMore && filteredItems.length === libraryItems.length && (
+            {hasMore && !isLoadingMore && filteredItems.length === items.length && (
               <div className="flex justify-center mt-10">
                 <Button 
                   variant="outline" 
