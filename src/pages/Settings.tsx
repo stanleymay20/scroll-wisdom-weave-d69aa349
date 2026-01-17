@@ -457,6 +457,33 @@ export default function Settings() {
                   </CardContent>
                 </Card>
 
+                {/* AI Usage Disclosure - Apple App Store requirement */}
+                <Card className="bg-gradient-card border-border/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Brain className="h-5 w-5 text-primary" />
+                      AI Usage Disclosure
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      ScrollLibrary uses AI to assist with content generation and learning support.
+                    </p>
+                    <div className="bg-muted/50 border border-border/50 rounded-lg p-4">
+                      <p className="text-sm font-medium mb-2">AI does NOT:</p>
+                      <ul className="text-sm text-muted-foreground space-y-1">
+                        <li>• Issue certificates</li>
+                        <li>• Determine certification eligibility</li>
+                        <li>• Perform verification</li>
+                        <li>• Detect AI-generated content</li>
+                      </ul>
+                    </div>
+                    <p className="text-xs text-muted-foreground italic">
+                      AI assists learning. Authority governs credentials.
+                    </p>
+                  </CardContent>
+                </Card>
+
                 <Card className="bg-gradient-card border-border/50">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
