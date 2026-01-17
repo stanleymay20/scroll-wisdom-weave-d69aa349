@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useNavigate } from "react-router-dom";
+import { useNavigate, Link } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -17,7 +17,8 @@ import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, 
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Settings as SettingsIcon, Palette, Bell, Brain, Shield, CreditCard,
-  Save, Trash2, Download, Moon, Sun, Type, Volume2, Crown, HardDrive, Loader2
+  Save, Trash2, Download, Moon, Sun, Type, Volume2, Crown, HardDrive, Loader2,
+  Info, ExternalLink, FileText, CheckCircle
 } from "lucide-react";
 import { StorageManager } from "@/components/pwa/StorageManager";
 import { useToast } from "@/hooks/use-toast";
@@ -309,6 +310,11 @@ export default function Settings() {
               <span className="hidden sm:inline">Storage</span>
               <span className="sm:hidden">Data</span>
             </TabsTrigger>
+            <TabsTrigger value="about" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
+              <Info className="h-4 w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">About & Trust</span>
+              <span className="sm:hidden">About</span>
+            </TabsTrigger>
           </TabsList>
 
               {/* Billing Tab */}
@@ -362,6 +368,133 @@ export default function Settings() {
               {/* Storage Tab */}
               <TabsContent value="storage" className="space-y-6">
                 <StorageManager />
+              </TabsContent>
+
+              {/* About & Trust Tab */}
+              <TabsContent value="about" className="space-y-6">
+                <Card className="bg-gradient-card border-border/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Shield className="h-5 w-5 text-primary" />
+                      Trust & Verification
+                    </CardTitle>
+                    <CardDescription>
+                      ScrollLibrary operates as a credential authority with transparent verification
+                    </CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="grid gap-3">
+                      <Link 
+                        to="/docs/trust-whitepaper" 
+                        className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/50 transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <FileText className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                          <div>
+                            <div className="font-medium">Trust Whitepaper</div>
+                            <div className="text-sm text-muted-foreground">
+                              Formal governance document defining our credential authority
+                            </div>
+                          </div>
+                        </div>
+                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      </Link>
+
+                      <Link 
+                        to="/docs/verification" 
+                        className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/50 transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <CheckCircle className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                          <div>
+                            <div className="font-medium">Verification API</div>
+                            <div className="text-sm text-muted-foreground">
+                              Public API documentation for certificate verification
+                            </div>
+                          </div>
+                        </div>
+                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      </Link>
+
+                      <Link 
+                        to="/verify" 
+                        className="flex items-center justify-between p-3 rounded-lg border border-border/50 hover:bg-muted/50 transition-colors group"
+                      >
+                        <div className="flex items-center gap-3">
+                          <Shield className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-colors" />
+                          <div>
+                            <div className="font-medium">Organization Verification</div>
+                            <div className="text-sm text-muted-foreground">
+                              Batch verification dashboard for employers & institutions
+                            </div>
+                          </div>
+                        </div>
+                        <ExternalLink className="h-4 w-4 text-muted-foreground" />
+                      </Link>
+                    </div>
+
+                    <Separator className="bg-border/50" />
+
+                    <div className="space-y-2">
+                      <Label>Trust Guarantees</Label>
+                      <div className="grid grid-cols-2 gap-2 text-sm">
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Public verification</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Integrity scoring</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>Immutable issuance</span>
+                        </div>
+                        <div className="flex items-center gap-2 text-muted-foreground">
+                          <CheckCircle className="h-4 w-4 text-green-500" />
+                          <span>No login required</span>
+                        </div>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                <Card className="bg-gradient-card border-border/50">
+                  <CardHeader>
+                    <CardTitle className="flex items-center gap-2">
+                      <Info className="h-5 w-5 text-primary" />
+                      About ScrollLibrary
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      ScrollLibrary is a credential authority for the post-AI learning era. 
+                      We issue verifiable certificates based on behavioral integrity, not AI detection.
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <Link to="/about">
+                        <Button variant="outline" size="sm">
+                          About Us
+                        </Button>
+                      </Link>
+                      <Link to="/privacy">
+                        <Button variant="ghost" size="sm">
+                          Privacy Policy
+                        </Button>
+                      </Link>
+                      <Link to="/terms">
+                        <Button variant="ghost" size="sm">
+                          Terms of Service
+                        </Button>
+                      </Link>
+                    </div>
+                    <Separator className="bg-border/50" />
+                    <div className="text-xs text-muted-foreground">
+                      <p>Schema Version: 7.0</p>
+                      <p>Credential Authority: ScrollLibrary Certification Authority</p>
+                    </div>
+                  </CardContent>
+                </Card>
               </TabsContent>
 
               <TabsContent value="system" className="space-y-6">
