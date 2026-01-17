@@ -12,6 +12,7 @@ import { ErrorBoundary, SectionErrorBoundary } from "@/components/ErrorBoundary"
 import { DiagnosticsPanel } from "@/components/system/DiagnosticsPanel";
 import { createLogger, setTraceId } from "@/lib/logger";
 import { SkeletonPage } from "@/components/ui/page-shell";
+import { InlineSplash } from "@/components/brand";
 import { initContract5 } from "@/lib/contract5";
 
 // Eager load critical pages
@@ -96,8 +97,8 @@ const App = () => (
             <OfflineIndicator />
             <PWAUpdateNotification />
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
-              {/* PERFORMANCE: Use SkeletonPage for instant visual feedback during lazy load */}
-              <Suspense fallback={<SkeletonPage />}>
+              {/* PERFORMANCE: Use InlineSplash for branded visual feedback during lazy load */}
+              <Suspense fallback={<InlineSplash />}>
                 <Routes>
                   {/* Critical routes - eager loaded */}
                   <Route path="/" element={<Index />} />
