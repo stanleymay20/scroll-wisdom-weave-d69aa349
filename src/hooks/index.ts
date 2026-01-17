@@ -15,4 +15,5 @@ export { useLibraryData } from './useLibraryData';
 export { useBookDetailData } from './useBookDetailData';
 export { useReaderData } from './useReaderData';
 export { useSpeedBudget, useButtonFeedback, useModalPreMount, useRouteChangeTimer } from './useSpeedBudget';
+export { useActionLifecycle, useSimpleAction } from './useActionLifecycle';
 export type { Entitlements } from './useEntitlements';
