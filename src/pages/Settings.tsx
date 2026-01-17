@@ -213,11 +213,9 @@ export default function Settings() {
     setIsSaving(false);
   };
 
-  const handleDeleteAccount = async () => {
-    toast({
-      title: t('settings.accountDeletion'),
-      description: t('settings.contactSupport'),
-    });
+  const handleDeleteAccount = () => {
+    // Navigate to dedicated account deletion page (Apple App Store requirement)
+    navigate("/account/delete");
   };
 
   const handleExportData = async () => {
