@@ -75,6 +75,7 @@ export function Navbar() {
             <Link to="/explore" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.explore')}</Link>
             <Link to="/library" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.library')}</Link>
             <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
+            <Link to="/verify" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Verify</Link>
             <Link to="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('footer.about')}</Link>
           </div>
 
@@ -152,6 +153,10 @@ export function Navbar() {
               </Link>
               <Link to="/generate" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.generate')}
+              </Link>
+              <Link to="/verify" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
+                <Shield className="h-4 w-4 text-muted-foreground" />
+                Verify
               </Link>
               <Link to="/about" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                 {t('footer.about')}
