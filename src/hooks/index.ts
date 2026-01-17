@@ -12,4 +12,5 @@ export { usePullToRefresh } from './usePullToRefresh';
 export { useAudioReliability, chunkTextForTTS, AUDIO_CHUNK_SIZES } from './useAudioReliability';
 export { useContract6Gate } from './useContract6Gate';
 export { useLibraryData } from './useLibraryData';
+export { useBookDetailData } from './useBookDetailData';
 export type { Entitlements } from './useEntitlements';

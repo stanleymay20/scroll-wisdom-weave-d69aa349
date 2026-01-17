@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Link } from "react-router-dom";
+import { Link, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { 
   Book, 
@@ -34,6 +34,7 @@ import { Badge } from "@/components/ui/badge";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { transformLibraryItemToCache } from "@/lib/bookDetailCache";
 
 interface LibraryBookCardProps {
   libraryId: string;
@@ -64,6 +65,7 @@ export function LibraryBookCard({
 }: LibraryBookCardProps) {
   const { t } = useLanguage();
   const { toast } = useToast();
+  const navigate = useNavigate();
   const [isRemoving, setIsRemoving] = useState(false);
   const [showRemoveDialog, setShowRemoveDialog] = useState(false);
 
@@ -71,6 +73,29 @@ export function LibraryBookCard({
   const progress = progressPercent || 0;
   const isComplete = progress >= 100;
   const isStarted = progress > 0;
+
+  // CONTRACT 5B-2.2: Create cached state for instant navigation
+  const getCachedState = () => {
+    return transformLibraryItemToCache({
+      book_id: bookId,
+      progress_percent: progressPercent,
+      last_read_chapter: lastReadChapter,
+      books: {
+        id: bookId,
+        title,
+        description,
+        category,
+        cover_image_url: coverImageUrl ?? null,
+        total_chapters: totalChapters,
+      },
+    });
+  };
+
+  // CONTRACT 5B-2.1: Navigate with cached state for instant shell
+  const handleNavigateToBook = (e: React.MouseEvent) => {
+    e.preventDefault();
+    navigate(`/book/${bookId}`, { state: getCachedState() });
+  };
 
   const handleRemove = async () => {
     setIsRemoving(true);
@@ -176,8 +201,8 @@ export function LibraryBookCard({
             </DropdownMenu>
           </div>
 
-          {/* Book Cover */}
-          <Link to={`/book/${bookId}`} className="block">
+          {/* Book Cover - CONTRACT 5B-2.1: Use navigate with cached state */}
+          <div onClick={handleNavigateToBook} className="block cursor-pointer">
             <div className="aspect-[3/4] relative overflow-hidden flex-shrink-0">
               {coverImageUrl ? (
                 <img
@@ -211,15 +236,15 @@ export function LibraryBookCard({
                 </div>
               )}
             </div>
-          </Link>
+          </div>
 
           {/* Book Info */}
           <div className="p-4 space-y-3 flex-1 flex flex-col">
-            <Link to={`/book/${bookId}`}>
+            <div onClick={handleNavigateToBook} className="cursor-pointer">
               <h3 className="font-display text-base font-semibold line-clamp-2 text-foreground group-hover:text-primary transition-colors leading-tight">
                 {title}
               </h3>
-            </Link>
+            </div>
             
             {description && (
               <p className="text-sm text-muted-foreground line-clamp-2 flex-1">
