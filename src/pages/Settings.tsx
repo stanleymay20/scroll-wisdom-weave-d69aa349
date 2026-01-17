@@ -784,10 +784,9 @@ export default function Settings() {
                 )}
               </Button>
             </div>
-          </Tabs>
-        </motion.div>
-      </div>
-    );
+          </motion.div>
+        </div>
+      );
 
   // Mobile uses MobileLayout wrapper, desktop uses traditional layout
   if (isMobile) {
