@@ -17,11 +17,12 @@ import { useLocation } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { createLogger } from '@/lib/logger';
 import {
-  getCachedChapter,
+  getCachedChapterByKey,
   setCachedChapter,
   generateContentPreview,
   CachedChapterDetail,
   ReaderLoadState,
+  normalizeCacheEntry,
 } from '@/lib/chapterDetailCache';
 
 const logger = createLogger('useReaderData');
@@ -139,36 +140,27 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
       }
     });
     
-    // STEP 2: Try cache first (INSTANT - <100ms)
-    // We need the chapter ID to check cache, so first try to get it
-    const chapterQuery = await supabase
-      .from('chapters')
-      .select('id')
-      .eq('book_id', bookId)
-      .eq('chapter_number', chapterNumber)
-      .single();
+    // STEP 2: Try cache first using deterministic key (INSTANT - <100ms)
+    // ISSUE 1 FIX: NO network call here - use bookId + chapterNumber directly
+    const cached = await getCachedChapterByKey(bookId, chapterNumber);
     
-    const chapterId = chapterQuery.data?.id;
-    
-    if (chapterId) {
-      const cached = await getCachedChapter(chapterId);
+    if (cached && mountedRef.current) {
+      setChapter({
+        id: cached.chapterId,
+        chapter_number: cached.chapterNumber,
+        title: cached.title,
+        content: cached.fullContent,
+        word_count: cached.wordCount,
+        academic_mode: cached.academicMode ?? undefined,
+        citation_style: cached.citationStyle ?? undefined,
+        chapter_references: (cached.chapterReferences as any[]) ?? [],
+        research_metadata: cached.researchMetadata ?? {},
+      });
+      setPreviewContent(cached.contentPreview);
+      setResumePosition(cached.lastReadPosition);
+      setLoadState('hydrating');
       
-      if (cached && mountedRef.current) {
-        setChapter({
-          id: cached.chapterId,
-          chapter_number: cached.chapterNumber,
-          title: cached.title,
-          content: cached.fullContent,
-          word_count: cached.wordCount,
-          academic_mode: cached.academicMode,
-          citation_style: cached.citationStyle,
-        });
-        setPreviewContent(cached.contentPreview);
-        setResumePosition(cached.lastReadPosition);
-        setLoadState('hydrating');
-        
-        logger.debug(`Cache loaded in ${(performance.now() - startTime).toFixed(0)}ms`);
-      }
+      logger.debug(`Cache loaded in ${(performance.now() - startTime).toFixed(0)}ms`);
     }
     
     // STEP 3: Check online status
@@ -232,7 +224,7 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
       setChapter(processedChapter);
       setHasNetworkData(true);
       
-      // STEP 5: Update cache for next time
+      // STEP 5: Update cache for next time (normalized)
       await setCachedChapter({
         chapterId: chapterData.id,
         bookId: bookId,
@@ -242,10 +234,11 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
         contentPreview: generateContentPreview(chapterData.content),
         fullContent: chapterData.content,
         lastReadPosition: resumePosition,
-        lastUpdated: Date.now(),
         isGenerated: chapterData.is_generated || false,
-        academicMode: chapterData.academic_mode,
-        citationStyle: chapterData.citation_style,
+        academicMode: chapterData.academic_mode ?? null,
+        citationStyle: chapterData.citation_style ?? null,
+        chapterReferences: Array.isArray(chapterData.chapter_references) ? chapterData.chapter_references : null,
+        researchMetadata: (chapterData.research_metadata as Record<string, unknown>) ?? null,
       });
 
       if (mountedRef.current) {
