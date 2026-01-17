@@ -989,7 +989,16 @@ export default function BookDetail() {
                     >
                       <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-card border border-border/50 hover:border-scroll-gold/50 transition-all duration-300 hover:shadow-lg">
                         <button
-                          onClick={() => isGenerated && navigate(`/read/${id}/${chapter.chapter_number}`)}
+                          onClick={() => isGenerated && navigate(`/read/${id}/${chapter.chapter_number}`, {
+                            state: {
+                              chapterId: chapter.id,
+                              bookId: id,
+                              chapterNumber: chapter.chapter_number,
+                              title: chapter.title,
+                              wordCount: chapter.word_count,
+                              content: chapter.content, // Pre-fill content for instant render
+                            }
+                          })}
                           className={`flex items-center gap-4 flex-1 text-left ${!isGenerated ? 'cursor-default' : 'group cursor-pointer'}`}
                           disabled={!isGenerated}
                         >
@@ -1029,7 +1038,16 @@ export default function BookDetail() {
                               <CheckCircle2 className="h-5 w-5 text-green-500" />
                               <ChevronRight 
                                 className="h-5 w-5 text-muted-foreground group-hover:text-scroll-gold transition-all cursor-pointer"
-                                onClick={() => navigate(`/read/${id}/${chapter.chapter_number}`)}
+                                onClick={() => navigate(`/read/${id}/${chapter.chapter_number}`, {
+                                  state: {
+                                    chapterId: chapter.id,
+                                    bookId: id,
+                                    chapterNumber: chapter.chapter_number,
+                                    title: chapter.title,
+                                    wordCount: chapter.word_count,
+                                    content: chapter.content,
+                                  }
+                                })}
                               />
                             </div>
                           ) : (

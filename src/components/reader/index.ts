@@ -6,3 +6,4 @@ export { InteractiveQA } from './InteractiveQA';
 export { QuizMode } from './QuizMode';
 export { TextHighlighter } from './TextHighlighter';
 export { VoiceConversation } from './VoiceConversation';
+export { ReaderSkeleton } from './ReaderSkeleton';

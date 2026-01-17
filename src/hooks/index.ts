@@ -13,4 +13,5 @@ export { useAudioReliability, chunkTextForTTS, AUDIO_CHUNK_SIZES } from './useAu
 export { useContract6Gate } from './useContract6Gate';
 export { useLibraryData } from './useLibraryData';
 export { useBookDetailData } from './useBookDetailData';
+export { useReaderData } from './useReaderData';
 export type { Entitlements } from './useEntitlements';
