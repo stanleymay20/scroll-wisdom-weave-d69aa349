@@ -13,7 +13,6 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
-import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "@/components/ui/alert-dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Settings as SettingsIcon, Palette, Bell, Brain, Shield, CreditCard,
@@ -312,6 +311,11 @@ export default function Settings() {
               <Info className="h-4 w-4 mr-1 sm:mr-2" />
               <span className="hidden sm:inline">About & Trust</span>
               <span className="sm:hidden">About</span>
+            </TabsTrigger>
+            <TabsTrigger value="privacy" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
+              <Shield className="h-4 w-4 mr-1 sm:mr-2" />
+              <span className="hidden sm:inline">{t('settings.privacy')}</span>
+              <span className="sm:hidden">Privacy</span>
             </TabsTrigger>
           </TabsList>
 
@@ -619,8 +623,6 @@ export default function Settings() {
 
                     <Separator className="bg-border/50" />
 
-                    <Separator className="bg-border/50" />
-
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <Label>{t('settings.fontSize')}</Label>
@@ -896,28 +898,10 @@ export default function Settings() {
                         <Label className="text-destructive">{t('settings.deleteAccount')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.deleteAccountDesc')}</p>
                       </div>
-                      <AlertDialog>
-                        <AlertDialogTrigger asChild>
-                          <Button variant="destructive">
-                            <Trash2 className="h-4 w-4 mr-2" />
-                            {t('settings.delete')}
-                          </Button>
-                        </AlertDialogTrigger>
-                        <AlertDialogContent>
-                          <AlertDialogHeader>
-                            <AlertDialogTitle>{t('settings.areYouSure')}</AlertDialogTitle>
-                            <AlertDialogDescription>
-                              {t('settings.deleteWarning')}
-                            </AlertDialogDescription>
-                          </AlertDialogHeader>
-                          <AlertDialogFooter>
-                            <AlertDialogCancel>{t('common.cancel')}</AlertDialogCancel>
-                            <AlertDialogAction onClick={handleDeleteAccount} className="bg-destructive text-destructive-foreground">
-                              {t('settings.deleteAccount')}
-                            </AlertDialogAction>
-                          </AlertDialogFooter>
-                        </AlertDialogContent>
-                      </AlertDialog>
+                      <Button variant="destructive" onClick={handleDeleteAccount}>
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        {t('settings.delete')}
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>
