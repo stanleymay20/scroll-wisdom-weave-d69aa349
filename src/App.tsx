@@ -42,6 +42,7 @@ const Install = lazy(() => import("./pages/Install"));
 const PWATest = lazy(() => import("./pages/PWATest"));
 const Diagnostics = lazy(() => import("./pages/Diagnostics"));
 const CertificateVerify = lazy(() => import("./pages/CertificateVerify"));
+const OrganizationVerify = lazy(() => import("./pages/OrganizationVerify"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
@@ -127,6 +128,7 @@ const App = () => (
                   <Route path="/book/:id" element={<BookDetail />} />
                   <Route path="/read/:bookId/:chapterId" element={<Reader />} />
                   <Route path="/certificate/:certificateNumber" element={<CertificateVerify />} />
+                  <Route path="/verify" element={<OrganizationVerify />} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
