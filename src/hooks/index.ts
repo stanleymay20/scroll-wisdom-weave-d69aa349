@@ -9,4 +9,6 @@ export { useNetworkAction, useGracefulDegradation } from './useNetworkAction';
 export { useAutoHideFloatingActions } from './useAutoHideFloatingActions';
 export { useMediaSession } from './useMediaSession';
 export { usePullToRefresh } from './usePullToRefresh';
+export { useAudioReliability, chunkTextForTTS, AUDIO_CHUNK_SIZES } from './useAudioReliability';
+export { useContract6Gate } from './useContract6Gate';
 export type { Entitlements } from './useEntitlements';

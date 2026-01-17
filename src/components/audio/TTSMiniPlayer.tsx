@@ -1,3 +1,14 @@
+/**
+ * CONTRACT 5 - Rule 5.3 & 5.4: Audio Reliability (HARD ENFORCEMENT)
+ * 
+ * This component MUST:
+ * - Respond to user actions within 100ms (Rule 5.6)
+ * - Never pause silently without explanation
+ * - Show buffering state when loading
+ * - Resume after interruptions (tab switch, phone call)
+ * - Survive screen lock via Media Session API
+ */
+
 import { useState, useRef, useCallback, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
@@ -13,12 +24,14 @@ import {
   Square, 
   X,
   AlertCircle,
-  Mic 
+  Mic,
+  RotateCcw 
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useMediaSession } from "@/hooks/useMediaSession";
+import { useAudioReliability, AUDIO_CHUNK_SIZES } from "@/hooks/useAudioReliability";
 import { cn } from "@/lib/utils";
 
 // OpenAI TTS voices
@@ -81,6 +94,20 @@ export function TTSMiniPlayer({
 
   const { toast } = useToast();
   const entitlements = useEntitlements();
+  
+  // CONTRACT 5 - Rule 5.3: Audio reliability tracking
+  const audioReliability = useAudioReliability({
+    id: 'tts-mini-player',
+    onVisibilityResume: () => {
+      // Resume playback when tab becomes visible again
+      if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
+        resumeFromPosition();
+      }
+    },
+    onError: (err) => {
+      setError(err);
+    },
+  });
   
   // CONTRACT 5 - Rule 5.3: Media Session API for OS-resilient audio
   const mediaSession = useMediaSession({
@@ -515,11 +542,41 @@ export function TTSMiniPlayer({
 
   return (
     <div className="flex items-center gap-2 bg-background/95 backdrop-blur-sm rounded-lg px-3 py-2 border border-border/50 shadow-lg">
+      {/* CONTRACT 5.3: Mandatory audio state indicator */}
+      {audioReliability.isLoading && (
+        <div className="flex items-center gap-1.5 text-xs text-muted-foreground animate-pulse">
+          <Loader2 className="h-3 w-3 animate-spin" />
+          <span className="hidden sm:inline">{audioReliability.stateMessage}</span>
+        </div>
+      )}
+      
+      {/* CONTRACT 5: Show "Resuming" indicator after interruption */}
+      {audioReliability.wasInterrupted && !isPlaying && !isLoading && (
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => {
+            audioReliability.clearInterruption();
+            resumeFromPosition();
+          }}
+          className="h-8 gap-1.5 text-xs border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
+          title="Resume where you left off"
+        >
+          <RotateCcw className="h-3 w-3" />
+          Resume
+        </Button>
+      )}
+
       {/* Play Chapter */}
       <Button
         variant="ghost"
         size="sm"
-        onClick={handlePlayChapter}
+        onClick={() => {
+          // CONTRACT 5.6: Immediate visual acknowledgment
+          const complete = audioReliability.acknowledgeUserAction('play-chapter');
+          handlePlayChapter();
+          complete();
+        }}
         disabled={isLoading && mode !== "chapter"}
         className={cn("h-8 gap-1.5", isPlaying && mode === "chapter" && "text-primary")}
         title={isPlaying && mode === "chapter" ? "Stop" : "Read Chapter"}
@@ -539,7 +596,11 @@ export function TTSMiniPlayer({
         <Button
           variant="outline"
           size="sm"
-          onClick={handlePlaySelection}
+          onClick={() => {
+            const complete = audioReliability.acknowledgeUserAction('play-selection');
+            handlePlaySelection();
+            complete();
+          }}
           disabled={isLoading && mode !== "selection"}
           className="h-8 gap-1.5 text-xs"
           title="Read Selection"
@@ -558,7 +619,11 @@ export function TTSMiniPlayer({
         <Button
           variant="ghost"
           size="icon"
-          onClick={stop}
+          onClick={() => {
+            const complete = audioReliability.acknowledgeUserAction('stop');
+            stop();
+            complete();
+          }}
           className="h-8 w-8"
           title="Stop"
         >
@@ -572,8 +637,10 @@ export function TTSMiniPlayer({
           variant="outline"
           size="sm"
           onClick={() => {
+            const complete = audioReliability.acknowledgeUserAction('interrupt');
             pauseForInteraction();
             onInterrupt();
+            complete();
           }}
           className="h-8 gap-1.5 text-xs border-primary/50 text-primary hover:bg-primary/10"
           title="Ask a question"
@@ -583,18 +650,33 @@ export function TTSMiniPlayer({
         </Button>
       )}
 
-      {/* Progress indicator */}
-      {isPlaying && totalChunks > 1 && (
-        <span className="text-xs text-muted-foreground">
-          {currentChunk}/{totalChunks}
-        </span>
+      {/* CONTRACT 5.3: Progress indicator with buffering state */}
+      {(isPlaying || audioReliability.isLoading) && totalChunks > 1 && (
+        <div className="flex items-center gap-1">
+          <span className="text-xs text-muted-foreground">
+            {currentChunk}/{totalChunks}
+          </span>
+          {audioReliability.state === 'buffering' && (
+            <span className="text-xs text-amber-500">buffering</span>
+          )}
+        </div>
       )}
 
-      {/* Error indicator */}
+      {/* CONTRACT 5.3: Error indicator with retry option */}
       {error && (
-        <div className="text-destructive" title={error}>
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => {
+            setError(null);
+            audioReliability.setState('idle');
+          }}
+          className="h-8 gap-1 text-destructive hover:text-destructive"
+          title={`Error: ${error}. Tap to retry`}
+        >
           <AlertCircle className="h-4 w-4" />
-        </div>
+          <span className="text-xs hidden sm:inline">Retry</span>
+        </Button>
       )}
 
       {/* Volume/Voice Settings */}
