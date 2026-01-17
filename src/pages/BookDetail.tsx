@@ -9,7 +9,7 @@
  * - 5B-2.5: Offline Truth - Show cached data if available
  */
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
@@ -72,11 +72,9 @@ import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagePerformance } from "@/lib/performance";
-import { apiCache } from "@/lib/cache";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useBookDetailData } from "@/hooks/useBookDetailData";
 import { GentleOfflineBanner } from "@/components/ui/gentle-offline-banner";
-import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 interface BookData {
   id: string;
@@ -111,11 +109,20 @@ export default function BookDetail() {
   // CONTRACT 4: Track TTI
   usePagePerformance('BookDetail');
   
-  const [book, setBook] = useState<BookData | null>(null);
-  const [chapters, setChapters] = useState<ChapterData[]>([]);
-  const [isLoading, setIsLoading] = useState(true);
-  const [isSaved, setIsSaved] = useState(false);
-  const [user, setUser] = useState<any>(null);
+  // CONTRACT 5B-2: Single source of truth for book detail data
+  const {
+    book,
+    chapters,
+    loadState,
+    isLoading,
+    user,
+    isSaved,
+    setIsSaved,
+    setBook,
+    setChapters,
+  } = useBookDetailData({ bookId: id });
+
+  // Local UI state (not related to data fetching)
   const [generatingChapterId, setGeneratingChapterId] = useState<string | null>(null);
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
@@ -141,107 +148,6 @@ export default function BookDetail() {
     { value: "african", labelKey: "coverTheme.african", descKey: "coverTheme.africanDesc" },
     { value: "prophetic", labelKey: "coverTheme.prophetic", descKey: "coverTheme.propheticDesc" },
   ];
-
-  // CONTRACT 5: Cache-first data fetching for instant display
-  useEffect(() => {
-    const fetchData = async () => {
-      // Try cache first for instant display (CONTRACT 5 SLA compliance)
-      const bookCacheKey = `book:detail:${id}`;
-      const cachedBook = apiCache.get<BookData>(bookCacheKey);
-      if (cachedBook) {
-        setBook(cachedBook);
-        setIsLoading(false); // Show cached data immediately
-      }
-      
-      // Get current user (non-blocking)
-      const { data: { user: currentUser } } = await supabase.auth.getUser();
-      setUser(currentUser);
-
-      // Fetch book (background refresh if cached)
-      const { data: bookData, error: bookError } = await supabase
-        .from("books")
-        .select("*")
-        .eq("id", id)
-        .single();
-
-      if (bookError) {
-        console.error("Error fetching book:", bookError);
-        // Only show error if no cached data
-        if (!cachedBook) {
-          toast({
-            title: t('common.error'),
-            description: t('book.notFound'),
-            variant: "destructive",
-          });
-          navigate("/explore");
-        }
-        return;
-      }
-
-      setBook(bookData);
-      apiCache.set(bookCacheKey, bookData, 5 * 60 * 1000); // 5 min cache
-
-      // Fetch chapters with cache
-      const chaptersCacheKey = `book:chapters:${id}`;
-      const cachedChapters = apiCache.get<ChapterData[]>(chaptersCacheKey);
-      if (cachedChapters) {
-        setChapters(cachedChapters);
-      }
-      
-      const { data: chaptersData, error: chaptersError } = await supabase
-        .from("chapters")
-        .select("id, chapter_number, title, word_count, is_generated, content")
-        .eq("book_id", id)
-        .order("chapter_number");
-
-      if (!chaptersError && chaptersData) {
-        setChapters(chaptersData);
-        apiCache.set(chaptersCacheKey, chaptersData, 2 * 60 * 1000); // 2 min cache
-      }
-
-      // Check if book is in user's library
-      if (currentUser) {
-        const { data: libraryItem } = await supabase
-          .from("user_library")
-          .select("id")
-          .eq("user_id", currentUser.id)
-          .eq("book_id", id)
-          .single();
-
-        setIsSaved(!!libraryItem);
-      }
-
-      setIsLoading(false);
-    };
-
-    if (id) {
-      fetchData();
-    }
-
-    // Set up realtime subscription for chapter updates
-    const channel = supabase
-      .channel('chapter-updates')
-      .on(
-        'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'chapters',
-          filter: `book_id=eq.${id}`
-        },
-        (payload) => {
-          const updatedChapter = payload.new as ChapterData;
-          setChapters(prev => prev.map(ch => 
-            ch.id === updatedChapter.id ? { ...ch, ...updatedChapter } : ch
-          ));
-        }
-      )
-      .subscribe();
-
-    return () => {
-      supabase.removeChannel(channel);
-    };
-  }, [id, navigate, toast]);
 
   const handleSaveToLibrary = async () => {
     if (!user) {
@@ -632,49 +538,32 @@ export default function BookDetail() {
     }
   };
 
-  // CONTRACT 4: Skeleton-first loading instead of blocking spinner
-  if (isLoading) {
-    return (
+  // CONTRACT 5B-2: Skeleton-first loading with cached data support
+  // Also handles offline states (RULE 5B-2.5)
+  if (loadState === 'skeleton' || loadState === 'offline-empty') {
+    const PageShell = isMobile ? MobileLayout : ({ children }: { children: React.ReactNode }) => (
       <div className="min-h-screen">
         <Navbar />
-        <main className="pt-24 pb-16">
-          <div className="container mx-auto px-4">
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-12">
-              {/* Cover skeleton */}
-              <div className="lg:col-span-1">
-                <Skeleton className="aspect-[3/4] rounded-xl" />
-              </div>
-              {/* Info skeleton */}
-              <div className="lg:col-span-2 space-y-4">
-                <Skeleton className="h-4 w-24" />
-                <Skeleton className="h-10 w-3/4" />
-                <Skeleton className="h-20 w-full" />
-                <div className="flex gap-4">
-                  <Skeleton className="h-6 w-32" />
-                  <Skeleton className="h-6 w-24" />
-                  <Skeleton className="h-6 w-28" />
-                </div>
-                <div className="flex gap-3 pt-4">
-                  <Skeleton className="h-12 w-32" />
-                  <Skeleton className="h-12 w-32" />
-                  <Skeleton className="h-12 w-12" />
-                </div>
-              </div>
-            </div>
-            {/* Chapters skeleton */}
-            <Skeleton className="h-8 w-48 mb-6" />
-            <div className="space-y-3">
-              {Array.from({ length: 5 }).map((_, i) => (
-                <Skeleton key={i} className="h-16 w-full rounded-lg" />
-              ))}
-            </div>
-          </div>
-        </main>
+        {children}
         <Footer />
       </div>
     );
+    
+    return (
+      <PageShell>
+        {loadState === 'offline-empty' && (
+          <div className="container mx-auto px-4 pt-24 pb-4">
+            <GentleOfflineBanner compact className="rounded-lg" />
+          </div>
+        )}
+        <main className={loadState === 'offline-empty' ? 'pb-16' : 'pt-24 pb-16'}>
+          <BookDetailSkeleton isMobile={isMobile} />
+        </main>
+      </PageShell>
+    );
   }
 
+  // Show cached/hydrating state with actual book data
   if (!book) {
     return null;
   }
