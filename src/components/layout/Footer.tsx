@@ -1,7 +1,8 @@
 import { forwardRef } from "react";
 import { Link } from "react-router-dom";
-import { Book, Github, Twitter, Mail } from "lucide-react";
+import { Github, Twitter, Mail } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import logo from "@/assets/logo.png";
 
 export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
   const { t } = useLanguage();
@@ -12,13 +13,13 @@ export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
           <div className="md:col-span-2">
-            <Link to="/" className="flex items-center gap-3 mb-4">
-              <div className="bg-gradient-gold p-2 rounded-lg">
-                <Book className="h-5 w-5 text-primary-foreground" />
-              </div>
-              <span className="font-display text-xl font-semibold text-gradient-gold">
-                ScrollLibrary
-              </span>
+            <Link to="/" className="flex items-center gap-2 mb-4 group">
+              <img 
+                src={logo} 
+                alt="ScrollLibrary" 
+                className="h-10 w-auto transition-transform group-hover:scale-105"
+                loading="lazy"
+              />
             </Link>
             <p className="text-muted-foreground text-sm max-w-sm mb-4">
               {t('footer.tagline')}

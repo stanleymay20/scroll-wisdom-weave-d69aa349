@@ -4,7 +4,8 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Book, Loader2, Mail, Lock, User, Wand2, AlertCircle } from "lucide-react";
+import { Loader2, Mail, Lock, User, Wand2, AlertCircle } from "lucide-react";
+import logo from "@/assets/logo.png";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -238,12 +239,14 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
         className="relative z-10 w-full max-w-md"
       >
         <div className="text-center mb-6 sm:mb-8">
-          <div className="inline-flex items-center gap-3 mb-4">
-            <div className="bg-gradient-gold p-2.5 sm:p-3 rounded-xl shadow-gold">
-              <Book className="h-6 w-6 sm:h-8 sm:w-8 text-primary-foreground" />
-            </div>
+          <div className="inline-flex items-center justify-center mb-4">
+            <img 
+              src={logo} 
+              alt="ScrollLibrary" 
+              className="h-16 sm:h-20 w-auto drop-shadow-lg"
+              loading="eager"
+            />
           </div>
-          <h1 className="font-display text-2xl sm:text-3xl font-bold text-gradient-gold">ScrollLibrary</h1>
           <p className="text-muted-foreground mt-2 text-sm sm:text-base">{getTitle()}</p>
         </div>
 
