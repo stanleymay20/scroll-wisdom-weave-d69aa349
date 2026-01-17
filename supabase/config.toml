@@ -62,3 +62,6 @@ verify_jwt = true
 
 [functions.export-certificate]
 verify_jwt = false
+
+[functions.batch-verify-certificates]
+verify_jwt = false
