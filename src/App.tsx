@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
+import { SettingsProvider } from "@/contexts/SettingsContext";
 import { useEffect, Suspense, lazy } from "react";
 import { PWAInstallPrompt, OfflineIndicator } from "@/components/pwa";
 import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
@@ -68,24 +69,15 @@ const queryClient = new QueryClient({
   },
 });
 
-function ThemeInitializer() {
+function AppInitializer() {
   useEffect(() => {
-    const themeMode = localStorage.getItem('theme-mode') || 'dark';
-    const colorTheme = localStorage.getItem('color-theme') || 'gold';
-    
-    if (themeMode === 'light') {
-      document.documentElement.setAttribute('data-theme', 'light');
-    } else {
-      document.documentElement.setAttribute('data-theme', colorTheme);
-    }
-    
     // Initialize trace ID for session correlation
     setTraceId();
     
     // CONTRACT 5: Initialize performance monitoring
     initContract5();
     
-    logger.info('Application initialized', { themeMode, colorTheme });
+    logger.info('Application initialized');
   }, []);
   return null;
 }
@@ -93,12 +85,13 @@ function ThemeInitializer() {
 const App = () => (
   <ErrorBoundary context="Root">
     <QueryClientProvider client={queryClient}>
-      <ThemeInitializer />
+      <AppInitializer />
       <LanguageProvider>
         <SubscriptionProvider>
-          <TooltipProvider>
-            <Toaster />
-            <Sonner />
+          <SettingsProvider>
+            <TooltipProvider>
+              <Toaster />
+              <Sonner />
             <OfflineIndicator />
             <PWAUpdateNotification />
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
@@ -147,10 +140,11 @@ const App = () => (
               </Suspense>
             </BrowserRouter>
           </TooltipProvider>
-        </SubscriptionProvider>
-      </LanguageProvider>
-    </QueryClientProvider>
-  </ErrorBoundary>
+        </SettingsProvider>
+      </SubscriptionProvider>
+    </LanguageProvider>
+  </QueryClientProvider>
+</ErrorBoundary>
 );
 
 export default App;

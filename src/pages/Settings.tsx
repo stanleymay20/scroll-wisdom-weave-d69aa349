@@ -15,56 +15,24 @@ import { Separator } from "@/components/ui/separator";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
-  Settings as SettingsIcon, Palette, Bell, Brain, Shield, CreditCard,
-  Save, Trash2, Download, Moon, Sun, Type, Volume2, Crown, HardDrive, Loader2,
+  Palette, Bell, Brain, Shield, CreditCard,
+  Save, Trash2, Download, Moon, Sun, Crown, HardDrive, Loader2,
   Info, ExternalLink, FileText, CheckCircle
 } from "lucide-react";
 import { StorageManager } from "@/components/pwa/StorageManager";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { useSettings } from "@/contexts/SettingsContext";
 import { SUBSCRIPTION_TIERS } from "@/lib/subscription";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagePerformance } from "@/lib/performance";
-
-interface SettingsData {
-  theme_preference: string;
-  font_size: string;
-  reader_theme: string;
-  tts_enabled: boolean;
-  animations_enabled: boolean;
-  email_updates: boolean;
-  new_book_alerts: boolean;
-  course_reminders: boolean;
-  writing_tone: string;
-  spiritual_strictness: string;
-  complexity_level: string;
-  study_speed: string;
-  ai_voice_preference: string;
-}
-
-const defaultSettings: SettingsData = {
-  theme_preference: "dark",
-  font_size: "medium",
-  reader_theme: "default",
-  tts_enabled: true,
-  animations_enabled: true,
-  email_updates: true,
-  new_book_alerts: true,
-  course_reminders: true,
-  writing_tone: "scholarly",
-  spiritual_strictness: "balanced",
-  complexity_level: "intermediate",
-  study_speed: "normal",
-  ai_voice_preference: "natural",
-};
 
 export default function Settings() {
   const { t } = useLanguage();
   const isMobile = useIsMobile();
   const [user, setUser] = useState<any>(null);
-  const [settings, setSettings] = useState<SettingsData>(defaultSettings);
-  const [isLoading, setIsLoading] = useState(true);
+  const { settings, updateSettings, isLoading } = useSettings();
   const [isSaving, setIsSaving] = useState(false);
   const [portalLoading, setPortalLoading] = useState(false);
   const { toast } = useToast();
@@ -146,17 +114,6 @@ export default function Settings() {
     checkAuth();
   }, []);
 
-  // Auto-save settings when they change (debounced)
-  useEffect(() => {
-    if (!user || isLoading) return;
-    
-    const saveTimeout = setTimeout(() => {
-      handleSaveSettings();
-    }, 1000); // Debounce 1 second
-    
-    return () => clearTimeout(saveTimeout);
-  }, [settings]);
-
   const checkAuth = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
@@ -164,52 +121,6 @@ export default function Settings() {
       return;
     }
     setUser(user);
-    await fetchSettings(user.id);
-    setIsLoading(false);
-  };
-
-  const fetchSettings = async (userId: string) => {
-    const { data } = await supabase
-      .from("profiles")
-      .select("theme_preference, font_size, reader_theme, tts_enabled, animations_enabled, email_updates, new_book_alerts, course_reminders, writing_tone, spiritual_strictness, complexity_level, study_speed, ai_voice_preference")
-      .eq("id", userId)
-      .maybeSingle();
-
-    if (data) {
-      setSettings({
-        theme_preference: data.theme_preference || "dark",
-        font_size: data.font_size || "medium",
-        reader_theme: data.reader_theme || "default",
-        tts_enabled: data.tts_enabled ?? true,
-        animations_enabled: data.animations_enabled ?? true,
-        email_updates: data.email_updates ?? true,
-        new_book_alerts: data.new_book_alerts ?? true,
-        course_reminders: data.course_reminders ?? true,
-        writing_tone: data.writing_tone || "scholarly",
-        spiritual_strictness: data.spiritual_strictness || "balanced",
-        complexity_level: data.complexity_level || "intermediate",
-        study_speed: data.study_speed || "normal",
-        ai_voice_preference: data.ai_voice_preference || "natural",
-      });
-    }
-  };
-
-  const handleSaveSettings = async () => {
-    if (!user || isSaving) return;
-    setIsSaving(true);
-
-    const { error } = await supabase
-      .from("profiles")
-      .update({
-        ...settings,
-        updated_at: new Date().toISOString(),
-      })
-      .eq("id", user.id);
-
-    if (error) {
-      console.error("Settings save error:", error);
-    }
-    setIsSaving(false);
   };
 
   const handleDeleteAccount = () => {
@@ -222,6 +133,13 @@ export default function Settings() {
       title: t('settings.dataExport'),
       description: t('settings.dataExportDesc'),
     });
+  };
+
+  // Helper to update a single setting
+  const handleSettingChange = async (key: string, value: any) => {
+    setIsSaving(true);
+    await updateSettings({ [key]: value });
+    setIsSaving(false);
   };
 
   // PERFORMANCE: Show skeleton UI immediately instead of blocking loader
@@ -544,16 +462,7 @@ export default function Settings() {
                       </div>
                       <Select
                         value={settings.theme_preference}
-                        onValueChange={(value) => {
-                          setSettings(s => ({ ...s, theme_preference: value }));
-                          localStorage.setItem('theme-mode', value);
-                          if (value === 'light') {
-                            document.documentElement.setAttribute('data-theme', 'light');
-                          } else {
-                            const colorTheme = localStorage.getItem('color-theme') || 'gold';
-                            document.documentElement.setAttribute('data-theme', colorTheme);
-                          }
-                        }}
+                        onValueChange={(value) => handleSettingChange('theme_preference', value)}
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />
@@ -604,8 +513,6 @@ export default function Settings() {
                                 if (themeMode !== 'light') {
                                   document.documentElement.setAttribute('data-theme', theme.id);
                                 }
-                                // Force re-render to update active state
-                                setSettings(s => ({ ...s }));
                               }}
                               className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${
                                 isActive 
@@ -630,7 +537,7 @@ export default function Settings() {
                       </div>
                       <Select
                         value={settings.font_size}
-                        onValueChange={(value) => setSettings(s => ({ ...s, font_size: value }))}
+                        onValueChange={(value) => handleSettingChange('font_size', value)}
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />
@@ -653,7 +560,7 @@ export default function Settings() {
                       </div>
                       <Select
                         value={settings.reader_theme}
-                        onValueChange={(value) => setSettings(s => ({ ...s, reader_theme: value }))}
+                        onValueChange={(value) => handleSettingChange('reader_theme', value)}
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />
@@ -676,7 +583,7 @@ export default function Settings() {
                       </div>
                       <Select
                         value={settings.ai_voice_preference}
-                        onValueChange={(value) => setSettings(s => ({ ...s, ai_voice_preference: value }))}
+                        onValueChange={(value) => handleSettingChange('ai_voice_preference', value)}
                       >
                         <SelectTrigger className="w-32">
                           <SelectValue />
@@ -699,7 +606,7 @@ export default function Settings() {
                       </div>
                       <Switch
                         checked={settings.tts_enabled}
-                        onCheckedChange={(checked) => setSettings(s => ({ ...s, tts_enabled: checked }))}
+                        onCheckedChange={(checked) => handleSettingChange('tts_enabled', checked)}
                       />
                     </div>
 
@@ -710,7 +617,7 @@ export default function Settings() {
                       </div>
                       <Switch
                         checked={settings.animations_enabled}
-                        onCheckedChange={(checked) => setSettings(s => ({ ...s, animations_enabled: checked }))}
+                        onCheckedChange={(checked) => handleSettingChange('animations_enabled', checked)}
                       />
                     </div>
                   </CardContent>
@@ -734,7 +641,7 @@ export default function Settings() {
                       </div>
                       <Switch
                         checked={settings.email_updates}
-                        onCheckedChange={(checked) => setSettings(s => ({ ...s, email_updates: checked }))}
+                        onCheckedChange={(checked) => handleSettingChange('email_updates', checked)}
                       />
                     </div>
 
@@ -747,7 +654,7 @@ export default function Settings() {
                       </div>
                       <Switch
                         checked={settings.new_book_alerts}
-                        onCheckedChange={(checked) => setSettings(s => ({ ...s, new_book_alerts: checked }))}
+                        onCheckedChange={(checked) => handleSettingChange('new_book_alerts', checked)}
                       />
                     </div>
 
@@ -760,7 +667,7 @@ export default function Settings() {
                       </div>
                       <Switch
                         checked={settings.course_reminders}
-                        onCheckedChange={(checked) => setSettings(s => ({ ...s, course_reminders: checked }))}
+                        onCheckedChange={(checked) => handleSettingChange('course_reminders', checked)}
                       />
                     </div>
                   </CardContent>
@@ -784,7 +691,7 @@ export default function Settings() {
                       </div>
                       <Select
                         value={settings.writing_tone}
-                        onValueChange={(value) => setSettings(s => ({ ...s, writing_tone: value }))}
+                        onValueChange={(value) => handleSettingChange('writing_tone', value)}
                       >
                         <SelectTrigger className="w-40">
                           <SelectValue />
@@ -807,7 +714,7 @@ export default function Settings() {
                       </div>
                       <Select
                         value={settings.spiritual_strictness}
-                        onValueChange={(value) => setSettings(s => ({ ...s, spiritual_strictness: value }))}
+                        onValueChange={(value) => handleSettingChange('spiritual_strictness', value)}
                       >
                         <SelectTrigger className="w-40">
                           <SelectValue />
@@ -830,7 +737,7 @@ export default function Settings() {
                       </div>
                       <Select
                         value={settings.complexity_level}
-                        onValueChange={(value) => setSettings(s => ({ ...s, complexity_level: value }))}
+                        onValueChange={(value) => handleSettingChange('complexity_level', value)}
                       >
                         <SelectTrigger className="w-40">
                           <SelectValue />
@@ -853,7 +760,7 @@ export default function Settings() {
                       </div>
                       <Select
                         value={settings.study_speed}
-                        onValueChange={(value) => setSettings(s => ({ ...s, study_speed: value }))}
+                        onValueChange={(value) => handleSettingChange('study_speed', value)}
                       >
                         <SelectTrigger className="w-40">
                           <SelectValue />
@@ -912,19 +819,19 @@ export default function Settings() {
               <p className="text-sm text-muted-foreground">
                 {isSaving ? t('settings.saving') : "Changes auto-save"}
               </p>
-              <Button onClick={handleSaveSettings} disabled={isSaving} variant="gold">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 {isSaving ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    <Loader2 className="h-4 w-4 animate-spin" />
                     {t('settings.saving')}
                   </>
                 ) : (
                   <>
-                    <Save className="h-4 w-4 mr-2" />
-                    {t('settings.saveAll')}
+                    <CheckCircle className="h-4 w-4 text-green-500" />
+                    Saved
                   </>
                 )}
-              </Button>
+              </div>
             </div>
           </motion.div>
         </div>
