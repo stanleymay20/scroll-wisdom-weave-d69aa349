@@ -179,6 +179,9 @@ export default function Reader() {
   const [showQuiz, setShowQuiz] = useState(false);
   const [showVoiceConversation, setShowVoiceConversation] = useState(false);
   const [highlightedText, setHighlightedText] = useState("");
+  
+  // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
+  const [shouldResumeTTS, setShouldResumeTTS] = useState(false);
 
   const currentChapter = parseInt(chapterId || "1");
   const { toast } = useToast();
@@ -744,7 +747,14 @@ export default function Reader() {
               selectedText={selectedTextForTTS}
               language={book?.language || "en"}
               stopKey={`${bookId}-${currentChapter}`}
+              title={`${book?.title} - ${chapter.title}`}
+              author="ScrollLibrary"
               onClose={() => setShowTTS(false)}
+              onInterrupt={() => {
+                // CONTRACT 5 - Rule 5.4: Interactive Guard Mode
+                // When user interrupts TTS, open VoiceConversation for Q&A
+                setShowVoiceConversation(true);
+              }}
             />
           </motion.div>
         )}
@@ -961,6 +971,11 @@ export default function Reader() {
             bookId={bookId || ""}
             chapterId={chapter.id}
             onClose={() => setShowVoiceConversation(false)}
+            onResumeTTS={() => {
+              // CONTRACT 5 - Rule 5.4: Resume TTS when user finishes asking
+              setShouldResumeTTS(true);
+              setShowTTS(true);
+            }}
           />
         )}
       </AnimatePresence>

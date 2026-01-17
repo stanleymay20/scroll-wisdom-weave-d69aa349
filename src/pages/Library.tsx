@@ -278,9 +278,10 @@ function MobileLibraryContent({
             <BookCardSkeleton key={i} />
           ))}
         </div>
-      ) : loadError ? (
+      ) : loadError && libraryItems.length === 0 ? (
+        // CONTRACT 5.5: Only show error if we have NO data at all
+        // If we have cached items, show them instead of error
         <div className="text-center py-12">
-          {/* CONTRACT 5.5: No red error screens for recoverable errors */}
           <CloudOff className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
           <p className="text-muted-foreground mb-2">Couldn't load library</p>
           <p className="text-sm text-muted-foreground/70 mb-4">Check your connection and try again</p>
@@ -603,7 +604,12 @@ export default function Library() {
         return;
       }
       
-      setLoadError(t('library.loadError'));
+      // CONTRACT 5.5: Only set error if we don't have cached data
+      // This prevents false offline errors when we have items to show
+      const hasCachedItems = libraryItems.length > 0 || apiCache.get<LibraryItem[]>('library:items:0') !== null;
+      if (!hasCachedItems) {
+        setLoadError(t('library.loadError'));
+      }
       if (!reset) {
         toast({
           title: t('common.error'),
