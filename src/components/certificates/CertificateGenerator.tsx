@@ -1,12 +1,15 @@
 /**
- * CONTRACT 6A — CERTIFICATE GENERATOR
- * Creates certificates with locked issuer authority
+ * CONTRACT 6C — CERTIFICATE GENERATOR WITH ELIGIBILITY GATE
+ * 
+ * Consumes 6A (Authority) and 6C (Eligibility) to determine
+ * if and which certificate a learner may receive.
  */
 
-import { useState } from 'react';
-import { Award, FileCheck, Loader2 } from 'lucide-react';
+import { useState, useMemo } from 'react';
+import { Award, FileCheck, Loader2, AlertCircle, Clock, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
 import { 
   createCertificate, 
@@ -15,6 +18,16 @@ import {
   CERTIFICATE_TYPES,
   CertificateType 
 } from '@/lib/certificateAuthority';
+import {
+  evaluateCertificateEligibility,
+  getEligibilityStatusText,
+  getEligibilityStatusColor,
+  shouldEnableCertificateButton,
+  createDefaultProgress,
+  BookProgress,
+  CertificateEligibilityResult,
+  ELIGIBILITY_THRESHOLDS,
+} from '@/lib/certificateEligibility';
 import { CertificateDisplay } from './CertificateDisplay';
 
 interface CertificateGeneratorProps {
@@ -29,6 +42,14 @@ interface CertificateGeneratorProps {
   userName: string;
   userEmail?: string;
   progressPercent: number;
+  /** Assessment data for eligibility check */
+  averageScore?: number;
+  integrityScore?: number;
+  quizzesRequired?: number;
+  quizzesSubmitted?: number;
+  hasRejectFlags?: boolean;
+  hasReviewFlags?: boolean;
+  lastMasteryAttempt?: Date | null;
   onCertificateGenerated?: (certificate: Certificate) => void;
 }
 
@@ -44,21 +65,57 @@ export function CertificateGenerator({
   userName,
   userEmail,
   progressPercent,
+  averageScore = 0,
+  integrityScore = 1.0,
+  quizzesRequired = 0,
+  quizzesSubmitted = 0,
+  hasRejectFlags = false,
+  hasReviewFlags = false,
+  lastMasteryAttempt = null,
   onCertificateGenerated,
 }: CertificateGeneratorProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [certificate, setCertificate] = useState<Certificate | null>(null);
-  const [selectedType, setSelectedType] = useState<CertificateType>('completion');
   const { toast } = useToast();
 
-  const canGenerateCertificate = progressPercent >= 100;
-  const canGenerateMastery = progressPercent >= 100 && learningLevel === 'mastery';
+  // 6C.1 — Evaluate eligibility using pure function
+  const eligibility: CertificateEligibilityResult = useMemo(() => {
+    const progress: BookProgress = {
+      totalChapters,
+      completedChapters: chaptersCompleted,
+      quizzesRequired,
+      quizzesSubmitted,
+      averageScore: averageScore / 100, // Convert to 0-1 scale
+      integrityScore: {
+        overall: integrityScore,
+        typing: integrityScore,
+        focus: integrityScore,
+        timing: integrityScore,
+        paste: integrityScore,
+      },
+      integrityClassification: integrityScore >= 0.9 ? 'trusted' : integrityScore >= 0.6 ? 'review' : 'reject',
+      hasRejectFlags,
+      hasReviewFlags,
+      masteryRequirementsMet: learningLevel === 'mastery' && averageScore >= 90,
+      lastMasteryAttempt,
+    };
+    return evaluateCertificateEligibility(progress);
+  }, [
+    totalChapters, chaptersCompleted, quizzesRequired, quizzesSubmitted,
+    averageScore, integrityScore, hasRejectFlags, hasReviewFlags,
+    learningLevel, lastMasteryAttempt
+  ]);
+
+  // 6C.5 — UI Enforcement: Button state
+  const canGenerate = shouldEnableCertificateButton(eligibility);
+  const selectedType = eligibility.certificateType || 'completion';
 
   const handleGenerate = async () => {
-    if (!canGenerateCertificate) {
+    // 6C.5 — Never allow manual override
+    if (!canGenerate) {
       toast({
-        title: 'Complete the book first',
-        description: `You've completed ${progressPercent}% of this book. Finish all chapters to receive your certificate.`,
+        title: 'Not eligible',
+        description: eligibility.reasons[0] || 'Complete requirements to unlock certificate.',
         variant: 'destructive',
       });
       return;
@@ -67,7 +124,7 @@ export function CertificateGenerator({
     setIsGenerating(true);
 
     try {
-      // Simulate processing time
+      // Simulate server-side revalidation
       await new Promise(resolve => setTimeout(resolve, 1500));
 
       const recipient: CertificateRecipient = {
@@ -106,8 +163,6 @@ export function CertificateGenerator({
 
   const handleDownload = () => {
     if (!certificate) return;
-    
-    // In production, this would generate a PDF
     toast({
       title: 'Download Started',
       description: 'Your certificate PDF is being prepared...',
@@ -122,13 +177,9 @@ export function CertificateGenerator({
           certificateType={selectedType}
           onDownload={handleDownload}
         />
-        
         <div className="flex justify-center">
-          <Button 
-            variant="outline" 
-            onClick={() => setCertificate(null)}
-          >
-            Generate Another Certificate
+          <Button variant="outline" onClick={() => setCertificate(null)}>
+            View Eligibility Status
           </Button>
         </div>
       </div>
@@ -143,10 +194,28 @@ export function CertificateGenerator({
           Certificate of Achievement
         </CardTitle>
         <CardDescription>
-          Generate your official ScrollLibrary certificate upon completion
+          {getEligibilityStatusText(eligibility)}
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
+        {/* Eligibility Status Alert */}
+        {!eligibility.eligible && (
+          <Alert variant={eligibility.blockedByCooldown ? 'default' : 'destructive'}>
+            {eligibility.blockedByCooldown ? (
+              <Clock className="h-4 w-4" />
+            ) : (
+              <AlertCircle className="h-4 w-4" />
+            )}
+            <AlertDescription>
+              <div className="space-y-1">
+                {eligibility.reasons.map((reason, i) => (
+                  <p key={i} className="text-sm">{reason}</p>
+                ))}
+              </div>
+            </AlertDescription>
+          </Alert>
+        )}
+
         {/* Progress Status */}
         <div className="p-4 rounded-lg bg-muted/50">
           <div className="flex items-center justify-between mb-2">
@@ -164,47 +233,56 @@ export function CertificateGenerator({
           </p>
         </div>
 
-        {/* Certificate Type Selection */}
-        <div className="space-y-3">
-          <label className="text-sm font-medium">Certificate Type</label>
-          <div className="grid gap-3">
-            {Object.values(CERTIFICATE_TYPES).map((type) => {
-              const isDisabled = 
-                (type.type === 'mastery' && !canGenerateMastery) ||
-                (type.requiresMinProgress > 0 && progressPercent < type.requiresMinProgress);
-              
-              return (
-                <button
-                  key={type.type}
-                  onClick={() => setSelectedType(type.type)}
-                  disabled={isDisabled}
-                  className={`p-4 rounded-lg border text-left transition-all ${
-                    selectedType === type.type
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border hover:border-primary/50'
-                  } ${isDisabled ? 'opacity-50 cursor-not-allowed' : 'cursor-pointer'}`}
-                >
-                  <div className="flex items-start justify-between">
-                    <div>
-                      <p className="font-medium">{type.displayName}</p>
-                      <p className="text-sm text-muted-foreground mt-1">
-                        {type.description}
-                      </p>
-                    </div>
-                    {selectedType === type.type && (
-                      <FileCheck className="h-5 w-5 text-primary flex-shrink-0" />
-                    )}
-                  </div>
-                </button>
-              );
-            })}
+        {/* Integrity Score */}
+        <div className="p-4 rounded-lg bg-muted/50">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-sm font-medium">Integrity Score</span>
+            <span className={`text-sm font-medium ${
+              integrityScore >= 0.9 ? 'text-green-600' : 
+              integrityScore >= 0.6 ? 'text-amber-600' : 'text-destructive'
+            }`}>
+              {Math.round(integrityScore * 100)}%
+            </span>
           </div>
+          <div className="h-2 bg-muted rounded-full overflow-hidden">
+            <div 
+              className={`h-full transition-all duration-500 ${
+                integrityScore >= 0.9 ? 'bg-green-500' : 
+                integrityScore >= 0.6 ? 'bg-amber-500' : 'bg-destructive'
+              }`}
+              style={{ width: `${integrityScore * 100}%` }}
+            />
+          </div>
+          <p className="text-xs text-muted-foreground mt-2">
+            Mastery requires ≥{ELIGIBILITY_THRESHOLDS.mastery.MIN_INTEGRITY * 100}% integrity
+          </p>
         </div>
 
-        {/* Generate Button */}
+        {/* Certificate Type Display */}
+        {eligibility.eligible && (
+          <div className="p-4 rounded-lg border border-primary/30 bg-primary/5">
+            <div className="flex items-center gap-3">
+              <FileCheck className="h-5 w-5 text-primary" />
+              <div>
+                <p className="font-medium">
+                  {eligibility.certificateType === 'mastery' 
+                    ? 'Mastery Certificate Available' 
+                    : 'Completion Certificate Available'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  {eligibility.certificateType === 'mastery'
+                    ? 'You have demonstrated mastery-level understanding'
+                    : 'Complete all chapters to receive your certificate'}
+                </p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* 6C.5 — Generate Button (disabled unless eligible) */}
         <Button
           onClick={handleGenerate}
-          disabled={!canGenerateCertificate || isGenerating}
+          disabled={!canGenerate || isGenerating}
           className="w-full"
           size="lg"
         >
@@ -213,14 +291,15 @@ export function CertificateGenerator({
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               Generating Certificate...
             </>
-          ) : canGenerateCertificate ? (
+          ) : canGenerate ? (
             <>
               <Award className="h-4 w-4 mr-2" />
-              Generate {CERTIFICATE_TYPES[selectedType].displayName}
+              Generate {eligibility.certificateType === 'mastery' ? 'Mastery' : 'Completion'} Certificate
             </>
           ) : (
             <>
-              Complete Book to Unlock Certificate
+              <Lock className="h-4 w-4 mr-2" />
+              Complete Requirements to Unlock
             </>
           )}
         </Button>
