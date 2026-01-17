@@ -1,3 +1,14 @@
+/**
+ * CONTRACT 5B-2: Book Detail Entry Speed
+ * 
+ * RULES:
+ * - 5B-2.1: Instant Shell - Navigate immediately with cached data
+ * - 5B-2.2: Cache-Primed Entry - Prefill from route state
+ * - 5B-2.3: Progressive Hydration - skeleton → cached → hydrating → ready
+ * - 5B-2.4: Zero Layout Shift - Skeleton matches final layout
+ * - 5B-2.5: Offline Truth - Show cached data if available
+ */
+
 import { useState, useEffect } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
@@ -5,7 +16,6 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
-import { Skeleton } from "@/components/ui/skeleton";
 import {
   Book,
   BookOpen,
@@ -57,12 +67,16 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { ShareDialog } from "@/components/books/ShareDialog";
 import { ExportDialog } from "@/components/books/ExportDialog";
+import { BookDetailSkeleton } from "@/components/books/BookDetailSkeleton";
 import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagePerformance } from "@/lib/performance";
-import { apiCache, cacheKeys } from "@/lib/cache";
+import { apiCache } from "@/lib/cache";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useBookDetailData } from "@/hooks/useBookDetailData";
+import { GentleOfflineBanner } from "@/components/ui/gentle-offline-banner";
+import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 interface BookData {
   id: string;
