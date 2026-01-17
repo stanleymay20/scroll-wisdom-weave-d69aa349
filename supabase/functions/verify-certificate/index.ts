@@ -152,31 +152,17 @@ Deno.serve(async (req) => {
     const storedIntegrityScore = metadata?.integrityScore as number | undefined;
     
     if (storedIntegrityScore === undefined || storedIntegrityScore === null) {
-      console.warn(`[verify-certificate] Certificate ${certificateNumber} missing integrity score in metadata`);
-      // Certificate was issued before integrity tracking - mark as unknown
+      console.warn(`[verify-certificate] Certificate ${certificateNumber} missing integrity score - STRICT MODE: invalidating`);
+      // STRICT POLICY: Certificates without integrity data are NOT verifiable
+      // This positions ScrollLibrary as post-AI-cheating era authority
       return new Response(
         JSON.stringify({ 
-          valid: true, // Still valid, but with warning
+          valid: false, // STRICT: Cannot verify without integrity data
           certificateNumber: cert.certificate_number,
-          certificateType: (cert.certificate_type || metadata?.certificateType) as VerificationResponse['certificateType'],
-          issuedAt: cert.issued_at,
-          issuer: {
-            authority: CERTIFICATE_ISSUER.authority,
-            representative: CERTIFICATE_ISSUER.representative,
-          },
-          recipient: {
-            name: (metadata?.recipientName as string) || 'Unknown',
-          },
-          book: {
-            title: (metadata?.bookTitle as string) || book?.title || 'Unknown',
-            category: book?.category,
-          },
-          integrityClassification: 'review' as const, // Force review if no data
-          verificationHash: cert.verification_hash || undefined,
-          reason: 'Certificate issued before integrity tracking - manual review recommended',
+          reason: 'Legacy certificate — not verifiable. Certificate was issued before integrity tracking was implemented.',
         }),
         { 
-          status: 200, 
+          status: 200, // Still 200 - this is a valid response, just not a valid certificate
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
