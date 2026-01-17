@@ -39,6 +39,8 @@ interface VoiceConversationProps {
   bookId: string;
   chapterId?: string;
   onClose: () => void;
+  /** Callback to resume TTS after question is answered (Interactive Guard Mode) */
+  onResumeTTS?: () => void;
 }
 
 const VOICES = [
@@ -63,6 +65,7 @@ export function VoiceConversation({
   bookId,
   chapterId,
   onClose,
+  onResumeTTS,
 }: VoiceConversationProps) {
   const [messages, setMessages] = useState<Message[]>([]);
   const [isListening, setIsListening] = useState(false);
@@ -559,6 +562,24 @@ export function VoiceConversation({
               </span>
             )}
           </div>
+          
+          {/* CONTRACT 5 - Rule 5.4: Resume Reading button for Interactive Guard Mode */}
+          {onResumeTTS && messages.length > 1 && !isListening && !isProcessing && !isSpeaking && (
+            <div className="mt-4 flex justify-center">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  onResumeTTS();
+                  onClose();
+                }}
+                className="gap-2 border-primary/50 text-primary hover:bg-primary/10"
+              >
+                <Volume2 className="h-4 w-4" />
+                Resume Reading
+              </Button>
+            </div>
+          )}
         </div>
       </motion.div>
     </motion.div>
