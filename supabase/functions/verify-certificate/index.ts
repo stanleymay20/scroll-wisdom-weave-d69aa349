@@ -147,16 +147,50 @@ Deno.serve(async (req) => {
     const metadata = cert.metadata as Record<string, unknown> | null;
     const book = (Array.isArray(cert.books) ? cert.books[0] : cert.books) as { id: string; title: string; category: string } | null;
 
-    // Determine integrity classification from score
-    const integrityScore = (metadata?.integrityScore as number) ?? 1.0;
+    // CRITICAL: Integrity score MUST exist in stored metadata - NO FALLBACK
+    // If missing, the certificate was issued incorrectly
+    const storedIntegrityScore = metadata?.integrityScore as number | undefined;
+    
+    if (storedIntegrityScore === undefined || storedIntegrityScore === null) {
+      console.warn(`[verify-certificate] Certificate ${certificateNumber} missing integrity score in metadata`);
+      // Certificate was issued before integrity tracking - mark as unknown
+      return new Response(
+        JSON.stringify({ 
+          valid: true, // Still valid, but with warning
+          certificateNumber: cert.certificate_number,
+          certificateType: (cert.certificate_type || metadata?.certificateType) as VerificationResponse['certificateType'],
+          issuedAt: cert.issued_at,
+          issuer: {
+            authority: CERTIFICATE_ISSUER.authority,
+            representative: CERTIFICATE_ISSUER.representative,
+          },
+          recipient: {
+            name: (metadata?.recipientName as string) || 'Unknown',
+          },
+          book: {
+            title: (metadata?.bookTitle as string) || book?.title || 'Unknown',
+            category: book?.category,
+          },
+          integrityClassification: 'review' as const, // Force review if no data
+          verificationHash: cert.verification_hash || undefined,
+          reason: 'Certificate issued before integrity tracking - manual review recommended',
+        }),
+        { 
+          status: 200, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
+
+    // Determine integrity classification from STORED score only
     let integrityClassification: 'trusted' | 'review' | 'flagged' = 'trusted';
-    if (integrityScore < 0.6) {
+    if (storedIntegrityScore < 0.6) {
       integrityClassification = 'flagged';
-    } else if (integrityScore < 0.9) {
+    } else if (storedIntegrityScore < 0.9) {
       integrityClassification = 'review';
     }
 
-    // Build response
+    // Build response using STORED data only - no defaults
     const response: VerificationResponse = {
       valid: !cert.revoked_at,
       certificateNumber: cert.certificate_number,
@@ -167,10 +201,10 @@ Deno.serve(async (req) => {
         representative: CERTIFICATE_ISSUER.representative,
       },
       recipient: {
-        name: (metadata?.recipientName as string) || 'Unknown',
+        name: (metadata?.recipientName as string) || 'Record unavailable',
       },
       book: {
-        title: (metadata?.bookTitle as string) || book?.title || 'Unknown',
+        title: (metadata?.bookTitle as string) || book?.title || 'Record unavailable',
         category: book?.category,
       },
       integrityClassification,
