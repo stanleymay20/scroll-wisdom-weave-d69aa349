@@ -100,6 +100,11 @@ export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
                   Verification API
                 </Link>
               </li>
+              <li>
+                <Link to="/docs/trust-whitepaper" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Trust Whitepaper
+                </Link>
+              </li>
             </ul>
           </div>
         </div>
