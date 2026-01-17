@@ -1,32 +1,55 @@
 /**
- * CONTRACT 5 — Skeleton-First Loading Components
+ * CONTRACT 5 & 5B-1 — Skeleton-First Loading Components
  * 
- * These components render INSTANTLY to ensure first meaningful content ≤ 1.5s
- * per Contract 5 SLA requirements.
+ * These components render INSTANTLY to ensure first meaningful content ≤ 100ms
+ * per Contract 5B-1 SLA requirements.
+ * 
+ * RULES:
+ * - 5B-1.1: Skeleton-First Render - renders before ANY fetch
+ * - Fixed dimensions matching final layout exactly
+ * - No layout shift when data loads
  */
 
 import { memo } from "react";
 import { Skeleton } from "@/components/ui/skeleton";
+import { cn } from "@/lib/utils";
 
 // Book card skeleton - used across multiple pages
 export const BookCardSkeleton = memo(function BookCardSkeleton({ 
-  mobile = false 
-}: { mobile?: boolean }) {
+  mobile = false,
+  className
+}: { mobile?: boolean; className?: string }) {
   if (mobile) {
     return (
-      <div className="space-y-2">
-        <Skeleton className="aspect-[3/4] rounded-xl" />
-        <Skeleton className="h-4 w-3/4" />
-        <Skeleton className="h-3 w-1/2" />
+      <div className={cn(
+        "rounded-lg overflow-hidden bg-card border border-border/50 animate-in fade-in-50 duration-100",
+        className
+      )}>
+        {/* Cover - 3:4 aspect ratio */}
+        <Skeleton className="aspect-[3/4] w-full rounded-none" />
+        {/* Content - tighter spacing for mobile */}
+        <div className="p-3 space-y-2">
+          <Skeleton className="h-3.5 w-3/4" />
+          <Skeleton className="h-4 w-16 rounded-full" />
+          <Skeleton className="h-1.5 w-full rounded-full" />
+        </div>
       </div>
     );
   }
   return (
-    <div className="space-y-3">
-      <Skeleton className="aspect-[3/4] rounded-xl" />
-      <Skeleton className="h-5 w-3/4" />
-      <Skeleton className="h-4 w-full" />
-      <Skeleton className="h-3 w-1/2" />
+    <div className={cn(
+      "rounded-xl overflow-hidden bg-card border border-border/50 animate-in fade-in-50 duration-150",
+      className
+    )}>
+      {/* Cover - 3:4 aspect ratio */}
+      <Skeleton className="aspect-[3/4] w-full rounded-none" />
+      {/* Content */}
+      <div className="p-4 space-y-3">
+        <Skeleton className="h-4 w-3/4" />
+        <Skeleton className="h-5 w-20 rounded-full" />
+        <Skeleton className="h-2 w-full rounded-full" />
+        <Skeleton className="h-9 w-full rounded-md" />
+      </div>
     </div>
   );
 });
@@ -275,5 +298,160 @@ export const HeroSkeleton = memo(function HeroSkeleton() {
         </div>
       </div>
     </section>
+  );
+});
+
+// ============= CONTRACT 5B-1: LIBRARY SKELETONS =============
+
+/**
+ * Library stats skeleton - matches StatCard exactly
+ */
+export const LibraryStatsSkeleton = memo(function LibraryStatsSkeleton({ 
+  isMobile = false 
+}: { isMobile?: boolean }) {
+  if (isMobile) {
+    return (
+      <div className="grid grid-cols-3 gap-3 mb-6">
+        {[1, 2, 3].map((i) => (
+          <div key={i} className="bg-card rounded-lg p-3 text-center border border-border/50">
+            <Skeleton className="h-5 w-8 mx-auto mb-1" />
+            <Skeleton className="h-3 w-12 mx-auto" />
+          </div>
+        ))}
+      </div>
+    );
+  }
+  
+  return (
+    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-8">
+      {[1, 2, 3].map((i) => (
+        <div key={i} className="bg-card rounded-xl border border-border/50 p-4 flex items-center gap-4">
+          <Skeleton className="h-12 w-12 rounded-lg flex-shrink-0" />
+          <div className="space-y-2 flex-1">
+            <Skeleton className="h-6 w-12" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+        </div>
+      ))}
+    </div>
+  );
+});
+
+/**
+ * Library header skeleton
+ */
+export const LibraryHeaderSkeleton = memo(function LibraryHeaderSkeleton({ 
+  isMobile = false 
+}: { isMobile?: boolean }) {
+  if (isMobile) {
+    return (
+      <div className="mb-6">
+        <Skeleton className="h-7 w-32 mb-2" />
+        <Skeleton className="h-4 w-48" />
+      </div>
+    );
+  }
+  
+  return (
+    <div className="text-center mb-8">
+      <Skeleton className="h-14 w-14 rounded-xl mx-auto mb-4" />
+      <Skeleton className="h-10 w-64 mx-auto mb-4" />
+      <Skeleton className="h-5 w-96 mx-auto max-w-full" />
+    </div>
+  );
+});
+
+/**
+ * Library filters skeleton (search + tabs + sort)
+ */
+export const LibraryFiltersSkeleton = memo(function LibraryFiltersSkeleton({ 
+  isMobile = false 
+}: { isMobile?: boolean }) {
+  if (isMobile) {
+    return (
+      <>
+        <Skeleton className="h-10 w-full rounded-md mb-4" />
+        <Skeleton className="h-10 w-full rounded-lg mb-6" />
+      </>
+    );
+  }
+  
+  return (
+    <div className="flex flex-col sm:flex-row gap-4 mb-8">
+      <Skeleton className="h-10 flex-1 rounded-md" />
+      <Skeleton className="h-10 w-64 rounded-lg" />
+      <Skeleton className="h-10 w-40 rounded-md" />
+    </div>
+  );
+});
+
+/**
+ * Full Library Page Skeleton - INSTANT RENDER (Rule 5B-1.1)
+ * This is what users see in <100ms
+ */
+export const LibraryPageSkeleton = memo(function LibraryPageSkeleton({ 
+  isMobile = false 
+}: { isMobile?: boolean }) {
+  const cardCount = isMobile ? 4 : 8;
+  const gridClass = isMobile 
+    ? "grid grid-cols-2 gap-3" 
+    : "grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6";
+  
+  return (
+    <div className={cn(
+      "animate-in fade-in-50 duration-100",
+      isMobile ? "px-4 py-4" : "container mx-auto px-4 py-24"
+    )}>
+      <LibraryHeaderSkeleton isMobile={isMobile} />
+      <LibraryStatsSkeleton isMobile={isMobile} />
+      <LibraryFiltersSkeleton isMobile={isMobile} />
+      <div className={gridClass}>
+        {Array.from({ length: cardCount }).map((_, i) => (
+          <BookCardSkeleton key={i} mobile={isMobile} />
+        ))}
+      </div>
+    </div>
+  );
+});
+
+/**
+ * Dashboard skeleton
+ */
+export const DashboardSkeleton = memo(function DashboardSkeleton({ 
+  isMobile = false 
+}: { isMobile?: boolean }) {
+  return (
+    <div className={cn(
+      "animate-in fade-in-50 duration-100",
+      isMobile ? "px-4 py-4" : "container mx-auto px-4 py-24"
+    )}>
+      {/* Header */}
+      <div className="mb-8">
+        <Skeleton className={cn("mb-2", isMobile ? "h-6 w-32" : "h-9 w-48")} />
+        <Skeleton className={cn(isMobile ? "h-4 w-48" : "h-5 w-64")} />
+      </div>
+      
+      {/* Stats grid */}
+      <div className={cn(
+        "grid gap-4 mb-8",
+        isMobile ? "grid-cols-2" : "grid-cols-4"
+      )}>
+        {[1, 2, 3, 4].map((i) => (
+          <div key={i} className="bg-card rounded-xl border border-border/50 p-4">
+            <Skeleton className="h-8 w-8 rounded-lg mb-2" />
+            <Skeleton className="h-6 w-12 mb-1" />
+            <Skeleton className="h-4 w-20" />
+          </div>
+        ))}
+      </div>
+      
+      {/* Recent activity */}
+      <Skeleton className="h-7 w-40 mb-4" />
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => (
+          <Skeleton key={i} className="h-20 w-full rounded-lg" />
+        ))}
+      </div>
+    </div>
   );
 });
