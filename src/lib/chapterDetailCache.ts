@@ -24,19 +24,63 @@ const STORE_NAME = 'chapters';
 // Only cache last N chapters to prevent storage bloat
 const MAX_CACHED_CHAPTERS = 50;
 
+/**
+ * NORMALIZED CACHE SCHEMA (ISSUE 2 FIX)
+ * All optional fields are explicit and safe with default guards.
+ */
 export interface CachedChapterDetail {
   chapterId: string;
   bookId: string;
   chapterNumber: number;
   title: string;
   wordCount: number | null;
-  contentPreview: string;       // first ~1000 chars for instant display
-  fullContent: string | null;   // full content if cached
-  lastReadPosition: number;     // scroll position 0-100
+  contentPreview: string;           // first ~1000 chars for instant display
+  fullContent: string | null;       // full content if cached
+  lastReadPosition: number;         // scroll position 0-100
   lastUpdated: number;
   isGenerated: boolean;
-  academicMode?: boolean;
-  citationStyle?: string;
+  // Explicit optional fields - never assume presence
+  academicMode: boolean | null;
+  citationStyle: string | null;
+  chapterReferences: unknown[] | null;
+  researchMetadata: Record<string, unknown> | null;
+}
+
+/**
+ * Normalize cache data to ensure all fields are safe
+ */
+export function normalizeCacheEntry(data: Partial<CachedChapterDetail> & { chapterId: string; bookId: string; chapterNumber: number; title: string }): CachedChapterDetail {
+  return {
+    chapterId: data.chapterId,
+    bookId: data.bookId,
+    chapterNumber: data.chapterNumber,
+    title: data.title,
+    wordCount: data.wordCount ?? null,
+    contentPreview: data.contentPreview ?? '',
+    fullContent: data.fullContent ?? null,
+    lastReadPosition: data.lastReadPosition ?? 0,
+    lastUpdated: data.lastUpdated ?? Date.now(),
+    isGenerated: data.isGenerated ?? false,
+    academicMode: data.academicMode ?? null,
+    citationStyle: data.citationStyle ?? null,
+    chapterReferences: data.chapterReferences ?? null,
+    researchMetadata: data.researchMetadata ?? null,
+  };
+}
+
+/**
+ * Generate cache key from bookId + chapterNumber (ISSUE 1 FIX)
+ * Deterministic key that doesn't require chapterId
+ */
+export function generateChapterCacheKey(bookId: string, chapterNumber: number): string {
+  return `chapter:${bookId}:${chapterNumber}`;
+}
+
+/**
+ * Generate cache key from chapterId (legacy support)
+ */
+export function generateChapterIdCacheKey(chapterId: string): string {
+  return `chapter:id:${chapterId}`;
 }
 
 export interface CachedBookMeta {
@@ -213,34 +257,63 @@ function setInLocalStorage<T>(key: string, value: T): void {
 // ============= PUBLIC API =============
 
 /**
- * Get cached chapter detail (INSTANT - Rule 5B-3.1)
- * Returns immediately with cached data or null
+ * Get cached chapter by bookId + chapterNumber (ISSUE 1 FIX)
+ * NO network call required - uses deterministic cache key
  */
-export async function getCachedChapter(chapterId: string): Promise<CachedChapterDetail | null> {
+export async function getCachedChapterByKey(bookId: string, chapterNumber: number): Promise<CachedChapterDetail | null> {
   const startTime = performance.now();
-  const key = `chapter:${chapterId}`;
+  const key = generateChapterCacheKey(bookId, chapterNumber);
   
   const cached = await getFromDB<CachedChapterDetail>(key);
   
   if (cached) {
     const duration = performance.now() - startTime;
-    logger.debug(`Cache hit: chapter "${cached.title}" in ${duration.toFixed(0)}ms`);
+    logger.debug(`Cache hit (key): chapter "${cached.title}" in ${duration.toFixed(0)}ms`);
+    return normalizeCacheEntry(cached);
   }
   
-  return cached;
+  return null;
+}
+
+/**
+ * Get cached chapter detail by chapterId (legacy support)
+ * Returns immediately with cached data or null
+ */
+export async function getCachedChapter(chapterId: string): Promise<CachedChapterDetail | null> {
+  const startTime = performance.now();
+  const key = generateChapterIdCacheKey(chapterId);
+  
+  const cached = await getFromDB<CachedChapterDetail>(key);
+  
+  if (cached) {
+    const duration = performance.now() - startTime;
+    logger.debug(`Cache hit (id): chapter "${cached.title}" in ${duration.toFixed(0)}ms`);
+    return normalizeCacheEntry(cached);
+  }
+  
+  return null;
 }
 
 /**
  * Save chapter detail to persistent cache
+ * Saves to BOTH key types for maximum cache hit rate
  */
-export async function setCachedChapter(data: CachedChapterDetail): Promise<void> {
+export async function setCachedChapter(data: Partial<CachedChapterDetail> & { chapterId: string; bookId: string; chapterNumber: number; title: string }): Promise<void> {
   const startTime = performance.now();
-  const key = `chapter:${data.chapterId}`;
   
-  await setInDB(key, {
+  const normalized = normalizeCacheEntry({
     ...data,
     lastUpdated: Date.now(),
   });
+  
+  // Save to both keys for maximum hit rate
+  const keyById = generateChapterIdCacheKey(data.chapterId);
+  const keyByNumber = generateChapterCacheKey(data.bookId, data.chapterNumber);
+  
+  await Promise.all([
+    setInDB(keyById, normalized),
+    setInDB(keyByNumber, normalized),
+  ]);
   
   logger.debug(`Cached chapter "${data.title}" in ${(performance.now() - startTime).toFixed(0)}ms`);
 }
@@ -321,7 +394,7 @@ export function createCacheFromRouteState(state: {
   wordCount?: number | null;
   content?: string | null;
 }): CachedChapterDetail {
-  return {
+  return normalizeCacheEntry({
     chapterId: state.chapterId,
     bookId: state.bookId,
     chapterNumber: state.chapterNumber,
@@ -329,10 +402,7 @@ export function createCacheFromRouteState(state: {
     wordCount: state.wordCount ?? null,
     contentPreview: generateContentPreview(state.content ?? null),
     fullContent: state.content ?? null,
-    lastReadPosition: 0,
-    lastUpdated: Date.now(),
-    isGenerated: true,
-  };
+  });
 }
 
 /**
