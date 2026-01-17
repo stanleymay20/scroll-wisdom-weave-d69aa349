@@ -395,6 +395,7 @@ export default function Generate() {
         "flex-1 pb-16",
         isMobile ? "pt-4 px-4" : "pt-20 container mx-auto px-4 max-w-3xl"
       )}>
+        <div className={cn("mx-auto", isMobile ? "max-w-full" : "max-w-3xl")}>
           {/* CONTRACT 4.3: Offline warning banner */}
           {!isOnline && (
             <motion.div
