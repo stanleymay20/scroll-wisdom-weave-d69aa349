@@ -36,6 +36,9 @@ import { BestsellerModeToggle } from "@/components/generate/BestsellerModeToggle
 import { AuthorImprint, AuthorMode } from "@/components/generate/AuthorImprint";
 import { usePagePerformance } from "@/lib/performance";
 import { useGracefulDegradation } from "@/hooks/useNetworkAction";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { MobileLayout } from "@/components/layout/MobileLayout";
+import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
   { value: "theology", labelKey: "categories.theology" },
@@ -61,6 +64,7 @@ const CATEGORIES = [
 export default function Generate() {
   const { t, language: uiLanguage } = useLanguage();
   const navigate = useNavigate();
+  const isMobile = useIsMobile();
   
   // CONTRACT 4: Track TTI
   usePagePerformance('Generate');
@@ -374,13 +378,23 @@ export default function Generate() {
     );
   }
 
-  return (
+  // Mobile-optimized layout wrapper
+  const PageWrapper = isMobile ? MobileLayout : ({ children }: { children: React.ReactNode }) => (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <TrialBanner />
       <LaunchBanner />
-      <main className="flex-1 pt-20 pb-16">
-        <div className="container mx-auto px-4 max-w-3xl">
+      {children}
+      <Footer />
+    </div>
+  );
+
+  return (
+    <PageWrapper>
+      <main className={cn(
+        "flex-1 pb-16",
+        isMobile ? "pt-4 px-4" : "pt-20 container mx-auto px-4 max-w-3xl"
+      )}>
           {/* CONTRACT 4.3: Offline warning banner */}
           {!isOnline && (
             <motion.div
@@ -804,7 +818,6 @@ export default function Generate() {
           </motion.div>
         </div>
       </main>
-      <Footer />
-    </div>
+    </PageWrapper>
   );
 }
