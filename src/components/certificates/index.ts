@@ -5,6 +5,7 @@
 
 export { CertificateDisplay } from './CertificateDisplay';
 export { CertificateGenerator } from './CertificateGenerator';
+export { CertificateStatusPanel } from './CertificateStatusPanel';
 export { PublishingCredibility } from './PublishingCredibility';
 
 export { 

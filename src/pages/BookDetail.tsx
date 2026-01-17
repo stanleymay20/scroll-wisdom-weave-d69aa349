@@ -75,6 +75,7 @@ import { usePagePerformance } from "@/lib/performance";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { useBookDetailData } from "@/hooks/useBookDetailData";
 import { GentleOfflineBanner } from "@/components/ui/gentle-offline-banner";
+import { CertificateStatusPanel } from "@/components/certificates";
 import { cn } from "@/lib/utils";
 interface BookData {
   id: string;
@@ -907,6 +908,18 @@ export default function BookDetail() {
                     </div>
                   </div>
                 </>
+              )}
+
+              {/* Certificate Status Panel - Shows eligibility for readers */}
+              {isSaved && (
+                <CertificateStatusPanel
+                  bookId={book.id}
+                  bookTitle={book.title}
+                  totalChapters={chapters.length}
+                  completedChapters={chapters.filter(ch => ch.is_generated).length}
+                  progressPercent={Math.round((chapters.filter(ch => ch.is_generated).length / Math.max(chapters.length, 1)) * 100)}
+                  className="mt-6"
+                />
               )}
 
               {/* AI Disclaimer */}
