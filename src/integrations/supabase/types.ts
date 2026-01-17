@@ -14,6 +14,91 @@ export type Database = {
   }
   public: {
     Tables: {
+      assessment_integrity_logs: {
+        Row: {
+          book_id: string
+          chapter_id: string | null
+          created_at: string
+          device_fingerprint: string | null
+          focus_loss_count: number
+          focus_score: number
+          id: string
+          integrity_score: number
+          paste_count: number
+          paste_score: number
+          quiz_attempt_id: string | null
+          session_duration_ms: number | null
+          severity: string
+          suspicious_timing: boolean
+          timing_score: number
+          typing_score: number
+          typing_variance: number | null
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          chapter_id?: string | null
+          created_at?: string
+          device_fingerprint?: string | null
+          focus_loss_count?: number
+          focus_score?: number
+          id?: string
+          integrity_score?: number
+          paste_count?: number
+          paste_score?: number
+          quiz_attempt_id?: string | null
+          session_duration_ms?: number | null
+          severity?: string
+          suspicious_timing?: boolean
+          timing_score?: number
+          typing_score?: number
+          typing_variance?: number | null
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          chapter_id?: string | null
+          created_at?: string
+          device_fingerprint?: string | null
+          focus_loss_count?: number
+          focus_score?: number
+          id?: string
+          integrity_score?: number
+          paste_count?: number
+          paste_score?: number
+          quiz_attempt_id?: string | null
+          session_duration_ms?: number | null
+          severity?: string
+          suspicious_timing?: boolean
+          timing_score?: number
+          typing_score?: number
+          typing_variance?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assessment_integrity_logs_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assessment_integrity_logs_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assessment_integrity_logs_quiz_attempt_id_fkey"
+            columns: ["quiz_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_attempts"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       books: {
         Row: {
           author_ai_agent: string | null
@@ -372,6 +457,47 @@ export type Database = {
         }
         Relationships: []
       }
+      mastery_attempts: {
+        Row: {
+          attempted_at: string
+          book_id: string
+          id: string
+          integrity_at_attempt: number | null
+          passed: boolean
+          reasons_failed: string[] | null
+          score_at_attempt: number | null
+          user_id: string
+        }
+        Insert: {
+          attempted_at?: string
+          book_id: string
+          id?: string
+          integrity_at_attempt?: number | null
+          passed?: boolean
+          reasons_failed?: string[] | null
+          score_at_attempt?: number | null
+          user_id: string
+        }
+        Update: {
+          attempted_at?: string
+          book_id?: string
+          id?: string
+          integrity_at_attempt?: number | null
+          passed?: boolean
+          reasons_failed?: string[] | null
+          score_at_attempt?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mastery_attempts_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       moderation_queue: {
         Row: {
           action: string | null
@@ -508,32 +634,44 @@ export type Database = {
         Row: {
           book_id: string
           certificate_number: string
+          certificate_type: string | null
           id: string
           isbn: string | null
           issued_at: string
           metadata: Json | null
+          revoked_at: string | null
+          revoked_reason: string | null
           rights_granted: string[] | null
           user_id: string
+          verification_hash: string | null
         }
         Insert: {
           book_id: string
           certificate_number: string
+          certificate_type?: string | null
           id?: string
           isbn?: string | null
           issued_at?: string
           metadata?: Json | null
+          revoked_at?: string | null
+          revoked_reason?: string | null
           rights_granted?: string[] | null
           user_id: string
+          verification_hash?: string | null
         }
         Update: {
           book_id?: string
           certificate_number?: string
+          certificate_type?: string | null
           id?: string
           isbn?: string | null
           issued_at?: string
           metadata?: Json | null
+          revoked_at?: string | null
+          revoked_reason?: string | null
           rights_granted?: string[] | null
           user_id?: string
+          verification_hash?: string | null
         }
         Relationships: [
           {
@@ -541,6 +679,63 @@ export type Database = {
             columns: ["book_id"]
             isOneToOne: false
             referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      quiz_attempts: {
+        Row: {
+          attempt_number: number
+          book_id: string
+          chapter_id: string
+          correct_answers: number
+          created_at: string
+          id: string
+          score: number
+          submitted_at: string
+          time_spent_seconds: number | null
+          total_questions: number
+          user_id: string
+        }
+        Insert: {
+          attempt_number?: number
+          book_id: string
+          chapter_id: string
+          correct_answers?: number
+          created_at?: string
+          id?: string
+          score: number
+          submitted_at?: string
+          time_spent_seconds?: number | null
+          total_questions?: number
+          user_id: string
+        }
+        Update: {
+          attempt_number?: number
+          book_id?: string
+          chapter_id?: string
+          correct_answers?: number
+          created_at?: string
+          id?: string
+          score?: number
+          submitted_at?: string
+          time_spent_seconds?: number | null
+          total_questions?: number
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_attempts_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "quiz_attempts_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
             referencedColumns: ["id"]
           },
         ]
