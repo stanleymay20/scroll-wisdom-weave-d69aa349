@@ -246,18 +246,43 @@
 }
 
 @layer base {
+  /* CONTRACT 5 - Rule 5.2: Global Safe-Area Variables (NON-NEGOTIABLE) */
+  :root {
+    --safe-top: env(safe-area-inset-top);
+    --safe-bottom: env(safe-area-inset-bottom);
+    --safe-left: env(safe-area-inset-left);
+    --safe-right: env(safe-area-inset-right);
+    
+    /* Floating control offsets */
+    --floating-bottom-offset: calc(env(safe-area-inset-bottom) + 5rem);
+    --floating-controls-offset: calc(env(safe-area-inset-bottom) + 1rem);
+    --reader-content-top: calc(env(safe-area-inset-top) + 5rem);
+    --reader-content-top-guided: calc(env(safe-area-inset-top) + 7rem);
+  }
+
   * {
     @apply border-border;
   }
 
   html {
     scroll-behavior: smooth;
+    /* Prevent horizontal overflow on mobile (Rule 5.2) */
+    overflow-x: hidden;
   }
 
   body {
     @apply bg-background text-foreground font-body antialiased;
     background-image: var(--gradient-hero);
     min-height: 100vh;
+    /* CONTRACT 5.2: Apply safe-area padding to body (MANDATORY) */
+    padding-top: var(--safe-top);
+    padding-bottom: var(--safe-bottom);
+    padding-left: var(--safe-left);
+    padding-right: var(--safe-right);
+    /* Prevent any horizontal overflow */
+    overflow-x: hidden;
+    /* Ensure content never goes under notch */
+    -webkit-overflow-scrolling: touch;
   }
 
   h1, h2, h3, h4, h5, h6 {
@@ -381,17 +406,50 @@
   box-shadow: var(--shadow-hover);
 }
 
+/* ===== CONTRACT 5.2: SAFE-AREA UTILITIES ===== */
+.safe-top {
+  padding-top: env(safe-area-inset-top);
+}
+
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+.safe-all {
+  padding-top: env(safe-area-inset-top);
+  padding-bottom: env(safe-area-inset-bottom);
+  padding-left: env(safe-area-inset-left);
+  padding-right: env(safe-area-inset-right);
+}
+
+/* Floating actions must ALWAYS respect safe areas */
+.floating-bottom {
+  bottom: calc(env(safe-area-inset-bottom) + 1rem);
+}
+
+.floating-bottom-controls {
+  bottom: calc(env(safe-area-inset-bottom) + 5rem);
+}
+
+/* Reader-specific offsets for visibility above footer */
+.reader-floating {
+  bottom: calc(env(safe-area-inset-bottom) + 6rem);
+}
+
 /* Reading mode styles */
 .reading-content {
   @apply leading-relaxed text-base sm:text-lg;
   max-width: 65ch;
   margin: 0 auto;
   padding: 0 1rem;
+  /* CONTRACT 5.2: Extra bottom padding for floating controls */
+  padding-bottom: calc(env(safe-area-inset-bottom) + 6rem);
 }
 
 @media (min-width: 640px) {
   .reading-content {
     padding: 0;
+    padding-bottom: calc(env(safe-area-inset-bottom) + 6rem);
   }
 }
 

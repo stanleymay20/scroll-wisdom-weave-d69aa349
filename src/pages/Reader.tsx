@@ -516,8 +516,8 @@ export default function Reader() {
   const currentTheme = READING_THEMES[readingTheme];
 
   return (
-    <div className={`min-h-screen ${currentTheme.bg} transition-colors duration-300 overflow-x-hidden`}>
-      {/* CONTRACT 5.2: Header with safe area inset */}
+    <div className={`min-h-screen ${currentTheme.bg} transition-colors duration-300 overflow-x-hidden safe-all`}>
+      {/* CONTRACT 5.2: Header with HARD safe area inset - never overlaps system UI */}
       <header 
         className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50"
         style={{ paddingTop: "env(safe-area-inset-top)" }}
@@ -796,11 +796,14 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* CONTRACT 5.2: Content area with proper safe area padding */}
+      {/* CONTRACT 5.2: Content area with HARD safe area padding - NEVER touches system UI */}
       <main 
         className="pb-24 overflow-x-hidden"
         style={{ 
-          paddingTop: guidedModeActive ? "calc(env(safe-area-inset-top) + 7rem)" : "calc(env(safe-area-inset-top) + 5rem)",
+          paddingTop: guidedModeActive 
+            ? "var(--reader-content-top-guided, calc(env(safe-area-inset-top) + 7rem))" 
+            : "var(--reader-content-top, calc(env(safe-area-inset-top) + 5rem))",
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 6rem)",
         }}
       >
         <article className="container mx-auto px-4 max-w-3xl overflow-x-hidden" ref={contentRef}>
@@ -980,10 +983,14 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* CONTRACT 5.2: Navigation Footer with safe area inset */}
+      {/* CONTRACT 5.2: Navigation Footer with HARD safe area inset - NEVER overlaps home indicator */}
       <footer 
         className="fixed bottom-0 left-0 right-0 bg-background/90 backdrop-blur-xl border-t border-border/50"
-        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        style={{ 
+          paddingBottom: "calc(env(safe-area-inset-bottom) + 0.5rem)",
+          paddingLeft: "env(safe-area-inset-left)",
+          paddingRight: "env(safe-area-inset-right)",
+        }}
       >
         <div className="container mx-auto px-4 h-16 flex items-center justify-between">
           <Button
