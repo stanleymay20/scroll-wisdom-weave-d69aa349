@@ -1,10 +1,12 @@
 /**
- * CONTRACT 6D — Public Certificate Verification Page
+ * CONTRACT 6D + 7A — Public Certificate Verification Page
  * 
  * Route: /certificate/:certificateNumber
  * 
  * Read-only, server-authoritative, no auth required.
  * Used by employers and institutions to verify certificate authenticity.
+ * 
+ * 7A: Adds export functionality (JSON/PDF) and share controls.
  */
 
 import { useParams, Link } from 'react-router-dom';
@@ -12,7 +14,8 @@ import { useQuery } from '@tanstack/react-query';
 import { 
   Award, Shield, CheckCircle2, XCircle, Calendar, 
   User, BookOpen, ExternalLink, Copy, Check,
-  AlertTriangle, Building2
+  AlertTriangle, Building2, Download, FileJson, FileText,
+  Share2
 } from 'lucide-react';
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -24,6 +27,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { Logo } from '@/components/brand';
 import { CERTIFICATE_ISSUER, getIssuerSignature } from '@/lib/certificateAuthority';
+import { toast } from 'sonner';
 
 interface CertificateData {
   valid: boolean;
@@ -135,6 +139,92 @@ export default function CertificateVerify() {
       await navigator.clipboard.writeText(data.verification_hash);
       setCopied(true);
       setTimeout(() => setCopied(false), 2000);
+    }
+  };
+
+  // 7A: Export certificate as JSON
+  const exportAsJSON = async () => {
+    if (!certificateNumber) return;
+    try {
+      const { data: exportData, error } = await supabase.functions.invoke('export-certificate', {
+        body: null,
+        method: 'GET',
+      });
+      
+      // Fallback: direct URL call for GET requests
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-certificate?number=${certificateNumber}&format=json`
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Export failed');
+      }
+      
+      const jsonData = await response.json();
+      const blob = new Blob([JSON.stringify(jsonData, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `certificate-${certificateNumber}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast.success('Certificate exported as JSON');
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Failed to export certificate');
+    }
+  };
+
+  // 7A: Export certificate as PDF (HTML for print)
+  const exportAsPDF = async () => {
+    if (!certificateNumber) return;
+    try {
+      const response = await fetch(
+        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/export-certificate?number=${certificateNumber}&format=pdf`
+      );
+      
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Export failed');
+      }
+      
+      const htmlContent = await response.text();
+      
+      // Open in new window for printing
+      const printWindow = window.open('', '_blank');
+      if (printWindow) {
+        printWindow.document.write(htmlContent);
+        printWindow.document.close();
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      }
+      toast.success('Certificate ready to print');
+    } catch (err) {
+      console.error('Export error:', err);
+      toast.error('Failed to export certificate');
+    }
+  };
+
+  // 7A: Share certificate URL
+  const shareCertificate = async () => {
+    const url = `${window.location.origin}/certificate/${certificateNumber}`;
+    if (navigator.share) {
+      try {
+        await navigator.share({
+          title: `Certificate - ${data?.metadata?.bookTitle || 'ScrollLibrary'}`,
+          text: `Verify my ${data?.certificate_type || 'completion'} certificate from ScrollLibrary`,
+          url,
+        });
+      } catch (err) {
+        // User cancelled or share failed, copy instead
+        await navigator.clipboard.writeText(url);
+        toast.success('Certificate URL copied to clipboard');
+      }
+    } else {
+      await navigator.clipboard.writeText(url);
+      toast.success('Certificate URL copied to clipboard');
     }
   };
 
@@ -404,6 +494,48 @@ export default function CertificateVerify() {
                 <p className="text-xs text-muted-foreground mt-1">Authorized Signature</p>
               </div>
             </div>
+
+            {/* 7A: Export & Share Controls */}
+            {!isRevoked && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Export & Share</p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={exportAsJSON}
+                      className="gap-2"
+                    >
+                      <FileJson className="h-4 w-4" />
+                      Export JSON
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={exportAsPDF}
+                      className="gap-2"
+                    >
+                      <FileText className="h-4 w-4" />
+                      Print PDF
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={shareCertificate}
+                      className="gap-2"
+                    >
+                      <Share2 className="h-4 w-4" />
+                      Share
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    Export for records or share with employers. JSON format is machine-readable.
+                  </p>
+                </div>
+              </>
+            )}
           </CardContent>
         </Card>
 

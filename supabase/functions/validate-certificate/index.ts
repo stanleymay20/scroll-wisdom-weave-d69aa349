@@ -15,6 +15,12 @@ const corsHeaders = {
 };
 
 // ============================================================
+// 7A Schema Version (for forward compatibility)
+// ============================================================
+
+const CERTIFICATE_SCHEMA_VERSION = '7.0';
+
+// ============================================================
 // 6C Eligibility Constants (mirrored from client)
 // ============================================================
 
@@ -531,6 +537,7 @@ Deno.serve(async (req) => {
         certificate_number: certificateNumber,
         issued_at: issuedAt,
         metadata: {
+          schemaVersion: CERTIFICATE_SCHEMA_VERSION, // 7A: Schema versioning
           certificateType: eligibility.certificateType,
           recipientName: userName,
           recipientEmail: userEmail,
@@ -540,6 +547,7 @@ Deno.serve(async (req) => {
           verificationHash,
           chaptersCompleted: completedChapters,
           totalChapters,
+          issuedWithVersion: CERTIFICATE_SCHEMA_VERSION, // Immutable record
         },
       })
       .select()
