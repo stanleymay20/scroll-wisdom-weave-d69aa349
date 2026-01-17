@@ -3,6 +3,7 @@ import { useParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -61,6 +62,8 @@ import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagePerformance } from "@/lib/performance";
 import { apiCache, cacheKeys } from "@/lib/cache";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 interface BookData {
   id: string;
   title: string;
@@ -89,6 +92,7 @@ export default function BookDetail() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   
   // CONTRACT 4: Track TTI
   usePagePerformance('BookDetail');
@@ -664,9 +668,17 @@ export default function BookDetail() {
   const totalWords = chapters.reduce((sum, ch) => sum + (ch.word_count || 0), 0);
   const readingTime = Math.ceil(totalWords / 200) || 1;
 
-  return (
+  // Mobile layout wrapper
+  const PageWrapper = isMobile ? MobileLayout : ({ children }: { children: React.ReactNode }) => (
     <div className="min-h-screen">
       <Navbar />
+      {children}
+      <Footer />
+    </div>
+  );
+
+  return (
+    <PageWrapper>
 
       {/* Delete Book Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -1137,7 +1149,6 @@ export default function BookDetail() {
           </motion.div>
         </div>
       </main>
-      <Footer />
-    </div>
+    </PageWrapper>
   );
 }

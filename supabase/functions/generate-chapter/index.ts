@@ -2546,6 +2546,38 @@ Format:
     // Sanitize all markdown from final content before saving
     finalContent = sanitizeMarkdown(finalContent);
     
+    // ===========================================
+    // CONTRACT 6 — HARD RUNTIME GATE (POST-GENERATION)
+    // RULE 6.2: Content MUST be blocked if it violates Contract 6
+    // RULE 6.4: Generation STOPS on first critical violation
+    // ===========================================
+    const { validateContract6Content, isValidBookType } = await import("../_shared/contract6-governance.ts");
+    
+    const validatedBookType = isValidBookType(effectiveBookType) ? effectiveBookType : 'text';
+    const contract6Validation = validateContract6Content(finalContent, validatedBookType, chapterTitle);
+    
+    if (!contract6Validation.valid && contract6Validation.shouldRegenerate) {
+      const criticalViolation = contract6Validation.violations[0];
+      console.log(`[CONTRACT 6] VIOLATION DETECTED: ${criticalViolation.code} - ${criticalViolation.message}`);
+      
+      // For non-admin users, block the content and return error
+      if (!isAdmin) {
+        console.log(`[CONTRACT 6] BLOCKING content for book type: ${effectiveBookType}`);
+        return new Response(JSON.stringify({
+          error: `CONTRACT 6 VIOLATION: ${criticalViolation.message}`,
+          code: criticalViolation.code,
+          bookType: effectiveBookType,
+          shouldRegenerate: true,
+          userMessage: contract6Validation.userMessage,
+        }), { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      } else {
+        console.log(`[CONTRACT 6] Admin override - saving content despite violations`);
+      }
+    } else if (!contract6Validation.valid) {
+      // Log non-critical violations but allow content
+      console.log(`[CONTRACT 6] Non-critical violations detected: ${contract6Validation.violations.length}`);
+    }
+    
     const actualWordCount = finalContent.split(/\s+/).filter((w: string) => w.length > 0).length;
 
     const updateData: any = {
@@ -2577,6 +2609,11 @@ Format:
       provider: 'Lovable AI',
       academicMode,
       sourceCount: researchResult?.references.length || 0,
+      contract6: {
+        valid: contract6Validation.valid,
+        violations: contract6Validation.violations.length,
+        bookType: effectiveBookType,
+      },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     
   } catch (error) {

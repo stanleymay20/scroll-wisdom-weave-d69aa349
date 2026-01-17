@@ -1,6 +1,7 @@
 export { BookTypeContractStatus } from './BookTypeContractStatus';
 export { ChangePreviewDialog } from './ChangePreviewDialog';
 export { Contract5Dashboard } from './Contract5Dashboard';
+export { Contract6ViolationBanner, Contract6StatusIndicator } from './Contract6ViolationBanner';
 export { DiagnosticsPanel } from './DiagnosticsPanel';
 export { EditScopeDialog } from './EditScopeDialog';
 export { ExportValidationStatus } from './ExportValidationStatus';

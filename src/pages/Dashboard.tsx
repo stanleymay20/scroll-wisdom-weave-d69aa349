@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { MobileLayout } from "@/components/layout/MobileLayout";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
@@ -13,6 +14,8 @@ import {
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { apiCache } from "@/lib/cache";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 
 interface DashboardStats {
   totalBooks: number;
@@ -104,6 +107,7 @@ function DashboardSkeleton() {
 }
 
 export default function Dashboard() {
+  const isMobile = useIsMobile();
   const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const [stats, setStats] = useState<DashboardStats>({ totalBooks: 0, totalChapters: 0, totalWords: 0, booksInProgress: 0 });
@@ -238,12 +242,22 @@ export default function Dashboard() {
     { icon: Clock, label: "In Progress", value: stats.booksInProgress, color: "text-purple-400" },
   ];
 
-  return (
+  // Mobile layout wrapper
+  const PageWrapper = isMobile ? MobileLayout : ({ children }: { children: React.ReactNode }) => (
     <div className="min-h-screen flex flex-col">
       <Navbar />
-      
-      <main className="flex-1 pt-24 pb-16">
-        <div className="container mx-auto px-4 max-w-6xl">
+      {children}
+      <Footer />
+    </div>
+  );
+
+  return (
+    <PageWrapper>
+      <main className={cn(
+        "flex-1 pb-16",
+        isMobile ? "pt-4 px-4" : "pt-24 container mx-auto px-4 max-w-6xl"
+      )}>
+        <div className={cn("mx-auto", isMobile ? "" : "max-w-6xl")}>
           <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
             {/* Welcome Header */}
             <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
@@ -395,8 +409,6 @@ export default function Dashboard() {
           </motion.div>
         </div>
       </main>
-
-      <Footer />
-    </div>
+    </PageWrapper>
   );
 }
