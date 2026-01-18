@@ -48,6 +48,8 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   const activeBlobUrlsRef = useRef<string[]>([]);
   const prevStopKeyRef = useRef<string | number | undefined>(undefined);
   const isMountedRef = useRef(true);
+  const wasPlayingBeforeInterruptRef = useRef(false);
+  const currentChunkIndexRef = useRef(0);
 
   // Track mounted state
   useEffect(() => {
@@ -56,6 +58,32 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       isMountedRef.current = false;
     };
   }, []);
+
+  // Handle visibility changes (tab switch, phone call, etc.)
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        // Page is hidden - track if we were playing
+        if (isPlaying && !isLoading) {
+          wasPlayingBeforeInterruptRef.current = true;
+          console.log("[TTS] Page hidden while playing - will attempt resume on return");
+        }
+      } else {
+        // Page is visible again
+        if (wasPlayingBeforeInterruptRef.current && !isPlaying && !isLoading) {
+          console.log("[TTS] Page visible again - audio may have been interrupted");
+          // Note: We don't auto-resume as it may be disruptive
+          // User can tap play to continue
+          wasPlayingBeforeInterruptRef.current = false;
+        }
+      }
+    };
+
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    return () => {
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [isPlaying, isLoading]);
 
   const base64ToBlobUrl = useCallback((base64: string, mimeType = "audio/mpeg") => {
     try {
@@ -131,6 +159,9 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       const audio = new Audio();
       audioRef.current = audio;
       audio.volume = volume;
+      
+      // Set audio attributes for better mobile behavior
+      audio.preload = 'auto';
 
       const cleanup = () => {
         audio.onplay = null;
@@ -138,6 +169,8 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         audio.onpause = null;
         audio.onerror = null;
         audio.ontimeupdate = null;
+        audio.onstalled = null;
+        audio.onwaiting = null;
       };
 
       audio.onplay = () => {
@@ -157,12 +190,33 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         if (stopRef.current || isStoppingRef.current) {
           cleanup();
           resolve(false);
+        } else {
+          // Unexpected pause (interruption) - try to resume
+          console.log("[TTS] Audio paused unexpectedly - attempting resume");
+          setTimeout(() => {
+            if (isMountedRef.current && !stopRef.current && audioRef.current === audio) {
+              audio.play().catch((err) => {
+                if (err?.name !== 'AbortError') {
+                  console.warn("[TTS] Resume failed:", err);
+                }
+              });
+            }
+          }, 200);
         }
       };
 
-      audio.onerror = () => {
+      audio.onerror = (e) => {
+        console.error("[TTS] Audio error:", e);
         cleanup();
         resolve(false);
+      };
+      
+      audio.onstalled = () => {
+        console.log("[TTS] Audio stalled - waiting for data");
+      };
+      
+      audio.onwaiting = () => {
+        console.log("[TTS] Audio waiting for data");
       };
 
       audio.ontimeupdate = () => {

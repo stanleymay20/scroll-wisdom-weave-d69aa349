@@ -63,23 +63,92 @@ function sanitizeFilename(title: string): string {
   return title.replace(/[^a-zA-Z0-9\s]/g, "").replace(/\s+/g, "_").substring(0, 50);
 }
 
+// Parse custom TABLE format from generate-chapter (non-markdown)
+// Format: TABLE: [Name]\n\nColumn 1: [H] Column 2: [H]\n\nRow 1:\n[H1]: [V]\n[H2]: [V]
+interface ParsedTable {
+  name: string;
+  headers: string[];
+  rows: string[][];
+}
+
+function parseCustomTableFormat(text: string): { tables: ParsedTable[]; cleanedText: string } {
+  const tables: ParsedTable[] = [];
+  
+  // Match custom table format: TABLE: [name] followed by Column/Row definitions
+  const tablePattern = /TABLE:\s*([^\n]+)\n\n(Column \d+:[^\n]+(?:\n|$))+\n*((?:Row \d+:[\s\S]*?(?=\n\nRow \d+:|\n\n[A-Z]|\n\n$|$))+)/gi;
+  
+  let cleanedText = text;
+  let match;
+  
+  while ((match = tablePattern.exec(text)) !== null) {
+    const tableName = match[1].trim();
+    const fullMatch = match[0];
+    
+    // Parse column headers
+    const columnMatch = fullMatch.match(/Column \d+:\s*([^\n]+)/g) || [];
+    const headers = columnMatch.map(col => {
+      const headerMatch = col.match(/Column \d+:\s*(.+)/);
+      return headerMatch ? headerMatch[1].trim() : '';
+    });
+    
+    // Parse rows - each row has format "Row N:\nHeader1: Value1\nHeader2: Value2"
+    const rows: string[][] = [];
+    const rowMatches = fullMatch.match(/Row \d+:[\s\S]*?(?=Row \d+:|$)/g) || [];
+    
+    for (const rowText of rowMatches) {
+      const rowValues: string[] = [];
+      for (const header of headers) {
+        // Try to find "Header: Value" pattern
+        const valuePattern = new RegExp(`${header.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}:\\s*([^\\n]+)`, 'i');
+        const valueMatch = rowText.match(valuePattern);
+        if (valueMatch) {
+          rowValues.push(valueMatch[1].trim());
+        } else {
+          rowValues.push('');
+        }
+      }
+      if (rowValues.some(v => v)) {
+        rows.push(rowValues);
+      }
+    }
+    
+    if (headers.length > 0 && rows.length > 0) {
+      tables.push({ name: tableName, headers, rows });
+      cleanedText = cleanedText.replace(fullMatch, `[CUSTOM_TABLE_${tables.length - 1}]`);
+    }
+  }
+  
+  return { tables, cleanedText };
+}
+
 // Enhanced markdown processing that preserves code blocks and images
 // Handles BOTH markdown image format AND comic "Panel N" format with storage URLs
 function processMarkdownContent(text: string): { 
   paragraphs: string[]; 
   codeBlocks: { lang: string; code: string }[]; 
   tables: string[][];
+  customTables: ParsedTable[];
   images: { alt: string; url: string }[];
 } {
-  if (!text) return { paragraphs: [], codeBlocks: [], tables: [], images: [] };
+  if (!text) return { paragraphs: [], codeBlocks: [], tables: [], customTables: [], images: [] };
   
   const codeBlocks: { lang: string; code: string }[] = [];
   const tables: string[][] = [];
   const images: { alt: string; url: string }[] = [];
   
-  // Extract code blocks first
-  let processedText = text.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
+  // First, parse custom TABLE: format
+  const { tables: customTables, cleanedText: textAfterCustomTables } = parseCustomTableFormat(text);
+  console.log(`[EXPORT] Found ${customTables.length} custom tables`);
+  
+  // Extract code blocks - handle both fenced and "CODE EXAMPLE" format
+  let processedText = textAfterCustomTables.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
     codeBlocks.push({ lang: lang || 'text', code: code.trim() });
+    return `[CODE_BLOCK_${codeBlocks.length - 1}]`;
+  });
+  
+  // Also handle "CODE EXAMPLE (Language):" format
+  processedText = processedText.replace(/CODE EXAMPLE \(([^)]+)\):\n\n((?:    [^\n]*\n?)+)/gi, (_, lang, code) => {
+    codeBlocks.push({ lang: lang || 'text', code: code.replace(/^    /gm, '').trim() });
     return `[CODE_BLOCK_${codeBlocks.length - 1}]`;
   });
   
@@ -93,7 +162,7 @@ function processMarkdownContent(text: string): {
     return `[IMAGE_${images.length - 1}]`;
   });
   
-  // Extract tables
+  // Extract markdown tables (pipe format - fallback)
   const tableRegex = /\|[^\n]+\|\n\|[-:| ]+\|\n(\|[^\n]+\|\n)+/g;
   processedText = processedText.replace(tableRegex, (match) => {
     const rows = match.split('\n').filter(r => r.trim() && !r.match(/^[-:| ]+$/));
@@ -118,9 +187,9 @@ function processMarkdownContent(text: string): {
   
   const paragraphs = stripped.split(/\n\n+/).filter(p => p.trim());
   
-  console.log(`[EXPORT] processMarkdownContent found ${images.length} images`);
+  console.log(`[EXPORT] processMarkdownContent found ${images.length} images, ${codeBlocks.length} code blocks`);
   
-  return { paragraphs, codeBlocks, tables, images };
+  return { paragraphs, codeBlocks, tables, customTables, images };
 }
 
 function stripMarkdown(text: string): string {
@@ -679,8 +748,8 @@ async function generatePDF(
     }
     y -= 30;
     
-    // Process content with code block and image handling
-    const { paragraphs, codeBlocks, images } = processMarkdownContent(chapter.content || "");
+    // Process content with code block, image, and table handling
+    const { paragraphs, codeBlocks, images, customTables } = processMarkdownContent(chapter.content || "");
     
     // Pre-fetch all images for this chapter (for comics)
     const fetchedImages: Map<number, { bytes: Uint8Array; type: 'png' | 'jpg' }> = new Map();
@@ -835,6 +904,102 @@ async function generatePDF(
             y -= 12;
           }
           y -= 10;
+          continue;
+        }
+      }
+      
+      // Check if this is a custom table placeholder
+      const customTableMatch = paragraph.match(/\[CUSTOM_TABLE_(\d+)\]/);
+      if (customTableMatch) {
+        const tableIndex = parseInt(customTableMatch[1]);
+        const table = customTables[tableIndex];
+        if (table) {
+          // Render custom table
+          y -= 10;
+          
+          // Calculate table dimensions
+          const numCols = table.headers.length;
+          const colWidth = textWidth / numCols;
+          const rowHeight = 18;
+          const headerHeight = 24;
+          const tableHeight = headerHeight + (table.rows.length * rowHeight) + 30;
+          
+          if (y - tableHeight < margin + 30) {
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            addPageNumber(page, pageNumber);
+            y = pageHeight - margin - 30;
+          }
+          
+          // Table title
+          page.drawText(table.name, {
+            x: margin,
+            y,
+            size: 11,
+            font: timesRomanBold,
+            color: rgb(0.1, 0.1, 0.1),
+          });
+          y -= 20;
+          
+          // Draw header background
+          page.drawRectangle({
+            x: margin,
+            y: y - headerHeight + 5,
+            width: textWidth,
+            height: headerHeight,
+            color: rgb(0.92, 0.92, 0.92),
+          });
+          
+          // Draw headers
+          for (let i = 0; i < table.headers.length; i++) {
+            const headerText = table.headers[i].slice(0, 25); // Truncate long headers
+            page.drawText(headerText, {
+              x: margin + (i * colWidth) + 5,
+              y: y - 12,
+              size: 9,
+              font: timesRomanBold,
+              color: rgb(0.1, 0.1, 0.1),
+            });
+          }
+          y -= headerHeight;
+          
+          // Draw rows
+          for (let rowIdx = 0; rowIdx < table.rows.length; rowIdx++) {
+            const row = table.rows[rowIdx];
+            
+            // Alternate row background
+            if (rowIdx % 2 === 1) {
+              page.drawRectangle({
+                x: margin,
+                y: y - rowHeight + 5,
+                width: textWidth,
+                height: rowHeight,
+                color: rgb(0.97, 0.97, 0.97),
+              });
+            }
+            
+            for (let colIdx = 0; colIdx < row.length && colIdx < numCols; colIdx++) {
+              const cellText = (row[colIdx] || '').slice(0, 30); // Truncate long values
+              page.drawText(cellText, {
+                x: margin + (colIdx * colWidth) + 5,
+                y: y - 12,
+                size: 9,
+                font: timesRoman,
+                color: rgb(0.2, 0.2, 0.2),
+              });
+            }
+            y -= rowHeight;
+            
+            // Check if we need a new page
+            if (y < margin + 30 && rowIdx < table.rows.length - 1) {
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              addPageNumber(page, pageNumber);
+              y = pageHeight - margin - 30;
+            }
+          }
+          
+          y -= 15;
           continue;
         }
       }

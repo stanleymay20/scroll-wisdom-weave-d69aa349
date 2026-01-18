@@ -963,11 +963,12 @@ export const translations: Record<Language, Record<string, string>> = {
     'library.failedLoadMore': 'Échec du chargement de plus de livres.',
     
     'explore.title': 'Explorer la',
-    'explore.titleHighlight': 'Bibliothèque',
+    'explore.highlight': 'Bibliothèque',
     'explore.subtitle': 'Parcourez notre collection de livres générés par IA.',
     'explore.searchPlaceholder': 'Rechercher des livres...',
     'explore.noBooks': 'Pas encore de livres. Soyez le premier à en générer un !',
     'explore.noBooksFound': 'Aucun livre trouvé. Essayez d\'ajuster votre recherche.',
+    'explore.allCategories': 'Tous',
     
     'book.readNow': 'Lire maintenant',
     'book.continueReading': 'Continuer la lecture',
