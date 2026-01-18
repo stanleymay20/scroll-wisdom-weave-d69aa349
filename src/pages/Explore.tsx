@@ -332,7 +332,7 @@ export default function Explore() {
             className="mb-12"
           >
             <h1 className="font-display text-4xl md:text-5xl font-bold mb-4">
-              {t('explore.title')} <span className="text-gradient-gold">{t('explore.highlight')}</span>
+              {t('explore.title')} <span className="text-gradient-gold">{t('explore.titleHighlight')}</span>
             </h1>
             <p className="text-muted-foreground text-lg max-w-2xl">
               {t('explore.subtitle')}

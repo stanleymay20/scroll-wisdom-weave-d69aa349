@@ -109,9 +109,10 @@ export function useLibraryData({
     };
   }, []);
   
-  // RULE 5B-1.2: Load cached data IMMEDIATELY (don't wait for auth)
+  // RULE 5B-1.2: Load cached data IMMEDIATELY - SYNCHRONOUS FIRST PAINT
   useEffect(() => {
     if (initCompleteRef.current) return;
+    initCompleteRef.current = true;
     
     const loadCachedData = async () => {
       const startTime = performance.now();
@@ -122,12 +123,11 @@ export function useLibraryData({
         const cachedUserId = userId || sessionStorage.getItem('last-library-user');
         
         if (!cachedUserId) {
-          // No cached user, just mark as skeleton and wait for auth
-          initCompleteRef.current = true;
+          // No cached user, just stay in skeleton and wait for auth
           return;
         }
         
-        // Load cached items in parallel
+        // Load cached items in parallel - NO AWAIT DELAY
         const [cachedItems, cachedStats] = await Promise.all([
           getCachedLibrary(cachedUserId),
           getCachedStats(),
@@ -159,28 +159,21 @@ export function useLibraryData({
           const cacheTime = performance.now() - startTime;
           markCacheRender('Library');
           logger.info(`Cache rendered in ${cacheTime.toFixed(0)}ms`);
+          
+          // Immediately update load state to show cached data
+          setLoadState('hydrating');
         }
         
         if (cachedStats) {
           setStats(cachedStats);
         }
         
-        // Update load state
-        setLoadState(determineLoadState(
-          hasCachedData.current,
-          true, // Still loading fresh
-          isOnline.current,
-          false
-        ));
-        
       } catch (e) {
         logger.warn('Failed to load cached data:', e);
       }
-      
-      initCompleteRef.current = true;
     };
     
-    // Execute immediately - no setTimeout for cache
+    // Execute IMMEDIATELY - no requestAnimationFrame, no setTimeout
     loadCachedData();
     
     return () => {
@@ -296,10 +289,13 @@ export function useLibraryData({
   
   // RULE 5B-1.3: Progressive Hydration - fetch fresh data after cache render
   useEffect(() => {
-    if (!userId || !initCompleteRef.current) return;
+    if (!userId) return;
     
+    // Don't wait for initCompleteRef - hydrate as soon as we have userId
     const hydrateData = async () => {
-      setLoadState(hasCachedData.current ? 'hydrating' : 'skeleton');
+      if (!hasCachedData.current) {
+        setLoadState('skeleton');
+      }
       
       await Promise.all([
         fetchItems(0, true),
@@ -312,10 +308,8 @@ export function useLibraryData({
       }
     };
     
-    // Defer hydration slightly to not block cache render
-    const timeoutId = setTimeout(hydrateData, 50);
-    
-    return () => clearTimeout(timeoutId);
+    // Start hydration immediately - no delay
+    hydrateData();
   }, [userId, fetchItems, fetchStats]);
   
   // Load more (pagination)
