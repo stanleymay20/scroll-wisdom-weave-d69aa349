@@ -166,10 +166,39 @@ function setInLocalStorage<T>(key: string, value: T): void {
 // ============= PUBLIC API =============
 
 /**
+ * Get cached library items SYNCHRONOUSLY first (Rule 5B-1.2)
+ * Tries localStorage immediately, then IndexedDB async
+ */
+export function getCachedLibrarySync(userId: string): CachedLibraryItem[] | null {
+  try {
+    // Check metadata first - SYNCHRONOUS
+    const metadataStr = localStorage.getItem(METADATA_KEY);
+    if (!metadataStr) return null;
+    
+    const metadata: CacheMetadata = JSON.parse(metadataStr);
+    if (metadata.userId !== userId) return null;
+    
+    // Get items - SYNCHRONOUS
+    const itemsStr = localStorage.getItem(ITEMS_KEY);
+    if (!itemsStr) return null;
+    
+    const items: CachedLibraryItem[] = JSON.parse(itemsStr);
+    logger.debug(`Sync cache hit: ${items.length} items`);
+    return items;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Get cached library items (INSTANT - Rule 5B-1.2)
  * Returns immediately with cached data or null
  */
 export async function getCachedLibrary(userId: string): Promise<CachedLibraryItem[] | null> {
+  // Try sync first for instant result
+  const syncResult = getCachedLibrarySync(userId);
+  if (syncResult) return syncResult;
+  
   const startTime = performance.now();
   
   // Check metadata matches current user
@@ -183,10 +212,23 @@ export async function getCachedLibrary(userId: string): Promise<CachedLibraryIte
   
   if (items) {
     const duration = performance.now() - startTime;
-    logger.debug(`Cache hit: ${items.length} items in ${duration.toFixed(0)}ms`);
+    logger.debug(`Async cache hit: ${items.length} items in ${duration.toFixed(0)}ms`);
   }
   
   return items;
+}
+
+/**
+ * Get cached stats SYNCHRONOUSLY
+ */
+export function getCachedStatsSync(): CachedLibraryStats | null {
+  try {
+    const statsStr = localStorage.getItem(STATS_KEY);
+    if (!statsStr) return null;
+    return JSON.parse(statsStr);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -197,7 +239,7 @@ export async function getCachedStats(): Promise<CachedLibraryStats | null> {
 }
 
 /**
- * Save library items to persistent cache
+ * Save library items to persistent cache (dual-write to localStorage + IndexedDB)
  */
 export async function setCachedLibrary(
   userId: string, 
@@ -205,24 +247,37 @@ export async function setCachedLibrary(
 ): Promise<void> {
   const startTime = performance.now();
   
-  // Save items
-  await setInDB(ITEMS_KEY, items);
-  
-  // Update metadata
+  // SYNC write to localStorage FIRST for instant retrieval next time
   const metadata: CacheMetadata = {
     version: CACHE_VERSION,
     lastUpdated: Date.now(),
     userId,
   };
+  
+  try {
+    localStorage.setItem(ITEMS_KEY, JSON.stringify(items));
+    localStorage.setItem(METADATA_KEY, JSON.stringify(metadata));
+  } catch (e) {
+    logger.warn('localStorage write failed, using IndexedDB only');
+  }
+  
+  // ASYNC write to IndexedDB for larger datasets
+  await setInDB(ITEMS_KEY, items);
   await setInDB(METADATA_KEY, metadata);
   
   logger.debug(`Cached ${items.length} items in ${(performance.now() - startTime).toFixed(0)}ms`);
 }
 
 /**
- * Save library stats to persistent cache
+ * Save library stats to persistent cache (dual-write)
  */
 export async function setCachedStats(stats: CachedLibraryStats): Promise<void> {
+  // SYNC write first
+  try {
+    localStorage.setItem(STATS_KEY, JSON.stringify(stats));
+  } catch {}
+  
+  // ASYNC backup
   await setInDB(STATS_KEY, stats);
 }
 

@@ -15,7 +15,9 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { 
   getCachedLibrary, 
+  getCachedLibrarySync,
   getCachedStats,
+  getCachedStatsSync,
   setCachedLibrary, 
   setCachedStats,
   transformToCachedItem,
@@ -78,10 +80,34 @@ export function useLibraryData({
   isMobile = false, 
   userId 
 }: UseLibraryDataOptions): UseLibraryDataReturn {
-  // Core state
-  const [items, setItems] = useState<LibraryItem[]>([]);
-  const [stats, setStats] = useState<CachedLibraryStats>({ total: 0, reading: 0, completed: 0 });
-  const [loadState, setLoadState] = useState<LibraryLoadState>('skeleton');
+  // CRITICAL: Try SYNC cache IMMEDIATELY during initialization
+  const cachedUserId = userId || sessionStorage.getItem('last-library-user');
+  const initialItems = cachedUserId ? getCachedLibrarySync(cachedUserId) : null;
+  const initialStats = getCachedStatsSync();
+  
+  // Transform cached items to full format if available
+  const transformedInitialItems: LibraryItem[] = initialItems 
+    ? initialItems.map(item => ({
+        id: item.id,
+        book_id: item.book_id,
+        progress_percent: item.progress_percent,
+        last_read_chapter: item.last_read_chapter,
+        created_at: item.created_at,
+        books: {
+          id: item.book_id,
+          title: item.title,
+          description: null,
+          category: item.category,
+          cover_image_url: item.cover_image_url,
+          total_chapters: item.total_chapters,
+        },
+      }))
+    : [];
+  
+  // Core state - INITIALIZED WITH CACHED DATA
+  const [items, setItems] = useState<LibraryItem[]>(transformedInitialItems);
+  const [stats, setStats] = useState<CachedLibraryStats>(initialStats || { total: 0, reading: 0, completed: 0 });
+  const [loadState, setLoadState] = useState<LibraryLoadState>(initialItems && initialItems.length > 0 ? 'hydrating' : 'skeleton');
   const [error, setError] = useState<string | null>(null);
   
   // Pagination
@@ -90,10 +116,10 @@ export function useLibraryData({
   const [isLoadingMore, setIsLoadingMore] = useState(false);
   
   // Refs for tracking
-  const hasCachedData = useRef(false);
+  const hasCachedData = useRef(initialItems && initialItems.length > 0);
   const isOnline = useRef(navigator.onLine);
   const mountedRef = useRef(true);
-  const initCompleteRef = useRef(false);
+  const initCompleteRef = useRef(initialItems && initialItems.length > 0);
   
   // Track online status
   useEffect(() => {
@@ -109,77 +135,18 @@ export function useLibraryData({
     };
   }, []);
   
-  // RULE 5B-1.2: Load cached data IMMEDIATELY - SYNCHRONOUS FIRST PAINT
+  // Mark first content if we had sync cache
   useEffect(() => {
-    if (initCompleteRef.current) return;
-    initCompleteRef.current = true;
-    
-    const loadCachedData = async () => {
-      const startTime = performance.now();
+    if (hasCachedData.current) {
       markFirstContent('Library');
-      
-      try {
-        // Load cached items - use last known userId or try to get from session storage
-        const cachedUserId = userId || sessionStorage.getItem('last-library-user');
-        
-        if (!cachedUserId) {
-          // No cached user, just stay in skeleton and wait for auth
-          return;
-        }
-        
-        // Load cached items in parallel - NO AWAIT DELAY
-        const [cachedItems, cachedStats] = await Promise.all([
-          getCachedLibrary(cachedUserId),
-          getCachedStats(),
-        ]);
-        
-        if (!mountedRef.current) return;
-        
-        if (cachedItems && cachedItems.length > 0) {
-          // Transform cached items to full LibraryItem format
-          const transformedItems: LibraryItem[] = cachedItems.map(item => ({
-            id: item.id,
-            book_id: item.book_id,
-            progress_percent: item.progress_percent,
-            last_read_chapter: item.last_read_chapter,
-            created_at: item.created_at,
-            books: {
-              id: item.book_id,
-              title: item.title,
-              description: null,
-              category: item.category,
-              cover_image_url: item.cover_image_url,
-              total_chapters: item.total_chapters,
-            },
-          }));
-          
-          setItems(transformedItems);
-          hasCachedData.current = true;
-          
-          const cacheTime = performance.now() - startTime;
-          markCacheRender('Library');
-          logger.info(`Cache rendered in ${cacheTime.toFixed(0)}ms`);
-          
-          // Immediately update load state to show cached data
-          setLoadState('hydrating');
-        }
-        
-        if (cachedStats) {
-          setStats(cachedStats);
-        }
-        
-      } catch (e) {
-        logger.warn('Failed to load cached data:', e);
-      }
-    };
-    
-    // Execute IMMEDIATELY - no requestAnimationFrame, no setTimeout
-    loadCachedData();
+      markCacheRender('Library');
+      logger.info('Sync cache rendered instantly');
+    }
     
     return () => {
       mountedRef.current = false;
     };
-  }, [userId]);
+  }, []);
   
   // Store userId for next session cache lookup
   useEffect(() => {
