@@ -65,9 +65,9 @@ Example GOOD titles: "The Leadership Lie", "Why Rich People Don't Budget"
 // Tier limits for book generation
 const TIER_LIMITS = {
   free: { booksPerDay: 1, maxChapters: 5 },
-  student: { booksPerDay: 3, maxChapters: 10 },
-  premium: { booksPerDay: 10, maxChapters: 20 },
-  prophet_tier: { booksPerDay: 50, maxChapters: 50 },
+  student: { booksPerDay: 5, maxChapters: 30 },
+  premium: { booksPerDay: 15, maxChapters: 50 },
+  prophet_tier: { booksPerDay: 100, maxChapters: 100 },
 } as const;
 
 // NOTE: Trial mode is enforced here (server-side) to avoid client-only bypasses.
