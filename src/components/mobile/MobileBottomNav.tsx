@@ -6,7 +6,7 @@
  */
 
 import { memo } from "react";
-import { Home, BookOpen, Headphones, Settings } from "lucide-react";
+import { Home, BookOpen, Library as LibraryIcon, Settings } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
 
@@ -14,7 +14,7 @@ import { cn } from "@/lib/utils";
 const NAV_ITEMS = [
   { icon: Home, label: "Home", path: "/" },
   { icon: BookOpen, label: "Books", path: "/explore" },
-  { icon: Headphones, label: "Audio", path: "/library?filter=audio" },
+  { icon: LibraryIcon, label: "Library", path: "/library" },
   { icon: Settings, label: "Settings", path: "/settings" },
 ] as const;
 

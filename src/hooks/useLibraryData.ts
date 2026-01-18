@@ -109,18 +109,27 @@ export function useLibraryData({
     };
   }, []);
   
-  // RULE 5B-1.2: Load cached data IMMEDIATELY
+  // RULE 5B-1.2: Load cached data IMMEDIATELY (don't wait for auth)
   useEffect(() => {
-    if (!userId || initCompleteRef.current) return;
+    if (initCompleteRef.current) return;
     
     const loadCachedData = async () => {
       const startTime = performance.now();
       markFirstContent('Library');
       
       try {
+        // Load cached items - use last known userId or try to get from session storage
+        const cachedUserId = userId || sessionStorage.getItem('last-library-user');
+        
+        if (!cachedUserId) {
+          // No cached user, just mark as skeleton and wait for auth
+          initCompleteRef.current = true;
+          return;
+        }
+        
         // Load cached items in parallel
         const [cachedItems, cachedStats] = await Promise.all([
-          getCachedLibrary(userId),
+          getCachedLibrary(cachedUserId),
           getCachedStats(),
         ]);
         
@@ -177,6 +186,13 @@ export function useLibraryData({
     return () => {
       mountedRef.current = false;
     };
+  }, [userId]);
+  
+  // Store userId for next session cache lookup
+  useEffect(() => {
+    if (userId) {
+      sessionStorage.setItem('last-library-user', userId);
+    }
   }, [userId]);
   
   // Fetch fresh data from network

@@ -237,18 +237,18 @@ export default function Explore() {
     }
   }, [isLoading]);
 
-  // CONTRACT 4: Cache-first data fetching
+  // CONTRACT 4: Cache-first data fetching with instant skeleton
   const fetchBooks = useCallback(async () => {
     const cacheKey = 'explore:books:published';
     
-    // Try cache first for instant display
+    // INSTANT: Try cache first for immediate display (non-blocking)
     const cached = apiCache.get<Book[]>(cacheKey);
-    if (cached) {
+    if (cached && cached.length > 0) {
       setBooks(cached);
       setIsLoading(false);
     }
     
-    // Fetch fresh data in background
+    // BACKGROUND: Fetch fresh data without blocking UI
     try {
       const { data, error } = await supabase
         .from("books")
@@ -261,17 +261,20 @@ export default function Explore() {
       
       const newBooks = data || [];
       setBooks(newBooks);
+      setIsLoading(false);
       apiCache.set(cacheKey, newBooks, 2 * 60 * 1000); // 2 min cache
     } catch (error) {
       console.error("Error fetching books:", error);
       // CONTRACT 4: Graceful degradation - keep cached data if fetch fails
-    } finally {
       setIsLoading(false);
     }
   }, [isMobile]);
 
+  // CONTRACT 5: Defer fetch to after first paint
   useEffect(() => {
-    fetchBooks();
+    // Use requestIdleCallback/setTimeout to not block skeleton render
+    const timeoutId = setTimeout(fetchBooks, 0);
+    return () => clearTimeout(timeoutId);
   }, [fetchBooks]);
 
   const filteredBooks = books.filter((book) => {
