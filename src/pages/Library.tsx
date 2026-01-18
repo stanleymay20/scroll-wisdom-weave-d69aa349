@@ -467,21 +467,14 @@ export default function Library() {
 
   // Mobile layout with persistent shell
   if (isMobile) {
-    // RULE 5B-1.1: Show skeleton IMMEDIATELY if no user yet
-    if (!user) {
-      return (
-        <MobileLayout showGenerateButton={false}>
-          <LibraryPageSkeleton isMobile />
-        </MobileLayout>
-      );
-    }
-    
+    // CONTRACT 5B-1: Show content with cached data or skeleton immediately
+    // Don't block on auth - useLibraryData loads cache independently
     return (
       <MobileLayout showGenerateButton={false}>
         <MobileLibraryContent
           items={items}
           filteredItems={filteredItems}
-          loadState={loadState}
+          loadState={!user ? 'skeleton' : loadState}
           stats={stats}
           searchQuery={searchQuery}
           setSearchQuery={setSearchQuery}
@@ -499,8 +492,11 @@ export default function Library() {
     );
   }
 
-  // RULE 5B-1.1: Show skeleton IMMEDIATELY for desktop too
-  if (!user) {
+  // Desktop: Show skeleton or content based on load state
+  // Don't block on auth if we have cached data
+  const showDesktopSkeleton = !user && items.length === 0;
+  
+  if (showDesktopSkeleton) {
     return (
       <div className="min-h-screen bg-background">
         <Navbar />
