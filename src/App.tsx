@@ -43,6 +43,7 @@ const Install = lazy(() => import("./pages/Install"));
 const PWATest = lazy(() => import("./pages/PWATest"));
 const Diagnostics = lazy(() => import("./pages/Diagnostics"));
 const CertificateVerify = lazy(() => import("./pages/CertificateVerify"));
+const CertificateStatus = lazy(() => import("./pages/CertificateStatus"));
 const OrganizationVerify = lazy(() => import("./pages/OrganizationVerify"));
 const VerificationDocs = lazy(() => import("./pages/VerificationDocs"));
 const TrustWhitepaper = lazy(() => import("./pages/TrustWhitepaper"));
@@ -122,6 +123,7 @@ const App = () => (
                   <Route path="/pwa-test" element={<PWATest />} />
                   <Route path="/diagnostics" element={<Diagnostics />} />
                   <Route path="/book/:id" element={<BookDetail />} />
+                  <Route path="/book/:bookId/certificate" element={<CertificateStatus />} />
                   <Route path="/read/:bookId/:chapterId" element={<Reader />} />
                   <Route path="/certificate/:certificateNumber" element={<CertificateVerify />} />
                   <Route path="/verify" element={<OrganizationVerify />} />
