@@ -515,12 +515,62 @@ Deno.serve(async (req) => {
     }
 
     // ============================================================
+    // 6C.6 — IDEMPOTENCY CHECK (CRITICAL)
+    // Only one active certificate per user per book per type
+    // ============================================================
+
+    const { data: existingCert, error: existingError } = await supabase
+      .from('publishing_certificates')
+      .select('id, certificate_number, issued_at, certificate_type')
+      .eq('user_id', user.id)
+      .eq('book_id', bookId)
+      .eq('certificate_type', eligibility.certificateType)
+      .is('revoked_at', null)
+      .maybeSingle();
+
+    if (existingError) {
+      console.error('[validate-certificate] Error checking existing certificate:', existingError);
+      return new Response(
+        JSON.stringify({ error: 'Failed to verify certificate status', code: 'DB_ERROR' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // If certificate already exists, return it instead of creating a duplicate
+    if (existingCert) {
+      console.log(`[validate-certificate] Certificate already exists: ${existingCert.certificate_number}`);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          alreadyIssued: true,
+          certificate: {
+            id: existingCert.id,
+            certificateNumber: existingCert.certificate_number,
+            certificateType: existingCert.certificate_type,
+            issuedAt: existingCert.issued_at,
+            issuer: CERTIFICATE_ISSUER,
+            recipient: {
+              name: userName,
+              email: userEmail,
+            },
+            book: {
+              id: bookId,
+              title: book.title,
+            },
+            integrityScore: eligibility.integrityScore,
+          },
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // ============================================================
     // ISSUE CERTIFICATE (6A Authority)
     // ============================================================
 
     const certificateNumber = generateCertificateNumber();
     const issuedAt = new Date().toISOString();
-    
+
     const verificationHash = generateVerificationHash({
       bookId,
       certificateNumber,
@@ -535,25 +585,59 @@ Deno.serve(async (req) => {
         book_id: bookId,
         user_id: user.id,
         certificate_number: certificateNumber,
+        certificate_type: eligibility.certificateType,
         issued_at: issuedAt,
+        verification_hash: verificationHash,
         metadata: {
-          schemaVersion: CERTIFICATE_SCHEMA_VERSION, // 7A: Schema versioning
-          certificateType: eligibility.certificateType,
+          schemaVersion: CERTIFICATE_SCHEMA_VERSION,
           recipientName: userName,
           recipientEmail: userEmail,
           bookTitle: book.title,
           issuer: CERTIFICATE_ISSUER,
           integrityScore: eligibility.integrityScore,
-          verificationHash,
           chaptersCompleted: completedChapters,
           totalChapters,
-          issuedWithVersion: CERTIFICATE_SCHEMA_VERSION, // Immutable record
+          issuedWithVersion: CERTIFICATE_SCHEMA_VERSION,
         },
       })
       .select()
       .single();
 
     if (certError) {
+      // Handle unique constraint violation gracefully
+      if (certError.code === '23505') {
+        console.log('[validate-certificate] Duplicate certificate attempt - race condition handled');
+        // Re-fetch the existing certificate
+        const { data: raceCert } = await supabase
+          .from('publishing_certificates')
+          .select('id, certificate_number, issued_at, certificate_type')
+          .eq('user_id', user.id)
+          .eq('book_id', bookId)
+          .eq('certificate_type', eligibility.certificateType)
+          .is('revoked_at', null)
+          .single();
+
+        if (raceCert) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              alreadyIssued: true,
+              certificate: {
+                id: raceCert.id,
+                certificateNumber: raceCert.certificate_number,
+                certificateType: raceCert.certificate_type,
+                issuedAt: raceCert.issued_at,
+                issuer: CERTIFICATE_ISSUER,
+                recipient: { name: userName, email: userEmail },
+                book: { id: bookId, title: book.title },
+                integrityScore: eligibility.integrityScore,
+              },
+            }),
+            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
+
       console.error('[validate-certificate] Error creating certificate:', certError);
       return new Response(
         JSON.stringify({ error: 'Failed to create certificate', code: 'CERT_CREATE_ERROR' }),
