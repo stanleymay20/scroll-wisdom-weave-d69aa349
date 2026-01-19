@@ -43,7 +43,7 @@ export function PasteProtectionDialog({
           </AlertDialogTitle>
           <AlertDialogDescription className="space-y-3">
             <p>
-              You've pasted or edited content in this chapter. How should we treat this content?
+              You've pasted content into this chapter. <strong>Your content will be kept.</strong> How should we protect it?
             </p>
             
             {contentPreview && (
@@ -94,7 +94,7 @@ export function PasteProtectionDialog({
             onClick={() => handleAction('cancel')}
             disabled={isSubmitting}
           >
-            Cancel
+            Decide Later (Keep Content)
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>

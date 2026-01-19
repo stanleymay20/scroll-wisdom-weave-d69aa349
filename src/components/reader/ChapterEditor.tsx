@@ -137,10 +137,17 @@ export function ChapterEditor({
   }, []);
 
   // Handle paste event - CONTRACT 2 Rule 1
+  // If user is pasting significant content, show dialog to decide if it should be protected
   const handlePaste = useCallback((e: React.ClipboardEvent<HTMLTextAreaElement>) => {
-    if (hasAskedForPaste.current || ownership.userLocked) return;
+    // If already asked or already locked, just allow the paste - content is protected
+    if (hasAskedForPaste.current) return;
+    
+    // If content is already locked (user-authored), allow paste without dialog
+    // The content is already protected
+    if (ownership.userLocked) return;
     
     const pastedText = e.clipboardData.getData('text');
+    // Only show dialog for substantial pastes (50+ chars)
     if (!pastedText || pastedText.length < 50) return;
     
     const textArea = e.target as HTMLTextAreaElement;
@@ -150,6 +157,7 @@ export function ChapterEditor({
     
     const diffPercent = calculateDifference(lastSavedContent.current, newContent);
     
+    // For significant changes (>30%), show the protection dialog
     if (diffPercent > 30) {
       e.preventDefault();
       setPendingPasteContent(newContent);
@@ -158,17 +166,25 @@ export function ChapterEditor({
   }, [localContent, calculateDifference, ownership.userLocked]);
 
   // Handle paste protection dialog result
+  // CRITICAL: Always apply the pasted content - never discard user's paste
   const handlePasteResult = useCallback(async (result: { action: 'lock' | 'allow_regen' | 'cancel' }) => {
     hasAskedForPaste.current = true;
     setShowPasteDialog(false);
     
-    if (result.action === 'cancel') {
-      setPendingPasteContent(null);
-      return;
-    }
-    
+    // IMPORTANT: Even on cancel, we should apply the paste! The dialog asks about PROTECTION, not whether to paste.
+    // The user's paste should NEVER be discarded - that violates Contract 2 Rule 1: User text is authoritative
     if (pendingPasteContent) {
       setLocalContent(pendingPasteContent);
+    }
+    
+    // Cancel means "just paste without deciding on lock status now"
+    if (result.action === 'cancel') {
+      setPendingPasteContent(null);
+      toast({
+        title: "Content pasted",
+        description: "Your content has been added. Save when ready.",
+      });
+      return;
     }
     
     const shouldLock = result.action === 'lock';
@@ -195,10 +211,10 @@ export function ChapterEditor({
       }));
       
       toast({
-        title: shouldLock ? "Content protected" : "Ready for editing",
+        title: shouldLock ? "Content protected" : "Content pasted",
         description: shouldLock 
-          ? "Your writing is now protected from full regeneration."
-          : "This content can be edited with explicit instructions.",
+          ? "Your writing is protected. Save to persist your changes."
+          : "Content added. This content can be edited with AI.",
       });
     } catch (error) {
       console.error("Error updating lock status:", error);
