@@ -121,32 +121,32 @@ function parseCustomTableFormat(text: string): { tables: ParsedTable[]; cleanedT
   return { tables, cleanedText };
 }
 
-// Enhanced markdown processing that preserves code blocks and images
-// Handles BOTH markdown image format AND comic "Panel N" format with storage URLs
+// Enhanced markdown processing that handles markdown tables, code blocks and images
+// Now prioritizes proper markdown pipe format for tables
 function processMarkdownContent(text: string): { 
   paragraphs: string[]; 
   codeBlocks: { lang: string; code: string }[]; 
-  tables: string[][];
+  tables: { name: string; headers: string[]; rows: string[][] }[];
   customTables: ParsedTable[];
   images: { alt: string; url: string }[];
 } {
   if (!text) return { paragraphs: [], codeBlocks: [], tables: [], customTables: [], images: [] };
   
   const codeBlocks: { lang: string; code: string }[] = [];
-  const tables: string[][] = [];
+  const tables: { name: string; headers: string[]; rows: string[][] }[] = [];
   const images: { alt: string; url: string }[] = [];
   
-  // First, parse custom TABLE: format
+  // First, parse old custom TABLE: format (legacy support)
   const { tables: customTables, cleanedText: textAfterCustomTables } = parseCustomTableFormat(text);
-  console.log(`[EXPORT] Found ${customTables.length} custom tables`);
+  console.log(`[EXPORT] Found ${customTables.length} legacy custom tables`);
   
-  // Extract code blocks - handle both fenced and "CODE EXAMPLE" format
+  // Extract code blocks - handle fenced code blocks with triple backticks
   let processedText = textAfterCustomTables.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
     codeBlocks.push({ lang: lang || 'text', code: code.trim() });
     return `[CODE_BLOCK_${codeBlocks.length - 1}]`;
   });
   
-  // Also handle "CODE EXAMPLE (Language):" format
+  // Also handle legacy "CODE EXAMPLE (Language):" format
   processedText = processedText.replace(/CODE EXAMPLE \(([^)]+)\):\n\n((?:    [^\n]*\n?)+)/gi, (_, lang, code) => {
     codeBlocks.push({ lang: lang || 'text', code: code.replace(/^    /gm, '').trim() });
     return `[CODE_BLOCK_${codeBlocks.length - 1}]`;
@@ -162,18 +162,53 @@ function processMarkdownContent(text: string): {
     return `[IMAGE_${images.length - 1}]`;
   });
   
-  // Extract markdown tables (pipe format - fallback)
-  const tableRegex = /\|[^\n]+\|\n\|[-:| ]+\|\n(\|[^\n]+\|\n)+/g;
-  processedText = processedText.replace(tableRegex, (match) => {
-    const rows = match.split('\n').filter(r => r.trim() && !r.match(/^[-:| ]+$/));
-    const tableData = rows.map(row => 
-      row.split('|').filter(cell => cell.trim()).map(cell => cell.trim())
-    );
-    tables.push(tableData.flat());
-    return `[TABLE_${tables.length - 1}]`;
+  // Extract PROPER markdown tables (pipe format) - this is the new primary format
+  // Pattern matches: | header | header |\n|---|---|\n| cell | cell |
+  const markdownTableRegex = /(?:(?:\*\*[^*]+\*\*|\w[^\n]*)\n\n?)?\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+/g;
+  processedText = processedText.replace(markdownTableRegex, (match) => {
+    // Extract optional table title (bold text or plain text before the table)
+    let tableName = '';
+    let tableContent = match;
+    const titleMatch = match.match(/^(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?(\|.+)/s);
+    if (titleMatch) {
+      tableName = (titleMatch[1] || titleMatch[2] || '').trim();
+      tableContent = titleMatch[3];
+    }
+    
+    const lines = tableContent.trim().split('\n');
+    if (lines.length < 2) return match;
+    
+    // Parse header row
+    const headerLine = lines[0];
+    const headers = headerLine.split('|')
+      .filter((cell: string) => cell.trim())
+      .map((cell: string) => cell.trim());
+    
+    // Skip separator row (line with ---)
+    // Parse data rows
+    const rows: string[][] = [];
+    for (let i = 2; i < lines.length; i++) {
+      const rowLine = lines[i];
+      if (!rowLine.includes('|')) continue;
+      const cells = rowLine.split('|')
+        .filter((cell: string, idx: number, arr: string[]) => idx > 0 && idx < arr.length - 1 || cell.trim())
+        .map((cell: string) => cell.trim())
+        .filter((cell: string) => cell);
+      if (cells.length > 0) {
+        rows.push(cells);
+      }
+    }
+    
+    if (headers.length > 0 && rows.length > 0) {
+      tables.push({ name: tableName || 'Table', headers, rows });
+      return `[MD_TABLE_${tables.length - 1}]`;
+    }
+    return match;
   });
   
-  // Strip remaining markdown (but NOT image placeholders)
+  console.log(`[EXPORT] Found ${tables.length} markdown tables, ${codeBlocks.length} code blocks`);
+  
+  // Strip remaining markdown (but NOT placeholders)
   const stripped = processedText
     .replace(/^#{1,6}\s+/gm, "")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
@@ -187,10 +222,11 @@ function processMarkdownContent(text: string): {
   
   const paragraphs = stripped.split(/\n\n+/).filter(p => p.trim());
   
-  console.log(`[EXPORT] processMarkdownContent found ${images.length} images, ${codeBlocks.length} code blocks`);
+  console.log(`[EXPORT] processMarkdownContent found ${images.length} images, ${codeBlocks.length} code blocks, ${tables.length} md tables`);
   
   return { paragraphs, codeBlocks, tables, customTables, images };
 }
+
 
 function stripMarkdown(text: string): string {
   if (!text) return "";
@@ -749,7 +785,7 @@ async function generatePDF(
     y -= 30;
     
     // Process content with code block, image, and table handling
-    const { paragraphs, codeBlocks, images, customTables } = processMarkdownContent(chapter.content || "");
+    const { paragraphs, codeBlocks, images, customTables, tables: mdTables } = processMarkdownContent(chapter.content || "");
     
     // Pre-fetch all images for this chapter (for comics)
     const fetchedImages: Map<number, { bytes: Uint8Array; type: 'png' | 'jpg' }> = new Map();
@@ -1004,6 +1040,104 @@ async function generatePDF(
         }
       }
       
+      // Check if this is a markdown table placeholder (new format)
+      const mdTableMatch = paragraph.match(/\[MD_TABLE_(\d+)\]/);
+      if (mdTableMatch) {
+        const tableIndex = parseInt(mdTableMatch[1]);
+        const table = mdTables[tableIndex];
+        if (table) {
+          // Render markdown table
+          y -= 10;
+          
+          // Calculate table dimensions
+          const numCols = Math.min(table.headers.length, 6); // Max 6 columns for readability
+          const colWidth = textWidth / numCols;
+          const rowHeight = 18;
+          const headerHeight = 24;
+          const tableHeight = headerHeight + (table.rows.length * rowHeight) + 30;
+          
+          if (y - tableHeight < margin + 30) {
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            addPageNumber(page, pageNumber);
+            y = pageHeight - margin - 30;
+          }
+          
+          // Table title (if present)
+          if (table.name && table.name !== 'Table') {
+            page.drawText(table.name, {
+              x: margin,
+              y,
+              size: 11,
+              font: timesRomanBold,
+              color: rgb(0.1, 0.1, 0.1),
+            });
+            y -= 20;
+          }
+          
+          // Draw header background
+          page.drawRectangle({
+            x: margin,
+            y: y - headerHeight + 5,
+            width: textWidth,
+            height: headerHeight,
+            color: rgb(0.92, 0.92, 0.92),
+          });
+          
+          // Draw headers
+          for (let i = 0; i < numCols; i++) {
+            const headerText = (table.headers[i] || '').slice(0, 25);
+            page.drawText(headerText, {
+              x: margin + (i * colWidth) + 5,
+              y: y - 12,
+              size: 9,
+              font: timesRomanBold,
+              color: rgb(0.1, 0.1, 0.1),
+            });
+          }
+          y -= headerHeight;
+          
+          // Draw rows
+          for (let rowIdx = 0; rowIdx < table.rows.length; rowIdx++) {
+            const row = table.rows[rowIdx];
+            
+            // Alternate row background
+            if (rowIdx % 2 === 1) {
+              page.drawRectangle({
+                x: margin,
+                y: y - rowHeight + 5,
+                width: textWidth,
+                height: rowHeight,
+                color: rgb(0.97, 0.97, 0.97),
+              });
+            }
+            
+            for (let colIdx = 0; colIdx < numCols && colIdx < row.length; colIdx++) {
+              const cellText = (row[colIdx] || '').slice(0, 30);
+              page.drawText(cellText, {
+                x: margin + (colIdx * colWidth) + 5,
+                y: y - 12,
+                size: 9,
+                font: timesRoman,
+                color: rgb(0.2, 0.2, 0.2),
+              });
+            }
+            y -= rowHeight;
+            
+            // Check if we need a new page
+            if (y < margin + 30 && rowIdx < table.rows.length - 1) {
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              addPageNumber(page, pageNumber);
+              y = pageHeight - margin - 30;
+            }
+          }
+          
+          y -= 15;
+          continue;
+        }
+      }
+      
       const lines = wrapText(paragraph.trim(), timesRoman, 11, textWidth);
       for (const line of lines) {
         if (y < margin + 30) {
@@ -1196,6 +1330,34 @@ async function generateEPUB(
       return `<pre><code class="${lang || 'text'}">${escapeXml(code.trim())}</code></pre>`;
     });
     
+    // Convert PROPER markdown tables to HTML tables
+    content = content.replace(/(?:(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/g, 
+      (_match: string, boldTitle: string, plainTitle: string, tableContent: string) => {
+        const tableName = (boldTitle || plainTitle || '').trim();
+        const lines = tableContent.trim().split('\n');
+        if (lines.length < 2) return _match;
+        
+        // Parse header row
+        const headerLine = lines[0];
+        const headers = headerLine.split('|')
+          .filter((cell: string) => cell.trim())
+          .map((cell: string) => `<th>${escapeXml(cell.trim())}</th>`)
+          .join('');
+        
+        // Parse data rows (skip separator row at index 1)
+        const rows = lines.slice(2).map((line: string) => {
+          const cells = line.split('|')
+            .filter((cell: string, idx: number, arr: string[]) => idx > 0 && idx < arr.length - 1 || cell.trim())
+            .map((cell: string) => `<td>${escapeXml(cell.trim())}</td>`)
+            .join('');
+          return cells ? `<tr>${cells}</tr>` : '';
+        }).filter((r: string) => r).join('\n');
+        
+        const titleHtml = tableName ? `<caption><strong>${escapeXml(tableName)}</strong></caption>` : '';
+        return `<table>${titleHtml}<thead><tr>${headers}</tr></thead><tbody>${rows}</tbody></table>`;
+      }
+    );
+    
     // Convert inline code
     content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
     
@@ -1205,7 +1367,7 @@ async function generateEPUB(
       .map((p: string) => {
         p = p.trim();
         if (!p) return '';
-        if (p.startsWith('<pre>') || p.startsWith('<code>') || p.startsWith('<figure>') || p.startsWith('<p>')) return p;
+        if (p.startsWith('<pre>') || p.startsWith('<code>') || p.startsWith('<figure>') || p.startsWith('<p>') || p.startsWith('<table>')) return p;
         return `<p>${escapeXml(p)}</p>`;
       })
       .filter((p: string) => p)
