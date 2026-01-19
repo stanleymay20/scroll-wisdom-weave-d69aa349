@@ -1,4 +1,59 @@
-import { useMemo } from "react";
+import { useMemo, useEffect, useRef } from "react";
+import hljs from 'highlight.js/lib/core';
+
+// Import common languages for syntax highlighting
+import javascript from 'highlight.js/lib/languages/javascript';
+import typescript from 'highlight.js/lib/languages/typescript';
+import python from 'highlight.js/lib/languages/python';
+import java from 'highlight.js/lib/languages/java';
+import csharp from 'highlight.js/lib/languages/csharp';
+import cpp from 'highlight.js/lib/languages/cpp';
+import go from 'highlight.js/lib/languages/go';
+import rust from 'highlight.js/lib/languages/rust';
+import ruby from 'highlight.js/lib/languages/ruby';
+import php from 'highlight.js/lib/languages/php';
+import swift from 'highlight.js/lib/languages/swift';
+import kotlin from 'highlight.js/lib/languages/kotlin';
+import sql from 'highlight.js/lib/languages/sql';
+import bash from 'highlight.js/lib/languages/bash';
+import json from 'highlight.js/lib/languages/json';
+import xml from 'highlight.js/lib/languages/xml';
+import css from 'highlight.js/lib/languages/css';
+import markdown from 'highlight.js/lib/languages/markdown';
+import yaml from 'highlight.js/lib/languages/yaml';
+
+// Register languages
+hljs.registerLanguage('javascript', javascript);
+hljs.registerLanguage('js', javascript);
+hljs.registerLanguage('typescript', typescript);
+hljs.registerLanguage('ts', typescript);
+hljs.registerLanguage('python', python);
+hljs.registerLanguage('py', python);
+hljs.registerLanguage('java', java);
+hljs.registerLanguage('csharp', csharp);
+hljs.registerLanguage('cs', csharp);
+hljs.registerLanguage('cpp', cpp);
+hljs.registerLanguage('c++', cpp);
+hljs.registerLanguage('c', cpp);
+hljs.registerLanguage('go', go);
+hljs.registerLanguage('rust', rust);
+hljs.registerLanguage('ruby', ruby);
+hljs.registerLanguage('rb', ruby);
+hljs.registerLanguage('php', php);
+hljs.registerLanguage('swift', swift);
+hljs.registerLanguage('kotlin', kotlin);
+hljs.registerLanguage('sql', sql);
+hljs.registerLanguage('bash', bash);
+hljs.registerLanguage('sh', bash);
+hljs.registerLanguage('shell', bash);
+hljs.registerLanguage('json', json);
+hljs.registerLanguage('xml', xml);
+hljs.registerLanguage('html', xml);
+hljs.registerLanguage('css', css);
+hljs.registerLanguage('markdown', markdown);
+hljs.registerLanguage('md', markdown);
+hljs.registerLanguage('yaml', yaml);
+hljs.registerLanguage('yml', yaml);
 
 interface MarkdownRendererProps {
   content: string;
@@ -8,9 +63,11 @@ interface MarkdownRendererProps {
 /**
  * Production-grade Markdown renderer for ScrollLibrary
  * Renders: headings, bold, italic, code, tables, lists, blockquotes, images
- * GFM-compatible with proper HTML output
+ * GFM-compatible with proper HTML output and syntax highlighting
  */
 export function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+
   const renderedContent = useMemo(() => {
     if (!content) return "";
     
@@ -25,24 +82,34 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     // Code blocks (```language ... ```) - render with syntax highlighting support
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
       const langLabel = lang ? `<span class="code-lang">${lang}</span>` : '';
-      const copyBtn = `<button class="code-copy" onclick="navigator.clipboard.writeText(this.parentElement.querySelector('code').textContent).then(() => this.textContent = 'Copied!').catch(() => {})">Copy</button>`;
-      return `<div class="code-block">${langLabel}${copyBtn}<pre><code class="language-${lang || 'text'}">${code.trim()}</code></pre></div>`;
+      const copyBtn = `<button class="code-copy" data-code="${encodeURIComponent(code.trim())}">Copy</button>`;
+      
+      // Apply syntax highlighting if language is supported
+      let highlightedCode = code.trim();
+      if (lang && hljs.getLanguage(lang.toLowerCase())) {
+        try {
+          highlightedCode = hljs.highlight(code.trim(), { 
+            language: lang.toLowerCase(),
+            ignoreIllegals: true 
+          }).value;
+        } catch {
+          // Fallback to plain text
+        }
+      }
+      
+      return `<div class="code-block">${langLabel}${copyBtn}<pre><code class="hljs language-${lang || 'text'}">${highlightedCode}</code></pre></div>`;
     });
     
     // Inline code (`code`)
     html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
     
     // Tables (GFM style with proper pipe formatting)
-    // Match: optional caption, then | header | header |, separator |---|---|, then data rows
     html = html.replace(/(?:(?:\*\*([^*\n]+)\*\*|([A-Za-z][^\n|]*?))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/gm, (match, boldCaption, plainCaption, tableContent) => {
       const caption = (boldCaption || plainCaption || '').trim();
       const lines = (tableContent || match).trim().split('\n');
       if (lines.length < 2) return match;
       
-      // Parse header
       const headerCells = lines[0].split('|').filter((c: string) => c.trim()).map((c: string) => `<th>${c.trim()}</th>`).join('');
-      
-      // Parse rows (skip separator line)
       const rows = lines.slice(2).map((row: string) => {
         if (!row.includes('|')) return '';
         const cells = row.split('|').filter((c: string) => c.trim()).map((c: string) => `<td>${c.trim()}</td>`).join('');
@@ -88,12 +155,10 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     
     // Unordered lists (- item or * item)
     html = html.replace(/^[\s]*[-*]\s+(.+)$/gm, '<li class="md-li">$1</li>');
-    // Wrap consecutive <li> elements in <ul>
     html = html.replace(/(<li class="md-li">.*?<\/li>\n?)+/g, '<ul class="md-ul">$&</ul>');
     
     // Ordered lists (1. item)
     html = html.replace(/^[\s]*\d+\.\s+(.+)$/gm, '<li class="md-li-ordered">$1</li>');
-    // Wrap consecutive ordered <li> elements in <ol>
     html = html.replace(/(<li class="md-li-ordered">.*?<\/li>\n?)+/g, '<ol class="md-ol">$&</ol>');
     
     // Paragraphs (double newlines)
@@ -108,8 +173,32 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     return html;
   }, [content]);
 
+  // Handle copy button clicks
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    const handleCopyClick = (e: Event) => {
+      const target = e.target as HTMLElement;
+      if (target.classList.contains('code-copy')) {
+        const code = decodeURIComponent(target.getAttribute('data-code') || '');
+        navigator.clipboard.writeText(code).then(() => {
+          target.textContent = 'Copied!';
+          setTimeout(() => { target.textContent = 'Copy'; }, 2000);
+        }).catch(() => {
+          target.textContent = 'Failed';
+          setTimeout(() => { target.textContent = 'Copy'; }, 2000);
+        });
+      }
+    };
+
+    container.addEventListener('click', handleCopyClick);
+    return () => container.removeEventListener('click', handleCopyClick);
+  }, [renderedContent]);
+
   return (
     <div 
+      ref={containerRef}
       className={`markdown-content prose prose-invert max-w-none ${className}`}
       dangerouslySetInnerHTML={{ __html: renderedContent }}
     />
@@ -244,11 +333,98 @@ export const markdownStyles = `
   color: hsl(210 40% 96%);
 }
 
-/* Syntax highlighting colors */
-.markdown-content .code-block code .keyword { color: hsl(280 80% 70%); }
-.markdown-content .code-block code .string { color: hsl(95 60% 60%); }
-.markdown-content .code-block code .number { color: hsl(35 90% 65%); }
-.markdown-content .code-block code .comment { color: hsl(210 15% 55%); font-style: italic; }
+/* Highlight.js syntax highlighting - GitHub Dark theme */
+.markdown-content .hljs {
+  color: #c9d1d9;
+  background: transparent;
+}
+
+.markdown-content .hljs-doctag,
+.markdown-content .hljs-keyword,
+.markdown-content .hljs-meta .hljs-keyword,
+.markdown-content .hljs-template-tag,
+.markdown-content .hljs-template-variable,
+.markdown-content .hljs-type,
+.markdown-content .hljs-variable.language_ {
+  color: #ff7b72;
+}
+
+.markdown-content .hljs-title,
+.markdown-content .hljs-title.class_,
+.markdown-content .hljs-title.class_.inherited__,
+.markdown-content .hljs-title.function_ {
+  color: #d2a8ff;
+}
+
+.markdown-content .hljs-attr,
+.markdown-content .hljs-attribute,
+.markdown-content .hljs-literal,
+.markdown-content .hljs-meta,
+.markdown-content .hljs-number,
+.markdown-content .hljs-operator,
+.markdown-content .hljs-selector-attr,
+.markdown-content .hljs-selector-class,
+.markdown-content .hljs-selector-id,
+.markdown-content .hljs-variable {
+  color: #79c0ff;
+}
+
+.markdown-content .hljs-meta .hljs-string,
+.markdown-content .hljs-regexp,
+.markdown-content .hljs-string {
+  color: #a5d6ff;
+}
+
+.markdown-content .hljs-built_in,
+.markdown-content .hljs-symbol {
+  color: #ffa657;
+}
+
+.markdown-content .hljs-code,
+.markdown-content .hljs-comment,
+.markdown-content .hljs-formula {
+  color: #8b949e;
+}
+
+.markdown-content .hljs-name,
+.markdown-content .hljs-quote,
+.markdown-content .hljs-selector-pseudo,
+.markdown-content .hljs-selector-tag {
+  color: #7ee787;
+}
+
+.markdown-content .hljs-subst {
+  color: #c9d1d9;
+}
+
+.markdown-content .hljs-section {
+  color: #1f6feb;
+  font-weight: bold;
+}
+
+.markdown-content .hljs-bullet {
+  color: #f2cc60;
+}
+
+.markdown-content .hljs-emphasis {
+  color: #c9d1d9;
+  font-style: italic;
+}
+
+.markdown-content .hljs-strong {
+  color: #c9d1d9;
+  font-weight: bold;
+}
+
+.markdown-content .hljs-addition {
+  color: #aff5b4;
+  background-color: #033a16;
+}
+
+.markdown-content .hljs-deletion {
+  color: #ffdcd7;
+  background-color: #67060c;
+}
 
 .markdown-content .inline-code {
   background: hsl(var(--muted));
