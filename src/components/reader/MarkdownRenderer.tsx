@@ -22,23 +22,35 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
     
-    // Code blocks (```language ... ```)
+    // Code blocks (```language ... ```) - render with syntax highlighting support
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
       const langLabel = lang ? `<span class="code-lang">${lang}</span>` : '';
-      return `<div class="code-block">${langLabel}<pre><code>${code.trim()}</code></pre></div>`;
+      const copyBtn = `<button class="code-copy" onclick="navigator.clipboard.writeText(this.parentElement.querySelector('code').textContent).then(() => this.textContent = 'Copied!').catch(() => {})">Copy</button>`;
+      return `<div class="code-block">${langLabel}${copyBtn}<pre><code class="language-${lang || 'text'}">${code.trim()}</code></pre></div>`;
     });
     
     // Inline code (`code`)
     html = html.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
     
-    // Tables (GFM style)
-    html = html.replace(/^\|(.+)\|\n\|[-:|]+\|\n((?:\|.+\|\n?)+)/gm, (match, header, body) => {
-      const headerCells = header.split('|').filter((c: string) => c.trim()).map((c: string) => `<th>${c.trim()}</th>`).join('');
-      const rows = body.trim().split('\n').map((row: string) => {
+    // Tables (GFM style with proper pipe formatting)
+    // Match: optional caption, then | header | header |, separator |---|---|, then data rows
+    html = html.replace(/(?:(?:\*\*([^*\n]+)\*\*|([A-Za-z][^\n|]*?))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/gm, (match, boldCaption, plainCaption, tableContent) => {
+      const caption = (boldCaption || plainCaption || '').trim();
+      const lines = (tableContent || match).trim().split('\n');
+      if (lines.length < 2) return match;
+      
+      // Parse header
+      const headerCells = lines[0].split('|').filter((c: string) => c.trim()).map((c: string) => `<th>${c.trim()}</th>`).join('');
+      
+      // Parse rows (skip separator line)
+      const rows = lines.slice(2).map((row: string) => {
+        if (!row.includes('|')) return '';
         const cells = row.split('|').filter((c: string) => c.trim()).map((c: string) => `<td>${c.trim()}</td>`).join('');
-        return `<tr>${cells}</tr>`;
-      }).join('');
-      return `<table class="md-table"><thead><tr>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`;
+        return cells ? `<tr>${cells}</tr>` : '';
+      }).filter(r => r).join('');
+      
+      const captionHtml = caption ? `<caption><strong>${caption}</strong></caption>` : '';
+      return `<table class="md-table">${captionHtml}<thead><tr>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`;
     });
     
     // Images ![alt](url)
@@ -182,34 +194,61 @@ export const markdownStyles = `
 
 .markdown-content .code-block {
   position: relative;
-  background: hsl(var(--muted));
+  background: hsl(220 15% 13%);
   border-radius: 0.5rem;
   margin: 1rem 0;
   overflow: hidden;
+  border: 1px solid hsl(var(--border) / 0.3);
 }
 
 .markdown-content .code-block .code-lang {
   position: absolute;
   top: 0;
-  right: 0;
+  left: 0;
+  background: hsl(var(--muted) / 0.8);
+  color: hsl(var(--muted-foreground));
+  padding: 0.25rem 0.75rem;
+  font-size: 0.7rem;
+  text-transform: lowercase;
+  border-bottom-right-radius: 0.25rem;
+}
+
+.markdown-content .code-block .code-copy {
+  position: absolute;
+  top: 0.25rem;
+  right: 0.5rem;
   background: hsl(var(--primary) / 0.2);
   color: hsl(var(--primary));
+  border: none;
   padding: 0.25rem 0.5rem;
   font-size: 0.7rem;
-  border-bottom-left-radius: 0.25rem;
+  border-radius: 0.25rem;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.markdown-content .code-block .code-copy:hover {
+  background: hsl(var(--primary) / 0.3);
 }
 
 .markdown-content .code-block pre {
   margin: 0;
-  padding: 1rem;
+  padding: 2.5rem 1rem 1rem;
   overflow-x: auto;
 }
 
 .markdown-content .code-block code {
-  font-family: 'Fira Code', 'Monaco', 'Consolas', monospace;
+  font-family: 'Fira Code', 'Monaco', 'Consolas', 'Liberation Mono', monospace;
   font-size: 0.85rem;
-  line-height: 1.5;
+  line-height: 1.6;
+  color: hsl(210 40% 96%);
 }
+
+/* Syntax highlighting colors */
+.markdown-content .code-block code .keyword { color: hsl(280 80% 70%); }
+.markdown-content .code-block code .string { color: hsl(95 60% 60%); }
+.markdown-content .code-block code .number { color: hsl(35 90% 65%); }
+.markdown-content .code-block code .comment { color: hsl(210 15% 55%); font-style: italic; }
 
 .markdown-content .inline-code {
   background: hsl(var(--muted));

@@ -219,20 +219,36 @@ STRICTLY FORBIDDEN:
 ❌ Personification of concepts
 
 ===========================================
-TABLE FORMAT (REQUIRED):
+TABLE FORMAT (MANDATORY - PROPER MARKDOWN):
 ===========================================
 
-Tables MUST be clearly formatted with:
-- Column headers clearly labeled
-- Aligned columns
-- Readable in PDF/EPUB export
-
-TABLE: [Table Name]
+Tables MUST use standard markdown pipe syntax:
 
 | Header 1    | Header 2    | Header 3    |
 |-------------|-------------|-------------|
 | Value 1.1   | Value 1.2   | Value 1.3   |
 | Value 2.1   | Value 2.2   | Value 2.3   |
+
+TABLE RULES:
+1. ALWAYS use pipe (|) delimiters
+2. ALWAYS include header separator row (---)
+3. Maximum 6 columns for readability
+
+❌ FORBIDDEN: "TABLE:", "Column 1:", "Row 1:" text formats
+
+===========================================
+CODE FORMAT (MANDATORY - FENCED BLOCKS):
+===========================================
+
+Code MUST use triple backtick fenced blocks:
+
+\`\`\`python
+def example():
+    result = calculate()
+    return result
+\`\`\`
+
+❌ FORBIDDEN: "CODE EXAMPLE ([Language]):" or plain indented text
 
 ===========================================
 REFERENCES (REQUIRED):
@@ -252,20 +268,21 @@ Before output, verify:
 [ ] Title is literal and technical (no metaphors)
 [ ] Learning objectives present at chapter start
 [ ] Code content ≥ 40% of chapter
-[ ] Code is properly indented and labeled
+[ ] Code uses proper fenced blocks with language spec
+[ ] Tables use proper markdown pipe format
 [ ] Exercises present at chapter end
 [ ] Mini-project present at chapter end
 [ ] NO metaphors, storytelling, or motivational language
-[ ] Tables properly formatted
 [ ] References included
 
+❌ If tables use text-based format instead of markdown → FAIL and REWRITE
+❌ If code uses "CODE EXAMPLE:" instead of fenced blocks → FAIL and REWRITE
 ❌ If ANY chapter cannot be learned by EXECUTION → FAIL and REWRITE
-❌ If metaphors or storytelling appear → FAIL and REWRITE
-❌ If code is missing or poorly formatted → FAIL and REWRITE
 
 This is a TECHNICAL TEXTBOOK, not a motivational book.
 Teach by DOING, not by INSPIRING.
 `;
+
 
 // ===========================================
 // SECTION 0.2: BESTSELLER MODE (FOR NON-TECHNICAL BOOKS)
@@ -673,61 +690,108 @@ If no edit intent is provided for regeneration → Return content unchanged or r
 export const FORMATTING_CONTRACT = `
 === FORMATTING & RENDERING CONTRACT (HARD) ===
 
-MARKDOWN IS FORBIDDEN IN FINAL OUTPUT
+PROPER MARKDOWN IS REQUIRED FOR TABLES AND CODE
 
-Do NOT output:
-- Asterisks for bold (**text**)
-- Asterisks for italics (*text*)
-- Underscores for emphasis (__text__)
-- Hash symbols for headings (## or ###)
-- Backticks for code
-- Pipe-based markdown tables
+You MUST use standard markdown for:
+- Tables: Pipe-based markdown tables with headers and alignment
+- Code blocks: Triple backtick fenced code blocks with language specification
 
-REQUIRED INSTEAD:
-- Section headings: Write as plain text on its own line (e.g., "Introduction" not "## Introduction")
-- Emphasis: Express through word choice and sentence structure, not symbols
-- Tables: Use labeled row/column format (see TABLE FORMAT below)
-- Code: Use indented plain text with language label prefix
+===========================================
+TABLE FORMAT (MANDATORY - PROPER MARKDOWN):
+===========================================
 
-TABLE FORMAT (REQUIRED):
+Tables MUST use standard markdown pipe syntax:
 
-TABLE: [Table Name]
+| Column Header 1 | Column Header 2 | Column Header 3 |
+|-----------------|-----------------|-----------------|
+| Row 1 Value 1   | Row 1 Value 2   | Row 1 Value 3   |
+| Row 2 Value 1   | Row 2 Value 2   | Row 2 Value 3   |
+| Row 3 Value 1   | Row 3 Value 2   | Row 3 Value 3   |
 
-Column 1: [Header]
-Column 2: [Header]
-Column 3: [Header]
+TABLE RULES (NON-NEGOTIABLE):
+1. ALWAYS use pipe (|) delimiters for columns
+2. ALWAYS include header separator row with dashes (---)
+3. ALWAYS align columns properly
+4. Maximum 6 columns per table for readability
+5. Include table caption above the table
 
-Row 1:
-[Header 1]: [Value]
-[Header 2]: [Value]
-[Header 3]: [Value]
+Example of CORRECT table format:
 
-Row 2:
-[Header 1]: [Value]
-[Header 2]: [Value]
-[Header 3]: [Value]
+**German Alphabet Pronunciation Guide**
 
-CODE FORMAT (REQUIRED):
+| Letter | German Name | IPA Sound | Example Word | Translation |
+|--------|-------------|-----------|--------------|-------------|
+| A, a   | Ah          | /aː/, /a/ | Apfel        | Apple       |
+| B, b   | Beh         | /b/       | Buch         | Book        |
+| C, c   | Tseh        | /k/, /ts/ | Computer     | Computer    |
 
-CODE EXAMPLE ([Language]):
+❌ FORBIDDEN TABLE FORMAT (WILL CAUSE FAILURE):
+- "TABLE: [Name]"
+- "Column 1: [Header]"
+- "Row 1: [Header]: [Value]"
+- Any text-based table representation
 
-    [properly indented line 1]
-    [properly indented line 2]
-    [blank line between logical blocks]
-    [properly indented line 3]
+If tables are NOT in proper markdown pipe format → OUTPUT IS INVALID
 
-If any markdown symbols (**, ##, \`\`\`) appear in output, the output is INVALID and must be REWRITTEN.
+===========================================
+CODE FORMAT (MANDATORY - FENCED CODE BLOCKS):
+===========================================
+
+Code MUST use triple backtick fenced blocks with language specification:
+
+\`\`\`python
+def greet_user():
+    name = input("Enter your name: ")
+    age = int(input("Enter your age: "))
+    
+    if age >= 18:
+        status = "an adult"
+    else:
+        status = "a minor"
+    
+    print(f"Hello {name}!")
+    print(f"You are {age} years old and {status}")
+
+if __name__ == "__main__":
+    greet_user()
+\`\`\`
+
+CODE RULES (NON-NEGOTIABLE):
+1. ALWAYS use triple backticks (\`\`\`)
+2. ALWAYS specify the language after opening backticks (python, javascript, sql, etc.)
+3. ALWAYS use proper indentation (4 spaces for Python, 2 for JS)
+4. Include comments explaining complex logic
+5. Use blank lines to separate logical blocks
+
+Supported languages: python, javascript, typescript, sql, java, csharp, cpp, ruby, go, rust, bash, html, css, json, yaml, markdown
+
+❌ FORBIDDEN CODE FORMAT:
+- "CODE EXAMPLE ([Language]):"
+- Plain indented text without backticks
+- Code without language specification
+
+If code is NOT in proper fenced block format → OUTPUT IS INVALID
+
+===========================================
+TEXT FORMATTING:
+===========================================
+
+For regular text content:
+- Section headings: Write as plain text on its own line
+- Emphasis: Express through word choice and sentence structure
+- Lists: Use numbered (1. 2. 3.) or bulleted (• or -) format
+- Avoid excessive asterisks for bold/italic in prose
 
 FORMAT & EXPORT ENFORCEMENT:
-• No visible markdown (**, _, ##)
-• Bold, italics, underline must render correctly
-• Tables must be readable in print
-• Code blocks must be properly indented
-• Cover must reflect interior content
-• EPUB / PDF ready without edits
+• Tables MUST render as proper grid tables in PDF/EPUB
+• Code blocks MUST have syntax highlighting capability
+• All content must be readable on mobile devices
+• Maximum table width: 6 columns
+• Code must be copy-pasteable and runnable
 
 === END FORMATTING CONTRACT ===
 `;
+
 
 // ===========================================
 // SECTION 5: ACADEMIC COMPLIANCE CONTRACT

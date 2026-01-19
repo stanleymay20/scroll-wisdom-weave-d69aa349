@@ -59,48 +59,70 @@ Mediocre content is NOT acceptable.`;
 const MASTER_FORMATTING_CONTRACT = `
 === FORMATTING & RENDERING CONTRACT (HARD) ===
 
-MARKDOWN IS FORBIDDEN IN FINAL OUTPUT
+PROPER MARKDOWN IS REQUIRED FOR TABLES AND CODE
 
-Do NOT output:
-- Asterisks for bold (**text**)
-- Asterisks for italics (*text*)
-- Underscores for emphasis (__text__)
-- Hash symbols for headings (## or ###)
-- Backticks for code
-- Pipe-based markdown tables
+===========================================
+TABLE FORMAT (MANDATORY - PROPER MARKDOWN):
+===========================================
 
-REQUIRED INSTEAD:
-- Section headings: Write as plain text on its own line (e.g., "Introduction" not "## Introduction")
-- Emphasis: Express through word choice and sentence structure, not symbols
-- Tables: Use labeled row/column format (see TABLE FORMAT below)
-- Code: Use indented plain text with language label prefix
+Tables MUST use standard markdown pipe syntax:
 
-TABLE FORMAT (REQUIRED):
+| Column Header 1 | Column Header 2 | Column Header 3 |
+|-----------------|-----------------|-----------------|
+| Row 1 Value 1   | Row 1 Value 2   | Row 1 Value 3   |
+| Row 2 Value 1   | Row 2 Value 2   | Row 2 Value 3   |
 
-TABLE: [Table Name]
+TABLE RULES:
+1. ALWAYS use pipe (|) delimiters for columns
+2. ALWAYS include header separator row with dashes (---)
+3. Maximum 6 columns per table for readability
+4. Include table caption above the table
 
-Column 1: [Header]
-Column 2: [Header]
-Column 3: [Header]
+Example of CORRECT table format:
 
-Row 1:
-[Header 1]: [Value]
-[Header 2]: [Value]
-[Header 3]: [Value]
+**German Alphabet Pronunciation**
 
-CODE FORMAT (REQUIRED):
+| Letter | German Name | IPA Sound | Example | Translation |
+|--------|-------------|-----------|---------|-------------|
+| A, a   | Ah          | /aː/      | Apfel   | Apple       |
+| B, b   | Beh         | /b/       | Buch    | Book        |
 
-CODE EXAMPLE ([Language]):
+❌ FORBIDDEN: "TABLE:", "Column 1:", "Row 1:" text-based formats
 
-    [properly indented line 1]
-    [properly indented line 2]
-    [blank line between logical blocks]
-    [properly indented line 3]
+===========================================
+CODE FORMAT (MANDATORY - FENCED CODE BLOCKS):
+===========================================
 
-If any markdown symbols (**, ##, \`\`\`) appear in output, the output is INVALID and must be REWRITTEN.
+Code MUST use triple backtick fenced blocks:
+
+\`\`\`python
+def example():
+    name = input("Enter name: ")
+    print(f"Hello {name}!")
+    
+if __name__ == "__main__":
+    example()
+\`\`\`
+
+CODE RULES:
+1. ALWAYS use triple backticks (\`\`\`)
+2. ALWAYS specify language (python, javascript, sql, etc.)
+3. Use proper indentation
+4. Include explanatory comments
+
+❌ FORBIDDEN: "CODE EXAMPLE ([Language]):" or plain indented text
+
+===========================================
+TEXT FORMATTING:
+===========================================
+
+- Section headings: Plain text on its own line
+- Lists: Numbered (1. 2. 3.) or bulleted (• or -)
+- Avoid excessive markdown in prose
 
 === END FORMATTING CONTRACT ===
 `;
+
 
 const ACADEMIC_CONTRACT = `
 === ACADEMIC COMPLIANCE CONTRACT ===
