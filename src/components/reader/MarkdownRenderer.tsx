@@ -21,6 +21,12 @@ import xml from 'highlight.js/lib/languages/xml';
 import css from 'highlight.js/lib/languages/css';
 import markdown from 'highlight.js/lib/languages/markdown';
 import yaml from 'highlight.js/lib/languages/yaml';
+// Additional languages
+import dart from 'highlight.js/lib/languages/dart';
+import scala from 'highlight.js/lib/languages/scala';
+import r from 'highlight.js/lib/languages/r';
+import elixir from 'highlight.js/lib/languages/elixir';
+import haskell from 'highlight.js/lib/languages/haskell';
 
 // Register languages
 hljs.registerLanguage('javascript', javascript);
@@ -54,6 +60,14 @@ hljs.registerLanguage('markdown', markdown);
 hljs.registerLanguage('md', markdown);
 hljs.registerLanguage('yaml', yaml);
 hljs.registerLanguage('yml', yaml);
+// Additional languages
+hljs.registerLanguage('dart', dart);
+hljs.registerLanguage('scala', scala);
+hljs.registerLanguage('r', r);
+hljs.registerLanguage('elixir', elixir);
+hljs.registerLanguage('ex', elixir);
+hljs.registerLanguage('haskell', haskell);
+hljs.registerLanguage('hs', haskell);
 
 interface MarkdownRendererProps {
   content: string;

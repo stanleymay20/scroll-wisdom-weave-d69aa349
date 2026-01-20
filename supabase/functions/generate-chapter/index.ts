@@ -90,27 +90,52 @@ Example of CORRECT table format:
 ❌ FORBIDDEN: "TABLE:", "Column 1:", "Row 1:" text-based formats
 
 ===========================================
-CODE FORMAT (MANDATORY - FENCED CODE BLOCKS):
+CODE FORMAT (MANDATORY - PROPER FENCED CODE BLOCKS)
 ===========================================
 
-Code MUST use triple backtick fenced blocks:
+ALL code MUST use proper triple backtick fenced blocks with language specification.
+Code MUST have proper line-by-line formatting with correct indentation.
+
+CORRECT CODE FORMAT EXAMPLE:
 
 \`\`\`python
-def example():
-    name = input("Enter name: ")
-    print(f"Hello {name}!")
+def greet_user():
+    name = input("Enter your name: ")
+    age = int(input("Enter your age: "))
     
+    if age >= 18:
+        status = "an adult"
+    else:
+        status = "a minor"
+    
+    print(f"\\nHello {name}!")
+    print(f"You are {age} years old and {status}")
+
 if __name__ == "__main__":
-    example()
+    greet_user()
 \`\`\`
 
-CODE RULES:
-1. ALWAYS use triple backticks (\`\`\`)
-2. ALWAYS specify language (python, javascript, sql, etc.)
-3. Use proper indentation
-4. Include explanatory comments
+CODE FORMATTING RULES (HARD REQUIREMENTS):
+1. ALWAYS use triple backticks (\`\`\`) to start and end code blocks
+2. ALWAYS specify the language after opening backticks (python, javascript, sql, java, etc.)
+3. ALWAYS use proper indentation (4 spaces for Python, 2-4 for others)
+4. ALWAYS include blank lines between logical sections
+5. ALWAYS format multi-line code with proper line breaks
+6. Include explanatory comments within code
+7. Each statement on its own line - NO cramming multiple statements
 
-❌ FORBIDDEN: "CODE EXAMPLE ([Language]):" or plain indented text
+CODE STYLE REQUIREMENTS:
+- Functions: proper definition with parameters on separate lines if long
+- Control flow: if/else/for/while on separate lines with proper indentation
+- Proper spacing around operators (=, ==, +, -, etc.)
+- String formatting should be readable
+
+❌ FORBIDDEN CODE FORMATS:
+- "CODE EXAMPLE (Python):" text-based format
+- Single-line cramped code without proper breaks
+- Code without language specification
+- Inline code for multi-line examples
+- Missing indentation
 
 ===========================================
 TEXT FORMATTING:
