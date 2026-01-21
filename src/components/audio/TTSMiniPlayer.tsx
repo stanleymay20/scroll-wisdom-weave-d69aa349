@@ -91,7 +91,8 @@ export function TTSMiniPlayer({
   const prevStopKeyRef = useRef<string | number | undefined>(undefined);
   const isMountedRef = useRef(true);
   const chunksRef = useRef<string[]>([]);
-
+  // Track if audio context is unlocked (user has interacted)
+  const audioUnlockedRef = useRef(false);
   const { toast } = useToast();
   const entitlements = useEntitlements();
   
@@ -196,6 +197,30 @@ export function TTSMiniPlayer({
     return URL.createObjectURL(blob);
   }, []);
 
+  // Unlock audio context on user gesture - call this synchronously in click handler
+  const unlockAudio = useCallback(() => {
+    if (audioUnlockedRef.current) return;
+    
+    // Create a persistent audio element on first user interaction
+    if (!audioRef.current) {
+      const audio = new Audio();
+      audio.volume = volume;
+      audioRef.current = audio;
+    }
+    
+    // Play silent audio to unlock autoplay
+    const audio = audioRef.current;
+    audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+    audio.play().then(() => {
+      audio.pause();
+      audioUnlockedRef.current = true;
+      console.log("[TTS] Audio context unlocked");
+    }).catch(() => {
+      // Still mark as attempted
+      audioUnlockedRef.current = true;
+    });
+  }, [volume]);
+
   const playUrl = useCallback((url: string): Promise<boolean> => {
     return new Promise((resolve) => {
       if (stopRef.current || isStoppingRef.current) {
@@ -203,7 +228,8 @@ export function TTSMiniPlayer({
         return;
       }
 
-      const audio = new Audio();
+      // Reuse existing audio element if available, or create new
+      const audio = audioRef.current || new Audio();
       audioRef.current = audio;
       audio.volume = volume;
 
@@ -373,6 +399,9 @@ export function TTSMiniPlayer({
   }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession]);
 
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
+    // CRITICAL: Unlock audio context immediately on user gesture (before any async work)
+    unlockAudio();
+    
     // Stop any existing playback first
     stop();
     
@@ -484,7 +513,7 @@ export function TTSMiniPlayer({
       mediaSession.setPlaybackState('idle');
       cleanupBlobUrls();
     }
-  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, stop, mediaSession]);
+  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, stop, mediaSession, unlockAudio]);
 
   // Stop on stopKey change (page navigation)
   useEffect(() => {
