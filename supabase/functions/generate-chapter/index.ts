@@ -497,6 +497,359 @@ const COMIC_STYLE_PRESETS: Record<string, {
 };
 
 // ===========================================
+// COMIC SUB-TYPE CONFIGURATION
+// Multi-Agent Architecture for Comics
+// ===========================================
+
+interface ComicSubTypeDefinition {
+  ageRange: string;
+  languageLevel: 'simple' | 'moderate' | 'advanced';
+  panelDensity: number;
+  dialogueComplexity: 'minimal' | 'moderate' | 'rich';
+  hasLearningObjectives: boolean;
+  certificationEligible: boolean;
+  storyArchitectRules: string;
+  scriptwriterRules: string;
+  visualDirectorRules: string;
+  learningAgentRules?: string;
+}
+
+const COMIC_SUB_TYPE_DEFINITIONS: Record<string, ComicSubTypeDefinition> = {
+  children_story: {
+    ageRange: '4-7',
+    languageLevel: 'simple',
+    panelDensity: 3,
+    dialogueComplexity: 'minimal',
+    hasLearningObjectives: false,
+    certificationEligible: true,
+    storyArchitectRules: 'Simple linear stories with clear beginning, middle, end. One central character. No complex subplots. Maximum 3 scenes per chapter.',
+    scriptwriterRules: 'Simple vocabulary, short sentences (max 8 words). Positive emotions. No scary content. Sound effects encouraged (BOOM!, WHOOSH!).',
+    visualDirectorRules: 'Large panels, bright colors, rounded shapes. Characters must have friendly expressions. Backgrounds simple and uncluttered.',
+  },
+  children_learning: {
+    ageRange: '7-12',
+    languageLevel: 'moderate',
+    panelDensity: 4,
+    dialogueComplexity: 'moderate',
+    hasLearningObjectives: true,
+    certificationEligible: true,
+    storyArchitectRules: 'Story must embed learning objectives naturally. Problem-solution structure. Character learns something new each chapter.',
+    scriptwriterRules: 'Grade-appropriate vocabulary. Explain concepts through character dialogue. Include curiosity questions. Vocabulary words can be slightly challenging.',
+    visualDirectorRules: 'Educational diagrams can be integrated. Show cause-and-effect visually. Characters can point to or interact with learning content.',
+    learningAgentRules: 'Each chapter must have 1-2 clear learning takeaways. Concepts explained through story, not lectures. Include a "Did You Know?" panel.',
+  },
+  teen_graphic: {
+    ageRange: '13-17',
+    languageLevel: 'advanced',
+    panelDensity: 5,
+    dialogueComplexity: 'rich',
+    hasLearningObjectives: false,
+    certificationEligible: false,
+    storyArchitectRules: 'Complex narratives allowed. Multiple characters with distinct arcs. Moral ambiguity acceptable. Cliffhangers encouraged.',
+    scriptwriterRules: 'Natural teen dialogue. Emotional depth. Internal monologue allowed. Subtext and nuance welcomed.',
+    visualDirectorRules: 'Dynamic camera angles. Atmospheric lighting. Detailed backgrounds. Cinematic compositions.',
+  },
+  educational: {
+    ageRange: 'all',
+    languageLevel: 'moderate',
+    panelDensity: 5,
+    dialogueComplexity: 'moderate',
+    hasLearningObjectives: true,
+    certificationEligible: true,
+    storyArchitectRules: 'Concept-first structure. Each scene introduces or reinforces a concept. Story serves the learning, not vice versa.',
+    scriptwriterRules: 'Clear explanations through character dialogue. Technical terms introduced and defined. Analogies encouraged.',
+    visualDirectorRules: 'Visual metaphors for abstract concepts. Diagrams and charts integrated naturally. Progressive complexity in visuals.',
+    learningAgentRules: 'Must include: (1) Concept introduction, (2) Visual demonstration, (3) Application example, (4) Summary panel. Learning objectives stated at chapter start.',
+  },
+  moral_values: {
+    ageRange: 'all',
+    languageLevel: 'moderate',
+    panelDensity: 4,
+    dialogueComplexity: 'moderate',
+    hasLearningObjectives: true,
+    certificationEligible: true,
+    storyArchitectRules: 'Values-driven narrative. Clear moral dilemma presented. Resolution demonstrates the value. No preachiness - show, dont tell.',
+    scriptwriterRules: 'Authentic emotional moments. Characters face real choices. Dialogue reveals character growth.',
+    visualDirectorRules: 'Expressive character emotions. Key moral moments get larger panels. Visual contrast between right and wrong choices.',
+    learningAgentRules: 'Core value must be demonstrated through action, not stated. Reflection moment at chapter end. Discussion questions optional.',
+  },
+  entertainment: {
+    ageRange: 'all',
+    languageLevel: 'moderate',
+    panelDensity: 5,
+    dialogueComplexity: 'rich',
+    hasLearningObjectives: false,
+    certificationEligible: false,
+    storyArchitectRules: 'Entertainment first. Strong hooks. Page-turner pacing. Genre conventions respected.',
+    scriptwriterRules: 'Witty dialogue. Character voice differentiation. Memorable lines. Humor where appropriate.',
+    visualDirectorRules: 'Maximum visual impact. Action sequences well choreographed. Splash pages for key moments.',
+  },
+};
+
+// ===========================================
+// MULTI-AGENT COMIC PROMPT BUILDERS
+// Each agent has a specific role and expertise
+// ===========================================
+
+function buildStoryArchitectPrompt(subType: string, chapterTitle: string, bookTitle: string, chapterNumber: number): string {
+  const config = COMIC_SUB_TYPE_DEFINITIONS[subType] || COMIC_SUB_TYPE_DEFINITIONS.entertainment;
+  
+  return `[STORY ARCHITECT AGENT]
+  
+You are designing the narrative structure for Chapter ${chapterNumber}: "${chapterTitle}" of "${bookTitle}".
+
+STORY TYPE: ${subType.replace(/_/g, ' ').toUpperCase()}
+AGE RANGE: ${config.ageRange}
+
+YOUR RULES:
+${config.storyArchitectRules}
+
+OUTPUT REQUIRED:
+1. Chapter Goal: What happens in this chapter? (1 sentence)
+2. Story Beat 1: Opening hook/setup
+3. Story Beat 2: Rising action/conflict
+4. Story Beat 3: Climax/resolution
+5. Emotional Arc: How does the reader feel at start vs end?
+6. Transition: How does this lead to the next chapter?
+
+Keep structure tight and purposeful.`;
+}
+
+function buildScriptwriterPrompt(subType: string, language: string, characterSheet?: any): string {
+  const config = COMIC_SUB_TYPE_DEFINITIONS[subType] || COMIC_SUB_TYPE_DEFINITIONS.entertainment;
+  
+  let characterInstructions = '';
+  if (characterSheet?.characters?.length > 0) {
+    characterInstructions = '\n\nCHARACTER VOICES TO MAINTAIN:\n' + 
+      characterSheet.characters.map((c: any) => 
+        `- ${c.name} (${c.role}): ${c.personalityTraits || 'Consistent personality'}`
+      ).join('\n');
+  }
+  
+  return `[SCRIPTWRITER AGENT]
+
+You write dialogue for ${subType.replace(/_/g, ' ')} comics.
+LANGUAGE: ${language}
+COMPLEXITY: ${config.dialogueComplexity}
+
+YOUR RULES:
+${config.scriptwriterRules}
+${characterInstructions}
+
+DIALOGUE FORMAT (MANDATORY):
+- CHARACTER_NAME: "Dialogue text here"
+- For thoughts: - CHARACTER_NAME: *(thinking) Internal thought*
+- For narration: - NARRATOR: "Narration text"
+
+Every panel MUST have dialogue. No silent panels allowed.`;
+}
+
+function buildVisualDirectorPrompt(subType: string, stylePreset: string, characterSheet?: any): string {
+  const config = COMIC_SUB_TYPE_DEFINITIONS[subType] || COMIC_SUB_TYPE_DEFINITIONS.entertainment;
+  const style = COMIC_STYLE_PRESETS[stylePreset] || COMIC_STYLE_PRESETS.children_book;
+  
+  let characterVisuals = '';
+  if (characterSheet?.characters?.length > 0) {
+    characterVisuals = '\n\nCHARACTER VISUAL REFERENCE (MUST MAINTAIN CONSISTENCY):\n' + 
+      characterSheet.characters.map((c: any) => 
+        `- ${c.name}: ${c.physicalDescription}. Wearing: ${c.clothingDescription || 'consistent outfit'}. Distinctive: ${c.distinctiveFeatures || 'none'}`
+      ).join('\n');
+  }
+  
+  const settingVisual = characterSheet?.settingDescription 
+    ? `\n\nSETTING REFERENCE:\n${characterSheet.settingDescription}` 
+    : '';
+  
+  return `[VISUAL DIRECTOR AGENT]
+
+You design the visual composition for each panel.
+STYLE: ${style.artStyle}
+PALETTE: ${style.colorPalette}
+LINE WEIGHT: ${style.lineWeight}
+
+YOUR RULES:
+${config.visualDirectorRules}
+${characterVisuals}
+${settingVisual}
+
+VISUAL DESCRIPTION FORMAT (MANDATORY):
+Visual: [Camera angle] of [scene description]. [Character(s)] [action/pose]. [Mood/lighting]. [Key visual elements].
+
+Example: "Wide shot of a sunlit marketplace. AMARA stands confidently in the center, hands on hips, looking at a mysterious vendor. Warm golden light. Colorful fabrics and spices in background."`;
+}
+
+function buildLearningAgentPrompt(subType: string, learningConfig?: any): string {
+  const config = COMIC_SUB_TYPE_DEFINITIONS[subType];
+  if (!config?.hasLearningObjectives || !config.learningAgentRules) {
+    return '';
+  }
+  
+  let objectivesSection = '';
+  if (learningConfig?.objectives?.length > 0) {
+    objectivesSection = '\n\nLEARNING OBJECTIVES TO EMBED:\n' + 
+      learningConfig.objectives.map((o: any, i: number) => `${i + 1}. ${o.objective}`).join('\n');
+  }
+  
+  let momentsSection = '';
+  if (learningConfig?.learningMoments?.length > 0) {
+    momentsSection = '\n\nLEARNING MOMENTS TO INCLUDE:\n' + 
+      learningConfig.learningMoments.map((m: any) => `- ${m.concept}: ${m.explanation} (Visual hint: ${m.panelHint})`).join('\n');
+  }
+  
+  let vocabularySection = '';
+  if (learningConfig?.keyVocabulary?.length > 0) {
+    vocabularySection = `\n\nKEY VOCABULARY TO INTRODUCE:\n${learningConfig.keyVocabulary.join(', ')}`;
+  }
+  
+  let moralSection = '';
+  if (learningConfig?.moralLesson) {
+    moralSection = `\n\nCORE MORAL LESSON:\n${learningConfig.moralLesson}`;
+  }
+  
+  return `[LEARNING AGENT]
+
+YOUR RULES:
+${config.learningAgentRules}
+${objectivesSection}
+${momentsSection}
+${vocabularySection}
+${moralSection}
+
+Learning must be WOVEN into the story, not lectured. Show through character actions and discoveries.`;
+}
+
+function buildContinuityGuardianPrompt(characterSheet?: any): string {
+  if (!characterSheet?.characters?.length) {
+    return '';
+  }
+  
+  return `[CONTINUITY GUARDIAN AGENT]
+
+CONSISTENCY RULES (HARD ENFORCEMENT):
+1. Characters must look IDENTICAL across all panels
+2. Outfits do NOT change unless story requires it
+3. Physical features (hair, skin, eyes) are LOCKED
+4. Setting elements must persist within scenes
+
+CHARACTER LOCK:
+${characterSheet.characters.map((c: any) => 
+  `- ${c.name}: ${c.physicalDescription}. ALWAYS wears: ${c.clothingDescription || 'consistent outfit'}`
+).join('\n')}
+
+If any panel violates consistency, STOP and correct.`;
+}
+
+function buildEnhancedComicSystemPrompt(
+  subType: string, 
+  stylePreset: string, 
+  language: string,
+  characterSheet?: any,
+  learningConfig?: any
+): string {
+  const storyArchitect = buildStoryArchitectPrompt(subType, '', '', 1);
+  const scriptwriter = buildScriptwriterPrompt(subType, language, characterSheet);
+  const visualDirector = buildVisualDirectorPrompt(subType, stylePreset, characterSheet);
+  const learningAgent = buildLearningAgentPrompt(subType, learningConfig);
+  const continuityGuardian = buildContinuityGuardianPrompt(characterSheet);
+  
+  return `===========================================
+SCROLLLIBRARY MULTI-AGENT COMIC GENERATION
+===========================================
+
+You are a MULTI-AGENT COMIC CREATION SYSTEM. You embody FIVE specialized agents working in harmony:
+
+${storyArchitect}
+
+${scriptwriter}
+
+${visualDirector}
+
+${learningAgent ? learningAgent : ''}
+
+${continuityGuardian ? continuityGuardian : ''}
+
+===========================================
+UNIFIED OUTPUT CONTRACT
+===========================================
+
+ALL agents must collaborate to produce panels in this EXACT format:
+
+[PANEL X]
+Visual: [Detailed scene description from Visual Director]
+Dialogue:
+- CHARACTER: "Speech text" [from Scriptwriter]
+Caption: "Narration if needed"
+
+CRITICAL RULES:
+1. EVERY panel MUST have dialogue (no silent panels)
+2. EVERY panel MUST have detailed visual description
+3. Characters MUST be visually consistent
+4. Story MUST follow the Story Architect's beats
+5. ${learningConfig?.objectives?.length > 0 ? 'Learning objectives MUST be embedded naturally' : 'Entertainment value is primary'}
+
+Language for ALL text: ${language}`;
+}
+
+function buildEnhancedComicChapterPrompt(
+  chapterTitle: string,
+  bookTitle: string,
+  chapterNumber: number,
+  keyTopics: string[],
+  language: string,
+  panelCount: number,
+  subType: string,
+  learningConfig?: any
+): string {
+  const config = COMIC_SUB_TYPE_DEFINITIONS[subType] || COMIC_SUB_TYPE_DEFINITIONS.entertainment;
+  
+  let learningSection = '';
+  if (config.hasLearningObjectives && learningConfig?.objectives?.length > 0) {
+    learningSection = `\n\nLEARNING OBJECTIVES FOR THIS CHAPTER:\n${
+      learningConfig.objectives.map((o: any, i: number) => `${i + 1}. ${o.objective}`).join('\n')
+    }\n\nThese MUST be demonstrated through the story, not explained directly.`;
+  }
+  
+  if (config.hasLearningObjectives && learningConfig?.moralLesson) {
+    learningSection += `\n\nMORAL LESSON: ${learningConfig.moralLesson}`;
+  }
+  
+  return `Create COMIC CHAPTER ${chapterNumber}: "${chapterTitle}"
+Book: "${bookTitle}"
+Comic Type: ${subType.replace(/_/g, ' ').toUpperCase()}
+Target Age: ${config.ageRange}
+
+STORY ELEMENTS:
+${keyTopics?.map((t, i) => `${i + 1}. ${t}`).join('\n') || '- Tell an engaging visual story'}
+${learningSection}
+
+PANEL COUNT: Generate exactly ${panelCount} panels
+
+OUTPUT FORMAT (MANDATORY):
+
+[PANEL 1]
+Visual: Wide establishing shot of [setting]. [Main character] [action/pose]. [Mood/atmosphere].
+Dialogue:
+- CHARACTER_NAME: "Opening line that hooks the reader"
+Caption: [Optional narration]
+
+[PANEL 2]
+Visual: [Next scene description]
+Dialogue:
+- CHARACTER_NAME: "Dialogue continues the story"
+
+(Continue for all ${panelCount} panels)
+
+REQUIREMENTS:
+- Dialogue complexity: ${config.dialogueComplexity}
+- Panel pacing: ${config.panelDensity} panels worth of story progression
+- Language: ${language}
+- EVERY panel MUST have at least one dialogue line
+- Visual descriptions MUST be detailed enough for image generation
+
+BEGIN COMIC CHAPTER:`;
+}
+
+// ===========================================
 // WORKBOOK STRUCTURE LIMITS
 // ===========================================
 
@@ -1870,28 +2223,36 @@ BEGIN REVISION:`;
     // COMIC BOOK GENERATION
     // ===========================================
     if (effectiveBookType === 'comic') {
-      console.log("[GENERATE-CHAPTER] Generating authority-grade comic chapter...");
+      console.log("[GENERATE-CHAPTER] Generating authority-grade comic chapter with multi-agent system...");
       console.log(`[GENERATE-CHAPTER] Comic style: ${effectiveComicStyle}, Panels: ${effectiveLayoutTemplate}`);
       
-      // Build enhanced system prompt with character sheet if provided
-      let enhancedSystemPrompt = buildComicSystemPrompt(effectiveComicStyle, languageName);
+      // Extract comic sub-type and learning config from request if available
+      const requestBody = await req.clone().json();
+      const comicSubType = requestBody.comicSubType || 'entertainment';
+      const comicLearningConfig = requestBody.comicLearningConfig || null;
+      const characterSheetConfig = requestBody.characterSheetConfig || effectiveCharacterSheet;
       
-      // Add character consistency from character sheet
-      if (effectiveCharacterSheet && Object.keys(effectiveCharacterSheet).length > 0) {
-        enhancedSystemPrompt += `\n\n**CHARACTER SHEET (MUST MAINTAIN CONSISTENCY):**\n${JSON.stringify(effectiveCharacterSheet, null, 2)}`;
-      }
+      console.log(`[GENERATE-CHAPTER] Comic sub-type: ${comicSubType}, Has learning: ${comicLearningConfig?.objectives?.length > 0}`);
       
-      // Add custom palette/line hints if provided
-      if (effectivePaletteHint) {
-        enhancedSystemPrompt += `\n\n**CUSTOM PALETTE:** ${effectivePaletteHint}`;
-      }
-      if (effectiveLineWeightHint) {
-        enhancedSystemPrompt += `\n\n**CUSTOM LINE WEIGHT:** ${effectiveLineWeightHint}`;
-      }
+      // Build enhanced multi-agent system prompt
+      const systemPrompt = buildEnhancedComicSystemPrompt(
+        comicSubType,
+        effectiveComicStyle,
+        languageName,
+        characterSheetConfig,
+        comicLearningConfig
+      );
       
-      const systemPrompt = enhancedSystemPrompt;
-      const chapterPrompt = buildComicChapterPrompt(
-        chapterTitle, bookTitle, chapterNumber, keyTopics, languageName, effectiveLayoutTemplate
+      // Build enhanced chapter prompt with learning objectives
+      const chapterPrompt = buildEnhancedComicChapterPrompt(
+        chapterTitle, 
+        bookTitle, 
+        chapterNumber, 
+        keyTopics, 
+        languageName, 
+        effectiveLayoutTemplate,
+        comicSubType,
+        comicLearningConfig
       );
       
       // Comic generation with retry logic for dialogue validation
