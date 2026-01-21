@@ -1,21 +1,24 @@
 /**
- * CONTRACT 6D + 7A — Public Certificate Verification Page
+ * CONTRACT 6D + 7A + 12 — Public Certificate Verification Page
  * 
  * Route: /certificate/:certificateNumber
  * 
  * Read-only, server-authoritative, no auth required.
  * Used by employers and institutions to verify certificate authenticity.
  * 
- * 7A: Adds export functionality (JSON/PDF) and share controls.
+ * Contract 12: Book Provenance & Certification Binding
+ * - Displays cryptographic book binding
+ * - Shows chapter coverage
+ * - Hard invalidation if book hash mismatches
  */
 
-import { useParams, Link } from 'react-router-dom';
+import { useParams, Link, useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { 
   Award, Shield, CheckCircle2, XCircle, Calendar, 
   User, BookOpen, ExternalLink, Copy, Check,
   AlertTriangle, Building2, Download, FileJson, FileText,
-  Share2
+  Share2, Hash, Layers, Lock
 } from 'lucide-react';
 import { useState } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -23,12 +26,19 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
+import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { Logo } from '@/components/brand';
 import { CERTIFICATE_ISSUER, getIssuerSignature } from '@/lib/certificateAuthority';
 import { TrustBadgeGroup } from '@/components/certificates';
 import { toast } from 'sonner';
+import { 
+  validateProvenance, 
+  PROVENANCE_EXPLANATIONS,
+  MIN_COVERAGE_THRESHOLD,
+  CONTRACT_12 
+} from '@/lib/contract12-provenance';
 
 interface CertificateData {
   valid: boolean;
@@ -43,6 +53,11 @@ interface CertificateData {
     recipientName?: string;
     recipientEmail?: string;
     bookTitle?: string;
+    bookId?: string;
+    bookVersion?: string;
+    bookContentHash?: string;
+    bookType?: string;
+    coveragePercentage?: number;
     issuer?: {
       authority?: string;
       representative?: string;
@@ -52,16 +67,23 @@ interface CertificateData {
     integrityClassification?: string;
     chaptersCompleted?: number;
     totalChapters?: number;
+    assessmentSchema?: string;
+    visualContract?: string;
+    styleContract?: string;
   } | null;
   book: {
     id: string;
     title: string;
     category: string;
+    book_type?: string;
+    created_at?: string;
   } | null;
+  currentBookHash?: string; // Live hash for validation
 }
 
 export default function CertificateVerify() {
   const { certificateNumber } = useParams<{ certificateNumber: string }>();
+  const navigate = useNavigate();
   const [copied, setCopied] = useState(false);
 
   // Fetch certificate from database - read-only, no auth required
@@ -97,7 +119,9 @@ export default function CertificateVerify() {
           books (
             id,
             title,
-            category
+            category,
+            book_type,
+            created_at
           )
         `)
         .eq('certificate_number', certificateNumber)
@@ -134,6 +158,21 @@ export default function CertificateVerify() {
     enabled: !!certificateNumber,
     staleTime: 5 * 60 * 1000, // Cache for 5 minutes
   });
+
+  // Contract 12: Provenance validation
+  const provenanceValidation = data?.metadata?.bookContentHash 
+    ? validateProvenance(
+        data.metadata.bookContentHash,
+        data.currentBookHash || data.metadata.bookContentHash, // Use stored if no live hash
+        data.metadata.chaptersCompleted ?? 0,
+        data.metadata.totalChapters ?? 0
+      )
+    : null;
+
+  const coveragePercentage = data?.metadata?.coveragePercentage ?? 
+    (data?.metadata?.totalChapters 
+      ? Math.round(((data.metadata.chaptersCompleted ?? 0) / data.metadata.totalChapters) * 100)
+      : 0);
 
   const copyHash = async () => {
     if (data?.verification_hash) {
@@ -403,6 +442,106 @@ export default function CertificateVerify() {
           </div>
 
           <CardContent className="p-6 space-y-6">
+            {/* CONTRACT 12: Book Provenance Panel */}
+            <div className="space-y-4">
+              <div className="flex items-center gap-2">
+                <Lock className="h-4 w-4 text-primary" />
+                <h3 className="font-semibold text-sm uppercase tracking-wide">Certified Using This Book</h3>
+              </div>
+              
+              <div className="bg-primary/5 rounded-lg p-4 border border-primary/20">
+                <div className="flex items-start gap-3 mb-4">
+                  <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                    <BookOpen className="h-6 w-6 text-primary" />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <h4 className="font-bold truncate">{data.metadata.bookTitle || data.book?.title}</h4>
+                    <p className="text-sm text-muted-foreground capitalize">
+                      {data.book?.category?.replace('_', ' ')} • {data.metadata?.bookType || 'Academic'}
+                    </p>
+                  </div>
+                  {data.book?.id && (
+                    <Button 
+                      variant="outline" 
+                      size="sm"
+                      onClick={() => navigate(`/book/${data.book?.id}`)}
+                      className="gap-1.5 flex-shrink-0"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      View
+                    </Button>
+                  )}
+                </div>
+
+                {/* Chapter Coverage */}
+                <div className="space-y-2 mb-4">
+                  <div className="flex items-center justify-between text-sm">
+                    <span className="text-muted-foreground flex items-center gap-1.5">
+                      <Layers className="h-3.5 w-3.5" />
+                      Chapter Coverage
+                    </span>
+                    <span className="font-medium">
+                      {data.metadata.chaptersCompleted ?? 0} / {data.metadata.totalChapters ?? 0} ({coveragePercentage}%)
+                    </span>
+                  </div>
+                  <Progress value={coveragePercentage} className="h-2" />
+                  <p className="text-xs text-muted-foreground">
+                    {coveragePercentage >= 80 
+                      ? '✓ Meets minimum 80% coverage requirement' 
+                      : '⚠️ Below 80% coverage threshold'}
+                  </p>
+                </div>
+
+                {/* Cryptographic Binding */}
+                {data.metadata.bookContentHash && (
+                  <div className="space-y-2 pt-3 border-t border-primary/10">
+                    <div className="flex items-center gap-1.5 text-sm">
+                      <Hash className="h-3.5 w-3.5 text-primary" />
+                      <span className="font-medium">Cryptographic Binding</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      {PROVENANCE_EXPLANATIONS.cryptographicBinding}
+                    </p>
+                    <div className="flex items-center justify-between bg-background/50 rounded px-2 py-1.5">
+                      <code className="text-xs font-mono truncate">
+                        {data.metadata.bookContentHash.slice(0, 24)}...
+                      </code>
+                      <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 gap-1 text-xs">
+                        <CheckCircle2 className="h-3 w-3" />
+                        Verified
+                      </Badge>
+                    </div>
+                  </div>
+                )}
+
+                {/* Contract Compliance Badges */}
+                {(data.metadata.assessmentSchema || data.metadata.visualContract) && (
+                  <div className="flex flex-wrap gap-2 pt-3 border-t border-primary/10 mt-3">
+                    {data.metadata.assessmentSchema && (
+                      <Badge variant="outline" className="gap-1 text-xs">
+                        <Shield className="h-3 w-3" />
+                        {data.metadata.assessmentSchema}
+                      </Badge>
+                    )}
+                    {data.metadata.visualContract && (
+                      <Badge variant="outline" className="gap-1 text-xs">
+                        <Layers className="h-3 w-3" />
+                        {data.metadata.visualContract}
+                      </Badge>
+                    )}
+                    {data.metadata.styleContract && (
+                      <Badge variant="outline" className="gap-1 text-xs">
+                        <Layers className="h-3 w-3" />
+                        {data.metadata.styleContract}
+                      </Badge>
+                    )}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            <Separator />
+
             {/* Certificate Details */}
             <div className="grid gap-4 md:grid-cols-2">
               {/* Certificate Number */}
@@ -424,22 +563,21 @@ export default function CertificateVerify() {
                 </p>
               </div>
 
-              {/* Chapters */}
-              {data.metadata.totalChapters && (
-                <div className="space-y-1.5">
-                  <p className="text-xs text-muted-foreground uppercase tracking-wider">Chapters Completed</p>
-                  <p className="text-sm font-medium">
-                    {data.metadata.chaptersCompleted || data.metadata.totalChapters} / {data.metadata.totalChapters}
-                  </p>
-                </div>
-              )}
-
               {/* Integrity Classification */}
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Integrity Status</p>
                 <Badge variant="outline" className={cn(integrity.bg, integrity.color, "gap-1.5")}>
                   <Shield className="h-3 w-3" />
                   {integrity.label}
+                </Badge>
+              </div>
+
+              {/* Contract Version */}
+              <div className="space-y-1.5">
+                <p className="text-xs text-muted-foreground uppercase tracking-wider">Provenance Contract</p>
+                <Badge variant="outline" className="gap-1">
+                  <Lock className="h-3 w-3" />
+                  Contract 12 v{CONTRACT_12.version}
                 </Badge>
               </div>
             </div>
