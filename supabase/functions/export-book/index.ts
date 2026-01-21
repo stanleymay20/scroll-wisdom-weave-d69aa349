@@ -246,10 +246,20 @@ function stripMarkdown(text: string): string {
 /**
  * Sanitize text for PDF WinAnsi encoding
  * Replaces Unicode characters that cannot be encoded in WinAnsi
+ * CRITICAL: Must be called on ALL text before drawText() in PDF generation
  */
 function sanitizeForPDF(text: string): string {
   if (!text) return "";
   return text
+    // Arrows (these were causing the error!)
+    .replace(/→/g, "->")
+    .replace(/←/g, "<-")
+    .replace(/↔/g, "<->")
+    .replace(/⇒/g, "=>")
+    .replace(/⇐/g, "<=")
+    .replace(/⇔/g, "<=>")
+    .replace(/↑/g, "^")
+    .replace(/↓/g, "v")
     // Superscript numbers and symbols
     .replace(/⁰/g, "0")
     .replace(/¹/g, "1")
@@ -262,7 +272,7 @@ function sanitizeForPDF(text: string): string {
     .replace(/⁸/g, "8")
     .replace(/⁹/g, "9")
     .replace(/⁺/g, "+")
-    .replace(/⁻/g, "-")  // This is the specific character causing the error
+    .replace(/⁻/g, "-")
     .replace(/⁼/g, "=")
     .replace(/⁽/g, "(")
     .replace(/⁾/g, ")")
@@ -295,9 +305,12 @@ function sanitizeForPDF(text: string): string {
     .replace(/"/g, '"')
     .replace(/…/g, "...")
     .replace(/•/g, "-")  // Bullet
-    .replace(/→/g, "->")
-    .replace(/←/g, "<-")
-    .replace(/↔/g, "<->")
+    .replace(/◦/g, "o")  // White bullet
+    .replace(/▪/g, "-")  // Black small square
+    .replace(/▸/g, ">")  // Right-pointing triangle
+    .replace(/▹/g, ">")  // White right-pointing triangle
+    .replace(/◂/g, "<")  // Left-pointing triangle
+    .replace(/◃/g, "<")  // White left-pointing triangle
     .replace(/≈/g, "~")
     .replace(/≠/g, "!=")
     .replace(/≤/g, "<=")
@@ -315,8 +328,28 @@ function sanitizeForPDF(text: string): string {
     .replace(/σ/g, "sigma")
     .replace(/φ/g, "phi")
     .replace(/ω/g, "omega")
+    .replace(/Ω/g, "Omega")
+    .replace(/∑/g, "sum")
+    .replace(/∏/g, "product")
+    .replace(/√/g, "sqrt")
+    .replace(/∫/g, "integral")
+    .replace(/∂/g, "d")
+    .replace(/∆/g, "delta")
+    .replace(/∇/g, "nabla")
+    // German/international chars that ARE supported in WinAnsi
+    // Keep: ä ö ü ß Ä Ö Ü é è ê ë etc. (these are in Latin-1)
     // Fallback: remove any remaining non-WinAnsi characters (keep basic ASCII + Latin-1)
     .replace(/[^\x00-\xFF]/g, "");
+}
+
+/**
+ * Sanitize text for HTML/XML output (EPUB/DOCX)
+ * Preserves Unicode but escapes XML entities
+ */
+function sanitizeForExport(text: string): string {
+  if (!text) return "";
+  // Just normalize whitespace, keep Unicode for EPUB/DOCX (they support it)
+  return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
 async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
@@ -1408,7 +1441,7 @@ async function generateEPUB(
       return `<pre><code class="${lang || 'text'}">${escapeXml(code.trim())}</code></pre>`;
     });
     
-    // Convert PROPER markdown tables to HTML tables
+    // Convert PROPER markdown tables (pipe format) to HTML tables
     content = content.replace(/(?:(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/g, 
       (_match: string, boldTitle: string, plainTitle: string, tableContent: string) => {
         const tableName = (boldTitle || plainTitle || '').trim();
@@ -1436,6 +1469,66 @@ async function generateEPUB(
       }
     );
     
+    // Convert PROSE-FORMAT tables (Row 1: ... Row 2: ...) to HTML tables
+    // This handles AI-generated tables that aren't in markdown pipe format
+    content = content.replace(/((?:Row \d+:[^\n]+\n)+)/g, (match: string) => {
+      const lines = match.trim().split('\n');
+      if (lines.length < 2) return match;
+      
+      // Parse the first row to extract column headers from "Field: Value" pairs
+      const firstRow = lines[0];
+      const fieldValuePairs = firstRow.match(/([A-Za-z][A-Za-z\s()]+):\s*([^:]+?)(?=\s+[A-Za-z][A-Za-z\s()]+:|$)/g);
+      
+      if (!fieldValuePairs || fieldValuePairs.length < 2) return match;
+      
+      // Extract headers from field names
+      const headers: string[] = [];
+      const headerMap: Map<string, number> = new Map();
+      fieldValuePairs.forEach((pair, idx) => {
+        const colonIdx = pair.indexOf(':');
+        if (colonIdx > 0) {
+          const header = pair.substring(0, colonIdx).trim();
+          headers.push(header);
+          headerMap.set(header.toLowerCase(), idx);
+        }
+      });
+      
+      // Parse all rows
+      const tableRows: string[][] = [];
+      for (const line of lines) {
+        const rowMatch = line.match(/^Row \d+:\s*/);
+        if (!rowMatch) continue;
+        
+        const rowContent = line.substring(rowMatch[0].length);
+        const pairs = rowContent.match(/([A-Za-z][A-Za-z\s()]+):\s*([^:]+?)(?=\s+[A-Za-z][A-Za-z\s()]+:|$)/g);
+        
+        if (pairs) {
+          const cells: string[] = new Array(headers.length).fill('');
+          pairs.forEach(pair => {
+            const colonIdx = pair.indexOf(':');
+            if (colonIdx > 0) {
+              const key = pair.substring(0, colonIdx).trim().toLowerCase();
+              const value = pair.substring(colonIdx + 1).trim();
+              const idx = headerMap.get(key);
+              if (idx !== undefined) {
+                cells[idx] = value;
+              }
+            }
+          });
+          tableRows.push(cells);
+        }
+      }
+      
+      if (tableRows.length === 0) return match;
+      
+      const headerHtml = headers.map(h => `<th>${escapeXml(h)}</th>`).join('');
+      const rowsHtml = tableRows.map(row => 
+        `<tr>${row.map(cell => `<td>${escapeXml(cell)}</td>`).join('')}</tr>`
+      ).join('\n');
+      
+      return `<table class="data-table"><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>`;
+    });
+    
     // Convert inline code
     content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
     
@@ -1446,6 +1539,8 @@ async function generateEPUB(
         p = p.trim();
         if (!p) return '';
         if (p.startsWith('<pre>') || p.startsWith('<code>') || p.startsWith('<figure>') || p.startsWith('<p>') || p.startsWith('<table>')) return p;
+        // Skip prose that's clearly table data (Row N: format)
+        if (/^Row \d+:/.test(p)) return '';
         return `<p>${escapeXml(p)}</p>`;
       })
       .filter((p: string) => p)
@@ -1627,7 +1722,7 @@ async function generateDOCX(
   // Process all chapters to extract images first
   let imageCounter = 0;
   const docxImages: { id: string; bytes: Uint8Array }[] = [];
-  const processedChapters: { chapter: any; processedContent: string[]; imageRefs: { index: number; alt: string }[] }[] = [];
+  const processedChapters: { chapter: any; processedContent: string[]; imageRefs: { index: number; alt: string }[]; tables: { original: string; headers: string[]; rows: string[][] }[] }[] = [];
   
   for (const chapter of chapters) {
     const content = chapter.content || "";
@@ -1646,10 +1741,65 @@ async function generateDOCX(
     }
     
     // Strip images from content for text processing
-    const textContent = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '[IMAGE_PLACEHOLDER]');
+    let textContent = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '[IMAGE_PLACEHOLDER]');
+    
+    // Extract tables in "Row X:" prose format for DOCX
+    const tableMatches: { original: string; headers: string[]; rows: string[][] }[] = [];
+    textContent = textContent.replace(/((?:Row \d+:[^\n]+\n)+)/g, (match: string) => {
+      const lines = match.trim().split('\n');
+      if (lines.length < 2) return match;
+      
+      // Parse the first row to extract column headers
+      const firstRow = lines[0];
+      const fieldValuePairs = firstRow.match(/([A-Za-z][A-Za-z\s()]+):\s*([^:]+?)(?=\s+[A-Za-z][A-Za-z\s()]+:|$)/g);
+      
+      if (!fieldValuePairs || fieldValuePairs.length < 2) return match;
+      
+      const headers: string[] = [];
+      const headerMap: Map<string, number> = new Map();
+      fieldValuePairs.forEach((pair, idx) => {
+        const colonIdx = pair.indexOf(':');
+        if (colonIdx > 0) {
+          const header = pair.substring(0, colonIdx).trim();
+          headers.push(header);
+          headerMap.set(header.toLowerCase(), idx);
+        }
+      });
+      
+      const tableRows: string[][] = [];
+      for (const line of lines) {
+        const rowMatch = line.match(/^Row \d+:\s*/);
+        if (!rowMatch) continue;
+        
+        const rowContent = line.substring(rowMatch[0].length);
+        const pairs = rowContent.match(/([A-Za-z][A-Za-z\s()]+):\s*([^:]+?)(?=\s+[A-Za-z][A-Za-z\s()]+:|$)/g);
+        
+        if (pairs) {
+          const cells: string[] = new Array(headers.length).fill('');
+          pairs.forEach(pair => {
+            const colonIdx = pair.indexOf(':');
+            if (colonIdx > 0) {
+              const key = pair.substring(0, colonIdx).trim().toLowerCase();
+              const value = pair.substring(colonIdx + 1).trim();
+              const idx = headerMap.get(key);
+              if (idx !== undefined) {
+                cells[idx] = value;
+              }
+            }
+          });
+          tableRows.push(cells);
+        }
+      }
+      
+      if (tableRows.length === 0) return match;
+      
+      tableMatches.push({ original: match, headers, rows: tableRows });
+      return `[DOCX_TABLE_${tableMatches.length - 1}]`;
+    });
+    
     const paragraphs = stripMarkdown(textContent).split(/\n\n+/);
     
-    processedChapters.push({ chapter, processedContent: paragraphs, imageRefs });
+    processedChapters.push({ chapter, processedContent: paragraphs, imageRefs, tables: tableMatches });
   }
 
   // Build content types with all images
@@ -1770,9 +1920,9 @@ async function generateDOCX(
 
   documentContent += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
 
-  // Chapters with embedded images
+  // Chapters with embedded images and tables
   let docPicId = 2;
-  for (const { chapter, processedContent, imageRefs } of processedChapters) {
+  for (const { chapter, processedContent, imageRefs, tables } of processedChapters) {
     documentContent += `
 <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter ${chapter.chapter_number}: ${escapeXml(chapter.title)}</w:t></w:r></w:p>`;
     
@@ -1780,6 +1930,44 @@ async function generateDOCX(
     for (const para of processedContent) {
       const trimmed = para.trim();
       if (!trimmed) continue;
+      
+      // Check for table placeholder
+      const tableMatch = trimmed.match(/\[DOCX_TABLE_(\d+)\]/);
+      if (tableMatch) {
+        const tableIdx = parseInt(tableMatch[1]);
+        const table = tables[tableIdx];
+        if (table) {
+          // Render Word table
+          const numCols = table.headers.length;
+          const colWidth = Math.floor(9000 / numCols); // Total width ~9000 twips
+          
+          documentContent += `
+<w:tbl>
+  <w:tblPr>
+    <w:tblW w:w="0" w:type="auto"/>
+    <w:tblBorders>
+      <w:top w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+      <w:left w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+      <w:bottom w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+      <w:right w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+      <w:insideH w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+      <w:insideV w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+    </w:tblBorders>
+  </w:tblPr>
+  <w:tblGrid>
+    ${table.headers.map(() => `<w:gridCol w:w="${colWidth}"/>`).join('')}
+  </w:tblGrid>
+  <w:tr>
+    ${table.headers.map(h => `<w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="F0F0F0"/></w:tcPr><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>${escapeXml(h)}</w:t></w:r></w:p></w:tc>`).join('')}
+  </w:tr>
+  ${table.rows.map((row, rowIdx) => `<w:tr>
+    ${row.map(cell => `<w:tc>${rowIdx % 2 === 1 ? '<w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="FAFAFA"/></w:tcPr>' : ''}<w:p><w:r><w:t>${escapeXml(cell)}</w:t></w:r></w:p></w:tc>`).join('')}
+  </w:tr>`).join('\n  ')}
+</w:tbl>
+<w:p><w:r><w:t></w:t></w:r></w:p>`;
+        }
+        continue;
+      }
       
       // Check for image placeholder
       if (trimmed.includes('[IMAGE_PLACEHOLDER]') && imageIdx < imageRefs.length) {
@@ -1822,7 +2010,7 @@ async function generateDOCX(
 <w:p><w:r><w:rPr><w:i/><w:sz w:val="18"/></w:rPr><w:t>${escapeXml(imgRef.alt)}</w:t></w:r></w:p>`;
         }
         imageIdx++;
-      } else if (!trimmed.includes('[IMAGE_PLACEHOLDER]')) {
+      } else if (!trimmed.includes('[IMAGE_PLACEHOLDER]') && !trimmed.includes('[DOCX_TABLE_')) {
         documentContent += `<w:p><w:r><w:t>${escapeXml(trimmed)}</w:t></w:r></w:p>`;
       }
     }
