@@ -90,51 +90,66 @@ Example of CORRECT table format:
 ❌ FORBIDDEN: "TABLE:", "Column 1:", "Row 1:" text-based formats
 
 ===========================================
-CODE FORMAT (MANDATORY - PROPER FENCED CODE BLOCKS)
+STRUCTURED CODE BLOCK FORMAT (CHATGPT-LEVEL QUALITY)
 ===========================================
 
-ALL code MUST use proper triple backtick fenced blocks with language specification.
-Code MUST have proper line-by-line formatting with correct indentation.
+For TECHNICAL content, use the STRUCTURED CODE BLOCK format for maximum learning quality.
+Code must be treated as a FIRST-CLASS content object, not inline text.
 
-CORRECT CODE FORMAT EXAMPLE:
+STRUCTURED CODE BLOCK FORMAT (MANDATORY for technical books):
 
+[CODE_BLOCK]
+language: python
+title: "Descriptive Title for the Code Example"
+purpose: "What this code demonstrates and why it matters"
+
+code:
 \`\`\`python
-def greet_user():
-    name = input("Enter your name: ")
-    age = int(input("Enter your age: "))
-    
-    if age >= 18:
-        status = "an adult"
-    else:
-        status = "a minor"
-    
-    print(f"\\nHello {name}!")
-    print(f"You are {age} years old and {status}")
+def greet(name):
+    """Return a personalized greeting."""
+    return f"Hello, {name}!"
 
-if __name__ == "__main__":
-    greet_user()
+# Usage example
+result = greet("Anna")
+print(result)
+\`\`\`
+
+output:
+Hello, Anna!
+
+explanation:
+This function takes a name as input and returns a formatted greeting string.
+The f-string syntax creates readable string interpolation in Python 3.6+.
+
+common_mistake:
+Forgetting to return the value instead of printing it directly.
+Wrong: print(f"Hello, {name}") inside the function without return.
+[/CODE_BLOCK]
+
+STRUCTURED CODE BLOCK REQUIREMENTS:
+1. EVERY code example MUST include: language, title, purpose, code, output (when applicable), explanation
+2. common_mistake section is RECOMMENDED for learning value
+3. Language must be explicitly specified (python, javascript, java, sql, etc.)
+4. Output must show ACTUAL expected results from running the code
+5. Explanation must connect the code to the learning concept
+6. common_mistake must show what NOT to do and why
+
+ALTERNATIVE: Standard fenced code blocks are acceptable for simple inline examples:
+\`\`\`python
+print("Hello")
 \`\`\`
 
 CODE FORMATTING RULES (HARD REQUIREMENTS):
-1. ALWAYS use triple backticks (\`\`\`) to start and end code blocks
-2. ALWAYS specify the language after opening backticks (python, javascript, sql, java, etc.)
-3. ALWAYS use proper indentation (4 spaces for Python, 2-4 for others)
-4. ALWAYS include blank lines between logical sections
-5. ALWAYS format multi-line code with proper line breaks
-6. Include explanatory comments within code
-7. Each statement on its own line - NO cramming multiple statements
-
-CODE STYLE REQUIREMENTS:
-- Functions: proper definition with parameters on separate lines if long
-- Control flow: if/else/for/while on separate lines with proper indentation
-- Proper spacing around operators (=, ==, +, -, etc.)
-- String formatting should be readable
+1. ALWAYS use proper indentation (4 spaces for Python, 2-4 for others)
+2. ALWAYS include blank lines between logical sections
+3. Include explanatory comments within code
+4. Each statement on its own line - NO cramming multiple statements
 
 ❌ FORBIDDEN CODE FORMATS:
 - "CODE EXAMPLE (Python):" text-based format
 - Single-line cramped code without proper breaks
 - Code without language specification
-- Inline code for multi-line examples
+- Code inside tables
 - Missing indentation
 
 ===========================================
