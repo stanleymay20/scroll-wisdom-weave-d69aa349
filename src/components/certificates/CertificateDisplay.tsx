@@ -3,7 +3,7 @@
  * CONTRACT 8A — CERTIFICATION EMBLEM REQUIREMENT
  * 
  * Renders certificates with locked issuer authority, Founder signature,
- * and MANDATORY Certification Emblem.
+ * MANDATORY Certification Emblem, and Book Provenance binding.
  */
 
 import { format } from 'date-fns';
@@ -20,14 +20,18 @@ import {
 } from '@/lib/certificateAuthority';
 import { CertificationEmblem } from './CertificationEmblem';
 import { CompetencyManifestDisplay } from './CompetencyManifestDisplay';
+import { CertifiedBookSeal } from './CertifiedBookSeal';
+import { BookProvenancePanel, BookProvenanceData } from './BookProvenancePanel';
 import { generateCompetencyManifest } from '@/lib/competencyManifest';
 
 interface CertificateDisplayProps {
   certificate: Certificate;
   certificateType?: CertificateType;
   onDownload?: () => void;
+  onViewBook?: () => void;
   compact?: boolean;
   showManifest?: boolean;
+  showProvenance?: boolean;
   manifestData?: {
     learningObjectives: string[];
     skills: { name: string; category: string }[];
@@ -37,15 +41,19 @@ interface CertificateDisplayProps {
     difficultyLevel: string;
     domain?: string;
   };
+  provenanceData?: BookProvenanceData;
 }
 
 export function CertificateDisplay({ 
   certificate, 
   certificateType = 'completion',
   onDownload,
+  onViewBook,
   compact = false,
   showManifest = true,
+  showProvenance = true,
   manifestData,
+  provenanceData,
 }: CertificateDisplayProps) {
   const isValid = validateCertificateIntegrity(certificate);
   const typeConfig = CERTIFICATE_TYPES[certificateType];
@@ -141,6 +149,17 @@ export function CertificateDisplay({
           </p>
         </div>
 
+        {/* CERTIFIED USING THIS BOOK SEAL */}
+        <div className="mb-8">
+          <CertifiedBookSeal
+            bookTitle={certificate.content.bookTitle}
+            bookType={certificate.content.bookType || 'text'}
+            version={provenanceData?.bookVersion}
+            onViewBook={onViewBook}
+            variant="compact"
+          />
+        </div>
+
         {/* Granted Rights */}
         <div className="text-center mb-8">
           <p className="text-sm text-muted-foreground mb-2">Rights Granted:</p>
@@ -205,6 +224,17 @@ export function CertificateDisplay({
             </Badge>
           )}
         </div>
+
+        {/* Book Provenance Panel - Employer View */}
+        {showProvenance && provenanceData && (
+          <div className="mt-8 pt-6 border-t border-primary/20">
+            <BookProvenancePanel 
+              provenance={provenanceData} 
+              onViewBook={onViewBook}
+              compact={false}
+            />
+          </div>
+        )}
 
         {/* Competency Manifest - Employer-Grade Learning Evidence */}
         {showManifest && manifest && (
