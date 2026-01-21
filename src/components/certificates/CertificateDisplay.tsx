@@ -1,6 +1,9 @@
 /**
  * CONTRACT 6A — CERTIFICATE DISPLAY COMPONENT
- * Renders certificates with locked issuer authority and Founder signature
+ * CONTRACT 8A — CERTIFICATION EMBLEM REQUIREMENT
+ * 
+ * Renders certificates with locked issuer authority, Founder signature,
+ * and MANDATORY Certification Emblem.
  */
 
 import { format } from 'date-fns';
@@ -15,22 +18,58 @@ import {
   CertificateType,
   validateCertificateIntegrity 
 } from '@/lib/certificateAuthority';
+import { CertificationEmblem } from './CertificationEmblem';
+import { CompetencyManifestDisplay } from './CompetencyManifestDisplay';
+import { generateCompetencyManifest } from '@/lib/competencyManifest';
 
 interface CertificateDisplayProps {
   certificate: Certificate;
   certificateType?: CertificateType;
   onDownload?: () => void;
   compact?: boolean;
+  showManifest?: boolean;
+  manifestData?: {
+    learningObjectives: string[];
+    skills: { name: string; category: string }[];
+    assessmentBreakdown: { tier: number; count: number; correct: number }[];
+    overallScore: number;
+    integrityScore: number;
+    difficultyLevel: string;
+    domain?: string;
+  };
 }
 
 export function CertificateDisplay({ 
   certificate, 
   certificateType = 'completion',
   onDownload,
-  compact = false 
+  compact = false,
+  showManifest = true,
+  manifestData,
 }: CertificateDisplayProps) {
   const isValid = validateCertificateIntegrity(certificate);
   const typeConfig = CERTIFICATE_TYPES[certificateType];
+
+  // Generate manifest if data is provided
+  const manifest = manifestData ? generateCompetencyManifest({
+    bookId: certificate.id,
+    bookTitle: certificate.content.bookTitle,
+    bookType: certificate.content.bookType || 'text',
+    domain: manifestData.domain || certificate.content.bookType || 'General',
+    totalChapters: certificate.content.totalChapters,
+    completedChapters: certificate.content.chaptersCompleted,
+    learningObjectives: manifestData.learningObjectives,
+    skills: manifestData.skills,
+    assessmentResults: manifestData.assessmentBreakdown.map(ab => ({
+      tier: ab.tier as 1 | 2 | 3 | 4,
+      questionCount: ab.count,
+      correctCount: ab.correct,
+    })),
+    integrityScore: manifestData.integrityScore / 100,
+    integritySignals: [],
+    certificateType,
+    certificateId: certificate.id,
+  }) : null;
 
   if (compact) {
     return (
@@ -62,12 +101,11 @@ export function CertificateDisplay({
       <div className="h-2 bg-gradient-to-r from-primary via-primary/80 to-primary" />
       
       <CardContent className="p-8 md:p-12">
-        {/* Authority Header */}
+        {/* Authority Header with MANDATORY Emblem */}
         <div className="text-center mb-8">
           <div className="flex justify-center mb-4">
-            <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
-              <Shield className="h-8 w-8 text-primary" />
-            </div>
+            {/* CONTRACT 8A: Certification Emblem is MANDATORY */}
+            <CertificationEmblem size="lg" />
           </div>
           <h2 className="text-lg font-semibold text-primary tracking-wide uppercase">
             {CERTIFICATE_ISSUER.authority}
@@ -168,6 +206,13 @@ export function CertificateDisplay({
           )}
         </div>
 
+        {/* Competency Manifest - Employer-Grade Learning Evidence */}
+        {showManifest && manifest && (
+          <div className="mt-8 pt-6 border-t border-primary/20">
+            <CompetencyManifestDisplay manifest={manifest} compact={true} />
+          </div>
+        )}
+
         {/* Download Button */}
         {onDownload && (
           <div className="flex justify-center mt-6">
@@ -178,8 +223,11 @@ export function CertificateDisplay({
           </div>
         )}
 
-        {/* Legal Footer */}
+        {/* Legal Footer with Emblem */}
         <div className="mt-8 pt-4 border-t border-primary/10 text-center">
+          <div className="flex items-center justify-center gap-2 mb-2">
+            <CertificationEmblem size="sm" />
+          </div>
           <p className="text-xs text-muted-foreground">
             This certificate is issued by {CERTIFICATE_ISSUER.authority}. 
             Verification available at scroll-wisdom-weave.lovable.app/verify/{certificate.id}
