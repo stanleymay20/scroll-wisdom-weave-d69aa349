@@ -35,6 +35,7 @@ import { ComicStyleSelector, ComicStyleConfig } from "@/components/generate/Comi
 import { ComicSubTypeSelector, ComicSubType, ComicSubTypeConfig } from "@/components/generate/ComicSubTypeSelector";
 import { ComicCharacterSheet, CharacterSheetConfig } from "@/components/generate/ComicCharacterSheet";
 import { ComicLearningObjectives, ComicLearningConfig } from "@/components/generate/ComicLearningObjectives";
+import { CharacterPortraitPreview } from "@/components/generate/CharacterPortraitPreview";
 import { BestsellerModeToggle } from "@/components/generate/BestsellerModeToggle";
 import { AuthorImprint, AuthorMode } from "@/components/generate/AuthorImprint";
 import { usePagePerformance } from "@/lib/performance";
@@ -616,6 +617,16 @@ export default function Generate() {
                       });
                     }}
                   />
+                  
+                  {/* Character Portrait Preview - only show when characters exist and not locked */}
+                  {characterSheetConfig.characters.length > 0 && !characterSheetConfig.isLocked && (
+                    <CharacterPortraitPreview
+                      characters={characterSheetConfig.characters}
+                      styleId={comicStyleConfig.styleId}
+                      paletteHint={comicStyleConfig.paletteHint}
+                      disabled={isGenerating}
+                    />
+                  )}
                   
                   {/* Learning Objectives - only for educational comic types */}
                   {comicSubTypeConfig?.hasLearningObjectives && (
