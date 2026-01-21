@@ -91,6 +91,12 @@ export function CertificationDisclaimer() {
               {t('certification.forEmployers')} →
             </Link>
             <Link 
+              to="/docs/institutional-readiness" 
+              className="text-primary hover:underline flex items-center gap-1"
+            >
+              {t('certification.forInstitutions')} →
+            </Link>
+            <Link 
               to="/docs/trust-whitepaper" 
               className="text-primary hover:underline flex items-center gap-1"
             >

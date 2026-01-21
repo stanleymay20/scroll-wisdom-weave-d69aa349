@@ -69,6 +69,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'certification.notCertify3': 'Equivalence to accredited institutions',
     'certification.howItWorks': 'How Certification Works',
     'certification.forEmployers': 'For Employers',
+    'certification.forInstitutions': 'For Institutions',
     'certification.trustWhitepaper': 'Trust Whitepaper',
     
     // Academic Credibility Section
