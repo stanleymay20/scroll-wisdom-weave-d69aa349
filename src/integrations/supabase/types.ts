@@ -84,6 +84,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "assessment_integrity_logs_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "public_books"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "assessment_integrity_logs_chapter_id_fkey"
             columns: ["chapter_id"]
             isOneToOne: false
@@ -250,6 +257,13 @@ export type Database = {
             columns: ["book_id"]
             isOneToOne: false
             referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chapters_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "public_books"
             referencedColumns: ["id"]
           },
         ]
@@ -496,6 +510,13 @@ export type Database = {
             referencedRelation: "books"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "mastery_attempts_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "public_books"
+            referencedColumns: ["id"]
+          },
         ]
       }
       moderation_queue: {
@@ -684,6 +705,13 @@ export type Database = {
             referencedRelation: "books"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "publishing_certificates_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "public_books"
+            referencedColumns: ["id"]
+          },
         ]
       }
       quiz_attempts: {
@@ -735,6 +763,13 @@ export type Database = {
             referencedColumns: ["id"]
           },
           {
+            foreignKeyName: "quiz_attempts_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "public_books"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "quiz_attempts_chapter_id_fkey"
             columns: ["chapter_id"]
             isOneToOne: false
@@ -742,6 +777,69 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      rate_limit_log: {
+        Row: {
+          created_at: string
+          endpoint: string
+          id: string
+          identifier: string
+          request_count: number | null
+          window_start: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint: string
+          id?: string
+          identifier: string
+          request_count?: number | null
+          window_start?: string
+        }
+        Update: {
+          created_at?: string
+          endpoint?: string
+          id?: string
+          identifier?: string
+          request_count?: number | null
+          window_start?: string
+        }
+        Relationships: []
+      }
+      security_audit_log: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          ip_address: string | null
+          metadata: Json | null
+          resource_id: string | null
+          resource_type: string | null
+          user_agent: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          resource_id?: string | null
+          resource_type?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json | null
+          resource_id?: string | null
+          resource_type?: string | null
+          user_agent?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
       }
       study_notes: {
         Row: {
@@ -786,6 +884,13 @@ export type Database = {
             columns: ["book_id"]
             isOneToOne: false
             referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "study_notes_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "public_books"
             referencedColumns: ["id"]
           },
           {
@@ -857,6 +962,13 @@ export type Database = {
             referencedRelation: "books"
             referencedColumns: ["id"]
           },
+          {
+            foreignKeyName: "user_library_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "public_books"
+            referencedColumns: ["id"]
+          },
         ]
       }
       user_roles: {
@@ -882,7 +994,54 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      public_books: {
+        Row: {
+          author_ai_agent: string | null
+          author_display_name: string | null
+          book_type: string | null
+          category: Database["public"]["Enums"]["book_category"] | null
+          cover_image_url: string | null
+          created_at: string | null
+          description: string | null
+          id: string | null
+          is_featured: boolean | null
+          is_published: boolean | null
+          language: string | null
+          title: string | null
+          total_chapters: number | null
+        }
+        Insert: {
+          author_ai_agent?: string | null
+          author_display_name?: string | null
+          book_type?: string | null
+          category?: Database["public"]["Enums"]["book_category"] | null
+          cover_image_url?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          is_featured?: boolean | null
+          is_published?: boolean | null
+          language?: string | null
+          title?: string | null
+          total_chapters?: number | null
+        }
+        Update: {
+          author_ai_agent?: string | null
+          author_display_name?: string | null
+          book_type?: string | null
+          category?: Database["public"]["Enums"]["book_category"] | null
+          cover_image_url?: string | null
+          created_at?: string | null
+          description?: string | null
+          id?: string | null
+          is_featured?: boolean | null
+          is_published?: boolean | null
+          language?: string | null
+          title?: string | null
+          total_chapters?: number | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       has_role: {
