@@ -2448,9 +2448,18 @@ ${block.title ? `<w:r><w:t xml:space="preserve"> - ${escapeXml(block.title)}</w:
   </w:r>
 </w:p>
 <w:p><w:r><w:rPr><w:i/><w:sz w:val="18"/></w:rPr><w:t>${escapeXml(imgRef.alt)}</w:t></w:r></w:p>`;
+        } else {
+          // Image format not supported in DOCX (webp, svg, gif) - show placeholder
+          documentContent += `
+<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="FFF3E0"/><w:pBdr><w:top w:val="single" w:sz="4" w:space="1" w:color="FF9800"/><w:bottom w:val="single" w:sz="4" w:space="1" w:color="FF9800"/></w:pBdr></w:pPr>
+<w:r><w:rPr><w:color w:val="E65100"/></w:rPr><w:t>[Image: ${escapeXml(imgRef.alt)}]</w:t></w:r></w:p>
+<w:p><w:r><w:rPr><w:i/><w:sz w:val="16"/><w:color w:val="999999"/></w:rPr><w:t>This image format (WebP/SVG/GIF) is not supported in Word documents. View the original in the app or EPUB export.</w:t></w:r></w:p>`;
         }
         imageIdx++;
-      } else if (!trimmed.includes('[IMAGE_PLACEHOLDER]') && !trimmed.includes('[DOCX_TABLE_') && !trimmed.includes('[DOCX_STRUCTURED_CODE_') && !trimmed.includes('[DOCX_CODE_')) {
+      } else if (trimmed.includes('[IMAGE_PLACEHOLDER]')) {
+        // Image placeholder without corresponding image ref - skip silently
+        imageIdx++;
+      } else if (!trimmed.includes('[DOCX_TABLE_') && !trimmed.includes('[DOCX_STRUCTURED_CODE_') && !trimmed.includes('[DOCX_CODE_')) {
         documentContent += `<w:p><w:r><w:t>${escapeXml(trimmed)}</w:t></w:r></w:p>`;
       }
     }
