@@ -10,6 +10,15 @@ export function HeroSection() {
 
   return (
     <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
+      {/* Launch Positioning Banner - Non-academic disclaimer */}
+      <div className="absolute top-20 left-0 right-0 z-20 px-4">
+        <div className="max-w-4xl mx-auto text-center">
+          <p className="text-xs md:text-sm text-muted-foreground bg-background/80 backdrop-blur-sm border border-border/50 rounded-full px-4 py-2 inline-block">
+            {t('home.launchDisclaimer')}
+          </p>
+        </div>
+      </div>
+
       {/* Background effects */}
       <div className="absolute inset-0 bg-hero-pattern opacity-30" />
       <div className="absolute top-1/4 left-1/4 w-96 h-96 bg-scroll-gold/10 rounded-full blur-3xl animate-pulse-glow" />
