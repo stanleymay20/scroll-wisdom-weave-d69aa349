@@ -448,9 +448,30 @@ export function TTSMiniPlayer({
     mediaSession.activate();
     mediaSession.setPlaybackState('playing');
 
+    // Prefetch helper - generates audio for a chunk
+    const fetchChunkAudio = async (chunk: string): Promise<string | null> => {
+      if (stopRef.current || isStoppingRef.current) return null;
+      
+      const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
+        body: { text: chunk, voice: selectedVoice, language },
+      });
+      
+      if (stopRef.current || isStoppingRef.current) return null;
+      if (invokeError || data?.error || !data?.audioContent) {
+        console.error("[TTS] Chunk fetch error:", invokeError || data?.error);
+        return null;
+      }
+      
+      const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
+      activeBlobUrlsRef.current.push(url);
+      return url;
+    };
+
     try {
+      // Start prefetching first chunk immediately
+      let nextChunkPromise: Promise<string | null> | null = fetchChunkAudio(chunks[0]);
+      
       for (let i = 0; i < chunks.length; i++) {
-        // Check stop flag before each chunk
         if (stopRef.current || isStoppingRef.current) {
           console.log("[TTS] Playback stopped at chunk", i);
           break;
@@ -458,33 +479,30 @@ export function TTSMiniPlayer({
 
         setCurrentChunk(i + 1);
         setCurrentPosition(i);
-        const chunk = chunks[i];
 
-        console.log("[TTS] Generating chunk", i + 1, "/", chunks.length, `(${chunk.length} chars)`);
+        console.log("[TTS] Playing chunk", i + 1, "/", chunks.length);
 
-        const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
-          body: { text: chunk, voice: selectedVoice, language },
-        });
-
-        // Check stop flag after API call
-        if (stopRef.current || isStoppingRef.current) {
-          console.log("[TTS] Playback stopped after API call");
-          break;
-        }
+        // Wait for current chunk audio (already being fetched)
+        const currentUrl = await nextChunkPromise;
         
-        if (invokeError) throw new Error(invokeError.message || "TTS failed");
-        if (data?.error) throw new Error(data.error);
-        if (!data?.audioContent) throw new Error("No audio received");
+        if (!currentUrl) {
+          console.log("[TTS] Failed to fetch chunk", i + 1);
+          throw new Error("Failed to generate audio");
+        }
 
-        const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
-        activeBlobUrlsRef.current.push(url);
+        // Start prefetching NEXT chunk while current plays (gapless playback)
+        if (i + 1 < chunks.length) {
+          nextChunkPromise = fetchChunkAudio(chunks[i + 1]);
+        } else {
+          nextChunkPromise = null;
+        }
 
         if (i === 0 && isMountedRef.current) {
           setIsLoading(false);
           mediaSession.setPlaybackState('playing');
         }
 
-        const success = await playUrl(url);
+        const success = await playUrl(currentUrl);
         
         if (!success) {
           console.log("[TTS] Playback of chunk", i + 1, "was interrupted");
