@@ -36,7 +36,8 @@ import {
   GraduationCap,
   MessageCircle,
   Mic,
-  Save
+  Save,
+  Code2
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -54,6 +55,7 @@ import { QuizMode, QuizModeButton } from "@/components/reader/QuizMode";
 import { VoiceConversation, VoiceConversationButton } from "@/components/reader/VoiceConversation";
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
+import { CodePlayground } from "@/components/reader/CodePlayground";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagePerformance } from "@/lib/performance";
@@ -160,6 +162,7 @@ export default function Reader() {
   const [showQA, setShowQA] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
   const [showVoiceConversation, setShowVoiceConversation] = useState(false);
+  const [showPlayground, setShowPlayground] = useState(false);
   const [highlightedText, setHighlightedText] = useState("");
   
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
@@ -263,6 +266,45 @@ export default function Reader() {
   const totalChapters = book?.total_chapters || 1;
   const wordCount = chapter?.word_count || 0;
   const estimatedReadingTime = Math.ceil(wordCount / 200); // 200 wpm average
+
+  // Helper function to extract the first code block from chapter content for playground
+  const extractCodeFromChapter = (content: string): string => {
+    // Try structured code blocks first [CODE_BLOCK]
+    const structuredMatch = content.match(/\[CODE_BLOCK\][\s\S]*?code:\s*```[\w]*\n([\s\S]*?)```/);
+    if (structuredMatch) return structuredMatch[1].trim();
+    
+    // Try standard markdown code blocks
+    const codeBlockMatch = content.match(/```[\w]*\n([\s\S]*?)```/);
+    if (codeBlockMatch) return codeBlockMatch[1].trim();
+    
+    return '// No code examples found in this chapter\n// Try writing your own code here!';
+  };
+
+  // Helper function to detect the programming language from chapter content
+  const detectLanguageFromChapter = (content: string): string => {
+    // Try structured code blocks first
+    const structuredLang = content.match(/\[CODE_BLOCK\][\s\S]*?language:\s*(\w+)/);
+    if (structuredLang) return structuredLang[1].toLowerCase();
+    
+    // Try standard markdown code blocks
+    const codeBlockLang = content.match(/```(\w+)\n/);
+    if (codeBlockLang) return codeBlockLang[1].toLowerCase();
+    
+    // Fallback detection based on content
+    if (/\bdef\s+\w+\s*\(/.test(content) || /\bprint\s*\(/.test(content)) return 'python';
+    if (/\bfunction\s+\w+\s*\(/.test(content) || /\bconst\s+\w+\s*=/.test(content)) return 'javascript';
+    if (/\bpublic\s+class\b/.test(content)) return 'java';
+    
+    return 'javascript';
+  };
+
+  // Check if chapter has code content (for showing playground button)
+  const hasCodeContent = (content: string | null | undefined): boolean => {
+    if (!content) return false;
+    return content.includes('[CODE_BLOCK]') || 
+           content.includes('```') || 
+           /\bdef\s+\w+\s*\(|\bfunction\s+\w+\s*\(|\bclass\s+\w+/.test(content);
+  };
 
   // CONTRACT 5B-3: Show skeleton with cached data for instant render
   if (loadState === 'skeleton' || loadState === 'offline-empty') {
@@ -891,6 +933,23 @@ export default function Reader() {
               setShowQA(true);
               showFloatingActions();
             }} />
+            {/* Playground button - only show for technical content */}
+            {hasCodeContent(chapter.content) && (
+              <Button
+                onClick={() => {
+                  closeTopPanels();
+                  setShowPlayground(true);
+                  showFloatingActions();
+                }}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                title="Open Code Playground"
+              >
+                <Code2 className="h-4 w-4" />
+                <span className="text-xs">Playground</span>
+              </Button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -942,6 +1001,17 @@ export default function Reader() {
           />
         )}
       </AnimatePresence>
+
+      {/* Code Playground */}
+      {chapter?.content && (
+        <CodePlayground
+          isOpen={showPlayground}
+          onClose={() => setShowPlayground(false)}
+          initialCode={extractCodeFromChapter(chapter.content)}
+          initialLanguage={detectLanguageFromChapter(chapter.content)}
+          title={`Code Playground - ${chapter.title}`}
+        />
+      )}
 
       {/* CONTRACT 5.2: Navigation Footer with HARD safe area inset - NEVER overlaps home indicator */}
       <footer 
