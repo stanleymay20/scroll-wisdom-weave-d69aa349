@@ -17,6 +17,18 @@
  * - Minimum 80% chapter coverage required
  * - All binding data is publicly verifiable
  * - No silent content substitution
+ * 
+ * VALIDITY HIERARCHY (Documented per Founder Directive):
+ * 1. Revoked? → ❌ INVALID (highest priority)
+ * 2. Hash mismatch? → ❌ INVALID
+ * 3. Coverage < 80%? → ❌ INVALID
+ * 4. Integrity violations? → ❌ INVALID
+ * 5. All checks pass → ✅ VALID
+ * 
+ * VIEW MODE: Public verification context = IMMUTABLE VIEW ONLY
+ * - No regeneration allowed
+ * - No editing allowed
+ * - No AI interaction allowed
  */
 
 // ============================================================
@@ -253,15 +265,46 @@ export interface Contract12Compliance {
     hasCoverage: boolean;
     coverageMeetsThreshold: boolean;
     hashIsValid: boolean;
+    notRevoked: boolean;
   };
   violations: string[];
+  validityLevel: 'valid' | 'invalid' | 'revoked';
 }
+
+/**
+ * VALIDITY HIERARCHY (Contract 12 Enforcement)
+ * 
+ * Order of precedence:
+ * 1. Revoked → INVALID (highest priority, cannot be overridden)
+ * 2. Hash mismatch → INVALID
+ * 3. Coverage < 80% → INVALID  
+ * 4. Integrity violations → INVALID
+ * 5. All checks pass → VALID
+ */
 
 export function checkContract12Compliance(
   provenance: Partial<BookProvenanceBinding>,
-  currentHash?: string
+  currentHash?: string,
+  isRevoked: boolean = false
 ): Contract12Compliance {
   const violations: string[] = [];
+  
+  // Rule 1: Revocation check (highest priority)
+  if (isRevoked) {
+    return {
+      compliant: false,
+      checks: {
+        hasBookId: !!provenance.bookId,
+        hasContentHash: !!provenance.bookContentHash,
+        hasCoverage: provenance.coveragePercentage !== undefined,
+        coverageMeetsThreshold: (provenance.coveragePercentage ?? 0) >= 80,
+        hashIsValid: true,
+        notRevoked: false,
+      },
+      violations: ['Certificate has been revoked'],
+      validityLevel: 'revoked',
+    };
+  }
   
   const hasBookId = !!provenance.bookId;
   if (!hasBookId) violations.push('Missing book ID');
@@ -286,8 +329,10 @@ export function checkContract12Compliance(
       hasCoverage,
       coverageMeetsThreshold,
       hashIsValid,
+      notRevoked: true,
     },
     violations,
+    validityLevel: violations.length === 0 ? 'valid' : 'invalid',
   };
 }
 
