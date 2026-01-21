@@ -484,11 +484,24 @@ IMPORTANT:
 // FALLBACK MULTI-TIER QUESTIONS
 // ===========================================
 
-function generateFallbackMultiTierQuestions(chapterTitle: string, bookTitle: string, bookType: string): any[] {
+interface QuizQuestion {
+  tier: number;
+  type: string;
+  question: string;
+  options: string[];
+  correctIndex: number;
+  explanation: string;
+  pointValue: number;
+  timeLimit: number;
+  codeSnippet?: string;
+  language?: string;
+}
+
+function generateFallbackMultiTierQuestions(chapterTitle: string, bookTitle: string, bookType: string): QuizQuestion[] {
   // Check if this is a technical book that should include coding questions
   const isTechnical = /technology|science|programming|computer|data|engineering|software/i.test(bookTitle + chapterTitle);
   
-  const baseQuestions = [
+  const baseQuestions: QuizQuestion[] = [
     // Tier 1 - Knowledge Check
     {
       tier: 1,
