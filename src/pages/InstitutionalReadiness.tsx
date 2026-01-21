@@ -14,10 +14,15 @@ import {
   AlertTriangle,
   GraduationCap,
   Building2,
-  Scale
+  Scale,
+  Printer
 } from "lucide-react";
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
+
+const handlePrint = () => {
+  window.print();
+};
 
 export default function InstitutionalReadiness() {
   return (
@@ -38,10 +43,14 @@ export default function InstitutionalReadiness() {
           <h1 className="text-4xl font-display font-bold text-foreground mb-4">
             Institutional Readiness
           </h1>
-          <p className="text-xl text-muted-foreground max-w-2xl mx-auto">
+          <p className="text-xl text-muted-foreground max-w-2xl mx-auto mb-6">
             A clear explanation of what ScrollLibrary is, what it is not, 
             and how it complements existing academic infrastructure.
           </p>
+          <Button variant="outline" onClick={handlePrint} className="print:hidden">
+            <Printer className="h-4 w-4 mr-2" />
+            Download as PDF
+          </Button>
         </motion.div>
 
         {/* What ScrollLibrary Is */}
