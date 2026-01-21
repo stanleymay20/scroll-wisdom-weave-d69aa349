@@ -121,18 +121,65 @@ function parseCustomTableFormat(text: string): { tables: ParsedTable[]; cleanedT
   return { tables, cleanedText };
 }
 
+// Structured code block interface (ChatGPT-level format)
+interface StructuredCodeBlockData {
+  language: string;
+  title?: string;
+  purpose?: string;
+  code: string;
+  output?: string;
+  explanation?: string;
+  commonMistake?: string;
+}
+
+// Parse structured code block format from text [CODE_BLOCK]...[/CODE_BLOCK]
+function parseStructuredCodeBlockFromText(blockContent: string): StructuredCodeBlockData | null {
+  const extractField = (field: string): string | undefined => {
+    const regex = new RegExp(`^${field}:\\s*["']?(.+?)["']?\\s*$`, 'mi');
+    const match = blockContent.match(regex);
+    return match?.[1]?.trim();
+  };
+
+  const extractMultilineField = (field: string): string | undefined => {
+    const regex = new RegExp(`^${field}:\\s*\\n([\\s\\S]*?)(?=^(?:language|title|purpose|code|output|explanation|common_mistake):|$)`, 'mi');
+    const match = blockContent.match(regex);
+    return match?.[1]?.trim();
+  };
+
+  // Extract code specifically - look for fenced code block
+  const codeMatch = blockContent.match(/code:\s*\n```\w*\n([\s\S]*?)```/);
+  const code = codeMatch?.[1]?.trim() || extractMultilineField('code') || '';
+
+  // Extract output - may be multi-line
+  const outputMatch = blockContent.match(/output:\s*\n([\s\S]*?)(?=^(?:explanation|common_mistake):|$)/mi);
+  const output = outputMatch?.[1]?.trim();
+
+  return {
+    language: extractField('language') || 'text',
+    title: extractField('title'),
+    purpose: extractField('purpose') || extractMultilineField('purpose'),
+    code,
+    output,
+    explanation: extractMultilineField('explanation'),
+    commonMistake: extractMultilineField('common_mistake'),
+  };
+}
+
 // Enhanced markdown processing that handles markdown tables, code blocks and images
 // Now prioritizes proper markdown pipe format for tables
+// Supports structured [CODE_BLOCK]...[/CODE_BLOCK] format
 function processMarkdownContent(text: string): { 
   paragraphs: string[]; 
   codeBlocks: { lang: string; code: string }[]; 
+  structuredBlocks: StructuredCodeBlockData[];
   tables: { name: string; headers: string[]; rows: string[][] }[];
   customTables: ParsedTable[];
   images: { alt: string; url: string }[];
 } {
-  if (!text) return { paragraphs: [], codeBlocks: [], tables: [], customTables: [], images: [] };
+  if (!text) return { paragraphs: [], codeBlocks: [], structuredBlocks: [], tables: [], customTables: [], images: [] };
   
   const codeBlocks: { lang: string; code: string }[] = [];
+  const structuredBlocks: StructuredCodeBlockData[] = [];
   const tables: { name: string; headers: string[]; rows: string[][] }[] = [];
   const images: { alt: string; url: string }[] = [];
   
@@ -140,8 +187,19 @@ function processMarkdownContent(text: string): {
   const { tables: customTables, cleanedText: textAfterCustomTables } = parseCustomTableFormat(text);
   console.log(`[EXPORT] Found ${customTables.length} legacy custom tables`);
   
-  // Extract code blocks - handle fenced code blocks with triple backticks
-  let processedText = textAfterCustomTables.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
+  // Extract STRUCTURED code blocks [CODE_BLOCK]...[/CODE_BLOCK] (ChatGPT-level format)
+  let processedText = textAfterCustomTables.replace(/\[CODE_BLOCK\]([\s\S]*?)\[\/CODE_BLOCK\]/g, (_, blockContent) => {
+    const parsed = parseStructuredCodeBlockFromText(blockContent);
+    if (parsed && parsed.code) {
+      structuredBlocks.push(parsed);
+      return `[STRUCTURED_CODE_${structuredBlocks.length - 1}]`;
+    }
+    return '';
+  });
+  console.log(`[EXPORT] Found ${structuredBlocks.length} structured code blocks`);
+  
+  // Extract regular fenced code blocks with triple backticks
+  processedText = processedText.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
     codeBlocks.push({ lang: lang || 'text', code: code.trim() });
     return `[CODE_BLOCK_${codeBlocks.length - 1}]`;
   });
@@ -222,9 +280,9 @@ function processMarkdownContent(text: string): {
   
   const paragraphs = stripped.split(/\n\n+/).filter(p => p.trim());
   
-  console.log(`[EXPORT] processMarkdownContent found ${images.length} images, ${codeBlocks.length} code blocks, ${tables.length} md tables`);
+  console.log(`[EXPORT] processMarkdownContent found ${images.length} images, ${codeBlocks.length} code blocks, ${structuredBlocks.length} structured blocks, ${tables.length} md tables`);
   
-  return { paragraphs, codeBlocks, tables, customTables, images };
+  return { paragraphs, codeBlocks, structuredBlocks, tables, customTables, images };
 }
 
 
@@ -894,7 +952,7 @@ async function generatePDF(
     y -= 30;
     
     // Process content with code block, image, and table handling
-    const { paragraphs, codeBlocks, images, customTables, tables: mdTables } = processMarkdownContent(chapter.content || "");
+    const { paragraphs, codeBlocks, structuredBlocks, images, customTables, tables: mdTables } = processMarkdownContent(chapter.content || "");
     
     // Pre-fetch all images for this chapter (for comics)
     const fetchedImages: Map<number, { bytes: Uint8Array; type: 'png' | 'jpg' }> = new Map();
@@ -1049,6 +1107,159 @@ async function generatePDF(
             y -= 12;
           }
           y -= 10;
+          continue;
+        }
+      }
+      
+      // Check if this is a STRUCTURED code block placeholder (ChatGPT-level format)
+      const structuredMatch = paragraph.match(/\[STRUCTURED_CODE_(\d+)\]/);
+      if (structuredMatch) {
+        const blockIndex = parseInt(structuredMatch[1]);
+        const block = structuredBlocks[blockIndex];
+        if (block) {
+          y -= 10;
+          
+          // Calculate total height needed for the structured block
+          const codeLines = block.code.split('\n');
+          let blockHeight = 40; // Header + padding
+          blockHeight += codeLines.length * 12 + 20; // Code
+          if (block.purpose) blockHeight += 20;
+          if (block.output) blockHeight += (block.output.split('\n').length * 12) + 30;
+          if (block.explanation) blockHeight += 30;
+          if (block.commonMistake) blockHeight += 30;
+          
+          if (y - blockHeight < margin + 30) {
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            addPageNumber(page, pageNumber);
+            y = pageHeight - margin - 30;
+          }
+          
+          // Header bar with language tag
+          page.drawRectangle({
+            x: margin - 5,
+            y: y - 20,
+            width: textWidth + 10,
+            height: 25,
+            color: rgb(0.92, 0.92, 0.92),
+          });
+          
+          page.drawText(`[${block.language.toUpperCase()}]${block.title ? ' - ' + sanitizeForPDF(block.title) : ''}`, {
+            x: margin,
+            y: y - 14,
+            size: 10,
+            font: timesRomanBold,
+            color: rgb(0.2, 0.2, 0.2),
+          });
+          y -= 25;
+          
+          // Purpose statement
+          if (block.purpose) {
+            page.drawText(sanitizeForPDF(`Purpose: ${block.purpose}`), {
+              x: margin,
+              y: y - 12,
+              size: 9,
+              font: helvetica,
+              color: rgb(0.4, 0.4, 0.4),
+            });
+            y -= 18;
+          }
+          
+          // Code background
+          const codeHeight = codeLines.length * 12 + 15;
+          page.drawRectangle({
+            x: margin - 5,
+            y: y - codeHeight,
+            width: textWidth + 10,
+            height: codeHeight,
+            color: rgb(0.12, 0.12, 0.15),
+          });
+          
+          y -= 10;
+          for (const codeLine of codeLines) {
+            page.drawText(sanitizeForPDF(codeLine.slice(0, 80)), {
+              x: margin,
+              y,
+              size: 9,
+              font: courier,
+              color: rgb(0.9, 0.9, 0.9), // Light text on dark background
+            });
+            y -= 12;
+          }
+          y -= 5;
+          
+          // Output section
+          if (block.output) {
+            page.drawRectangle({
+              x: margin - 5,
+              y: y - (block.output.split('\n').length * 12 + 20),
+              width: textWidth + 10,
+              height: block.output.split('\n').length * 12 + 20,
+              color: rgb(0.08, 0.10, 0.08),
+            });
+            
+            page.drawText("OUTPUT:", {
+              x: margin,
+              y: y - 12,
+              size: 8,
+              font: helvetica,
+              color: rgb(0.4, 0.8, 0.4),
+            });
+            y -= 18;
+            
+            for (const outLine of block.output.split('\n')) {
+              page.drawText(sanitizeForPDF(outLine.slice(0, 80)), {
+                x: margin,
+                y,
+                size: 9,
+                font: courier,
+                color: rgb(0.4, 0.9, 0.4), // Green output text
+              });
+              y -= 12;
+            }
+            y -= 5;
+          }
+          
+          // Explanation
+          if (block.explanation) {
+            const explLines = wrapText(`Explanation: ${block.explanation}`, timesRoman, 9, textWidth);
+            for (const line of explLines) {
+              page.drawText(line, {
+                x: margin,
+                y,
+                size: 9,
+                font: timesRoman,
+                color: rgb(0.3, 0.3, 0.3),
+              });
+              y -= 12;
+            }
+            y -= 5;
+          }
+          
+          // Common mistake warning
+          if (block.commonMistake) {
+            page.drawRectangle({
+              x: margin - 5,
+              y: y - 25,
+              width: textWidth + 10,
+              height: 25,
+              color: rgb(0.95, 0.90, 0.90),
+            });
+            const warnLines = wrapText(`⚠ Common Mistake: ${block.commonMistake}`, timesRoman, 9, textWidth - 10);
+            for (const line of warnLines) {
+              page.drawText(sanitizeForPDF(line), {
+                x: margin,
+                y: y - 12,
+                size: 9,
+                font: timesRoman,
+                color: rgb(0.6, 0.2, 0.2),
+              });
+              y -= 12;
+            }
+            y -= 5;
+          }
+          
+          y -= 15;
           continue;
         }
       }
@@ -1436,7 +1647,39 @@ async function generateEPUB(
       content = content.replace(original, replacement);
     }
     
-    // Convert markdown code blocks to HTML
+    // Convert STRUCTURED code blocks [CODE_BLOCK]...[/CODE_BLOCK] to rich HTML
+    content = content.replace(/\[CODE_BLOCK\]([\s\S]*?)\[\/CODE_BLOCK\]/g, (_match: string, blockContent: string) => {
+      const parsed = parseStructuredCodeBlockFromText(blockContent);
+      if (!parsed || !parsed.code) return '';
+      
+      let html = `<div class="structured-code-block">`;
+      html += `<div class="code-header"><span class="lang-tag">[${escapeXml(parsed.language.toUpperCase())}]</span>`;
+      if (parsed.title) html += ` <span class="code-title">${escapeXml(parsed.title)}</span>`;
+      html += `</div>`;
+      
+      if (parsed.purpose) {
+        html += `<p class="code-purpose"><strong>Purpose:</strong> ${escapeXml(parsed.purpose)}</p>`;
+      }
+      
+      html += `<pre class="code-content"><code class="${parsed.language}">${escapeXml(parsed.code)}</code></pre>`;
+      
+      if (parsed.output) {
+        html += `<div class="code-output"><div class="output-label">OUTPUT:</div><pre class="output-content">${escapeXml(parsed.output)}</pre></div>`;
+      }
+      
+      if (parsed.explanation) {
+        html += `<p class="code-explanation"><strong>Explanation:</strong> ${escapeXml(parsed.explanation)}</p>`;
+      }
+      
+      if (parsed.commonMistake) {
+        html += `<div class="code-warning"><strong>⚠ Common Mistake:</strong> ${escapeXml(parsed.commonMistake)}</div>`;
+      }
+      
+      html += `</div>`;
+      return html;
+    });
+    
+    // Convert regular markdown code blocks to HTML
     content = content.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match: string, lang: string, code: string) => {
       return `<pre><code class="${lang || 'text'}">${escapeXml(code.trim())}</code></pre>`;
     });
@@ -1597,15 +1840,17 @@ ${htmlContent}
 </package>`;
   await zipWriter.add("OEBPS/content.opf", new zip.TextReader(contentOpf));
 
-  // Enhanced CSS with code block and table styling
+  // Enhanced CSS with structured code block, table, and figure styling
   const css = `body { font-family: Georgia, serif; margin: 2em; line-height: 1.6; }
 h1 { font-size: 1.8em; margin-bottom: 0.5em; }
 h2 { font-size: 1.4em; margin-top: 1.5em; }
 p { margin: 0.8em 0; text-align: justify; }
 .cover { text-align: center; }
 .cover img { max-width: 100%; height: auto; }
-pre { background: #f5f5f5; padding: 1em; border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 0.9em; }
+pre { background: #1e1e24; color: #e0e0e0; padding: 1em; border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 0.9em; }
+pre.code-content { background: #1e1e24; color: #e0e0e0; margin: 0; border-radius: 0 0 4px 4px; }
 code { font-family: monospace; background: #f0f0f0; padding: 0.2em 0.4em; border-radius: 3px; }
+pre code { background: transparent; padding: 0; }
 .reference { margin: 0.5em 0; padding-left: 2em; text-indent: -2em; font-size: 0.95em; }
 .academic-notice { background: #fff8e1; border-left: 4px solid #ffc107; padding: 1em; margin: 1em 0; font-size: 0.9em; }
 table { border-collapse: collapse; width: 100%; margin: 1.5em 0; page-break-inside: avoid; }
@@ -1618,7 +1863,18 @@ tr:nth-child(odd) { background: #fff; }
 .data-table th { background: #4a90d9; color: white; }
 .data-table tr:nth-child(even) { background: #e6f2ff; }
 figure { margin: 1em 0; text-align: center; }
-figcaption { font-style: italic; font-size: 0.9em; color: #666; margin-top: 0.5em; }`;
+figcaption { font-style: italic; font-size: 0.9em; color: #666; margin-top: 0.5em; }
+/* Structured Code Block Styles (ChatGPT-level) */
+.structured-code-block { margin: 1.5em 0; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
+.code-header { background: #e8e8ec; padding: 0.6em 1em; border-bottom: 1px solid #ddd; }
+.lang-tag { background: #5c6bc0; color: white; padding: 0.2em 0.5em; border-radius: 3px; font-size: 0.8em; font-weight: bold; }
+.code-title { margin-left: 0.5em; font-weight: bold; }
+.code-purpose { background: #f5f5fa; padding: 0.6em 1em; margin: 0; font-size: 0.9em; color: #555; border-bottom: 1px solid #eee; }
+.code-output { background: #0a0c0a; }
+.output-label { color: #4caf50; font-size: 0.75em; padding: 0.5em 1em 0; font-weight: bold; }
+.output-content { color: #4caf50; margin: 0; padding: 0.5em 1em 1em; background: transparent; }
+.code-explanation { padding: 0.8em 1em; margin: 0; font-size: 0.9em; background: #fafafa; border-top: 1px solid #eee; }
+.code-warning { background: #fff3e0; border-top: 1px solid #ff9800; padding: 0.8em 1em; font-size: 0.9em; color: #e65100; }`;
   await zipWriter.add("OEBPS/style.css", new zip.TextReader(css));
 
   if (hasCover) {
@@ -1730,7 +1986,7 @@ async function generateDOCX(
   // Process all chapters to extract images first
   let imageCounter = 0;
   const docxImages: { id: string; bytes: Uint8Array }[] = [];
-  const processedChapters: { chapter: any; processedContent: string[]; imageRefs: { index: number; alt: string }[]; tables: { original: string; headers: string[]; rows: string[][] }[] }[] = [];
+  const processedChapters: { chapter: any; processedContent: string[]; imageRefs: { index: number; alt: string }[]; tables: { original: string; headers: string[]; rows: string[][] }[]; structuredCodeBlocks: StructuredCodeBlockData[]; codeBlocks: { lang: string; code: string }[] }[] = [];
   
   for (const chapter of chapters) {
     const content = chapter.content || "";
@@ -1750,6 +2006,24 @@ async function generateDOCX(
     
     // Strip images from content for text processing
     let textContent = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '[IMAGE_PLACEHOLDER]');
+    
+    // Extract STRUCTURED code blocks [CODE_BLOCK]...[/CODE_BLOCK] for DOCX
+    const structuredCodeBlocks: StructuredCodeBlockData[] = [];
+    textContent = textContent.replace(/\[CODE_BLOCK\]([\s\S]*?)\[\/CODE_BLOCK\]/g, (_match: string, blockContent: string) => {
+      const parsed = parseStructuredCodeBlockFromText(blockContent);
+      if (parsed && parsed.code) {
+        structuredCodeBlocks.push(parsed);
+        return `[DOCX_STRUCTURED_CODE_${structuredCodeBlocks.length - 1}]`;
+      }
+      return '';
+    });
+    
+    // Extract regular fenced code blocks for DOCX
+    const codeBlocks: { lang: string; code: string }[] = [];
+    textContent = textContent.replace(/```(\w+)?\n([\s\S]*?)```/g, (_match: string, lang: string, code: string) => {
+      codeBlocks.push({ lang: lang || 'text', code: code.trim() });
+      return `[DOCX_CODE_${codeBlocks.length - 1}]`;
+    });
     
     // Extract tables in "Row X:" prose format for DOCX
     const tableMatches: { original: string; headers: string[]; rows: string[][] }[] = [];
@@ -1807,7 +2081,14 @@ async function generateDOCX(
     
     const paragraphs = stripMarkdown(textContent).split(/\n\n+/);
     
-    processedChapters.push({ chapter, processedContent: paragraphs, imageRefs, tables: tableMatches });
+    processedChapters.push({ 
+      chapter, 
+      processedContent: paragraphs, 
+      imageRefs, 
+      tables: tableMatches,
+      structuredCodeBlocks,
+      codeBlocks
+    });
   }
 
   // Build content types with all images
@@ -1930,7 +2211,7 @@ async function generateDOCX(
 
   // Chapters with embedded images and tables
   let docPicId = 2;
-  for (const { chapter, processedContent, imageRefs, tables } of processedChapters) {
+  for (const { chapter, processedContent, imageRefs, tables, structuredCodeBlocks, codeBlocks } of processedChapters) {
     documentContent += `
 <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter ${chapter.chapter_number}: ${escapeXml(chapter.title)}</w:t></w:r></w:p>`;
     
@@ -1977,6 +2258,72 @@ async function generateDOCX(
         continue;
       }
       
+      // Check for STRUCTURED code block placeholder
+      const structuredCodeMatch = trimmed.match(/\[DOCX_STRUCTURED_CODE_(\d+)\]/);
+      if (structuredCodeMatch) {
+        const codeIdx = parseInt(structuredCodeMatch[1]);
+        const block = structuredCodeBlocks[codeIdx];
+        if (block) {
+          // Render structured code block with full metadata in Word
+          // Header with language tag
+          documentContent += `
+<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="E8E8EC"/></w:pPr>
+<w:r><w:rPr><w:b/><w:color w:val="5C6BC0"/></w:rPr><w:t>[${escapeXml(block.language.toUpperCase())}]</w:t></w:r>
+${block.title ? `<w:r><w:t xml:space="preserve"> - ${escapeXml(block.title)}</w:t></w:r>` : ''}
+</w:p>`;
+          
+          // Purpose
+          if (block.purpose) {
+            documentContent += `<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="F5F5FA"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Purpose: </w:t></w:r><w:r><w:t>${escapeXml(block.purpose)}</w:t></w:r></w:p>`;
+          }
+          
+          // Code block (monospace, dark background)
+          const codeLines = block.code.split('\n');
+          for (const codeLine of codeLines) {
+            documentContent += `<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="1E1E24"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:color w:val="E0E0E0"/><w:sz w:val="18"/></w:rPr><w:t>${escapeXml(codeLine)}</w:t></w:r></w:p>`;
+          }
+          
+          // Output section
+          if (block.output) {
+            documentContent += `<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="0A0C0A"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="4CAF50"/><w:sz w:val="16"/></w:rPr><w:t>OUTPUT:</w:t></w:r></w:p>`;
+            for (const outLine of block.output.split('\n')) {
+              documentContent += `<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="0A0C0A"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:color w:val="4CAF50"/><w:sz w:val="18"/></w:rPr><w:t>${escapeXml(outLine)}</w:t></w:r></w:p>`;
+            }
+          }
+          
+          // Explanation
+          if (block.explanation) {
+            documentContent += `<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="FAFAFA"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Explanation: </w:t></w:r><w:r><w:t>${escapeXml(block.explanation)}</w:t></w:r></w:p>`;
+          }
+          
+          // Common mistake warning
+          if (block.commonMistake) {
+            documentContent += `<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="FFF3E0"/></w:pPr><w:r><w:rPr><w:b/><w:color w:val="E65100"/></w:rPr><w:t>Common Mistake: </w:t></w:r><w:r><w:rPr><w:color w:val="E65100"/></w:rPr><w:t>${escapeXml(block.commonMistake)}</w:t></w:r></w:p>`;
+          }
+          
+          documentContent += `<w:p><w:r><w:t></w:t></w:r></w:p>`;
+        }
+        continue;
+      }
+      
+      // Check for regular code block placeholder
+      const codeMatch = trimmed.match(/\[DOCX_CODE_(\d+)\]/);
+      if (codeMatch) {
+        const codeIdx = parseInt(codeMatch[1]);
+        const block = codeBlocks[codeIdx];
+        if (block) {
+          // Language label
+          documentContent += `<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="E8E8E8"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="16"/></w:rPr><w:t>${escapeXml(block.lang.toUpperCase())}</w:t></w:r></w:p>`;
+          
+          // Code lines with monospace font
+          for (const codeLine of block.code.split('\n')) {
+            documentContent += `<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="F5F5F5"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="18"/></w:rPr><w:t>${escapeXml(codeLine)}</w:t></w:r></w:p>`;
+          }
+          documentContent += `<w:p><w:r><w:t></w:t></w:r></w:p>`;
+        }
+        continue;
+      }
+      
       // Check for image placeholder
       if (trimmed.includes('[IMAGE_PLACEHOLDER]') && imageIdx < imageRefs.length) {
         const imgRef = imageRefs[imageIdx];
@@ -2018,7 +2365,7 @@ async function generateDOCX(
 <w:p><w:r><w:rPr><w:i/><w:sz w:val="18"/></w:rPr><w:t>${escapeXml(imgRef.alt)}</w:t></w:r></w:p>`;
         }
         imageIdx++;
-      } else if (!trimmed.includes('[IMAGE_PLACEHOLDER]') && !trimmed.includes('[DOCX_TABLE_')) {
+      } else if (!trimmed.includes('[IMAGE_PLACEHOLDER]') && !trimmed.includes('[DOCX_TABLE_') && !trimmed.includes('[DOCX_STRUCTURED_CODE_') && !trimmed.includes('[DOCX_CODE_')) {
         documentContent += `<w:p><w:r><w:t>${escapeXml(trimmed)}</w:t></w:r></w:p>`;
       }
     }
