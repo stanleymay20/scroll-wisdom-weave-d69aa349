@@ -60,6 +60,7 @@ import { usePagePerformance } from "@/lib/performance";
 import { useAutoHideFloatingActions } from "@/hooks/useAutoHideFloatingActions";
 import { useReaderData } from "@/hooks/useReaderData";
 import { cn } from "@/lib/utils";
+import { useQuizGating } from "@/hooks/useQuizGating";
 
 interface BookData {
   id: string;
@@ -119,6 +120,13 @@ export default function Reader() {
     resumePosition,
     userId,
   } = useReaderData({ bookId, chapterNumber: currentChapter });
+  
+  // CONTRACT 5: Quiz Gating - chapters must be read before quizzes unlock
+  const quizGating = useQuizGating({
+    bookId: bookId || '',
+    chapterNumber: currentChapter,
+    userId,
+  });
   
   const [fontSize, setFontSize] = useState(18);
   const [readingTheme, setReadingTheme] = useState<ReadingTheme>('default');
@@ -229,6 +237,9 @@ export default function Reader() {
     
     setReadingProgress(progress);
     
+    // CONTRACT 5: Update quiz gating progress
+    quizGating.updateReadProgress(progress);
+    
     // Debounced auto-save every significant progress change
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
@@ -242,7 +253,7 @@ export default function Reader() {
         saveProgress(currentChapter, overallProgress, false); // Silent save during reading
       }
     }, 3000); // Save 3 seconds after scrolling stops
-  }, [userId, bookId, book?.total_chapters, currentChapter, saveProgress]);
+  }, [userId, bookId, book?.total_chapters, currentChapter, saveProgress, quizGating]);
 
   useEffect(() => {
     window.addEventListener("scroll", handleScroll);
@@ -852,13 +863,27 @@ export default function Reader() {
               }} 
               cognitiveLevel={cognitiveLevel}
             />
-            <QuizModeButton onClick={() => {
-              closeTopPanels();
-              setShowQA(false);
-              setShowVoiceConversation(false);
-              setShowQuiz(true);
-              showFloatingActions();
-            }} />
+            {/* CONTRACT 5: Quiz button with gating - locked until chapter is read */}
+            {quizGating.isQuizUnlocked ? (
+              <QuizModeButton onClick={() => {
+                closeTopPanels();
+                setShowQA(false);
+                setShowVoiceConversation(false);
+                setShowQuiz(true);
+                showFloatingActions();
+              }} />
+            ) : (
+              <Button
+                variant="outline"
+                size="sm"
+                disabled
+                className="gap-2 opacity-60"
+                title={`Read ${quizGating.requiredProgress - quizGating.readProgress}% more to unlock quiz`}
+              >
+                <GraduationCap className="h-4 w-4" />
+                <span className="text-xs">🔒 {Math.round(quizGating.readProgress)}%</span>
+              </Button>
+            )}
             <InteractiveQAButton onClick={() => {
               closeTopPanels();
               setShowQuiz(false);

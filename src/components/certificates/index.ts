@@ -1,5 +1,6 @@
 /**
  * CONTRACT 6A — CERTIFICATE COMPONENTS
+ * CONTRACT 8A — CERTIFICATION EMBLEM
  * Trust & Certification UX for publishing credibility
  */
 
@@ -9,6 +10,7 @@ export { CertificateStatusPanel } from './CertificateStatusPanel';
 export { PublishingCredibility } from './PublishingCredibility';
 export { TrustBadge, TrustBadgeGroup, EmbeddableTrustBadge, generateEmbedCode } from './TrustBadges';
 export { CompetencyManifestDisplay } from './CompetencyManifestDisplay';
+export { CertificationEmblem, CertificationEmblemInline } from './CertificationEmblem';
 export type { TrustBadgeType } from './TrustBadges';
 
 export { 

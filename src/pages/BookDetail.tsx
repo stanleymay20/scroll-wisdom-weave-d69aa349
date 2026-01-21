@@ -77,6 +77,7 @@ import { useBookDetailData } from "@/hooks/useBookDetailData";
 import { GentleOfflineBanner } from "@/components/ui/gentle-offline-banner";
 import { CertificateStatusPanel } from "@/components/certificates";
 import { cn } from "@/lib/utils";
+import { checkPublishingGate, formatAuditReport, type PublishingGateResult } from "@/lib/bookAuditIntegration";
 interface BookData {
   id: string;
   title: string;
@@ -136,6 +137,8 @@ export default function BookDetail() {
   const [editIntent, setEditIntent] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [auditResult, setAuditResult] = useState<PublishingGateResult | null>(null);
+  const [showAuditDialog, setShowAuditDialog] = useState(false);
 
   const isOwner = user && book?.creator_id === user.id;
 
@@ -402,6 +405,37 @@ export default function BookDetail() {
 
   const handleTogglePublish = async () => {
     if (!book || !isOwner) return;
+    
+    // CONTRACT 6: If trying to publish, run audit first
+    if (!book.is_published) {
+      const chaptersForAudit = chapters.map(ch => ({
+        id: ch.id,
+        content: ch.content || '',
+        is_generated: ch.is_generated,
+      }));
+      
+      const gateResult = checkPublishingGate(book.id, book.book_type, chaptersForAudit);
+      setAuditResult(gateResult);
+      
+      if (!gateResult.canPublish) {
+        setShowAuditDialog(true);
+        toast({
+          title: "Publishing Blocked",
+          description: `${gateResult.blockerReasons.length} issue(s) must be fixed before publishing.`,
+          variant: "destructive",
+        });
+        return;
+      }
+      
+      // Show warnings even if can publish
+      if (gateResult.warnings.length > 0) {
+        toast({
+          title: "Publishing Warnings",
+          description: `${gateResult.warnings.length} warning(s) found. Review recommended.`,
+          variant: "default",
+        });
+      }
+    }
     
     setIsUpdatingPublish(true);
     try {
@@ -1083,6 +1117,37 @@ export default function BookDetail() {
           </motion.div>
         </div>
       </main>
+
+      {/* Book Audit Dialog */}
+      <AlertDialog open={showAuditDialog} onOpenChange={setShowAuditDialog}>
+        <AlertDialogContent className="max-w-lg">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Flag className="h-5 w-5 text-destructive" />
+              Publishing Blocked
+            </AlertDialogTitle>
+            <AlertDialogDescription asChild>
+              <div className="space-y-3">
+                <p>This book cannot be published due to quality issues:</p>
+                {auditResult?.blockerReasons.map((reason, i) => (
+                  <p key={i} className="text-sm text-destructive">• {reason}</p>
+                ))}
+                {auditResult?.warnings.map((warning, i) => (
+                  <p key={i} className="text-sm text-amber-600">⚠ {warning}</p>
+                ))}
+                {auditResult?.auditResult && (
+                  <p className="text-xs text-muted-foreground mt-2">
+                    Audit Score: {auditResult.auditResult.score}/100
+                  </p>
+                )}
+              </div>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Close</AlertDialogCancel>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </PageWrapper>
   );
 }
