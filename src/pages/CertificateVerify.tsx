@@ -692,6 +692,14 @@ export default function CertificateVerify() {
           </div>
         )}
 
+        {/* Legal Disclaimer */}
+        <div className="mt-6 p-3 bg-muted/30 rounded-lg border border-muted text-center">
+          <p className="text-xs text-muted-foreground">
+            This certificate verifies learning outcomes, not authorship of the book.
+            Book content is generated using AI assistance and certified through ScrollLibrary's governed assessment system.
+          </p>
+        </div>
+
         {/* Footer Note */}
         <p className="text-center text-xs text-muted-foreground mt-6">
           This certificate can be independently verified at{' '}
