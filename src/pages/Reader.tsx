@@ -56,6 +56,7 @@ import { VoiceConversation, VoiceConversationButton } from "@/components/reader/
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 import { CodePlayground } from "@/components/reader/CodePlayground";
+import { ComicReaderMode, parseComicContentToPanels, ComicPanelData } from "@/components/reader/ComicReaderMode";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagePerformance } from "@/lib/performance";
@@ -163,6 +164,7 @@ export default function Reader() {
   const [showQuiz, setShowQuiz] = useState(false);
   const [showVoiceConversation, setShowVoiceConversation] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
+  const [showComicReader, setShowComicReader] = useState(false);
   const [highlightedText, setHighlightedText] = useState("");
   
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
@@ -950,6 +952,23 @@ export default function Reader() {
                 <span className="text-xs">Playground</span>
               </Button>
             )}
+            {/* Comic Reader button - only show for comic content */}
+            {chapter.content.includes('[PANEL') && (
+              <Button
+                onClick={() => {
+                  closeTopPanels();
+                  setShowComicReader(true);
+                  showFloatingActions();
+                }}
+                variant="outline"
+                size="sm"
+                className="gap-2 bg-primary/10 border-primary/30"
+                title="Open Comic Reader"
+              >
+                <BookOpen className="h-4 w-4 text-primary" />
+                <span className="text-xs">Comic Mode</span>
+              </Button>
+            )}
           </motion.div>
         )}
       </AnimatePresence>
@@ -1010,6 +1029,23 @@ export default function Reader() {
           initialCode={extractCodeFromChapter(chapter.content)}
           initialLanguage={detectLanguageFromChapter(chapter.content)}
           title={`Code Playground - ${chapter.title}`}
+        />
+      )}
+
+      {/* Comic Reader Mode */}
+      {showComicReader && chapter?.content && (
+        <ComicReaderMode
+          panels={parseComicContentToPanels(chapter.content)}
+          chapterTitle={chapter.title}
+          bookTitle={book?.title || ""}
+          onClose={() => setShowComicReader(false)}
+          onComplete={() => {
+            toast({
+              title: "Chapter complete!",
+              description: "Great job reading this comic chapter.",
+            });
+            quizGating.markChapterComplete(currentChapter);
+          }}
         />
       )}
 

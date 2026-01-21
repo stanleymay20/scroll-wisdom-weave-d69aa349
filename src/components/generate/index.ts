@@ -16,3 +16,4 @@ export { ComicCharacterSheet } from './ComicCharacterSheet';
 export type { ComicCharacter, CharacterSheetConfig } from './ComicCharacterSheet';
 export { ComicLearningObjectives } from './ComicLearningObjectives';
 export type { ComicLearningConfig, LearningObjective, LearningMoment } from './ComicLearningObjectives';
+export { CharacterPortraitPreview } from './CharacterPortraitPreview';
