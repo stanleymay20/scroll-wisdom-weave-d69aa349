@@ -5,7 +5,7 @@
  * No blocking calls allowed in this component.
  */
 
-import { memo } from "react";
+import { memo, forwardRef } from "react";
 import { Home, BookOpen, Library as LibraryIcon, Settings } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -22,13 +22,14 @@ const NAV_ITEMS = [
  * Pure UI component - NO data fetching, NO auth checks
  * This is critical for Contract 4A compliance
  */
-function MobileBottomNavComponent() {
+const MobileBottomNavComponent = forwardRef<HTMLElement, object>((_props, ref) => {
   // Only hook allowed: location for active state
   const location = useLocation();
   const pathname = location.pathname;
 
   return (
     <nav 
+      ref={ref}
       className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border/30 md:hidden"
       style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
     >
@@ -58,6 +59,8 @@ function MobileBottomNavComponent() {
       </div>
     </nav>
   );
-}
+});
+
+MobileBottomNavComponent.displayName = 'MobileBottomNav';
 
 export const MobileBottomNav = memo(MobileBottomNavComponent);

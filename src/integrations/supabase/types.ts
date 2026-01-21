@@ -563,6 +563,7 @@ export type Database = {
           new_book_alerts: boolean | null
           plan: Database["public"]["Enums"]["user_plan"] | null
           reader_theme: string | null
+          role: string | null
           spiritual_strictness: string | null
           study_speed: string | null
           theme_preference: string | null
@@ -591,6 +592,7 @@ export type Database = {
           new_book_alerts?: boolean | null
           plan?: Database["public"]["Enums"]["user_plan"] | null
           reader_theme?: string | null
+          role?: string | null
           spiritual_strictness?: string | null
           study_speed?: string | null
           theme_preference?: string | null
@@ -619,6 +621,7 @@ export type Database = {
           new_book_alerts?: boolean | null
           plan?: Database["public"]["Enums"]["user_plan"] | null
           reader_theme?: string | null
+          role?: string | null
           spiritual_strictness?: string | null
           study_speed?: string | null
           theme_preference?: string | null
@@ -888,6 +891,16 @@ export type Database = {
           _user_id: string
         }
         Returns: boolean
+      }
+      verify_certificate: {
+        Args: { cert_number: string }
+        Returns: {
+          book_title: string
+          certificate_type: string
+          is_valid: boolean
+          issued_at: string
+          verification_hash: string
+        }[]
       }
     }
     Enums: {
