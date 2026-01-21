@@ -451,6 +451,68 @@ async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
   }
 }
 
+type ImageKind = 'jpeg' | 'png' | 'gif' | 'webp' | 'svg' | 'unknown';
+
+function detectImageKind(bytes: Uint8Array): ImageKind {
+  if (!bytes || bytes.length < 12) return 'unknown';
+
+  // PNG
+  if (bytes[0] === 0x89 && bytes[1] === 0x50 && bytes[2] === 0x4e && bytes[3] === 0x47) return 'png';
+  // JPEG
+  if (bytes[0] === 0xff && bytes[1] === 0xd8) return 'jpeg';
+  // GIF
+  if (bytes[0] === 0x47 && bytes[1] === 0x49 && bytes[2] === 0x46) return 'gif';
+  // WEBP (RIFF....WEBP)
+  if (
+    bytes[0] === 0x52 && bytes[1] === 0x49 && bytes[2] === 0x46 && bytes[3] === 0x46 &&
+    bytes[8] === 0x57 && bytes[9] === 0x45 && bytes[10] === 0x42 && bytes[11] === 0x50
+  ) return 'webp';
+
+  // SVG (best-effort: detect "<svg" early in the content)
+  try {
+    const prefix = new TextDecoder().decode(bytes.slice(0, Math.min(bytes.length, 256))).trimStart();
+    if (prefix.startsWith('<svg') || (prefix.startsWith('<?xml') && prefix.includes('<svg'))) return 'svg';
+  } catch {
+    // ignore
+  }
+
+  return 'unknown';
+}
+
+function imageKindToExt(kind: ImageKind): string {
+  switch (kind) {
+    case 'jpeg':
+      return 'jpg';
+    case 'png':
+      return 'png';
+    case 'gif':
+      return 'gif';
+    case 'webp':
+      return 'webp';
+    case 'svg':
+      return 'svg';
+    default:
+      return 'jpg';
+  }
+}
+
+function imageKindToMediaType(kind: ImageKind): string {
+  switch (kind) {
+    case 'jpeg':
+      return 'image/jpeg';
+    case 'png':
+      return 'image/png';
+    case 'gif':
+      return 'image/gif';
+    case 'webp':
+      return 'image/webp';
+    case 'svg':
+      return 'image/svg+xml';
+    default:
+      return 'image/jpeg';
+  }
+}
+
 // Safe base64 encoding for large arrays (avoids stack overflow)
 function uint8ArrayToBase64(bytes: Uint8Array): string {
   const chunkSize = 8192;
@@ -1601,8 +1663,12 @@ async function generateEPUB(
   await zipWriter.add("META-INF/container.xml", new zip.TextReader(containerXml));
 
   const hasCover = coverImageBytes && coverImageBytes.length > 0;
+  const coverKind: ImageKind = hasCover ? detectImageKind(coverImageBytes!) : 'unknown';
+  const coverExt = imageKindToExt(coverKind);
+  const coverMediaType = imageKindToMediaType(coverKind);
+
   if (hasCover) {
-    await zipWriter.add("OEBPS/images/cover.jpg", new zip.Uint8ArrayReader(coverImageBytes));
+    await zipWriter.add(`OEBPS/images/cover.${coverExt}`, new zip.Uint8ArrayReader(coverImageBytes!));
   }
 
   const chapterItems = chapters.map((ch, i) => ({
@@ -1616,7 +1682,7 @@ async function generateEPUB(
   
   // First, process all chapters to collect images and generate XHTML
   let imageCounter = 0;
-  const chapterImages: { id: string; path: string; bytes: Uint8Array }[] = [];
+  const chapterImages: { id: string; path: string; bytes: Uint8Array; href: string; mediaType: string }[] = [];
   const processedChapters: { id: string; href: string; xhtml: string }[] = [];
   
   for (const item of chapterItems) {
@@ -1628,15 +1694,25 @@ async function generateEPUB(
     
     for (const match of imageMatches) {
       const [fullMatch, alt, url] = match;
-      const imageName = `panel-${imageCounter}.jpg`;
-      const imageId = `panel-img-${imageCounter}`;
-      imageCounter++;
       
       console.log(`[EXPORT] Fetching EPUB image: ${alt || 'panel'}`);
       const imageBytes = await fetchImageBytes(url);
       if (imageBytes) {
-        chapterImages.push({ id: imageId, path: `OEBPS/images/${imageName}`, bytes: imageBytes });
-        imageMap.set(fullMatch, `<figure><img src="images/${imageName}" alt="${escapeXml(alt || 'Panel')}" style="max-width:100%;"/><figcaption>${escapeXml(alt || '')}</figcaption></figure>`);
+        const kind = detectImageKind(imageBytes);
+        const ext = imageKindToExt(kind);
+        const imageName = `img-${imageCounter}.${ext}`;
+        const imageId = `img-${imageCounter}`;
+        const href = `images/${imageName}`;
+        imageCounter++;
+
+        chapterImages.push({
+          id: imageId,
+          path: `OEBPS/${href}`,
+          href,
+          bytes: imageBytes,
+          mediaType: imageKindToMediaType(kind),
+        });
+        imageMap.set(fullMatch, `<figure><img src="${href}" alt="${escapeXml(alt || 'Image')}" style="max-width:100%;"/><figcaption>${escapeXml(alt || '')}</figcaption></figure>`);
       } else {
         imageMap.set(fullMatch, `<p><em>[Image not available: ${escapeXml(alt || 'Panel')}]</em></p>`);
       }
@@ -1804,8 +1880,7 @@ ${htmlContent}
   
   // Now generate manifest with all collected images - use the actual stored path
   const imageManifestItems = chapterImages.map((img) => {
-    const filename = img.path.split('/').pop() || 'panel.jpg';
-    return `<item id="${img.id}" href="images/${filename}" media-type="image/jpeg"/>`;
+    return `<item id="${img.id}" href="${img.href}" media-type="${img.mediaType}"/>`;
   }).join('\n    ');
 
   const contentOpf = `<?xml version="1.0" encoding="UTF-8"?>
@@ -1823,7 +1898,7 @@ ${htmlContent}
   <manifest>
     <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
     ${hasCover ? '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>' : ''}
-    ${hasCover ? '<item id="cover-image" href="images/cover.jpg" media-type="image/jpeg" properties="cover-image"/>' : ''}
+    ${hasCover ? `<item id="cover-image" href="images/cover.${coverExt}" media-type="${coverMediaType}" properties="cover-image"/>` : ''}
     <item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>
     ${chapterItems.map(c => `<item id="${c.id}" href="${c.href}" media-type="application/xhtml+xml"/>`).join('\n    ')}
     ${hasRefs ? '<item id="references" href="references.xhtml" media-type="application/xhtml+xml"/>' : ''}
@@ -1882,7 +1957,7 @@ figcaption { font-style: italic; font-size: 0.9em; color: #666; margin-top: 0.5e
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>Cover</title><link rel="stylesheet" href="style.css"/></head>
-<body class="cover"><img src="images/cover.jpg" alt="Cover"/></body>
+ <body class="cover"><img src="images/cover.${coverExt}" alt="Cover"/></body>
 </html>`;
     await zipWriter.add("OEBPS/cover.xhtml", new zip.TextReader(coverXhtml));
   }
@@ -2112,18 +2187,28 @@ async function generateDOCX(
   // Add cover and all panel images to media folder
   let imageRelId = 2;
   let imageRels = '';
+  const coverKind: ImageKind = coverImageBytes ? detectImageKind(coverImageBytes) : 'unknown';
+  const canEmbedDocxCover = coverKind === 'png' || coverKind === 'jpeg';
+  const coverExt = imageKindToExt(coverKind);
   
-  if (coverImageBytes) {
-    await zipWriter.add("word/media/cover.jpeg", new zip.Uint8ArrayReader(coverImageBytes));
-    imageRels += `<Relationship Id="rId${imageRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/cover.jpeg"/>`;
+  if (coverImageBytes && canEmbedDocxCover) {
+    await zipWriter.add(`word/media/cover.${coverExt}`, new zip.Uint8ArrayReader(coverImageBytes));
+    imageRels += `<Relationship Id="rId${imageRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/cover.${coverExt}"/>`;
     imageRelId++;
+  } else if (coverImageBytes && !canEmbedDocxCover) {
+    console.log(`[EXPORT] DOCX cover image type not supported (${coverKind}); using text-only cover page`);
   }
   
   // Add all chapter images
   const imageRelMap: Map<number, number> = new Map();
   for (const img of docxImages) {
-    const isPng = img.bytes[0] === 0x89 && img.bytes[1] === 0x50;
-    const ext = isPng ? 'png' : 'jpeg';
+    const kind = detectImageKind(img.bytes);
+    const canEmbed = kind === 'png' || kind === 'jpeg';
+    if (!canEmbed) {
+      console.log(`[EXPORT] DOCX image ${img.id} type not supported (${kind}); skipping embed`);
+      continue;
+    }
+    const ext = imageKindToExt(kind);
     await zipWriter.add(`word/media/${img.id}.${ext}`, new zip.Uint8ArrayReader(img.bytes));
     imageRels += `<Relationship Id="rId${imageRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${img.id}.${ext}"/>`;
     imageRelMap.set(parseInt(img.id.replace('image', '')), imageRelId);
@@ -2145,7 +2230,7 @@ async function generateDOCX(
 <w:body>`;
 
   // Cover image
-  if (coverImageBytes) {
+  if (coverImageBytes && canEmbedDocxCover) {
     documentContent += `
 <w:p>
   <w:r>
@@ -2157,7 +2242,7 @@ async function generateDOCX(
           <a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture">
             <pic:pic>
               <pic:nvPicPr>
-                <pic:cNvPr id="1" name="cover.jpeg"/>
+                 <pic:cNvPr id="1" name="cover.${coverExt}"/>
                 <pic:cNvPicPr/>
               </pic:nvPicPr>
               <pic:blipFill>
