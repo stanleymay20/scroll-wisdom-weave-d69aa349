@@ -243,6 +243,82 @@ function stripMarkdown(text: string): string {
     .trim();
 }
 
+/**
+ * Sanitize text for PDF WinAnsi encoding
+ * Replaces Unicode characters that cannot be encoded in WinAnsi
+ */
+function sanitizeForPDF(text: string): string {
+  if (!text) return "";
+  return text
+    // Superscript numbers and symbols
+    .replace(/⁰/g, "0")
+    .replace(/¹/g, "1")
+    .replace(/²/g, "2")
+    .replace(/³/g, "3")
+    .replace(/⁴/g, "4")
+    .replace(/⁵/g, "5")
+    .replace(/⁶/g, "6")
+    .replace(/⁷/g, "7")
+    .replace(/⁸/g, "8")
+    .replace(/⁹/g, "9")
+    .replace(/⁺/g, "+")
+    .replace(/⁻/g, "-")  // This is the specific character causing the error
+    .replace(/⁼/g, "=")
+    .replace(/⁽/g, "(")
+    .replace(/⁾/g, ")")
+    .replace(/ⁿ/g, "n")
+    // Subscript numbers
+    .replace(/₀/g, "0")
+    .replace(/₁/g, "1")
+    .replace(/₂/g, "2")
+    .replace(/₃/g, "3")
+    .replace(/₄/g, "4")
+    .replace(/₅/g, "5")
+    .replace(/₆/g, "6")
+    .replace(/₇/g, "7")
+    .replace(/₈/g, "8")
+    .replace(/₉/g, "9")
+    .replace(/₊/g, "+")
+    .replace(/₋/g, "-")
+    .replace(/₌/g, "=")
+    .replace(/₍/g, "(")
+    .replace(/₎/g, ")")
+    // Common math symbols
+    .replace(/×/g, "x")
+    .replace(/÷/g, "/")
+    .replace(/−/g, "-")  // Minus sign (U+2212)
+    .replace(/–/g, "-")  // En dash
+    .replace(/—/g, "-")  // Em dash
+    .replace(/'/g, "'")  // Smart quotes
+    .replace(/'/g, "'")
+    .replace(/"/g, '"')
+    .replace(/"/g, '"')
+    .replace(/…/g, "...")
+    .replace(/•/g, "-")  // Bullet
+    .replace(/→/g, "->")
+    .replace(/←/g, "<-")
+    .replace(/↔/g, "<->")
+    .replace(/≈/g, "~")
+    .replace(/≠/g, "!=")
+    .replace(/≤/g, "<=")
+    .replace(/≥/g, ">=")
+    .replace(/∞/g, "infinity")
+    .replace(/π/g, "pi")
+    .replace(/α/g, "alpha")
+    .replace(/β/g, "beta")
+    .replace(/γ/g, "gamma")
+    .replace(/δ/g, "delta")
+    .replace(/ε/g, "epsilon")
+    .replace(/θ/g, "theta")
+    .replace(/λ/g, "lambda")
+    .replace(/μ/g, "mu")
+    .replace(/σ/g, "sigma")
+    .replace(/φ/g, "phi")
+    .replace(/ω/g, "omega")
+    // Fallback: remove any remaining non-WinAnsi characters (keep basic ASCII + Latin-1)
+    .replace(/[^\x00-\xFF]/g, "");
+}
+
 async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
   try {
     // Handle base64 data URIs
@@ -930,7 +1006,7 @@ async function generatePDF(
           
           // Code content
           for (const codeLine of codeLines) {
-            page.drawText(codeLine.slice(0, 80), { // Truncate long lines
+            page.drawText(sanitizeForPDF(codeLine.slice(0, 80)), { // Truncate long lines
               x: margin,
               y,
               size: 9,
@@ -988,7 +1064,7 @@ async function generatePDF(
           
           // Draw headers
           for (let i = 0; i < table.headers.length; i++) {
-            const headerText = table.headers[i].slice(0, 25); // Truncate long headers
+            const headerText = sanitizeForPDF(table.headers[i].slice(0, 25)); // Truncate long headers
             page.drawText(headerText, {
               x: margin + (i * colWidth) + 5,
               y: y - 12,
@@ -1015,7 +1091,7 @@ async function generatePDF(
             }
             
             for (let colIdx = 0; colIdx < row.length && colIdx < numCols; colIdx++) {
-              const cellText = (row[colIdx] || '').slice(0, 30); // Truncate long values
+              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 30)); // Truncate long values
               page.drawText(cellText, {
                 x: margin + (colIdx * colWidth) + 5,
                 y: y - 12,
@@ -1113,7 +1189,7 @@ async function generatePDF(
             }
             
             for (let colIdx = 0; colIdx < numCols && colIdx < row.length; colIdx++) {
-              const cellText = (row[colIdx] || '').slice(0, 30);
+              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 30));
               page.drawText(cellText, {
                 x: margin + (colIdx * colWidth) + 5,
                 y: y - 12,
@@ -1223,7 +1299,9 @@ async function generatePDF(
 }
 
 function wrapText(text: string, font: any, fontSize: number, maxWidth: number): string[] {
-  const words = text.split(/\s+/);
+  // Sanitize text for PDF WinAnsi encoding before measuring/wrapping
+  const sanitizedText = sanitizeForPDF(text);
+  const words = sanitizedText.split(/\s+/);
   const lines: string[] = [];
   let currentLine = "";
   
