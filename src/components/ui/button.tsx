@@ -68,7 +68,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
     // Contract 5C-1: Immediate feedback for pending state
     if (isPending && !asChild) {
       return (
-        <button
+        <Comp
           className={cn(buttonVariants({ variant, size, className }), "relative")}
           ref={ref}
           disabled
@@ -77,7 +77,7 @@ const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
           <Loader2 className="h-4 w-4 animate-spin" />
           {pendingText && <span className="ml-2">{pendingText}</span>}
           {!pendingText && <span className="opacity-0">{children}</span>}
-        </button>
+        </Comp>
       );
     }
     

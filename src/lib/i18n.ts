@@ -55,6 +55,22 @@ export const translations: Record<Language, Record<string, string>> = {
     'clarification.isNot2': 'Not a frontend developer tool or JavaScript framework',
     'clarification.isNot3': 'Not a UI animation or scroll-effect plugin',
     
+    // Certification Disclaimer Section
+    'certification.badge': 'Trust & Transparency',
+    'certification.title': 'What ScrollLibrary Certifies',
+    'certification.subtitle': 'Clear boundaries on what our certificates represent',
+    'certification.weCertify': 'We Certify',
+    'certification.certify1': 'Completion of specific learning material',
+    'certification.certify2': 'Demonstrated comprehension via assessments',
+    'certification.certify3': 'Verified behavioral learning integrity',
+    'certification.weDoNotCertify': 'We Do NOT Certify',
+    'certification.notCertify1': 'Academic degrees or university credits',
+    'certification.notCertify2': 'Professional licensure or employment eligibility',
+    'certification.notCertify3': 'Equivalence to accredited institutions',
+    'certification.howItWorks': 'How Certification Works',
+    'certification.forEmployers': 'For Employers',
+    'certification.trustWhitepaper': 'Trust Whitepaper',
+    
     // Academic Credibility Section
     'academic.badge': 'Built for Scholars',
     'academic.title': 'Built for Students, Researchers, and Educators',

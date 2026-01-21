@@ -50,6 +50,7 @@ const TrustWhitepaper = lazy(() => import("./pages/TrustWhitepaper"));
 const AccountDelete = lazy(() => import("./pages/AccountDelete"));
 const CertificateTest = lazy(() => import("./pages/CertificateTest"));
 const LaunchChecklist = lazy(() => import("./pages/LaunchChecklist"));
+const HowCertificationWorks = lazy(() => import("./pages/HowCertificationWorks"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
@@ -130,6 +131,7 @@ const App = () => (
                   <Route path="/certificate/:certificateNumber" element={<CertificateVerify />} />
                   <Route path="/verify" element={<OrganizationVerify />} />
                   <Route path="/docs/verification" element={<VerificationDocs />} />
+                  <Route path="/docs/how-certification-works" element={<HowCertificationWorks />} />
                   <Route path="/docs/trust-whitepaper" element={<TrustWhitepaper />} />
                   <Route path="/account/delete" element={<AccountDelete />} />
                   <Route path="/certificate-test" element={<CertificateTest />} />
