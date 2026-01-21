@@ -20,8 +20,10 @@ interface ContentModeSelectorProps {
 }
 
 const CITATION_STYLES: { value: CitationStyle; label: string; description: string }[] = [
-  { value: 'APA', label: 'APA 7th Edition', description: 'American Psychological Association - Most common in social sciences' },
-  { value: 'Harvard', label: 'Harvard Referencing', description: 'Author-date system - Common in UK universities' },
+  { value: 'APA', label: 'APA 7th Edition', description: 'American Psychological Association - Social sciences, psychology, education' },
+  { value: 'Harvard', label: 'Harvard Referencing', description: 'Author-date system - UK universities, business, humanities' },
+  { value: 'MLA', label: 'MLA 9th Edition', description: 'Modern Language Association - Literature, humanities, arts' },
+  { value: 'Chicago', label: 'Chicago (Author-Date)', description: 'Chicago Manual of Style - History, social sciences, sciences' },
 ];
 
 export function ContentModeSelector({
