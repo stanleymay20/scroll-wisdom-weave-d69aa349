@@ -11,6 +11,60 @@ const logStep = (step: string, details?: any) => {
   console.log(`[INTERACTIVE-QA] ${step}${detailsStr}`);
 };
 
+// ===========================================
+// MULTI-TIER ASSESSMENT SYSTEM
+// ===========================================
+
+const TIER_CONFIGS = {
+  1: { name: 'Knowledge Check', weight: 0.15, required: false },
+  2: { name: 'Applied Reasoning', weight: 0.30, required: true },
+  3: { name: 'Scenario & Debugging', weight: 0.35, required: true },
+  4: { name: 'Integrity-Weighted', weight: 0.20, required: false }
+};
+
+const MULTI_TIER_QUIZ_PROMPT = `You are an assessment generator for ScrollLibrary using a 4-TIER certification system.
+
+TIER SYSTEM (MANDATORY):
+- Tier 1: Knowledge Check (MCQ) - Basic recall, minor weight
+- Tier 2: Applied Reasoning (REQUIRED for certification) - "What happens if...", output prediction, why/how questions
+- Tier 3: Scenario & Debugging (REQUIRED for certification) - Fix broken code, choose best approach, case-based
+- Tier 4: Integrity-Weighted (mastery only) - Time-pressured, progressive hints
+
+CRITICAL RULE: MCQ-only quizzes are NOT acceptable for certification.
+
+Generate a multi-tier assessment with this distribution:
+- 1-2 Tier 1 (Knowledge Check) questions
+- 2 Tier 2 (Applied Reasoning) questions - MANDATORY
+- 2 Tier 3 (Scenario/Debugging) questions - MANDATORY  
+- 1 Tier 4 (Integrity-Weighted) question if content supports it
+
+Each question must include:
+- tier (1-4)
+- type: "knowledge", "reasoning", "scenario", "integrity"
+- question text
+- 4 options for MCQ-style questions OR expected answer approach for open-ended
+- correctIndex (0-3) for the correct answer
+- explanation of why the answer is correct
+- pointValue (Tier 1: 1pt, Tier 2: 3pt, Tier 3: 5pt, Tier 4: 7pt)
+- timeLimit in seconds (Tier 1: 30s, Tier 2: 120s, Tier 3: 180s, Tier 4: 60s)
+
+TIER 2 QUESTION FORMATS:
+- "What would happen if you [action]?"
+- "Given [scenario], predict the output:"
+- "Why does [behavior] occur when [condition]?"
+- "Compare and contrast [A] and [B]:"
+
+TIER 3 QUESTION FORMATS:
+- "The following code/scenario contains an error. Identify and fix it:"
+- "Which approach would be most efficient for [scenario]? Justify your choice."
+- "Debug this: [problem]. What is wrong?"
+- "A junior developer wrote this. Identify improvements:"
+
+TIER 4 QUESTION FORMATS:
+- Time-pressured pattern recognition
+- Multi-step problem solving
+- Progressive hint challenges`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -53,7 +107,16 @@ serve(async (req) => {
 
     logStep("User authenticated", { userId: user.id.slice(0, 8) + "..." });
 
-    const { question, chapterContent, chapterTitle, bookTitle, conversationHistory = [], isQuizMode = false } = await req.json();
+    const { 
+      question, 
+      chapterContent, 
+      chapterTitle, 
+      bookTitle, 
+      conversationHistory = [], 
+      isQuizMode = false,
+      isMasteryMode = false,
+      bookType = 'text'
+    } = await req.json();
 
     if (!question || !chapterContent) {
       return new Response(JSON.stringify({ error: "Question and chapter content are required" }), {
@@ -66,34 +129,35 @@ serve(async (req) => {
       questionLength: question.length, 
       contentLength: chapterContent.length,
       historyLength: conversationHistory.length,
-      isQuizMode
+      isQuizMode,
+      isMasteryMode,
+      bookType
     });
 
-    // Handle Quiz Mode with tool calling for structured output
+    // Handle Multi-Tier Quiz Mode
     if (isQuizMode) {
-      logStep("Generating quiz questions using tool calling");
+      logStep("Generating MULTI-TIER quiz questions");
 
       const quizMessages = [
         {
           role: "system",
-          content: `You are a quiz generator for ScrollLibrary. Generate comprehension questions based on chapter content.
+          content: `${MULTI_TIER_QUIZ_PROMPT}
 
 CHAPTER CONTEXT:
 - Book: "${bookTitle}"
 - Chapter: "${chapterTitle}"
+- Book Type: "${bookType}"
+- Mastery Mode: ${isMasteryMode}
 
 CHAPTER CONTENT:
-${chapterContent}
+${chapterContent.slice(0, 8000)}
 
-Generate exactly 5 multiple-choice questions that test understanding of the key concepts in this chapter. Each question should:
-1. Test comprehension, not just memorization
-2. Have 4 distinct options with only one correct answer
-3. Include a brief explanation for why the correct answer is right
-4. Vary in difficulty from basic recall to application`
+Generate exactly 7 multi-tier quiz questions following the tier distribution above.
+${isMasteryMode ? 'Include at least 1 Tier 4 integrity-weighted question.' : 'Tier 4 is optional for non-mastery assessments.'}`
         },
         {
           role: "user",
-          content: "Generate 5 multiple-choice quiz questions for this chapter."
+          content: "Generate 7 multi-tier assessment questions for this chapter following the 4-tier system."
         }
       ];
 
@@ -110,8 +174,8 @@ Generate exactly 5 multiple-choice questions that test understanding of the key 
             {
               type: "function",
               function: {
-                name: "generate_quiz",
-                description: "Generate multiple-choice quiz questions based on chapter content",
+                name: "generate_multi_tier_quiz",
+                description: "Generate multi-tier assessment questions based on chapter content",
                 parameters: {
                   type: "object",
                   properties: {
@@ -120,9 +184,22 @@ Generate exactly 5 multiple-choice questions that test understanding of the key 
                       items: {
                         type: "object",
                         properties: {
+                          tier: { 
+                            type: "number", 
+                            description: "Assessment tier (1-4)" 
+                          },
+                          type: { 
+                            type: "string", 
+                            enum: ["knowledge", "reasoning", "scenario", "integrity"],
+                            description: "Question type based on tier" 
+                          },
                           question: { 
                             type: "string", 
                             description: "The quiz question text" 
+                          },
+                          context: {
+                            type: "string",
+                            description: "Optional context or code snippet for the question"
                           },
                           options: { 
                             type: "array", 
@@ -135,21 +212,42 @@ Generate exactly 5 multiple-choice questions that test understanding of the key 
                           },
                           explanation: { 
                             type: "string",
-                            description: "Brief explanation of why the correct answer is right"
+                            description: "Detailed explanation of why the correct answer is right"
+                          },
+                          pointValue: {
+                            type: "number",
+                            description: "Point value (1 for T1, 3 for T2, 5 for T3, 7 for T4)"
+                          },
+                          timeLimit: {
+                            type: "number",
+                            description: "Time limit in seconds"
                           }
                         },
-                        required: ["question", "options", "correctIndex", "explanation"],
+                        required: ["tier", "type", "question", "options", "correctIndex", "explanation", "pointValue", "timeLimit"],
                         additionalProperties: false
                       }
+                    },
+                    tierBreakdown: {
+                      type: "object",
+                      properties: {
+                        tier1: { type: "number" },
+                        tier2: { type: "number" },
+                        tier3: { type: "number" },
+                        tier4: { type: "number" }
+                      }
+                    },
+                    certificationEligible: {
+                      type: "boolean",
+                      description: "True if quiz includes required Tier 2 and Tier 3 questions"
                     }
                   },
-                  required: ["questions"],
+                  required: ["questions", "tierBreakdown", "certificationEligible"],
                   additionalProperties: false
                 }
               }
             }
           ],
-          tool_choice: { type: "function", function: { name: "generate_quiz" } }
+          tool_choice: { type: "function", function: { name: "generate_multi_tier_quiz" } }
         }),
       });
 
@@ -176,13 +274,17 @@ Generate exactly 5 multiple-choice questions that test understanding of the key 
       logStep("Quiz response received", { hasChoices: !!quizData.choices });
 
       // Extract questions from tool call response
-      let questions = [];
+      let questions: any[] = [];
+      let tierBreakdown = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 };
+      let certificationEligible = false;
       
       if (quizData.choices?.[0]?.message?.tool_calls?.[0]?.function?.arguments) {
         try {
           const args = JSON.parse(quizData.choices[0].message.tool_calls[0].function.arguments);
           questions = args.questions || [];
-          logStep("Parsed quiz questions from tool call", { count: questions.length });
+          tierBreakdown = args.tierBreakdown || tierBreakdown;
+          certificationEligible = args.certificationEligible || false;
+          logStep("Parsed multi-tier quiz questions from tool call", { count: questions.length, tierBreakdown });
         } catch (parseErr) {
           logStep("Failed to parse tool call arguments", { error: String(parseErr) });
         }
@@ -192,7 +294,6 @@ Generate exactly 5 multiple-choice questions that test understanding of the key 
       if (questions.length === 0 && quizData.choices?.[0]?.message?.content) {
         try {
           const content = quizData.choices[0].message.content;
-          // Try to find JSON in the content
           const jsonMatch = content.match(/\[[\s\S]*\]/);
           if (jsonMatch) {
             questions = JSON.parse(jsonMatch[0]);
@@ -203,87 +304,64 @@ Generate exactly 5 multiple-choice questions that test understanding of the key 
         }
       }
 
-      // Generate fallback questions if all else fails
+      // Generate multi-tier fallback questions if all else fails
       if (questions.length === 0) {
-        logStep("Using generated fallback questions");
-        questions = [
-          {
-            question: `What is the main topic discussed in the chapter "${chapterTitle}"?`,
-            options: [
-              "The introduction of key concepts",
-              "Historical background information",
-              "Practical applications",
-              "Theoretical frameworks"
-            ],
-            correctIndex: 0,
-            explanation: "The chapter primarily focuses on introducing and explaining the key concepts central to its theme."
-          },
-          {
-            question: "Which approach does this chapter recommend for understanding the material?",
-            options: [
-              "Memorization only",
-              "Critical analysis and application",
-              "Speed reading",
-              "Skipping to conclusions"
-            ],
-            correctIndex: 1,
-            explanation: "The chapter emphasizes critical analysis and practical application of concepts for deeper understanding."
-          },
-          {
-            question: "What distinguishes this chapter's perspective from common assumptions?",
-            options: [
-              "It follows conventional wisdom exactly",
-              "It presents a unique or challenging viewpoint",
-              "It avoids any conclusions",
-              "It only presents statistics"
-            ],
-            correctIndex: 1,
-            explanation: "The chapter offers fresh insights that may challenge or expand upon conventional thinking."
-          },
-          {
-            question: "How does this chapter connect to the broader book themes?",
-            options: [
-              "It stands completely alone",
-              "It builds on previous concepts and leads to future ones",
-              "It contradicts other chapters",
-              "It repeats earlier material exactly"
-            ],
-            correctIndex: 1,
-            explanation: "Chapters in well-structured books build progressively, connecting to broader themes."
-          },
-          {
-            question: "What is the intended takeaway from this chapter?",
-            options: [
-              "No clear conclusion",
-              "Action steps and deeper understanding",
-              "Only historical facts",
-              "Entertainment only"
-            ],
-            correctIndex: 1,
-            explanation: "The chapter aims to provide actionable insights and deepen the reader's understanding."
-          }
-        ];
+        logStep("Using multi-tier fallback questions");
+        questions = generateFallbackMultiTierQuestions(chapterTitle, bookTitle, bookType);
       }
 
-      // Validate and fix question structure
+      // Validate and normalize question structure
       questions = questions.map((q: any, idx: number) => ({
+        tier: typeof q.tier === 'number' && q.tier >= 1 && q.tier <= 4 ? q.tier : (idx < 2 ? 1 : idx < 4 ? 2 : 3),
+        type: q.type || (q.tier === 1 ? 'knowledge' : q.tier === 2 ? 'reasoning' : q.tier === 3 ? 'scenario' : 'integrity'),
         question: q.question || `Question ${idx + 1}`,
+        context: q.context || null,
         options: Array.isArray(q.options) && q.options.length === 4 
           ? q.options 
           : ["Option A", "Option B", "Option C", "Option D"],
         correctIndex: typeof q.correctIndex === 'number' && q.correctIndex >= 0 && q.correctIndex <= 3 
           ? q.correctIndex 
           : 0,
-        explanation: q.explanation || "This is the correct answer based on the chapter content."
+        explanation: q.explanation || "This is the correct answer based on the chapter content.",
+        pointValue: q.pointValue || (q.tier === 1 ? 1 : q.tier === 2 ? 3 : q.tier === 3 ? 5 : 7),
+        timeLimit: q.timeLimit || (q.tier === 1 ? 30 : q.tier === 2 ? 120 : q.tier === 3 ? 180 : 60)
       }));
 
-      logStep("Quiz generation complete", { questionCount: questions.length });
+      // Calculate tier breakdown from actual questions
+      tierBreakdown = {
+        tier1: questions.filter((q: any) => q.tier === 1).length,
+        tier2: questions.filter((q: any) => q.tier === 2).length,
+        tier3: questions.filter((q: any) => q.tier === 3).length,
+        tier4: questions.filter((q: any) => q.tier === 4).length
+      };
+
+      // Determine certification eligibility
+      certificationEligible = tierBreakdown.tier2 >= 2 && tierBreakdown.tier3 >= 1;
+      const masteryEligible = certificationEligible && tierBreakdown.tier4 >= 1;
+
+      // Calculate total points
+      const totalPoints = questions.reduce((sum: number, q: any) => sum + q.pointValue, 0);
+      const estimatedTime = questions.reduce((sum: number, q: any) => sum + q.timeLimit, 0) / 60; // minutes
+
+      logStep("Multi-tier quiz generation complete", { 
+        questionCount: questions.length,
+        tierBreakdown,
+        certificationEligible,
+        masteryEligible,
+        totalPoints
+      });
 
       return new Response(
         JSON.stringify({
           success: true,
           questions,
-          isQuiz: true
+          isQuiz: true,
+          isMultiTier: true,
+          tierBreakdown,
+          certificationEligible,
+          masteryEligible,
+          totalPoints,
+          estimatedTimeMinutes: Math.ceil(estimatedTime)
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -317,7 +395,6 @@ IMPORTANT:
 - Never make up false information
 - If you truly don't know something, say so honestly`
       },
-      // Add conversation history for context
       ...conversationHistory.map((msg: { role: string; content: string }) => ({
         role: msg.role,
         content: msg.content
@@ -385,3 +462,121 @@ IMPORTANT:
     );
   }
 });
+
+// ===========================================
+// FALLBACK MULTI-TIER QUESTIONS
+// ===========================================
+
+function generateFallbackMultiTierQuestions(chapterTitle: string, bookTitle: string, bookType: string) {
+  return [
+    // Tier 1 - Knowledge Check
+    {
+      tier: 1,
+      type: "knowledge",
+      question: `What is the main topic discussed in the chapter "${chapterTitle}"?`,
+      options: [
+        "The introduction of key concepts and fundamentals",
+        "Historical background and context",
+        "Practical applications and use cases",
+        "Theoretical frameworks and models"
+      ],
+      correctIndex: 0,
+      explanation: "The chapter primarily focuses on introducing and explaining the key concepts central to its theme.",
+      pointValue: 1,
+      timeLimit: 30
+    },
+    {
+      tier: 1,
+      type: "knowledge",
+      question: "Which approach does this chapter recommend for understanding the material?",
+      options: [
+        "Memorization only",
+        "Critical analysis and practical application",
+        "Speed reading techniques",
+        "Skipping to conclusions"
+      ],
+      correctIndex: 1,
+      explanation: "The chapter emphasizes critical analysis and practical application of concepts for deeper understanding.",
+      pointValue: 1,
+      timeLimit: 30
+    },
+    // Tier 2 - Applied Reasoning (REQUIRED)
+    {
+      tier: 2,
+      type: "reasoning",
+      question: "What would happen if you applied the main concept from this chapter to a real-world scenario?",
+      options: [
+        "Nothing would change because theory doesn't apply to practice",
+        "You would see measurable improvements in understanding and outcomes",
+        "The concept would fail completely in practice",
+        "You would need additional concepts not covered in this chapter"
+      ],
+      correctIndex: 1,
+      explanation: "When correctly applied, the concepts in this chapter should lead to tangible improvements, as the chapter bridges theory with practical application.",
+      pointValue: 3,
+      timeLimit: 120
+    },
+    {
+      tier: 2,
+      type: "reasoning",
+      question: "Why does the chapter present information in this particular order?",
+      options: [
+        "Random organization with no specific purpose",
+        "Building from foundational concepts to advanced applications",
+        "To confuse readers and test their patience",
+        "Alphabetical by topic"
+      ],
+      correctIndex: 1,
+      explanation: "The chapter follows a pedagogical structure, building from foundational concepts to more complex applications, enabling progressive understanding.",
+      pointValue: 3,
+      timeLimit: 120
+    },
+    // Tier 3 - Scenario & Debugging (REQUIRED)
+    {
+      tier: 3,
+      type: "scenario",
+      question: "A colleague misunderstands a key concept from this chapter and makes an error. Based on the chapter content, which misconception is most likely?",
+      options: [
+        "Confusing correlation with causation in the subject matter",
+        "Applying concepts too literally without adaptation",
+        "Skipping foundational steps and jumping to conclusions",
+        "All of the above are common misconceptions addressed in this chapter"
+      ],
+      correctIndex: 3,
+      explanation: "The chapter addresses multiple common misconceptions, and learners often encounter all of these errors when first engaging with the material.",
+      pointValue: 5,
+      timeLimit: 180
+    },
+    {
+      tier: 3,
+      type: "scenario",
+      question: "Given a scenario where the main approach fails, which alternative strategy from the chapter should you try first?",
+      options: [
+        "Abandon the approach entirely and start over",
+        "Apply the troubleshooting techniques mentioned in the chapter",
+        "Ignore the failure and continue anyway",
+        "Wait for someone else to solve the problem"
+      ],
+      correctIndex: 1,
+      explanation: "The chapter provides troubleshooting techniques and alternative strategies for when the primary approach encounters obstacles.",
+      pointValue: 5,
+      timeLimit: 180
+    },
+    // Tier 4 - Integrity-Weighted
+    {
+      tier: 4,
+      type: "integrity",
+      question: "In 60 seconds: Synthesize the three most important takeaways from this chapter and explain how they connect to form a coherent understanding.",
+      options: [
+        "The concepts are unrelated and stand alone",
+        "They form a progressive learning path from theory to practice",
+        "They contradict each other intentionally",
+        "They are only relevant to specific industries"
+      ],
+      correctIndex: 1,
+      explanation: "The chapter's main concepts are interconnected, forming a progressive learning path that builds from theoretical foundations to practical applications.",
+      pointValue: 7,
+      timeLimit: 60
+    }
+  ];
+}
