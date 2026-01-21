@@ -139,17 +139,17 @@ export default function Reader() {
   const [showReferences, setShowReferences] = useState(false);
   const [selectedTextForTTS, setSelectedTextForTTS] = useState("");
 
+  // Close overlay panels but preserve TTS state (TTS is independent)
   const closeTopPanels = useCallback(() => {
     setShowSettings(false);
-    setShowTTS(false);
     setShowLevelSelector(false);
     setShowReferences(false);
   }, []);
 
+  // Open exclusive panels (settings, level, refs) - TTS is independent and persists
   const openExclusive = useCallback(
-    (panel: "settings" | "tts" | "level" | "refs") => {
+    (panel: "settings" | "level" | "refs") => {
       setShowSettings(panel === "settings");
-      setShowTTS(panel === "tts");
       setShowLevelSelector(panel === "level");
       setShowReferences(panel === "refs");
     },
@@ -718,18 +718,21 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* CONTRACT 5.2: TTS Mini Player - respects safe areas */}
+      {/* CONTRACT 5.2: TTS Mini Player - respects safe areas, z-50 to always stay on top */}
       <AnimatePresence>
         {showTTS && chapter?.content && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed z-40"
+            className="fixed z-50"
             style={{ 
-              bottom: "calc(env(safe-area-inset-bottom) + 5rem)",
-              left: "50%",
-              transform: "translateX(-50%)"
+              bottom: "calc(env(safe-area-inset-bottom) + 1.5rem)",
+              left: "1rem",
+              right: "1rem",
+              maxWidth: "24rem",
+              marginLeft: "auto",
+              marginRight: "auto"
             }}
           >
             <TTSMiniPlayer
