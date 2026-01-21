@@ -60,20 +60,20 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   }, []);
 
   // Handle visibility changes (tab switch, phone call, etc.)
+  // Simplified: just track state, don't try to auto-resume which causes issues on mobile
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.hidden) {
         // Page is hidden - track if we were playing
         if (isPlaying && !isLoading) {
           wasPlayingBeforeInterruptRef.current = true;
-          console.log("[TTS] Page hidden while playing - will attempt resume on return");
+          console.log("[TTS] Page hidden while playing");
         }
       } else {
-        // Page is visible again
-        if (wasPlayingBeforeInterruptRef.current && !isPlaying && !isLoading) {
-          console.log("[TTS] Page visible again - audio may have been interrupted");
-          // Note: We don't auto-resume as it may be disruptive
-          // User can tap play to continue
+        // Page is visible again - reset interrupt flag
+        // User can manually resume if needed
+        if (wasPlayingBeforeInterruptRef.current) {
+          console.log("[TTS] Page visible again - user can tap play to continue");
           wasPlayingBeforeInterruptRef.current = false;
         }
       }
@@ -162,6 +162,15 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       
       // Set audio attributes for better mobile behavior
       audio.preload = 'auto';
+      
+      // Track if we've already resolved to prevent double-resolve
+      let resolved = false;
+      const safeResolve = (value: boolean) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(value);
+        }
+      };
 
       const cleanup = () => {
         audio.onplay = null;
@@ -171,6 +180,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         audio.ontimeupdate = null;
         audio.onstalled = null;
         audio.onwaiting = null;
+        audio.oncanplaythrough = null;
       };
 
       audio.onplay = () => {
@@ -183,32 +193,23 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
 
       audio.onended = () => {
         cleanup();
-        resolve(true);
+        safeResolve(true);
       };
 
       audio.onpause = () => {
+        // Only handle as stop if we explicitly requested stop
         if (stopRef.current || isStoppingRef.current) {
           cleanup();
-          resolve(false);
-        } else {
-          // Unexpected pause (interruption) - try to resume
-          console.log("[TTS] Audio paused unexpectedly - attempting resume");
-          setTimeout(() => {
-            if (isMountedRef.current && !stopRef.current && audioRef.current === audio) {
-              audio.play().catch((err) => {
-                if (err?.name !== 'AbortError') {
-                  console.warn("[TTS] Resume failed:", err);
-                }
-              });
-            }
-          }, 200);
+          safeResolve(false);
         }
+        // Otherwise this is an external pause (visibility change, etc.)
+        // Don't auto-resume as it can cause loops on mobile
       };
 
       audio.onerror = (e) => {
-        console.error("[TTS] Audio error:", e);
+        console.error("[TTS] Audio playback error:", e);
         cleanup();
-        resolve(false);
+        safeResolve(false);
       };
       
       audio.onstalled = () => {
@@ -220,19 +221,36 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       };
 
       audio.ontimeupdate = () => {
-        if (audio.duration && isMountedRef.current) {
+        if (audio.duration && isMountedRef.current && !resolved) {
           setProgress((audio.currentTime / audio.duration) * 100);
         }
       };
 
+      // Better error handling for mobile - use canplaythrough
+      audio.oncanplaythrough = () => {
+        console.log("[TTS] Audio ready to play");
+      };
+
       audio.src = url;
-      audio.play().catch((err) => {
-        cleanup();
-        if (err?.name !== "AbortError") {
-          console.error("[TTS] Play error:", err);
-        }
-        resolve(false);
-      });
+      
+      // Use a play promise with proper error handling
+      const playPromise = audio.play();
+      if (playPromise !== undefined) {
+        playPromise
+          .then(() => {
+            console.log("[TTS] Playback started successfully");
+          })
+          .catch((err) => {
+            cleanup();
+            if (err?.name !== "AbortError") {
+              console.error("[TTS] Play error:", err);
+              if (isMountedRef.current) {
+                setError("Tap to retry audio");
+              }
+            }
+            safeResolve(false);
+          });
+      }
     });
   }, [onPlayingChange, volume]);
 
@@ -306,6 +324,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         if (stopRef.current || isStoppingRef.current) break;
 
         const chunk = chunks[i];
+        currentChunkIndexRef.current = i;
         console.log("[TTS Client] Generating chunk", i + 1, "/", chunks.length, { len: chunk.length });
 
         const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
@@ -329,7 +348,15 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         if (i === 0 && isMountedRef.current) setIsLoading(false);
 
         const success = await playUrl(url);
-        if (!success) break;
+        if (!success) {
+          console.log("[TTS Client] Chunk playback failed, stopping sequence");
+          break;
+        }
+        
+        // Small delay between chunks to prevent audio resource conflicts
+        if (i < chunks.length - 1 && !stopRef.current) {
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
       }
     } catch (err) {
       if (err instanceof Error && err.name === "AbortError") {
