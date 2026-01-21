@@ -1,34 +1,30 @@
 // ScrollLibrary Global Configuration
 
 // ===========================================
-// TRIAL MODE - 30 DAY FREE ACCESS FOR ALL USERS
-// Set to false after trial period ends to restore normal subscription logic
+// PRODUCTION MODE - Trial period has ended
 // ===========================================
-export const TRIAL_MODE = true;
-export const TRIAL_END_DATE = new Date('2026-01-20'); // 30 days from Dec 21, 2025
+export const TRIAL_MODE = false;
+export const TRIAL_END_DATE = new Date('2026-01-20'); // Trial ended
 
-// Check if trial is still active
+// Check if trial is still active (now returns false)
 export const isTrialActive = (): boolean => {
-  if (!TRIAL_MODE) return false;
-  return new Date() < TRIAL_END_DATE;
+  return false; // Trial period ended - use normal subscription logic
 };
 
 // Launch mode: When true, enables limited free generation for promotional period
-// NOTE: Launch mode is disabled during trial mode - trial gives full access
-export const LAUNCH_MODE = true;
+export const LAUNCH_MODE = false; // Disabled for production
 
-// Check if launch mode restrictions should apply (disabled during trial)
+// Check if launch mode restrictions should apply
 export const isLaunchModeActive = (): boolean => {
-  if (isTrialActive()) return false; // Trial mode overrides launch mode
-  return LAUNCH_MODE;
+  return false; // Production mode - use full subscription logic
 };
 
-// Launch mode limits
+// Launch mode limits (kept for reference)
 export const LAUNCH_MODE_CONFIG = {
   freeBookLimit: 1, // Books per day for free tier
   freeMaxWordCount: 4000, // Max words per chapter for free tier
   freeExportFormats: [] as const, // Free tier cannot export
-  showBanner: true, // Show promotional banner
+  showBanner: false, // No promotional banner in production
 };
 
 // Export formats (production-only, no HTML/markdown)
