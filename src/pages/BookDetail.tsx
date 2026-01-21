@@ -79,6 +79,7 @@ import { CertificateStatusPanel } from "@/components/certificates";
 import { cn } from "@/lib/utils";
 import { checkPublishingGate, formatAuditReport, type PublishingGateResult } from "@/lib/bookAuditIntegration";
 import { isAcademicCategory } from "@/lib/academicCategories";
+import { CodeQualityBadge } from "@/components/books/CodeQualityBadge";
 interface BookData {
   id: string;
   title: string;
@@ -829,6 +830,10 @@ export default function BookDetail() {
                   <Clock className="h-4 w-4 text-scroll-gold" />
                   <span>{readingTime} {t('book.minRead')}</span>
                 </div>
+                {/* Code Quality Badge for technical books */}
+                {chapters.some(ch => ch.is_generated) && (
+                  <CodeQualityBadge chapters={chapters} />
+                )}
               </div>
 
               {/* Actions */}

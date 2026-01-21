@@ -32,16 +32,38 @@ TIER SYSTEM (MANDATORY):
 
 CRITICAL RULE: MCQ-only quizzes are NOT acceptable for certification.
 
+CODING QUESTION SUPPORT:
+For TECHNICAL content (programming, data science, engineering), include CODING-ENABLED questions:
+- Tier 2: "Predict the output of this code:" - show code snippet, ask what it outputs
+- Tier 3: "Debug this code:" - show buggy code, ask user to identify/fix the error
+- Tier 3: "Complete this function:" - show partial code, ask user to fill in the blank
+
+CODING QUESTION FORMAT (for technical content):
+{
+  "tier": 3,
+  "type": "coding",
+  "question": "What is wrong with this function?",
+  "codeSnippet": "def add(a, b):\\n    return a + b\\n    print('Result:', a + b)",
+  "language": "python",
+  "options": ["Missing return statement", "Unreachable code after return", "Wrong operator", "Syntax error"],
+  "correctIndex": 1,
+  "explanation": "The print statement after return is unreachable code because the function exits at return.",
+  "pointValue": 5,
+  "timeLimit": 180
+}
+
 Generate a multi-tier assessment with this distribution:
 - 1-2 Tier 1 (Knowledge Check) questions
-- 2 Tier 2 (Applied Reasoning) questions - MANDATORY
-- 2 Tier 3 (Scenario/Debugging) questions - MANDATORY  
+- 2 Tier 2 (Applied Reasoning) questions - MANDATORY, include coding for tech content
+- 2 Tier 3 (Scenario/Debugging) questions - MANDATORY, include coding for tech content
 - 1 Tier 4 (Integrity-Weighted) question if content supports it
 
 Each question must include:
 - tier (1-4)
-- type: "knowledge", "reasoning", "scenario", "integrity"
+- type: "knowledge", "reasoning", "scenario", "integrity", or "coding" (for code-based questions)
 - question text
+- codeSnippet (for coding questions - the code to analyze/debug/predict)
+- language (for coding questions - python, javascript, java, etc.)
 - 4 options for MCQ-style questions OR expected answer approach for open-ended
 - correctIndex (0-3) for the correct answer
 - explanation of why the answer is correct
@@ -52,18 +74,13 @@ TIER 2 QUESTION FORMATS:
 - "What would happen if you [action]?"
 - "Given [scenario], predict the output:"
 - "Why does [behavior] occur when [condition]?"
-- "Compare and contrast [A] and [B]:"
+- "What does this code output?" (for technical content)
 
 TIER 3 QUESTION FORMATS:
 - "The following code/scenario contains an error. Identify and fix it:"
 - "Which approach would be most efficient for [scenario]? Justify your choice."
 - "Debug this: [problem]. What is wrong?"
-- "A junior developer wrote this. Identify improvements:"
-
-TIER 4 QUESTION FORMATS:
-- Time-pressured pattern recognition
-- Multi-step problem solving
-- Progressive hint challenges`;
+- "A junior developer wrote this. Identify improvements:"`;
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -467,8 +484,11 @@ IMPORTANT:
 // FALLBACK MULTI-TIER QUESTIONS
 // ===========================================
 
-function generateFallbackMultiTierQuestions(chapterTitle: string, bookTitle: string, bookType: string) {
-  return [
+function generateFallbackMultiTierQuestions(chapterTitle: string, bookTitle: string, bookType: string): any[] {
+  // Check if this is a technical book that should include coding questions
+  const isTechnical = /technology|science|programming|computer|data|engineering|software/i.test(bookTitle + chapterTitle);
+  
+  const baseQuestions = [
     // Tier 1 - Knowledge Check
     {
       tier: 1,
@@ -579,4 +599,60 @@ function generateFallbackMultiTierQuestions(chapterTitle: string, bookTitle: str
       timeLimit: 60
     }
   ];
+
+  // Add coding questions for technical content
+  if (isTechnical) {
+    // Replace one Tier 2 with a coding output prediction
+    baseQuestions.splice(2, 1, {
+      tier: 2,
+      type: "coding",
+      question: "What will this code output?",
+      codeSnippet: `def process(items):
+    result = []
+    for item in items:
+        if item > 0:
+            result.append(item * 2)
+    return result
+
+print(process([1, -2, 3, -4, 5]))`,
+      language: "python",
+      options: [
+        "[2, -4, 6, -8, 10]",
+        "[1, -2, 3, -4, 5]",
+        "[2, 6, 10]",
+        "Error: invalid operation"
+      ],
+      correctIndex: 2,
+      explanation: "The function filters out negative numbers and doubles the positive ones. Only 1, 3, and 5 are positive, so the output is [2, 6, 10].",
+      pointValue: 3,
+      timeLimit: 120
+    });
+
+    // Replace one Tier 3 with a debugging question
+    baseQuestions.splice(4, 1, {
+      tier: 3,
+      type: "coding",
+      question: "This function should return the sum of a list, but it has a bug. What is wrong?",
+      codeSnippet: `def calculate_sum(numbers):
+    total = 0
+    for num in numbers:
+        total = num
+    return total
+
+# Expected: calculate_sum([1, 2, 3]) should return 6`,
+      language: "python",
+      options: [
+        "The return statement is in the wrong place",
+        "Should use 'total += num' instead of 'total = num'",
+        "The loop variable should be 'number' not 'num'",
+        "The function is missing an input validation"
+      ],
+      correctIndex: 1,
+      explanation: "The bug is in 'total = num' which overwrites total each iteration instead of adding. The fix is 'total += num' to accumulate the sum.",
+      pointValue: 5,
+      timeLimit: 180
+    });
+  }
+
+  return baseQuestions;
 }
