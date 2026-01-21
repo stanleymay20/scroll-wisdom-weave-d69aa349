@@ -499,124 +499,109 @@ interface QuizQuestion {
 
 function generateFallbackMultiTierQuestions(chapterTitle: string, bookTitle: string, bookType: string): QuizQuestion[] {
   // Check if this is a technical book that should include coding questions
-  const isTechnical = /technology|science|programming|computer|data|engineering|software/i.test(bookTitle + chapterTitle);
+  const isTechnical = /technology|science|programming|computer|data|engineering|software|python|javascript|java|api|database/i.test(bookTitle + chapterTitle + bookType);
   
   const baseQuestions: QuizQuestion[] = [
-    // Tier 1 - Knowledge Check
+    // Tier 1 - Knowledge Check (max 2, ~30%)
     {
       tier: 1,
       type: "knowledge",
       question: `What is the main topic discussed in the chapter "${chapterTitle}"?`,
       options: [
-        "The introduction of key concepts and fundamentals",
         "Historical background and context",
-        "Practical applications and use cases",
-        "Theoretical frameworks and models"
-      ],
-      correctIndex: 0,
-      explanation: "The chapter primarily focuses on introducing and explaining the key concepts central to its theme.",
-      pointValue: 1,
-      timeLimit: 30
-    },
-    {
-      tier: 1,
-      type: "knowledge",
-      question: "Which approach does this chapter recommend for understanding the material?",
-      options: [
-        "Memorization only",
-        "Critical analysis and practical application",
-        "Speed reading techniques",
-        "Skipping to conclusions"
+        "The introduction of key concepts and fundamentals",
+        "Advanced theoretical frameworks",
+        "Practical applications only"
       ],
       correctIndex: 1,
-      explanation: "The chapter emphasizes critical analysis and practical application of concepts for deeper understanding.",
+      explanation: "The chapter primarily focuses on introducing and explaining the key concepts central to its theme, building a foundation for deeper understanding.",
       pointValue: 1,
       timeLimit: 30
     },
-    // Tier 2 - Applied Reasoning (REQUIRED)
+    // Tier 2 - Applied Reasoning (REQUIRED - 2 questions)
     {
       tier: 2,
       type: "reasoning",
       question: "What would happen if you applied the main concept from this chapter to a real-world scenario?",
       options: [
-        "Nothing would change because theory doesn't apply to practice",
-        "You would see measurable improvements in understanding and outcomes",
         "The concept would fail completely in practice",
-        "You would need additional concepts not covered in this chapter"
+        "Nothing would change because theory doesn't apply",
+        "You would see measurable improvements in understanding and outcomes",
+        "Additional unrelated concepts would be needed"
       ],
-      correctIndex: 1,
-      explanation: "When correctly applied, the concepts in this chapter should lead to tangible improvements, as the chapter bridges theory with practical application.",
+      correctIndex: 2,
+      explanation: "When correctly applied, the concepts in this chapter lead to tangible improvements because the chapter bridges theory with practical application through concrete examples.",
       pointValue: 3,
       timeLimit: 120
     },
     {
       tier: 2,
       type: "reasoning",
-      question: "Why does the chapter present information in this particular order?",
+      question: "Why does the chapter present information in this particular sequence?",
       options: [
-        "Random organization with no specific purpose",
+        "Alphabetical organization by topic",
+        "Random structure with no pattern",
         "Building from foundational concepts to advanced applications",
-        "To confuse readers and test their patience",
-        "Alphabetical by topic"
+        "Most recent research first"
       ],
-      correctIndex: 1,
-      explanation: "The chapter follows a pedagogical structure, building from foundational concepts to more complex applications, enabling progressive understanding.",
+      correctIndex: 2,
+      explanation: "The chapter follows a pedagogical structure, building from foundational concepts to more complex applications. This scaffolding enables progressive understanding.",
       pointValue: 3,
       timeLimit: 120
     },
-    // Tier 3 - Scenario & Debugging (REQUIRED)
+    // Tier 3 - Scenario & Debugging (REQUIRED - 2 questions)
     {
       tier: 3,
       type: "scenario",
-      question: "A colleague misunderstands a key concept from this chapter and makes an error. Based on the chapter content, which misconception is most likely?",
+      question: "A learner misunderstands a key concept from this chapter and makes an error in applying it. Based on the chapter content, which misconception is most likely?",
       options: [
+        "Applying concepts too literally without contextual adaptation",
+        "Skipping foundational steps and jumping to advanced conclusions",
         "Confusing correlation with causation in the subject matter",
-        "Applying concepts too literally without adaptation",
-        "Skipping foundational steps and jumping to conclusions",
         "All of the above are common misconceptions addressed in this chapter"
       ],
       correctIndex: 3,
-      explanation: "The chapter addresses multiple common misconceptions, and learners often encounter all of these errors when first engaging with the material.",
+      explanation: "The chapter addresses multiple common misconceptions. Learners often encounter all of these errors because they represent typical learning barriers in this domain.",
       pointValue: 5,
       timeLimit: 180
     },
     {
       tier: 3,
       type: "scenario",
-      question: "Given a scenario where the main approach fails, which alternative strategy from the chapter should you try first?",
+      question: "Given a scenario where the primary approach fails, which alternative strategy from the chapter should you try first?",
       options: [
-        "Abandon the approach entirely and start over",
-        "Apply the troubleshooting techniques mentioned in the chapter",
-        "Ignore the failure and continue anyway",
-        "Wait for someone else to solve the problem"
+        "Abandon the approach entirely and use a different methodology",
+        "Apply the troubleshooting and diagnostic techniques mentioned",
+        "Ignore the failure and continue with the same approach",
+        "Wait for external guidance before taking any action"
       ],
       correctIndex: 1,
-      explanation: "The chapter provides troubleshooting techniques and alternative strategies for when the primary approach encounters obstacles.",
+      explanation: "The chapter provides systematic troubleshooting techniques. Before abandoning an approach, the diagnostic strategies should be applied to identify root causes.",
       pointValue: 5,
       timeLimit: 180
     },
-    // Tier 4 - Integrity-Weighted
+    // Tier 4 - Integrity-Weighted (for mastery)
     {
       tier: 4,
       type: "integrity",
-      question: "In 60 seconds: Synthesize the three most important takeaways from this chapter and explain how they connect to form a coherent understanding.",
+      question: "In 60 seconds: Synthesize the three most important takeaways from this chapter and explain their interconnection.",
       options: [
-        "The concepts are unrelated and stand alone",
-        "They form a progressive learning path from theory to practice",
-        "They contradict each other intentionally",
+        "The concepts are unrelated standalone facts",
+        "They form a progressive learning path from theory to practice to mastery",
+        "They contradict each other to encourage critical thinking",
         "They are only relevant to specific industries"
       ],
       correctIndex: 1,
-      explanation: "The chapter's main concepts are interconnected, forming a progressive learning path that builds from theoretical foundations to practical applications.",
+      explanation: "The chapter's main concepts are interconnected, forming a coherent framework. Theory provides foundation, practice enables application, and mastery emerges from integration.",
       pointValue: 7,
       timeLimit: 60
     }
   ];
 
-  // Add coding questions for technical content
+  // Add coding questions for technical content (MANDATORY per ARC-1.0)
   if (isTechnical) {
-    // Replace one Tier 2 with a coding output prediction
-    baseQuestions.splice(2, 1, {
+    // Add Tier 2 coding question - Output Prediction
+    baseQuestions.splice(2, 0, {
       tier: 2,
       type: "coding",
       question: "What will this code output?",
@@ -630,42 +615,72 @@ function generateFallbackMultiTierQuestions(chapterTitle: string, bookTitle: str
 print(process([1, -2, 3, -4, 5]))`,
       language: "python",
       options: [
-        "[2, -4, 6, -8, 10]",
-        "[1, -2, 3, -4, 5]",
         "[2, 6, 10]",
-        "Error: invalid operation"
+        "[2, -4, 6, -8, 10]",
+        "[1, 3, 5]",
+        "Error: cannot multiply"
       ],
-      correctIndex: 2,
-      explanation: "The function filters out negative numbers and doubles the positive ones. Only 1, 3, and 5 are positive, so the output is [2, 6, 10].",
+      correctIndex: 0,
+      explanation: "The function filters out negative numbers (keeping 1, 3, 5) and doubles the remaining values: 1*2=2, 3*2=6, 5*2=10. Result: [2, 6, 10]",
       pointValue: 3,
       timeLimit: 120
     });
 
-    // Replace one Tier 3 with a debugging question
-    baseQuestions.splice(4, 1, {
+    // Add Tier 3 coding question - Debug/Fix
+    baseQuestions.splice(5, 0, {
       tier: 3,
       type: "coding",
-      question: "This function should return the sum of a list, but it has a bug. What is wrong?",
-      codeSnippet: `def calculate_sum(numbers):
+      question: "This function should calculate the average, but it has a bug. What is wrong?",
+      codeSnippet: `def calculate_average(numbers):
     total = 0
     for num in numbers:
-        total = num
-    return total
+        total = total + num
+    return total / len(numbers)
 
-# Expected: calculate_sum([1, 2, 3]) should return 6`,
+# Crashes when called with: calculate_average([])`,
       language: "python",
       options: [
-        "The return statement is in the wrong place",
-        "Should use 'total += num' instead of 'total = num'",
+        "Should use 'total += num' instead of 'total = total + num'",
+        "No check for empty list causes division by zero error",
         "The loop variable should be 'number' not 'num'",
-        "The function is missing an input validation"
+        "return statement should be inside the loop"
       ],
       correctIndex: 1,
-      explanation: "The bug is in 'total = num' which overwrites total each iteration instead of adding. The fix is 'total += num' to accumulate the sum.",
+      explanation: "When called with an empty list, len(numbers) is 0, causing division by zero. Fix: add 'if not numbers: return 0' at the start.",
+      pointValue: 5,
+      timeLimit: 180
+    });
+
+    // Add another Tier 3 - Trace Execution
+    baseQuestions.push({
+      tier: 3,
+      type: "coding",
+      question: "After this code executes, what is the value of 'result'?",
+      codeSnippet: `data = {'a': 1, 'b': 2, 'c': 3}
+result = sum(v for v in data.values() if v > 1)`,
+      language: "python",
+      options: [
+        "6",
+        "5",
+        "3",
+        "Error: cannot sum dictionary"
+      ],
+      correctIndex: 1,
+      explanation: "data.values() returns [1, 2, 3]. The generator filters v > 1, keeping [2, 3]. sum([2, 3]) = 5.",
       pointValue: 5,
       timeLimit: 180
     });
   }
 
-  return baseQuestions;
+  // Randomize correct answer positions to avoid anti-pattern
+  return baseQuestions.map(q => {
+    if (q.options && q.correctIndex !== undefined) {
+      // Shuffle options while tracking correct answer
+      const correctAnswer = q.options[q.correctIndex];
+      const shuffled = [...q.options].sort(() => Math.random() - 0.5);
+      const newCorrectIndex = shuffled.indexOf(correctAnswer);
+      return { ...q, options: shuffled, correctIndex: newCorrectIndex };
+    }
+    return q;
+  });
 }
