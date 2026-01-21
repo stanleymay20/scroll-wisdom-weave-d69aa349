@@ -3,19 +3,33 @@
  * 
  * Wires the auditBook() function into the publishing flow.
  * Books that fail audit are blocked from publishing.
+ * 
+ * Includes Contract 9 (ICG-1.0) illustration auditing.
  */
 
 import { auditBook, BookAuditResult } from './pedagogicalSchema';
+import { 
+  auditIllustrations, 
+  getIllustrationRequirement,
+  IllustrationAuditResult,
+  IllustrationMeta,
+  type BookType as ICGBookType
+} from './illustratedContentContract';
 
 // Book types that are exempt from strict pedagogical schema
 const EXEMPT_BOOK_TYPES = ['children', 'comic', 'novel', 'fiction', 'bestseller', 'poetry'];
 
+// Book types that require illustration audit
+const ILLUSTRATED_BOOK_TYPES = ['illustrated', 'comic', 'children'];
+
 export interface PublishingGateResult {
   canPublish: boolean;
   auditResult: BookAuditResult | null;
+  illustrationAuditResult: IllustrationAuditResult | null;
   blockerReasons: string[];
   warnings: string[];
   requiresAudit: boolean;
+  requiresIllustrationAudit: boolean;
 }
 
 /**
@@ -27,12 +41,26 @@ export function requiresPedagogicalAudit(bookType: string | null): boolean {
 }
 
 /**
+ * Check if a book type requires illustration audit
+ */
+export function requiresIllustrationAudit(bookType: string | null): boolean {
+  if (!bookType) return false;
+  return ILLUSTRATED_BOOK_TYPES.includes(bookType.toLowerCase());
+}
+
+/**
  * Run publishing gate check for a book
  */
 export function checkPublishingGate(
   bookId: string,
   bookType: string | null,
-  chapters: { id: string; content: string; is_generated?: boolean | null }[]
+  chapters: { 
+    id: string; 
+    content: string; 
+    is_generated?: boolean | null;
+    illustrations?: IllustrationMeta[];
+  }[],
+  category?: string
 ): PublishingGateResult {
   const blockerReasons: string[] = [];
   const warnings: string[] = [];
@@ -45,15 +73,40 @@ export function checkPublishingGate(
 
   // Check if book type requires pedagogical audit
   const requiresAudit = requiresPedagogicalAudit(bookType);
+  const needsIllustrationAudit = requiresIllustrationAudit(bookType);
+
+  // Run illustration audit if required (Contract 9 - ICG-1.0)
+  let illustrationAuditResult: IllustrationAuditResult | null = null;
+  if (needsIllustrationAudit && category) {
+    const illustrationInput = {
+      bookType: (bookType || 'text') as ICGBookType,
+      category,
+      chapters: chapters.map(ch => ({
+        id: ch.id,
+        content: ch.content || '',
+        illustrations: ch.illustrations || [],
+      })),
+    };
+
+    illustrationAuditResult = auditIllustrations(illustrationInput);
+
+    // Add illustration blockers
+    if (!illustrationAuditResult.passed) {
+      blockerReasons.push(...illustrationAuditResult.blockerReasons);
+    }
+    warnings.push(...illustrationAuditResult.warnings);
+  }
 
   if (!requiresAudit) {
-    // Exempt book types can publish without full audit
+    // Exempt book types can publish without full pedagogical audit
     return {
       canPublish: blockerReasons.length === 0,
       auditResult: null,
+      illustrationAuditResult,
       blockerReasons,
-      warnings: ['This book type is exempt from pedagogical schema requirements'],
+      warnings: ['This book type is exempt from pedagogical schema requirements', ...warnings],
       requiresAudit: false,
+      requiresIllustrationAudit: needsIllustrationAudit,
     };
   }
 
@@ -67,9 +120,11 @@ export function checkPublishingGate(
     return {
       canPublish: false,
       auditResult: null,
+      illustrationAuditResult,
       blockerReasons,
       warnings,
       requiresAudit: true,
+      requiresIllustrationAudit: needsIllustrationAudit,
     };
   }
 
@@ -82,9 +137,11 @@ export function checkPublishingGate(
   return {
     canPublish: !auditResult.publishingBlocked && blockerReasons.length === 0,
     auditResult,
+    illustrationAuditResult,
     blockerReasons,
     warnings,
     requiresAudit: true,
+    requiresIllustrationAudit: needsIllustrationAudit,
   };
 }
 
@@ -123,6 +180,25 @@ export function formatAuditReport(result: PublishingGateResult): string {
     lines.push(`- Code Quality: ${audit.codeQuality.score}/100`);
     lines.push(`- Table Quality: ${audit.tableQuality.score}/100`);
     lines.push(`- Quiz Rigor: ${audit.quizRigor.score}/100`);
+  }
+
+  // Contract 9 - Illustration Audit
+  if (result.illustrationAuditResult) {
+    const illAudit = result.illustrationAuditResult;
+    lines.push('');
+    lines.push('**Illustration Audit (ICG-1.0):**');
+    lines.push(`- Score: ${illAudit.score}/100`);
+    lines.push(`- Passed: ${illAudit.passed ? '✅' : '❌'}`);
+    
+    if (illAudit.missingRequired.length > 0) {
+      lines.push(`- Missing Required: ${illAudit.missingRequired.length}`);
+    }
+    if (illAudit.missingCaptions.length > 0) {
+      lines.push(`- Missing Captions: ${illAudit.missingCaptions.length}`);
+    }
+    if (illAudit.accessibilityIssues.length > 0) {
+      lines.push(`- Accessibility Issues: ${illAudit.accessibilityIssues.length}`);
+    }
   }
 
   return lines.join('\n');

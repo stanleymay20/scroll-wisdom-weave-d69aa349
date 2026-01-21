@@ -13,3 +13,12 @@ export { CodePlayground, PlaygroundButton } from './CodePlayground';
 export { CodingQuizQuestion, type CodingQuestion } from './CodingQuizQuestion';
 export { ComicReaderMode, parseComicContentToPanels } from './ComicReaderMode';
 export type { ComicPanelData } from './ComicReaderMode';
+
+// Contract 9 - Illustrated Content Components (ICG-1.0)
+export { IllustratedImage, ImageExpander, ChartExplainer } from './illustrated';
+export type { 
+  IllustratedImageProps, 
+  ImageExpanderProps, 
+  ChartExplainerProps,
+  IllustratedContentProps 
+} from './illustrated';
