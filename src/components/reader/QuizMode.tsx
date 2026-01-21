@@ -23,6 +23,11 @@ interface QuizQuestion {
   options: string[];
   correctIndex: number;
   explanation: string;
+  tier?: number;
+  type?: 'knowledge' | 'reasoning' | 'scenario' | 'integrity';
+  pointValue?: number;
+  timeLimit?: number;
+  context?: string;
 }
 
 interface QuizModeProps {
@@ -33,6 +38,8 @@ interface QuizModeProps {
   chapterId: string;
   isOpen: boolean;
   onClose: () => void;
+  isMasteryMode?: boolean;
+  bookType?: string;
 }
 
 export function QuizMode({
@@ -43,6 +50,8 @@ export function QuizMode({
   chapterId,
   isOpen,
   onClose,
+  isMasteryMode = false,
+  bookType = 'text',
 }: QuizModeProps) {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -66,11 +75,13 @@ export function QuizMode({
     try {
       const { data, error } = await supabase.functions.invoke("interactive-qa", {
         body: {
-          question: "QUIZ_MODE: Generate 5 multiple-choice comprehension questions based on this chapter. For each question, provide 4 options with one correct answer. Format as JSON array.",
-          chapterContent: chapterContent.slice(0, 6000),
+          question: "QUIZ_MODE: Generate multi-tier assessment questions for certification.",
+          chapterContent: chapterContent.slice(0, 8000),
           chapterTitle,
           bookTitle,
           isQuizMode: true,
+          isMasteryMode,
+          bookType,
         },
       });
 

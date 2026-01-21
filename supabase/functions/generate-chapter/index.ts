@@ -747,6 +747,175 @@ function validateWorkbookStructure(content: string): ValidationResult {
   };
 }
 
+// ===========================================
+// PEDAGOGICAL SCHEMA VALIDATION (PBG-1.0)
+// Every chapter MUST include 7 mandatory sections
+// ===========================================
+
+interface PedagogicalValidationResult extends ValidationResult {
+  sectionsFound: number;
+  sectionsRequired: number;
+  missingSections: string[];
+  score: number;
+}
+
+const MANDATORY_PEDAGOGICAL_SECTIONS = {
+  learning_objectives: {
+    displayName: 'Learning Objectives',
+    patterns: [
+      /learning\s*objectives?/i,
+      /by\s+the\s+end\s+of\s+this\s+chapter/i,
+      /you\s+will\s+(?:be\s+able\s+to|learn)/i,
+      /objectives?/i,
+    ],
+    required: true,
+  },
+  core_concept: {
+    displayName: 'Core Concept Explanation',
+    patterns: [
+      /core\s+concepts?/i,
+      /fundamental(?:s)?/i,
+      /key\s+(?:concepts?|ideas?|principles?)/i,
+      /introduction|overview/i,
+    ],
+    required: true,
+  },
+  mental_model: {
+    displayName: 'Mental Model / Analogy',
+    patterns: [
+      /mental\s+model/i,
+      /think\s+of\s+it\s+as/i,
+      /imagine|analogy|like\s+a/i,
+      /similar\s+to/i,
+    ],
+    required: true,
+  },
+  worked_examples: {
+    displayName: 'Worked Examples',
+    patterns: [
+      /(?:worked\s+)?examples?/i,
+      /for\s+instance/i,
+      /consider\s+(?:this|the\s+following)/i,
+      /let'?s\s+(?:look\s+at|see|examine)/i,
+      /step\s+\d/i,
+      /code\s+example/i,
+    ],
+    required: true,
+  },
+  common_mistakes: {
+    displayName: 'Common Mistakes & Misconceptions',
+    patterns: [
+      /common\s+mistakes?/i,
+      /misconceptions?/i,
+      /common\s+errors?/i,
+      /avoid|don'?t|pitfall/i,
+      /watch\s+out/i,
+    ],
+    required: true,
+  },
+  practice_section: {
+    displayName: 'Practice Section',
+    patterns: [
+      /practice/i,
+      /exercises?/i,
+      /try\s+it/i,
+      /your\s+turn/i,
+      /apply\s+what\s+you/i,
+      /hands[- ]on/i,
+    ],
+    required: true,
+  },
+  quiz_gate: {
+    displayName: 'Chapter Quiz Gate',
+    patterns: [
+      /quiz/i,
+      /assessment/i,
+      /test\s+your/i,
+      /check\s+your\s+understanding/i,
+      /review\s+questions?/i,
+      /self[- ]assessment/i,
+    ],
+    required: true,
+  },
+};
+
+function validatePedagogicalSchema(content: string, bookType: string): PedagogicalValidationResult {
+  const errors: ValidationError[] = [];
+  const warnings: { code: string; message: string }[] = [];
+  const missingSections: string[] = [];
+
+  // Skip validation for non-educational book types
+  const EXEMPT_BOOK_TYPES = ['children', 'comic', 'novel', 'fiction', 'bestseller'];
+  if (EXEMPT_BOOK_TYPES.includes(bookType?.toLowerCase())) {
+    console.log(`[PEDAGOGICAL] Skipping validation for book type: ${bookType}`);
+    return {
+      valid: true,
+      blocked: false,
+      errors: [],
+      warnings: [],
+      sectionsFound: 7,
+      sectionsRequired: 7,
+      missingSections: [],
+      score: 100,
+    };
+  }
+
+  const contentLower = content.toLowerCase();
+  let sectionsFound = 0;
+
+  Object.entries(MANDATORY_PEDAGOGICAL_SECTIONS).forEach(([sectionId, config]) => {
+    const found = config.patterns.some(pattern => pattern.test(content));
+    
+    if (found) {
+      sectionsFound++;
+    } else if (config.required) {
+      missingSections.push(config.displayName);
+      errors.push({
+        code: `MISSING_${sectionId.toUpperCase()}`,
+        message: `Missing required section: ${config.displayName}`,
+        severity: 'high',
+      });
+    }
+  });
+
+  const sectionsRequired = Object.values(MANDATORY_PEDAGOGICAL_SECTIONS).filter(c => c.required).length;
+  const score = Math.round((sectionsFound / sectionsRequired) * 100);
+
+  // Check minimum word count for proper chapter depth
+  const wordCount = content.split(/\s+/).filter(w => w.length > 0).length;
+  if (wordCount < 1500) {
+    warnings.push({
+      code: 'CHAPTER_TOO_SHORT',
+      message: `Chapter has ${wordCount} words (minimum 1500 recommended for proper depth)`,
+    });
+  }
+
+  // Critical failure if less than 5 sections found
+  if (sectionsFound < 5) {
+    errors.push({
+      code: 'INSUFFICIENT_PEDAGOGICAL_STRUCTURE',
+      message: `Only ${sectionsFound}/${sectionsRequired} required sections found. Minimum 5 required.`,
+      severity: 'critical',
+    });
+  }
+
+  const hasCriticalError = errors.some(e => e.severity === 'critical');
+
+  return {
+    valid: !hasCriticalError && score >= 70,
+    blocked: hasCriticalError,
+    errors,
+    warnings,
+    sectionsFound,
+    sectionsRequired,
+    missingSections,
+    score,
+    failureMessage: hasCriticalError
+      ? `❌ **PEDAGOGICAL SCHEMA VIOLATION**: Chapter requires 7 mandatory sections. Found ${sectionsFound}. Missing: ${missingSections.join(', ')}`
+      : undefined,
+  };
+}
+
 function validateAcademicRequirements(
   content: string,
   sources: Reference[],
@@ -2625,6 +2794,31 @@ Format:
       console.log(`[CONTRACT 6] Non-critical violations detected: ${contract6Validation.violations.length}`);
     }
     
+    // ===========================================
+    // PEDAGOGICAL SCHEMA VALIDATION (PBG-1.0)
+    // Validate 7 mandatory sections for educational books
+    // ===========================================
+    const pedagogicalValidation = validatePedagogicalSchema(finalContent, effectiveBookType);
+    console.log(`[PEDAGOGICAL] Validation result: ${pedagogicalValidation.sectionsFound}/${pedagogicalValidation.sectionsRequired} sections, score: ${pedagogicalValidation.score}%`);
+    
+    if (!pedagogicalValidation.valid && pedagogicalValidation.blocked) {
+      console.log(`[PEDAGOGICAL] BLOCKING content: ${pedagogicalValidation.missingSections.join(', ')}`);
+      
+      // For non-admin users, log warning but allow (soft enforcement initially)
+      if (!isAdmin && pedagogicalValidation.score < 50) {
+        // Only hard-block if less than 50% compliance
+        return new Response(JSON.stringify({
+          error: `PEDAGOGICAL SCHEMA VIOLATION: Chapter requires 7 mandatory sections. Found ${pedagogicalValidation.sectionsFound}. Missing: ${pedagogicalValidation.missingSections.join(', ')}`,
+          code: 'PEDAGOGICAL_SCHEMA_VIOLATION',
+          sectionsFound: pedagogicalValidation.sectionsFound,
+          sectionsRequired: pedagogicalValidation.sectionsRequired,
+          missingSections: pedagogicalValidation.missingSections,
+          score: pedagogicalValidation.score,
+          shouldRegenerate: true,
+        }), { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+    
     const actualWordCount = finalContent.split(/\s+/).filter((w: string) => w.length > 0).length;
 
     const updateData: any = {
@@ -2660,6 +2854,13 @@ Format:
         valid: contract6Validation.valid,
         violations: contract6Validation.violations.length,
         bookType: effectiveBookType,
+      },
+      pedagogicalSchema: {
+        valid: pedagogicalValidation.valid,
+        sectionsFound: pedagogicalValidation.sectionsFound,
+        sectionsRequired: pedagogicalValidation.sectionsRequired,
+        score: pedagogicalValidation.score,
+        missingSections: pedagogicalValidation.missingSections,
       },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     
