@@ -861,6 +861,9 @@ export default function BookDetail() {
                   hasGeneratedChapters={chapters.some(ch => ch.is_generated)}
                   coverImageUrl={book.cover_image_url}
                   authorName={book.author_ai_agent || undefined}
+                  bookType={book.book_type || 'text'}
+                  chapterContents={chapters.filter(ch => ch.is_generated).map(ch => ch.content || '')}
+                  chapters={chapters.filter(ch => ch.is_generated).map(ch => ({ chapter_number: ch.chapter_number, content: ch.content }))}
                 />
                 <ShareDialog 
                   title={book.title} 

@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import {
   Dialog,
   DialogContent,
@@ -22,13 +22,15 @@ import {
   AlertCircle,
   Image as ImageIcon,
   GraduationCap,
-  XCircle
+  XCircle,
+  AlertTriangle
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { validateComicContent, ComicValidationResult } from "@/lib/systemDiagnostics";
+import { validateContentForExport, ExportValidationResult, formatIssuesForDisplay } from "@/lib/exportValidation";
 
 interface ExportDialogProps {
   bookId: string;
@@ -40,6 +42,7 @@ interface ExportDialogProps {
   citationStyle?: string;
   bookType?: string;
   chapterContents?: string[];
+  chapters?: { chapter_number: number; content: string | null }[];
 }
 
 type ExportFormat = "pdf" | "epub" | "docx";
@@ -53,7 +56,8 @@ export function ExportDialog({
   isAcademicMode = false,
   citationStyle = 'APA',
   bookType = 'text',
-  chapterContents = []
+  chapterContents = [],
+  chapters = []
 }: ExportDialogProps) {
   const [isExporting, setIsExporting] = useState<ExportFormat | null>(null);
   const [authorName, setAuthorName] = useState(defaultAuthorName || "");
@@ -90,6 +94,17 @@ export function ExportDialog({
   // Comic validation - HARD RULE: comics must have matching panels and images
   const [comicValidation, setComicValidation] = useState<ComicValidationResult | null>(null);
   
+  // Pre-export content validation
+  const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('pdf');
+  
+  // Validate content for selected format
+  const contentValidation = useMemo<ExportValidationResult>(() => {
+    if (!hasGeneratedChapters || chapters.length === 0) {
+      return { valid: true, issues: [], canProceed: true };
+    }
+    return validateContentForExport(chapters, bookType, selectedFormat);
+  }, [chapters, bookType, selectedFormat, hasGeneratedChapters]);
+  
   useEffect(() => {
     if (bookType === 'comic' && chapterContents.length > 0) {
       const allContent = chapterContents.join('\n\n');
@@ -99,6 +114,7 @@ export function ExportDialog({
   }, [bookType, chapterContents]);
 
   const isComicBlocked = bookType === 'comic' && comicValidation && !comicValidation.canExport;
+  const hasExportErrors = !contentValidation.canProceed;
 
   useEffect(() => {
     if (defaultAuthorName) {
@@ -239,7 +255,7 @@ export function ExportDialog({
   ];
 
   const hasCover = !!coverImageUrl;
-  const canProceed = hasGeneratedChapters && hasCover && !isComicBlocked && isAuthenticated;
+  const canProceed = hasGeneratedChapters && hasCover && !isComicBlocked && isAuthenticated && !hasExportErrors;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -335,28 +351,88 @@ export function ExportDialog({
         <div className="space-y-2">
           <Label>{t('export.format')}</Label>
           <div className="grid gap-2">
-            {formats.map(({ format, label, icon: Icon, description }) => (
-              <Button
-                key={format}
-                variant="outline"
-                className="w-full justify-start h-auto py-3 px-4 hover:border-scroll-gold/50"
-                onClick={() => handleExport(format)}
-                disabled={isExporting !== null || !canProceed || !canExport || !authorName.trim()}
-              >
-                {isExporting === format ? (
-                  <Loader2 className="h-5 w-5 mr-3 animate-spin" />
-                ) : (
-                  <Icon className="h-5 w-5 mr-3 text-scroll-gold" />
-                )}
-                <div className="text-left">
-                  <div className="font-medium">{label}</div>
-                  <div className="text-xs text-muted-foreground">{description}</div>
-                </div>
-                <CheckCircle2 className="h-4 w-4 ml-auto text-green-500 opacity-0 group-hover:opacity-100" />
-              </Button>
-            ))}
+            {formats.map(({ format, label, icon: Icon, description }) => {
+              // Check format-specific validation
+              const formatValidation = validateContentForExport(chapters, bookType, format);
+              const hasFormatWarnings = formatValidation.issues.filter(i => i.level === 'warning').length > 0;
+              const hasFormatErrors = !formatValidation.canProceed;
+              
+              return (
+                <Button
+                  key={format}
+                  variant="outline"
+                  className={`w-full justify-start h-auto py-3 px-4 hover:border-scroll-gold/50 ${hasFormatErrors ? 'opacity-50' : ''}`}
+                  onClick={() => {
+                    setSelectedFormat(format);
+                    if (!hasFormatErrors) {
+                      handleExport(format);
+                    }
+                  }}
+                  disabled={isExporting !== null || !canProceed || !canExport || !authorName.trim() || hasFormatErrors}
+                >
+                  {isExporting === format ? (
+                    <Loader2 className="h-5 w-5 mr-3 animate-spin" />
+                  ) : (
+                    <Icon className="h-5 w-5 mr-3 text-scroll-gold" />
+                  )}
+                  <div className="text-left flex-1">
+                    <div className="font-medium flex items-center gap-2">
+                      {label}
+                      {hasFormatWarnings && !hasFormatErrors && (
+                        <AlertTriangle className="h-3 w-3 text-amber-500" />
+                      )}
+                      {hasFormatErrors && (
+                        <XCircle className="h-3 w-3 text-destructive" />
+                      )}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{description}</div>
+                  </div>
+                  {!hasFormatErrors && !hasFormatWarnings && (
+                    <CheckCircle2 className="h-4 w-4 ml-auto text-green-500 opacity-0 group-hover:opacity-100" />
+                  )}
+                </Button>
+              );
+            })}
           </div>
         </div>
+
+        {/* Pre-export Content Validation Issues */}
+        {contentValidation.issues.length > 0 && (
+          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <span className="text-sm font-medium text-amber-400">
+                Content Issues Detected
+              </span>
+            </div>
+            <div className="space-y-1 max-h-32 overflow-y-auto">
+              {contentValidation.issues.slice(0, 5).map((issue, i) => (
+                <div key={i} className="flex items-start gap-2 text-xs">
+                  {issue.level === 'error' ? (
+                    <XCircle className="h-3 w-3 text-destructive mt-0.5 shrink-0" />
+                  ) : issue.level === 'warning' ? (
+                    <AlertTriangle className="h-3 w-3 text-amber-500 mt-0.5 shrink-0" />
+                  ) : (
+                    <AlertCircle className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
+                  )}
+                  <span className={issue.level === 'error' ? 'text-destructive' : 'text-muted-foreground'}>
+                    {issue.message}
+                  </span>
+                </div>
+              ))}
+              {contentValidation.issues.length > 5 && (
+                <p className="text-xs text-muted-foreground">
+                  ...and {contentValidation.issues.length - 5} more issues
+                </p>
+              )}
+            </div>
+            {!contentValidation.canProceed && (
+              <p className="text-xs text-destructive font-medium">
+                Fix errors before exporting.
+              </p>
+            )}
+          </div>
+        )}
 
         {/* Validation Messages */}
         {!isAuthenticated && (
