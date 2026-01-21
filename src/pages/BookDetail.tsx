@@ -78,6 +78,7 @@ import { GentleOfflineBanner } from "@/components/ui/gentle-offline-banner";
 import { CertificateStatusPanel } from "@/components/certificates";
 import { cn } from "@/lib/utils";
 import { checkPublishingGate, formatAuditReport, type PublishingGateResult } from "@/lib/bookAuditIntegration";
+import { isAcademicCategory } from "@/lib/academicCategories";
 interface BookData {
   id: string;
   title: string;
@@ -224,6 +225,9 @@ export default function BookDetail() {
             .map((t) => t.replace("- ", ""))
         : [];
 
+      // Determine if academic mode should be enabled based on category
+      const shouldEnableAcademicMode = book.book_type === 'text' && isAcademicCategory(book.category);
+
       const response = await supabase.functions.invoke("generate-chapter", {
         body: {
           chapterId: chapter.id,
@@ -234,6 +238,9 @@ export default function BookDetail() {
           category: book.category,
           language: book.language || "en",
           bookType: book.book_type || "text",
+          // Enable academic mode with real citations for academic categories
+          academicMode: shouldEnableAcademicMode,
+          citationStyle: 'APA', // Default to APA for academic categories
           ...(regenerate
             ? {
                 regenerate: true,
@@ -316,6 +323,9 @@ export default function BookDetail() {
           ? keyTopicsMatch[1].split('\n').filter(t => t.startsWith('-')).map(t => t.replace('- ', ''))
           : [];
 
+        // Determine if academic mode should be enabled based on category
+        const shouldEnableAcademicMode = book.book_type === 'text' && isAcademicCategory(book.category);
+
         const response = await supabase.functions.invoke('generate-chapter', {
           body: {
             chapterId: chapter.id,
@@ -325,7 +335,10 @@ export default function BookDetail() {
             keyTopics,
             category: book.category,
             language: book.language || 'en',
-            bookType: book.book_type || 'text', // Pass book type for comic/illustrated generation
+            bookType: book.book_type || 'text',
+            // Enable academic mode with real citations for academic categories
+            academicMode: shouldEnableAcademicMode,
+            citationStyle: 'APA', // Default to APA for academic categories
           }
         });
 
