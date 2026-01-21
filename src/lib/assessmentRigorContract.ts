@@ -6,9 +6,18 @@
  * - Coding challenges for technical content
  * - Anti-pattern detection (AI, copy-paste, speed-running)
  * - Integrity-weighted scoring
+ * - Contract 11 (VRA-1.0) visual reference integration
  */
 
 import { AssessmentTier, TIER_CONFIGS } from './multiTierAssessment';
+import { 
+  validateVisualReferences, 
+  buildVisualAwareQuestionPrompt,
+  VRAValidationResult,
+  ChapterVisualContext,
+  VisualReference,
+  VRA_CONTRACT_VERSION
+} from './visualReferenceAssessment';
 
 // ===========================================
 // QUESTION TYPE CONTRACTS
@@ -435,7 +444,11 @@ export const CODING_QUESTION_TEMPLATES: CodingQuestionTemplate[] = [
 export function generateQuizPromptEnhancements(
   isTechnical: boolean,
   targetCertification: 'completion' | 'mastery',
-  existingTierBreakdown?: Record<AssessmentTier, number>
+  existingTierBreakdown?: Record<AssessmentTier, number>,
+  visualContext?: {
+    visuals: VisualReference[];
+    existingQuestionCount: number;
+  }
 ): string {
   const requirements = targetCertification === 'mastery'
     ? MASTERY_CERTIFICATE_REQUIREMENTS
@@ -459,6 +472,16 @@ export function generateQuizPromptEnhancements(
     prompt += `- Include expected output in explanation\n`;
   }
   
+  // CONTRACT 11 (VRA-1.0) - Visual Reference Integration
+  if (visualContext && visualContext.visuals.length > 0) {
+    prompt += buildVisualAwareQuestionPrompt(
+      '', // Content already provided elsewhere
+      visualContext.visuals,
+      2, // Tier 2 as base
+      visualContext.existingQuestionCount
+    );
+  }
+  
   prompt += `\nFORBIDDEN ANTI-PATTERNS:\n`;
   prompt += `- MCQ-only quizzes (Tier 1 only)\n`;
   prompt += `- Obvious answers (only positive option, longest option)\n`;
@@ -471,6 +494,80 @@ export function generateQuizPromptEnhancements(
   prompt += `- Code examples must be copy-paste runnable\n`;
   
   return prompt;
+}
+
+// ===========================================
+// COMBINED ASSESSMENT VALIDATION (ARC + VRA)
+// ===========================================
+
+export interface CombinedAssessmentValidation {
+  arcValidation: QuizValidationResult;
+  vraValidation: VRAValidationResult | null;
+  overallValid: boolean;
+  overallScore: number;
+  certificationBlocked: boolean;
+  blockReasons: string[];
+}
+
+export function validateAssessmentWithVisuals(
+  questions: (QuizQuestion & { referencesVisual?: boolean; visualReferenceId?: string })[],
+  isTechnical: boolean,
+  targetCertification: 'completion' | 'mastery',
+  visualContext?: ChapterVisualContext
+): CombinedAssessmentValidation {
+  // Run ARC-1.0 validation
+  const arcValidation = validateQuizForCertification(questions, isTechnical, targetCertification);
+  
+  // Run VRA-1.0 validation if visuals present
+  let vraValidation: VRAValidationResult | null = null;
+  if (visualContext && visualContext.illustrations.length > 0) {
+    vraValidation = validateVisualReferences(
+      questions.map(q => ({
+        id: q.type + Math.random().toString(36).slice(2),
+        tier: q.tier,
+        questionText: q.question,
+        referencesVisual: q.referencesVisual || false,
+        visualReferenceId: q.visualReferenceId,
+      })),
+      visualContext
+    );
+  }
+  
+  // Calculate combined score
+  const arcWeight = 0.7;
+  const vraWeight = 0.3;
+  
+  let overallScore: number;
+  if (vraValidation) {
+    overallScore = Math.round(
+      (arcValidation.valid ? 100 : 50) * arcWeight +
+      vraValidation.score * vraWeight
+    );
+  } else {
+    overallScore = arcValidation.valid ? 100 : 50;
+  }
+  
+  // Determine blockers
+  const blockReasons: string[] = [];
+  
+  if (!arcValidation.valid) {
+    blockReasons.push('ARC-1.0: Assessment tier requirements not met');
+  }
+  
+  if (vraValidation && !vraValidation.isValid) {
+    vraValidation.violations
+      .filter(v => v.severity === 'critical')
+      .forEach(v => blockReasons.push(`VRA-1.0: ${v.message}`));
+  }
+  
+  return {
+    arcValidation,
+    vraValidation,
+    overallValid: arcValidation.valid && (vraValidation?.isValid ?? true),
+    overallScore,
+    certificationBlocked: blockReasons.length > 0,
+    blockReasons,
+  };
 }
 
 // ===========================================
