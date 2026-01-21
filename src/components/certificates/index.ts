@@ -11,7 +11,10 @@ export { PublishingCredibility } from './PublishingCredibility';
 export { TrustBadge, TrustBadgeGroup, EmbeddableTrustBadge, generateEmbedCode } from './TrustBadges';
 export { CompetencyManifestDisplay } from './CompetencyManifestDisplay';
 export { CertificationEmblem, CertificationEmblemInline } from './CertificationEmblem';
+export { BookProvenancePanel } from './BookProvenancePanel';
+export { CertifiedBookSeal } from './CertifiedBookSeal';
 export type { TrustBadgeType } from './TrustBadges';
+export type { BookProvenanceData } from './BookProvenancePanel';
 
 export { 
   CERTIFICATE_ISSUER,
