@@ -376,36 +376,60 @@ export default function CertificateVerify() {
 
       {/* Main Content */}
       <main className="container mx-auto px-4 py-8 max-w-3xl">
-        {/* Status Banner */}
+        {/* EMPLOYER-FIRST: 5-Second Trust Signal */}
         <div className={cn(
-          "mb-6 p-4 rounded-lg border flex items-center gap-4",
+          "mb-6 p-6 rounded-xl border-2 shadow-sm",
           isRevoked 
-            ? "bg-destructive/5 border-destructive/30" 
-            : "bg-green-500/5 border-green-500/30"
+            ? "bg-destructive/5 border-destructive/40" 
+            : "bg-green-500/5 border-green-500/40"
         )}>
-          {isRevoked ? (
-            <>
-              <XCircle className="h-8 w-8 text-destructive flex-shrink-0" />
-              <div>
-                <p className="font-semibold text-destructive">Certificate Revoked</p>
-                <p className="text-sm text-muted-foreground">
-                  {data.revoked_reason || 'This certificate has been revoked and is no longer valid.'}
-                </p>
-              </div>
-            </>
-          ) : (
-            <>
-              <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400 flex-shrink-0" />
-              <div>
-                <p className="font-semibold text-green-700 dark:text-green-300">
-                  Verified Certificate
-                </p>
-                <p className="text-sm text-muted-foreground">
-                  This certificate is valid and was issued by ScrollLibrary Certification Authority.
-                </p>
-              </div>
-            </>
-          )}
+          <div className="flex items-start gap-4">
+            {isRevoked ? (
+              <>
+                <div className="h-14 w-14 rounded-full bg-destructive/10 flex items-center justify-center flex-shrink-0">
+                  <XCircle className="h-8 w-8 text-destructive" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xl font-bold text-destructive mb-1">Certificate Revoked</p>
+                  <p className="text-muted-foreground">
+                    {data.revoked_reason || 'This certificate has been revoked and is no longer valid.'}
+                  </p>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="h-14 w-14 rounded-full bg-green-500/10 flex items-center justify-center flex-shrink-0">
+                  <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
+                </div>
+                <div className="flex-1">
+                  <p className="text-xl font-bold text-green-700 dark:text-green-300 mb-1">
+                    ✓ Verified & Valid
+                  </p>
+                  <p className="text-muted-foreground mb-3">
+                    This certificate was issued by ScrollLibrary Certification Authority.
+                  </p>
+                  
+                  {/* EMPLOYER QUICK SUMMARY - What matters in 5 seconds */}
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 mt-3 p-3 bg-background/60 rounded-lg border">
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Holder</p>
+                      <p className="font-semibold text-sm truncate">{data.metadata?.recipientName || 'Unknown'}</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Coverage</p>
+                      <p className="font-semibold text-sm">{coveragePercentage}% Complete</p>
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground uppercase tracking-wider">Integrity</p>
+                      <Badge variant="outline" className={cn(integrity.bg, integrity.color, "text-xs mt-0.5")}>
+                        {integrity.label}
+                      </Badge>
+                    </div>
+                  </div>
+                </div>
+              </>
+            )}
+          </div>
         </div>
 
         {/* Certificate Card */}
@@ -442,20 +466,41 @@ export default function CertificateVerify() {
           </div>
 
           <CardContent className="p-6 space-y-6">
-            {/* CONTRACT 12: Book Provenance Panel */}
+            {/* FOR EMPLOYERS: What This Means */}
+            <div className="bg-primary/5 rounded-lg p-4 border border-primary/10">
+              <h3 className="font-semibold text-sm mb-2 flex items-center gap-2">
+                <Building2 className="h-4 w-4 text-primary" />
+                What This Means for Employers
+              </h3>
+              <ul className="text-sm text-muted-foreground space-y-1">
+                <li>✓ The holder completed <strong>{coveragePercentage}%</strong> of the course material</li>
+                <li>✓ Assessments were monitored for integrity ({integrity.label} classification)</li>
+                <li>✓ This certificate is cryptographically bound to the exact book version studied</li>
+                {data.metadata?.assessmentSchema && (
+                  <li>✓ Multi-tier assessment applied (knowledge, reasoning, and scenario questions)</li>
+                )}
+              </ul>
+            </div>
+
+            <Separator />
+
+            {/* CONTRACT 12: Book Provenance Panel - Collapsible for Technical Details */}
             <div className="space-y-4">
-              <div className="flex items-center gap-2">
-                <Lock className="h-4 w-4 text-primary" />
-                <h3 className="font-semibold text-sm uppercase tracking-wide">Certified Using This Book</h3>
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Lock className="h-4 w-4 text-primary" />
+                  <h3 className="font-semibold text-sm uppercase tracking-wide">Certified Using This Book</h3>
+                </div>
+                <p className="text-xs text-muted-foreground">Immutable binding</p>
               </div>
               
-              <div className="bg-primary/5 rounded-lg p-4 border border-primary/20">
+              <div className="bg-muted/30 rounded-lg p-4 border">
                 <div className="flex items-start gap-3 mb-4">
                   <div className="h-12 w-12 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
                     <BookOpen className="h-6 w-6 text-primary" />
                   </div>
                   <div className="flex-1 min-w-0">
-                    <h4 className="font-bold truncate">{data.metadata.bookTitle || data.book?.title}</h4>
+                    <h4 className="font-bold truncate">{data.metadata?.bookTitle || data.book?.title}</h4>
                     <p className="text-sm text-muted-foreground capitalize">
                       {data.book?.category?.replace('_', ' ')} • {data.metadata?.bookType || 'Academic'}
                     </p>
@@ -468,7 +513,7 @@ export default function CertificateVerify() {
                       className="gap-1.5 flex-shrink-0"
                     >
                       <ExternalLink className="h-3.5 w-3.5" />
-                      View
+                      View Book
                     </Button>
                   )}
                 </div>
@@ -481,57 +526,53 @@ export default function CertificateVerify() {
                       Chapter Coverage
                     </span>
                     <span className="font-medium">
-                      {data.metadata.chaptersCompleted ?? 0} / {data.metadata.totalChapters ?? 0} ({coveragePercentage}%)
+                      {data.metadata?.chaptersCompleted ?? 0} / {data.metadata?.totalChapters ?? 0} ({coveragePercentage}%)
                     </span>
                   </div>
                   <Progress value={coveragePercentage} className="h-2" />
                   <p className="text-xs text-muted-foreground">
                     {coveragePercentage >= 80 
-                      ? '✓ Meets minimum 80% coverage requirement' 
+                      ? '✓ Meets minimum 80% coverage requirement for certification' 
                       : '⚠️ Below 80% coverage threshold'}
                   </p>
                 </div>
 
-                {/* Cryptographic Binding */}
-                {data.metadata.bookContentHash && (
-                  <div className="space-y-2 pt-3 border-t border-primary/10">
-                    <div className="flex items-center gap-1.5 text-sm">
-                      <Hash className="h-3.5 w-3.5 text-primary" />
-                      <span className="font-medium">Cryptographic Binding</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {PROVENANCE_EXPLANATIONS.cryptographicBinding}
-                    </p>
-                    <div className="flex items-center justify-between bg-background/50 rounded px-2 py-1.5">
-                      <code className="text-xs font-mono truncate">
-                        {data.metadata.bookContentHash.slice(0, 24)}...
-                      </code>
+                {/* Cryptographic Binding - Simplified for Non-Technical */}
+                {data.metadata?.bookContentHash && (
+                  <div className="space-y-2 pt-3 border-t">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-1.5 text-sm">
+                        <Hash className="h-3.5 w-3.5 text-primary" />
+                        <span className="font-medium">Content Verification</span>
+                      </div>
                       <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 gap-1 text-xs">
                         <CheckCircle2 className="h-3 w-3" />
-                        Verified
+                        Hash Verified
                       </Badge>
                     </div>
+                    <p className="text-xs text-muted-foreground">
+                      This certificate cannot be reused with a different or modified book.
+                      The content hash ensures the certificate is permanently bound to this exact book version.
+                    </p>
                   </div>
                 )}
 
                 {/* Contract Compliance Badges */}
-                {(data.metadata.assessmentSchema || data.metadata.visualContract) && (
-                  <div className="flex flex-wrap gap-2 pt-3 border-t border-primary/10 mt-3">
+                {(data.metadata?.assessmentSchema || data.metadata?.visualContract) && (
+                  <div className="flex flex-wrap gap-2 pt-3 border-t mt-3">
+                    <span className="text-xs text-muted-foreground mr-1">Contracts:</span>
                     {data.metadata.assessmentSchema && (
                       <Badge variant="outline" className="gap-1 text-xs">
-                        <Shield className="h-3 w-3" />
                         {data.metadata.assessmentSchema}
                       </Badge>
                     )}
                     {data.metadata.visualContract && (
                       <Badge variant="outline" className="gap-1 text-xs">
-                        <Layers className="h-3 w-3" />
                         {data.metadata.visualContract}
                       </Badge>
                     )}
                     {data.metadata.styleContract && (
                       <Badge variant="outline" className="gap-1 text-xs">
-                        <Layers className="h-3 w-3" />
                         {data.metadata.styleContract}
                       </Badge>
                     )}
@@ -542,8 +583,8 @@ export default function CertificateVerify() {
 
             <Separator />
 
-            {/* Certificate Details */}
-            <div className="grid gap-4 md:grid-cols-2">
+            {/* Certificate Details - Simplified Grid */}
+            <div className="grid gap-4 sm:grid-cols-2">
               {/* Certificate Number */}
               <div className="space-y-1.5">
                 <p className="text-xs text-muted-foreground uppercase tracking-wider">Certificate Number</p>
@@ -562,51 +603,58 @@ export default function CertificateVerify() {
                   })}
                 </p>
               </div>
-
-              {/* Integrity Classification */}
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Integrity Status</p>
-                <Badge variant="outline" className={cn(integrity.bg, integrity.color, "gap-1.5")}>
-                  <Shield className="h-3 w-3" />
-                  {integrity.label}
-                </Badge>
-              </div>
-
-              {/* Contract Version */}
-              <div className="space-y-1.5">
-                <p className="text-xs text-muted-foreground uppercase tracking-wider">Provenance Contract</p>
-                <Badge variant="outline" className="gap-1">
-                  <Lock className="h-3 w-3" />
-                  Contract 12 v{CONTRACT_12.version}
-                </Badge>
-              </div>
             </div>
 
-            <Separator />
-
-            {/* Verification Hash */}
-            <div className="space-y-2">
-              <p className="text-xs text-muted-foreground uppercase tracking-wider">Verification Hash</p>
-              <div className="flex items-center gap-2 p-3 bg-muted/50 rounded-lg font-mono text-sm">
-                <code className="flex-1 break-all">{data.verification_hash || 'N/A'}</code>
-                {data.verification_hash && (
-                  <Button 
-                    variant="ghost" 
-                    size="icon" 
-                    className="flex-shrink-0 h-8 w-8"
-                    onClick={copyHash}
-                  >
-                    {copied ? (
-                      <Check className="h-4 w-4 text-green-500" />
-                    ) : (
-                      <Copy className="h-4 w-4" />
+            {/* Technical Details - Collapsed by Default for Non-Technical Users */}
+            <details className="group">
+              <summary className="cursor-pointer text-xs text-muted-foreground uppercase tracking-wider flex items-center gap-2 py-2">
+                <span>Technical Details</span>
+                <span className="text-[10px] text-muted-foreground/60">(for auditors)</span>
+              </summary>
+              
+              <div className="mt-3 space-y-4 pt-3 border-t">
+                {/* Verification Hash */}
+                <div className="space-y-2">
+                  <p className="text-xs text-muted-foreground">Verification Hash</p>
+                  <div className="flex items-center gap-2 p-2 bg-muted/50 rounded font-mono text-xs">
+                    <code className="flex-1 break-all">{data.verification_hash || 'N/A'}</code>
+                    {data.verification_hash && (
+                      <Button 
+                        variant="ghost" 
+                        size="icon" 
+                        className="flex-shrink-0 h-7 w-7"
+                        onClick={copyHash}
+                      >
+                        {copied ? (
+                          <Check className="h-3.5 w-3.5 text-green-500" />
+                        ) : (
+                          <Copy className="h-3.5 w-3.5" />
+                        )}
+                      </Button>
                     )}
-                  </Button>
-                )}
-              </div>
-            </div>
+                  </div>
+                </div>
 
-            <Separator />
+                {/* Book Content Hash */}
+                {data.metadata?.bookContentHash && (
+                  <div className="space-y-2">
+                    <p className="text-xs text-muted-foreground">Book Content Hash</p>
+                    <code className="text-xs font-mono bg-muted/50 px-2 py-1 rounded block break-all">
+                      {data.metadata.bookContentHash}
+                    </code>
+                  </div>
+                )}
+
+                {/* Contract Version */}
+                <div className="space-y-1">
+                  <p className="text-xs text-muted-foreground">Provenance Contract</p>
+                  <Badge variant="outline" className="gap-1 text-xs">
+                    <Lock className="h-3 w-3" />
+                    Contract 12 v{CONTRACT_12.version}
+                  </Badge>
+                </div>
+              </div>
+            </details>
 
             {/* Issuer Information */}
             <div className="space-y-3">
