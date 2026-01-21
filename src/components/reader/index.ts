@@ -1,4 +1,6 @@
 export { MarkdownRenderer } from './MarkdownRenderer';
+export { StructuredCodeBlock, parseStructuredCodeBlock, hasStructuredCodeBlocks, extractAllStructuredCodeBlocks } from './StructuredCodeBlock';
+export type { StructuredCodeBlockData } from './StructuredCodeBlock';
 export { ChapterEditor } from './ChapterEditor';
 export { CognitiveLevelSelector } from './CognitiveLevelSelector';
 export { GuidedReadingMode } from './GuidedReadingMode';

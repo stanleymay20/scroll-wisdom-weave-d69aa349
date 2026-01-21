@@ -1,5 +1,6 @@
-import { useMemo, useEffect, useRef } from "react";
+import { useMemo, useEffect, useRef, useState } from "react";
 import hljs from 'highlight.js/lib/core';
+import { StructuredCodeBlock, extractAllStructuredCodeBlocks, StructuredCodeBlockData } from "./StructuredCodeBlock";
 
 // Import common languages for syntax highlighting
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -21,7 +22,6 @@ import xml from 'highlight.js/lib/languages/xml';
 import css from 'highlight.js/lib/languages/css';
 import markdown from 'highlight.js/lib/languages/markdown';
 import yaml from 'highlight.js/lib/languages/yaml';
-// Additional languages
 import dart from 'highlight.js/lib/languages/dart';
 import scala from 'highlight.js/lib/languages/scala';
 import r from 'highlight.js/lib/languages/r';
@@ -60,7 +60,6 @@ hljs.registerLanguage('markdown', markdown);
 hljs.registerLanguage('md', markdown);
 hljs.registerLanguage('yaml', yaml);
 hljs.registerLanguage('yml', yaml);
-// Additional languages
 hljs.registerLanguage('dart', dart);
 hljs.registerLanguage('scala', scala);
 hljs.registerLanguage('r', r);
@@ -81,11 +80,17 @@ interface MarkdownRendererProps {
  */
 export function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  
+  // Extract structured code blocks first
+  const { blocks: structuredBlocks, cleanedText } = useMemo(() => {
+    if (!content) return { blocks: [], cleanedText: "" };
+    return extractAllStructuredCodeBlocks(content);
+  }, [content]);
 
   const renderedContent = useMemo(() => {
-    if (!content) return "";
+    if (!cleanedText) return "";
     
-    let html = content;
+    let html = cleanedText;
     
     // Escape HTML entities first
     html = html
@@ -185,9 +190,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/(<\/(?:h[1-6]|ul|ol|blockquote|table|figure|div|hr)>)<\/p>/g, '$1');
     
     return html;
-  }, [content]);
+  }, [cleanedText]);
 
-  // Handle copy button clicks
+  // Handle copy button clicks for legacy code blocks
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -210,13 +215,57 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     return () => container.removeEventListener('click', handleCopyClick);
   }, [renderedContent]);
 
-  return (
-    <div 
-      ref={containerRef}
-      className={`markdown-content prose prose-invert max-w-none ${className}`}
-      dangerouslySetInnerHTML={{ __html: renderedContent }}
-    />
-  );
+  // Render with structured code blocks injected
+  const renderWithStructuredBlocks = () => {
+    if (structuredBlocks.length === 0) {
+      return (
+        <div 
+          ref={containerRef}
+          className={`markdown-content prose prose-invert max-w-none ${className}`}
+          dangerouslySetInnerHTML={{ __html: renderedContent }}
+        />
+      );
+    }
+
+    // Split rendered content by placeholders and inject structured blocks
+    const parts = renderedContent.split(/<!--STRUCTURED_CODE_BLOCK_(\d+)-->/);
+    const elements: React.ReactNode[] = [];
+
+    for (let i = 0; i < parts.length; i++) {
+      if (i % 2 === 0) {
+        // Regular HTML content
+        if (parts[i].trim()) {
+          elements.push(
+            <div 
+              key={`html-${i}`}
+              className="markdown-content prose prose-invert max-w-none"
+              dangerouslySetInnerHTML={{ __html: parts[i] }}
+            />
+          );
+        }
+      } else {
+        // Structured code block placeholder
+        const blockIndex = parseInt(parts[i], 10);
+        if (structuredBlocks[blockIndex]) {
+          elements.push(
+            <StructuredCodeBlock 
+              key={`block-${blockIndex}`}
+              data={structuredBlocks[blockIndex]}
+              className="my-6"
+            />
+          );
+        }
+      }
+    }
+
+    return (
+      <div ref={containerRef} className={className}>
+        {elements}
+      </div>
+    );
+  };
+
+  return renderWithStructuredBlocks();
 }
 
 // Add CSS for markdown rendering
