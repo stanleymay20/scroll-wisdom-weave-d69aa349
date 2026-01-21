@@ -8,3 +8,11 @@ export { BestsellerQAScore, DEFAULT_BESTSELLER_CHECKS } from './BestsellerQAScor
 export type { QACheckItem } from './BestsellerQAScore';
 export { AuthorImprint } from './AuthorImprint';
 export type { AuthorMode } from './AuthorImprint';
+
+// Comic Generation System
+export { ComicSubTypeSelector } from './ComicSubTypeSelector';
+export type { ComicSubType, ComicSubTypeConfig } from './ComicSubTypeSelector';
+export { ComicCharacterSheet } from './ComicCharacterSheet';
+export type { ComicCharacter, CharacterSheetConfig } from './ComicCharacterSheet';
+export { ComicLearningObjectives } from './ComicLearningObjectives';
+export type { ComicLearningConfig, LearningObjective, LearningMoment } from './ComicLearningObjectives';

@@ -32,6 +32,9 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { BookTypeSelector, ExtendedBookType } from "@/components/generate/BookTypeSelector";
 import { WorkbookPreview } from "@/components/generate/WorkbookPreview";
 import { ComicStyleSelector, ComicStyleConfig } from "@/components/generate/ComicStyleSelector";
+import { ComicSubTypeSelector, ComicSubType, ComicSubTypeConfig } from "@/components/generate/ComicSubTypeSelector";
+import { ComicCharacterSheet, CharacterSheetConfig } from "@/components/generate/ComicCharacterSheet";
+import { ComicLearningObjectives, ComicLearningConfig } from "@/components/generate/ComicLearningObjectives";
 import { BestsellerModeToggle } from "@/components/generate/BestsellerModeToggle";
 import { AuthorImprint, AuthorMode } from "@/components/generate/AuthorImprint";
 import { usePagePerformance } from "@/lib/performance";
@@ -106,6 +109,21 @@ export default function Generate() {
     layoutTemplate: 5,
     textInImage: true,
     scenesPerPanel: 1,
+  });
+  
+  // Comic Sub-Type & Advanced Configuration
+  const [comicSubType, setComicSubType] = useState<ComicSubType>("entertainment");
+  const [comicSubTypeConfig, setComicSubTypeConfig] = useState<ComicSubTypeConfig | null>(null);
+  const [characterSheetConfig, setCharacterSheetConfig] = useState<CharacterSheetConfig>({
+    characters: [],
+    isLocked: false,
+    settingDescription: "",
+    visualConsistencyNotes: "",
+  });
+  const [comicLearningConfig, setComicLearningConfig] = useState<ComicLearningConfig>({
+    objectives: [],
+    learningMoments: [],
+    ageAppropriateComplexity: "moderate",
   });
   
   const [contentMode, setContentMode] = useState<ContentMode>("creative");
@@ -294,6 +312,11 @@ export default function Generate() {
           layoutTemplate: extendedBookType === "comic" ? comicStyleConfig.layoutTemplate : null,
           textInImage: extendedBookType === "comic" ? comicStyleConfig.textInImage : null,
           scenesPerPanel: extendedBookType === "comic" ? comicStyleConfig.scenesPerPanel : null,
+          // Comic Sub-Type & Multi-Agent Architecture fields
+          comicSubType: extendedBookType === "comic" ? comicSubType : null,
+          comicSubTypeConfig: extendedBookType === "comic" ? comicSubTypeConfig : null,
+          characterSheetConfig: extendedBookType === "comic" ? characterSheetConfig : null,
+          comicLearningConfig: extendedBookType === "comic" && comicSubTypeConfig?.hasLearningObjectives ? comicLearningConfig : null,
         },
       });
 
@@ -557,13 +580,53 @@ export default function Generate() {
                 />
               )}
 
-              {/* Comic Style Selector - shows when comic selected */}
+              {/* Comic Configuration - shows when comic selected */}
               {extendedBookType === "comic" && (
-                <ComicStyleSelector
-                  value={comicStyleConfig}
-                  onChange={setComicStyleConfig}
-                  disabled={isGenerating}
-                />
+                <div className="space-y-4">
+                  {/* Comic Sub-Type Selector */}
+                  <ComicSubTypeSelector
+                    value={comicSubType}
+                    onChange={(subType, config) => {
+                      setComicSubType(subType);
+                      setComicSubTypeConfig(config);
+                      // Auto-adjust style based on sub-type
+                      if (subType === "children_story" || subType === "children_learning") {
+                        setComicStyleConfig(prev => ({ ...prev, styleId: "children_book" }));
+                      }
+                    }}
+                    disabled={isGenerating}
+                  />
+                  
+                  {/* Visual Style Selector */}
+                  <ComicStyleSelector
+                    value={comicStyleConfig}
+                    onChange={setComicStyleConfig}
+                    disabled={isGenerating}
+                  />
+                  
+                  {/* Character Sheet */}
+                  <ComicCharacterSheet
+                    value={characterSheetConfig}
+                    onChange={setCharacterSheetConfig}
+                    disabled={isGenerating}
+                    onLock={() => {
+                      toast({
+                        title: "Character Sheet Locked",
+                        description: "Characters will remain consistent across all panels.",
+                      });
+                    }}
+                  />
+                  
+                  {/* Learning Objectives - only for educational comic types */}
+                  {comicSubTypeConfig?.hasLearningObjectives && (
+                    <ComicLearningObjectives
+                      value={comicLearningConfig}
+                      onChange={setComicLearningConfig}
+                      disabled={isGenerating}
+                      subType={comicSubType as "children_learning" | "educational" | "moral_values"}
+                    />
+                  )}
+                </div>
               )}
 
               {/* Word Count & Language - hide word count for comics/workbooks */}
