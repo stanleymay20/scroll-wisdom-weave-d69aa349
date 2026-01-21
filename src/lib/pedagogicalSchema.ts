@@ -296,15 +296,19 @@ export interface QuizRigorResult {
 export function auditCodeQuality(content: string): CodeQualityResult {
   const issues: string[] = [];
   
-  // Check for proper code blocks
-  const hasProperFormatting = /```\w+[\s\S]*?```/.test(content);
+  // Check for structured code blocks (ChatGPT-level format)
+  const hasStructuredCodeBlocks = /\[CODE_BLOCK\][\s\S]*?\[\/CODE_BLOCK\]/.test(content);
+  
+  // Check for proper code blocks (legacy or standard)
+  const hasProperFormatting = hasStructuredCodeBlocks || /```\w+[\s\S]*?```/.test(content);
   if (!hasProperFormatting && /code|function|class|def |const |let |var /.test(content.toLowerCase())) {
     issues.push('Code found but not in proper fenced code blocks');
   }
   
   // Check for language labels
   const codeBlocks = content.match(/```\w+/g) || [];
-  const hasLanguageLabels = codeBlocks.length > 0;
+  const structuredLangs = content.match(/\[CODE_BLOCK\][\s\S]*?language:\s*(\w+)/gi) || [];
+  const hasLanguageLabels = codeBlocks.length > 0 || structuredLangs.length > 0;
   if (!hasLanguageLabels && /```/.test(content)) {
     issues.push('Code blocks missing language specification');
   }
@@ -312,25 +316,30 @@ export function auditCodeQuality(content: string): CodeQualityResult {
   // Check indentation (look for 2+ space indentation patterns)
   const hasIndentation = /\n {2,}|\n\t+/.test(content);
   
-  // Check for output examples
-  const hasOutputExamples = /(output|result|returns|prints|console\.log|print\()/i.test(content);
+  // Check for output examples - structured blocks have explicit output section
+  const hasStructuredOutput = /\[CODE_BLOCK\][\s\S]*?output:[\s\S]*?\[\/CODE_BLOCK\]/i.test(content);
+  const hasOutputExamples = hasStructuredOutput || /(output|result|returns|prints|console\.log|print\()/i.test(content);
   if (!hasOutputExamples && hasProperFormatting) {
     issues.push('Missing output examples after code blocks');
   }
   
-  // Check for explanations
-  const hasExplanations = /(explanation|this code|this function|here we|note that)/i.test(content);
+  // Check for explanations - structured blocks have explicit explanation section
+  const hasStructuredExplanation = /\[CODE_BLOCK\][\s\S]*?explanation:[\s\S]*?\[\/CODE_BLOCK\]/i.test(content);
+  const hasExplanations = hasStructuredExplanation || /(explanation|this code|this function|here we|note that)/i.test(content);
   
-  // Check for error/failure examples
-  const hasErrorExamples = /(error|exception|mistake|wrong|incorrect|fail|bug)/i.test(content);
+  // Check for error/failure examples - structured blocks have common_mistake section
+  const hasStructuredMistakes = /\[CODE_BLOCK\][\s\S]*?common_mistake:[\s\S]*?\[\/CODE_BLOCK\]/i.test(content);
+  const hasErrorExamples = hasStructuredMistakes || /(error|exception|mistake|wrong|incorrect|fail|bug)/i.test(content);
   if (!hasErrorExamples && hasProperFormatting) {
     issues.push('Missing error/failure examples');
   }
 
+  // Bonus points for using structured code blocks
   let score = 0;
-  if (hasProperFormatting) score += 25;
+  if (hasProperFormatting) score += 20;
+  if (hasStructuredCodeBlocks) score += 10; // Bonus for structured format
   if (hasLanguageLabels) score += 20;
-  if (hasIndentation) score += 15;
+  if (hasIndentation) score += 10;
   if (hasOutputExamples) score += 15;
   if (hasExplanations) score += 15;
   if (hasErrorExamples) score += 10;
@@ -342,7 +351,7 @@ export function auditCodeQuality(content: string): CodeQualityResult {
     hasOutputExamples,
     hasExplanations,
     hasErrorExamples,
-    score,
+    score: Math.min(100, score),
     issues
   };
 }
