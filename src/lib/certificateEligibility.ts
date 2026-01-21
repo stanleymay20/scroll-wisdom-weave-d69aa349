@@ -51,6 +51,7 @@ export interface CertificateEligibilityResult {
 export interface BookProgress {
   totalChapters: number;
   completedChapters: number;
+  chaptersIncludedInAssessment?: number[]; // Chapter numbers covered
   quizzesRequired: number;
   quizzesSubmitted: number;
   averageScore: number;
@@ -60,6 +61,8 @@ export interface BookProgress {
   hasReviewFlags: boolean;
   masteryRequirementsMet: boolean;
   lastMasteryAttempt: Date | null;
+  bookHash?: string; // Hash at certification time
+  currentBookHash?: string; // Live hash for validation
 }
 
 // ============================================================
@@ -69,8 +72,8 @@ export interface BookProgress {
 const COMPLETION_THRESHOLDS = {
   /** Minimum integrity score for completion certificate */
   MIN_INTEGRITY: 0.6,
-  /** All chapters must be completed */
-  CHAPTERS_REQUIRED: 1.0, // 100%
+  /** Minimum chapter coverage ratio for certification */
+  MIN_CHAPTER_COVERAGE: 0.8, // 80%
   /** All required quizzes must be submitted */
   QUIZZES_REQUIRED: 1.0, // 100%
 } as const;
@@ -79,26 +82,37 @@ const COMPLETION_THRESHOLDS = {
  * Check if learner is eligible for a Completion Certificate
  * 
  * Requirements:
- * - All chapters completed
+ * - Minimum 80% chapter coverage
  * - All required quizzes submitted
  * - No reject integrity flags
  * - Integrity score ≥ 0.6
+ * - Book hash must match (if provided)
  */
 function checkCompletionEligibility(progress: BookProgress): {
   eligible: boolean;
   reasons: string[];
+  coveragePercentage: number;
 } {
   const reasons: string[] = [];
   let eligible = true;
 
-  // Check chapter completion
+  // CRITICAL: Check book hash integrity first
+  if (progress.bookHash && progress.currentBookHash) {
+    if (progress.bookHash !== progress.currentBookHash) {
+      eligible = false;
+      reasons.push('Certificate invalid: book content has changed since certification');
+    }
+  }
+
+  // Check chapter coverage (minimum 80%)
   const chapterProgress = progress.totalChapters > 0 
     ? progress.completedChapters / progress.totalChapters 
     : 0;
+  const coveragePercentage = Math.round(chapterProgress * 100);
   
-  if (chapterProgress < COMPLETION_THRESHOLDS.CHAPTERS_REQUIRED) {
+  if (chapterProgress < COMPLETION_THRESHOLDS.MIN_CHAPTER_COVERAGE) {
     eligible = false;
-    reasons.push(`Complete all chapters (${progress.completedChapters}/${progress.totalChapters})`);
+    reasons.push(`Complete at least 80% of chapters (${progress.completedChapters}/${progress.totalChapters} = ${coveragePercentage}%)`);
   }
 
   // Check quiz submission
@@ -123,7 +137,7 @@ function checkCompletionEligibility(progress: BookProgress): {
     reasons.push(`Integrity score too low (${Math.round(progress.integrityScore.overall * 100)}% < 60%)`);
   }
 
-  return { eligible, reasons };
+  return { eligible, reasons, coveragePercentage };
 }
 
 // ============================================================
@@ -218,11 +232,27 @@ function checkMasteryEligibility(progress: BookProgress): {
  */
 export function evaluateCertificateEligibility(
   progress: BookProgress
-): CertificateEligibilityResult {
+): CertificateEligibilityResult & { coveragePercentage?: number } {
+  // CRITICAL: Check hash mismatch first - invalidates everything
+  if (progress.bookHash && progress.currentBookHash && progress.bookHash !== progress.currentBookHash) {
+    return {
+      eligible: false,
+      certificateType: null,
+      reasons: ['Certificate invalid: the referenced book content has changed since certification'],
+      integrityScore: progress.integrityScore.overall,
+      blockedByCooldown: false,
+      canRetryAt: null,
+      coveragePercentage: 0,
+    };
+  }
+
   // First, check mastery eligibility (highest tier)
   const masteryResult = checkMasteryEligibility(progress);
   
   if (masteryResult.eligible) {
+    const coverage = progress.totalChapters > 0 
+      ? Math.round((progress.completedChapters / progress.totalChapters) * 100) 
+      : 100;
     return {
       eligible: true,
       certificateType: 'mastery',
@@ -230,6 +260,7 @@ export function evaluateCertificateEligibility(
       integrityScore: progress.integrityScore.overall,
       blockedByCooldown: false,
       canRetryAt: null,
+      coveragePercentage: coverage,
     };
   }
 
@@ -245,6 +276,7 @@ export function evaluateCertificateEligibility(
       integrityScore: progress.integrityScore.overall,
       blockedByCooldown: masteryResult.blockedByCooldown,
       canRetryAt: masteryResult.canRetryAt,
+      coveragePercentage: completionResult.coveragePercentage,
     };
   }
 
@@ -256,6 +288,7 @@ export function evaluateCertificateEligibility(
     integrityScore: progress.integrityScore.overall,
     blockedByCooldown: masteryResult.blockedByCooldown,
     canRetryAt: masteryResult.canRetryAt,
+    coveragePercentage: completionResult.coveragePercentage,
   };
 }
 
@@ -311,6 +344,7 @@ export function createDefaultProgress(): BookProgress {
   return {
     totalChapters: 0,
     completedChapters: 0,
+    chaptersIncludedInAssessment: [],
     quizzesRequired: 0,
     quizzesSubmitted: 0,
     averageScore: 0,
@@ -326,7 +360,59 @@ export function createDefaultProgress(): BookProgress {
     hasReviewFlags: false,
     masteryRequirementsMet: false,
     lastMasteryAttempt: null,
+    bookHash: undefined,
+    currentBookHash: undefined,
   };
+}
+
+// ============================================================
+// 6C.6 — Hash Validation (Critical Security)
+// ============================================================
+
+/**
+ * Validate that a certificate's book hash matches the current book state.
+ * If mismatch → certificate is INVALID.
+ * 
+ * This is the enforcement layer for Contract 12 (Book Provenance).
+ */
+export function validateCertificateBookHash(
+  storedHash: string,
+  currentHash: string
+): { valid: boolean; reason?: string } {
+  if (!storedHash || !currentHash) {
+    return { valid: false, reason: 'Missing hash data for validation' };
+  }
+  
+  if (storedHash !== currentHash) {
+    return { 
+      valid: false, 
+      reason: 'Certificate invalid: book content has changed since certification' 
+    };
+  }
+  
+  return { valid: true };
+}
+
+/**
+ * Calculate chapter coverage percentage
+ */
+export function calculateCoveragePercentage(
+  completedChapters: number,
+  totalChapters: number
+): number {
+  if (totalChapters <= 0) return 0;
+  return Math.round((completedChapters / totalChapters) * 100);
+}
+
+/**
+ * Check if coverage meets minimum threshold
+ */
+export function meetsCoverageRequirement(
+  completedChapters: number,
+  totalChapters: number
+): boolean {
+  const coverage = completedChapters / totalChapters;
+  return coverage >= COMPLETION_THRESHOLDS.MIN_CHAPTER_COVERAGE;
 }
 
 // ============================================================

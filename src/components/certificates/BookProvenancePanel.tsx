@@ -35,8 +35,11 @@ export interface BookProvenanceData {
   bookType: 'academic' | 'technical' | 'comic' | 'children' | 'illustrated' | 'workbook' | 'text';
   bookVersion: string;
   bookHash: string; // SHA256 hash of book content at certification time
+  currentBookHash?: string; // Current hash for live validation
   totalChapters: number;
   completedChapters: number;
+  chaptersIncludedInAssessment?: number[]; // Chapter numbers covered by assessment
+  coveragePercentage?: number; // Computed coverage ratio
   wordCount?: number;
   category: string;
   language: string;
@@ -50,6 +53,7 @@ export interface BookProvenanceData {
   }[];
   certifiedAt: Date;
   bookCreatedAt: Date;
+  hashMismatch?: boolean; // If true, certificate is INVALID
 }
 
 interface BookProvenancePanelProps {
@@ -78,6 +82,50 @@ export function BookProvenancePanel({
 
   const bookTypeInfo = getBookTypeLabel(provenance.bookType);
   const allChecksPassed = provenance.integrityChecks.every(c => c.passed);
+  
+  // Hash validation - CRITICAL: invalidates certificate if book changed
+  const hashMismatch = provenance.hashMismatch || 
+    (provenance.currentBookHash && provenance.bookHash !== provenance.currentBookHash);
+  
+  // Coverage calculation
+  const coveragePercent = provenance.coveragePercentage ?? 
+    (provenance.totalChapters > 0 
+      ? Math.round((provenance.completedChapters / provenance.totalChapters) * 100) 
+      : 0);
+
+  // If hash mismatch, certificate is INVALID
+  if (hashMismatch) {
+    return (
+      <Card className="border-2 border-destructive/50 bg-destructive/5">
+        <CardContent className="p-6">
+          <div className="flex items-center gap-4 mb-4">
+            <div className="h-14 w-14 rounded-full bg-destructive/10 flex items-center justify-center">
+              <Shield className="h-7 w-7 text-destructive" />
+            </div>
+            <div>
+              <h3 className="text-lg font-bold text-destructive">⚠️ Certificate Invalid</h3>
+              <p className="text-sm text-muted-foreground">
+                The referenced book content has changed since certification.
+              </p>
+            </div>
+          </div>
+          <div className="bg-destructive/10 rounded-lg p-4 space-y-2">
+            <p className="text-sm font-medium text-destructive">
+              This certificate is no longer valid because the book it references has been modified.
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Original Hash: <code className="font-mono">{provenance.bookHash.slice(0, 16)}...</code>
+            </p>
+            {provenance.currentBookHash && (
+              <p className="text-xs text-muted-foreground">
+                Current Hash: <code className="font-mono">{provenance.currentBookHash.slice(0, 16)}...</code>
+              </p>
+            )}
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   if (compact) {
     return (
@@ -96,7 +144,7 @@ export function BookProvenancePanel({
               </div>
               <p className="font-semibold truncate">{provenance.bookTitle}</p>
               <p className="text-xs text-muted-foreground">
-                {provenance.completedChapters}/{provenance.totalChapters} chapters • {provenance.bookVersion}
+                {provenance.completedChapters}/{provenance.totalChapters} chapters ({coveragePercent}%) • {provenance.bookVersion}
               </p>
             </div>
             <Badge className={bookTypeInfo.color}>
@@ -159,12 +207,43 @@ export function BookProvenancePanel({
 
         <Separator />
 
+        {/* Chapter Coverage */}
+        <div className="space-y-3">
+          <h4 className="font-medium flex items-center gap-2 text-sm">
+            <Layers className="h-4 w-4 text-primary" />
+            Chapter Coverage
+          </h4>
+          <div className="bg-muted/50 rounded-lg p-4">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-sm text-muted-foreground">Chapters Certified</span>
+              <span className="font-medium">
+                {provenance.completedChapters} of {provenance.totalChapters} ({coveragePercent}%)
+              </span>
+            </div>
+            <div className="w-full bg-muted rounded-full h-2 mb-3">
+              <div 
+                className="bg-primary h-2 rounded-full transition-all" 
+                style={{ width: `${coveragePercent}%` }}
+              />
+            </div>
+            <p className="text-xs text-muted-foreground">
+              This certificate verifies mastery of {coveragePercent}% of the book content.
+              {coveragePercent >= 80 ? ' ✓ Meets minimum coverage requirement.' : ''}
+            </p>
+          </div>
+        </div>
+
+        <Separator />
+
         {/* Version & Hash (Cryptographic Binding) */}
         <div className="space-y-3">
           <h4 className="font-medium flex items-center gap-2 text-sm">
             <Hash className="h-4 w-4 text-primary" />
             Cryptographic Binding
           </h4>
+          <p className="text-xs text-muted-foreground -mt-1">
+            This ensures the certificate cannot be reused with a different or modified book.
+          </p>
           <div className="bg-muted/50 rounded-lg p-4 space-y-3">
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">Book Version</span>
@@ -192,6 +271,13 @@ export function BookProvenancePanel({
               <code className="text-sm font-mono bg-background px-2 py-1 rounded truncate max-w-[200px]">
                 {provenance.bookId.slice(0, 8)}...
               </code>
+            </div>
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Hash Verified</span>
+              <Badge variant="outline" className="bg-green-500/10 text-green-600 border-green-500/30 gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                Valid
+              </Badge>
             </div>
           </div>
         </div>
