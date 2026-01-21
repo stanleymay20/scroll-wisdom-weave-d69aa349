@@ -21,7 +21,7 @@ export interface AcademicSource {
   accessDate?: string;
 }
 
-export type CitationStyle = 'APA' | 'Harvard';
+export type CitationStyle = 'APA' | 'Harvard' | 'MLA' | 'Chicago';
 
 // Format author name for citation
 function formatAuthorName(name: string, style: CitationStyle, position: 'first' | 'subsequent'): string {
@@ -76,9 +76,33 @@ function formatAuthors(authors: string[], style: CitationStyle): string {
       const allButLast = formattedAuthors.slice(0, -1).join(', ');
       return `${allButLast}, & ${formattedAuthors[formattedAuthors.length - 1]}`;
     } else {
-      // More than 20 authors: first 19, ..., last
       const first19 = formattedAuthors.slice(0, 19).join(', ');
       return `${first19}, ... ${formattedAuthors[formattedAuthors.length - 1]}`;
+    }
+  } else if (style === 'MLA') {
+    // MLA: First author inverted, subsequent normal
+    if (formattedAuthors.length === 1) {
+      return formattedAuthors[0];
+    } else if (formattedAuthors.length === 2) {
+      return `${formattedAuthors[0]}, and ${formattedAuthors[1]}`;
+    } else if (formattedAuthors.length <= 3) {
+      const allButLast = formattedAuthors.slice(0, -1).join(', ');
+      return `${allButLast}, and ${formattedAuthors[formattedAuthors.length - 1]}`;
+    } else {
+      return `${formattedAuthors[0]}, et al.`;
+    }
+  } else if (style === 'Chicago') {
+    // Chicago: Similar to APA but with "and" instead of "&"
+    if (formattedAuthors.length === 1) {
+      return formattedAuthors[0];
+    } else if (formattedAuthors.length === 2) {
+      return `${formattedAuthors[0]}, and ${formattedAuthors[1]}`;
+    } else if (formattedAuthors.length <= 10) {
+      const allButLast = formattedAuthors.slice(0, -1).join(', ');
+      return `${allButLast}, and ${formattedAuthors[formattedAuthors.length - 1]}`;
+    } else {
+      const first7 = formattedAuthors.slice(0, 7).join(', ');
+      return `${first7}, et al.`;
     }
   } else { // Harvard
     if (formattedAuthors.length === 1) {
@@ -108,6 +132,26 @@ export function formatInTextCitation(source: AcademicSource, style: CitationStyl
     } else {
       return `(${lastName} et al., ${year})`;
     }
+  } else if (style === 'MLA') {
+    // MLA uses author and page number, no year in-text
+    if (source.authors.length === 1) {
+      return `(${lastName}${source.pages ? ` ${source.pages}` : ''})`;
+    } else if (source.authors.length === 2) {
+      const lastName2 = getLastName(source.authors[1]);
+      return `(${lastName} and ${lastName2}${source.pages ? ` ${source.pages}` : ''})`;
+    } else {
+      return `(${lastName} et al.${source.pages ? ` ${source.pages}` : ''})`;
+    }
+  } else if (style === 'Chicago') {
+    // Chicago author-date style
+    if (source.authors.length === 1) {
+      return `(${lastName} ${year}${source.pages ? `, ${source.pages}` : ''})`;
+    } else if (source.authors.length === 2) {
+      const lastName2 = getLastName(source.authors[1]);
+      return `(${lastName} and ${lastName2} ${year}${source.pages ? `, ${source.pages}` : ''})`;
+    } else {
+      return `(${lastName} et al. ${year}${source.pages ? `, ${source.pages}` : ''})`;
+    }
   } else { // Harvard
     if (source.authors.length === 1) {
       return `(${lastName} ${year})`;
@@ -134,10 +178,17 @@ export function formatBibliographyEntry(source: AcademicSource, style: CitationS
   const year = source.year || 'n.d.';
   const title = source.title;
   
-  if (style === 'APA') {
-    return formatAPAEntry(source, authors, year, title);
-  } else {
-    return formatHarvardEntry(source, authors, year, title);
+  switch (style) {
+    case 'APA':
+      return formatAPAEntry(source, authors, year, title);
+    case 'Harvard':
+      return formatHarvardEntry(source, authors, year, title);
+    case 'MLA':
+      return formatMLAEntry(source, authors, title);
+    case 'Chicago':
+      return formatChicagoEntry(source, authors, year, title);
+    default:
+      return formatAPAEntry(source, authors, year, title);
   }
 }
 
@@ -243,6 +294,117 @@ function formatHarvardEntry(source: AcademicSource, authors: string, year: numbe
   return entry.trim();
 }
 
+function formatMLAEntry(source: AcademicSource, authors: string, title: string): string {
+  let entry = `${authors}. `;
+  
+  switch (source.type) {
+    case 'journal':
+      entry += `"${title}." `;
+      if (source.journal) {
+        entry += `*${source.journal}*`;
+        if (source.volume) {
+          entry += `, vol. ${source.volume}`;
+          if (source.issue) entry += `, no. ${source.issue}`;
+        }
+        entry += `, ${source.year || 'n.d.'}`;
+        if (source.pages) entry += `, pp. ${source.pages}`;
+        entry += '. ';
+      }
+      break;
+      
+    case 'book':
+      entry += `*${title}*. `;
+      if (source.publisher) entry += `${source.publisher}, ${source.year || 'n.d.'}. `;
+      break;
+      
+    case 'conference':
+      entry += `"${title}." `;
+      if (source.journal) entry += `*${source.journal}*, `;
+      if (source.publisher) entry += `${source.publisher}, ${source.year || 'n.d.'}. `;
+      break;
+      
+    case 'preprint':
+      entry += `"${title}." `;
+      entry += `Preprint, ${source.year || 'n.d.'}. `;
+      break;
+      
+    case 'thesis':
+      entry += `*${title}*. `;
+      entry += `${source.year || 'n.d.'}. `;
+      if (source.publisher) entry += `${source.publisher}, `;
+      entry += `Dissertation. `;
+      break;
+      
+    default:
+      entry += `"${title}." `;
+      if (source.publisher) entry += `${source.publisher}, ${source.year || 'n.d.'}. `;
+  }
+  
+  if (source.doi) {
+    entry += `doi:${source.doi}.`;
+  } else if (source.url) {
+    entry += `${source.url}.`;
+  }
+  
+  return entry.trim();
+}
+
+function formatChicagoEntry(source: AcademicSource, authors: string, year: number | string, title: string): string {
+  let entry = `${authors}. ${year}. `;
+  
+  switch (source.type) {
+    case 'journal':
+      entry += `"${title}." `;
+      if (source.journal) {
+        entry += `*${source.journal}*`;
+        if (source.volume) {
+          entry += ` ${source.volume}`;
+          if (source.issue) entry += `, no. ${source.issue}`;
+        }
+        if (source.pages) entry += `: ${source.pages}`;
+        entry += '. ';
+      }
+      break;
+      
+    case 'book':
+      entry += `*${title}*. `;
+      if (source.publisher) entry += `${source.publisher}. `;
+      break;
+      
+    case 'conference':
+      entry += `"${title}." `;
+      if (source.journal) entry += `In *${source.journal}*. `;
+      if (source.publisher) entry += `${source.publisher}. `;
+      break;
+      
+    case 'preprint':
+      entry += `"${title}." `;
+      entry += `Preprint. `;
+      break;
+      
+    case 'thesis':
+      entry += `"${title}." `;
+      entry += `PhD diss., `;
+      if (source.publisher) entry += `${source.publisher}. `;
+      break;
+      
+    default:
+      entry += `"${title}." `;
+      if (source.publisher) entry += `${source.publisher}. `;
+  }
+  
+  if (source.doi) {
+    entry += `https://doi.org/${source.doi}.`;
+  } else if (source.url) {
+    const accessDate = source.accessDate || new Date().toLocaleDateString('en-US', {
+      month: 'long', day: 'numeric', year: 'numeric'
+    });
+    entry += `${source.url}. Accessed ${accessDate}.`;
+  }
+  
+  return entry.trim();
+}
+
 // Generate full bibliography from sources
 export function generateBibliography(sources: AcademicSource[], style: CitationStyle): string {
   // Sort alphabetically by first author's last name
@@ -252,7 +414,13 @@ export function generateBibliography(sources: AcademicSource[], style: CitationS
     return lastNameA.localeCompare(lastNameB);
   });
   
-  const header = style === 'APA' ? '## References\n\n' : '## Reference List\n\n';
+  const headers: Record<CitationStyle, string> = {
+    'APA': '## References\n\n',
+    'Harvard': '## Reference List\n\n',
+    'MLA': '## Works Cited\n\n',
+    'Chicago': '## Bibliography\n\n',
+  };
+  const header = headers[style] || '## References\n\n';
   const entries = sorted.map(source => formatBibliographyEntry(source, style));
   
   return header + entries.join('\n\n');
