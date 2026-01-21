@@ -6,7 +6,6 @@
  * TTI tracked for SLA compliance.
  */
 
-import { useEffect } from "react";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Navbar } from "@/components/layout/Navbar";
 import { HeroSection } from "@/components/home/HeroSection";
@@ -18,20 +17,12 @@ import { Footer } from "@/components/layout/Footer";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { MobileLayout, MobileHome } from "@/components/mobile";
 import { usePagePerformance } from "@/lib/performance";
-import { markFirstContent, markInteractive } from "@/lib/contract5";
 
 const Index = () => {
   const isMobile = useIsMobile();
   
-  // CONTRACT 5: Track page load performance
+  // CONTRACT 5: Track page load performance (handles all metrics)
   usePagePerformance('Home');
-  
-  // CONTRACT 5: Mark first content immediately on mount (static content)
-  useEffect(() => {
-    markFirstContent('Home');
-    // All content is static, so interactive immediately
-    markInteractive('Home');
-  }, []);
 
   // Mobile-first: Use persistent mobile layout
   if (isMobile) {
