@@ -13,7 +13,7 @@ const corsHeaders = {
 // During trial, all users get full export access
 // ===========================================
 const TRIAL_MODE = true;
-const TRIAL_END_DATE = new Date('2026-01-20');
+const TRIAL_END_DATE = new Date('2026-03-01');
 
 function isTrialActive(): boolean {
   if (!TRIAL_MODE) return false;
