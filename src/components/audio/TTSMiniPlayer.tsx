@@ -448,23 +448,55 @@ export function TTSMiniPlayer({
     mediaSession.activate();
     mediaSession.setPlaybackState('playing');
 
-    // Prefetch helper - generates audio for a chunk
-    const fetchChunkAudio = async (chunk: string): Promise<string | null> => {
-      if (stopRef.current || isStoppingRef.current) return null;
-      
-      const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
-        body: { text: chunk, voice: selectedVoice, language },
-      });
-      
-      if (stopRef.current || isStoppingRef.current) return null;
-      if (invokeError || data?.error || !data?.audioContent) {
-        console.error("[TTS] Chunk fetch error:", invokeError || data?.error);
-        return null;
+    // Prefetch helper with retry logic for network failures
+    const fetchChunkAudio = async (chunk: string, retries = 2): Promise<string | null> => {
+      for (let attempt = 0; attempt <= retries; attempt++) {
+        if (stopRef.current || isStoppingRef.current) return null;
+        
+        try {
+          const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
+            body: { text: chunk, voice: selectedVoice, language },
+          });
+          
+          if (stopRef.current || isStoppingRef.current) return null;
+          
+          if (invokeError) {
+            console.error(`[TTS] Chunk fetch error (attempt ${attempt + 1}):`, invokeError);
+            if (attempt < retries) {
+              await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+              continue;
+            }
+            return null;
+          }
+          
+          if (data?.error) {
+            console.error(`[TTS] API error:`, data.error);
+            // Don't retry for API errors (e.g., quota exceeded)
+            return null;
+          }
+          
+          if (!data?.audioContent) {
+            console.error("[TTS] No audio content received");
+            if (attempt < retries) {
+              await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+              continue;
+            }
+            return null;
+          }
+          
+          const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
+          activeBlobUrlsRef.current.push(url);
+          return url;
+        } catch (err) {
+          console.error(`[TTS] Network error (attempt ${attempt + 1}):`, err);
+          if (attempt < retries) {
+            await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
+            continue;
+          }
+          return null;
+        }
       }
-      
-      const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
-      activeBlobUrlsRef.current.push(url);
-      return url;
+      return null;
     };
 
     try {
@@ -486,8 +518,13 @@ export function TTSMiniPlayer({
         const currentUrl = await nextChunkPromise;
         
         if (!currentUrl) {
-          console.log("[TTS] Failed to fetch chunk", i + 1);
-          throw new Error("Failed to generate audio");
+          console.log("[TTS] Failed to fetch chunk", i + 1, "- skipping to next");
+          // Try to continue with next chunk instead of stopping entirely
+          if (i + 1 < chunks.length) {
+            nextChunkPromise = fetchChunkAudio(chunks[i + 1]);
+            continue;
+          }
+          break;
         }
 
         // Start prefetching NEXT chunk while current plays (gapless playback)
