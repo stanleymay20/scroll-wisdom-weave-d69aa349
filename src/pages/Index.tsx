@@ -10,6 +10,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { Navbar } from "@/components/layout/Navbar";
 import { HeroSection } from "@/components/home/HeroSection";
 import { PlatformClarification } from "@/components/home/PlatformClarification";
+import { CertificationDisclaimer } from "@/components/home/CertificationDisclaimer";
 import { AcademicCredibility } from "@/components/home/AcademicCredibility";
 import { FeaturedBooks } from "@/components/home/FeaturedBooks";
 import { CategoriesSection } from "@/components/home/CategoriesSection";
@@ -41,6 +42,7 @@ const Index = () => {
       <main>
         <HeroSection />
         <PlatformClarification />
+        <CertificationDisclaimer />
         <AcademicCredibility />
         <FeaturedBooks />
         <CategoriesSection />
