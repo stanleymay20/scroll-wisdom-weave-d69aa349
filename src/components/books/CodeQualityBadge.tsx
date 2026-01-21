@@ -61,13 +61,12 @@ function analyzeCodeQuality(chapters: { content: string | null }[]): CodeQuality
   const hasCommonMistakes = /\[CODE_BLOCK\][\s\S]*?common_mistake:[\s\S]*?\[\/CODE_BLOCK\]/i.test(allContent) ||
     /(common mistake|error|pitfall|wrong approach|avoid|don't do)/i.test(allContent);
 
-  // Calculate score
+  // Calculate score - only consider actual code blocks, not prose mentions
   let score = 0;
-  const hasAnyCode = structuredBlockCount > 0 || regularBlockCount > 0 || 
-    /code|function|class|def |const |let |var /.test(allContent.toLowerCase());
+  const hasActualCodeBlocks = structuredBlockCount > 0 || regularBlockCount > 0;
   
-  if (!hasAnyCode) {
-    // No code in book - return N/A state
+  if (!hasActualCodeBlocks) {
+    // No actual code blocks in book - return N/A state (hide badge)
     return {
       score: -1, // Special value for "no code"
       hasStructuredBlocks: false,
