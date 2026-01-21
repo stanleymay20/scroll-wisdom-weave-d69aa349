@@ -836,7 +836,7 @@ async function generatePDF(
   y -= 50;
   
   for (const chapter of chapters) {
-    page.drawText(`Chapter ${chapter.chapter_number}: ${chapter.title}`, {
+    page.drawText(sanitizeForPDF(`Chapter ${chapter.chapter_number}: ${chapter.title}`), {
       x: margin,
       y,
       size: 12,
@@ -962,9 +962,9 @@ async function generatePDF(
             
             y -= drawHeight + 10;
             
-            // Add caption if available
+            // Add caption if available - MUST sanitize
             if (imgMeta?.alt && imgMeta.alt !== 'Image') {
-              page.drawText(imgMeta.alt, {
+              page.drawText(sanitizeForPDF(imgMeta.alt), {
                 x: margin,
                 y,
                 size: 9,
@@ -975,8 +975,8 @@ async function generatePDF(
             }
           } catch (error) {
             console.error(`[EXPORT] Failed to embed image ${imgIndex}:`, error);
-            // Draw placeholder text
-            page.drawText(`[Image: ${imgMeta?.alt || 'Panel'}]`, {
+            // Draw placeholder text - MUST sanitize
+            page.drawText(sanitizeForPDF(`[Image: ${imgMeta?.alt || 'Panel'}]`), {
               x: margin,
               y,
               size: 10,
@@ -986,8 +986,8 @@ async function generatePDF(
             y -= 20;
           }
         } else {
-          // Image not found - draw placeholder
-          page.drawText(`[Image not available: ${imgMeta?.alt || 'Panel'}]`, {
+          // Image not found - draw placeholder - MUST sanitize
+          page.drawText(sanitizeForPDF(`[Image not available: ${imgMeta?.alt || 'Panel'}]`), {
             x: margin,
             y,
             size: 10,
@@ -1076,8 +1076,8 @@ async function generatePDF(
             y = pageHeight - margin - 30;
           }
           
-          // Table title
-          page.drawText(table.name, {
+          // Table title - MUST sanitize for PDF encoding
+          page.drawText(sanitizeForPDF(table.name), {
             x: margin,
             y,
             size: 11,
@@ -1174,7 +1174,7 @@ async function generatePDF(
           
           // Table title (if present)
           if (table.name && table.name !== 'Table') {
-            page.drawText(table.name, {
+            page.drawText(sanitizeForPDF(table.name), {
               x: margin,
               y,
               size: 11,
@@ -1193,9 +1193,9 @@ async function generatePDF(
             color: rgb(0.92, 0.92, 0.92),
           });
           
-          // Draw headers
+          // Draw headers - MUST sanitize for PDF encoding
           for (let i = 0; i < numCols; i++) {
-            const headerText = (table.headers[i] || '').slice(0, 25);
+            const headerText = sanitizeForPDF((table.headers[i] || '').slice(0, 25));
             page.drawText(headerText, {
               x: margin + (i * colWidth) + 5,
               y: y - 12,
@@ -1597,7 +1597,7 @@ ${htmlContent}
 </package>`;
   await zipWriter.add("OEBPS/content.opf", new zip.TextReader(contentOpf));
 
-  // Enhanced CSS with code block styling
+  // Enhanced CSS with code block and table styling
   const css = `body { font-family: Georgia, serif; margin: 2em; line-height: 1.6; }
 h1 { font-size: 1.8em; margin-bottom: 0.5em; }
 h2 { font-size: 1.4em; margin-top: 1.5em; }
@@ -1608,9 +1608,17 @@ pre { background: #f5f5f5; padding: 1em; border-radius: 4px; overflow-x: auto; f
 code { font-family: monospace; background: #f0f0f0; padding: 0.2em 0.4em; border-radius: 3px; }
 .reference { margin: 0.5em 0; padding-left: 2em; text-indent: -2em; font-size: 0.95em; }
 .academic-notice { background: #fff8e1; border-left: 4px solid #ffc107; padding: 1em; margin: 1em 0; font-size: 0.9em; }
-table { border-collapse: collapse; width: 100%; margin: 1em 0; }
-th, td { border: 1px solid #ddd; padding: 0.5em; text-align: left; }
-th { background: #f5f5f5; }`;
+table { border-collapse: collapse; width: 100%; margin: 1.5em 0; page-break-inside: avoid; }
+table caption { font-weight: bold; margin-bottom: 0.5em; text-align: left; font-size: 1.1em; }
+th, td { border: 1px solid #ccc; padding: 0.6em 0.8em; text-align: left; vertical-align: top; }
+th { background: #e8e8e8; font-weight: bold; }
+tr:nth-child(even) { background: #f9f9f9; }
+tr:nth-child(odd) { background: #fff; }
+.data-table { font-size: 0.95em; }
+.data-table th { background: #4a90d9; color: white; }
+.data-table tr:nth-child(even) { background: #e6f2ff; }
+figure { margin: 1em 0; text-align: center; }
+figcaption { font-style: italic; font-size: 0.9em; color: #666; margin-top: 0.5em; }`;
   await zipWriter.add("OEBPS/style.css", new zip.TextReader(css));
 
   if (hasCover) {
