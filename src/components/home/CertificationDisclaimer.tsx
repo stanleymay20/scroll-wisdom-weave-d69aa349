@@ -24,8 +24,11 @@ export function CertificationDisclaimer() {
             <h2 className="text-2xl font-display font-bold text-foreground mb-2">
               {t('certification.title')}
             </h2>
-            <p className="text-muted-foreground max-w-2xl mx-auto">
+            <p className="text-muted-foreground max-w-2xl mx-auto mb-4">
               {t('certification.subtitle')}
+            </p>
+            <p className="text-sm text-primary font-medium max-w-xl mx-auto border-l-2 border-primary pl-4 italic">
+              "I read. I learned. I was assessed. Here is proof."
             </p>
           </div>
 
