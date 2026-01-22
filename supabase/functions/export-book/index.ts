@@ -165,9 +165,17 @@ function parseStructuredCodeBlockFromText(blockContent: string): StructuredCodeB
   };
 }
 
-// Enhanced markdown processing that handles markdown tables, code blocks and images
+// Heading structure for export
+interface HeadingData {
+  level: number; // 1-6
+  text: string;
+  index: number; // position in paragraphs array
+}
+
+// Enhanced markdown processing that handles markdown tables, code blocks, images, and HEADINGS
 // Now prioritizes proper markdown pipe format for tables
 // Supports structured [CODE_BLOCK]...[/CODE_BLOCK] format
+// PRESERVES headings as structured data for proper export styling
 function processMarkdownContent(text: string): { 
   paragraphs: string[]; 
   codeBlocks: { lang: string; code: string }[]; 
@@ -175,13 +183,15 @@ function processMarkdownContent(text: string): {
   tables: { name: string; headers: string[]; rows: string[][] }[];
   customTables: ParsedTable[];
   images: { alt: string; url: string }[];
+  headings: HeadingData[];
 } {
-  if (!text) return { paragraphs: [], codeBlocks: [], structuredBlocks: [], tables: [], customTables: [], images: [] };
+  if (!text) return { paragraphs: [], codeBlocks: [], structuredBlocks: [], tables: [], customTables: [], images: [], headings: [] };
   
   const codeBlocks: { lang: string; code: string }[] = [];
   const structuredBlocks: StructuredCodeBlockData[] = [];
   const tables: { name: string; headers: string[]; rows: string[][] }[] = [];
   const images: { alt: string; url: string }[] = [];
+  const headings: HeadingData[] = [];
   
   // First, parse old custom TABLE: format (legacy support)
   const { tables: customTables, cleanedText: textAfterCustomTables } = parseCustomTableFormat(text);
@@ -266,9 +276,18 @@ function processMarkdownContent(text: string): {
   
   console.log(`[EXPORT] Found ${tables.length} markdown tables, ${codeBlocks.length} code blocks`);
   
-  // Strip remaining markdown (but NOT placeholders)
+  // EXTRACT HEADINGS - preserve them as structured data with placeholders
+  // This must happen BEFORE stripping other markdown
+  processedText = processedText.replace(/^(#{1,6})\s+(.+)$/gm, (_, hashes, text) => {
+    const level = hashes.length;
+    headings.push({ level, text: text.trim(), index: -1 }); // index will be set after paragraph split
+    return `[HEADING_${headings.length - 1}_LEVEL_${level}]`;
+  });
+  
+  console.log(`[EXPORT] Found ${headings.length} headings`);
+  
+  // Strip remaining markdown (but NOT placeholders and NOT headings - already extracted)
   const stripped = processedText
-    .replace(/^#{1,6}\s+/gm, "")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")
     .replace(/`[^`]+`/g, (match) => match.slice(1, -1))
@@ -280,9 +299,20 @@ function processMarkdownContent(text: string): {
   
   const paragraphs = stripped.split(/\n\n+/).filter(p => p.trim());
   
-  console.log(`[EXPORT] processMarkdownContent found ${images.length} images, ${codeBlocks.length} code blocks, ${structuredBlocks.length} structured blocks, ${tables.length} md tables`);
+  // Update heading indices to match paragraph positions
+  paragraphs.forEach((p, idx) => {
+    const headingMatch = p.match(/\[HEADING_(\d+)_LEVEL_\d+\]/);
+    if (headingMatch) {
+      const headingIdx = parseInt(headingMatch[1], 10);
+      if (headings[headingIdx]) {
+        headings[headingIdx].index = idx;
+      }
+    }
+  });
   
-  return { paragraphs, codeBlocks, structuredBlocks, tables, customTables, images };
+  console.log(`[EXPORT] processMarkdownContent found ${images.length} images, ${codeBlocks.length} code blocks, ${structuredBlocks.length} structured blocks, ${tables.length} md tables, ${headings.length} headings`);
+  
+  return { paragraphs, codeBlocks, structuredBlocks, tables, customTables, images, headings };
 }
 
 
@@ -1013,8 +1043,8 @@ async function generatePDF(
     }
     y -= 30;
     
-    // Process content with code block, image, and table handling
-    const { paragraphs, codeBlocks, structuredBlocks, images, customTables, tables: mdTables } = processMarkdownContent(chapter.content || "");
+    // Process content with code block, image, table, and HEADING handling
+    const { paragraphs, codeBlocks, structuredBlocks, images, customTables, tables: mdTables, headings } = processMarkdownContent(chapter.content || "");
     
     // Pre-fetch all images for this chapter (for comics)
     const fetchedImages: Map<number, { bytes: Uint8Array; type: 'png' | 'jpg' }> = new Map();
@@ -1031,8 +1061,46 @@ async function generatePDF(
       }
     }
     
-    for (const paragraph of paragraphs) {
+    for (let paraIdx = 0; paraIdx < paragraphs.length; paraIdx++) {
+      const paragraph = paragraphs[paraIdx];
       if (!paragraph.trim()) continue;
+      
+      // Check if this is a HEADING placeholder - render with proper styling
+      const headingMatch = paragraph.match(/\[HEADING_(\d+)_LEVEL_(\d+)\]/);
+      if (headingMatch) {
+        const headingIdx = parseInt(headingMatch[1], 10);
+        const headingLevel = parseInt(headingMatch[2], 10);
+        const heading = headings[headingIdx];
+        if (heading) {
+          // Determine font size and styling based on heading level
+          const headingSizes = { 1: 18, 2: 16, 3: 14, 4: 13, 5: 12, 6: 11 };
+          const headingSize = headingSizes[headingLevel as keyof typeof headingSizes] || 12;
+          
+          if (y < margin + 50) {
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            addPageNumber(page, pageNumber);
+            y = pageHeight - margin - 30;
+          }
+          
+          // Add some spacing before headings
+          y -= (headingLevel <= 2 ? 15 : 8);
+          
+          const headingLines = wrapText(heading.text, timesRomanBold, headingSize, textWidth);
+          for (const line of headingLines) {
+            page.drawText(line, {
+              x: margin,
+              y,
+              size: headingSize,
+              font: timesRomanBold,
+              color: rgb(0.1, 0.1, 0.1),
+            });
+            y -= headingSize + 4;
+          }
+          y -= 6;
+        }
+        continue;
+      }
       
       // Check if this is an image placeholder (for comics)
       const imageMatch = paragraph.match(/\[IMAGE_(\d+)\]/);
@@ -1688,7 +1756,19 @@ async function generateEPUB(
   for (const item of chapterItems) {
     let content = item.chapter.content || "";
     
-    // Extract and process images first
+    // FIRST: Extract and store headings BEFORE any other processing
+    // This preserves heading text that would otherwise be lost in markdown stripping
+    const headingMap: Map<string, { level: number; text: string }> = new Map();
+    let headingIdx = 0;
+    content = content.replace(/^(#{1,6})\s+(.+)$/gm, (_match: string, hashes: string, text: string) => {
+      const level = hashes.length;
+      const placeholder = `[EPUB_HEADING_${headingIdx}]`;
+      headingMap.set(placeholder, { level, text: text.trim() });
+      headingIdx++;
+      return placeholder;
+    });
+    
+    // Extract and process images
     const imageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
     const imageMap: Map<string, string> = new Map();
     
@@ -1721,6 +1801,11 @@ async function generateEPUB(
     // Replace image markdown with HTML
     for (const [original, replacement] of imageMap) {
       content = content.replace(original, replacement);
+    }
+    
+    // Convert heading placeholders to proper HTML heading tags
+    for (const [placeholder, headingData] of headingMap) {
+      content = content.replace(placeholder, `<h${headingData.level}>${escapeXml(headingData.text)}</h${headingData.level}>`);
     }
     
     // Convert STRUCTURED code blocks [CODE_BLOCK]...[/CODE_BLOCK] to rich HTML
@@ -1851,15 +1936,39 @@ async function generateEPUB(
     // Convert inline code
     content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
     
-    // Convert paragraphs (skip already processed HTML)
+    // Convert HEADING placeholders to proper HTML heading tags
+    content = content.replace(/\[HEADING_(\d+)_LEVEL_(\d+)\]/g, (_match: string, _idx: string, level: string) => {
+      return `[HEADING_PLACEHOLDER_${_idx}_${level}]`;
+    });
+    
+    // Convert paragraphs (skip already processed HTML) - with heading support
     const htmlContent = content
       .split(/\n\n+/)
       .map((p: string) => {
         p = p.trim();
         if (!p) return '';
-        if (p.startsWith('<pre>') || p.startsWith('<code>') || p.startsWith('<figure>') || p.startsWith('<p>') || p.startsWith('<table>')) return p;
+        if (p.startsWith('<pre>') || p.startsWith('<code>') || p.startsWith('<figure>') || p.startsWith('<p>') || p.startsWith('<table>') || p.startsWith('<div')) return p;
         // Skip prose that's clearly table data (Row N: format)
         if (/^Row \d+:/.test(p)) return '';
+        
+        // Check for heading placeholder and convert to proper HTML heading
+        const headingMatch = p.match(/\[HEADING_PLACEHOLDER_(\d+)_(\d+)\](.*)$/);
+        if (headingMatch) {
+          const level = headingMatch[2];
+          // Extract actual heading text - need to find it from original markdown
+          // The heading text follows the placeholder pattern
+          const headingText = p.replace(/\[HEADING_PLACEHOLDER_\d+_\d+\]/, '').trim();
+          return `<h${level}>${escapeXml(headingText)}</h${level}>`;
+        }
+        
+        // Handle remaining heading placeholders that contain the text
+        const simpleHeadingMatch = p.match(/^\[HEADING_(\d+)_LEVEL_(\d+)\]$/);
+        if (simpleHeadingMatch) {
+          // This is a placeholder only - we need to get the heading text from our data
+          // For now, skip the placeholder - the heading text should follow
+          return '';
+        }
+        
         return `<p>${escapeXml(p)}</p>`;
       })
       .filter((p: string) => p)
@@ -1915,10 +2024,14 @@ ${htmlContent}
 </package>`;
   await zipWriter.add("OEBPS/content.opf", new zip.TextReader(contentOpf));
 
-  // Enhanced CSS with structured code block, table, and figure styling
+  // Enhanced CSS with structured code block, table, figure, and HEADING styling
   const css = `body { font-family: Georgia, serif; margin: 2em; line-height: 1.6; }
-h1 { font-size: 1.8em; margin-bottom: 0.5em; }
-h2 { font-size: 1.4em; margin-top: 1.5em; }
+h1 { font-size: 1.8em; margin-bottom: 0.5em; margin-top: 1em; font-weight: bold; }
+h2 { font-size: 1.5em; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
+h3 { font-size: 1.3em; margin-top: 1.3em; margin-bottom: 0.4em; font-weight: bold; }
+h4 { font-size: 1.15em; margin-top: 1.2em; margin-bottom: 0.3em; font-weight: bold; }
+h5 { font-size: 1.05em; margin-top: 1em; margin-bottom: 0.3em; font-weight: bold; }
+h6 { font-size: 1em; margin-top: 1em; margin-bottom: 0.3em; font-weight: bold; font-style: italic; }
 p { margin: 0.8em 0; text-align: justify; }
 .cover { text-align: center; }
 .cover img { max-width: 100%; height: auto; }
@@ -2061,7 +2174,7 @@ async function generateDOCX(
   // Process all chapters to extract images first
   let imageCounter = 0;
   const docxImages: { id: string; bytes: Uint8Array }[] = [];
-  const processedChapters: { chapter: any; processedContent: string[]; imageRefs: { index: number; alt: string }[]; tables: { original: string; headers: string[]; rows: string[][] }[]; structuredCodeBlocks: StructuredCodeBlockData[]; codeBlocks: { lang: string; code: string }[] }[] = [];
+  const processedChapters: { chapter: any; processedContent: string[]; imageRefs: { index: number; alt: string }[]; tables: { original: string; headers: string[]; rows: string[][] }[]; structuredCodeBlocks: StructuredCodeBlockData[]; codeBlocks: { lang: string; code: string }[]; headings: { level: number; text: string }[] }[] = [];
   
   for (const chapter of chapters) {
     const content = chapter.content || "";
@@ -2081,6 +2194,15 @@ async function generateDOCX(
     
     // Strip images from content for text processing
     let textContent = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '[IMAGE_PLACEHOLDER]');
+    
+    // FIRST: Extract headings BEFORE other markdown processing
+    // This preserves heading text that would otherwise be lost in stripMarkdown()
+    const docxHeadings: { level: number; text: string }[] = [];
+    textContent = textContent.replace(/^(#{1,6})\s+(.+)$/gm, (_match: string, hashes: string, text: string) => {
+      const level = hashes.length;
+      docxHeadings.push({ level, text: text.trim() });
+      return `[DOCX_HEADING_${docxHeadings.length - 1}]`;
+    });
     
     // Extract STRUCTURED code blocks [CODE_BLOCK]...[/CODE_BLOCK] for DOCX
     const structuredCodeBlocks: StructuredCodeBlockData[] = [];
@@ -2154,6 +2276,7 @@ async function generateDOCX(
       return `[DOCX_TABLE_${tableMatches.length - 1}]`;
     });
     
+    // Use stripMarkdown but preserve heading placeholders
     const paragraphs = stripMarkdown(textContent).split(/\n\n+/);
     
     processedChapters.push({ 
@@ -2162,7 +2285,8 @@ async function generateDOCX(
       imageRefs, 
       tables: tableMatches,
       structuredCodeBlocks,
-      codeBlocks
+      codeBlocks,
+      headings: docxHeadings
     });
   }
 
@@ -2296,7 +2420,7 @@ async function generateDOCX(
 
   // Chapters with embedded images and tables
   let docPicId = 2;
-  for (const { chapter, processedContent, imageRefs, tables, structuredCodeBlocks, codeBlocks } of processedChapters) {
+  for (const { chapter, processedContent, imageRefs, tables, structuredCodeBlocks, codeBlocks, headings } of processedChapters) {
     documentContent += `
 <w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter ${chapter.chapter_number}: ${escapeXml(chapter.title)}</w:t></w:r></w:p>`;
     
@@ -2304,6 +2428,24 @@ async function generateDOCX(
     for (const para of processedContent) {
       const trimmed = para.trim();
       if (!trimmed) continue;
+      
+      // Check for HEADING placeholder - render with Word heading styles
+      const headingMatch = trimmed.match(/\[DOCX_HEADING_(\d+)\]/);
+      if (headingMatch) {
+        const headingIdx = parseInt(headingMatch[1]);
+        const heading = headings[headingIdx];
+        if (heading) {
+          // Map heading level to Word heading style
+          // Level 1 is used for chapter titles, so content headings start at Heading2
+          const wordHeadingLevel = Math.min(heading.level + 1, 6);
+          const headingSizes: Record<number, number> = { 1: 36, 2: 32, 3: 28, 4: 26, 5: 24, 6: 22 };
+          const fontSize = headingSizes[heading.level] || 24;
+          
+          documentContent += `
+<w:p><w:pPr><w:pStyle w:val="Heading${wordHeadingLevel}"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="${fontSize}"/></w:rPr><w:t>${escapeXml(heading.text)}</w:t></w:r></w:p>`;
+        }
+        continue;
+      }
       
       // Check for table placeholder
       const tableMatch = trimmed.match(/\[DOCX_TABLE_(\d+)\]/);
