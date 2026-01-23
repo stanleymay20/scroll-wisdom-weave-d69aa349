@@ -65,9 +65,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
-import { ShareDialog } from "@/components/books/ShareDialog";
-import { ExportDialog } from "@/components/books/ExportDialog";
-import { BookDetailSkeleton } from "@/components/books/BookDetailSkeleton";
+import { ShareDialog, ExportDialog, BookDetailSkeleton, ChapterManagement } from "@/components/books";
 import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -876,6 +874,23 @@ export default function BookDetail() {
                   contentTitle={book.title}
                 />
               </div>
+
+              {/* Chapter Management for Owners */}
+              {isOwner && (
+                <ChapterManagement
+                  bookId={book.id}
+                  bookTitle={book.title}
+                  chapters={chapters}
+                  onChaptersChange={setChapters}
+                  onBookUpdate={(updates) => {
+                    if (updates.preface !== undefined) {
+                      setBook(prev => prev ? { ...prev, description: updates.preface || null } : null);
+                    }
+                  }}
+                  preface={book.description}
+                  className="mt-6"
+                />
+              )}
 
               {/* Publish Toggle for Owners */}
               {isOwner && (
