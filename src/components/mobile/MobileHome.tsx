@@ -156,11 +156,21 @@ export function MobileHome() {
   // Main content - note: padding-top is handled by MobileLayout wrapper
   return (
     <div className="min-h-screen bg-background pb-24 px-4 pt-4">
+      {/* Welcome Hero for Mobile */}
+      <section className="mb-6 text-center py-4">
+        <h1 className="font-display text-xl font-bold text-foreground mb-1">
+          Welcome to ScrollLibrary
+        </h1>
+        <p className="text-sm text-muted-foreground">
+          AI-powered books & learning
+        </p>
+      </section>
+
       {/* Continue Reading Section */}
       {userId && continueReading.length > 0 && (
         <section className="mb-8">
           <SectionHeader title="Continue Reading" linkTo="/library" />
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             {continueReading.map((item) => (
               <MobileBookCard
                 key={item.book_id}
@@ -179,11 +189,11 @@ export function MobileHome() {
 
       {/* Last Added Section */}
       <section className="mb-8">
-        <SectionHeader title="Last Added" linkTo="/explore" />
+        <SectionHeader title="Recently Added" linkTo="/explore" />
         {loading ? (
           <BookGridSkeleton count={6} />
         ) : lastAdded.length > 0 ? (
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             {lastAdded.map((book) => (
               <MobileBookCard
                 key={book.id}
@@ -196,7 +206,7 @@ export function MobileHome() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-12">
+          <div className="text-center py-12 rounded-xl bg-muted/30 border border-dashed border-border">
             <p className="text-muted-foreground text-sm">No books yet</p>
             <p className="text-muted-foreground/60 text-xs mt-1">
               Tap the + button to create your first book
@@ -209,11 +219,11 @@ export function MobileHome() {
       <section>
         <SectionHeader title="Browse Categories" linkTo="/explore" />
         <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
-          {["Theology", "Science", "History", "Fiction", "Philosophy", "Arts"].map((cat) => (
+          {QUICK_CATEGORIES.map((cat) => (
             <Link
               key={cat}
               to={`/explore?category=${cat.toLowerCase()}`}
-              className="flex-shrink-0 px-4 py-2 rounded-full bg-muted text-sm font-medium text-foreground hover:bg-scroll-gold/10 hover:text-scroll-gold transition-colors"
+              className="flex-shrink-0 px-4 py-2.5 rounded-full bg-muted/50 text-sm font-medium text-foreground border border-border/50 hover:bg-scroll-gold/10 hover:text-scroll-gold hover:border-scroll-gold/30 active:scale-95 transition-all"
             >
               {cat}
             </Link>
