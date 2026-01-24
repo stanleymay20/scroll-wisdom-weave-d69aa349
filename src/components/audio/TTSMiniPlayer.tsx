@@ -156,29 +156,42 @@ export function TTSMiniPlayer({
       .trim();
   }, []);
 
-  // CONTRACT 5 - Rule 5.3: Smaller chunks for faster first audio (≤400 chars initial)
-  const chunkText = useCallback((input: string, maxChars = 600) => {
+  // CONTRACT 5 - Rule 5.3: Optimized chunking for instant audio start
+  // First chunk MUST be ≤120 chars for sub-second TTS response
+  const chunkText = useCallback((input: string, maxChars = 500) => {
     const text = input.trim();
     if (!text) return [];
 
     const sentences = text.split(/(?<=[.!?])\s+/).map(s => s.trim()).filter(Boolean);
     const chunks: string[] = [];
     let current = "";
+    let isFirstChunk = true;
 
     for (const s of sentences) {
+      // First chunk: max 120 chars for instant playback
+      const chunkLimit = isFirstChunk ? 120 : maxChars;
+      
       if (!current) {
         current = s;
+        // If first sentence exceeds limit, split it
+        if (isFirstChunk && current.length > chunkLimit) {
+          chunks.push(current.slice(0, chunkLimit));
+          current = current.slice(chunkLimit).trim();
+          isFirstChunk = false;
+        }
         continue;
       }
-      if ((current + " " + s).length <= maxChars) {
+      
+      if ((current + " " + s).length <= chunkLimit) {
         current = current + " " + s;
       } else {
         chunks.push(current);
         current = s;
+        isFirstChunk = false;
       }
     }
     if (current) chunks.push(current);
-    if (chunks.length === 0) return [text.slice(0, maxChars)];
+    if (chunks.length === 0) return [text.slice(0, 120)];
     return chunks;
   }, []);
 
@@ -402,14 +415,21 @@ export function TTSMiniPlayer({
     // CRITICAL: Unlock audio context immediately on user gesture (before any async work)
     unlockAudio();
     
+    // CONTRACT 5.6: Immediate visual feedback - show loading BEFORE stopping
+    setIsLoading(true);
+    setError(null);
+    setMode(isSelection ? "selection" : "chapter");
+    audioReliability.setState('loading');
+    
     // Stop any existing playback first
     stop();
     
-    // Wait for stop to complete
-    await new Promise(resolve => setTimeout(resolve, 100));
+    // Minimal delay for cleanup
+    await new Promise(resolve => setTimeout(resolve, 50));
     
     const cleaned = sanitizeText(textToRead);
     if (!cleaned) {
+      setIsLoading(false);
       toast({ title: "No text", description: "No readable text found", variant: "destructive" });
       return;
     }
@@ -419,30 +439,19 @@ export function TTSMiniPlayer({
     isStoppingRef.current = false;
     pausedAtChunkRef.current = 0;
     
-    setError(null);
-    setIsLoading(true);
     setProgress(0);
-    setMode(isSelection ? "selection" : "chapter");
 
     cleanupBlobUrls();
 
-    // CONTRACT 5 - Rule 5.3: For selection, use a single small chunk
-    // For chapter, use smaller first chunk (≤200 chars) for instant audio start
+    // CONTRACT 5 - Rule 5.3: First chunk TINY (≤120 chars) for instant start
     let chunks = isSelection 
-      ? [cleaned.slice(0, 1200)] 
-      : chunkText(cleaned, 600);
-
-    // Make first chunk even smaller for faster start (≤200 chars)
-    if (!isSelection && chunks[0] && chunks[0].length > 200) {
-      const first = chunks[0].slice(0, 200);
-      const rest = chunks[0].slice(200).trim();
-      chunks = [first, ...(rest ? [rest] : []), ...chunks.slice(1)];
-    }
+      ? [cleaned.slice(0, 800)] 
+      : chunkText(cleaned, 500);
 
     // Store chunks for potential resume (Rule 5.4)
     chunksRef.current = chunks;
     setTotalChunks(chunks.length);
-    console.log("[TTS] Starting playback with", chunks.length, "chunks (first:", chunks[0]?.length, "chars)");
+    console.log("[TTS] Starting with", chunks.length, "chunks (first:", chunks[0]?.length, "chars)");
 
     // Activate media session for OS controls (Rule 5.3)
     mediaSession.activate();
