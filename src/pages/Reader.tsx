@@ -57,6 +57,7 @@ import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 import { CodePlayground } from "@/components/reader/CodePlayground";
 import { ComicReaderMode, parseComicContentToPanels, ComicPanelData } from "@/components/reader/ComicReaderMode";
+import { LearningDeckGenerator } from "@/components/decks";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { usePagePerformance } from "@/lib/performance";
@@ -865,13 +866,14 @@ export default function Reader() {
       </main>
 
       {/* CONTRACT 5.2: Floating Cognitive Level Indicator - respects safe areas & auto-hides */}
+      {/* FIXED: z-20 to stay below action buttons but above content */}
       <AnimatePresence>
         {guidedModeActive && !showLevelSelector && !showQA && floatingActionsVisible && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             exit={{ opacity: 0, y: 20 }}
-            className="fixed z-30"
+            className="fixed z-20"
             style={{ 
               bottom: "calc(env(safe-area-inset-bottom) + 5rem)",
               left: "50%",
@@ -888,13 +890,14 @@ export default function Reader() {
       </AnimatePresence>
 
       {/* CONTRACT 5.2: Interactive Q&A Button + Quiz Button + Voice Button - auto-hide on scroll */}
+      {/* FIXED: z-60 to ensure buttons are always above TTS player (z-50) */}
       <AnimatePresence>
         {chapter?.content && !showQA && !showVoiceConversation && floatingActionsVisible && (
           <motion.div 
             initial={{ opacity: 0, x: 20 }}
             animate={{ opacity: 1, x: 0 }}
             exit={{ opacity: 0, x: 20 }}
-            className="fixed z-40 flex flex-col gap-2"
+            className="fixed z-[60] flex flex-col gap-2"
             style={{ 
               bottom: "calc(env(safe-area-inset-bottom) + 5rem)",
               right: "1rem"
@@ -925,7 +928,7 @@ export default function Reader() {
                 size="sm"
                 disabled
                 className="gap-2 opacity-60"
-                title={`Read ${quizGating.requiredProgress - quizGating.readProgress}% more to unlock quiz`}
+                title={`Read ${Math.max(0, quizGating.requiredProgress - quizGating.readProgress).toFixed(0)}% more to unlock quiz`}
               >
                 <GraduationCap className="h-4 w-4" />
                 <span className="text-xs">🔒 {Math.round(quizGating.readProgress)}%</span>
@@ -955,6 +958,15 @@ export default function Reader() {
                 <span className="text-xs">Playground</span>
               </Button>
             )}
+            {/* VLD-1.0: Learning Deck Generator */}
+            <LearningDeckGenerator
+              bookId={bookId || ''}
+              bookTitle={book?.title || ''}
+              userId={userId}
+              totalChapters={totalChapters}
+              currentChapter={currentChapter}
+              variant="inline"
+            />
             {/* Comic Reader button - only show for comic content */}
             {chapter.content.includes('[PANEL') && (
               <Button
