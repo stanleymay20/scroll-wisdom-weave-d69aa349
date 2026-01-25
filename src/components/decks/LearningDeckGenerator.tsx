@@ -2,7 +2,7 @@
  * VLD-1.0: Learning Deck Generator Component
  * 
  * UI for generating verified learning decks from book content.
- * Shows eligibility status, generation options, and preview.
+ * Shows eligibility status, generation options, and full slide preview.
  */
 
 import { useState, useCallback } from 'react';
@@ -22,6 +22,7 @@ import {
   Users,
   FileText,
   ChevronRight,
+  X,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -59,6 +60,7 @@ import {
   DeckGenerationParams,
 } from '@/lib/learningDeckContract';
 import { cn } from '@/lib/utils';
+import SlideViewer from './SlideViewer';
 
 interface LearningDeckGeneratorProps {
   bookId: string;
@@ -97,6 +99,7 @@ export function LearningDeckGenerator({
   const [dialogOpen, setDialogOpen] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedDeck, setGeneratedDeck] = useState<LearningDeck | null>(null);
+  const [showViewer, setShowViewer] = useState(false);
 
   // Eligibility check
   const targetChapters = scope === 'chapter' && currentChapter ? [currentChapter] : undefined;
@@ -422,26 +425,43 @@ export function LearningDeckGenerator({
           </AnimatePresence>
 
           {/* Generated Deck Preview */}
-          {generatedDeck && (
-            <div className="p-4 rounded-lg bg-muted/50 border border-border/50">
+          {generatedDeck && !showViewer && (
+            <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
               <div className="flex items-center justify-between mb-2">
-                <span className="font-medium">Deck Ready</span>
+                <span className="font-medium flex items-center gap-2">
+                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                  Deck Ready
+                </span>
                 <Badge variant="secondary">{generatedDeck.slides.length} slides</Badge>
               </div>
               <p className="text-sm text-muted-foreground mb-3">
-                Generated from {generatedDeck.metadata.chaptersCovered.length} chapter(s)
+                Generated from {generatedDeck.metadata.chaptersCovered?.length || 'all'} chapter(s)
               </p>
               <div className="flex gap-2">
+                <Button 
+                  variant="default" 
+                  size="sm" 
+                  onClick={() => setShowViewer(true)} 
+                  className="gap-1.5"
+                >
+                  <Eye className="h-3.5 w-3.5" />
+                  View Slides
+                </Button>
                 <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5">
                   <Download className="h-3.5 w-3.5" />
                   Export PDF
                 </Button>
-                <Button variant="ghost" size="sm" className="gap-1.5">
-                  <Eye className="h-3.5 w-3.5" />
-                  Preview
-                </Button>
               </div>
             </div>
+          )}
+
+          {/* Full Slide Viewer */}
+          {generatedDeck && showViewer && (
+            <SlideViewer 
+              deck={generatedDeck} 
+              onClose={() => setShowViewer(false)}
+              className="min-h-[400px]"
+            />
           )}
         </div>
 

@@ -5,11 +5,28 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Slide layout types based on NotebookLM quality standards
+type SlideLayout = 
+  | 'title-visual'
+  | 'learning-objectives'
+  | 'concept-text'
+  | 'concept-visual'
+  | 'diagram-focus'
+  | 'comparison'
+  | 'example-walkthrough'
+  | 'summary-proof';
+
 interface SlideData {
   type: string;
+  layout: SlideLayout;
   heading: string;
-  content: string[];
+  content: string[]; // Max 5 bullets, max 15 words each
   sourceReference?: string;
+  speakerNotes?: string;
+  visual?: {
+    type: 'diagram' | 'chart' | 'illustration' | 'icon';
+    description: string;
+  };
 }
 
 interface DeckGenerationParams {
@@ -43,46 +60,128 @@ serve(async (req) => {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
 
-    // Build system prompt based on VLD-1.0 contract
-    const systemPrompt = `You are a Verified Learning Deck generator for ScrollLibrary.
+    // Build NotebookLM-quality system prompt with strict presentation discipline
+    const systemPrompt = `You are a premium Learning Deck generator for ScrollLibrary, trained to produce slides matching Google NotebookLM quality.
 
-You create structured presentation slides from educational book content following strict rules:
+## PRESENTATION DISCIPLINE (MANDATORY - ENFORCED)
 
-## SLIDE STRUCTURE (MANDATORY)
-1. Title Slide: Book title, chapters covered, "Verified Learning Deck", version
-2. Learning Objectives: 3-5 clear objectives extracted from content
-3. Core Concept Slides: One concept per slide, 3-5 bullet points max, plain language
-4. Application/Example Slide: Real-world example or use case
-5. Summary Slide: Key takeaways + verification badge
+### SLIDE DENSITY LIMITS (HARD RULES)
+- Maximum 5 bullet points per slide
+- Maximum 12-15 words per bullet point
+- ONE concept per slide only
+- White space is intentional, not empty
+- Heading must be under 8 words
 
-## RULES
-- Every concept slide MUST include "Source: Chapter X, Section Y"
-- NO summarizing content not in the book
-- NO AI hallucinations or made-up examples
-- Maximum ${params.maxSlides} slides
-- Tone: ${params.tone}
-- Target audience: ${params.targetAudience}
+### NARRATIVE SLIDE FLOW
+Every deck follows this arc:
+1. What is this? (Introduction)
+2. Why does it matter? (Relevance)
+3. How does it work? (Mechanism)
+4. Show me an example (Application)
+5. Key takeaway (Summary)
 
-## OUTPUT FORMAT
-Return a JSON object with:
+### VISUAL-FIRST PRINCIPLE
+- Prefer diagram > text explanation
+- Prefer chart > bullet points
+- Prefer illustration > paragraph
+- Every concept slide should suggest a visual if possible
+
+## AVAILABLE LAYOUTS (pick from these ONLY)
+1. "title-visual" - Title slide with book info and visual element
+2. "learning-objectives" - 3-5 objectives as bullet points
+3. "concept-text" - One concept with 3-5 bullets
+4. "concept-visual" - Concept with primary visual element
+5. "diagram-focus" - Visual dominates, minimal text
+6. "comparison" - Two-column comparison layout
+7. "example-walkthrough" - Step-by-step example
+8. "summary-proof" - Key takeaways + verification badge
+
+## SLIDE STRUCTURE
+
+### Slide 1: Title (layout: title-visual)
+- Book title (heading)
+- Chapters covered
+- "Verified Learning Deck"
+- Version info
+
+### Slide 2: Learning Objectives (layout: learning-objectives)
+- 3-5 clear, actionable objectives
+- Start with verbs: "Understand", "Apply", "Analyze"
+- Directly from book content
+
+### Slides 3-N: Core Concepts
+For each major concept:
+- Choose appropriate layout (concept-text, concept-visual, diagram-focus, comparison)
+- ONE concept per slide
+- 3-5 bullets maximum
+- Include suggested visual when appropriate
+- MUST include source reference
+
+### Application Slide (layout: example-walkthrough)
+- Real-world example or scenario
+- Step-by-step walkthrough
+- Concrete, not abstract
+
+### Final Slide: Summary (layout: summary-proof)
+- 3-5 key takeaways
+- Verification badge section
+- "Generated after verified reading & assessment"
+
+## SPEAKER NOTES
+Include brief speaker notes for each slide:
+- 2-3 sentences expanding on the slide content
+- Talking points for presenters
+- NOT visible on slides
+
+## OUTPUT FORMAT (STRICT JSON)
 {
   "slides": [
-    { "type": "title|learning-objectives|core-concept|application|summary-proof", "heading": "...", "content": ["bullet1", "bullet2"], "sourceReference": "Chapter 1, Section 2" }
+    {
+      "type": "title|learning-objectives|core-concept|application|summary-proof",
+      "layout": "title-visual|learning-objectives|concept-text|concept-visual|diagram-focus|comparison|example-walkthrough|summary-proof",
+      "heading": "Short heading under 8 words",
+      "content": ["bullet 1 (max 15 words)", "bullet 2"],
+      "sourceReference": "Chapter X, Section Y",
+      "speakerNotes": "Expanded talking points for presenter...",
+      "visual": {
+        "type": "diagram|chart|illustration|icon",
+        "description": "Brief description of suggested visual"
+      }
+    }
   ]
-}`;
+}
 
-    const userPrompt = `Generate a learning deck for the book "${bookTitle}".
+## FORBIDDEN
+- NO walls of text
+- NO more than 5 bullets
+- NO bullets over 15 words
+- NO generic templates
+- NO content not in the book
+- NO AI hallucinations
+- NO MCQ-style content
+
+## PARAMETERS FOR THIS DECK
+- Maximum slides: ${params.maxSlides}
+- Tone: ${params.tone}
+- Target audience: ${params.targetAudience}
+- Include visuals: ${params.includeVisuals}`;
+
+    const userPrompt = `Generate a NotebookLM-quality learning deck for: "${bookTitle}"
 
 Scope: ${params.scope}
-${params.chapterNumbers ? `Chapters: ${params.chapterNumbers.join(', ')}` : 'All chapters'}
+${params.chapterNumbers?.length ? `Chapters: ${params.chapterNumbers.join(', ')}` : 'Full book'}
 Target Audience: ${params.targetAudience}
 Tone: ${params.tone}
 Max Slides: ${params.maxSlides}
-Include Visuals: ${params.includeVisuals}
 
-Create a structured, presentation-ready learning deck that proves verified reading and understanding.
+CRITICAL: Follow the narrative arc (What → Why → How → Example → Takeaway).
+CRITICAL: Max 5 bullets per slide, max 15 words per bullet.
+CRITICAL: Include speaker notes for each slide.
+CRITICAL: Suggest appropriate visuals.
 
-Return ONLY valid JSON.`;
+Return ONLY valid JSON matching the schema.`;
+
+    console.log("[VLD] Generating deck for:", bookTitle);
 
     const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -96,8 +195,8 @@ Return ONLY valid JSON.`;
           { role: "system", content: systemPrompt },
           { role: "user", content: userPrompt },
         ],
-        temperature: 0.7,
-        max_tokens: 4000,
+        temperature: 0.6, // Lower for more consistent formatting
+        max_tokens: 6000,
       }),
     });
 
@@ -120,33 +219,51 @@ Return ONLY valid JSON.`;
     const aiResponse = await response.json();
     const content = aiResponse.choices?.[0]?.message?.content || "";
 
-    // Parse JSON from response
+    // Parse and validate JSON response
     let slides: SlideData[] = [];
     try {
-      // Try to extract JSON from the response
       const jsonMatch = content.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
         const parsed = JSON.parse(jsonMatch[0]);
         slides = parsed.slides || [];
+        
+        // Validate and enforce density limits
+        slides = slides.map((slide: SlideData) => ({
+          ...slide,
+          // Enforce max 5 bullets
+          content: (slide.content || []).slice(0, 5).map((bullet: string) => {
+            // Enforce max 15 words per bullet
+            const words = bullet.split(' ');
+            return words.length > 15 ? words.slice(0, 15).join(' ') + '...' : bullet;
+          }),
+          // Ensure layout exists
+          layout: slide.layout || 'concept-text',
+        }));
       }
     } catch (parseError) {
-      console.error("Failed to parse AI response:", parseError);
-      // Create fallback slides
+      console.error("[VLD] Failed to parse AI response:", parseError);
+      // Create fallback slides with proper structure
       slides = [
         {
           type: "title",
+          layout: "title-visual",
           heading: bookTitle,
           content: ["Verified Learning Deck", "Generated by ScrollLibrary"],
+          speakerNotes: "Welcome to this learning deck generated from your verified reading.",
         },
         {
           type: "summary-proof",
+          layout: "summary-proof",
           heading: "Summary",
-          content: ["Deck generation requires valid content response.", "Please try again."],
+          content: ["Generation encountered an issue", "Please try again"],
+          speakerNotes: "The deck generation needs to be retried.",
         },
       ];
     }
 
-    // Build the deck object
+    console.log("[VLD] Generated", slides.length, "slides");
+
+    // Build the deck object with full metadata
     const deck = {
       id: crypto.randomUUID(),
       title: `${bookTitle} - Learning Deck`,
@@ -179,7 +296,7 @@ Return ONLY valid JSON.`;
     });
 
   } catch (error) {
-    console.error("Learning deck generation error:", error);
+    console.error("[VLD] Generation error:", error);
     return new Response(
       JSON.stringify({ error: error instanceof Error ? error.message : "Generation failed" }),
       {
