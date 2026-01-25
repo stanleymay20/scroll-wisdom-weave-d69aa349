@@ -33,13 +33,27 @@ export type SlideType =
   | 'application'
   | 'summary-proof';
 
+// Slide layout types (NotebookLM-quality layouts)
+export type SlideLayout = 
+  | 'title-visual'
+  | 'learning-objectives'
+  | 'concept-text'
+  | 'concept-visual'
+  | 'diagram-focus'
+  | 'comparison'
+  | 'example-walkthrough'
+  | 'summary-proof';
+
 export interface SlideData {
   type: SlideType;
+  layout?: SlideLayout; // Layout template to use
   heading: string;
   content: string[];
   sourceReference?: string; // "Chapter X, Section Y"
+  speakerNotes?: string; // Optional presenter notes
   visual?: {
-    type: 'diagram' | 'chart' | 'illustration';
+    type: 'diagram' | 'chart' | 'illustration' | 'icon';
+    description?: string;
     url?: string;
     alt?: string;
   };
