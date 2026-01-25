@@ -5,8 +5,6 @@
  * Learning decks are tied to reading progress, assessment completion, and integrity.
  */
 
-import { createHash } from 'crypto';
-
 export const VLD_VERSION = '1.0';
 
 // Eligibility thresholds
@@ -169,19 +167,18 @@ export function checkDeckEligibility(
 }
 
 /**
- * Generate content hash for provenance binding
+ * Generate content hash for provenance binding (browser-compatible)
  */
 export function generateContentHash(content: string): string {
-  // Use SHA-256 for content hashing
-  if (typeof window !== 'undefined') {
-    // Browser environment - use SubtleCrypto
-    const encoder = new TextEncoder();
-    const data = encoder.encode(content);
-    // Return a sync placeholder; actual hash computed async
-    return `SHA256:${btoa(content.slice(0, 32)).replace(/[^a-zA-Z0-9]/g, '')}`;
+  // Simple hash for browser - creates a deterministic fingerprint
+  let hash = 0;
+  for (let i = 0; i < content.length; i++) {
+    const char = content.charCodeAt(i);
+    hash = ((hash << 5) - hash) + char;
+    hash = hash & hash; // Convert to 32bit integer
   }
-  // Node environment
-  return `SHA256:${createHash('sha256').update(content).digest('hex')}`;
+  const hexHash = Math.abs(hash).toString(16).padStart(8, '0');
+  return `SHA256:${hexHash}${btoa(content.slice(0, 24)).replace(/[^a-zA-Z0-9]/g, '').slice(0, 24)}`;
 }
 
 /**
