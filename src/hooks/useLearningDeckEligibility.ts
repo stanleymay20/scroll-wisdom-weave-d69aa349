@@ -28,6 +28,7 @@ interface LearningDeckEligibilityResult {
   refresh: () => void;
   chapterProgress: Map<number, number>;
   quizAttempts: Map<number, boolean>;
+  quizScores: Map<number, number>;
 }
 
 export function useLearningDeckEligibility({
@@ -39,6 +40,7 @@ export function useLearningDeckEligibility({
 }: UseLearningDeckEligibilityProps): LearningDeckEligibilityResult {
   const [chapterProgress, setChapterProgress] = useState<Map<number, number>>(new Map());
   const [quizAttempts, setQuizAttempts] = useState<Map<number, boolean>>(new Map());
+  const [quizScores, setQuizScores] = useState<Map<number, number>>(new Map());
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -101,15 +103,26 @@ export function useLearningDeckEligibility({
       }
       setChapterProgress(progressMap);
 
-      // Build quiz attempts map
+      // Build quiz attempts and scores maps
       const quizMap = new Map<number, boolean>();
+      const scoreMap = new Map<number, number>();
       quizData?.forEach(attempt => {
         const chapterNum = chapterIdToNumber.get(attempt.chapter_id);
         if (chapterNum !== undefined) {
           quizMap.set(chapterNum, true);
+          // Calculate percentage score
+          const score = attempt.total_questions > 0 
+            ? (attempt.score / attempt.total_questions) * 100 
+            : 0;
+          // Keep highest score per chapter
+          const existing = scoreMap.get(chapterNum) || 0;
+          if (score > existing) {
+            scoreMap.set(chapterNum, score);
+          }
         }
       });
       setQuizAttempts(quizMap);
+      setQuizScores(scoreMap);
 
     } catch (err) {
       console.error('[VLD] Error fetching eligibility data:', err);
@@ -132,9 +145,10 @@ export function useLearningDeckEligibility({
       quizAttempts,
       totalChapters,
       targetChapters,
-      false // hasIntegrityFlags - would come from integrity system
+      false, // hasIntegrityFlags - would come from integrity system
+      quizScores
     );
-  }, [bookId, scope, chapterProgress, quizAttempts, totalChapters, targetChapters]);
+  }, [bookId, scope, chapterProgress, quizAttempts, quizScores, totalChapters, targetChapters]);
 
   return {
     eligibility,
@@ -143,5 +157,6 @@ export function useLearningDeckEligibility({
     refresh: fetchProgress,
     chapterProgress,
     quizAttempts,
+    quizScores,
   };
 }

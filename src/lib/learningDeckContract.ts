@@ -7,17 +7,26 @@
 
 export const VLD_VERSION = '1.0';
 
-// Eligibility thresholds (RELAXED for accessibility per user request)
+// Eligibility thresholds - TWO TIERS: Basic (relaxed) and Premium (full completion)
 export const VLD_ELIGIBILITY = {
-  CHAPTER_READ_PROGRESS: 30,   // % of chapter that must be read (lowered from 80%)
-  BOOK_CHAPTER_COMPLETION: 30, // % of book chapters that must be completed (lowered from 80%)
-  QUIZ_ATTEMPT_REQUIRED: false, // Quiz no longer required for basic deck access
+  // BASIC TIER - Relaxed for accessibility (anyone can generate basic decks)
+  BASIC_READ_PROGRESS: 0,       // No minimum read progress for basic decks
+  BASIC_QUIZ_REQUIRED: false,   // No quiz required for basic decks
+  
+  // PREMIUM TIER - Full completion required for certification-ready decks
+  PREMIUM_CHAPTER_READ_PROGRESS: 80,  // 80% of chapters must be read
+  PREMIUM_BOOK_COMPLETION: 80,        // 80% of book must be completed
+  PREMIUM_QUIZ_REQUIRED: true,        // Quiz required for premium decks
+  PREMIUM_QUIZ_PASS_RATE: 70,         // 70% quiz pass rate required
+  
+  // Deck limits
   MAX_SLIDES_DEFAULT: 10,
   MAX_SLIDES_LIMIT: 15,
-  // Premium deck access still requires full completion
-  PREMIUM_CHAPTER_READ_PROGRESS: 80,
-  PREMIUM_QUIZ_REQUIRED: true,
+  PREMIUM_MAX_SLIDES: 25,
 } as const;
+
+// Deck tiers
+export type DeckTier = 'basic' | 'premium';
 
 // Deck scope types
 export type DeckScope = 'chapter' | 'book';
@@ -85,13 +94,17 @@ export interface LearningDeck {
 
 export interface DeckEligibility {
   isEligible: boolean;
+  tier: DeckTier;                  // Which tier the user qualifies for
+  isPremiumEligible: boolean;     // Can generate premium certification decks
   chaptersRead: number[];
   chaptersRequired: number[];
   quizzesAttempted: number[];
   quizzesRequired: number[];
+  quizzesPassed: number[];        // Quizzes with passing score
   readProgress: number;
   hasIntegrityFlags: boolean;
   reason?: string;
+  premiumBlocker?: string;        // Why premium isn't available
 }
 
 export interface DeckGenerationParams {
@@ -110,6 +123,9 @@ export interface DeckGenerationParams {
 
 /**
  * Check if user is eligible to generate a learning deck
+ * TWO-TIER SYSTEM:
+ * - Basic: Always eligible (relaxed access per user request)
+ * - Premium: Requires 80% reading + 70% quiz pass rate (certification-ready)
  */
 export function checkDeckEligibility(
   scope: DeckScope,
@@ -117,12 +133,14 @@ export function checkDeckEligibility(
   quizAttempts: Map<number, boolean>,   // chapter number -> quiz attempted
   totalChapters: number,
   requestedChapters?: number[],
-  hasIntegrityFlags = false
+  hasIntegrityFlags = false,
+  quizScores?: Map<number, number>      // chapter number -> quiz score (0-100)
 ): DeckEligibility {
   const chaptersRead: number[] = [];
   const chaptersRequired: number[] = [];
   const quizzesAttempted: number[] = [];
   const quizzesRequired: number[] = [];
+  const quizzesPassed: number[] = [];
 
   // Determine which chapters are required
   const targetChapters = scope === 'chapter' && requestedChapters 
@@ -134,12 +152,17 @@ export function checkDeckEligibility(
     quizzesRequired.push(chapterNum);
 
     const progress = chapterProgress.get(chapterNum) || 0;
-    if (progress >= VLD_ELIGIBILITY.CHAPTER_READ_PROGRESS) {
+    if (progress >= VLD_ELIGIBILITY.PREMIUM_CHAPTER_READ_PROGRESS) {
       chaptersRead.push(chapterNum);
     }
 
     if (quizAttempts.get(chapterNum)) {
       quizzesAttempted.push(chapterNum);
+      // Check if quiz was passed
+      const score = quizScores?.get(chapterNum) || 0;
+      if (score >= VLD_ELIGIBILITY.PREMIUM_QUIZ_PASS_RATE) {
+        quizzesPassed.push(chapterNum);
+      }
     }
   }
 
@@ -147,38 +170,42 @@ export function checkDeckEligibility(
   const totalProgress = targetChapters.reduce((sum, ch) => sum + (chapterProgress.get(ch) || 0), 0);
   const readProgress = totalProgress / targetChapters.length;
 
-  // Check eligibility (RELAXED - basic deck access)
-  const minimumChaptersRead = chaptersRead.length >= Math.ceil(chaptersRequired.length * VLD_ELIGIBILITY.CHAPTER_READ_PROGRESS / 100);
-  // Quiz is now optional for basic access
-  const quizRequirementMet = !VLD_ELIGIBILITY.QUIZ_ATTEMPT_REQUIRED || 
-    quizzesAttempted.length >= Math.ceil(quizzesRequired.length * 0.3);
-  
-  // For book scope, need 30% of chapters complete (lowered from 80%)
-  const bookScopeOk = scope === 'chapter' || 
-    (chaptersRead.length / totalChapters) >= (VLD_ELIGIBILITY.BOOK_CHAPTER_COMPLETION / 100);
+  // BASIC TIER: Always eligible unless integrity flags
+  const isBasicEligible = !hasIntegrityFlags;
 
-  const isEligible = (minimumChaptersRead || readProgress >= VLD_ELIGIBILITY.CHAPTER_READ_PROGRESS) && 
-    quizRequirementMet && bookScopeOk && !hasIntegrityFlags;
+  // PREMIUM TIER: 80% chapters read + 70% quizzes passed
+  const premiumReadMet = readProgress >= VLD_ELIGIBILITY.PREMIUM_CHAPTER_READ_PROGRESS;
+  const premiumQuizMet = quizzesPassed.length >= Math.ceil(quizzesRequired.length * 0.7);
+  const isPremiumEligible = premiumReadMet && premiumQuizMet && !hasIntegrityFlags;
 
-  // Determine reason if not eligible
-  let reason: string | undefined;
-  if (hasIntegrityFlags) {
-    reason = 'Active integrity flags detected. Please contact support.';
-  } else if (!minimumChaptersRead && readProgress < VLD_ELIGIBILITY.CHAPTER_READ_PROGRESS) {
-    reason = `Read at least ${VLD_ELIGIBILITY.CHAPTER_READ_PROGRESS}% of the content to unlock slides.`;
-  } else if (!bookScopeOk) {
-    reason = `Complete ${VLD_ELIGIBILITY.BOOK_CHAPTER_COMPLETION}% of book chapters to generate full-book deck.`;
+  // Determine tier
+  const tier: DeckTier = isPremiumEligible ? 'premium' : 'basic';
+
+  // Premium blocker reason
+  let premiumBlocker: string | undefined;
+  if (!isPremiumEligible) {
+    if (hasIntegrityFlags) {
+      premiumBlocker = 'Integrity flags detected - premium decks unavailable.';
+    } else if (!premiumReadMet) {
+      premiumBlocker = `Read ${VLD_ELIGIBILITY.PREMIUM_CHAPTER_READ_PROGRESS}% of content for premium certification deck.`;
+    } else if (!premiumQuizMet) {
+      premiumBlocker = `Pass 70% of chapter quizzes with ${VLD_ELIGIBILITY.PREMIUM_QUIZ_PASS_RATE}%+ score for premium deck.`;
+    }
   }
 
   return {
-    isEligible,
+    isEligible: isBasicEligible,
+    tier,
+    isPremiumEligible,
     chaptersRead,
     chaptersRequired,
     quizzesAttempted,
     quizzesRequired,
+    quizzesPassed,
     readProgress,
     hasIntegrityFlags,
-    reason,
+    reason: hasIntegrityFlags ? 'Integrity flags detected. Contact support.' : undefined,
+    premiumBlocker,
   };
 }
 

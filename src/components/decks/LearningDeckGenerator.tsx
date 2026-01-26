@@ -113,9 +113,10 @@ export function LearningDeckGenerator({
 
   const isEligible = eligibility?.isEligible ?? false;
 
-  // Generate deck
+  // Generate deck - always allowed for basic tier
   const handleGenerate = useCallback(async () => {
-    if (!isEligible) {
+    // Basic tier is always eligible unless integrity flags
+    if (eligibility?.hasIntegrityFlags) {
       toast({
         title: VLD_COPY.lockedTitle,
         description: eligibility?.reason || VLD_COPY.lockedDescription,
@@ -200,15 +201,29 @@ export function LearningDeckGenerator({
     }
   }, [generatedDeck, bookTitle, toast]);
 
-  // Render eligibility progress
+  // Render eligibility progress with two-tier display
   const renderEligibilityProgress = () => {
     if (!eligibility) return null;
 
     const readPercent = (eligibility.chaptersRead.length / eligibility.chaptersRequired.length) * 100;
-    const quizPercent = (eligibility.quizzesAttempted.length / eligibility.quizzesRequired.length) * 100;
+    const quizPassPercent = eligibility.quizzesPassed 
+      ? (eligibility.quizzesPassed.length / eligibility.quizzesRequired.length) * 100 
+      : 0;
 
     return (
       <div className="space-y-3">
+        {/* Current Tier Badge */}
+        <div className="flex items-center gap-2">
+          <Badge variant={eligibility.tier === 'premium' ? 'default' : 'secondary'}>
+            {eligibility.tier === 'premium' ? '⭐ Premium Tier' : '📄 Basic Tier'}
+          </Badge>
+          {eligibility.tier === 'basic' && (
+            <span className="text-xs text-muted-foreground">
+              Complete requirements for premium certification deck
+            </span>
+          )}
+        </div>
+
         <div>
           <div className="flex items-center justify-between text-sm mb-1">
             <span className="flex items-center gap-1.5">
@@ -216,7 +231,7 @@ export function LearningDeckGenerator({
               Reading Progress
             </span>
             <span className="text-muted-foreground">
-              {eligibility.chaptersRead.length}/{eligibility.chaptersRequired.length} chapters
+              {eligibility.chaptersRead.length}/{eligibility.chaptersRequired.length} chapters (80% needed for premium)
             </span>
           </div>
           <Progress value={readPercent} className="h-2" />
@@ -225,14 +240,22 @@ export function LearningDeckGenerator({
           <div className="flex items-center justify-between text-sm mb-1">
             <span className="flex items-center gap-1.5">
               <GraduationCap className="h-3.5 w-3.5" />
-              Quizzes Attempted
+              Quizzes Passed
             </span>
             <span className="text-muted-foreground">
-              {eligibility.quizzesAttempted.length}/{eligibility.quizzesRequired.length} quizzes
+              {eligibility.quizzesPassed?.length || 0}/{eligibility.quizzesRequired.length} quizzes (70% needed for premium)
             </span>
           </div>
-          <Progress value={quizPercent} className="h-2" />
+          <Progress value={quizPassPercent} className="h-2" />
         </div>
+        
+        {/* Premium blocker message */}
+        {eligibility.premiumBlocker && (
+          <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
+            <AlertCircle className="h-3 w-3" />
+            {eligibility.premiumBlocker}
+          </p>
+        )}
       </div>
     );
   };
@@ -315,114 +338,96 @@ export function LearningDeckGenerator({
         </DialogHeader>
 
         <div className="space-y-6 py-4">
-          {/* Eligibility Status */}
+          {/* Eligibility Status - Always show, always eligible for basic tier */}
           <div className={cn(
             'p-4 rounded-lg border',
-            isEligible 
-              ? 'bg-emerald-500/10 border-emerald-500/30' 
-              : 'bg-amber-500/10 border-amber-500/30'
+            eligibility?.tier === 'premium'
+              ? 'bg-scroll-gold/10 border-scroll-gold/30' 
+              : 'bg-emerald-500/10 border-emerald-500/30'
           )}>
             <div className="flex items-center gap-2 mb-3">
-              {isEligible ? (
-                <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              ) : (
-                <AlertCircle className="h-5 w-5 text-amber-600" />
-              )}
+              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
               <span className="font-medium">
-                {isEligible ? 'Ready to Generate' : 'Requirements Pending'}
+                {eligibility?.tier === 'premium' ? '⭐ Premium Deck Ready' : 'Basic Deck Ready'}
               </span>
             </div>
             {renderEligibilityProgress()}
-            {!isEligible && eligibility?.reason && (
-              <p className="text-sm text-amber-700 dark:text-amber-400 mt-3">
-                {eligibility.reason}
-              </p>
-            )}
           </div>
 
-          {/* Generation Options - only show if eligible */}
-          <AnimatePresence>
-            {isEligible && (
-              <motion.div
-                initial={{ opacity: 0, height: 0 }}
-                animate={{ opacity: 1, height: 'auto' }}
-                exit={{ opacity: 0, height: 0 }}
-                className="space-y-4"
-              >
-                {/* Scope */}
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Scope</Label>
-                    <Select value={scope} onValueChange={(v) => setScope(v as DeckScope)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="chapter">Current Chapter</SelectItem>
-                        <SelectItem value="book">Full Book</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+          {/* Generation Options - Always show since basic tier is always eligible */}
+          <div className="space-y-4">
+            {/* Scope */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Scope</Label>
+                <Select value={scope} onValueChange={(v) => setScope(v as DeckScope)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="chapter">Current Chapter</SelectItem>
+                    <SelectItem value="book">Full Book</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                  <div className="space-y-2">
-                    <Label>Target Audience</Label>
-                    <Select value={targetAudience} onValueChange={(v) => setTargetAudience(v as TargetAudience)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="student">Student</SelectItem>
-                        <SelectItem value="lecturer">Lecturer</SelectItem>
-                        <SelectItem value="employer">Employer</SelectItem>
-                        <SelectItem value="peer-teaching">Peer Teaching</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-                </div>
+              <div className="space-y-2">
+                <Label>Target Audience</Label>
+                <Select value={targetAudience} onValueChange={(v) => setTargetAudience(v as TargetAudience)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="student">Student</SelectItem>
+                    <SelectItem value="lecturer">Lecturer</SelectItem>
+                    <SelectItem value="employer">Employer</SelectItem>
+                    <SelectItem value="peer-teaching">Peer Teaching</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
 
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label>Tone</Label>
-                    <Select value={tone} onValueChange={(v) => setTone(v as DeckTone)}>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="academic">Academic</SelectItem>
-                        <SelectItem value="simple">Simple</SelectItem>
-                        <SelectItem value="visual">Visual-First</SelectItem>
-                        <SelectItem value="children">Children-Friendly</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Tone</Label>
+                <Select value={tone} onValueChange={(v) => setTone(v as DeckTone)}>
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="academic">Academic</SelectItem>
+                    <SelectItem value="simple">Simple</SelectItem>
+                    <SelectItem value="visual">Visual-First</SelectItem>
+                    <SelectItem value="children">Children-Friendly</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
 
-                  <div className="space-y-2">
-                    <Label>Max Slides: {maxSlides}</Label>
-                    <Slider
-                      value={[maxSlides]}
-                      onValueChange={([v]) => setMaxSlides(v)}
-                      min={5}
-                      max={VLD_ELIGIBILITY.MAX_SLIDES_LIMIT}
-                      step={1}
-                      className="mt-3"
-                    />
-                  </div>
-                </div>
+              <div className="space-y-2">
+                <Label>Max Slides: {maxSlides}</Label>
+                <Slider
+                  value={[maxSlides]}
+                  onValueChange={([v]) => setMaxSlides(v)}
+                  min={5}
+                  max={eligibility?.tier === 'premium' ? VLD_ELIGIBILITY.PREMIUM_MAX_SLIDES : VLD_ELIGIBILITY.MAX_SLIDES_LIMIT}
+                  step={1}
+                  className="mt-3"
+                />
+              </div>
+            </div>
 
-                <div className="flex items-center justify-between">
-                  <Label htmlFor="include-visuals" className="flex items-center gap-2">
-                    <FileText className="h-4 w-4" />
-                    Include Visuals
-                  </Label>
-                  <Switch
-                    id="include-visuals"
-                    checked={includeVisuals}
-                    onCheckedChange={setIncludeVisuals}
-                  />
-                </div>
-              </motion.div>
-            )}
-          </AnimatePresence>
+            <div className="flex items-center justify-between">
+              <Label htmlFor="include-visuals" className="flex items-center gap-2">
+                <FileText className="h-4 w-4" />
+                Include Visuals
+              </Label>
+              <Switch
+                id="include-visuals"
+                checked={includeVisuals}
+                onCheckedChange={setIncludeVisuals}
+              />
+            </div>
+          </div>
 
           {/* Generated Deck Preview */}
           {generatedDeck && !showViewer && (
@@ -471,7 +476,7 @@ export function LearningDeckGenerator({
           </Button>
           <Button
             onClick={handleGenerate}
-            disabled={!isEligible || isGenerating}
+            disabled={isGenerating}
             variant="hero"
             className="gap-2"
           >
@@ -483,7 +488,7 @@ export function LearningDeckGenerator({
             ) : (
               <>
                 <Sparkles className="h-4 w-4" />
-                Generate Deck
+                Generate {eligibility?.tier === 'premium' ? 'Premium' : 'Basic'} Deck
               </>
             )}
           </Button>
