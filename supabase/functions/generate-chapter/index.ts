@@ -2243,6 +2243,70 @@ BEGIN REVISION:`;
       
       console.log(`[GENERATE-CHAPTER] Comic sub-type: ${comicSubType}, Has learning: ${comicLearningConfig?.objectives?.length > 0}`);
       
+      // ===========================================
+      // CHAPTER-TO-CHAPTER STORY CONTINUITY
+      // Fetch previous chapters for storyline consistency
+      // ===========================================
+      let previousChaptersSummary = '';
+      
+      if (chapterNumber > 1 && chapter?.book_id) {
+        console.log(`[GENERATE-CHAPTER] Fetching previous chapters for continuity (Chapter ${chapterNumber})...`);
+        
+        const { data: previousChapters } = await supabase
+          .from("chapters")
+          .select("chapter_number, title, content, comic_metadata")
+          .eq("book_id", chapter.book_id)
+          .eq("is_generated", true)
+          .lt("chapter_number", chapterNumber)
+          .order("chapter_number", { ascending: true });
+        
+        if (previousChapters && previousChapters.length > 0) {
+          console.log(`[GENERATE-CHAPTER] Found ${previousChapters.length} previous chapters for continuity`);
+          
+          // Build story continuity context from previous chapters
+          const summaries = previousChapters.map((ch) => {
+            // Extract key plot points from comic metadata if available
+            const metadata = ch.comic_metadata as any;
+            const plotSummary = metadata?.storySummary || '';
+            const keyEvents = metadata?.keyEvents?.join(', ') || '';
+            const endingState = metadata?.chapterEndState || '';
+            
+            // If no metadata, extract from content
+            let contentSummary = '';
+            if (!plotSummary && ch.content) {
+              // Get first and last panels for context
+              const panelMatches = ch.content.match(/\[PANEL\s*\d+\][\s\S]*?(?=\[PANEL|\s*$)/gi) || [];
+              if (panelMatches.length > 0) {
+                const firstPanel = panelMatches[0]?.slice(0, 300) || '';
+                const lastPanel = panelMatches[panelMatches.length - 1]?.slice(0, 300) || '';
+                contentSummary = `Opening: ${firstPanel.replace(/\[PANEL\s*\d+\]/i, '').trim().slice(0, 150)}... Ending: ${lastPanel.replace(/\[PANEL\s*\d+\]/i, '').trim().slice(0, 150)}`;
+              }
+            }
+            
+            return `Chapter ${ch.chapter_number} "${ch.title}": ${plotSummary || contentSummary || 'Story continues'}${keyEvents ? ` Key events: ${keyEvents}` : ''}${endingState ? ` Ends with: ${endingState}` : ''}`;
+          }).join('\n');
+          
+          previousChaptersSummary = `
+===========================================
+STORY CONTINUITY - PREVIOUS CHAPTERS
+===========================================
+The following chapters have already been told. Your new chapter MUST continue from where the last chapter ended.
+DO NOT contradict established events. DO NOT repeat plot points. BUILD upon what happened.
+
+${summaries}
+
+CRITICAL CONTINUITY RULES:
+1. Characters must remember what happened in previous chapters
+2. Plot threads introduced earlier should be acknowledged or developed
+3. The emotional arc should progress naturally from the previous chapter's ending
+4. References to past events should be consistent and accurate
+5. If this is a mid-story chapter, DO NOT start like it's the beginning of a new story
+===========================================
+`;
+          console.log(`[GENERATE-CHAPTER] Story continuity context built (${previousChaptersSummary.length} chars)`);
+        }
+      }
+      
       // Build enhanced multi-agent system prompt
       const systemPrompt = buildEnhancedComicSystemPrompt(
         comicSubType,
@@ -2253,7 +2317,7 @@ BEGIN REVISION:`;
       );
       
       // Build enhanced chapter prompt with learning objectives
-      const chapterPrompt = buildEnhancedComicChapterPrompt(
+      let chapterPrompt = buildEnhancedComicChapterPrompt(
         chapterTitle, 
         bookTitle, 
         chapterNumber, 
@@ -2263,6 +2327,11 @@ BEGIN REVISION:`;
         comicSubType,
         comicLearningConfig
       );
+      
+      // Inject story continuity context if available
+      if (previousChaptersSummary) {
+        chapterPrompt = previousChaptersSummary + '\n\n' + chapterPrompt;
+      }
       
       // Comic generation with retry logic for dialogue validation
       const MAX_COMIC_ATTEMPTS = 2;
@@ -2557,6 +2626,60 @@ This is MANDATORY. No exceptions.`;
 
       const actualWordCount = finalComicContent.split(/\s+/).filter((w: string) => w.length > 0).length;
 
+      // ===========================================
+      // EXTRACT STORY SUMMARY FOR CONTINUITY
+      // This metadata helps future chapters maintain story flow
+      // ===========================================
+      let comicMetadata: any = {};
+      
+      try {
+        // Use AI to extract story summary for continuity
+        const summaryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash-lite",
+            messages: [{
+              role: "user",
+              content: `Analyze this comic chapter and extract:
+1. A 2-3 sentence story summary
+2. Key events (max 5 bullet points)
+3. How the chapter ends (emotional state, cliffhanger, resolution)
+
+Comic content:
+${finalComicContent.slice(0, 4000)}
+
+Return JSON only:
+{
+  "storySummary": "...",
+  "keyEvents": ["event1", "event2"],
+  "chapterEndState": "..."
+}`
+            }],
+          }),
+        });
+        
+        if (summaryResponse.ok) {
+          const summaryData = await summaryResponse.json();
+          const summaryContent = summaryData.choices?.[0]?.message?.content || '';
+          const jsonMatch = summaryContent.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            comicMetadata = JSON.parse(jsonMatch[0]);
+            console.log(`[GENERATE-CHAPTER] Story metadata extracted for continuity`);
+          }
+        }
+      } catch (metaError) {
+        console.error("[GENERATE-CHAPTER] Failed to extract story metadata:", metaError);
+      }
+      
+      // Add panel data to metadata
+      comicMetadata.panelCount = panels.length;
+      comicMetadata.dialogueCount = comicValidation?.totalDialogueCount || 0;
+      comicMetadata.generatedAt = new Date().toISOString();
+
       const { error: updateError } = await supabase
         .from("chapters")
         .update({
@@ -2564,6 +2687,7 @@ This is MANDATORY. No exceptions.`;
           word_count: actualWordCount,
           is_generated: true,
           updated_at: new Date().toISOString(),
+          comic_metadata: comicMetadata,
         })
         .eq("id", chapterId);
 
@@ -2589,6 +2713,7 @@ This is MANDATORY. No exceptions.`;
           totalDialogueCount: finalDialogueCount,
           panelsWithDialogue: comicValidation?.panelDialogues?.filter(p => p.hasDialogue).length || 0,
         },
+        storyMetadata: comicMetadata,
       }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
