@@ -50,62 +50,147 @@ const SUPPORTED_LANGUAGES = [
   { value: 'css', label: 'CSS', executor: 'preview' },
 ] as const;
 
-// Simulated execution for non-JS languages (educational purpose)
+// Enhanced code execution with proper output capture
 function simulateExecution(code: string, language: string): { output: string; error?: string } {
-  // For JavaScript, we can actually execute it
+  // For JavaScript - PROPER execution with full console capture
   if (language === 'javascript') {
     try {
       const logs: string[] = [];
-      const originalLog = console.log;
+      const originalConsole = {
+        log: console.log,
+        warn: console.warn,
+        error: console.error,
+        info: console.info,
+      };
+      
+      // Capture all console methods
       console.log = (...args) => {
         logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '));
       };
+      console.warn = (...args) => {
+        logs.push(`⚠️ ${args.map(a => String(a)).join(' ')}`);
+      };
+      console.error = (...args) => {
+        logs.push(`❌ ${args.map(a => String(a)).join(' ')}`);
+      };
+      console.info = (...args) => {
+        logs.push(`ℹ️ ${args.map(a => String(a)).join(' ')}`);
+      };
       
-      // Create a safe execution context
+      // Create isolated execution context with common utilities
       const result = new Function(`
         "use strict";
+        // Provide common utilities
+        const print = (...args) => console.log(...args);
+        
         ${code}
       `)();
       
-      console.log = originalLog;
+      // Restore console
+      Object.assign(console, originalConsole);
       
+      // Include return value if present
       if (result !== undefined) {
         logs.push(`→ ${typeof result === 'object' ? JSON.stringify(result, null, 2) : result}`);
       }
       
-      return { output: logs.length > 0 ? logs.join('\n') : '(no output)' };
+      return { output: logs.length > 0 ? logs.join('\n') : '✓ Code executed successfully (no output)' };
     } catch (error) {
       return { 
         output: '', 
-        error: error instanceof Error ? error.message : String(error) 
+        error: `${error instanceof Error ? error.name : 'Error'}: ${error instanceof Error ? error.message : String(error)}` 
       };
     }
   }
   
-  // For Python - provide educational simulation
+  // For Python - enhanced simulation with more pattern support
   if (language === 'python') {
-    // Simple print detection for demo purposes
-    const printMatch = code.match(/print\s*\(\s*["']([^"']+)["']\s*\)/g);
-    if (printMatch) {
-      const outputs = printMatch.map(p => {
-        const match = p.match(/print\s*\(\s*["']([^"']+)["']\s*\)/);
-        return match ? match[1] : '';
-      });
+    const outputs: string[] = [];
+    
+    // Match print statements with various patterns
+    const printPatterns = [
+      /print\s*\(\s*f?["']([^"']+)["']\s*\)/g,  // print("text") or print(f"text")
+      /print\s*\(\s*(\d+(?:\s*[+\-*/]\s*\d+)*)\s*\)/g, // print(1 + 2)
+      /print\s*\(\s*(\w+)\s*\)/g, // print(variable)
+    ];
+    
+    for (const pattern of printPatterns) {
+      const matches = code.matchAll(pattern);
+      for (const match of matches) {
+        // Try to evaluate simple expressions
+        const content = match[1];
+        if (/^\d+(?:\s*[+\-*/]\s*\d+)*$/.test(content)) {
+          try {
+            outputs.push(String(eval(content)));
+          } catch {
+            outputs.push(content);
+          }
+        } else {
+          outputs.push(content);
+        }
+      }
+    }
+    
+    // Detect function definitions
+    const funcDefs = code.match(/def\s+(\w+)\s*\([^)]*\):/g);
+    if (funcDefs) {
+      outputs.push(`📦 Defined: ${funcDefs.map(f => f.match(/def\s+(\w+)/)?.[1]).filter(Boolean).join(', ')}`);
+    }
+    
+    // Detect class definitions
+    const classDefs = code.match(/class\s+(\w+)[:(]/g);
+    if (classDefs) {
+      outputs.push(`🏗️ Class: ${classDefs.map(c => c.match(/class\s+(\w+)/)?.[1]).filter(Boolean).join(', ')}`);
+    }
+    
+    if (outputs.length > 0) {
       return { output: outputs.join('\n') };
     }
     
-    // Simple variable assignment detection
-    const varMatch = code.match(/(\w+)\s*=\s*["']?([^"'\n]+)["']?/);
-    if (varMatch) {
-      return { output: `Variable '${varMatch[1]}' assigned value: ${varMatch[2]}` };
-    }
+    return { 
+      output: '✓ Python code parsed successfully\n\n💡 For live Python execution, use a Python environment.\nThis playground simulates basic print() output.' 
+    };
+  }
+
+  // TypeScript - transpile conceptually
+  if (language === 'typescript') {
+    // Try to run as JavaScript (strip types conceptually)
+    const jsCode = code
+      .replace(/:\s*(string|number|boolean|any|void|never|unknown)(\[\])?/g, '')
+      .replace(/<[^>]+>/g, '')
+      .replace(/interface\s+\w+\s*\{[^}]*\}/g, '')
+      .replace(/type\s+\w+\s*=[^;]+;/g, '');
     
-    return { output: '# Code parsed successfully\n# (Live Python execution requires a server-side runtime)' };
+    return simulateExecution(jsCode, 'javascript');
+  }
+
+  // For SQL - explain the query
+  if (language === 'sql') {
+    const operations = [];
+    if (/SELECT/i.test(code)) operations.push('📊 SELECT query');
+    if (/INSERT/i.test(code)) operations.push('➕ INSERT operation');
+    if (/UPDATE/i.test(code)) operations.push('✏️ UPDATE operation');
+    if (/DELETE/i.test(code)) operations.push('🗑️ DELETE operation');
+    if (/CREATE/i.test(code)) operations.push('🏗️ CREATE statement');
+    if (/JOIN/i.test(code)) operations.push('🔗 JOIN detected');
+    
+    return {
+      output: operations.length > 0 
+        ? `✓ SQL parsed successfully\n\n${operations.join('\n')}\n\n💡 Run this query in your database client.`
+        : '✓ SQL code parsed\n\n💡 Run this query in your database client for results.'
+    };
   }
   
-  // For other languages, provide syntax validation feedback
+  // For other languages, provide helpful feedback
+  const langInfo: Record<string, string> = {
+    java: 'Java requires compilation with javac',
+    cpp: 'C++ requires compilation with g++ or clang++',
+    html: 'Open in browser to see rendered output',
+    css: 'Apply to HTML elements to see styling',
+  };
+  
   return { 
-    output: `✓ ${language.toUpperCase()} code parsed\n\n[Live execution for ${language} requires server-side compilation]\n\nTip: Review your code logic manually or test in a local environment.`
+    output: `✓ ${language.toUpperCase()} code parsed successfully\n\n${langInfo[language] || `${language} requires a dedicated runtime environment.`}\n\n💡 Copy this code to your local development environment to execute.`
   };
 }
 

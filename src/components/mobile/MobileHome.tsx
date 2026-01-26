@@ -140,17 +140,26 @@ export function MobileHome() {
   }, []);
 
   // CONTRACT 5: Defer data fetch to after first paint and track SLA
+  // FIXED: Use requestAnimationFrame chain for faster paint
   useEffect(() => {
     // Mark first content immediately (skeletons are visible)
     markFirstContent('MobileHome');
     
-    // Use requestIdleCallback or setTimeout to not block paint
-    const timeoutId = setTimeout(() => {
-      fetchData().then(() => {
-        markInteractive('MobileHome');
+    // Use double RAF to ensure we're after paint, then fetch immediately
+    let cancelled = false;
+    requestAnimationFrame(() => {
+      if (cancelled) return;
+      requestAnimationFrame(() => {
+        if (cancelled) return;
+        fetchData().then(() => {
+          if (!cancelled) {
+            markInteractive('MobileHome');
+          }
+        });
       });
-    }, 0);
-    return () => clearTimeout(timeoutId);
+    });
+    
+    return () => { cancelled = true; };
   }, [fetchData]);
 
   // Main content - note: padding-top is handled by MobileLayout wrapper
