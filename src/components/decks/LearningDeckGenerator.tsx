@@ -23,7 +23,9 @@ import {
   FileText,
   ChevronRight,
   X,
+  FileDown,
 } from 'lucide-react';
+import { exportToPowerPoint, downloadBlob } from '@/lib/exportLearningDeck';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
@@ -175,29 +177,28 @@ export function LearningDeckGenerator({
   ]);
 
   // Export deck as PDF
-  const handleExport = useCallback(async () => {
+  // Export deck as PowerPoint
+  const [isExporting, setIsExporting] = useState(false);
+  
+  const handleExportPPTX = useCallback(async () => {
     if (!generatedDeck) return;
+    setIsExporting(true);
 
     try {
-      const { data, error } = await supabase.functions.invoke('export-learning-deck', {
-        body: { deck: generatedDeck, format: 'pdf' },
-      });
+      const blob = await exportToPowerPoint(generatedDeck, bookTitle);
+      const filename = `${bookTitle.replace(/[^a-zA-Z0-9]/g, '_')}_LearningDeck.pptx`;
+      downloadBlob(blob, filename);
 
-      if (error) throw error;
-
-      // Download the PDF
-      const link = document.createElement('a');
-      link.href = `data:application/pdf;base64,${data.content}`;
-      link.download = `${bookTitle.replace(/[^a-zA-Z0-9]/g, '_')}_LearningDeck.pdf`;
-      link.click();
-
-      toast({ title: 'Deck Exported', description: 'PDF downloaded successfully.' });
+      toast({ title: 'PowerPoint Exported', description: 'PPTX downloaded successfully.' });
     } catch (err) {
+      console.error('[VLD] Export error:', err);
       toast({
         title: 'Export Failed',
-        description: 'Could not export deck',
+        description: 'Could not export PowerPoint',
         variant: 'destructive',
       });
+    } finally {
+      setIsExporting(false);
     }
   }, [generatedDeck, bookTitle, toast]);
 
@@ -452,9 +453,19 @@ export function LearningDeckGenerator({
                   <Eye className="h-3.5 w-3.5" />
                   View Slides
                 </Button>
-                <Button variant="outline" size="sm" onClick={handleExport} className="gap-1.5">
-                  <Download className="h-3.5 w-3.5" />
-                  Export PDF
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  onClick={handleExportPPTX} 
+                  className="gap-1.5"
+                  disabled={isExporting}
+                >
+                  {isExporting ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <FileDown className="h-3.5 w-3.5" />
+                  )}
+                  Export PPTX
                 </Button>
               </div>
             </div>
