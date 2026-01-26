@@ -68,14 +68,15 @@ export function FloatingActions({
         right: "max(1rem, env(safe-area-inset-right))"
       }}
     >
-      {/* Expanded Menu */}
+      {/* Expanded Menu - positioned to avoid content overlap */}
       <AnimatePresence>
         {isExpanded && (
           <motion.div
             initial={{ opacity: 0, scale: 0.8, y: 20 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
             exit={{ opacity: 0, scale: 0.8, y: 20 }}
-            className="absolute bottom-14 right-0 flex flex-col gap-2 bg-background/95 backdrop-blur-lg rounded-xl p-3 border border-border/50 shadow-xl min-w-[160px]"
+            className="absolute bottom-16 right-0 flex flex-col gap-2 bg-background backdrop-blur-lg rounded-xl p-3 border border-border shadow-2xl min-w-[180px] max-h-[60vh] overflow-y-auto"
+            style={{ maxWidth: 'calc(100vw - 2rem)' }}
           >
             {/* Voice AI */}
             <VoiceConversationButton 

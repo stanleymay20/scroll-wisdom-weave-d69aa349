@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -336,17 +336,20 @@ export function QuizMode({
 }
 
 // Button to open quiz mode
-export function QuizModeButton({ onClick }: { onClick: () => void }) {
-  const { t } = useLanguage();
-  return (
-    <Button
-      onClick={onClick}
-      variant="outline"
-      size="sm"
-      className="gap-2"
-    >
-      <GraduationCap className="h-4 w-4" />
-      {t('quiz.title').replace('Chapter ', '')}
-    </Button>
-  );
-}
+export const QuizModeButton = forwardRef<HTMLButtonElement, { onClick: () => void }>(
+  function QuizModeButton({ onClick }, ref) {
+    const { t } = useLanguage();
+    return (
+      <Button
+        ref={ref}
+        onClick={onClick}
+        variant="outline"
+        size="sm"
+        className="gap-2"
+      >
+        <GraduationCap className="h-4 w-4" />
+        {t('quiz.title').replace('Chapter ', '')}
+      </Button>
+    );
+  }
+);
