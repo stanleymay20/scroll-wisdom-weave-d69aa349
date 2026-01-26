@@ -1051,6 +1051,7 @@ export type Database = {
         }
         Returns: boolean
       }
+      is_staff: { Args: never; Returns: boolean }
       verify_certificate: {
         Args: { cert_number: string }
         Returns: {
