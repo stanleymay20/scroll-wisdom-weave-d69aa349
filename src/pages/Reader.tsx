@@ -175,7 +175,7 @@ export default function Reader() {
   const lastSavedProgress = useRef<number>(0);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Save reading progress to database with debounce and toast
+  // Save reading progress to database with debounce and toast (UPSERT)
   const saveProgress = useCallback(async (chapterNum: number, progressPercent: number, showToast = false) => {
     if (!userId || !bookId) return;
     
@@ -183,14 +183,18 @@ export default function Reader() {
     if (Math.abs(progressPercent - lastSavedProgress.current) < 5 && !showToast) return;
     
     try {
+      // Use UPSERT to ensure the library entry exists and is updated
       const { error } = await supabase
         .from("user_library")
-        .update({
+        .upsert({
+          user_id: userId,
+          book_id: bookId,
           last_read_chapter: chapterNum,
           progress_percent: Math.round(progressPercent)
-        })
-        .eq("user_id", userId)
-        .eq("book_id", bookId);
+        }, { 
+          onConflict: 'user_id,book_id',
+          ignoreDuplicates: false 
+        });
       
       if (!error) {
         lastSavedProgress.current = progressPercent;
@@ -201,6 +205,19 @@ export default function Reader() {
             description: `Chapter ${chapterNum} • ${Math.round(progressPercent)}% complete`,
             duration: 2000,
           });
+        }
+      } else {
+        console.error("[Reader] Progress save error:", error);
+        // Fallback: Try insert if upsert fails (missing unique constraint)
+        if (error.code === '23505' || error.code === '42P10') {
+          await supabase
+            .from("user_library")
+            .update({
+              last_read_chapter: chapterNum,
+              progress_percent: Math.round(progressPercent)
+            })
+            .eq("user_id", userId)
+            .eq("book_id", bookId);
         }
       }
     } catch (error) {
