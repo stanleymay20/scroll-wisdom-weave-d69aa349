@@ -889,20 +889,91 @@ MANDATORY RULES (HARD FAILURE IF VIOLATED):
 5. Inline code for multi-line logic is FORBIDDEN
 6. Collapsed, flattened, or paragraph-style code is INVALID
 
-CODE FORMAT (REQUIRED):
+===========================================
+PYTHON CODE FORMATTING RULES (STRICT):
+===========================================
 
-CODE EXAMPLE ([Language]):
+1. IMPORT STATEMENTS:
+   - ALL imports MUST be on SEPARATE lines
+   - Import statements MUST appear at the TOP of the code block
+   - NO multiple imports on the same line
+   
+   ✅ CORRECT:
+   import os
+   import sys
+   from typing import List
+   
+   ❌ WRONG:
+   import os, sys
+   from typing import List, Dict, Optional
 
-\`\`\`python
-def calculate_total(items):
-    """Calculate total price from items list."""
-    total = 0
-    
-    for item in items:
-        total += item.price
-    
-    return total
-\`\`\`
+2. PRINT STATEMENTS:
+   - Each print() statement MUST be on its OWN line
+   - NO multiple print() statements on the same line
+   
+   ✅ CORRECT:
+   print("Hello")
+   print("World")
+   
+   ❌ WRONG:
+   print("Hello"); print("World")
+   print("Hello") print("World")
+
+3. FUNCTION DEFINITIONS:
+   - Function body must start on a NEW line after def
+   - Proper 4-space indentation inside function body
+   
+   ✅ CORRECT:
+   def greet(name):
+       message = f"Hello {name}"
+       print(message)
+       return message
+   
+   ❌ WRONG:
+   def greet(name): print(f"Hello {name}"); return
+
+4. CODE AND OUTPUT SEPARATION:
+   - Code and expected output MUST be in SEPARATE blocks
+   - Use "Output:" label before output section
+   - Output NEVER appears on the same line as code
+   
+   ✅ CORRECT FORMAT:
+   \`\`\`python
+   x = 5
+   y = 10
+   result = x + y
+   print(f"Sum: {result}")
+   \`\`\`
+   
+   **Output:**
+   \`\`\`
+   Sum: 15
+   \`\`\`
+   
+   ❌ WRONG (output inline):
+   print("Hello")  # Output: Hello
+   x = 5  # >>> 5
+
+5. NO SHELL/INTERPRETER PREFIXES IN CODE:
+   - Do NOT include "python", "bash", "$", ">>>" before code
+   - Code blocks show ONLY the code, not the command to run it
+   
+   ✅ CORRECT:
+   \`\`\`python
+   print("Hello World")
+   \`\`\`
+   
+   ❌ WRONG:
+   \`\`\`
+   python print("Hello World")
+   $ python script.py
+   >>> print("Hello World")
+   \`\`\`
+
+6. BLANK LINES FOR READABILITY:
+   - Blank line between function definitions
+   - Blank line between logical sections
+   - Blank line after import blocks
 
 VALIDATION RULE:
 If any code block would raise a syntax or indentation error
@@ -919,6 +990,9 @@ FORBIDDEN:
 - Unindented or poorly indented code
 - Code without language identifier
 - Code embedded in prose without block formatting
+- Multiple statements separated by semicolons
+- Output on the same line as code
+- Shell prefixes (python, bash, $, >>>) in code blocks
 
 If code is unreadable or improperly formatted, REWRITE ENTIRE SECTION.
 

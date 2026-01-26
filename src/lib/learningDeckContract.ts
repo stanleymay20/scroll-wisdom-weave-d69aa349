@@ -7,21 +7,21 @@
 
 export const VLD_VERSION = '1.0';
 
-// Eligibility thresholds - TWO TIERS: Basic (relaxed) and Premium (full completion)
+// Eligibility thresholds - NO RESTRICTIONS (accessible to everyone)
 export const VLD_ELIGIBILITY = {
-  // BASIC TIER - Relaxed for accessibility (anyone can generate basic decks)
-  BASIC_READ_PROGRESS: 0,       // No minimum read progress for basic decks
-  BASIC_QUIZ_REQUIRED: false,   // No quiz required for basic decks
+  // NO RESTRICTIONS - Anyone can generate decks immediately
+  BASIC_READ_PROGRESS: 0,       // No minimum read progress
+  BASIC_QUIZ_REQUIRED: false,   // No quiz required
   
-  // PREMIUM TIER - Full completion required for certification-ready decks
-  PREMIUM_CHAPTER_READ_PROGRESS: 80,  // 80% of chapters must be read
-  PREMIUM_BOOK_COMPLETION: 80,        // 80% of book must be completed
-  PREMIUM_QUIZ_REQUIRED: true,        // Quiz required for premium decks
-  PREMIUM_QUIZ_PASS_RATE: 70,         // 70% quiz pass rate required
+  // PREMIUM TIER - Optional for certification-ready decks (informational only)
+  PREMIUM_CHAPTER_READ_PROGRESS: 0,   // No restriction
+  PREMIUM_BOOK_COMPLETION: 0,         // No restriction
+  PREMIUM_QUIZ_REQUIRED: false,       // No quiz required
+  PREMIUM_QUIZ_PASS_RATE: 0,          // No pass rate required
   
-  // Deck limits
-  MAX_SLIDES_DEFAULT: 10,
-  MAX_SLIDES_LIMIT: 15,
+  // Deck limits - generous for all users
+  MAX_SLIDES_DEFAULT: 15,
+  MAX_SLIDES_LIMIT: 25,
   PREMIUM_MAX_SLIDES: 25,
 } as const;
 
@@ -123,9 +123,7 @@ export interface DeckGenerationParams {
 
 /**
  * Check if user is eligible to generate a learning deck
- * TWO-TIER SYSTEM:
- * - Basic: Always eligible (relaxed access per user request)
- * - Premium: Requires 80% reading + 70% quiz pass rate (certification-ready)
+ * NO RESTRICTIONS - Everyone can generate decks immediately
  */
 export function checkDeckEligibility(
   scope: DeckScope,
