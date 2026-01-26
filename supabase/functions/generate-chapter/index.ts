@@ -1924,9 +1924,20 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  // Parse body ONCE at the start to avoid "Body is unusable" error
+  let requestBody: Record<string, unknown> | null = null;
+  try {
+    requestBody = await req.json();
+  } catch (e) {
+    console.error("[GENERATE-CHAPTER] Failed to parse request body:", e);
+    return new Response(
+      JSON.stringify({ error: "Invalid request body", code: "PARSE_ERROR" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  }
+
   // Health check (no auth required)
-  const healthBody = await req.clone().json().catch(() => null);
-  if (healthBody?.healthCheck) {
+  if (requestBody?.healthCheck) {
     return new Response(
       JSON.stringify({ ok: true, function: "generate-chapter", buildId: `fn:${new Date().toISOString()}` }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -1934,7 +1945,7 @@ serve(async (req) => {
   }
   
   // OCR check endpoint (requires auth, handled below)
-  if (healthBody?.ocrCheck && healthBody?.imageUrl) {
+  if (requestBody?.ocrCheck && (requestBody as Record<string, unknown>)?.imageUrl) {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       return new Response(JSON.stringify({ error: "API key not configured" }), {
@@ -1952,7 +1963,7 @@ serve(async (req) => {
             role: "user",
             content: [
               { type: "text", text: `Analyze this comic panel image. List ALL visible text including speech bubbles, captions, and any words. Return JSON: {"hasText": boolean, "foundText": ["word1", "word2", ...]}` },
-              { type: "image_url", image_url: { url: healthBody.imageUrl } }
+              { type: "image_url", image_url: { url: requestBody.imageUrl as string } }
             ]
           }],
         }),
@@ -2024,23 +2035,22 @@ serve(async (req) => {
     const userPlan = profile?.plan || "free";
     const maxWordCount = TIER_WORD_LIMITS[userPlan as keyof typeof TIER_WORD_LIMITS] || TIER_WORD_LIMITS.free;
 
-    const { 
-      chapterId, 
-      bookTitle, 
-      chapterTitle, 
-      chapterNumber, 
-      keyTopics, 
-      category,
-      wordCount = 4000,
-      language = 'English',
-      bookType = 'text',
-      academicMode = false,
-      citationStyle = 'APA',
-      comicStyle = 'children_book',
-      // NEW: Edit control parameters
-      editIntent = null,
-      isRegeneration = false,
-    } = await req.json();
+    // Use already-parsed requestBody instead of re-reading req.json()
+    const chapterId = requestBody?.chapterId as string | undefined;
+    const bookTitle = requestBody?.bookTitle as string;
+    const chapterTitle = requestBody?.chapterTitle as string;
+    const chapterNumber = requestBody?.chapterNumber as number;
+    const keyTopics = (requestBody?.keyTopics as string[]) || [];
+    const category = requestBody?.category as string;
+    const wordCount = (requestBody?.wordCount as number) || 4000;
+    const language = (requestBody?.language as string) || 'English';
+    const bookType = (requestBody?.bookType as string) || 'text';
+    const academicMode = (requestBody?.academicMode as boolean) || false;
+    const citationStyle = (requestBody?.citationStyle as string) || 'APA';
+    const comicStyle = (requestBody?.comicStyle as string) || 'children_book';
+    // Edit control parameters
+    const editIntent = (requestBody?.editIntent as string | null) || null;
+    const isRegeneration = (requestBody?.isRegeneration as boolean) || false;
 
     // ===========================================
     // EDIT CONTROL CONTRACT ENFORCEMENT
