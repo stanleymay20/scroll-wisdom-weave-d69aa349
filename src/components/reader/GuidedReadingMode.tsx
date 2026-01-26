@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, forwardRef } from "react";
 import { motion, AnimatePresence, useInView } from "framer-motion";
 import { 
   Brain, 
@@ -366,21 +366,21 @@ export function SectionLock({
   );
 }
 
-// Floating indicator for current cognitive level
-export function CognitiveLevelIndicator({
-  level,
-  progress,
-  onClick
-}: {
-  level: string;
-  progress: number;
-  onClick?: () => void;
-}) {
+// Floating indicator for current cognitive level - wrapped in forwardRef for AnimatePresence
+export const CognitiveLevelIndicator = forwardRef<
+  HTMLButtonElement,
+  {
+    level: string;
+    progress: number;
+    onClick?: () => void;
+  }
+>(function CognitiveLevelIndicator({ level, progress, onClick }, ref) {
   const levelData = COGNITIVE_LEVELS.find(l => l.id === level) || COGNITIVE_LEVELS[1];
   const Icon = levelData.icon;
 
   return (
     <motion.button
+      ref={ref}
       onClick={onClick}
       className={cn(
         "flex items-center gap-2 px-3 py-2 rounded-full",
@@ -405,4 +405,4 @@ export function CognitiveLevelIndicator({
       </span>
     </motion.button>
   );
-}
+});

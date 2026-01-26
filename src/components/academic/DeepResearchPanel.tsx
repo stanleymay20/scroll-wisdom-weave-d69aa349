@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   X, ExternalLink, Copy, CheckCircle2, AlertTriangle, 
@@ -63,14 +63,17 @@ const CONFIDENCE_COLORS = {
   insufficient: 'text-red-400 bg-red-500/20 border-red-500/50',
 };
 
-export function DeepResearchPanel({
+export const DeepResearchPanel = forwardRef<
+  HTMLDivElement,
+  DeepResearchPanelProps
+>(function DeepResearchPanel({
   isOpen,
   onClose,
   sources,
   metadata,
   citationStyle,
   suggestedRefinements,
-}: DeepResearchPanelProps) {
+}, ref) {
   const { toast } = useToast();
   const [expandedSource, setExpandedSource] = useState<string | null>(null);
   const [copiedId, setCopiedId] = useState<string | null>(null);
@@ -388,4 +391,4 @@ export function DeepResearchPanel({
       )}
     </AnimatePresence>
   );
-}
+});
