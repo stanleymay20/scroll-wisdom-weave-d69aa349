@@ -163,6 +163,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/(?<![*\w])\*([^*\n]+)\*(?![*\w])/g, '<em>$1</em>');
     html = html.replace(/(?<![_\w])_([^_\n]+)_(?![_\w])/g, '<em>$1</em>');
     
+    // Underline (<u>text</u> - HTML tag passthrough)
+    html = html.replace(/&lt;u&gt;([^<]+)&lt;\/u&gt;/g, '<u class="md-underline">$1</u>');
+    
     // Strikethrough (~~text~~)
     html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
     
@@ -530,5 +533,26 @@ export const markdownStyles = `
   border: none;
   border-top: 1px solid hsl(var(--border));
   margin: 2rem 0;
+}
+
+.markdown-content .md-underline {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  text-decoration-color: hsl(var(--primary) / 0.6);
+}
+
+.markdown-content strong {
+  font-weight: 700;
+  color: inherit;
+}
+
+.markdown-content em {
+  font-style: italic;
+  color: inherit;
+}
+
+.markdown-content del {
+  text-decoration: line-through;
+  opacity: 0.7;
 }
 `;

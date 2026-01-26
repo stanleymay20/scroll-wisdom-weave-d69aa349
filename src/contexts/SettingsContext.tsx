@@ -15,6 +15,10 @@ interface UserSettings {
   complexity_level: string;
   study_speed: string;
   ai_voice_preference: string;
+  // NEW: Reader-specific settings
+  reading_width: 'narrow' | 'normal' | 'wide' | 'full';
+  reading_speed: 'slow' | 'normal' | 'fast';
+  font_color: string; // HSL string or preset name
 }
 
 const defaultSettings: UserSettings = {
@@ -31,6 +35,10 @@ const defaultSettings: UserSettings = {
   complexity_level: 'intermediate',
   study_speed: 'normal',
   ai_voice_preference: 'natural',
+  // NEW defaults
+  reading_width: 'normal',
+  reading_speed: 'normal',
+  font_color: 'default',
 };
 
 interface SettingsContextType {
@@ -47,6 +55,24 @@ const fontSizeMap: Record<string, string> = {
   medium: '16px',
   large: '18px',
   xlarge: '20px',
+};
+
+// Reading width CSS variable mapping
+const readingWidthMap: Record<string, string> = {
+  narrow: '38rem',
+  normal: '48rem',
+  wide: '64rem',
+  full: '100%',
+};
+
+// Font color presets (HSL)
+export const fontColorPresets: Record<string, { label: string; value: string }> = {
+  default: { label: 'Default', value: 'inherit' },
+  warm: { label: 'Warm', value: 'hsl(35, 85%, 90%)' },
+  cool: { label: 'Cool', value: 'hsl(210, 80%, 90%)' },
+  sepia: { label: 'Sepia', value: 'hsl(30, 50%, 75%)' },
+  green: { label: 'Green', value: 'hsl(150, 60%, 85%)' },
+  amber: { label: 'Amber', value: 'hsl(45, 90%, 85%)' },
 };
 
 export function SettingsProvider({ children }: { children: ReactNode }) {
@@ -76,6 +102,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     root.style.setProperty('--base-font-size', fontSize);
     root.style.fontSize = fontSize;
     
+    // Apply reading width
+    const readingWidth = readingWidthMap[currentSettings.reading_width] || '48rem';
+    root.style.setProperty('--reading-width', readingWidth);
+    
+    // Apply font color
+    const fontColor = fontColorPresets[currentSettings.font_color]?.value || 'inherit';
+    root.style.setProperty('--reader-font-color', fontColor);
+    
     // Apply animations preference
     if (!currentSettings.animations_enabled) {
       root.classList.add('reduce-motion');
@@ -94,11 +128,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           setUserId(user.id);
           const { data } = await supabase
             .from('profiles')
-            .select('theme_preference, font_size, reader_theme, tts_enabled, animations_enabled, email_updates, new_book_alerts, course_reminders, writing_tone, spiritual_strictness, complexity_level, study_speed, ai_voice_preference')
+            .select('theme_preference, font_size, reader_theme, tts_enabled, animations_enabled, email_updates, new_book_alerts, course_reminders, writing_tone, spiritual_strictness, complexity_level, study_speed, ai_voice_preference, learning_preferences')
             .eq('id', user.id)
             .maybeSingle();
           
           if (data) {
+            // Extract reader settings from learning_preferences JSON
+            const learningPrefs = (data.learning_preferences as Record<string, unknown>) || {};
+            
             const userSettings: UserSettings = {
               theme_preference: data.theme_preference || defaultSettings.theme_preference,
               font_size: data.font_size || defaultSettings.font_size,
@@ -113,6 +150,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
               complexity_level: data.complexity_level || defaultSettings.complexity_level,
               study_speed: data.study_speed || defaultSettings.study_speed,
               ai_voice_preference: data.ai_voice_preference || defaultSettings.ai_voice_preference,
+              // Extract new settings from learning_preferences
+              reading_width: (learningPrefs.reading_width as UserSettings['reading_width']) || defaultSettings.reading_width,
+              reading_speed: (learningPrefs.reading_speed as UserSettings['reading_speed']) || defaultSettings.reading_speed,
+              font_color: (learningPrefs.font_color as string) || defaultSettings.font_color,
             };
             setSettings(userSettings);
             applyVisualSettings(userSettings);
@@ -120,7 +161,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
         } else {
           // Apply default/localStorage settings for non-logged-in users
           const themeMode = localStorage.getItem('theme-mode') || 'dark';
-          const settingsWithLocalStorage = { ...defaultSettings, theme_preference: themeMode };
+          const readingWidth = localStorage.getItem('reading-width') || 'normal';
+          const fontColor = localStorage.getItem('font-color') || 'default';
+          const settingsWithLocalStorage = { 
+            ...defaultSettings, 
+            theme_preference: themeMode,
+            reading_width: readingWidth as UserSettings['reading_width'],
+            font_color: fontColor,
+          };
           setSettings(settingsWithLocalStorage);
           applyVisualSettings(settingsWithLocalStorage);
         }
@@ -154,16 +202,48 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     setSettings(newSettings);
     applyVisualSettings(newSettings);
 
+    // Save to localStorage for guest users
+    if (updates.reading_width) localStorage.setItem('reading-width', updates.reading_width);
+    if (updates.font_color) localStorage.setItem('font-color', updates.font_color);
+
     // Save to database if logged in
     if (userId) {
       try {
-        await supabase
-          .from('profiles')
-          .update({
-            ...updates,
-            updated_at: new Date().toISOString(),
-          })
-          .eq('id', userId);
+        // Separate standard fields from learning_preferences fields
+        const { reading_width, reading_speed, font_color, ...standardUpdates } = updates;
+        
+        // If there are new reader settings, update learning_preferences
+        if (reading_width || reading_speed || font_color) {
+          const { data: currentProfile } = await supabase
+            .from('profiles')
+            .select('learning_preferences')
+            .eq('id', userId)
+            .single();
+          
+          const currentPrefs = (currentProfile?.learning_preferences as Record<string, unknown>) || {};
+          
+          await supabase
+            .from('profiles')
+            .update({
+              ...standardUpdates,
+              learning_preferences: {
+                ...currentPrefs,
+                ...(reading_width && { reading_width }),
+                ...(reading_speed && { reading_speed }),
+                ...(font_color && { font_color }),
+              },
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', userId);
+        } else {
+          await supabase
+            .from('profiles')
+            .update({
+              ...standardUpdates,
+              updated_at: new Date().toISOString(),
+            })
+            .eq('id', userId);
+        }
       } catch (error) {
         console.error('Failed to save settings:', error);
       }

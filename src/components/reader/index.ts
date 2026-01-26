@@ -14,6 +14,12 @@ export { CodingQuizQuestion, type CodingQuestion } from './CodingQuizQuestion';
 export { ComicReaderMode, parseComicContentToPanels } from './ComicReaderMode';
 export type { ComicPanelData } from './ComicReaderMode';
 
+// NEW: Reader settings and floating actions
+export { ReaderSettingsPanel, READING_THEMES } from './ReaderSettingsPanel';
+export { FloatingActions } from './FloatingActions';
+export { DirectTextEditor, DirectEditButton } from './DirectTextEditor';
+export type { ReadingTheme } from './ReaderSettingsPanel';
+
 // Contract 9 - Illustrated Content Components (ICG-1.0)
 export { IllustratedImage, ImageExpander, ChartExplainer } from './illustrated';
 export type { 
