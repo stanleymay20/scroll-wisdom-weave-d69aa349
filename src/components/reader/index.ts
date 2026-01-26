@@ -18,6 +18,7 @@ export type { ComicPanelData } from './ComicReaderMode';
 export { ReaderSettingsPanel, READING_THEMES } from './ReaderSettingsPanel';
 export { FloatingActions } from './FloatingActions';
 export { DirectTextEditor, DirectEditButton } from './DirectTextEditor';
+export { MobileReaderLayout, SwipeHintOverlay } from './MobileReaderLayout';
 export type { ReadingTheme } from './ReaderSettingsPanel';
 
 // Contract 9 - Illustrated Content Components (ICG-1.0)
