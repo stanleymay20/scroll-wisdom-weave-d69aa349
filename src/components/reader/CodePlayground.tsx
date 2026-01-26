@@ -3,7 +3,7 @@
  * A standalone sandbox for testing and running code snippets within the reader
  */
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, forwardRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -383,18 +383,14 @@ export function CodePlayground({
 }
 
 // Button to launch playground from reader
-export function PlaygroundButton({ 
-  code, 
-  language,
-  onClick 
-}: { 
-  code?: string;
-  language?: string;
-  onClick: () => void;
-}) {
+export const PlaygroundButton = forwardRef<
+  HTMLButtonElement,
+  { code?: string; language?: string; onClick: () => void }
+>(function PlaygroundButton({ code, language, onClick }, ref) {
   const { t } = useLanguage();
   return (
     <Button
+      ref={ref}
       onClick={onClick}
       variant="outline"
       size="sm"
@@ -404,4 +400,4 @@ export function PlaygroundButton({
       Playground
     </Button>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { 
   Mic, 
@@ -587,25 +587,23 @@ export function VoiceConversation({
 }
 
 // Button to open voice conversation
-export function VoiceConversationButton({ 
-  onClick,
-  cognitiveLevel,
-}: { 
-  onClick: () => void;
-  cognitiveLevel: string;
-}) {
+export const VoiceConversationButton = forwardRef<
+  HTMLButtonElement,
+  { onClick: () => void; cognitiveLevel: string }
+>(function VoiceConversationButton({ onClick, cognitiveLevel }, ref) {
   const isInteractive = cognitiveLevel !== "familiarisation";
   const { t } = useLanguage();
-  
+
   return (
     <Button
+      ref={ref}
       variant="outline"
       size="sm"
       onClick={onClick}
-      className="gap-2"
+      className="gap-2 justify-start"
     >
       <Mic className="h-4 w-4" />
       {isInteractive ? t('voice.voiceAI') : t('voice.listen')}
     </Button>
   );
-}
+});

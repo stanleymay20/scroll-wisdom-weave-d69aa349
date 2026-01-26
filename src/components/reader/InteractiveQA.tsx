@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -441,14 +441,19 @@ export function InteractiveQA({
 }
 
 // Floating button to open Q&A
-export function InteractiveQAButton({ onClick }: { onClick: () => void }) {
-  return (
-    <Button
-      onClick={onClick}
-      size="icon"
-      className="h-12 w-12 rounded-full bg-scroll-gold hover:bg-scroll-gold/90 text-scroll-dark shadow-lg"
-    >
-      <MessageCircle className="h-5 w-5" />
-    </Button>
-  );
-}
+export const InteractiveQAButton = forwardRef<HTMLButtonElement, { onClick: () => void }>(
+  function InteractiveQAButton({ onClick }, ref) {
+    return (
+      <Button
+        ref={ref}
+        onClick={onClick}
+        variant="outline"
+        size="sm"
+        className="gap-2 justify-start"
+      >
+        <MessageCircle className="h-4 w-4" />
+        <span className="text-xs">Ask AI</span>
+      </Button>
+    );
+  }
+);
