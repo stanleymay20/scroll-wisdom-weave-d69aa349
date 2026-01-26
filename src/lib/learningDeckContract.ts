@@ -7,13 +7,16 @@
 
 export const VLD_VERSION = '1.0';
 
-// Eligibility thresholds
+// Eligibility thresholds (RELAXED for accessibility per user request)
 export const VLD_ELIGIBILITY = {
-  CHAPTER_READ_PROGRESS: 80,   // % of chapter that must be read
-  BOOK_CHAPTER_COMPLETION: 80, // % of book chapters that must be completed
-  QUIZ_ATTEMPT_REQUIRED: true, // Quiz must be attempted (pass not required)
+  CHAPTER_READ_PROGRESS: 30,   // % of chapter that must be read (lowered from 80%)
+  BOOK_CHAPTER_COMPLETION: 30, // % of book chapters that must be completed (lowered from 80%)
+  QUIZ_ATTEMPT_REQUIRED: false, // Quiz no longer required for basic deck access
   MAX_SLIDES_DEFAULT: 10,
   MAX_SLIDES_LIMIT: 15,
+  // Premium deck access still requires full completion
+  PREMIUM_CHAPTER_READ_PROGRESS: 80,
+  PREMIUM_QUIZ_REQUIRED: true,
 } as const;
 
 // Deck scope types
@@ -144,26 +147,25 @@ export function checkDeckEligibility(
   const totalProgress = targetChapters.reduce((sum, ch) => sum + (chapterProgress.get(ch) || 0), 0);
   const readProgress = totalProgress / targetChapters.length;
 
-  // Check eligibility
-  const allChaptersRead = chaptersRequired.every(ch => chaptersRead.includes(ch));
-  const allQuizzesAttempted = quizzesRequired.every(ch => quizzesAttempted.includes(ch));
+  // Check eligibility (RELAXED - basic deck access)
+  const minimumChaptersRead = chaptersRead.length >= Math.ceil(chaptersRequired.length * VLD_ELIGIBILITY.CHAPTER_READ_PROGRESS / 100);
+  // Quiz is now optional for basic access
+  const quizRequirementMet = !VLD_ELIGIBILITY.QUIZ_ATTEMPT_REQUIRED || 
+    quizzesAttempted.length >= Math.ceil(quizzesRequired.length * 0.3);
   
-  // For book scope, need 80% of chapters complete
+  // For book scope, need 30% of chapters complete (lowered from 80%)
   const bookScopeOk = scope === 'chapter' || 
     (chaptersRead.length / totalChapters) >= (VLD_ELIGIBILITY.BOOK_CHAPTER_COMPLETION / 100);
 
-  const isEligible = allChaptersRead && allQuizzesAttempted && bookScopeOk && !hasIntegrityFlags;
+  const isEligible = (minimumChaptersRead || readProgress >= VLD_ELIGIBILITY.CHAPTER_READ_PROGRESS) && 
+    quizRequirementMet && bookScopeOk && !hasIntegrityFlags;
 
   // Determine reason if not eligible
   let reason: string | undefined;
   if (hasIntegrityFlags) {
     reason = 'Active integrity flags detected. Please contact support.';
-  } else if (!allChaptersRead) {
-    const missing = chaptersRequired.filter(ch => !chaptersRead.includes(ch));
-    reason = `Read ${VLD_ELIGIBILITY.CHAPTER_READ_PROGRESS}% of chapter(s) ${missing.join(', ')} to unlock.`;
-  } else if (!allQuizzesAttempted) {
-    const missing = quizzesRequired.filter(ch => !quizzesAttempted.includes(ch));
-    reason = `Attempt quiz for chapter(s) ${missing.join(', ')} to unlock.`;
+  } else if (!minimumChaptersRead && readProgress < VLD_ELIGIBILITY.CHAPTER_READ_PROGRESS) {
+    reason = `Read at least ${VLD_ELIGIBILITY.CHAPTER_READ_PROGRESS}% of the content to unlock slides.`;
   } else if (!bookScopeOk) {
     reason = `Complete ${VLD_ELIGIBILITY.BOOK_CHAPTER_COMPLETION}% of book chapters to generate full-book deck.`;
   }

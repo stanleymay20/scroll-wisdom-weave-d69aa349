@@ -2236,11 +2236,10 @@ BEGIN REVISION:`;
       console.log("[GENERATE-CHAPTER] Generating authority-grade comic chapter with multi-agent system...");
       console.log(`[GENERATE-CHAPTER] Comic style: ${effectiveComicStyle}, Panels: ${effectiveLayoutTemplate}`);
       
-      // Extract comic sub-type and learning config from request if available
-      const requestBody = await req.clone().json();
-      const comicSubType = requestBody.comicSubType || 'entertainment';
-      const comicLearningConfig = requestBody.comicLearningConfig || null;
-      const characterSheetConfig = requestBody.characterSheetConfig || effectiveCharacterSheet;
+      // Extract comic sub-type and learning config from already-parsed requestBody
+      const comicSubType = (requestBody?.comicSubType as string) || 'entertainment';
+      const comicLearningConfig = (requestBody?.comicLearningConfig as any) || null;
+      const characterSheetConfig = (requestBody?.characterSheetConfig as any) || effectiveCharacterSheet;
       
       console.log(`[GENERATE-CHAPTER] Comic sub-type: ${comicSubType}, Has learning: ${comicLearningConfig?.objectives?.length > 0}`);
       
