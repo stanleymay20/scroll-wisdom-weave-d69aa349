@@ -21,6 +21,16 @@ export { DirectTextEditor, DirectEditButton } from './DirectTextEditor';
 export { MobileReaderLayout, SwipeHintOverlay } from './MobileReaderLayout';
 export type { ReadingTheme } from './ReaderSettingsPanel';
 
+// Lazy-loaded panels for performance optimization
+export { 
+  LazyLearningDeckGenerator,
+  LazyDeepResearchPanel,
+  LazyCodePlayground,
+  LazyComicReaderMode,
+  LazyVoiceConversation,
+  withLazySuspense
+} from './LazyReaderPanels';
+
 // Contract 9 - Illustrated Content Components (ICG-1.0)
 export { IllustratedImage, ImageExpander, ChartExplainer } from './illustrated';
 export type { 

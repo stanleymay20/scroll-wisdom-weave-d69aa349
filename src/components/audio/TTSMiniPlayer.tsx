@@ -9,7 +9,7 @@
  * - Survive screen lock via Media Session API
  */
 
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useState, useRef, useCallback, useEffect, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -61,7 +61,7 @@ interface TTSMiniPlayerProps {
   onInterrupt?: () => void;
 }
 
-export function TTSMiniPlayer({ 
+export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(function TTSMiniPlayer({ 
   chapterText, 
   selectedText, 
   language = "en", 
@@ -70,7 +70,7 @@ export function TTSMiniPlayer({
   title = "Chapter",
   author = "ScrollLibrary",
   onInterrupt 
-}: TTSMiniPlayerProps) {
+}, ref) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -825,4 +825,4 @@ export function TTSMiniPlayer({
       )}
     </div>
   );
-}
+});
