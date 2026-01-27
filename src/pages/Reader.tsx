@@ -170,6 +170,9 @@ export default function Reader() {
   
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
   const [shouldResumeTTS, setShouldResumeTTS] = useState(false);
+  
+  // AUTO-CONTINUE: Enable audio to automatically advance to next chapter
+  const [autoContinueAudio, setAutoContinueAudio] = useState(true);
 
   const { toast } = useToast();
   const lastSavedProgress = useRef<number>(0);
@@ -762,6 +765,38 @@ export default function Reader() {
                 // CONTRACT 5 - Rule 5.4: Interactive Guard Mode
                 // When user interrupts TTS, open VoiceConversation for Q&A
                 setShowVoiceConversation(true);
+              }}
+              autoContinue={autoContinueAudio}
+              currentChapter={currentChapter}
+              totalChapters={totalChapters}
+              onChapterComplete={async () => {
+                // AUTO-CONTINUE: Navigate to next chapter when audio finishes
+                if (currentChapter < totalChapters) {
+                  console.log("[Reader] Audio complete - advancing to next chapter");
+                  
+                  // Save progress for current chapter
+                  if (userId && book?.total_chapters) {
+                    const overallProgress = (currentChapter / book.total_chapters) * 100;
+                    await saveProgress(currentChapter, overallProgress);
+                  }
+                  
+                  // Navigate to next chapter
+                  window.scrollTo({ top: 0, behavior: 'instant' });
+                  navigate(`/read/${bookId}/${currentChapter + 1}`, { replace: true });
+                  
+                  toast({
+                    title: "Chapter complete",
+                    description: `Continuing to Chapter ${currentChapter + 1}...`,
+                    duration: 2000,
+                  });
+                } else {
+                  // Book complete
+                  toast({
+                    title: "🎉 Book complete!",
+                    description: "You've finished listening to all chapters.",
+                    duration: 4000,
+                  });
+                }
               }}
             />
           </motion.div>
