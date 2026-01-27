@@ -73,6 +73,7 @@ export function LibraryBookCard({
   const progress = progressPercent || 0;
   const isComplete = progress >= 100;
   const isStarted = progress > 0;
+  const isJustAdded = progress === 0; // Book added but not yet opened
 
   // CONTRACT 5B-2.2: Create cached state for instant navigation
   const getCachedState = () => {

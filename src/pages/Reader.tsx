@@ -238,8 +238,16 @@ export default function Reader() {
     };
   }, [userId, bookId, currentChapter, readingProgress, book?.total_chapters, saveProgress]);
 
-  // Track scroll progress and auto-save periodically (optimized: 5s debounce, 10% threshold)
+  // Track scroll progress with THROTTLE for performance (fires max every 100ms)
+  // Auto-save DEBOUNCED at 5s after scroll stops, only if ≥10% change
+  const scrollThrottleRef = useRef<number>(0);
+  
   const handleScroll = useCallback(() => {
+    // THROTTLE: Skip if less than 100ms since last execution
+    const now = Date.now();
+    if (now - scrollThrottleRef.current < 100) return;
+    scrollThrottleRef.current = now;
+    
     if (!contentRef.current) return;
     
     const element = contentRef.current;
@@ -252,7 +260,7 @@ export default function Reader() {
     // CONTRACT 5: Update quiz gating progress
     quizGating.updateReadProgress(progress);
     
-    // Debounced auto-save - only after 5 seconds of no scrolling
+    // DEBOUNCED auto-save - only after 5 seconds of no scrolling
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
@@ -264,11 +272,11 @@ export default function Reader() {
         const overallProgress = ((completedChapters + currentChapterContribution) / book.total_chapters) * 100;
         saveProgress(currentChapter, overallProgress, false); // Silent save
       }
-    }, 5000); // Increased to 5 seconds for less frequent saves
+    }, 5000);
   }, [userId, bookId, book?.total_chapters, currentChapter, saveProgress, quizGating]);
 
   useEffect(() => {
-    window.addEventListener("scroll", handleScroll);
+    window.addEventListener("scroll", handleScroll, { passive: true });
     return () => window.removeEventListener("scroll", handleScroll);
   }, [handleScroll]);
 
