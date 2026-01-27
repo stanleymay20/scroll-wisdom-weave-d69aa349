@@ -210,19 +210,21 @@ Return ONLY valid JSON matching the schema.`;
     });
 
     if (!response.ok) {
-      if (response.status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limits exceeded, please try again later." }), {
+      const errorStatus = response.status;
+      console.error(`[VLD] AI gateway error: ${errorStatus}`);
+      if (errorStatus === 429) {
+        return new Response(JSON.stringify({ error: "Rate limits exceeded. Please wait a moment and try again." }), {
           status: 429,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      if (response.status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required, please add funds to your workspace." }), {
+      if (errorStatus === 402) {
+        return new Response(JSON.stringify({ error: "AI credits exhausted. Please add funds to continue." }), {
           status: 402,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
-      throw new Error(`AI gateway error: ${response.status}`);
+      throw new Error(`AI gateway error: ${errorStatus}`);
     }
 
     const aiResponse = await response.json();
@@ -277,20 +279,30 @@ Return ONLY valid JSON matching the schema.`;
     console.log("[VLD] Generated", slides.length, "slides, now generating visuals...");
 
     // ===========================================
-    // VISUAL GENERATION - NotebookLM Quality
+    // VISUAL GENERATION - NotebookLM Quality (with rate limit handling)
     // ===========================================
     if (params.includeVisuals) {
-      const slidesWithVisuals = await Promise.all(
-        slides.map(async (slide, index) => {
-          // Skip if no visual description or already has imageUrl
-          if (!slide.visual?.description || slide.visual.imageUrl) {
-            return slide;
-          }
+      // Generate visuals with staggered delays to avoid rate limits
+      const visualPromises: Promise<typeof slides[0]>[] = [];
+      
+      for (let i = 0; i < slides.length; i++) {
+        const slide = slides[i];
+        
+        // Skip if no visual description or already has imageUrl
+        if (!slide.visual?.description || slide.visual.imageUrl) {
+          visualPromises.push(Promise.resolve(slide));
+          continue;
+        }
+        
+        // Stagger requests to avoid rate limits - 500ms between each
+        const delayMs = i * 500;
+        
+        const visualPromise = new Promise<typeof slide>(async (resolve) => {
+          await new Promise(r => setTimeout(r, delayMs));
           
           try {
-            console.log(`[VLD] Generating visual for slide ${index + 1}: ${slide.heading}`);
+            console.log(`[VLD] Generating visual for slide ${i + 1}: ${slide.heading}`);
             
-            // Build image prompt optimized for presentation visuals
             const imagePrompt = buildSlideImagePrompt(slide, params.tone);
             
             const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -311,28 +323,32 @@ Return ONLY valid JSON matching the schema.`;
               const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
               
               if (imageUrl) {
-                console.log(`[VLD] Visual generated for slide ${index + 1}`);
-                return {
+                console.log(`[VLD] Visual generated for slide ${i + 1}`);
+                resolve({
                   ...slide,
-                  visual: {
-                    ...slide.visual,
+                  visual: { 
+                    type: slide.visual!.type,
+                    description: slide.visual!.description,
                     imageUrl,
                   },
-                };
+                });
+                return;
               }
             } else {
-              console.log(`[VLD] Image generation failed for slide ${index + 1}: ${imageResponse.status}`);
+              console.log(`[VLD] Image skipped for slide ${i + 1}: ${imageResponse.status}`);
             }
           } catch (imgError) {
-            console.error(`[VLD] Error generating visual for slide ${index + 1}:`, imgError);
+            console.log(`[VLD] Visual error for slide ${i + 1}:`, imgError);
           }
           
           // Return slide without generated image on error
-          return slide;
-        })
-      );
+          resolve(slide);
+        });
+        
+        visualPromises.push(visualPromise);
+      }
       
-      slides = slidesWithVisuals;
+      slides = await Promise.all(visualPromises);
     }
 
     // Count slides with generated visuals
