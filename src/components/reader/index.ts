@@ -20,6 +20,7 @@ export { FloatingActions } from './FloatingActions';
 export { DirectTextEditor, DirectEditButton } from './DirectTextEditor';
 export { MobileReaderLayout, SwipeHintOverlay } from './MobileReaderLayout';
 export { PreviouslyInBookCard } from './PreviouslyInBookCard';
+export { ReadingSessionTimer } from './ReadingSessionTimer';
 export type { ReadingTheme } from './ReaderSettingsPanel';
 
 // Lazy-loaded panels for performance optimization

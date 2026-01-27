@@ -57,7 +57,7 @@ import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 import { CodePlayground } from "@/components/reader/CodePlayground";
 import { ComicReaderMode, parseComicContentToPanels, ComicPanelData } from "@/components/reader/ComicReaderMode";
-import { PreviouslyInBookCard } from "@/components/reader/PreviouslyInBookCard";
+import { PreviouslyInBookCard, ReadingSessionTimer } from "@/components/reader";
 import { LearningDeckGenerator } from "@/components/decks";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -65,6 +65,8 @@ import { useSettings } from "@/contexts/SettingsContext";
 import { usePagePerformance } from "@/lib/performance";
 import { useAutoHideFloatingActions } from "@/hooks/useAutoHideFloatingActions";
 import { useReaderData } from "@/hooks/useReaderData";
+import { useReadingSession } from "@/hooks/useReadingSession";
+import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { cn } from "@/lib/utils";
 import { useQuizGating } from "@/hooks/useQuizGating";
 
@@ -134,6 +136,20 @@ export default function Reader() {
     chapterNumber: currentChapter,
     userId,
   });
+  
+  // Reading session tracking with weekly goals
+  const {
+    formattedTime,
+    elapsedSeconds,
+    weeklyProgress,
+    updateWeeklyGoal,
+    endSession,
+  } = useReadingSession(bookId || '', chapter?.id || null);
+  
+  // Track TTS playing state for auto-scroll
+  const [isTTSPlaying, setIsTTSPlaying] = useState(false);
+  
+  // Auto-scroll is defined after wordCount is available (line ~312)
   
   const [fontSize, setFontSize] = useState(18);
   const [readingTheme, setReadingTheme] = useState<ReadingTheme>('default');
@@ -289,6 +305,14 @@ export default function Reader() {
   const totalChapters = book?.total_chapters || 1;
   const wordCount = chapter?.word_count || 0;
   const estimatedReadingTime = Math.ceil(wordCount / 200); // 200 wpm average
+
+  // Auto-scroll synchronized with audio playback
+  const { isAutoScrolling, toggleAutoScroll, resetScroll } = useAutoScroll({
+    isPlaying: isTTSPlaying,
+    contentRef,
+    estimatedDurationMs: wordCount > 0 ? (wordCount / 150) * 60 * 1000 : 60000, // ~150 wpm for TTS
+    enabled: settings.tts_enabled,
+  });
 
   // Helper function to extract the first code block from chapter content for playground
   const extractCodeFromChapter = (content: string): string => {
@@ -542,7 +566,7 @@ export default function Reader() {
             >
               <ChevronLeft className="h-5 w-5" />
             </Button>
-            <div>
+            <div className="hidden sm:block">
               <h1 className="text-sm font-medium line-clamp-1">
                 {book?.title || "Loading..."}
               </h1>
@@ -550,6 +574,14 @@ export default function Reader() {
                 Chapter {currentChapter} of {totalChapters}
               </p>
             </div>
+            {/* Reading Session Timer - compact on mobile */}
+            <ReadingSessionTimer
+              formattedTime={formattedTime}
+              elapsedSeconds={elapsedSeconds}
+              weeklyProgress={weeklyProgress}
+              onUpdateGoal={updateWeeklyGoal}
+              compact
+            />
           </div>
           
           <div className="flex items-center gap-1 sm:gap-2">
@@ -716,6 +748,20 @@ export default function Reader() {
                 {guidedModeActive ? t('reader.on') : t('reader.off')}
               </Button>
             </div>
+            
+            {/* Auto-Scroll with Audio */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Auto-scroll with audio</span>
+              <Button
+                variant={isAutoScrolling ? "default" : "outline"}
+                size="sm"
+                onClick={toggleAutoScroll}
+                disabled={!isTTSPlaying}
+                title={isTTSPlaying ? "Toggle auto-scroll" : "Start audio to enable"}
+              >
+                {isAutoScrolling ? 'On' : 'Off'}
+              </Button>
+            </div>
           </div>
         </motion.div>
       )}
@@ -772,6 +818,7 @@ export default function Reader() {
               autoContinue={autoContinueAudio}
               currentChapter={currentChapter}
               totalChapters={totalChapters}
+              onPlayingChange={setIsTTSPlaying}
               onChapterComplete={async () => {
                 // AUTO-CONTINUE: Navigate to next chapter when audio finishes
                 if (currentChapter < totalChapters) {

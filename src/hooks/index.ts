@@ -18,3 +18,6 @@ export { useSpeedBudget, useButtonFeedback, useModalPreMount, useRouteChangeTime
 export { useActionLifecycle, useSimpleAction } from './useActionLifecycle';
 export { useAssessmentIntegrity, useSimpleQuizValidation } from './useAssessmentIntegrity';
 export type { Entitlements } from './useEntitlements';
+export { useSavedDecks } from './useSavedDecks';
+export { useReadingSession } from './useReadingSession';
+export { useAutoScroll } from './useAutoScroll';
