@@ -68,6 +68,8 @@ interface TTSMiniPlayerProps {
   currentChapter?: number;
   /** Total chapters in book */
   totalChapters?: number;
+  /** Callback when playing state changes - for auto-scroll sync */
+  onPlayingChange?: (isPlaying: boolean) => void;
 }
 
 export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(function TTSMiniPlayer({ 
@@ -83,6 +85,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   autoContinue = false,
   currentChapter,
   totalChapters,
+  onPlayingChange,
 }, ref) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -153,6 +156,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       isMountedRef.current = false;
     };
   }, []);
+
+  // Report playing state changes for auto-scroll sync
+  useEffect(() => {
+    onPlayingChange?.(isPlaying);
+  }, [isPlaying, onPlayingChange]);
 
   const sanitizeText = useCallback((raw: string) => {
     return raw
