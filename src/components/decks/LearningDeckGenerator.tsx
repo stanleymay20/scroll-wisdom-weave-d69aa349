@@ -165,13 +165,14 @@ export function LearningDeckGenerator({
       }
       if (data?.error) throw new Error(data.error);
 
-      setGeneratedDeck(data.deck);
-      
-      const visualCount = data.deck.slides?.filter((s: any) => s.visual?.imageUrl).length || 0;
-      toast({
-        title: 'Deck Generated!',
-        description: `${data.deck.slides.length} slides created${visualCount > 0 ? ` with ${visualCount} visuals` : ''}.`,
-      });
+       setGeneratedDeck(data.deck);
+       
+       const visualCount = data.deck.slides?.filter((s: any) => s.visual?.imageUrl).length || 0;
+       const warning = Array.isArray(data?.warnings) && data.warnings.length > 0 ? ` ${data.warnings[0]}` : '';
+       toast({
+         title: 'Deck Generated!',
+         description: `${data.deck.slides.length} slides created${visualCount > 0 ? ` with ${visualCount} visuals` : ''}.${warning}`,
+       });
     } catch (err) {
       console.error('[VLD] Generation error:', err);
       const errMsg = err instanceof Error ? err.message : 'Could not generate deck';
