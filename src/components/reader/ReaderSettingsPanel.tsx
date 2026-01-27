@@ -8,10 +8,12 @@
  * - Font color selection
  * - Reading theme
  * - Guided mode toggle
+ * - TTS Auto-continue toggle
  */
 
-import { Palette, Type, AlignJustify, Zap, BookOpen } from "lucide-react";
+import { Palette, Type, AlignJustify, Zap, BookOpen, Volume2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Switch } from "@/components/ui/switch";
 import { useSettings, fontColorPresets } from "@/contexts/SettingsContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 
@@ -177,6 +179,21 @@ export function ReaderSettingsPanel({
           {guidedModeActive ? t('reader.on') : t('reader.off')}
         </Button>
       </div>
+
+      {/* TTS Auto-Continue Toggle */}
+      <div className="flex items-center justify-between pt-2 border-t border-border/30">
+        <span className="text-sm text-muted-foreground flex items-center gap-2">
+          <Volume2 className="h-4 w-4" />
+          Audio Auto-Continue
+        </span>
+        <Switch
+          checked={settings.tts_auto_continue}
+          onCheckedChange={(checked) => updateSettings({ tts_auto_continue: checked })}
+        />
+      </div>
+      <p className="text-xs text-muted-foreground/70 -mt-3">
+        Automatically play next chapter when audio finishes
+      </p>
     </div>
   );
 }

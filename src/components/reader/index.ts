@@ -14,11 +14,12 @@ export { CodingQuizQuestion, type CodingQuestion } from './CodingQuizQuestion';
 export { ComicReaderMode, parseComicContentToPanels } from './ComicReaderMode';
 export type { ComicPanelData } from './ComicReaderMode';
 
-// NEW: Reader settings and floating actions
+// Reader settings and floating actions
 export { ReaderSettingsPanel, READING_THEMES } from './ReaderSettingsPanel';
 export { FloatingActions } from './FloatingActions';
 export { DirectTextEditor, DirectEditButton } from './DirectTextEditor';
 export { MobileReaderLayout, SwipeHintOverlay } from './MobileReaderLayout';
+export { PreviouslyInBookCard } from './PreviouslyInBookCard';
 export type { ReadingTheme } from './ReaderSettingsPanel';
 
 // Lazy-loaded panels for performance optimization

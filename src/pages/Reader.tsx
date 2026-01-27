@@ -57,9 +57,11 @@ import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 import { CodePlayground } from "@/components/reader/CodePlayground";
 import { ComicReaderMode, parseComicContentToPanels, ComicPanelData } from "@/components/reader/ComicReaderMode";
+import { PreviouslyInBookCard } from "@/components/reader/PreviouslyInBookCard";
 import { LearningDeckGenerator } from "@/components/decks";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSettings } from "@/contexts/SettingsContext";
 import { usePagePerformance } from "@/lib/performance";
 import { useAutoHideFloatingActions } from "@/hooks/useAutoHideFloatingActions";
 import { useReaderData } from "@/hooks/useReaderData";
@@ -99,6 +101,7 @@ type ReadingTheme = keyof typeof READING_THEMES;
 
 export default function Reader() {
   const { t } = useLanguage();
+  const { settings } = useSettings();
   const { bookId, chapterId } = useParams();
   const navigate = useNavigate();
   
@@ -171,8 +174,8 @@ export default function Reader() {
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
   const [shouldResumeTTS, setShouldResumeTTS] = useState(false);
   
-  // AUTO-CONTINUE: Enable audio to automatically advance to next chapter
-  const [autoContinueAudio, setAutoContinueAudio] = useState(true);
+  // AUTO-CONTINUE: Use settings from context
+  const autoContinueAudio = settings.tts_auto_continue;
 
   const { toast } = useToast();
   const lastSavedProgress = useRef<number>(0);
@@ -869,6 +872,15 @@ export default function Reader() {
               <AcademicDisclaimer variant="compact" className="mb-6" />
             ) : (
               <ContentDisclaimer type="ai" className="mb-6" />
+            )}
+            
+            {/* Previously in this book - Context for returning readers */}
+            {bookId && currentChapter > 1 && (
+              <PreviouslyInBookCard
+                bookId={bookId}
+                currentChapter={currentChapter}
+                bookTitle={book?.title}
+              />
             )}
 
             <h2 className={`font-display text-3xl md:text-4xl font-bold mb-2 ${readingTheme === 'default' ? 'text-gradient-gold' : currentTheme.text}`}>

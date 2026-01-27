@@ -88,6 +88,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [volume, setVolume] = useState(1);
+  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
   const [selectedVoice, setSelectedVoice] = useState("alloy");
   const [progress, setProgress] = useState(0);
   const [currentChunk, setCurrentChunk] = useState(0);
@@ -258,6 +259,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       const audio = audioRef.current || new Audio();
       audioRef.current = audio;
       audio.volume = volume;
+      audio.playbackRate = playbackSpeed;
 
       const cleanup = () => {
         audio.onplay = null;
@@ -304,7 +306,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         resolve(false);
       });
     });
-  }, [volume]);
+  }, [volume, playbackSpeed]);
 
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
@@ -800,14 +802,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         </Button>
       )}
 
-      {/* Volume/Voice Settings */}
+      {/* Volume/Voice/Speed Settings */}
       <Popover>
         <PopoverTrigger asChild>
           <Button variant="ghost" size="icon" className="h-8 w-8" title="Settings">
             <Settings className="h-4 w-4" />
           </Button>
         </PopoverTrigger>
-        <PopoverContent className="w-56" align="end" side="top">
+        <PopoverContent className="w-64" align="end" side="top">
           <div className="space-y-3">
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Volume</label>
@@ -826,6 +828,32 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
                 />
               </div>
             </div>
+            
+            {/* Playback Speed */}
+            <div className="space-y-1.5">
+              <label className="text-xs font-medium">Speed: {playbackSpeed}x</label>
+              <div className="flex gap-1">
+                {[0.75, 1, 1.25, 1.5, 2].map((speed) => (
+                  <button
+                    key={speed}
+                    onClick={() => {
+                      setPlaybackSpeed(speed);
+                      if (audioRef.current) {
+                        audioRef.current.playbackRate = speed;
+                      }
+                    }}
+                    className={`flex-1 px-1.5 py-1 text-xs rounded transition-all ${
+                      playbackSpeed === speed
+                        ? 'bg-primary text-primary-foreground'
+                        : 'bg-muted/50 hover:bg-muted'
+                    }`}
+                  >
+                    {speed}x
+                  </button>
+                ))}
+              </div>
+            </div>
+            
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Voice</label>
               <Select value={selectedVoice} onValueChange={setSelectedVoice}>
