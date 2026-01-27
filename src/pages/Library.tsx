@@ -133,6 +133,11 @@ function MobileLibraryContent({
   setSearchQuery,
   filterStatus,
   setFilterStatus,
+  filterCategory,
+  setFilterCategory,
+  sortBy,
+  setSortBy,
+  categories,
   handleRemoveBook,
   hasMore,
   isLoadingMore,
@@ -149,6 +154,11 @@ function MobileLibraryContent({
   setSearchQuery: (v: string) => void;
   filterStatus: "all" | "reading" | "completed";
   setFilterStatus: (v: "all" | "reading" | "completed") => void;
+  filterCategory: string;
+  setFilterCategory: (v: string) => void;
+  sortBy: string;
+  setSortBy: (v: string) => void;
+  categories: string[];
   handleRemoveBook: (id: string) => void;
   hasMore: boolean;
   isLoadingMore: boolean;
@@ -256,13 +266,45 @@ function MobileLibraryContent({
 
       {/* Filter Tabs */}
       {items.length > 0 && (
-        <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)} className="mb-6">
+        <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)} className="mb-4">
           <TabsList className="w-full">
             <TabsTrigger value="all" className="flex-1">All</TabsTrigger>
             <TabsTrigger value="reading" className="flex-1">Reading</TabsTrigger>
             <TabsTrigger value="completed" className="flex-1">Done</TabsTrigger>
           </TabsList>
         </Tabs>
+      )}
+
+      {/* Category Filter & Sort */}
+      {items.length > 0 && (
+        <div className="flex gap-2 mb-6">
+          <Select value={filterCategory} onValueChange={setFilterCategory}>
+            <SelectTrigger className="flex-1">
+              <SelectValue placeholder="Category" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Categories</SelectItem>
+              {categories.map((cat) => (
+                <SelectItem key={cat} value={cat} className="capitalize">
+                  {cat.replace(/_/g, ' ')}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-[130px]">
+              <SlidersHorizontal className="h-4 w-4 mr-1" />
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="recent">Newest</SelectItem>
+              <SelectItem value="oldest">Oldest</SelectItem>
+              <SelectItem value="title">A-Z</SelectItem>
+              <SelectItem value="title-desc">Z-A</SelectItem>
+              <SelectItem value="progress">Progress</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       )}
 
       {/* Content */}
@@ -305,7 +347,7 @@ function MobileLibraryContent({
         <div className="text-center py-12">
           <Search className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
           <p className="text-muted-foreground mb-4">No books found</p>
-          <Button variant="outline" onClick={() => { setSearchQuery(""); setFilterStatus("all"); }}>
+          <Button variant="outline" onClick={() => { setSearchQuery(""); setFilterStatus("all"); setFilterCategory("all"); setSortBy("recent"); }}>
             Clear Filters
           </Button>
         </div>
@@ -359,7 +401,8 @@ export default function Library() {
   const [user, setUser] = useState<any>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "reading" | "completed">("all");
-  const [sortBy, setSortBy] = useState<"recent" | "title" | "progress">("recent");
+  const [filterCategory, setFilterCategory] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("recent");
   const navigate = useNavigate();
   const { toast } = useToast();
   const libraryLimits = useLibraryLimits();
@@ -423,6 +466,17 @@ export default function Library() {
     };
   }, [navigate]);
 
+  // Extract unique categories from library items
+  const categories = useMemo(() => {
+    const cats = new Set<string>();
+    items.forEach(item => {
+      if (item.books.category) {
+        cats.add(item.books.category);
+      }
+    });
+    return Array.from(cats).sort();
+  }, [items]);
+
   // Filter and sort items
   const filteredItems = useMemo(() => {
     let result = [...items];
@@ -437,6 +491,11 @@ export default function Library() {
       );
     }
 
+    // Category filter
+    if (filterCategory && filterCategory !== "all") {
+      result = result.filter(item => item.books.category === filterCategory);
+    }
+
     // Status filter - "reading" = any book not completed (matches stats query)
     if (filterStatus === "reading") {
       result = result.filter(i => (i.progress_percent || 0) < 100);
@@ -449,8 +508,12 @@ export default function Library() {
       switch (sortBy) {
         case "title":
           return a.books.title.localeCompare(b.books.title);
+        case "title-desc":
+          return b.books.title.localeCompare(a.books.title);
         case "progress":
           return (b.progress_percent || 0) - (a.progress_percent || 0);
+        case "oldest":
+          return new Date(a.created_at).getTime() - new Date(b.created_at).getTime();
         case "recent":
         default:
           return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
@@ -458,7 +521,7 @@ export default function Library() {
     });
 
     return result;
-  }, [items, searchQuery, filterStatus, sortBy]);
+  }, [items, searchQuery, filterCategory, filterStatus, sortBy]);
 
   const handleRemoveBook = useCallback((libraryId: string) => {
     removeItem(libraryId);
@@ -480,6 +543,11 @@ export default function Library() {
           setSearchQuery={setSearchQuery}
           filterStatus={filterStatus}
           setFilterStatus={setFilterStatus}
+          filterCategory={filterCategory}
+          setFilterCategory={setFilterCategory}
+          sortBy={sortBy}
+          setSortBy={setSortBy}
+          categories={categories}
           handleRemoveBook={handleRemoveBook}
           hasMore={hasMore}
           isLoadingMore={isLoadingMore}
@@ -615,15 +683,32 @@ export default function Library() {
               </TabsList>
             </Tabs>
 
+            {/* Category Filter */}
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-[160px]">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {categories.map((cat) => (
+                  <SelectItem key={cat} value={cat} className="capitalize">
+                    {cat.replace(/_/g, ' ')}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
             {/* Sort */}
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+            <Select value={sortBy} onValueChange={setSortBy}>
               <SelectTrigger className="w-[160px]">
                 <SlidersHorizontal className="h-4 w-4 mr-2" />
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="recent">{t('library.sortRecent') || "Most Recent"}</SelectItem>
-                <SelectItem value="title">{t('library.sortTitle') || "Title"}</SelectItem>
+                <SelectItem value="recent">{t('library.sortRecent') || "Newest"}</SelectItem>
+                <SelectItem value="oldest">Oldest</SelectItem>
+                <SelectItem value="title">{t('library.sortTitle') || "A-Z"}</SelectItem>
+                <SelectItem value="title-desc">Z-A</SelectItem>
                 <SelectItem value="progress">{t('library.sortProgress') || "Progress"}</SelectItem>
               </SelectContent>
             </Select>
@@ -715,7 +800,7 @@ export default function Library() {
             <p className="text-muted-foreground mb-6 max-w-md mx-auto">
               {t('library.noResultsDesc') || "Try adjusting your search or filters"}
             </p>
-            <Button variant="outline" onClick={() => { setSearchQuery(""); setFilterStatus("all"); }}>
+            <Button variant="outline" onClick={() => { setSearchQuery(""); setFilterStatus("all"); setFilterCategory("all"); setSortBy("recent"); }}>
               {t('library.clearFilters') || "Clear Filters"}
             </Button>
           </motion.div>
