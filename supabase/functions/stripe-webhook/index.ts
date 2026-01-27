@@ -71,9 +71,10 @@ serve(async (req) => {
 
     logStep("Processing event", { type: event.type, id: event.id });
 
-    // Map Stripe product IDs to tier names
-    const getTierFromProductId = (productId: string): string => {
-      const productMap: Record<string, string> = {
+    // Map Stripe product IDs to tier names - must match src/lib/subscription.ts
+    type ValidPlan = 'free' | 'premium' | 'prophet_tier' | 'student';
+    const getTierFromProductId = (productId: string): ValidPlan => {
+      const productMap: Record<string, ValidPlan> = {
         'prod_TaQU3ILEUpbXOT': 'premium',
         'prod_TaQWA7MSUntiMy': 'prophet_tier',
         'prod_TaQSrotoUkTuPC': 'student',
@@ -104,7 +105,7 @@ serve(async (req) => {
                   .from("profiles")
                   .upsert({
                     id: user.id,
-                    plan: tier as "free" | "premium" | "prophet_tier",
+                    plan: tier,
                     updated_at: new Date().toISOString(),
                   }, { onConflict: "id" });
 
@@ -140,7 +141,7 @@ serve(async (req) => {
                 await supabase
                   .from("profiles")
                   .update({ 
-                    plan: tier as "free" | "premium" | "prophet_tier",
+                    plan: tier,
                     updated_at: new Date().toISOString() 
                   })
                   .eq("id", user.id);
@@ -171,7 +172,7 @@ serve(async (req) => {
               await supabase
                 .from("profiles")
                 .update({ 
-                  plan: tier as "free" | "premium" | "prophet_tier",
+                  plan: tier,
                   updated_at: new Date().toISOString() 
                 })
                 .eq("id", user.id);
