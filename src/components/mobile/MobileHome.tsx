@@ -12,6 +12,7 @@ import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileBookCard } from "./MobileBookCard";
+import { ContinueReadingWidget } from "@/components/home/ContinueReadingWidget";
 import { Skeleton } from "@/components/ui/skeleton";
 import { apiCache, cacheKeys } from "@/lib/cache";
 import { MOBILE_DATA_LIMITS } from "@/lib/performanceContracts";
@@ -166,13 +167,18 @@ export function MobileHome() {
   return (
     <div className="min-h-screen bg-background pb-24 px-4 pt-4">
       {/* Welcome Hero for Mobile */}
-      <section className="mb-6 text-center py-4">
+      <section className="mb-4 text-center py-3">
         <h1 className="font-display text-xl font-bold text-foreground mb-1">
           Welcome to ScrollLibrary
         </h1>
         <p className="text-sm text-muted-foreground">
           AI-powered books & learning
         </p>
+      </section>
+
+      {/* Continue Reading Widget */}
+      <section className="mb-6">
+        <ContinueReadingWidget />
       </section>
 
       {/* Continue Reading Section */}
