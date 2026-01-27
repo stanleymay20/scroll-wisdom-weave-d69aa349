@@ -27,13 +27,6 @@ interface Book {
   created_at: string | null;
 }
 
-interface LibraryItem {
-  book_id: string;
-  progress_percent: number | null;
-  last_read_chapter: number | null;
-  books: Book;
-}
-
 // Memoized skeleton for performance
 const BookGridSkeleton = memo(function BookGridSkeleton({ count = 4 }: { count?: number }) {
   return (
@@ -69,10 +62,8 @@ const QUICK_CATEGORIES = ["Theology", "Science", "History", "Fiction", "Philosop
 
 export function MobileHome() {
   // UI shell renders immediately with these defaults
-  const [continueReading, setContinueReading] = useState<LibraryItem[]>([]);
   const [lastAdded, setLastAdded] = useState<Book[]>([]);
   const [loading, setLoading] = useState(true);
-  const [userId, setUserId] = useState<string | null>(null);
 
   // Deferred data fetch - runs AFTER first paint
   const fetchData = useCallback(async () => {
@@ -84,53 +75,20 @@ export function MobileHome() {
         setLoading(false);
       }
 
-      // Background auth check - don't block render
-      const { data: { user } } = await supabase.auth.getUser();
-      setUserId(user?.id || null);
-
-      // Parallel fetch with reduced data limits for mobile
-      const [libraryResult, booksResult] = await Promise.all([
-        // Fetch continue reading (user's library with progress) - REDUCED COUNT
-        user ? supabase
-          .from("user_library")
-          .select(`
-            book_id,
-            progress_percent,
-            last_read_chapter,
-            books!inner (
-              id,
-              title,
-              cover_image_url,
-              category,
-              book_type,
-              created_at
-            )
-          `)
-          .eq("user_id", user.id)
-          .gt("progress_percent", 0)
-          .lt("progress_percent", 100)
-          .order("created_at", { ascending: false })
-          .limit(MOBILE_DATA_LIMITS.continueReadingCount) : Promise.resolve({ data: null }),
-        
-        // Cache-first for last added books - REDUCED COUNT
-        apiCache.getOrSet<Book[]>(
-          cacheKeys.featuredBooks(),
-          async () => {
-            const { data } = await supabase
-              .from("books")
-              .select("id, title, cover_image_url, category, book_type, created_at")
-              .eq("is_published", true)
-              .order("created_at", { ascending: false })
-              .limit(MOBILE_DATA_LIMITS.recentBooksCount);
-            return data || [];
-          },
-          60000 // 60 second cache
-        )
-      ]);
-
-      if (libraryResult.data) {
-        setContinueReading(libraryResult.data as unknown as LibraryItem[]);
-      }
+      // Cache-first for last added books - REDUCED COUNT
+      const booksResult = await apiCache.getOrSet<Book[]>(
+        cacheKeys.featuredBooks(),
+        async () => {
+          const { data } = await supabase
+            .from("books")
+            .select("id, title, cover_image_url, category, book_type, created_at")
+            .eq("is_published", true)
+            .order("created_at", { ascending: false })
+            .limit(MOBILE_DATA_LIMITS.recentBooksCount);
+          return data || [];
+        },
+        60000 // 60 second cache
+      );
       
       setLastAdded(booksResult);
     } catch (error) {
@@ -176,31 +134,10 @@ export function MobileHome() {
         </p>
       </section>
 
-      {/* Continue Reading Widget */}
+      {/* Continue Reading Widget - Single instance, no duplication */}
       <section className="mb-6">
         <ContinueReadingWidget />
       </section>
-
-      {/* Continue Reading Section */}
-      {userId && continueReading.length > 0 && (
-        <section className="mb-8">
-          <SectionHeader title="Continue Reading" linkTo="/library" />
-          <div className="grid grid-cols-2 gap-3">
-            {continueReading.map((item) => (
-              <MobileBookCard
-                key={item.book_id}
-                id={item.books.id}
-                title={item.books.title}
-                coverImageUrl={item.books.cover_image_url || undefined}
-                category={item.books.category}
-                bookType={item.books.book_type}
-                lastReadChapter={item.last_read_chapter}
-                progressPercent={item.progress_percent}
-              />
-            ))}
-          </div>
-        </section>
-      )}
 
       {/* Last Added Section */}
       <section className="mb-8">
