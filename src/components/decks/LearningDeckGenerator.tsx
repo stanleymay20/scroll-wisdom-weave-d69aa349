@@ -152,20 +152,32 @@ export function LearningDeckGenerator({
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Handle specific error codes
+        const errorMsg = error.message || '';
+        if (errorMsg.includes('429') || errorMsg.includes('Rate limit')) {
+          throw new Error('Rate limit reached. Please wait 30 seconds and try again.');
+        }
+        if (errorMsg.includes('402') || errorMsg.includes('Payment')) {
+          throw new Error('AI credits exhausted. Please add credits to continue.');
+        }
+        throw error;
+      }
       if (data?.error) throw new Error(data.error);
 
       setGeneratedDeck(data.deck);
       
+      const visualCount = data.deck.slides?.filter((s: any) => s.visual?.imageUrl).length || 0;
       toast({
         title: 'Deck Generated!',
-        description: `${data.deck.slides.length} slides created successfully.`,
+        description: `${data.deck.slides.length} slides created${visualCount > 0 ? ` with ${visualCount} visuals` : ''}.`,
       });
     } catch (err) {
       console.error('[VLD] Generation error:', err);
+      const errMsg = err instanceof Error ? err.message : 'Could not generate deck';
       toast({
         title: 'Generation Failed',
-        description: err instanceof Error ? err.message : 'Could not generate deck',
+        description: errMsg,
         variant: 'destructive',
       });
     } finally {

@@ -7,7 +7,7 @@
  * Pull-to-refresh for native mobile UX
  */
 
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, useMemo } from "react";
 import { useSearchParams, useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -21,7 +21,14 @@ import { Input } from "@/components/ui/input";
 import { Skeleton } from "@/components/ui/skeleton";
 import { PullToRefreshIndicator } from "@/components/ui/pull-to-refresh";
 import { GentleOfflineBanner } from "@/components/ui/gentle-offline-banner";
-import { Search, X } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Search, X, ArrowUpDown, SlidersHorizontal } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { apiCache } from "@/lib/cache";
@@ -58,7 +65,10 @@ interface Book {
   cover_image_url: string | null;
   total_chapters: number | null;
   book_type: string;
+  created_at?: string;
 }
+
+type SortOption = 'newest' | 'oldest' | 'title_asc' | 'title_desc' | 'chapters';
 
 // CONTRACT 4: Skeleton-first loading for book grids
 function BookGridSkeleton({ count = 8, mobile = false }: { count?: number; mobile?: boolean }) {
@@ -99,6 +109,8 @@ function MobileExploreContent({
   selectedCategory,
   handleCategoryChange,
   getCategoryLabel,
+  sortBy,
+  handleSortChange,
   onRefresh,
 }: {
   books: Book[];
@@ -109,6 +121,8 @@ function MobileExploreContent({
   selectedCategory: string;
   handleCategoryChange: (c: string) => void;
   getCategoryLabel: (c: string) => string;
+  sortBy: SortOption;
+  handleSortChange: (s: SortOption) => void;
   onRefresh: () => Promise<void>;
 }) {
   const { t } = useLanguage();
@@ -165,9 +179,26 @@ function MobileExploreContent({
         )}
       </div>
 
+      {/* Sort + Categories row */}
+      <div className="flex items-center gap-2 mb-4">
+        <Select value={sortBy} onValueChange={(v) => handleSortChange(v as SortOption)}>
+          <SelectTrigger className="w-[120px] h-8 text-xs">
+            <ArrowUpDown className="h-3 w-3 mr-1" />
+            <SelectValue placeholder="Sort" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="newest">Newest</SelectItem>
+            <SelectItem value="oldest">Oldest</SelectItem>
+            <SelectItem value="title_asc">A-Z</SelectItem>
+            <SelectItem value="title_desc">Z-A</SelectItem>
+            <SelectItem value="chapters">Most Chapters</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+      
       {/* Categories - Horizontal scroll */}
       <div className="flex gap-2 overflow-x-auto pb-4 -mx-4 px-4 scrollbar-hide mb-4">
-        {CATEGORIES.slice(0, 10).map((category) => (
+        {CATEGORIES.map((category) => (
           <Button
             key={category}
             variant={selectedCategory === category ? "gold" : "muted"}
@@ -215,6 +246,9 @@ export default function Explore() {
   const [selectedCategory, setSelectedCategory] = useState(
     searchParams.get("category") || "all"
   );
+  const [sortBy, setSortBy] = useState<SortOption>(
+    (searchParams.get("sort") as SortOption) || 'newest'
+  );
   const [books, setBooks] = useState<Book[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   
@@ -252,10 +286,10 @@ export default function Explore() {
     try {
       const { data, error } = await supabase
         .from("books")
-        .select("id, title, description, category, cover_image_url, total_chapters, book_type")
+        .select("id, title, description, category, cover_image_url, total_chapters, book_type, created_at")
         .eq("is_published", true)
         .order("created_at", { ascending: false })
-        .limit(isMobile ? 20 : 50); // CONTRACT 4: Reduced limits for mobile
+        .limit(isMobile ? 30 : 100);
 
       if (error) throw error;
       
@@ -277,12 +311,47 @@ export default function Explore() {
     return () => clearTimeout(timeoutId);
   }, [fetchBooks]);
 
-  const filteredBooks = books.filter((book) => {
-    const matchesCategory = selectedCategory === "all" || book.category === selectedCategory;
-    const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-      book.description?.toLowerCase().includes(searchQuery.toLowerCase());
-    return matchesCategory && matchesSearch;
-  });
+  // Filter and sort books
+  const filteredBooks = useMemo(() => {
+    let result = books.filter((book) => {
+      const matchesCategory = selectedCategory === "all" || book.category === selectedCategory;
+      const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        book.description?.toLowerCase().includes(searchQuery.toLowerCase());
+      return matchesCategory && matchesSearch;
+    });
+    
+    // Sort
+    switch (sortBy) {
+      case 'oldest':
+        result.sort((a, b) => new Date(a.created_at || 0).getTime() - new Date(b.created_at || 0).getTime());
+        break;
+      case 'title_asc':
+        result.sort((a, b) => a.title.localeCompare(b.title));
+        break;
+      case 'title_desc':
+        result.sort((a, b) => b.title.localeCompare(a.title));
+        break;
+      case 'chapters':
+        result.sort((a, b) => (b.total_chapters || 0) - (a.total_chapters || 0));
+        break;
+      case 'newest':
+      default:
+        result.sort((a, b) => new Date(b.created_at || 0).getTime() - new Date(a.created_at || 0).getTime());
+        break;
+    }
+    
+    return result;
+  }, [books, selectedCategory, searchQuery, sortBy]);
+
+  const handleSortChange = (sort: SortOption) => {
+    setSortBy(sort);
+    if (sort === 'newest') {
+      searchParams.delete("sort");
+    } else {
+      searchParams.set("sort", sort);
+    }
+    setSearchParams(searchParams);
+  };
 
   const handleCategoryChange = (category: string) => {
     setSelectedCategory(category);
@@ -313,6 +382,8 @@ export default function Explore() {
           selectedCategory={selectedCategory}
           handleCategoryChange={handleCategoryChange}
           getCategoryLabel={getCategoryLabel}
+          sortBy={sortBy}
+          handleSortChange={handleSortChange}
           onRefresh={fetchBooks}
         />
       </MobileLayout>
@@ -364,6 +435,21 @@ export default function Explore() {
                   </button>
                 )}
               </div>
+              
+              {/* Sort Dropdown */}
+              <Select value={sortBy} onValueChange={(v) => handleSortChange(v as SortOption)}>
+                <SelectTrigger className="w-[180px]">
+                  <ArrowUpDown className="h-4 w-4 mr-2" />
+                  <SelectValue placeholder="Sort by" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="newest">Newest First</SelectItem>
+                  <SelectItem value="oldest">Oldest First</SelectItem>
+                  <SelectItem value="title_asc">Title A-Z</SelectItem>
+                  <SelectItem value="title_desc">Title Z-A</SelectItem>
+                  <SelectItem value="chapters">Most Chapters</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Category Filters */}
