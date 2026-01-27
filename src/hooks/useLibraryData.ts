@@ -1,5 +1,5 @@
 /**
- * CONTRACT 5B-1: Library Data Hook
+ * CONTRACT 5B-1: Library Data Hook (OPTIMIZED v1.2)
  * 
  * Implements skeleton-first, cache-first library loading.
  * 
@@ -9,19 +9,22 @@
  * - 5B-1.3: Progressive Hydration - no blocking
  * - 5B-1.4: Deterministic Loading States
  * - 5B-1.5: Offline Truthfulness
+ * 
+ * OPTIMIZATIONS v1.2:
+ * - Parallel stats queries
+ * - Proper cleanup of async operations
+ * - AbortController for network requests
+ * - Memory-safe ref handling
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { 
-  getCachedLibrary, 
   getCachedLibrarySync,
-  getCachedStats,
   getCachedStatsSync,
   setCachedLibrary, 
   setCachedStats,
   transformToCachedItem,
-  determineLoadState,
   type CachedLibraryItem,
   type CachedLibraryStats,
   type LibraryLoadState
