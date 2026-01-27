@@ -5,6 +5,11 @@
  * - Calculates scroll speed based on content length
  * - Smooth scrolling that follows audio progress
  * - Pause/resume with audio state
+ * 
+ * FIXES:
+ * - Removed circular dependency in useEffect
+ * - Uses refs to avoid stale closures
+ * - Proper cleanup of animation frames
  */
 
 import { useState, useEffect, useRef, useCallback } from 'react';
@@ -24,10 +29,21 @@ export function useAutoScroll({
 }: UseAutoScrollOptions) {
   const [isAutoScrolling, setIsAutoScrolling] = useState(false);
   const [scrollProgress, setScrollProgress] = useState(0);
+  
   const animationRef = useRef<number>();
   const startTimeRef = useRef<number>(0);
-  const startScrollRef = useRef<number>(0);
-  const pausedAtRef = useRef<number>(0);
+  const pausedTimeRef = useRef<number>(0);
+  const isPlayingRef = useRef(isPlaying);
+  const enabledRef = useRef(enabled);
+
+  // Keep refs in sync
+  useEffect(() => {
+    isPlayingRef.current = isPlaying;
+  }, [isPlaying]);
+
+  useEffect(() => {
+    enabledRef.current = enabled;
+  }, [enabled]);
 
   // Calculate scroll parameters
   const getScrollParams = useCallback(() => {
@@ -41,41 +57,50 @@ export function useAutoScroll({
       duration: estimatedDurationMs,
       pixelsPerMs: scrollHeight / estimatedDurationMs,
     };
-  }, [contentRef, estimatedDurationMs]);
+  }, [estimatedDurationMs]);
 
   // Start auto-scrolling
   const startAutoScroll = useCallback(() => {
-    if (!enabled || !contentRef.current) return;
+    if (!enabledRef.current || !contentRef.current) return;
 
     const params = getScrollParams();
     if (!params || params.scrollHeight <= 0) return;
 
     setIsAutoScrolling(true);
-    startTimeRef.current = performance.now() - pausedAtRef.current;
-    startScrollRef.current = contentRef.current.scrollTop;
+    
+    // Calculate start time accounting for paused time
+    const now = performance.now();
+    if (pausedTimeRef.current > 0) {
+      // Resume from where we paused
+      startTimeRef.current = now - pausedTimeRef.current;
+    } else {
+      startTimeRef.current = now;
+    }
 
     const animate = (currentTime: number) => {
-      if (!contentRef.current) return;
+      if (!contentRef.current || !isPlayingRef.current) {
+        return;
+      }
 
       const elapsed = currentTime - startTimeRef.current;
       const progress = Math.min(elapsed / params.duration, 1);
       
-      // Eased scrolling for smoother motion
-      const easeProgress = 1 - Math.pow(1 - progress, 3);
-      const targetScroll = startScrollRef.current + (params.scrollHeight - startScrollRef.current) * easeProgress;
+      // Linear scrolling for predictable sync with audio
+      const targetScroll = params.scrollHeight * progress;
       
       contentRef.current.scrollTop = targetScroll;
       setScrollProgress(progress * 100);
 
-      if (progress < 1) {
+      if (progress < 1 && isPlayingRef.current) {
         animationRef.current = requestAnimationFrame(animate);
-      } else {
+      } else if (progress >= 1) {
         setIsAutoScrolling(false);
+        pausedTimeRef.current = 0;
       }
     };
 
     animationRef.current = requestAnimationFrame(animate);
-  }, [enabled, contentRef, getScrollParams]);
+  }, [contentRef, getScrollParams]);
 
   // Pause auto-scrolling
   const pauseAutoScroll = useCallback(() => {
@@ -83,23 +108,23 @@ export function useAutoScroll({
       cancelAnimationFrame(animationRef.current);
       animationRef.current = undefined;
     }
-    pausedAtRef.current = performance.now() - startTimeRef.current;
+    
+    // Save the elapsed time so we can resume
+    if (startTimeRef.current > 0) {
+      pausedTimeRef.current = performance.now() - startTimeRef.current;
+    }
+    
     setIsAutoScrolling(false);
   }, []);
-
-  // Resume auto-scrolling
-  const resumeAutoScroll = useCallback(() => {
-    if (enabled && pausedAtRef.current > 0) {
-      startAutoScroll();
-    }
-  }, [enabled, startAutoScroll]);
 
   // Reset scroll position
   const resetScroll = useCallback(() => {
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current);
+      animationRef.current = undefined;
     }
-    pausedAtRef.current = 0;
+    pausedTimeRef.current = 0;
+    startTimeRef.current = 0;
     setScrollProgress(0);
     setIsAutoScrolling(false);
     if (contentRef.current) {
@@ -116,7 +141,7 @@ export function useAutoScroll({
     }
   }, [isAutoScrolling, pauseAutoScroll, startAutoScroll]);
 
-  // Sync with audio playing state
+  // Sync with audio playing state - NO circular deps
   useEffect(() => {
     if (!enabled) return;
 
@@ -131,32 +156,39 @@ export function useAutoScroll({
         cancelAnimationFrame(animationRef.current);
       }
     };
-  }, [isPlaying, enabled, startAutoScroll, pauseAutoScroll]);
+  }, [isPlaying, enabled]); // Only depend on the actual state values
 
   // Handle manual scroll interruption
   useEffect(() => {
-    if (!contentRef.current || !isAutoScrolling) return;
+    const element = contentRef.current;
+    if (!element || !isAutoScrolling) return;
 
-    let lastScrollTop = contentRef.current.scrollTop;
+    let lastScrollTop = element.scrollTop;
     let manualScrollTimeout: ReturnType<typeof setTimeout>;
+    let isUserScrolling = false;
 
     const handleScroll = () => {
-      if (!contentRef.current) return;
-      
-      const currentScrollTop = contentRef.current.scrollTop;
+      const currentScrollTop = element.scrollTop;
       const scrollDiff = Math.abs(currentScrollTop - lastScrollTop);
       
-      // If user scrolls significantly, pause auto-scroll temporarily
-      if (scrollDiff > 50) {
+      // If user scrolls significantly (more than auto-scroll would), pause temporarily
+      if (scrollDiff > 10 && !isUserScrolling) {
+        isUserScrolling = true;
         pauseAutoScroll();
         
         // Resume after 3 seconds of no manual scroll
         clearTimeout(manualScrollTimeout);
         manualScrollTimeout = setTimeout(() => {
-          if (isPlaying) {
-            // Adjust start position to current position
-            pausedAtRef.current = 0;
-            startScrollRef.current = contentRef.current?.scrollTop || 0;
+          isUserScrolling = false;
+          if (isPlayingRef.current && enabledRef.current) {
+            // Resume from current position
+            pausedTimeRef.current = 0; // Reset paused time to start from current pos
+            const params = getScrollParams();
+            if (params && params.scrollHeight > 0) {
+              // Calculate what percentage we're at based on current scroll
+              const currentProgress = element.scrollTop / params.scrollHeight;
+              pausedTimeRef.current = currentProgress * params.duration;
+            }
             startAutoScroll();
           }
         }, 3000);
@@ -165,20 +197,19 @@ export function useAutoScroll({
       lastScrollTop = currentScrollTop;
     };
 
-    contentRef.current.addEventListener('scroll', handleScroll, { passive: true });
+    element.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
-      contentRef.current?.removeEventListener('scroll', handleScroll);
+      element.removeEventListener('scroll', handleScroll);
       clearTimeout(manualScrollTimeout);
     };
-  }, [contentRef, isAutoScrolling, isPlaying, pauseAutoScroll, startAutoScroll]);
+  }, [isAutoScrolling, pauseAutoScroll, getScrollParams]);
 
   return {
     isAutoScrolling,
     scrollProgress,
     startAutoScroll,
     pauseAutoScroll,
-    resumeAutoScroll,
     resetScroll,
     toggleAutoScroll,
   };

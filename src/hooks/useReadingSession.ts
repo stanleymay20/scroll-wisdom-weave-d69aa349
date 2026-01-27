@@ -5,18 +5,15 @@
  * - Automatic session start/stop
  * - Periodic saves to prevent data loss
  * - Weekly goal progress tracking
+ * 
+ * FIXES:
+ * - Uses ref for elapsed time to avoid stale closures in callbacks
+ * - Proper cleanup on unmount
+ * - Prevents multiple sessions from being created
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { supabase } from '@/integrations/supabase/client';
-
-interface ReadingSession {
-  id: string;
-  bookId: string;
-  chapterId: string | null;
-  startedAt: Date;
-  durationSeconds: number;
-}
 
 interface WeeklyProgress {
   totalMinutes: number;
@@ -26,7 +23,6 @@ interface WeeklyProgress {
 }
 
 export function useReadingSession(bookId: string, chapterId: string | null) {
-  const [session, setSession] = useState<ReadingSession | null>(null);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [weeklyProgress, setWeeklyProgress] = useState<WeeklyProgress>({
     totalMinutes: 0,
@@ -35,15 +31,49 @@ export function useReadingSession(bookId: string, chapterId: string | null) {
     sessionsThisWeek: 0,
   });
   const [isTracking, setIsTracking] = useState(false);
+  
+  // Use refs to avoid stale closures in callbacks
+  const elapsedSecondsRef = useRef(0);
   const intervalRef = useRef<ReturnType<typeof setInterval>>();
   const saveIntervalRef = useRef<ReturnType<typeof setInterval>>();
   const sessionIdRef = useRef<string | null>(null);
+  const isStartingRef = useRef(false);
+
+  // Keep ref in sync with state
+  useEffect(() => {
+    elapsedSecondsRef.current = elapsedSeconds;
+  }, [elapsedSeconds]);
+
+  // Save current progress using ref value
+  const saveProgress = useCallback(async () => {
+    if (!sessionIdRef.current) return;
+
+    try {
+      await supabase
+        .from('reading_sessions')
+        .update({
+          duration_seconds: elapsedSecondsRef.current,
+        })
+        .eq('id', sessionIdRef.current);
+    } catch (error) {
+      console.error('Failed to save session progress:', error);
+    }
+  }, []);
 
   // Start a new reading session
   const startSession = useCallback(async () => {
+    // Prevent multiple session starts
+    if (isStartingRef.current || sessionIdRef.current) return;
+    if (!bookId) return;
+    
+    isStartingRef.current = true;
+
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+        isStartingRef.current = false;
+        return;
+      }
 
       const { data, error } = await supabase
         .from('reading_sessions')
@@ -59,19 +89,17 @@ export function useReadingSession(bookId: string, chapterId: string | null) {
       if (error) throw error;
 
       sessionIdRef.current = data.id;
-      setSession({
-        id: data.id,
-        bookId,
-        chapterId,
-        startedAt: new Date(),
-        durationSeconds: 0,
-      });
       setElapsedSeconds(0);
+      elapsedSecondsRef.current = 0;
       setIsTracking(true);
 
       // Start the timer
       intervalRef.current = setInterval(() => {
-        setElapsedSeconds(prev => prev + 1);
+        setElapsedSeconds(prev => {
+          const newVal = prev + 1;
+          elapsedSecondsRef.current = newVal;
+          return newVal;
+        });
       }, 1000);
 
       // Save progress every 30 seconds
@@ -81,52 +109,44 @@ export function useReadingSession(bookId: string, chapterId: string | null) {
 
     } catch (error) {
       console.error('Failed to start reading session:', error);
+    } finally {
+      isStartingRef.current = false;
     }
-  }, [bookId, chapterId]);
-
-  // Save current progress
-  const saveProgress = useCallback(async () => {
-    if (!sessionIdRef.current) return;
-
-    try {
-      await supabase
-        .from('reading_sessions')
-        .update({
-          duration_seconds: elapsedSeconds,
-        })
-        .eq('id', sessionIdRef.current);
-    } catch (error) {
-      console.error('Failed to save session progress:', error);
-    }
-  }, [elapsedSeconds]);
+  }, [bookId, chapterId, saveProgress]);
 
   // End the current session
   const endSession = useCallback(async () => {
     if (!sessionIdRef.current) return;
 
-    // Clear intervals
-    if (intervalRef.current) clearInterval(intervalRef.current);
-    if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
+    // Clear intervals first
+    if (intervalRef.current) {
+      clearInterval(intervalRef.current);
+      intervalRef.current = undefined;
+    }
+    if (saveIntervalRef.current) {
+      clearInterval(saveIntervalRef.current);
+      saveIntervalRef.current = undefined;
+    }
+
+    const sessionId = sessionIdRef.current;
+    sessionIdRef.current = null;
+    setIsTracking(false);
 
     try {
       await supabase
         .from('reading_sessions')
         .update({
           ended_at: new Date().toISOString(),
-          duration_seconds: elapsedSeconds,
+          duration_seconds: elapsedSecondsRef.current,
         })
-        .eq('id', sessionIdRef.current);
-
-      sessionIdRef.current = null;
-      setSession(null);
-      setIsTracking(false);
+        .eq('id', sessionId);
 
       // Refresh weekly progress
       fetchWeeklyProgress();
     } catch (error) {
       console.error('Failed to end reading session:', error);
     }
-  }, [elapsedSeconds]);
+  }, []);
 
   // Pause tracking (e.g., when tab is hidden)
   const pauseSession = useCallback(() => {
@@ -141,7 +161,11 @@ export function useReadingSession(bookId: string, chapterId: string | null) {
   const resumeSession = useCallback(() => {
     if (isTracking && !intervalRef.current) {
       intervalRef.current = setInterval(() => {
-        setElapsedSeconds(prev => prev + 1);
+        setElapsedSeconds(prev => {
+          const newVal = prev + 1;
+          elapsedSecondsRef.current = newVal;
+          return newVal;
+        });
       }, 1000);
     }
   }, [isTracking]);
@@ -229,18 +253,45 @@ export function useReadingSession(bookId: string, chapterId: string | null) {
 
   // Auto-start session and fetch weekly progress
   useEffect(() => {
-    startSession();
+    // Reset state for new chapter
+    setElapsedSeconds(0);
+    elapsedSecondsRef.current = 0;
+    
+    // Clean up any existing session first
+    if (sessionIdRef.current) {
+      endSession();
+    }
+
+    // Start new session after a brief delay to allow cleanup
+    const startTimeout = setTimeout(() => {
+      startSession();
+    }, 100);
+    
     fetchWeeklyProgress();
 
     return () => {
+      clearTimeout(startTimeout);
+      // Clear intervals on unmount
       if (intervalRef.current) clearInterval(intervalRef.current);
       if (saveIntervalRef.current) clearInterval(saveIntervalRef.current);
-      // Save on unmount
+      
+      // End session on unmount (fire and forget)
       if (sessionIdRef.current) {
-        endSession();
+        const sessionId = sessionIdRef.current;
+        const finalDuration = elapsedSecondsRef.current;
+        sessionIdRef.current = null;
+        
+        // Fire and forget - don't await in cleanup
+        supabase
+          .from('reading_sessions')
+          .update({
+            ended_at: new Date().toISOString(),
+            duration_seconds: finalDuration,
+          })
+          .eq('id', sessionId);
       }
     };
-  }, [bookId, chapterId]);
+  }, [bookId, chapterId]); // Only restart when book/chapter changes
 
   // Format time display
   const formatTime = (seconds: number): string => {
