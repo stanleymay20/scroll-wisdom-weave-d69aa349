@@ -805,6 +805,69 @@ export type Database = {
         }
         Relationships: []
       }
+      saved_learning_decks: {
+        Row: {
+          book_id: string
+          chapters_covered: number[] | null
+          created_at: string
+          deck_data: Json
+          id: string
+          scope: string
+          slide_count: number | null
+          target_audience: string | null
+          tier: string | null
+          title: string
+          tone: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          chapters_covered?: number[] | null
+          created_at?: string
+          deck_data?: Json
+          id?: string
+          scope?: string
+          slide_count?: number | null
+          target_audience?: string | null
+          tier?: string | null
+          title: string
+          tone?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          chapters_covered?: number[] | null
+          created_at?: string
+          deck_data?: Json
+          id?: string
+          scope?: string
+          slide_count?: number | null
+          target_audience?: string | null
+          tier?: string | null
+          title?: string
+          tone?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "saved_learning_decks_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "saved_learning_decks_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "public_books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       security_audit_log: {
         Row: {
           created_at: string

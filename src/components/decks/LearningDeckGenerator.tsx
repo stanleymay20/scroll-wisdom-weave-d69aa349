@@ -24,6 +24,8 @@ import {
   ChevronRight,
   X,
   FileDown,
+  Save,
+  FolderOpen,
 } from 'lucide-react';
 import { exportToPowerPoint, downloadBlob } from '@/lib/exportLearningDeck';
 import { Button } from '@/components/ui/button';
@@ -48,6 +50,7 @@ import {
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Slider } from '@/components/ui/slider';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useLearningDeckEligibility } from '@/hooks/useLearningDeckEligibility';
@@ -63,6 +66,8 @@ import {
 } from '@/lib/learningDeckContract';
 import { cn } from '@/lib/utils';
 import SlideViewer from './SlideViewer';
+import SavedDecksTab from './SavedDecksTab';
+import { useSavedDecks } from '@/hooks/useSavedDecks';
 
 interface LearningDeckGeneratorProps {
   bookId: string;
@@ -114,6 +119,9 @@ export function LearningDeckGenerator({
   });
 
   const isEligible = eligibility?.isEligible ?? false;
+  
+  // Saved decks hook
+  const { saveDeck, isSaving, decks: savedDecks, refresh: refreshSavedDecks } = useSavedDecks({ bookId, userId });
 
   // Generate deck - always allowed for basic tier
   const handleGenerate = useCallback(async () => {
@@ -342,7 +350,7 @@ export function LearningDeckGenerator({
       <DialogTrigger asChild>
         {renderTrigger()}
       </DialogTrigger>
-      <DialogContent className="max-w-lg">
+      <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Presentation className="h-5 w-5 text-scroll-gold" />
@@ -351,172 +359,209 @@ export function LearningDeckGenerator({
           <DialogDescription>{VLD_COPY.description}</DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6 py-4">
-          {/* Eligibility Status - Always show, always eligible for basic tier */}
-          <div className={cn(
-            'p-4 rounded-lg border',
-            eligibility?.tier === 'premium'
-              ? 'bg-scroll-gold/10 border-scroll-gold/30' 
-              : 'bg-emerald-500/10 border-emerald-500/30'
-          )}>
-            <div className="flex items-center gap-2 mb-3">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600" />
-              <span className="font-medium">
-                {eligibility?.tier === 'premium' ? '⭐ Premium Deck Ready' : 'Basic Deck Ready'}
-              </span>
-            </div>
-            {renderEligibilityProgress()}
-          </div>
-
-          {/* Generation Options - Always show since basic tier is always eligible */}
-          <div className="space-y-4">
-            {/* Scope */}
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Scope</Label>
-                <Select value={scope} onValueChange={(v) => setScope(v as DeckScope)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="chapter">Current Chapter</SelectItem>
-                    <SelectItem value="book">Full Book</SelectItem>
-                  </SelectContent>
-                </Select>
+        <Tabs defaultValue="generate" className="flex-1 overflow-hidden flex flex-col">
+          <TabsList className="grid w-full grid-cols-2">
+            <TabsTrigger value="generate" className="gap-2">
+              <Sparkles className="h-4 w-4" />
+              Generate
+            </TabsTrigger>
+            <TabsTrigger value="saved" className="gap-2">
+              <FolderOpen className="h-4 w-4" />
+              Saved ({savedDecks.length})
+            </TabsTrigger>
+          </TabsList>
+          
+          <TabsContent value="generate" className="flex-1 overflow-y-auto mt-4">
+            <div className="space-y-6">
+              {/* Eligibility Status */}
+              <div className={cn(
+                'p-4 rounded-lg border',
+                eligibility?.tier === 'premium'
+                  ? 'bg-scroll-gold/10 border-scroll-gold/30' 
+                  : 'bg-emerald-500/10 border-emerald-500/30'
+              )}>
+                <div className="flex items-center gap-2 mb-3">
+                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                  <span className="font-medium">
+                    {eligibility?.tier === 'premium' ? '⭐ Premium Deck Ready' : 'Basic Deck Ready'}
+                  </span>
+                </div>
+                {renderEligibilityProgress()}
               </div>
 
-              <div className="space-y-2">
-                <Label>Target Audience</Label>
-                <Select value={targetAudience} onValueChange={(v) => setTargetAudience(v as TargetAudience)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="student">Student</SelectItem>
-                    <SelectItem value="lecturer">Lecturer</SelectItem>
-                    <SelectItem value="employer">Employer</SelectItem>
-                    <SelectItem value="peer-teaching">Peer Teaching</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-            </div>
+              {/* Generation Options */}
+              <div className="space-y-4">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Scope</Label>
+                    <Select value={scope} onValueChange={(v) => setScope(v as DeckScope)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="chapter">Current Chapter</SelectItem>
+                        <SelectItem value="book">Full Book</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
 
-            <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <Label>Tone</Label>
-                <Select value={tone} onValueChange={(v) => setTone(v as DeckTone)}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="academic">Academic</SelectItem>
-                    <SelectItem value="simple">Simple</SelectItem>
-                    <SelectItem value="visual">Visual-First</SelectItem>
-                    <SelectItem value="children">Children-Friendly</SelectItem>
-                  </SelectContent>
-                </Select>
+                  <div className="space-y-2">
+                    <Label>Target Audience</Label>
+                    <Select value={targetAudience} onValueChange={(v) => setTargetAudience(v as TargetAudience)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="student">Student</SelectItem>
+                        <SelectItem value="lecturer">Lecturer</SelectItem>
+                        <SelectItem value="employer">Employer</SelectItem>
+                        <SelectItem value="peer-teaching">Peer Teaching</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label>Tone</Label>
+                    <Select value={tone} onValueChange={(v) => setTone(v as DeckTone)}>
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="academic">Academic</SelectItem>
+                        <SelectItem value="simple">Simple</SelectItem>
+                        <SelectItem value="visual">Visual-First</SelectItem>
+                        <SelectItem value="children">Children-Friendly</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label>Max Slides: {maxSlides}</Label>
+                    <Slider
+                      value={[maxSlides]}
+                      onValueChange={([v]) => setMaxSlides(v)}
+                      min={5}
+                      max={eligibility?.tier === 'premium' ? VLD_ELIGIBILITY.PREMIUM_MAX_SLIDES : VLD_ELIGIBILITY.MAX_SLIDES_LIMIT}
+                      step={1}
+                      className="mt-3"
+                    />
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="include-visuals" className="flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Include Visuals
+                  </Label>
+                  <Switch
+                    id="include-visuals"
+                    checked={includeVisuals}
+                    onCheckedChange={setIncludeVisuals}
+                  />
+                </div>
               </div>
 
-              <div className="space-y-2">
-                <Label>Max Slides: {maxSlides}</Label>
-                <Slider
-                  value={[maxSlides]}
-                  onValueChange={([v]) => setMaxSlides(v)}
-                  min={5}
-                  max={eligibility?.tier === 'premium' ? VLD_ELIGIBILITY.PREMIUM_MAX_SLIDES : VLD_ELIGIBILITY.MAX_SLIDES_LIMIT}
-                  step={1}
-                  className="mt-3"
+              {/* Generated Deck Preview */}
+              {generatedDeck && !showViewer && (
+                <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="font-medium flex items-center gap-2">
+                      <CheckCircle2 className="h-4 w-4 text-emerald-600" />
+                      Deck Ready
+                    </span>
+                    <Badge variant="secondary">{generatedDeck.slides.length} slides</Badge>
+                  </div>
+                  <p className="text-sm text-muted-foreground mb-3">
+                    Generated from {generatedDeck.metadata.chaptersCovered?.length || 'all'} chapter(s)
+                  </p>
+                  <div className="flex flex-wrap gap-2">
+                    <Button 
+                      variant="default" 
+                      size="sm" 
+                      onClick={() => setShowViewer(true)} 
+                      className="gap-1.5"
+                    >
+                      <Eye className="h-3.5 w-3.5" />
+                      View Slides
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={handleExportPPTX} 
+                      className="gap-1.5"
+                      disabled={isExporting}
+                    >
+                      {isExporting ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <FileDown className="h-3.5 w-3.5" />
+                      )}
+                      Export PPTX
+                    </Button>
+                    <Button 
+                      variant="outline" 
+                      size="sm" 
+                      onClick={() => saveDeck(generatedDeck)} 
+                      className="gap-1.5"
+                      disabled={isSaving}
+                    >
+                      {isSaving ? (
+                        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      ) : (
+                        <Save className="h-3.5 w-3.5" />
+                      )}
+                      Save Deck
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Full Slide Viewer */}
+              {generatedDeck && showViewer && (
+                <SlideViewer 
+                  deck={generatedDeck} 
+                  onClose={() => setShowViewer(false)}
+                  className="min-h-[400px]"
                 />
-              </div>
+              )}
             </div>
-
-            <div className="flex items-center justify-between">
-              <Label htmlFor="include-visuals" className="flex items-center gap-2">
-                <FileText className="h-4 w-4" />
-                Include Visuals
-              </Label>
-              <Switch
-                id="include-visuals"
-                checked={includeVisuals}
-                onCheckedChange={setIncludeVisuals}
-              />
+            
+            {/* Generate Button */}
+            <div className="mt-6 pt-4 border-t flex justify-end gap-2">
+              <Button variant="outline" onClick={() => setDialogOpen(false)}>
+                Cancel
+              </Button>
+              <Button
+                onClick={handleGenerate}
+                disabled={isGenerating}
+                variant="hero"
+                className="gap-2"
+              >
+                {isGenerating ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                    Generating...
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4" />
+                    Generate {eligibility?.tier === 'premium' ? 'Premium' : 'Basic'} Deck
+                  </>
+                )}
+              </Button>
             </div>
-          </div>
-
-          {/* Generated Deck Preview */}
-          {generatedDeck && !showViewer && (
-            <div className="p-4 rounded-lg bg-emerald-500/10 border border-emerald-500/30">
-              <div className="flex items-center justify-between mb-2">
-                <span className="font-medium flex items-center gap-2">
-                  <CheckCircle2 className="h-4 w-4 text-emerald-600" />
-                  Deck Ready
-                </span>
-                <Badge variant="secondary">{generatedDeck.slides.length} slides</Badge>
-              </div>
-              <p className="text-sm text-muted-foreground mb-3">
-                Generated from {generatedDeck.metadata.chaptersCovered?.length || 'all'} chapter(s)
-              </p>
-              <div className="flex gap-2">
-                <Button 
-                  variant="default" 
-                  size="sm" 
-                  onClick={() => setShowViewer(true)} 
-                  className="gap-1.5"
-                >
-                  <Eye className="h-3.5 w-3.5" />
-                  View Slides
-                </Button>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
-                  onClick={handleExportPPTX} 
-                  className="gap-1.5"
-                  disabled={isExporting}
-                >
-                  {isExporting ? (
-                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                  ) : (
-                    <FileDown className="h-3.5 w-3.5" />
-                  )}
-                  Export PPTX
-                </Button>
-              </div>
-            </div>
-          )}
-
-          {/* Full Slide Viewer */}
-          {generatedDeck && showViewer && (
-            <SlideViewer 
-              deck={generatedDeck} 
-              onClose={() => setShowViewer(false)}
-              className="min-h-[400px]"
+          </TabsContent>
+          
+          <TabsContent value="saved" className="flex-1 overflow-y-auto mt-4">
+            <SavedDecksTab
+              bookId={bookId}
+              bookTitle={bookTitle}
+              userId={userId}
             />
-          )}
-        </div>
-
-        <DialogFooter>
-          <Button variant="outline" onClick={() => setDialogOpen(false)}>
-            Cancel
-          </Button>
-          <Button
-            onClick={handleGenerate}
-            disabled={isGenerating}
-            variant="hero"
-            className="gap-2"
-          >
-            {isGenerating ? (
-              <>
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Generating...
-              </>
-            ) : (
-              <>
-                <Sparkles className="h-4 w-4" />
-                Generate {eligibility?.tier === 'premium' ? 'Premium' : 'Basic'} Deck
-              </>
-            )}
-          </Button>
-        </DialogFooter>
+          </TabsContent>
+        </Tabs>
       </DialogContent>
     </Dialog>
   );

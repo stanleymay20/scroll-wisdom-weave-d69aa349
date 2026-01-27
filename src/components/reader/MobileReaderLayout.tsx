@@ -91,12 +91,16 @@ export function MobileReaderLayout({
         // Swiped right - go to previous chapter
         if (currentChapter > 1) {
           setSwipeDirection('right');
+          // Scroll to top before navigating
+          window.scrollTo({ top: 0, behavior: 'instant' });
           onPrevChapter();
         }
       } else if (info.offset.x < -threshold || info.velocity.x < -velocity) {
         // Swiped left - go to next chapter
         if (currentChapter < totalChapters) {
           setSwipeDirection('left');
+          // Scroll to top before navigating
+          window.scrollTo({ top: 0, behavior: 'instant' });
           onNextChapter();
         }
       }
@@ -241,7 +245,10 @@ export function MobileReaderLayout({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onPrevChapter}
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: 'instant' });
+                  onPrevChapter();
+                }}
                 disabled={currentChapter <= 1}
                 className="text-white hover:bg-white/20 disabled:opacity-30"
               >
@@ -258,7 +265,10 @@ export function MobileReaderLayout({
               <Button
                 variant="ghost"
                 size="sm"
-                onClick={onNextChapter}
+                onClick={() => {
+                  window.scrollTo({ top: 0, behavior: 'instant' });
+                  onNextChapter();
+                }}
                 disabled={currentChapter >= totalChapters}
                 className="text-white hover:bg-white/20 disabled:opacity-30"
               >
@@ -275,14 +285,20 @@ export function MobileReaderLayout({
         className="absolute left-0 top-1/4 bottom-1/4 w-12 z-10"
         onClick={(e) => {
           e.stopPropagation();
-          if (currentChapter > 1) onPrevChapter();
+          if (currentChapter > 1) {
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            onPrevChapter();
+          }
         }}
       />
       <div 
         className="absolute right-0 top-1/4 bottom-1/4 w-12 z-10"
         onClick={(e) => {
           e.stopPropagation();
-          if (currentChapter < totalChapters) onNextChapter();
+          if (currentChapter < totalChapters) {
+            window.scrollTo({ top: 0, behavior: 'instant' });
+            onNextChapter();
+          }
         }}
       />
     </div>
