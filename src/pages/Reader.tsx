@@ -1098,7 +1098,9 @@ export default function Reader() {
                 const overallProgress = ((completedChapters + currentChapterContribution) / book.total_chapters) * 100;
                 await saveProgress(currentChapter, overallProgress);
               }
-              navigate(`/read/${bookId}/${currentChapter - 1}`);
+              // Scroll to top for new chapter
+              window.scrollTo({ top: 0, behavior: 'instant' });
+              navigate(`/read/${bookId}/${currentChapter - 1}`, { replace: true });
             }}
             disabled={currentChapter <= 1}
             className="gap-2"
@@ -1122,7 +1124,9 @@ export default function Reader() {
                 const overallProgress = (currentChapter / book.total_chapters) * 100;
                 await saveProgress(currentChapter, overallProgress);
               }
-              navigate(`/read/${bookId}/${currentChapter + 1}`);
+              // Scroll to top for new chapter
+              window.scrollTo({ top: 0, behavior: 'instant' });
+              navigate(`/read/${bookId}/${currentChapter + 1}`, { replace: true });
             }}
             disabled={currentChapter >= totalChapters}
             className="gap-2"
