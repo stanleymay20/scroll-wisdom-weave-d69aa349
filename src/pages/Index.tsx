@@ -9,6 +9,7 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Navbar } from "@/components/layout/Navbar";
 import { HeroSection } from "@/components/home/HeroSection";
+import { ContinueReadingWidget } from "@/components/home/ContinueReadingWidget";
 import { PlatformClarification } from "@/components/home/PlatformClarification";
 import { CertificationDisclaimer } from "@/components/home/CertificationDisclaimer";
 import { AcademicCredibility } from "@/components/home/AcademicCredibility";
@@ -41,6 +42,9 @@ const Index = () => {
       <TrialBanner />
       <main>
         <HeroSection />
+        <div className="container mx-auto px-4 -mt-8 mb-8 relative z-20">
+          <ContinueReadingWidget />
+        </div>
         <PlatformClarification />
         <CertificationDisclaimer />
         <AcademicCredibility />
