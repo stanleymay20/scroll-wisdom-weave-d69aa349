@@ -175,50 +175,39 @@ export default function Reader() {
   const lastSavedProgress = useRef<number>(0);
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Save reading progress to database with debounce and toast (UPSERT)
+  // Save reading progress to database with debounce (optimized)
+  // Only saves when progress changes by ≥10% OR on explicit save request
   const saveProgress = useCallback(async (chapterNum: number, progressPercent: number, showToast = false) => {
     if (!userId || !bookId) return;
     
-    // Skip if progress hasn't changed significantly (< 5%)
-    if (Math.abs(progressPercent - lastSavedProgress.current) < 5 && !showToast) return;
+    const roundedProgress = Math.round(progressPercent);
+    
+    // Skip if progress hasn't changed significantly (< 10%) unless forcing save
+    if (!showToast && Math.abs(roundedProgress - lastSavedProgress.current) < 10) return;
     
     try {
-      // Use UPSERT to ensure the library entry exists and is updated
-      const { error } = await supabase
+      // Use update with filter (more reliable than upsert for existing entries)
+      const { error, count } = await supabase
         .from("user_library")
-        .upsert({
-          user_id: userId,
-          book_id: bookId,
+        .update({
           last_read_chapter: chapterNum,
-          progress_percent: Math.round(progressPercent)
-        }, { 
-          onConflict: 'user_id,book_id',
-          ignoreDuplicates: false 
-        });
+          progress_percent: roundedProgress
+        })
+        .eq("user_id", userId)
+        .eq("book_id", bookId);
       
       if (!error) {
-        lastSavedProgress.current = progressPercent;
+        lastSavedProgress.current = roundedProgress;
         
         if (showToast) {
           toast({
             title: "Progress saved",
-            description: `Chapter ${chapterNum} • ${Math.round(progressPercent)}% complete`,
+            description: `Chapter ${chapterNum} • ${roundedProgress}% complete`,
             duration: 2000,
           });
         }
       } else {
         console.error("[Reader] Progress save error:", error);
-        // Fallback: Try insert if upsert fails (missing unique constraint)
-        if (error.code === '23505' || error.code === '42P10') {
-          await supabase
-            .from("user_library")
-            .update({
-              last_read_chapter: chapterNum,
-              progress_percent: Math.round(progressPercent)
-            })
-            .eq("user_id", userId)
-            .eq("book_id", bookId);
-        }
       }
     } catch (error) {
       console.error("Error saving progress:", error);
@@ -249,7 +238,7 @@ export default function Reader() {
     };
   }, [userId, bookId, currentChapter, readingProgress, book?.total_chapters, saveProgress]);
 
-  // Track scroll progress and auto-save periodically
+  // Track scroll progress and auto-save periodically (optimized: 5s debounce, 10% threshold)
   const handleScroll = useCallback(() => {
     if (!contentRef.current) return;
     
@@ -263,7 +252,7 @@ export default function Reader() {
     // CONTRACT 5: Update quiz gating progress
     quizGating.updateReadProgress(progress);
     
-    // Debounced auto-save every significant progress change
+    // Debounced auto-save - only after 5 seconds of no scrolling
     if (saveTimeoutRef.current) {
       clearTimeout(saveTimeoutRef.current);
     }
@@ -273,9 +262,9 @@ export default function Reader() {
         const completedChapters = currentChapter - 1;
         const currentChapterContribution = progress / 100;
         const overallProgress = ((completedChapters + currentChapterContribution) / book.total_chapters) * 100;
-        saveProgress(currentChapter, overallProgress, false); // Silent save during reading
+        saveProgress(currentChapter, overallProgress, false); // Silent save
       }
-    }, 3000); // Save 3 seconds after scrolling stops
+    }, 5000); // Increased to 5 seconds for less frequent saves
   }, [userId, bookId, book?.total_chapters, currentChapter, saveProgress, quizGating]);
 
   useEffect(() => {
