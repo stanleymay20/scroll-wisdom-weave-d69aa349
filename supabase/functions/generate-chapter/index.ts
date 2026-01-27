@@ -2809,6 +2809,63 @@ Return JSON only:
     // ===========================================
     const targetWords = Math.min(Math.max(effectiveWordCount, 2000), 6000);
 
+    // ===========================================
+    // CHAPTER-TO-CHAPTER CONTENT CONTINUITY (TEXT/ILLUSTRATED)
+    // Fetch previous chapters for concept/story flow consistency
+    // ===========================================
+    let previousChaptersContext = '';
+    
+    if (chapterNumber > 1 && chapter?.book_id) {
+      console.log(`[GENERATE-CHAPTER] Fetching previous chapters for content continuity (Chapter ${chapterNumber})...`);
+      
+      const { data: previousChapters } = await supabase
+        .from("chapters")
+        .select("chapter_number, title, content")
+        .eq("book_id", chapter.book_id)
+        .eq("is_generated", true)
+        .lt("chapter_number", chapterNumber)
+        .order("chapter_number", { ascending: false })
+        .limit(2); // Get last 2 chapters for context
+      
+      if (previousChapters && previousChapters.length > 0) {
+        console.log(`[GENERATE-CHAPTER] Found ${previousChapters.length} previous chapters for content continuity`);
+        
+        // Build content continuity context from previous chapters
+        const summaries = previousChapters.reverse().map((ch) => {
+          // Extract key points from content - first 500 and last 300 chars for context
+          let contentSummary = '';
+          if (ch.content) {
+            const opening = ch.content.slice(0, 500).trim();
+            const ending = ch.content.slice(-300).trim();
+            contentSummary = `Opening: ${opening}... Ending: ...${ending}`;
+          }
+          
+          return `Chapter ${ch.chapter_number} "${ch.title}": ${contentSummary || 'Content continues'}`;
+        }).join('\n\n');
+        
+        previousChaptersContext = `
+===========================================
+CONTENT CONTINUITY - PREVIOUS CHAPTERS
+===========================================
+The following chapters have already been written. Your new chapter MUST continue from where the last chapter ended.
+
+CONTINUITY RULES:
+1. DO NOT repeat concepts already explained in previous chapters
+2. BUILD upon previously established ideas and terminology
+3. Reference back to earlier content when extending concepts
+4. Maintain consistent tone, style, and terminology
+5. If this is a mid-book chapter, DO NOT start like it's a new book introduction
+6. Ensure logical progression of complexity and depth
+
+PREVIOUS CONTENT SUMMARY:
+${summaries}
+===========================================
+
+`;
+        console.log(`[GENERATE-CHAPTER] Content continuity context built (${previousChaptersContext.length} chars)`);
+      }
+    }
+
     let systemPrompt: string;
     let chapterPrompt: string;
     
@@ -2893,7 +2950,7 @@ CITATION STYLE: ${citationStyle}
 If ANY metaphor, storytelling, or motivational language appears → OUTPUT IS INVALID.
 Teach by DOING, not by INSPIRING.`;
 
-      chapterPrompt = `Write an ACADEMIC/TECHNICAL Chapter: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+      chapterPrompt = `${previousChaptersContext}Write an ACADEMIC/TECHNICAL Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
 
 VERIFIED SOURCES TO CITE (USE ONLY THESE):
 ${researchResult.references.slice(0, 15).map((ref, i) => 
@@ -2910,6 +2967,7 @@ REQUIREMENTS:
 4. Mark unsupported claims with "[requires verification]"
 5. NO Markdown syntax (**, ##, backticks) — write plain text only
 6. NO metaphors, storytelling, or motivational content
+${chapterNumber > 1 ? '7. BUILD upon previous chapter concepts - do NOT repeat basic introductions' : ''}
 
 MANDATORY STRUCTURE (ACADEMIC/TECHNICAL):
 
@@ -2922,7 +2980,7 @@ By the end of this chapter, you will be able to:
 
 Introduction
 
-[Technical context and scope - NO storytelling, NO emotional hooks]
+[Technical context and scope - NO storytelling, NO emotional hooks${chapterNumber > 1 ? ' - Reference prior chapter if building on concepts' : ''}]
 
 Core Concepts
 
@@ -2986,7 +3044,7 @@ LANGUAGE: Write EXCLUSIVELY in ${languageName}.
 
 Teach by DOING, not by INSPIRING.`;
 
-      chapterPrompt = `Write an ACADEMIC/TECHNICAL Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+      chapterPrompt = `${previousChaptersContext}Write an ACADEMIC/TECHNICAL Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
 
 LANGUAGE: Generate ALL content in ${languageName}.
 
@@ -3004,7 +3062,7 @@ By the end of this chapter, you will be able to:
 
 Introduction
 
-[Technical overview - NO storytelling]
+[Technical overview - NO storytelling${chapterNumber > 1 ? ' - Reference prior chapter if building on concepts' : ''}]
 
 Core Concepts
 
@@ -3034,6 +3092,7 @@ REQUIREMENTS:
 - NO Markdown syntax
 - NO metaphors or storytelling
 - Technical, instructional tone
+${chapterNumber > 1 ? '- BUILD upon previous chapter concepts - do NOT repeat basic introductions' : ''}
 
 BEGIN WRITING THE ACADEMIC/TECHNICAL CHAPTER:`;
 
@@ -3056,7 +3115,7 @@ ${FINAL_DIRECTIVE}
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.
 Create comprehensive, bestseller-grade chapters that readers would pay $20+ for.`;
       
-      chapterPrompt = `Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+      chapterPrompt = `${previousChaptersContext}Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
 
 LANGUAGE: Generate ALL content in ${languageName}.
 
@@ -3078,6 +3137,7 @@ REQUIREMENTS:
 - NO AI-sounding phrases ("Let's dive in", "In this chapter we will explore")
 - Include real-world examples
 - Every paragraph must deliver VALUE
+${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat introductions' : ''}
 
 BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
     }

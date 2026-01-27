@@ -25,7 +25,8 @@ import {
   X,
   AlertCircle,
   Mic,
-  RotateCcw 
+  RotateCcw,
+  SkipForward
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -59,6 +60,14 @@ interface TTSMiniPlayerProps {
   author?: string;
   /** Callback when user wants to ask a question (Interactive Guard Mode) */
   onInterrupt?: () => void;
+  /** Callback when chapter audio completes - used for auto-continue */
+  onChapterComplete?: () => void;
+  /** Whether auto-continue to next chapter is enabled */
+  autoContinue?: boolean;
+  /** Current chapter number (for display) */
+  currentChapter?: number;
+  /** Total chapters in book */
+  totalChapters?: number;
 }
 
 export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(function TTSMiniPlayer({ 
@@ -69,7 +78,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   stopKey,
   title = "Chapter",
   author = "ScrollLibrary",
-  onInterrupt 
+  onInterrupt,
+  onChapterComplete,
+  autoContinue = false,
+  currentChapter,
+  totalChapters,
 }, ref) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -573,11 +586,18 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         setIsPlaying(false);
         setProgress(0);
         setCurrentChunk(0);
+        
+        // AUTO-CONTINUE: Trigger callback when chapter finishes naturally (not stopped)
+        // Only trigger if we completed all chunks without being stopped
+        if (!stopRef.current && !isStoppingRef.current && mode === 'chapter' && autoContinue) {
+          console.log("[TTS] Chapter complete - triggering auto-continue");
+          onChapterComplete?.();
+        }
       }
       mediaSession.setPlaybackState('idle');
       cleanupBlobUrls();
     }
-  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, stop, mediaSession, unlockAudio]);
+  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, stop, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability]);
 
   // Stop on stopKey change (page navigation)
   useEffect(() => {
@@ -752,6 +772,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           {audioReliability.state === 'buffering' && (
             <span className="text-xs text-amber-500">buffering</span>
           )}
+        </div>
+      )}
+      
+      {/* AUTO-CONTINUE indicator */}
+      {autoContinue && currentChapter && totalChapters && currentChapter < totalChapters && (
+        <div className="flex items-center gap-1 text-xs text-primary" title="Auto-continue enabled">
+          <SkipForward className="h-3 w-3" />
+          <span className="hidden sm:inline">→Ch {currentChapter + 1}</span>
         </div>
       )}
 
