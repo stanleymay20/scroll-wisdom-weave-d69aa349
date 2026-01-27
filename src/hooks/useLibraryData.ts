@@ -216,8 +216,8 @@ export function useLibraryData({
   }, [userId, isMobile]);
   
   // Fetch stats from network
-  // "Reading" = books with meaningful progress (≥5%) but not complete
-  // Books with 1-4% are "just opened" and don't count as actively reading
+  // "Reading" = any book in library that is NOT completed (< 100%)
+  // Once a book is added to library, it's considered "in reading" until completed
   const fetchStats = useCallback(async () => {
     if (!userId) return;
     
@@ -231,8 +231,7 @@ export function useLibraryData({
           .from('user_library')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', userId)
-          .gte('progress_percent', 5) // Only count as "reading" if ≥5% progress
-          .lt('progress_percent', 100),
+          .lt('progress_percent', 100), // Any book not completed = reading
         supabase
           .from('user_library')
           .select('id', { count: 'exact', head: true })

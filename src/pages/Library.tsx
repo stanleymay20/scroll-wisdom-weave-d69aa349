@@ -437,9 +437,9 @@ export default function Library() {
       );
     }
 
-    // Status filter - "reading" requires ≥5% progress to match stats query
+    // Status filter - "reading" = any book not completed (matches stats query)
     if (filterStatus === "reading") {
-      result = result.filter(i => (i.progress_percent || 0) >= 5 && (i.progress_percent || 0) < 100);
+      result = result.filter(i => (i.progress_percent || 0) < 100);
     } else if (filterStatus === "completed") {
       result = result.filter(i => (i.progress_percent || 0) >= 100);
     }
