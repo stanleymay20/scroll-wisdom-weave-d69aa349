@@ -158,12 +158,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         setSubscriptionEnd(subData.subscription_end);
 
         // Update profile plan to keep things consistent (fire and forget)
-        const validPlans = ['free', 'premium', 'prophet_tier', 'student'] as const;
-        const planToSave = validPlans.includes(detectedTier as any) ? detectedTier : 'premium';
+        // Ensure tier is valid for database enum
+        const validPlans: SubscriptionTier[] = ['free', 'premium', 'prophet_tier', 'student'];
+        const planToSave = validPlans.includes(detectedTier) ? detectedTier : 'premium';
 
         supabase
           .from('profiles')
-          .update({ plan: planToSave })
+          .update({ plan: planToSave as 'free' | 'premium' | 'prophet_tier' | 'student' })
           .eq('id', session.user.id)
           .then(() => {});
       } else {
