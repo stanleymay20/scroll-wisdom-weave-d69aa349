@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.87.1";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -60,6 +61,13 @@ serve(async (req) => {
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY is not configured");
     }
+
+    // Storage client (used to avoid returning huge base64 payloads)
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    const storageClient = (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY)
+      ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+      : null;
 
     // Build NotebookLM-quality system prompt with strict presentation discipline
     const systemPrompt = `You are a premium Learning Deck generator for ScrollLibrary, trained to produce slides matching Google NotebookLM quality.
@@ -281,74 +289,129 @@ Return ONLY valid JSON matching the schema.`;
     // ===========================================
     // VISUAL GENERATION - NotebookLM Quality (with rate limit handling)
     // ===========================================
+    const warnings: string[] = [];
+
     if (params.includeVisuals) {
-      // Generate visuals with staggered delays to avoid rate limits
-      const visualPromises: Promise<typeof slides[0]>[] = [];
-      
+      // IMPORTANT: Generate visuals sequentially to prevent burst rate-limits
+      // and upload base64 data URLs to storage to avoid oversized JSON responses.
+      const updatedSlides: SlideData[] = [];
+      const deckAssetPrefix = `vld/${crypto.randomUUID()}`;
+      const MAX_VISUALS = Math.min(slides.length, 12);
+
+      if (slides.length > MAX_VISUALS) {
+        warnings.push(`Visuals were generated for the first ${MAX_VISUALS} slides only (to keep generation reliable).`);
+      }
+
       for (let i = 0; i < slides.length; i++) {
         const slide = slides[i];
-        
-        // Skip if no visual description or already has imageUrl
-        if (!slide.visual?.description || slide.visual.imageUrl) {
-          visualPromises.push(Promise.resolve(slide));
+
+        if (i >= MAX_VISUALS) {
+          updatedSlides.push(slide);
           continue;
         }
-        
-        // Stagger requests to avoid rate limits - 500ms between each
-        const delayMs = i * 500;
-        
-        const visualPromise = new Promise<typeof slide>(async (resolve) => {
-          await new Promise(r => setTimeout(r, delayMs));
-          
-          try {
-            console.log(`[VLD] Generating visual for slide ${i + 1}: ${slide.heading}`);
-            
-            const imagePrompt = buildSlideImagePrompt(slide, params.tone);
-            
-            const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-              method: "POST",
-              headers: {
-                Authorization: `Bearer ${LOVABLE_API_KEY}`,
-                "Content-Type": "application/json",
-              },
-              body: JSON.stringify({
-                model: "google/gemini-2.5-flash-image",
-                messages: [{ role: "user", content: imagePrompt }],
-                modalities: ["image", "text"],
-              }),
-            });
-            
-            if (imageResponse.ok) {
-              const imageData = await imageResponse.json();
-              const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-              
-              if (imageUrl) {
-                console.log(`[VLD] Visual generated for slide ${i + 1}`);
-                resolve({
-                  ...slide,
-                  visual: { 
-                    type: slide.visual!.type,
-                    description: slide.visual!.description,
-                    imageUrl,
-                  },
-                });
-                return;
-              }
-            } else {
-              console.log(`[VLD] Image skipped for slide ${i + 1}: ${imageResponse.status}`);
-            }
-          } catch (imgError) {
-            console.log(`[VLD] Visual error for slide ${i + 1}:`, imgError);
+
+        // Skip if no visual description or already has imageUrl
+        if (!slide.visual?.description || slide.visual.imageUrl) {
+          updatedSlides.push(slide);
+          continue;
+        }
+
+        // Small delay between requests to avoid 429s
+        await new Promise((r) => setTimeout(r, 650));
+
+        try {
+          console.log(`[VLD] Generating visual for slide ${i + 1}: ${slide.heading}`);
+          const imagePrompt = buildSlideImagePrompt(slide, params.tone);
+
+          const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-2.5-flash-image",
+              messages: [{ role: "user", content: imagePrompt }],
+              modalities: ["image", "text"],
+            }),
+          });
+
+          if (!imageResponse.ok) {
+            console.log(`[VLD] Image skipped for slide ${i + 1}: ${imageResponse.status}`);
+            updatedSlides.push(slide);
+            continue;
           }
-          
-          // Return slide without generated image on error
-          resolve(slide);
-        });
-        
-        visualPromises.push(visualPromise);
+
+          const imageData = await imageResponse.json();
+          const rawImageUrl: string | undefined = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+          if (!rawImageUrl) {
+            updatedSlides.push(slide);
+            continue;
+          }
+
+          let finalImageUrl = rawImageUrl;
+
+          // If the model returns base64 data URLs, upload to storage and use a public URL.
+          if (rawImageUrl.startsWith("data:image/") && storageClient) {
+            const match = rawImageUrl.match(/^data:(image\/[a-zA-Z0-9+.-]+);base64,(.+)$/);
+            if (match) {
+              const mime = match[1];
+              const base64 = match[2];
+              const bytes = Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+
+              // Keep files reasonably sized; if huge, skip upload and keep slide w/o image.
+              if (bytes.byteLength > 6 * 1024 * 1024) {
+                console.log(`[VLD] Image too large (${bytes.byteLength} bytes) for slide ${i + 1}; skipping.`);
+                warnings.push(`Slide ${i + 1} visual was skipped because it was too large.`);
+                updatedSlides.push(slide);
+                continue;
+              }
+
+              const ext = mime.includes("png") ? "png" : mime.includes("webp") ? "webp" : "jpg";
+              const path = `${deckAssetPrefix}/slide-${String(i + 1).padStart(2, "0")}.${ext}`;
+              const { error: uploadError } = await storageClient
+                .storage
+                .from("book-assets")
+                .upload(path, bytes, {
+                  contentType: mime,
+                  upsert: true,
+                });
+
+              if (uploadError) {
+                console.log(`[VLD] Upload failed for slide ${i + 1}: ${uploadError.message}`);
+                warnings.push(`Slide ${i + 1} visual upload failed; using text-only slide.`);
+                updatedSlides.push(slide);
+                continue;
+              }
+
+              const { data: publicData } = storageClient
+                .storage
+                .from("book-assets")
+                .getPublicUrl(path);
+
+              if (publicData?.publicUrl) {
+                finalImageUrl = publicData.publicUrl;
+              }
+            }
+          }
+
+          console.log(`[VLD] Visual generated for slide ${i + 1}`);
+          updatedSlides.push({
+            ...slide,
+            visual: {
+              type: slide.visual.type,
+              description: slide.visual.description,
+              imageUrl: finalImageUrl,
+            },
+          });
+        } catch (imgError) {
+          console.log(`[VLD] Visual error for slide ${i + 1}:`, imgError);
+          warnings.push(`Slide ${i + 1} visual generation failed; using text-only slide.`);
+          updatedSlides.push(slide);
+        }
       }
-      
-      slides = await Promise.all(visualPromises);
+
+      slides = updatedSlides;
     }
 
     // Count slides with generated visuals
@@ -384,7 +447,7 @@ Return ONLY valid JSON matching the schema.`;
       },
     };
 
-    return new Response(JSON.stringify({ deck }), {
+    return new Response(JSON.stringify({ deck, warnings }), {
       headers: { ...corsHeaders, "Content-Type": "application/json" },
     });
 
