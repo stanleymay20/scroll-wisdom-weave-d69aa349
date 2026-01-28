@@ -1,19 +1,19 @@
 import { useCallback } from 'react';
-import { usePWA } from './usePWA';
 import { useToast } from './use-toast';
 
 /**
  * CONTRACT 4.3 - Network-Aware Actions
  * 
- * Hook that wraps async actions and blocks them when offline,
- * providing clear user feedback instead of silent failures.
+ * ULTRA-CONSERVATIVE: Only block actions when browser explicitly says offline
+ * Never use our own connectivity checks to block - those can have false positives
  */
 export function useNetworkAction() {
-  const { isOnline } = usePWA();
   const { toast } = useToast();
+  // Always trust navigator.onLine - it's the most reliable
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
   /**
-   * Execute an action only if online, with graceful degradation
+   * Execute an action - only block if browser explicitly says offline
    */
   const executeIfOnline = useCallback(
     async <T>(
@@ -30,7 +30,8 @@ export function useNetworkAction() {
         allowOffline = false 
       } = options || {};
 
-      if (!isOnline && !allowOffline) {
+      // Only block if browser explicitly reports offline
+      if (!navigator.onLine && !allowOffline) {
         toast({
           title: `${actionName} unavailable`,
           description: offlineMessage,
@@ -45,7 +46,7 @@ export function useNetworkAction() {
         // Check if error is network-related
         if (error instanceof TypeError && error.message.includes('fetch')) {
           toast({
-            title: 'Connection lost',
+            title: 'Connection issue',
             description: 'Please check your internet connection and try again.',
             variant: 'destructive',
           });
@@ -54,15 +55,16 @@ export function useNetworkAction() {
         throw error;
       }
     },
-    [isOnline, toast]
+    [toast]
   );
 
   /**
-   * Check if an action can proceed
+   * Check if an action can proceed - ultra-permissive
    */
   const canProceed = useCallback(
     (actionName?: string): boolean => {
-      if (!isOnline) {
+      // Only block if browser explicitly says offline
+      if (!navigator.onLine) {
         toast({
           title: `${actionName || 'Action'} unavailable offline`,
           description: 'This feature requires an internet connection.',
@@ -72,7 +74,7 @@ export function useNetworkAction() {
       }
       return true;
     },
-    [isOnline, toast]
+    [toast]
   );
 
   return {
@@ -84,20 +86,17 @@ export function useNetworkAction() {
 
 /**
  * CONTRACT 4.5 - Graceful Degradation Helper
- * 
- * Wraps a component action with offline-awareness
  */
 export function useGracefulDegradation() {
-  const { isOnline } = usePWA();
+  const isOnline = typeof navigator !== 'undefined' ? navigator.onLine : true;
 
   return {
     isOnline,
-    // Feature availability based on online status
     canGenerate: isOnline,
     canExport: isOnline,
     canSync: isOnline,
-    canSearch: true, // Can search cached content
-    canRead: true, // Can read cached content
-    canBrowse: true, // Can browse cached library
+    canSearch: true,
+    canRead: true,
+    canBrowse: true,
   };
 }

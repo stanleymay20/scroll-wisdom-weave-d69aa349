@@ -15,66 +15,38 @@ interface PWAState {
 }
 
 /**
- * CONTRACT 4.3 - Robust connectivity verification
+ * CONTRACT 4.3 - Ultra-Conservative Connectivity Verification
  * 
- * RULES:
- * - Never report offline if we can actually reach the network
- * - Use multiple verification strategies
- * - Be optimistic but honest
- * - Timeout quickly to avoid blocking UI
+ * CRITICAL RULES:
+ * - NEVER declare offline unless absolutely certain
+ * - Browser navigator.onLine = true means we're online (trust it)
+ * - Only verify when browser explicitly says offline
+ * - Avoid false positives at all costs - they hurt UX
  */
 async function verifyConnectivity(): Promise<boolean> {
-  // IMPORTANT: navigator.onLine is unreliable (especially iOS/PWA).
-  // We ALWAYS attempt an actual fetch before declaring offline.
-
-  // Try multiple same-origin endpoints with fast timeouts.
-  // Using GET (not HEAD) improves compatibility with some SW/proxies/CDNs.
-  const endpoints = [
-    { url: '/manifest.webmanifest', timeout: 2500 },
-    { url: '/favicon.png', timeout: 2500 },
-  ];
-
-  for (const endpoint of endpoints) {
-    try {
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), endpoint.timeout);
-
-      const response = await fetch(endpoint.url, {
-        method: 'GET',
-        cache: 'no-store',
-        signal: controller.signal,
-        headers: {
-          'cache-control': 'no-cache',
-          pragma: 'no-cache',
-        },
-      });
-
-      clearTimeout(timeoutId);
-
-      if (response.ok || response.status === 304) {
-        return true;
-      }
-    } catch {
-      // Continue to next endpoint
-    }
+  // RULE 1: If browser says online, trust it immediately
+  // This prevents false offline from SW/cache quirks
+  if (navigator.onLine) {
+    return true;
   }
 
-  // Final fallback: external reachability check.
-  // no-cors returns an opaque response on success; it only throws on network failure.
+  // RULE 2: Browser says offline - do ONE quick verification
+  // to confirm before showing offline banner
   try {
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 2000);
 
-    await fetch('https://www.gstatic.com/generate_204', {
+    // Try our own origin first (most reliable)
+    const response = await fetch('/manifest.webmanifest', {
       method: 'GET',
-      mode: 'no-cors',
       cache: 'no-store',
       signal: controller.signal,
     });
 
     clearTimeout(timeoutId);
-    return true;
+    return response.ok || response.status === 304;
   } catch {
+    // Single failure when browser says offline = actually offline
     return false;
   }
 }
@@ -82,35 +54,23 @@ async function verifyConnectivity(): Promise<boolean> {
 export function usePWA(): PWAState {
   const [deferredPrompt, setDeferredPrompt] = useState<BeforeInstallPromptEvent | null>(null);
   const [isInstalled, setIsInstalled] = useState(false);
-  const [isOnline, setIsOnline] = useState(true); // Optimistic default
+  // CRITICAL: Always start online - only go offline when CONFIRMED
+  const [isOnline, setIsOnline] = useState(true);
   const [platform, setPlatform] = useState<'ios' | 'android' | 'desktop'>('desktop');
   const verifyIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const lastVerifyRef = useRef<number>(0);
   const isOnlineRef = useRef<boolean>(true);
 
-  // Debounced connectivity verification with hysteresis (prevents false-offline)
-  const consecutiveFailuresRef = useRef(0);
-
-  const checkConnectivity = useCallback(async (immediate = false) => {
-    const now = Date.now();
-    // Throttle: don't check more than once per 3 seconds unless immediate
-    if (!immediate && now - lastVerifyRef.current < 3000) return;
-    lastVerifyRef.current = now;
-
-    const actuallyOnline = await verifyConnectivity();
-
-    if (actuallyOnline) {
-      consecutiveFailuresRef.current = 0;
+  // Ultra-conservative offline detection
+  const checkConnectivity = useCallback(async () => {
+    // ALWAYS trust navigator.onLine when it says true
+    if (navigator.onLine) {
       setIsOnline(true);
       return;
     }
 
-    // Require 2 consecutive failed verifications before declaring offline.
-    // This avoids SW/cache quirks and transient network blips causing "false offline".
-    consecutiveFailuresRef.current += 1;
-    if (consecutiveFailuresRef.current >= 2) {
-      setIsOnline(false);
-    }
+    // Browser says offline - verify once before believing it
+    const actuallyOnline = await verifyConnectivity();
+    setIsOnline(actuallyOnline);
   }, []);
 
   useEffect(() => {
@@ -153,50 +113,40 @@ export function usePWA(): PWAState {
     };
     window.addEventListener('appinstalled', handleInstalled);
 
-    // Online/offline status with verification
+    // Online/offline status - trust browser events
     const handleOnline = () => {
-      consecutiveFailuresRef.current = 0;
       setIsOnline(true);
-      console.log('[PWA] Network: online event received');
+      console.log('[PWA] Network: online');
     };
     
     const handleOffline = () => {
-      // Don't trust the browser offline event. Verify twice before declaring offline.
-      console.log('[PWA] Network: offline event received, verifying...');
-      // First check quickly...
-      setTimeout(() => {
-        checkConnectivity(true);
-      }, 500);
-      // ...then confirm with a second check shortly after.
-      setTimeout(() => {
-        checkConnectivity(true);
-      }, 1800);
+      // Verify before declaring offline
+      console.log('[PWA] Network: offline event, verifying...');
+      setTimeout(checkConnectivity, 300);
     };
     
     window.addEventListener('online', handleOnline);
     window.addEventListener('offline', handleOffline);
 
-    // Initial state: optimistic, then verify quickly.
-    // This prevents iOS/PWA false negatives from navigator.onLine.
+    // Always start online - never show false offline on load
     setIsOnline(true);
 
-    // Verify shortly after mount (gives the app time to paint first)
-    const initialVerifyTimer = setTimeout(() => {
-      checkConnectivity(true);
-    }, 800);
+    // Only verify if browser explicitly says offline
+    if (!navigator.onLine) {
+      setTimeout(checkConnectivity, 500);
+    }
 
-    // Periodic verification every 60 seconds - only when we're showing offline.
+    // Periodic re-check only when showing offline (to auto-recover)
     verifyIntervalRef.current = setInterval(() => {
       if (!document.hidden && !isOnlineRef.current) {
-        checkConnectivity(true);
+        checkConnectivity();
       }
-    }, 60000);
+    }, 30000);
 
-    // Verify on visibility change (tab becomes active) - only if we think we're offline
     const handleVisibilityChange = () => {
+      // Re-check when tab becomes visible and we're showing offline
       if (!document.hidden && !isOnlineRef.current) {
-        // Only re-verify when coming back to tab AND we're showing offline
-        checkConnectivity(true);
+        checkConnectivity();
       }
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
@@ -208,7 +158,6 @@ export function usePWA(): PWAState {
       window.removeEventListener('online', handleOnline);
       window.removeEventListener('offline', handleOffline);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      clearTimeout(initialVerifyTimer);
       if (verifyIntervalRef.current) {
         clearInterval(verifyIntervalRef.current);
       }
@@ -238,27 +187,27 @@ export function usePWA(): PWAState {
   };
 }
 
-// Offline indicator component hook with improved logic
+// Offline indicator - only show when CONFIRMED offline
 export function useOfflineIndicator() {
   const [showOffline, setShowOffline] = useState(false);
   const { isOnline } = usePWA();
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   useEffect(() => {
-    // Clear any pending timers
     if (timerRef.current) {
       clearTimeout(timerRef.current);
       timerRef.current = null;
     }
 
-    if (!isOnline) {
-      // VERY long delay (3s) to prevent flickering on transient network issues
-      // Only show offline banner if we've been offline for 3 full seconds
+    if (!isOnline && !navigator.onLine) {
+      // Only show after 5s of confirmed offline state
       timerRef.current = setTimeout(() => {
-        setShowOffline(true);
-      }, 3000);
+        // Double-check before showing
+        if (!navigator.onLine) {
+          setShowOffline(true);
+        }
+      }, 5000);
     } else {
-      // Immediately hide offline banner when online
       setShowOffline(false);
     }
 
@@ -269,5 +218,6 @@ export function useOfflineIndicator() {
     };
   }, [isOnline]);
 
-  return { showOffline, isOnline };
+  // isOnline should reflect the actual state for button enablement
+  return { showOffline, isOnline: isOnline || navigator.onLine };
 }
