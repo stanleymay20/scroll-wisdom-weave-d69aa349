@@ -2,14 +2,15 @@
  * CONTRACT 5 - Rule 5.5: Honest Offline & Degraded Mode UX
  * 
  * Gentle banners instead of alerts. Users always know what works and what doesn't.
- * FIXED: Only shows when truly offline (navigator.onLine is false)
+ * FIXED: Uses robust connectivity verification from usePWA hook
  */
 
-import { forwardRef, useState, useEffect } from 'react';
+import { forwardRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
-import { WifiOff, CloudOff, RefreshCw } from 'lucide-react';
+import { WifiOff } from 'lucide-react';
 import { OFFLINE_MESSAGES } from '@/lib/contract5';
 import { cn } from '@/lib/utils';
+import { useOfflineIndicator } from '@/hooks/usePWA';
 
 interface GentleOfflineBannerProps {
   /** Show "showing cached data" message */
@@ -22,26 +23,13 @@ interface GentleOfflineBannerProps {
 
 export const GentleOfflineBanner = forwardRef<HTMLDivElement, GentleOfflineBannerProps>(
   function GentleOfflineBanner({ showingCached, className, compact }, ref) {
-    // Use navigator.onLine directly for most reliable offline detection
-    const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
+    // Use robust offline indicator from PWA hook (requires 2 consecutive failures + 3s delay)
+    const { showOffline } = useOfflineIndicator();
     
-    useEffect(() => {
-      const handleOnline = () => setIsOffline(false);
-      const handleOffline = () => setIsOffline(true);
-      
-      window.addEventListener('online', handleOnline);
-      window.addEventListener('offline', handleOffline);
-      
-      return () => {
-        window.removeEventListener('online', handleOnline);
-        window.removeEventListener('offline', handleOffline);
-      };
-    }, []);
-    
-    // Only show when truly offline or explicitly showing cached data
-    if (!isOffline && !showingCached) return null;
+    // Only show when truly offline (verified) or explicitly showing cached data
+    if (!showOffline && !showingCached) return null;
 
-    const message = isOffline 
+    const message = showOffline 
       ? OFFLINE_MESSAGES.offline
       : showingCached
         ? OFFLINE_MESSAGES.showingCached
@@ -78,25 +66,12 @@ export const GentleOfflineBanner = forwardRef<HTMLDivElement, GentleOfflineBanne
 
 /**
  * Inline badge version for use in headers/toolbars
- * Only shows when actually offline
+ * Only shows when actually offline (uses robust PWA verification)
  */
 export function OfflineStatusBadge({ className }: { className?: string }) {
-  const [isOffline, setIsOffline] = useState(() => !navigator.onLine);
+  const { showOffline } = useOfflineIndicator();
   
-  useEffect(() => {
-    const handleOnline = () => setIsOffline(false);
-    const handleOffline = () => setIsOffline(true);
-    
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-    
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, []);
-  
-  if (!isOffline) return null;
+  if (!showOffline) return null;
   
   return (
     <span className={cn(
