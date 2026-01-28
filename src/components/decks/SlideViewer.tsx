@@ -3,7 +3,7 @@
  * 
  * Displays learning deck slides with NotebookLM-quality layouts,
  * AI-generated visuals, speaker notes, "Explain this slide" feature,
- * and TTS audio playback for slide narration.
+ * TTS audio playback (browser + ElevenLabs for premium), and auto-play.
  */
 
 import { useState, useCallback, forwardRef, useRef, useEffect } from 'react';
@@ -24,16 +24,25 @@ import {
   X,
   ImageIcon,
   Volume2,
-  VolumeX,
   Pause,
   Play,
+  Settings2,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { ScrollArea } from '@/components/ui/scroll-area';
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from '@/components/ui/popover';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { LearningDeck, SlideData, SlideLayout } from '@/lib/learningDeckContract';
 
 // Layout icon mapping
@@ -60,6 +69,15 @@ const layoutStyles: Record<string, string> = {
   'summary-proof': 'from-scroll-gold/20 to-primary/10',
 };
 
+// ElevenLabs voice options for premium users
+const ELEVENLABS_VOICES = [
+  { id: 'rachel', name: 'Sarah (Warm)' },
+  { id: 'adam', name: 'George (Authoritative)' },
+  { id: 'bella', name: 'Laura (Friendly)' },
+  { id: 'josh', name: 'Liam (Clear)' },
+  { id: 'sam', name: 'Lily (Energetic)' },
+] as const;
+
 interface SlideViewerProps {
   deck: LearningDeck;
   onClose?: () => void;
@@ -69,6 +87,7 @@ interface SlideViewerProps {
 const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
   ({ deck, onClose, className }, ref) => {
     const { toast } = useToast();
+    const { tier } = useSubscription();
     const [currentIndex, setCurrentIndex] = useState(0);
     const [isFullscreen, setIsFullscreen] = useState(false);
     const [showNotes, setShowNotes] = useState(false);
@@ -78,9 +97,14 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
     // TTS Audio state
     const [isLoadingAudio, setIsLoadingAudio] = useState(false);
     const [isPlaying, setIsPlaying] = useState(false);
-    const [audioEnabled, setAudioEnabled] = useState(false);
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const currentSlideAudioRef = useRef<number>(-1);
+    
+    // Premium TTS settings
+    const isPremiumUser = tier === 'premium' || tier === 'prophet_tier';
+    const [useElevenLabs, setUseElevenLabs] = useState(isPremiumUser);
+    const [elevenLabsVoice, setElevenLabsVoice] = useState<string>('sam');
+    const [autoPlay, setAutoPlay] = useState(false);
 
     const currentSlide = deck.slides[currentIndex];
     const totalSlides = deck.slides.length;
@@ -89,6 +113,9 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
     // Clean up audio on unmount
     useEffect(() => {
       return () => {
+        if ('speechSynthesis' in window) {
+          window.speechSynthesis.cancel();
+        }
         if (audioRef.current) {
           audioRef.current.pause();
           audioRef.current = null;
@@ -108,12 +135,100 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
       return parts.join('. ');
     }, []);
 
+    // Play with browser-native TTS
+    const playBrowserTTS = useCallback((narration: string) => {
+      if (!('speechSynthesis' in window)) {
+        toast({
+          title: 'Audio not supported',
+          description: 'Your browser does not support text-to-speech.',
+          variant: 'destructive',
+        });
+        return;
+      }
+
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(narration);
+      utterance.rate = 1.0;
+      utterance.pitch = 1.0;
+
+      utterance.onend = () => {
+        setIsPlaying(false);
+        // Auto-play next slide if enabled
+        if (autoPlay && currentIndex < totalSlides - 1) {
+          setTimeout(() => goTo(currentIndex + 1), 500);
+        }
+      };
+
+      utterance.onerror = () => {
+        setIsPlaying(false);
+        setIsLoadingAudio(false);
+      };
+
+      window.speechSynthesis.speak(utterance);
+      setIsPlaying(true);
+      currentSlideAudioRef.current = currentIndex;
+    }, [autoPlay, currentIndex, totalSlides, toast]);
+
+    // Play with ElevenLabs TTS (premium)
+    const playElevenLabsTTS = useCallback(async (narration: string) => {
+      try {
+        const { data, error } = await supabase.functions.invoke('elevenlabs-tts', {
+          body: { text: narration, voice: elevenLabsVoice },
+        });
+
+        if (error) throw error;
+        if (data?.requiresUpgrade) {
+          toast({
+            title: 'Premium Feature',
+            description: 'ElevenLabs TTS requires Premium or Prophet tier.',
+          });
+          // Fall back to browser TTS
+          playBrowserTTS(narration);
+          return;
+        }
+
+        if (!data?.audioContent) {
+          throw new Error('No audio content received');
+        }
+
+        // Create audio from base64
+        const audioUrl = `data:audio/mpeg;base64,${data.audioContent}`;
+        const audio = new Audio(audioUrl);
+        audioRef.current = audio;
+
+        audio.onended = () => {
+          setIsPlaying(false);
+          // Auto-play next slide if enabled
+          if (autoPlay && currentIndex < totalSlides - 1) {
+            setTimeout(() => goTo(currentIndex + 1), 500);
+          }
+        };
+
+        audio.onerror = () => {
+          setIsPlaying(false);
+          toast({
+            title: 'Audio Error',
+            description: 'Failed to play audio. Trying browser TTS...',
+          });
+          playBrowserTTS(narration);
+        };
+
+        await audio.play();
+        setIsPlaying(true);
+        currentSlideAudioRef.current = currentIndex;
+      } catch (err) {
+        console.error('[SlideViewer] ElevenLabs TTS error:', err);
+        // Fall back to browser TTS
+        playBrowserTTS(narration);
+      }
+    }, [elevenLabsVoice, autoPlay, currentIndex, totalSlides, toast, playBrowserTTS]);
+
     // Play TTS for current slide
     const playSlideAudio = useCallback(async () => {
       if (!currentSlide || isLoadingAudio) return;
       
-      // If already playing this slide, just resume
-      if (audioRef.current && currentSlideAudioRef.current === currentIndex) {
+      // If already playing this slide with audio element, just resume
+      if (audioRef.current && currentSlideAudioRef.current === currentIndex && audioRef.current.paused) {
         audioRef.current.play();
         setIsPlaying(true);
         return;
@@ -124,33 +239,10 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
       try {
         const narration = getSlideNarration(currentSlide);
         
-        // Use browser-native TTS for fast playback (no network delay)
-        if ('speechSynthesis' in window) {
-          // Stop any existing speech
-          window.speechSynthesis.cancel();
-          
-          const utterance = new SpeechSynthesisUtterance(narration);
-          utterance.rate = 1.0;
-          utterance.pitch = 1.0;
-          
-          utterance.onend = () => {
-            setIsPlaying(false);
-          };
-          
-          utterance.onerror = () => {
-            setIsPlaying(false);
-            setIsLoadingAudio(false);
-          };
-          
-          window.speechSynthesis.speak(utterance);
-          setIsPlaying(true);
-          currentSlideAudioRef.current = currentIndex;
+        if (useElevenLabs && isPremiumUser) {
+          await playElevenLabsTTS(narration);
         } else {
-          toast({
-            title: 'Audio not supported',
-            description: 'Your browser does not support text-to-speech.',
-            variant: 'destructive',
-          });
+          playBrowserTTS(narration);
         }
       } catch (err) {
         console.error('[SlideViewer] TTS error:', err);
@@ -162,7 +254,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
       } finally {
         setIsLoadingAudio(false);
       }
-    }, [currentSlide, currentIndex, isLoadingAudio, getSlideNarration, toast]);
+    }, [currentSlide, currentIndex, isLoadingAudio, getSlideNarration, useElevenLabs, isPremiumUser, playElevenLabsTTS, playBrowserTTS, toast]);
 
     // Stop audio playback
     const stopAudio = useCallback(() => {
@@ -187,12 +279,22 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
     // Navigate slides
     const goTo = useCallback((index: number) => {
       if (index >= 0 && index < totalSlides) {
-        stopAudio(); // Stop audio when changing slides
+        stopAudio();
         setCurrentIndex(index);
         setExplanation(null);
-        currentSlideAudioRef.current = -1; // Reset audio tracking
+        currentSlideAudioRef.current = -1;
       }
     }, [totalSlides, stopAudio]);
+
+    // Auto-play effect when slide changes
+    useEffect(() => {
+      if (autoPlay && currentIndex >= 0 && !isPlaying && !isLoadingAudio) {
+        const timer = setTimeout(() => {
+          playSlideAudio();
+        }, 300);
+        return () => clearTimeout(timer);
+      }
+    }, [currentIndex, autoPlay]); // Only trigger on index change when autoPlay is on
 
     const goNext = useCallback(() => goTo(currentIndex + 1), [currentIndex, goTo]);
     const goPrev = useCallback(() => goTo(currentIndex - 1), [currentIndex, goTo]);
@@ -234,7 +336,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
 
     if (!currentSlide) return null;
 
-    // Check if visual has a generated image (supports both url and imageUrl)
+    // Check if visual has a generated image
     const visualImageUrl = currentSlide.visual?.url || (currentSlide.visual as any)?.imageUrl;
     const hasGeneratedVisual = !!visualImageUrl;
 
@@ -263,6 +365,12 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                 Visual
               </Badge>
             )}
+            {autoPlay && (
+              <Badge variant="default" className="gap-1 text-xs bg-primary/80">
+                <Play className="h-3 w-3" />
+                Auto
+              </Badge>
+            )}
           </div>
           <div className="flex items-center gap-1">
             {/* Audio Playback Button */}
@@ -282,6 +390,89 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                 <Volume2 className="h-4 w-4" />
               )}
             </Button>
+
+            {/* Audio Settings Popover */}
+            <Popover>
+              <PopoverTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className={cn((useElevenLabs || autoPlay) && 'bg-scroll-gold/10 text-scroll-gold')}
+                  title="Audio Settings"
+                >
+                  <Settings2 className="h-4 w-4" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-72" align="end">
+                <div className="space-y-4">
+                  <h4 className="font-medium text-sm">Audio Settings</h4>
+                  
+                  {/* Auto-play toggle */}
+                  <div className="flex items-center justify-between">
+                    <Label htmlFor="auto-play" className="text-sm">
+                      Auto-play slides
+                    </Label>
+                    <Switch
+                      id="auto-play"
+                      checked={autoPlay}
+                      onCheckedChange={setAutoPlay}
+                    />
+                  </div>
+                  
+                  {/* ElevenLabs toggle (premium only) */}
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="elevenlabs" className="text-sm">
+                        ElevenLabs TTS
+                      </Label>
+                      {isPremiumUser ? (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-scroll-gold/10 text-scroll-gold border-scroll-gold/30">
+                          <Sparkles className="h-2.5 w-2.5 mr-0.5" />
+                          Premium
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0">
+                          Upgrade
+                        </Badge>
+                      )}
+                    </div>
+                    <Switch
+                      id="elevenlabs"
+                      checked={useElevenLabs}
+                      onCheckedChange={setUseElevenLabs}
+                      disabled={!isPremiumUser}
+                    />
+                  </div>
+                  
+                  {/* Voice selector (when ElevenLabs enabled) */}
+                  {useElevenLabs && isPremiumUser && (
+                    <div className="space-y-2">
+                      <Label className="text-sm">Voice</Label>
+                      <div className="grid grid-cols-2 gap-1">
+                        {ELEVENLABS_VOICES.map((voice) => (
+                          <Button
+                            key={voice.id}
+                            variant={elevenLabsVoice === voice.id ? 'default' : 'outline'}
+                            size="sm"
+                            className="text-xs h-7"
+                            onClick={() => setElevenLabsVoice(voice.id)}
+                          >
+                            {voice.name}
+                          </Button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  
+                  {!isPremiumUser && (
+                    <p className="text-xs text-muted-foreground">
+                      Upgrade to Premium for high-quality ElevenLabs voices.
+                    </p>
+                  )}
+                </div>
+              </PopoverContent>
+            </Popover>
+
             <Button
               variant="ghost"
               size="icon"
@@ -327,7 +518,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                   {currentSlide.heading}
                 </h2>
 
-                {/* Main Content Area - Flexbox for visual + text */}
+                {/* Main Content Area */}
                 <div className={cn(
                   'flex-1',
                   hasGeneratedVisual && 'grid grid-cols-1 md:grid-cols-2 gap-6'
@@ -360,7 +551,6 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                   {/* Slide Content */}
                   <div className="flex flex-col justify-center">
                     {currentSlide.layout === 'comparison' ? (
-                      // Comparison layout - two columns
                       <div className="grid grid-cols-2 gap-6">
                         {currentSlide.content.map((item, i) => (
                           <div key={i} className="p-4 rounded-lg bg-background/50 border">
@@ -369,7 +559,6 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                         ))}
                       </div>
                     ) : (
-                      // Standard bullet layout
                       <ul className="space-y-3">
                         {currentSlide.content.map((bullet, i) => (
                           <motion.li
@@ -386,7 +575,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                       </ul>
                     )}
 
-                    {/* Visual placeholder when no image but description exists */}
+                    {/* Visual placeholder */}
                     {!hasGeneratedVisual && currentSlide.visual && (
                       <div className="mt-6 p-4 rounded-lg bg-muted/50 border border-dashed">
                         <div className="flex items-center gap-2 text-sm text-muted-foreground">
