@@ -72,6 +72,7 @@ export function QuizMode({
     setSelectedAnswer(null);
     setShowResult(false);
 
+    // Single attempt - no silent retries (better UX)
     try {
       const { data, error } = await supabase.functions.invoke("interactive-qa", {
         body: {
@@ -85,7 +86,16 @@ export function QuizMode({
         },
       });
 
-      if (error) throw error;
+      if (error) {
+        // Map specific errors to user-friendly messages
+        if (error.message?.includes('429') || error.message?.includes('Rate limit')) {
+          throw new Error('Too many requests. Please wait 30 seconds and try again.');
+        }
+        if (error.message?.includes('402')) {
+          throw new Error('AI credits exhausted. Please check your subscription.');
+        }
+        throw error;
+      }
 
       if (data?.questions && Array.isArray(data.questions)) {
         setQuestions(data.questions);
@@ -96,22 +106,23 @@ export function QuizMode({
             setQuestions(parsed);
           }
         } catch {
-          throw new Error("Failed to generate quiz questions");
+          throw new Error("Invalid quiz format received");
         }
       } else {
         throw new Error("No quiz questions generated");
       }
     } catch (err) {
       console.error("[QuizMode] Error:", err);
+      const errorMessage = err instanceof Error ? err.message : t('quiz.generationFailedDesc');
       toast({
         title: t('quiz.generationFailed'),
-        description: t('quiz.generationFailedDesc'),
+        description: errorMessage,
         variant: "destructive",
       });
     } finally {
       setIsLoading(false);
     }
-  }, [chapterContent, chapterTitle, bookTitle, toast, t]);
+  }, [chapterContent, chapterTitle, bookTitle, isMasteryMode, bookType, toast, t]);
 
   const handleSelectAnswer = (index: number) => {
     if (showResult) return;

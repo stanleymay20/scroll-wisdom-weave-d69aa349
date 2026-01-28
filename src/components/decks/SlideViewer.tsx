@@ -2,10 +2,11 @@
  * VLD-1.0: Slide Viewer Component
  * 
  * Displays learning deck slides with NotebookLM-quality layouts,
- * AI-generated visuals, speaker notes, and "Explain this slide" feature.
+ * AI-generated visuals, speaker notes, "Explain this slide" feature,
+ * and TTS audio playback for slide narration.
  */
 
-import { useState, useCallback, forwardRef } from 'react';
+import { useState, useCallback, forwardRef, useRef, useEffect } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ChevronLeft,
@@ -22,6 +23,10 @@ import {
   StickyNote,
   X,
   ImageIcon,
+  Volume2,
+  VolumeX,
+  Pause,
+  Play,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -69,18 +74,125 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
     const [showNotes, setShowNotes] = useState(false);
     const [isExplaining, setIsExplaining] = useState(false);
     const [explanation, setExplanation] = useState<string | null>(null);
+    
+    // TTS Audio state
+    const [isLoadingAudio, setIsLoadingAudio] = useState(false);
+    const [isPlaying, setIsPlaying] = useState(false);
+    const [audioEnabled, setAudioEnabled] = useState(false);
+    const audioRef = useRef<HTMLAudioElement | null>(null);
+    const currentSlideAudioRef = useRef<number>(-1);
 
     const currentSlide = deck.slides[currentIndex];
     const totalSlides = deck.slides.length;
     const LayoutIcon = layoutIcons[currentSlide?.layout || 'concept-text'];
 
+    // Clean up audio on unmount
+    useEffect(() => {
+      return () => {
+        if (audioRef.current) {
+          audioRef.current.pause();
+          audioRef.current = null;
+        }
+      };
+    }, []);
+
+    // Generate slide narration text
+    const getSlideNarration = useCallback((slide: SlideData): string => {
+      const parts = [slide.heading];
+      if (slide.content?.length) {
+        parts.push(...slide.content);
+      }
+      if (slide.speakerNotes) {
+        parts.push(slide.speakerNotes);
+      }
+      return parts.join('. ');
+    }, []);
+
+    // Play TTS for current slide
+    const playSlideAudio = useCallback(async () => {
+      if (!currentSlide || isLoadingAudio) return;
+      
+      // If already playing this slide, just resume
+      if (audioRef.current && currentSlideAudioRef.current === currentIndex) {
+        audioRef.current.play();
+        setIsPlaying(true);
+        return;
+      }
+
+      setIsLoadingAudio(true);
+      
+      try {
+        const narration = getSlideNarration(currentSlide);
+        
+        // Use browser-native TTS for fast playback (no network delay)
+        if ('speechSynthesis' in window) {
+          // Stop any existing speech
+          window.speechSynthesis.cancel();
+          
+          const utterance = new SpeechSynthesisUtterance(narration);
+          utterance.rate = 1.0;
+          utterance.pitch = 1.0;
+          
+          utterance.onend = () => {
+            setIsPlaying(false);
+          };
+          
+          utterance.onerror = () => {
+            setIsPlaying(false);
+            setIsLoadingAudio(false);
+          };
+          
+          window.speechSynthesis.speak(utterance);
+          setIsPlaying(true);
+          currentSlideAudioRef.current = currentIndex;
+        } else {
+          toast({
+            title: 'Audio not supported',
+            description: 'Your browser does not support text-to-speech.',
+            variant: 'destructive',
+          });
+        }
+      } catch (err) {
+        console.error('[SlideViewer] TTS error:', err);
+        toast({
+          title: 'Audio Failed',
+          description: 'Could not play slide audio',
+          variant: 'destructive',
+        });
+      } finally {
+        setIsLoadingAudio(false);
+      }
+    }, [currentSlide, currentIndex, isLoadingAudio, getSlideNarration, toast]);
+
+    // Stop audio playback
+    const stopAudio = useCallback(() => {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+      }
+      if (audioRef.current) {
+        audioRef.current.pause();
+      }
+      setIsPlaying(false);
+    }, []);
+
+    // Toggle audio
+    const toggleAudio = useCallback(() => {
+      if (isPlaying) {
+        stopAudio();
+      } else {
+        playSlideAudio();
+      }
+    }, [isPlaying, stopAudio, playSlideAudio]);
+
     // Navigate slides
     const goTo = useCallback((index: number) => {
       if (index >= 0 && index < totalSlides) {
+        stopAudio(); // Stop audio when changing slides
         setCurrentIndex(index);
-        setExplanation(null); // Clear explanation when changing slides
+        setExplanation(null);
+        currentSlideAudioRef.current = -1; // Reset audio tracking
       }
-    }, [totalSlides]);
+    }, [totalSlides, stopAudio]);
 
     const goNext = useCallback(() => goTo(currentIndex + 1), [currentIndex, goTo]);
     const goPrev = useCallback(() => goTo(currentIndex - 1), [currentIndex, goTo]);
@@ -153,6 +265,23 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
             )}
           </div>
           <div className="flex items-center gap-1">
+            {/* Audio Playback Button */}
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={toggleAudio}
+              disabled={isLoadingAudio}
+              className={cn(isPlaying && 'bg-primary/10 text-primary')}
+              title={isPlaying ? 'Stop narration' : 'Play slide narration'}
+            >
+              {isLoadingAudio ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : isPlaying ? (
+                <Pause className="h-4 w-4" />
+              ) : (
+                <Volume2 className="h-4 w-4" />
+              )}
+            </Button>
             <Button
               variant="ghost"
               size="icon"

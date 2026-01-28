@@ -3,6 +3,7 @@
  * 
  * UI for generating verified learning decks from book content.
  * Shows eligibility status, generation options, and full slide preview.
+ * Subscription-tier aware: Premium subscribers get enhanced features.
  */
 
 import { useState, useCallback } from 'react';
@@ -26,6 +27,7 @@ import {
   FileDown,
   Save,
   FolderOpen,
+  Crown,
 } from 'lucide-react';
 import { exportToPowerPoint, downloadBlob } from '@/lib/exportLearningDeck';
 import { Button } from '@/components/ui/button';
@@ -54,6 +56,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { useToast } from '@/hooks/use-toast';
 import { useLanguage } from '@/contexts/LanguageContext';
 import { useLearningDeckEligibility } from '@/hooks/useLearningDeckEligibility';
+import { useSubscription } from '@/contexts/SubscriptionContext';
 import { supabase } from '@/integrations/supabase/client';
 import {
   DeckScope,
@@ -94,13 +97,20 @@ export function LearningDeckGenerator({
 }: LearningDeckGeneratorProps) {
   const { t } = useLanguage();
   const { toast } = useToast();
+  
+  // Subscription context for tier-based features
+  const { tier, isSubscribed } = useSubscription();
+  const isPaidSubscriber = tier !== 'free';
+  const isPremiumOrHigher = tier === 'premium' || tier === 'prophet_tier';
 
   // Generation settings
   const [scope, setScope] = useState<DeckScope>(currentChapter ? 'chapter' : 'book');
   const [targetAudience, setTargetAudience] = useState<TargetAudience>('student');
   const [tone, setTone] = useState<DeckTone>('academic');
-  const [maxSlides, setMaxSlides] = useState<number>(VLD_ELIGIBILITY.MAX_SLIDES_DEFAULT);
-  const [includeVisuals, setIncludeVisuals] = useState(true);
+  // Paid subscribers get higher slide limits
+  const defaultMaxSlides = isPaidSubscriber ? VLD_ELIGIBILITY.PREMIUM_MAX_SLIDES : VLD_ELIGIBILITY.MAX_SLIDES_DEFAULT;
+  const [maxSlides, setMaxSlides] = useState<number>(defaultMaxSlides);
+  const [includeVisuals, setIncludeVisuals] = useState(isPaidSubscriber); // Visuals default on for paid
 
   // UI state
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -122,6 +132,9 @@ export function LearningDeckGenerator({
   
   // Saved decks hook
   const { saveDeck, isSaving, decks: savedDecks, refresh: refreshSavedDecks } = useSavedDecks({ bookId, userId });
+  
+  // Calculate effective tier based on subscription + learning progress
+  const effectiveTier = isPremiumOrHigher ? 'premium' : (eligibility?.tier || 'basic');
 
   // Generate deck - always allowed for basic tier
   const handleGenerate = useCallback(async () => {
@@ -223,7 +236,7 @@ export function LearningDeckGenerator({
     }
   }, [generatedDeck, bookTitle, toast]);
 
-  // Render eligibility progress with two-tier display
+  // Render eligibility progress with subscription + learning tier display
   const renderEligibilityProgress = () => {
     if (!eligibility) return null;
 
@@ -234,14 +247,27 @@ export function LearningDeckGenerator({
 
     return (
       <div className="space-y-3">
-        {/* Current Tier Badge */}
+        {/* Subscription Tier Badge - shows subscription benefit */}
+        {isPaidSubscriber && (
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-scroll-gold/10 border border-scroll-gold/30">
+            <Crown className="h-4 w-4 text-scroll-gold" />
+            <span className="text-sm font-medium text-scroll-gold">
+              {tier === 'prophet_tier' ? 'Prophet Tier' : tier === 'premium' ? 'Premium' : 'Student'} Subscriber
+            </span>
+            <Badge variant="outline" className="ml-auto text-xs">
+              Premium decks unlocked
+            </Badge>
+          </div>
+        )}
+
+        {/* Learning Progress Tier Badge */}
         <div className="flex items-center gap-2">
-          <Badge variant={eligibility.tier === 'premium' ? 'default' : 'secondary'}>
-            {eligibility.tier === 'premium' ? '⭐ Premium Tier' : '📄 Basic Tier'}
+          <Badge variant={effectiveTier === 'premium' ? 'default' : 'secondary'}>
+            {effectiveTier === 'premium' ? '⭐ Premium Deck' : '📄 Basic Deck'}
           </Badge>
-          {eligibility.tier === 'basic' && (
+          {effectiveTier === 'basic' && !isPaidSubscriber && (
             <span className="text-xs text-muted-foreground">
-              Complete requirements for premium certification deck
+              Subscribe or complete requirements for premium
             </span>
           )}
         </div>
@@ -253,7 +279,7 @@ export function LearningDeckGenerator({
               Reading Progress
             </span>
             <span className="text-muted-foreground">
-              {eligibility.chaptersRead.length}/{eligibility.chaptersRequired.length} chapters (80% needed for premium)
+              {eligibility.chaptersRead.length}/{eligibility.chaptersRequired.length} chapters
             </span>
           </div>
           <Progress value={readPercent} className="h-2" />
@@ -262,20 +288,20 @@ export function LearningDeckGenerator({
           <div className="flex items-center justify-between text-sm mb-1">
             <span className="flex items-center gap-1.5">
               <GraduationCap className="h-3.5 w-3.5" />
-              Quizzes Passed
+              Quizzes Completed
             </span>
             <span className="text-muted-foreground">
-              {eligibility.quizzesPassed?.length || 0}/{eligibility.quizzesRequired.length} quizzes (70% needed for premium)
+              {eligibility.quizzesPassed?.length || 0}/{eligibility.quizzesRequired.length} quizzes
             </span>
           </div>
           <Progress value={quizPassPercent} className="h-2" />
         </div>
         
-        {/* Premium blocker message */}
-        {eligibility.premiumBlocker && (
-          <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1">
-            <AlertCircle className="h-3 w-3" />
-            {eligibility.premiumBlocker}
+        {/* Show upgrade prompt for free users */}
+        {!isPaidSubscriber && effectiveTier === 'basic' && (
+          <p className="text-xs text-primary/80 flex items-center gap-1">
+            <Sparkles className="h-3 w-3" />
+            Upgrade to Premium for enhanced decks with visuals
           </p>
         )}
       </div>
@@ -376,14 +402,17 @@ export function LearningDeckGenerator({
               {/* Eligibility Status */}
               <div className={cn(
                 'p-4 rounded-lg border',
-                eligibility?.tier === 'premium'
+                effectiveTier === 'premium'
                   ? 'bg-scroll-gold/10 border-scroll-gold/30' 
                   : 'bg-emerald-500/10 border-emerald-500/30'
               )}>
                 <div className="flex items-center gap-2 mb-3">
-                  <CheckCircle2 className="h-5 w-5 text-emerald-600" />
+                  <CheckCircle2 className={cn(
+                    "h-5 w-5",
+                    effectiveTier === 'premium' ? 'text-scroll-gold' : 'text-emerald-600'
+                  )} />
                   <span className="font-medium">
-                    {eligibility?.tier === 'premium' ? '⭐ Premium Deck Ready' : 'Basic Deck Ready'}
+                    {effectiveTier === 'premium' ? '⭐ Premium Deck Ready' : 'Basic Deck Ready'}
                   </span>
                 </div>
                 {renderEligibilityProgress()}
@@ -443,7 +472,7 @@ export function LearningDeckGenerator({
                       value={[maxSlides]}
                       onValueChange={([v]) => setMaxSlides(v)}
                       min={5}
-                      max={eligibility?.tier === 'premium' ? VLD_ELIGIBILITY.PREMIUM_MAX_SLIDES : VLD_ELIGIBILITY.MAX_SLIDES_LIMIT}
+                      max={isPaidSubscriber ? VLD_ELIGIBILITY.PREMIUM_MAX_SLIDES : VLD_ELIGIBILITY.MAX_SLIDES_LIMIT}
                       step={1}
                       className="mt-3"
                     />
