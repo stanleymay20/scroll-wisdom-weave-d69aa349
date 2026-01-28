@@ -9,12 +9,13 @@
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Navbar } from "@/components/layout/Navbar";
 import { HeroSection } from "@/components/home/HeroSection";
-import { ContinueReadingWidget } from "@/components/home/ContinueReadingWidget";
-import { PlatformClarification } from "@/components/home/PlatformClarification";
-import { CertificationDisclaimer } from "@/components/home/CertificationDisclaimer";
-import { AcademicCredibility } from "@/components/home/AcademicCredibility";
-import { FeaturedBooks } from "@/components/home/FeaturedBooks";
-import { CategoriesSection } from "@/components/home/CategoriesSection";
+import { TrustSignals } from "@/components/home/TrustSignals";
+import { WhatYouCanCreate } from "@/components/home/WhatYouCanCreate";
+import { HowItWorks } from "@/components/home/HowItWorks";
+import { WhyDifferent } from "@/components/home/WhyDifferent";
+import { WhoItsFor } from "@/components/home/WhoItsFor";
+import { UseCases } from "@/components/home/UseCases";
+import { FinalCTA } from "@/components/home/FinalCTA";
 import { Footer } from "@/components/layout/Footer";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { MobileLayout, MobileHome } from "@/components/mobile";
@@ -42,14 +43,13 @@ const Index = () => {
       <TrialBanner />
       <main>
         <HeroSection />
-        <div className="container mx-auto px-4 -mt-8 mb-8 relative z-20">
-          <ContinueReadingWidget />
-        </div>
-        <PlatformClarification />
-        <CertificationDisclaimer />
-        <AcademicCredibility />
-        <FeaturedBooks />
-        <CategoriesSection />
+        <TrustSignals />
+        <WhatYouCanCreate />
+        <HowItWorks />
+        <WhyDifferent />
+        <WhoItsFor />
+        <UseCases />
+        <FinalCTA />
       </main>
       <Footer />
     </div>
