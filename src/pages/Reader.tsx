@@ -37,7 +37,8 @@ import {
   MessageCircle,
   Mic,
   Save,
-  Code2
+  Code2,
+  Edit3
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -57,8 +58,8 @@ import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 import { CodePlayground } from "@/components/reader/CodePlayground";
 import { ComicReaderMode, parseComicContentToPanels, ComicPanelData } from "@/components/reader/ComicReaderMode";
-import { PreviouslyInBookCard, ReadingSessionTimer } from "@/components/reader";
-import { LearningDeckGenerator } from "@/components/decks";
+import { PreviouslyInBookCard, ReadingSessionTimer, DirectTextEditor } from "@/components/reader";
+import { LearningDeckGenerator, FlashcardGenerator } from "@/components/decks";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -185,7 +186,9 @@ export default function Reader() {
   const [showVoiceConversation, setShowVoiceConversation] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
   const [showComicReader, setShowComicReader] = useState(false);
+  const [showDirectEditor, setShowDirectEditor] = useState(false);
   const [highlightedText, setHighlightedText] = useState("");
+  const [isBookOwner, setIsBookOwner] = useState(false);
   
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
   const [shouldResumeTTS, setShouldResumeTTS] = useState(false);
@@ -235,6 +238,27 @@ export default function Reader() {
       console.error("Error saving progress:", error);
     }
   }, [userId, bookId, toast]);
+
+  // Check book ownership
+  useEffect(() => {
+    const checkOwnership = async () => {
+      if (!bookId || !userId) {
+        setIsBookOwner(false);
+        return;
+      }
+      try {
+        const { data } = await supabase
+          .from('books')
+          .select('user_id')
+          .eq('id', bookId)
+          .single();
+        setIsBookOwner(data?.user_id === userId);
+      } catch {
+        setIsBookOwner(false);
+      }
+    };
+    checkOwnership();
+  }, [bookId, userId]);
 
   // Reset reading progress on chapter change
   useEffect(() => {
@@ -1075,6 +1099,27 @@ export default function Reader() {
               currentChapter={currentChapter}
               variant="inline"
             />
+            {/* Flashcards Generator */}
+            <FlashcardGenerator
+              bookId={bookId || ''}
+              bookTitle={book?.title || ''}
+              currentChapter={currentChapter}
+              totalChapters={totalChapters}
+              variant="inline"
+            />
+            {/* Edit Chapter button - for book owners */}
+            {isBookOwner && (
+              <Button
+                onClick={() => setShowDirectEditor(true)}
+                variant="outline"
+                size="sm"
+                className="gap-2"
+                title="Edit chapter content"
+              >
+                <Edit3 className="h-4 w-4" />
+                <span className="text-xs">Edit</span>
+              </Button>
+            )}
             {/* Comic Reader button - only show for comic content */}
             {chapter.content.includes('[PANEL') && (
               <Button
@@ -1152,6 +1197,21 @@ export default function Reader() {
           initialCode={extractCodeFromChapter(chapter.content)}
           initialLanguage={detectLanguageFromChapter(chapter.content)}
           title={`Code Playground - ${chapter.title}`}
+        />
+      )}
+
+      {/* Direct Text Editor for book owners */}
+      {showDirectEditor && chapter?.content && (
+        <DirectTextEditor
+          chapterId={chapter.id}
+          content={chapter.content}
+          isOwner={isBookOwner}
+          onSave={(newContent) => {
+            setShowDirectEditor(false);
+            // Trigger refresh to show updated content
+            window.location.reload();
+          }}
+          onCancel={() => setShowDirectEditor(false)}
         />
       )}
 
