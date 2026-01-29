@@ -255,12 +255,16 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
     }
   }, [bookId, chapterNumber, chapter, previewContent, resumePosition]);
 
-  // Initial load
+  // Initial load - reset state and fetch on every chapter/book change
   useEffect(() => {
     mountedRef.current = true;
-    hasFetched.current = false;
-
-    if (bookId && !hasFetched.current) {
+    
+    // Always reset and reload when bookId or chapterNumber changes
+    if (bookId) {
+      // Reset state for fresh chapter load
+      setLoadState('skeleton');
+      setError(null);
+      setHasNetworkData(false);
       hasFetched.current = true;
       loadData();
     }
@@ -268,7 +272,7 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
     return () => {
       mountedRef.current = false;
     };
-  }, [bookId, chapterNumber, loadData]);
+  }, [bookId, chapterNumber]); // Note: removed loadData to prevent infinite loops
 
   // Online/offline listener
   useEffect(() => {
