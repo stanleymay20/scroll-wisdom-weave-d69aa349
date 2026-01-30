@@ -5,17 +5,29 @@
  * No blocking calls allowed in this component.
  */
 
-import { memo, forwardRef } from "react";
-import { Home, BookOpen, Library as LibraryIcon, Settings } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { memo, forwardRef, useState } from "react";
+import { Home, BookOpen, Library as LibraryIcon, Settings, Plus, X, Image, FileText } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
+import { motion, AnimatePresence } from "framer-motion";
 
-// Static nav items - no computation needed
-const NAV_ITEMS = [
+// Left side nav items
+const LEFT_NAV_ITEMS = [
   { icon: Home, label: "Home", path: "/" },
-  { icon: BookOpen, label: "Books", path: "/explore" },
+  { icon: BookOpen, label: "Explore", path: "/explore" },
+] as const;
+
+// Right side nav items
+const RIGHT_NAV_ITEMS = [
   { icon: LibraryIcon, label: "Library", path: "/library" },
   { icon: Settings, label: "Settings", path: "/settings" },
+] as const;
+
+// Book type options for the create menu
+const BOOK_TYPES = [
+  { id: "text", label: "Text Book", icon: BookOpen },
+  { id: "comic", label: "Comic", icon: Image },
+  { id: "workbook", label: "Workbook", icon: FileText },
 ] as const;
 
 /**
@@ -23,41 +35,135 @@ const NAV_ITEMS = [
  * This is critical for Contract 4A compliance
  */
 const MobileBottomNavComponent = forwardRef<HTMLElement, object>((_props, ref) => {
-  // Only hook allowed: location for active state
   const location = useLocation();
+  const navigate = useNavigate();
   const pathname = location.pathname;
+  const [showCreateMenu, setShowCreateMenu] = useState(false);
+
+  const isActive = (path: string) => 
+    pathname === path || 
+    (path === "/" && pathname === "/") ||
+    (path !== "/" && pathname.startsWith(path.split("?")[0]));
+
+  const handleCreateBook = (type: string) => {
+    setShowCreateMenu(false);
+    navigate(`/generate?type=${type}`);
+  };
 
   return (
-    <nav 
-      ref={ref}
-      className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border/30 md:hidden"
-      style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
-    >
-      <div className="flex items-center justify-around h-16">
-        {NAV_ITEMS.map((item) => {
-          const Icon = item.icon;
-          const isActive = pathname === item.path || 
-            (item.path === "/" && pathname === "/") ||
-            (item.path !== "/" && pathname.startsWith(item.path.split("?")[0]));
-
-          return (
-            <Link
-              key={item.path}
-              to={item.path}
-              className={cn(
-                "flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-colors",
-                isActive 
-                  ? "text-scroll-gold" 
-                  : "text-muted-foreground active:text-foreground"
-              )}
+    <>
+      {/* Create Menu Overlay */}
+      <AnimatePresence>
+        {showCreateMenu && (
+          <>
+            {/* Backdrop */}
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              className="fixed inset-0 bg-background/80 backdrop-blur-sm z-[100] md:hidden"
+              onClick={() => setShowCreateMenu(false)}
+            />
+            
+            {/* Menu */}
+            <motion.div
+              initial={{ opacity: 0, y: 100 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0, y: 100 }}
+              className="fixed bottom-24 left-1/2 -translate-x-1/2 z-[101] bg-card border border-border rounded-2xl p-4 shadow-2xl md:hidden"
+              style={{ paddingBottom: "calc(1rem + env(safe-area-inset-bottom))" }}
             >
-              <Icon className={cn("h-5 w-5", isActive && "fill-scroll-gold/20")} />
-              <span className="text-[10px] font-medium">{item.label}</span>
-            </Link>
-          );
-        })}
-      </div>
-    </nav>
+              <div className="flex flex-col gap-2 min-w-[200px]">
+                <p className="text-sm font-medium text-muted-foreground text-center mb-2">
+                  Create New Book
+                </p>
+                {BOOK_TYPES.map((type) => {
+                  const Icon = type.icon;
+                  return (
+                    <button
+                      key={type.id}
+                      onClick={() => handleCreateBook(type.id)}
+                      className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted transition-colors"
+                    >
+                      <div className="w-10 h-10 rounded-full bg-scroll-gold/10 flex items-center justify-center">
+                        <Icon className="h-5 w-5 text-scroll-gold" />
+                      </div>
+                      <span className="font-medium">{type.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          </>
+        )}
+      </AnimatePresence>
+
+      {/* Bottom Navigation */}
+      <nav 
+        ref={ref}
+        className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border/30 md:hidden"
+        style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <div className="flex items-center justify-around h-16">
+          {/* Left Nav Items */}
+          {LEFT_NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.path);
+
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-colors",
+                  active 
+                    ? "text-scroll-gold" 
+                    : "text-muted-foreground active:text-foreground"
+                )}
+              >
+                <Icon className={cn("h-5 w-5", active && "fill-scroll-gold/20")} />
+                <span className="text-[10px] font-medium">{item.label}</span>
+              </Link>
+            );
+          })}
+
+          {/* Center Create Button */}
+          <button
+            onClick={() => setShowCreateMenu(!showCreateMenu)}
+            className={cn(
+              "relative flex items-center justify-center w-14 h-14 -mt-6 rounded-full shadow-lg transition-all",
+              showCreateMenu
+                ? "bg-destructive text-destructive-foreground rotate-45"
+                : "bg-scroll-gold text-background shadow-scroll-gold/30"
+            )}
+          >
+            <Plus className="h-7 w-7 transition-transform" />
+          </button>
+
+          {/* Right Nav Items */}
+          {RIGHT_NAV_ITEMS.map((item) => {
+            const Icon = item.icon;
+            const active = isActive(item.path);
+
+            return (
+              <Link
+                key={item.path}
+                to={item.path}
+                className={cn(
+                  "flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-colors",
+                  active 
+                    ? "text-scroll-gold" 
+                    : "text-muted-foreground active:text-foreground"
+                )}
+              >
+                <Icon className={cn("h-5 w-5", active && "fill-scroll-gold/20")} />
+                <span className="text-[10px] font-medium">{item.label}</span>
+              </Link>
+            );
+          })}
+        </div>
+      </nav>
+    </>
   );
 });
 
