@@ -158,13 +158,13 @@ export function QuizMode({
             book_id: bookId,
             chapter_id: chapterId,
             note_type: "quiz_result",
-            title: `Quiz: ${chapterTitle}`,
-            content: {
+            content: JSON.stringify({
+              title: `Quiz: ${chapterTitle}`,
               score,
               total: questions.length,
               percentage: Math.round((score / questions.length) * 100),
               questions: questions.map((q, i) => ({ question: q.question, correct: i < score })),
-            },
+            }),
           });
         }
       } catch (err) {
