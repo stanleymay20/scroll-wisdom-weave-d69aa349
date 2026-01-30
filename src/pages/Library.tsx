@@ -533,7 +533,7 @@ export default function Library() {
     // CONTRACT 5B-1: Show content with cached data or skeleton immediately
     // Don't block on auth - useLibraryData loads cache independently
     return (
-      <MobileLayout showGenerateButton={false}>
+      <MobileLayout>
         <MobileLibraryContent
           items={items}
           filteredItems={filteredItems}

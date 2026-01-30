@@ -62,7 +62,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
     
     // Handle common auth errors with user-friendly messages
     if (message.includes("Invalid login credentials")) {
-      return "Invalid email or password. Please check your credentials and try again.";
+      return "Invalid email or password. If you don't have an account yet, please sign up first.";
     }
     if (message.includes("Email not confirmed")) {
       return "Please verify your email before signing in. Check your inbox for a confirmation link.";
