@@ -40,6 +40,12 @@ serve(async (req) => {
 
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
     if (!supabaseUrl || !supabaseServiceKey) throw new Error("Supabase configuration missing");
+    
+    // SECURITY: Webhook signature verification is REQUIRED in production
+    if (!webhookSecret) {
+      logStep("SECURITY ERROR: STRIPE_WEBHOOK_SECRET is not configured");
+      throw new Error("STRIPE_WEBHOOK_SECRET must be configured. Unsigned webhooks are not accepted.");
+    }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -49,24 +55,26 @@ serve(async (req) => {
     const signature = req.headers.get("stripe-signature");
     const body = await req.text();
 
-    let event: Stripe.Event;
+    // SECURITY: Signature verification is mandatory
+    if (!signature) {
+      logStep("SECURITY ERROR: Missing stripe-signature header");
+      return new Response(JSON.stringify({ error: "Missing stripe-signature header" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
-    // Verify webhook signature if secret is configured
-    if (webhookSecret && signature) {
-      try {
-        event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
-        logStep("Webhook signature verified");
-      } catch (err) {
-        logStep("Webhook signature verification failed");
-        return new Response(JSON.stringify({ error: "Invalid signature" }), {
-          status: 400,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-    } else {
-      // Parse event without verification (for testing)
-      event = JSON.parse(body);
-      logStep("Webhook parsed without signature verification (testing mode)");
+    let event: Stripe.Event;
+    try {
+      event = stripe.webhooks.constructEvent(body, signature, webhookSecret);
+      logStep("Webhook signature verified successfully");
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : "Unknown error";
+      logStep("SECURITY ERROR: Webhook signature verification failed", { error: errorMessage });
+      return new Response(JSON.stringify({ error: "Invalid webhook signature" }), {
+        status: 400,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
     }
 
     logStep("Processing event", { type: event.type, id: event.id });
