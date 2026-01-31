@@ -36,8 +36,12 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   }, [mode]);
 
   useEffect(() => {
-    // Detect password-recovery session in URL hash and avoid redirecting away during recovery.
-    isRecoveryRef.current = hasRecoveryTokens(window.location.hash);
+    const url = new URL(window.location.href);
+    const code = url.searchParams.get("code");
+
+    // Detect password-recovery session in URL hash (implicit flow) OR ?code= (PKCE flow)
+    // and avoid redirecting away during recovery.
+    isRecoveryRef.current = hasRecoveryTokens(window.location.hash) || Boolean(code);
     if (isRecoveryRef.current && mode !== "reset-password") {
       setMode("reset-password");
     }
@@ -57,13 +61,23 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
       }
     });
 
-    // If user landed here via recovery link, restore session from hash tokens.
-    // This fixes cases where localStorage doesn't yet contain the recovery session.
+    // If user landed here via recovery link, restore session.
+    // Supports both:
+    //  - URL hash tokens (#access_token=...&refresh_token=...)
+    //  - PKCE auth code (?code=...)
     (async () => {
       if (!isRecoveryRef.current) return;
       const { data: { session } } = await supabase.auth.getSession();
       if (session) return;
 
+      // PKCE: exchange ?code= for session
+      if (code) {
+        const { error } = await supabase.auth.exchangeCodeForSession(code);
+        if (error) console.warn("Recovery code exchange failed:", error.message);
+        return;
+      }
+
+      // Implicit: restore from hash tokens
       const tokens = parseHashTokens(window.location.hash);
       if (!tokens) return;
 
@@ -71,9 +85,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
         access_token: tokens.access_token,
         refresh_token: tokens.refresh_token,
       });
-      if (error) {
-        console.warn("Recovery session restore failed:", error.message);
-      }
+      if (error) console.warn("Recovery session restore failed:", error.message);
     })();
 
     // For normal signed-in visits, redirect home.
@@ -202,10 +214,19 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
       } else if (mode === "magic-link") {
         await handleSendMagicLink(safeEmail);
       } else if (mode === "reset-password") {
-        const { data: { session } } = await supabase.auth.getSession();
+        let { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          throw new Error("Your reset link is missing or expired. Please request a new password reset email.");
+          // Mobile browsers often use PKCE recovery links with ?code=...
+          const url = new URL(window.location.href);
+          const code = url.searchParams.get("code");
+          if (code) {
+            const { error } = await supabase.auth.exchangeCodeForSession(code);
+            if (!error) {
+              ({ data: { session } } = await supabase.auth.getSession());
+            }
+          }
         }
+        if (!session) throw new Error("Your reset link is missing or expired. Please request a new password reset email.");
         if (safeNewPassword.length < 6) {
           throw new Error("Password must be at least 6 characters long.");
         }
