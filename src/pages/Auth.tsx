@@ -413,21 +413,26 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
             )}
 
             {mode === "reset-password" && (
-              <div className="space-y-2">
-                <Label htmlFor="newPassword" className="text-sm">New Password</Label>
-                <div className="relative">
-                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-                  <Input
-                    id="newPassword"
-                    type="password"
-                    placeholder="Enter new password"
-                    value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
-                    className="pl-10 bg-background/50 border-border focus:border-primary h-11"
-                    required
-                    minLength={6}
-                  />
+              <div className="space-y-4">
+                <div className="space-y-2">
+                  <Label htmlFor="newPassword" className="text-sm">New Password</Label>
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      id="newPassword"
+                      type="password"
+                      placeholder="Enter new password"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      className="pl-10 bg-background/50 border-border focus:border-primary h-11"
+                      required
+                      minLength={6}
+                    />
+                  </div>
                 </div>
+                <p className="text-xs text-muted-foreground">
+                  If the link doesn't work, request a new one below.
+                </p>
               </div>
             )}
 
@@ -455,7 +460,15 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
               <button type="button" onClick={() => setMode("login")} className="text-sm text-muted-foreground hover:text-primary transition-colors">
                 ← {t('common.back')}
               </button>
-            ) : mode !== "reset-password" && (
+            ) : mode === "reset-password" ? (
+              <button
+                type="button"
+                onClick={() => setMode("forgot-password")}
+                className="text-sm text-muted-foreground hover:text-primary transition-colors"
+              >
+                Request new reset link
+              </button>
+            ) : (
               <button
                 type="button"
                 onClick={() => setMode(mode === "login" ? "signup" : "login")}
