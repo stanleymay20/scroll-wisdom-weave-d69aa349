@@ -1,4 +1,4 @@
-import { useState, useEffect, forwardRef } from "react";
+ import { useState, useEffect, forwardRef, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
+ import { hasRecoveryTokens, parseHashTokens } from "@/lib/authRecovery";
 
 type AuthMode = "login" | "signup" | "forgot-password" | "magic-link" | "reset-password";
 
@@ -27,6 +28,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   const [authError, setAuthError] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const isRecoveryRef = useRef(false);
 
   // Clear error when mode changes
   useEffect(() => {
@@ -34,22 +36,49 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   }, [mode]);
 
   useEffect(() => {
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (event === "PASSWORD_RECOVERY") {
-          setMode("reset-password");
-          setAuthError(null);
-        } else if (event === "SIGNED_IN" && session?.user) {
-          // Defer navigation to avoid potential deadlocks
-          setTimeout(() => {
-            navigate("/");
-          }, 0);
-        }
-      }
-    );
+    // Detect password-recovery session in URL hash and avoid redirecting away during recovery.
+    isRecoveryRef.current = hasRecoveryTokens(window.location.hash);
+    if (isRecoveryRef.current && mode !== "reset-password") {
+      setMode("reset-password");
+    }
 
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        setMode("reset-password");
+        setAuthError(null);
+        return;
+      }
+
+      if (event === "SIGNED_IN" && session?.user) {
+        // If we're in recovery, stay on the reset screen.
+        if (isRecoveryRef.current || mode === "reset-password") return;
+        // Defer navigation to avoid potential deadlocks
+        setTimeout(() => navigate("/"), 0);
+      }
+    });
+
+    // If user landed here via recovery link, restore session from hash tokens.
+    // This fixes cases where localStorage doesn't yet contain the recovery session.
+    (async () => {
+      if (!isRecoveryRef.current) return;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) return;
+
+      const tokens = parseHashTokens(window.location.hash);
+      if (!tokens) return;
+
+      const { error } = await supabase.auth.setSession({
+        access_token: tokens.access_token,
+        refresh_token: tokens.refresh_token,
+      });
+      if (error) {
+        console.warn("Recovery session restore failed:", error.message);
+      }
+    })();
+
+    // For normal signed-in visits, redirect home.
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user && mode !== "reset-password") {
+      if (session?.user && mode !== "reset-password" && !isRecoveryRef.current) {
         navigate("/");
       }
     });
@@ -173,6 +202,10 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
       } else if (mode === "magic-link") {
         await handleSendMagicLink(safeEmail);
       } else if (mode === "reset-password") {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session) {
+          throw new Error("Your reset link is missing or expired. Please request a new password reset email.");
+        }
         if (safeNewPassword.length < 6) {
           throw new Error("Password must be at least 6 characters long.");
         }
@@ -192,6 +225,15 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
         description: friendlyMessage,
         variant: "destructive",
       });
+
+      if (
+        mode === "reset-password" &&
+        typeof friendlyMessage === "string" &&
+        friendlyMessage.toLowerCase().includes("reset link")
+      ) {
+        // Offer a safe escape hatch back to requesting a reset email.
+        setMode("forgot-password");
+      }
     } finally {
       setIsLoading(false);
     }
