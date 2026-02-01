@@ -9,15 +9,14 @@ const corsHeaders = {
 };
 
 // ===========================================
-// TRIAL MODE CONFIG - Matches src/lib/config.ts
-// During trial, all users get full export access
+// PRODUCTION MODE - Trial period has ended
+// Matches src/lib/config.ts
 // ===========================================
-const TRIAL_MODE = true;
-const TRIAL_END_DATE = new Date('2026-03-01');
+const TRIAL_MODE = false;
+const TRIAL_END_DATE = new Date('2026-01-20'); // Trial ended
 
 function isTrialActive(): boolean {
-  if (!TRIAL_MODE) return false;
-  return new Date() < TRIAL_END_DATE;
+  return false; // Trial period ended - use normal subscription logic
 }
 
 // Format restrictions by tier (bypassed during trial)
