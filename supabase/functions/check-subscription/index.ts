@@ -26,6 +26,31 @@ serve(async (req) => {
   try {
     logStep("Function started");
 
+    // Validate JWT manually since verify_jwt=false
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader?.startsWith("Bearer ")) {
+      logStep("No valid authorization header");
+      return new Response(JSON.stringify({ subscribed: false, tier: 'free' }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
+    
+    if (claimsError || !claimsData?.claims) {
+      logStep("Invalid JWT, returning free tier", { error: claimsError?.message });
+      return new Response(JSON.stringify({ subscribed: false, tier: 'free' }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+        status: 200,
+      });
+    }
+
+    const userId = claimsData.claims.sub;
+    const userEmail = claimsData.claims.email as string;
+    logStep("User authenticated via claims", { userId, email: userEmail });
+
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) {
       logStep("No Stripe key, returning free tier");
@@ -36,21 +61,8 @@ serve(async (req) => {
     }
     logStep("Stripe key verified");
 
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) throw new Error("No authorization header provided");
-    logStep("Authorization header found");
-
-    const token = authHeader.replace("Bearer ", "");
-    logStep("Authenticating user with token");
-    
-    const { data: userData, error: userError } = await supabaseClient.auth.getUser(token);
-    if (userError) throw new Error(`Authentication error: ${userError.message}`);
-    const user = userData.user;
-    if (!user?.email) throw new Error("User not authenticated or email not available");
-    logStep("User authenticated", { userId: user.id, email: user.email });
-
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customers = await stripe.customers.list({ email: user.email, limit: 1 });
+    const customers = await stripe.customers.list({ email: userEmail, limit: 1 });
     
     if (customers.data.length === 0) {
       logStep("No customer found, returning free tier");
