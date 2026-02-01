@@ -53,6 +53,7 @@ const LaunchChecklist = lazy(() => import("./pages/LaunchChecklist"));
 const HowCertificationWorks = lazy(() => import("./pages/HowCertificationWorks"));
 const InstitutionalReadiness = lazy(() => import("./pages/InstitutionalReadiness"));
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
+const AdminRecovery = lazy(() => import("./pages/AdminRecovery"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
@@ -140,6 +141,7 @@ const App = () => (
                   <Route path="/launch-checklist" element={<LaunchChecklist />} />
                   <Route path="/docs/institutional-readiness" element={<InstitutionalReadiness />} />
                   <Route path="/health-check" element={<HealthCheck />} />
+                  <Route path="/admin-recovery" element={<AdminRecovery />} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
