@@ -26,7 +26,7 @@ interface UserSettings {
 }
 
 const defaultSettings: UserSettings = {
-  theme_preference: 'dark',
+  theme_preference: 'light',
   font_size: 'medium',
   reader_theme: 'default',
   tts_enabled: true,
@@ -89,11 +89,21 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
   const applyVisualSettings = (currentSettings: UserSettings) => {
     const root = document.documentElement;
     
-    // Apply theme mode
+    // Apply theme mode (light / dark / system)
     const themeMode = currentSettings.theme_preference;
     const colorTheme = localStorage.getItem('color-theme') || 'gold';
     
-    if (themeMode === 'light') {
+    // Determine effective mode
+    let effectiveMode: 'light' | 'dark' = 'light';
+    if (themeMode === 'system') {
+      effectiveMode = window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    } else if (themeMode === 'dark') {
+      effectiveMode = 'dark';
+    } else {
+      effectiveMode = 'light';
+    }
+    
+    if (effectiveMode === 'light') {
       root.classList.remove('dark');
       root.setAttribute('data-theme', 'light');
     } else {
@@ -122,6 +132,18 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
       root.classList.remove('reduce-motion');
     }
   };
+
+  // Listen for system theme changes when in "system" mode
+  useEffect(() => {
+    const mediaQuery = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleChange = () => {
+      if (settings.theme_preference === 'system') {
+        applyVisualSettings(settings);
+      }
+    };
+    mediaQuery.addEventListener('change', handleChange);
+    return () => mediaQuery.removeEventListener('change', handleChange);
+  }, [settings]);
 
   // Fetch settings on mount and when user changes
   useEffect(() => {

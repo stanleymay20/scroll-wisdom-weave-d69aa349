@@ -17,7 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { 
   Palette, Bell, Brain, Shield, CreditCard,
   Save, Trash2, Download, Moon, Sun, Crown, HardDrive, Loader2,
-  Info, ExternalLink, FileText, CheckCircle
+  Info, ExternalLink, FileText, CheckCircle, Monitor
 } from "lucide-react";
 import { StorageManager } from "@/components/pwa/StorageManager";
 import { useToast } from "@/hooks/use-toast";
@@ -468,16 +468,22 @@ export default function Settings() {
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
+                          <SelectItem value="light">
+                            <div className="flex items-center gap-2">
+                              <Sun className="h-4 w-4" />
+                              {t('settings.light')}
+                            </div>
+                          </SelectItem>
                           <SelectItem value="dark">
                             <div className="flex items-center gap-2">
                               <Moon className="h-4 w-4" />
                               {t('settings.dark')}
                             </div>
                           </SelectItem>
-                          <SelectItem value="light">
+                          <SelectItem value="system">
                             <div className="flex items-center gap-2">
-                              <Sun className="h-4 w-4" />
-                              {t('settings.light')}
+                              <Monitor className="h-4 w-4" />
+                              System
                             </div>
                           </SelectItem>
                         </SelectContent>
@@ -492,7 +498,7 @@ export default function Settings() {
                         <Label>{t('settings.colorTheme')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.colorThemeDesc')}</p>
                       </div>
-                      <div className="grid grid-cols-3 sm:grid-cols-6 gap-3">
+                      <div className="grid grid-cols-4 sm:grid-cols-8 gap-3">
                         {[
                           { id: 'gold', label: t('settings.gold'), color: 'bg-amber-500' },
                           { id: 'orange', label: t('settings.orange'), color: 'bg-orange-500' },
@@ -500,6 +506,8 @@ export default function Settings() {
                           { id: 'purple', label: t('settings.purple'), color: 'bg-purple-500' },
                           { id: 'green', label: t('settings.green'), color: 'bg-emerald-500' },
                           { id: 'rainbow', label: t('settings.rainbow'), color: 'bg-gradient-to-r from-pink-500 via-purple-500 to-blue-500' },
+                          { id: 'black', label: 'Black', color: 'bg-zinc-900' },
+                          { id: 'grey', label: 'Grey', color: 'bg-zinc-500' },
                         ].map((theme) => {
                           const currentColorTheme = localStorage.getItem('color-theme') || 'gold';
                           const isActive = currentColorTheme === theme.id;
@@ -513,6 +521,8 @@ export default function Settings() {
                                 if (themeMode !== 'light') {
                                   document.documentElement.setAttribute('data-theme', theme.id);
                                 }
+                                // Force re-render
+                                window.dispatchEvent(new Event('storage'));
                               }}
                               className={`flex flex-col items-center gap-2 p-3 rounded-xl border transition-all ${
                                 isActive 
