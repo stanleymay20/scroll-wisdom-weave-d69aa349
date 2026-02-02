@@ -50,10 +50,13 @@ serve(async (req) => {
       );
     }
 
-    // Get authenticated user
+    // Get authenticated user with manual JWT validation
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      throw new Error("Not authenticated");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Not authenticated" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 }
+      );
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey, {
@@ -61,14 +64,26 @@ serve(async (req) => {
     });
 
     const token = authHeader.replace("Bearer ", "");
+    
+    // Use getClaims for JWT validation
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
+    if (claimsError || !claimsData?.claims) {
+      logStep("JWT validation failed", { error: claimsError?.message });
+      return new Response(
+        JSON.stringify({ error: "Invalid session" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 }
+      );
+    }
+    
+    // Also get user data for email logging
     const { data: userData, error: userError } = await supabase.auth.getUser(token);
     
     if (userError || !userData.user) {
-      throw new Error("Authentication failed");
+      logStep("User fetch failed", { error: userError?.message });
     }
 
-    const userId = userData.user.id;
-    logStep("User authenticated", { userId, email: userData.user.email });
+    const userId = claimsData.claims.sub as string;
+    logStep("User authenticated", { userId, email: userData?.user?.email });
 
     // Check if user already has admin role
     const { data: existingRole } = await supabase
