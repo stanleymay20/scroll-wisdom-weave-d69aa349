@@ -6,6 +6,7 @@ import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
 import { Shield, Loader2 } from 'lucide-react';
+import { clearAdminCache } from '@/hooks/useAdmin';
 
 export default function AdminRecovery() {
   const [code, setCode] = useState('');
@@ -44,7 +45,8 @@ export default function AdminRecovery() {
 
       if (data?.success) {
         toast.success(data.message || 'Admin access granted!');
-        // Clear admin cache to force refresh
+        // Clear admin cache to force immediate recognition
+        clearAdminCache();
         setTimeout(() => {
           navigate('/admin');
           window.location.reload();
