@@ -1,17 +1,26 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { toast } from 'sonner';
-import { Shield, Loader2 } from 'lucide-react';
-import { clearAdminCache } from '@/hooks/useAdmin';
+import { Shield, Loader2, CheckCircle } from 'lucide-react';
+import { clearAdminCache, useIsAdmin } from '@/hooks/useAdmin';
 
 export default function AdminRecovery() {
   const [code, setCode] = useState('');
   const [isLoading, setIsLoading] = useState(false);
+  const [claimSuccess, setClaimSuccess] = useState(false);
   const navigate = useNavigate();
+  const { isAdmin, recheckAdmin } = useIsAdmin();
+
+  // If already admin, show success state
+  useEffect(() => {
+    if (isAdmin && !isLoading) {
+      setClaimSuccess(true);
+    }
+  }, [isAdmin, isLoading]);
 
   const handleClaimAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -29,7 +38,7 @@ export default function AdminRecovery() {
       
       if (!session) {
         toast.error('Please log in first');
-        navigate('/login');
+        navigate('/auth');
         return;
       }
 
@@ -47,10 +56,14 @@ export default function AdminRecovery() {
         toast.success(data.message || 'Admin access granted!');
         // Clear admin cache to force immediate recognition
         clearAdminCache();
+        // Set local success state immediately
+        setClaimSuccess(true);
+        // Force recheck admin status
+        await recheckAdmin();
+        // Short delay then reload to ensure PWA state is fresh
         setTimeout(() => {
-          navigate('/admin');
-          window.location.reload();
-        }, 1000);
+          window.location.href = '/generate';
+        }, 1500);
       } else {
         toast.error(data?.error || 'Failed to claim admin');
       }
@@ -61,6 +74,33 @@ export default function AdminRecovery() {
       setIsLoading(false);
     }
   };
+
+  // Show success state after claiming
+  if (claimSuccess || isAdmin) {
+    return (
+      <div className="min-h-screen flex items-center justify-center bg-background p-4">
+        <Card className="w-full max-w-md">
+          <CardHeader className="text-center">
+            <div className="mx-auto mb-4 w-12 h-12 rounded-full bg-green-500/10 flex items-center justify-center">
+              <CheckCircle className="w-6 h-6 text-green-500" />
+            </div>
+            <CardTitle>Admin Access Granted!</CardTitle>
+            <CardDescription>
+              You now have full admin privileges. Redirecting to Generate...
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="text-center">
+            <Button 
+              className="w-full" 
+              onClick={() => window.location.href = '/generate'}
+            >
+              Go to Generate
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-background p-4">
