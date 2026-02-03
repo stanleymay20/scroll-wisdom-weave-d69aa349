@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { supabase } from '@/integrations/supabase/client';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 
@@ -6,11 +6,45 @@ import { useSubscription } from '@/contexts/SubscriptionContext';
 const adminCache = new Map<string, { isAdmin: boolean; timestamp: number }>();
 const CACHE_DURATION = 300000; // 5 minutes
 
+// Global function to clear admin cache (call after claiming admin)
+export function clearAdminCache(userId?: string) {
+  if (userId) {
+    adminCache.delete(userId);
+  } else {
+    adminCache.clear();
+  }
+}
+
 export function useIsAdmin() {
   const [isAdmin, setIsAdmin] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const { user } = useSubscription();
   const checkedRef = useRef(false);
+
+  const recheckAdmin = useCallback(async () => {
+    if (!user?.id) return;
+    
+    // Clear cache and recheck
+    clearAdminCache(user.id);
+    checkedRef.current = false;
+    
+    try {
+      const { data, error } = await supabase
+        .from('user_roles')
+        .select('role')
+        .eq('user_id', user.id)
+        .eq('role', 'admin')
+        .maybeSingle();
+
+      if (!error) {
+        const adminStatus = !!data;
+        setIsAdmin(adminStatus);
+        adminCache.set(user.id, { isAdmin: adminStatus, timestamp: Date.now() });
+      }
+    } catch (err) {
+      console.error('Admin recheck failed:', err);
+    }
+  }, [user?.id]);
 
   useEffect(() => {
     async function checkAdminRole() {
@@ -61,5 +95,5 @@ export function useIsAdmin() {
     checkAdminRole();
   }, [user?.id]);
 
-  return { isAdmin, isLoading };
+  return { isAdmin, isLoading, recheckAdmin };
 }
