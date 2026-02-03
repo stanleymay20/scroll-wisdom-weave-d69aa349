@@ -131,6 +131,19 @@ serve(async (req) => {
 
     console.log(`[GENERATE-BOOK] Authenticated user: ${user.id.slice(0, 8)}...`);
 
+    // Check if user is an admin - admins bypass ALL limits
+    const { data: adminRole } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", user.id)
+      .eq("role", "admin")
+      .maybeSingle();
+
+    const isAdmin = !!adminRole;
+    if (isAdmin) {
+      console.log(`[GENERATE-BOOK] User is ADMIN - bypassing all limits`);
+    }
+
     // Get user's subscription plan and check daily limits
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
@@ -144,16 +157,17 @@ serve(async (req) => {
 
     const userPlan = (profile?.plan || "free") as keyof typeof TIER_LIMITS;
 
+    // Admin bypass: admins get prophet_tier limits
     // Trial bypass: do NOT cap chapters to free tier, and do NOT block on daily limits.
     const trialActive = isTrialActive();
-    const effectivePlan: keyof typeof TIER_LIMITS = trialActive ? "premium" : userPlan;
+    const effectivePlan: keyof typeof TIER_LIMITS = isAdmin ? "prophet_tier" : (trialActive ? "premium" : userPlan);
     const limits = TIER_LIMITS[effectivePlan] || TIER_LIMITS.free;
 
-    // Check daily book limits (skip during trial)
+    // Check daily book limits (skip during trial AND for admins)
     const today = new Date().toISOString().split("T")[0];
     const currentCount = profile?.last_book_date === today ? (profile?.daily_book_count || 0) : 0;
 
-    if (!trialActive && currentCount >= limits.booksPerDay) {
+    if (!isAdmin && !trialActive && currentCount >= limits.booksPerDay) {
       console.log(
         `[GENERATE-BOOK] Daily limit reached for user ${user.id.slice(0, 8)}... (${effectivePlan}: ${currentCount}/${limits.booksPerDay})`
       );
