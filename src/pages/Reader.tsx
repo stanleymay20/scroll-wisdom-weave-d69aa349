@@ -127,6 +127,7 @@ export default function Reader() {
     previewContent,
     loadState,
     isLoading,
+    isOnline,
     resumePosition,
     userId,
   } = useReaderData({ bookId, chapterNumber: currentChapter });
