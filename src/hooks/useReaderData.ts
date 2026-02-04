@@ -9,7 +9,11 @@
  * - 5B-3.2: Cache-Primed Entry - Prefill from route state
  * - 5B-3.3: Progressive Hydration - skeleton → cached → hydrating → ready
  * - 5B-3.4: Zero Layout Shift
- * - 5B-3.5: Offline Truth
+ * - 5B-3.5: Offline Truth - Show cached data if available
+ * 
+ * OFFLINE SUPPORT:
+ * - Chapters are cached to both chapterDetailCache AND offlineStorage
+ * - offlineStorage persists full content for true offline reading
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -24,6 +28,7 @@ import {
   ReaderLoadState,
   normalizeCacheEntry,
 } from '@/lib/chapterDetailCache';
+import { offlineStorage } from '@/lib/offlineStorage';
 
 const logger = createLogger('useReaderData');
 
@@ -67,6 +72,7 @@ interface UseReaderDataReturn {
   loadState: ReaderLoadState;
   isLoading: boolean;
   isHydrating: boolean;
+  isOnline: boolean;
   resumePosition: number;
   error: string | null;
   userId: string | null;
@@ -140,27 +146,43 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
       }
     });
     
-    // STEP 2: Try cache first using deterministic key (INSTANT - <100ms)
-    // ISSUE 1 FIX: NO network call here - use bookId + chapterNumber directly
-    const cached = await getCachedChapterByKey(bookId, chapterNumber);
+    // STEP 2: Try OFFLINE STORAGE first (full content for offline reading)
+    const offlineChapters = await offlineStorage.getChaptersByBook(bookId);
+    const offlineChapter = offlineChapters.find(c => c.chapterNumber === chapterNumber);
     
-    if (cached && mountedRef.current) {
+    if (offlineChapter && mountedRef.current) {
       setChapter({
-        id: cached.chapterId,
-        chapter_number: cached.chapterNumber,
-        title: cached.title,
-        content: cached.fullContent,
-        word_count: cached.wordCount,
-        academic_mode: cached.academicMode ?? undefined,
-        citation_style: cached.citationStyle ?? undefined,
-        chapter_references: (cached.chapterReferences as any[]) ?? [],
-        research_metadata: cached.researchMetadata ?? {},
+        id: offlineChapter.id,
+        chapter_number: offlineChapter.chapterNumber,
+        title: offlineChapter.title,
+        content: offlineChapter.content,
+        word_count: offlineChapter.content?.length ? Math.round(offlineChapter.content.split(/\s+/).length) : null,
       });
-      setPreviewContent(cached.contentPreview);
-      setResumePosition(cached.lastReadPosition);
+      setPreviewContent(offlineChapter.content || '');
       setLoadState('hydrating');
+      logger.debug(`Offline storage hit in ${(performance.now() - startTime).toFixed(0)}ms`);
+    } else {
+      // STEP 2b: Try chapter detail cache (may have partial content)
+      const cached = await getCachedChapterByKey(bookId, chapterNumber);
       
-      logger.debug(`Cache loaded in ${(performance.now() - startTime).toFixed(0)}ms`);
+      if (cached && mountedRef.current) {
+        setChapter({
+          id: cached.chapterId,
+          chapter_number: cached.chapterNumber,
+          title: cached.title,
+          content: cached.fullContent,
+          word_count: cached.wordCount,
+          academic_mode: cached.academicMode ?? undefined,
+          citation_style: cached.citationStyle ?? undefined,
+          chapter_references: (cached.chapterReferences as any[]) ?? [],
+          research_metadata: cached.researchMetadata ?? {},
+        });
+        setPreviewContent(cached.contentPreview);
+        setResumePosition(cached.lastReadPosition);
+        setLoadState('hydrating');
+        
+        logger.debug(`Cache loaded in ${(performance.now() - startTime).toFixed(0)}ms`);
+      }
     }
     
     // STEP 3: Check online status
@@ -240,6 +262,20 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
         chapterReferences: Array.isArray(chapterData.chapter_references) ? chapterData.chapter_references : null,
         researchMetadata: (chapterData.research_metadata as Record<string, unknown>) ?? null,
       });
+      
+      // STEP 6: ALSO cache to offline storage for true offline reading
+      try {
+        await offlineStorage.cacheChapter({
+          id: chapterData.id,
+          bookId: bookId,
+          title: chapterData.title,
+          content: chapterData.content || '',
+          chapterNumber: chapterData.chapter_number,
+        });
+        logger.debug(`Cached chapter ${chapterData.chapter_number} to offline storage`);
+      } catch (offlineErr) {
+        logger.warn('Failed to cache to offline storage:', offlineErr);
+      }
 
       if (mountedRef.current) {
         setLoadState('ready');
@@ -293,6 +329,9 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
     await loadData();
   }, [loadData, chapter]);
 
+  // Compute isOnline from loadState
+  const isOnline = loadState !== 'offline-with-cache' && loadState !== 'offline-empty';
+
   return {
     book,
     chapter,
@@ -300,6 +339,7 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
     loadState,
     isLoading: loadState === 'skeleton',
     isHydrating: loadState === 'hydrating',
+    isOnline,
     resumePosition,
     error,
     userId,
