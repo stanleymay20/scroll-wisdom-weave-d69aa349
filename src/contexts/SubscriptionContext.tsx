@@ -48,7 +48,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       const { data: profile } = await supabase
         .from('profiles')
         .select('daily_book_count, last_book_date')
-        .eq('id', userId)
+        .eq('user_id', userId)
         .maybeSingle();
 
       if (profile) {
@@ -117,7 +117,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         supabase
           .from('profiles')
           .select('daily_book_count, last_book_date, plan')
-          .eq('id', session.user.id)
+          .eq('user_id', session.user.id)
           .maybeSingle(),
         supabase.functions.invoke('check-subscription'),
       ]);
@@ -165,7 +165,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         supabase
           .from('profiles')
           .update({ plan: planToSave as 'free' | 'premium' | 'prophet_tier' | 'student' })
-          .eq('id', session.user.id)
+          .eq('user_id', session.user.id)
           .then(() => {});
       } else {
         // FAIL-OPEN: if profile shows a paid plan, do NOT downgrade to free
@@ -197,7 +197,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         daily_book_count: newCount,
         last_book_date: today,
       })
-      .eq('id', user.id);
+      .eq('user_id', user.id);
 
     setDailyLimitInfo({
       dailyBookCount: newCount,

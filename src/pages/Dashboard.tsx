@@ -116,7 +116,7 @@ export default function Dashboard() {
   }, [navigate]);
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase.from("profiles").select("*").eq("id", userId).maybeSingle();
+    const { data } = await supabase.from("profiles").select("*").eq("user_id", userId).maybeSingle();
     if (data) {
       setProfile(data);
       apiCache.set('dashboard:profile', data, 2 * 60 * 1000);
