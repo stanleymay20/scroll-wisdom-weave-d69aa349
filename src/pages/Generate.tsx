@@ -65,6 +65,18 @@ const CATEGORIES = [
   { value: "poetry", labelKey: "categories.poetry" },
 ];
 
+function DesktopGenerateWrapper({ children }: { children: React.ReactNode }) {
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      <TrialBanner />
+      <LaunchBanner />
+      {children}
+      <Footer />
+    </div>
+  );
+}
+
 export default function Generate() {
   const { t, language: uiLanguage } = useLanguage();
   const navigate = useNavigate();
@@ -402,19 +414,7 @@ export default function Generate() {
     );
   }
 
-  // Mobile-optimized layout wrapper
-  const PageWrapper = isMobile ? MobileLayout : ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen flex flex-col">
-      <Navbar />
-      <TrialBanner />
-      <LaunchBanner />
-      {children}
-      <Footer />
-    </div>
-  );
-
-  return (
-    <PageWrapper>
+  const Main = (
       <main className={cn(
         "flex-1 pb-16",
         isMobile ? "pt-4 px-4" : "pt-20 container mx-auto px-4 max-w-3xl"
@@ -893,6 +893,11 @@ export default function Generate() {
           </motion.div>
         </div>
       </main>
-    </PageWrapper>
+  );
+
+  return isMobile ? (
+    <MobileLayout>{Main}</MobileLayout>
+  ) : (
+    <DesktopGenerateWrapper>{Main}</DesktopGenerateWrapper>
   );
 }
