@@ -178,7 +178,7 @@ export default function Profile() {
     const { data, error } = await supabase
       .from("profiles")
       .select("*")
-      .eq("id", userId)
+      .eq("user_id", userId)
       .maybeSingle();
 
     if (error) {
@@ -232,7 +232,7 @@ export default function Profile() {
         country: editedProfile.country,
         updated_at: new Date().toISOString(),
       })
-      .eq("id", user.id);
+      .eq("user_id", user.id);
 
     if (error) {
       console.error("Profile update error:", error);
