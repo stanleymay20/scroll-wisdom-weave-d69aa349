@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
@@ -23,9 +23,11 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { apiCache } from "@/lib/cache";
 import { cn } from "@/lib/utils";
+import { clearAdminCache } from "@/hooks/useAdmin";
 
 interface ProfileData {
   id: string;
+  user_id?: string;
   full_name: string | null;
   avatar_url: string | null;
   bio: string | null;
@@ -179,6 +181,10 @@ export default function Profile() {
       .eq("id", userId)
       .maybeSingle();
 
+    if (error) {
+      console.error("Error fetching profile:", error);
+    }
+    
     if (data) {
       setProfile(data);
       setEditedProfile({
@@ -229,9 +235,10 @@ export default function Profile() {
       .eq("id", user.id);
 
     if (error) {
+      console.error("Profile update error:", error);
       toast({
         title: t('common.error'),
-        description: "Failed to update profile",
+        description: error.message || "Failed to update profile",
         variant: "destructive",
       });
     } else {
@@ -241,6 +248,7 @@ export default function Profile() {
       });
       // Invalidate cache and refetch
       apiCache.delete('profile:current');
+      clearAdminCache(user.id);
       await fetchProfile(user.id);
     }
     setIsSaving(false);
