@@ -48,7 +48,7 @@ export function Navbar() {
   }, []);
 
   const fetchProfile = async (userId: string) => {
-    const { data } = await supabase.from("profiles").select("full_name, avatar_url").eq("user_id", userId).maybeSingle();
+    const { data } = await supabase.from("profiles").select("full_name, avatar_url").or(`user_id.eq.${userId},id.eq.${userId}`).maybeSingle();
     if (data) setProfile(data);
   };
 
