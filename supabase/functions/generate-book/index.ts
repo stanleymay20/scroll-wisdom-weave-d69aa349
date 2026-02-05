@@ -148,8 +148,8 @@ serve(async (req) => {
     const { data: profile, error: profileError } = await supabase
       .from("profiles")
       .select("plan, daily_book_count, last_book_date")
-      .eq("id", user.id)
-      .single();
+      .eq("user_id", user.id)
+      .maybeSingle();
 
     if (profileError) {
       console.error("Profile error:", profileError);
@@ -460,26 +460,11 @@ Format your response as a JSON object with this structure:
         is_published: false,
         is_featured: false,
         author_ai_agent: resolvedAuthorName,
-        // New author fields
-        author_mode: authorMode,
-        author_display_name: resolvedAuthorName,
-        pen_name: penName || null,
-        publisher_imprint: publisherImprint || null,
         cover_image_url: customCover || null,
         creator_id: user.id,
+        user_id: user.id,
         language: language,
-        // CONTRACT 3: Store the extended book type for chapter generation pipeline routing
         book_type: effectiveBookType,
-        // Workbook fields
-        workbook_density: bookType === 'workbook' ? workbookDensity : null,
-        // Comic fields
-        comic_style_id: bookType === 'comic' ? comicStyleId : null,
-        palette_hint: bookType === 'comic' ? paletteHint : null,
-        line_weight_hint: bookType === 'comic' ? lineWeightHint : null,
-        character_sheet: bookType === 'comic' ? characterSheet : null,
-        layout_template: bookType === 'comic' ? layoutTemplate : null,
-        text_in_image: bookType === 'comic' ? textInImage : null,
-        scenes_per_panel: bookType === 'comic' ? scenesPerPanel : null,
       })
       .select()
       .single();
