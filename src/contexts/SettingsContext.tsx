@@ -156,7 +156,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           const { data } = await supabase
             .from('profiles')
             .select('theme_preference, font_size, reader_theme, tts_enabled, animations_enabled, email_updates, new_book_alerts, course_reminders, writing_tone, spiritual_strictness, complexity_level, study_speed, ai_voice_preference, learning_preferences')
-            .eq('user_id', user.id)
+            .or(`user_id.eq.${user.id},id.eq.${user.id}`)
             .maybeSingle();
           
           if (data) {
@@ -246,7 +246,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
           const { data: currentProfile } = await supabase
             .from('profiles')
             .select('learning_preferences')
-            .eq('user_id', userId)
+            .or(`user_id.eq.${userId},id.eq.${userId}`)
             .single();
           
           const currentPrefs = (currentProfile?.learning_preferences as Record<string, unknown>) || {};
@@ -265,7 +265,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
               },
               updated_at: new Date().toISOString(),
             })
-            .eq('user_id', userId);
+            .or(`user_id.eq.${userId},id.eq.${userId}`);
         } else {
           await supabase
             .from('profiles')
@@ -273,7 +273,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
               ...standardUpdates,
               updated_at: new Date().toISOString(),
             })
-            .eq('user_id', userId);
+            .or(`user_id.eq.${userId},id.eq.${userId}`);
         }
       } catch (error) {
         console.error('Failed to save settings:', error);
