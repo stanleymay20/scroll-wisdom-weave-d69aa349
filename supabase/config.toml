@@ -1,22 +1,22 @@
 project_id = "lrricdforqfkaaciammv"
 
 [functions.generate-book]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-chapter]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-cover]
-verify_jwt = true
+verify_jwt = false
 
 [functions.content-filter]
 verify_jwt = false
 
 [functions.export-book]
-verify_jwt = true
+verify_jwt = false
 
 [functions.text-to-speech]
-verify_jwt = true
+verify_jwt = false
 
 [functions.verify-certificate]
 verify_jwt = false
@@ -25,10 +25,10 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.create-checkout]
-verify_jwt = true
+verify_jwt = false
 
 [functions.customer-portal]
-verify_jwt = true
+verify_jwt = false
 
 [functions.stripe-webhook]
 verify_jwt = false
@@ -37,31 +37,40 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.generate-image]
-verify_jwt = true
+verify_jwt = false
 
 [functions.generate-references]
-verify_jwt = true
+verify_jwt = false
 
 [functions.interactive-qa]
-verify_jwt = true
+verify_jwt = false
 
 [functions.voice-stt]
-verify_jwt = true
+verify_jwt = false
 
 [functions.voice-tts]
-verify_jwt = true
+verify_jwt = false
 
 [functions.voice-conversation]
-verify_jwt = true
+verify_jwt = false
 
 [functions.deep-research]
-verify_jwt = true
+verify_jwt = false
 
 [functions.validate-certificate]
-verify_jwt = true
+verify_jwt = false
 
 [functions.export-certificate]
 verify_jwt = false
 
 [functions.batch-verify-certificates]
+verify_jwt = false
+
+[functions.elevenlabs-tts]
+verify_jwt = false
+
+[functions.delete-account]
+verify_jwt = false
+
+[functions.generate-learning-deck]
 verify_jwt = false
