@@ -17,6 +17,7 @@ export type { ComicPanelData } from './ComicReaderMode';
 // Reader settings and floating actions
 export { ReaderSettingsPanel, READING_THEMES } from './ReaderSettingsPanel';
 export { FloatingActions } from './FloatingActions';
+export { ReaderToolsSheet } from './ReaderToolsSheet';
 export { DirectTextEditor, DirectEditButton } from './DirectTextEditor';
 export { MobileReaderLayout, SwipeHintOverlay } from './MobileReaderLayout';
 export { PreviouslyInBookCard } from './PreviouslyInBookCard';

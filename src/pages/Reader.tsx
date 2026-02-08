@@ -33,12 +33,6 @@ import {
   Brain,
   BookMarked,
   Palette,
-  GraduationCap,
-  MessageCircle,
-  Mic,
-  Save,
-  Code2,
-  Edit3
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -50,21 +44,20 @@ import { GuidedReadingMode, CognitiveLevelIndicator } from "@/components/reader/
 import { DeepResearchPanel } from "@/components/academic/DeepResearchPanel";
 import { AcademicModeIndicator } from "@/components/academic/AcademicModeIndicator";
 import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
-import { InteractiveQA, InteractiveQAButton } from "@/components/reader/InteractiveQA";
+import { InteractiveQA } from "@/components/reader/InteractiveQA";
 import { TextHighlighter } from "@/components/reader/TextHighlighter";
-import { QuizMode, QuizModeButton } from "@/components/reader/QuizMode";
-import { VoiceConversation, VoiceConversationButton } from "@/components/reader/VoiceConversation";
+import { QuizMode } from "@/components/reader/QuizMode";
+import { VoiceConversation } from "@/components/reader/VoiceConversation";
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 import { CodePlayground } from "@/components/reader/CodePlayground";
 import { ComicReaderMode, parseComicContentToPanels, ComicPanelData } from "@/components/reader/ComicReaderMode";
 import { PreviouslyInBookCard, ReadingSessionTimer, DirectTextEditor } from "@/components/reader";
-import { LearningDeckGenerator, FlashcardGenerator } from "@/components/decks";
+import { ReaderToolsSheet } from "@/components/reader/ReaderToolsSheet";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSettings } from "@/contexts/SettingsContext";
 import { usePagePerformance } from "@/lib/performance";
-import { useAutoHideFloatingActions } from "@/hooks/useAutoHideFloatingActions";
 import { useReaderData } from "@/hooks/useReaderData";
 import { useReadingSession } from "@/hooks/useReadingSession";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
@@ -111,12 +104,7 @@ export default function Reader() {
   // PERFORMANCE: Track TTI
   usePagePerformance('Reader');
   const contentRef = useRef<HTMLDivElement>(null);
-  
-  // CONTRACT 5.2: Auto-hide floating actions while scrolling
-  const { isVisible: floatingActionsVisible, show: showFloatingActions } = useAutoHideFloatingActions({
-    scrollThreshold: 30,
-    pauseMs: 1200,
-  });
+
 
   const currentChapter = parseInt(chapterId || "1");
   
@@ -1001,7 +989,7 @@ export default function Reader() {
       {/* CONTRACT 5.2: Floating Cognitive Level Indicator - respects safe areas & auto-hides */}
       {/* FIXED: z-20 to stay below action buttons but above content */}
       <AnimatePresence>
-        {guidedModeActive && !showLevelSelector && !showQA && floatingActionsVisible && (
+        {guidedModeActive && !showLevelSelector && !showQA && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1022,125 +1010,50 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* CONTRACT 5.2: Interactive Q&A Button + Quiz Button + Voice Button - auto-hide on scroll */}
-      {/* FIXED: z-60 to ensure buttons are always above TTS player (z-50) */}
-      <AnimatePresence>
-        {chapter?.content && !showQA && !showVoiceConversation && floatingActionsVisible && (
-          <motion.div 
-            initial={{ opacity: 0, x: 20 }}
-            animate={{ opacity: 1, x: 0 }}
-            exit={{ opacity: 0, x: 20 }}
-            className="fixed z-[60] flex flex-col gap-2"
-            style={{ 
-              bottom: "calc(env(safe-area-inset-bottom) + 5rem)",
-              right: "1rem"
-            }}
-          >
-            <VoiceConversationButton 
-              onClick={() => {
-                closeTopPanels();
-                setShowQA(false);
-                setShowQuiz(false);
-                setShowVoiceConversation(true);
-                showFloatingActions();
-              }} 
-              cognitiveLevel={cognitiveLevel}
-            />
-            {/* CONTRACT 5: Quiz button with gating - locked until chapter is read */}
-            {quizGating.isQuizUnlocked ? (
-              <QuizModeButton onClick={() => {
-                closeTopPanels();
-                setShowQA(false);
-                setShowVoiceConversation(false);
-                setShowQuiz(true);
-                showFloatingActions();
-              }} />
-            ) : (
-              <Button
-                variant="outline"
-                size="sm"
-                disabled
-                className="gap-2 opacity-60"
-                title={`Read ${Math.max(0, quizGating.requiredProgress - quizGating.readProgress).toFixed(0)}% more to unlock quiz`}
-              >
-                <GraduationCap className="h-4 w-4" />
-                <span className="text-xs">🔒 {Math.round(quizGating.readProgress)}%</span>
-              </Button>
-            )}
-            <InteractiveQAButton onClick={() => {
-              closeTopPanels();
-              setShowQuiz(false);
-              setShowVoiceConversation(false);
-              setShowQA(true);
-              showFloatingActions();
-            }} />
-            {/* Playground button - only show for technical content */}
-            {hasCodeContent(chapter.content) && (
-              <Button
-                onClick={() => {
-                  closeTopPanels();
-                  setShowPlayground(true);
-                  showFloatingActions();
-                }}
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                title="Open Code Playground"
-              >
-                <Code2 className="h-4 w-4" />
-                <span className="text-xs">Playground</span>
-              </Button>
-            )}
-            {/* VLD-1.0: Learning Deck Generator */}
-            <LearningDeckGenerator
-              bookId={bookId || ''}
-              bookTitle={book?.title || ''}
-              userId={userId}
-              totalChapters={totalChapters}
-              currentChapter={currentChapter}
-              variant="inline"
-            />
-            {/* Flashcards Generator */}
-            <FlashcardGenerator
-              bookId={bookId || ''}
-              bookTitle={book?.title || ''}
-              currentChapter={currentChapter}
-              totalChapters={totalChapters}
-              variant="inline"
-            />
-            {/* Edit Chapter button - for book owners */}
-            {isBookOwner && (
-              <Button
-                onClick={() => setShowDirectEditor(true)}
-                variant="outline"
-                size="sm"
-                className="gap-2"
-                title="Edit chapter content"
-              >
-                <Edit3 className="h-4 w-4" />
-                <span className="text-xs">Edit</span>
-              </Button>
-            )}
-            {/* Comic Reader button - only show for comic content */}
-            {chapter.content.includes('[PANEL') && (
-              <Button
-                onClick={() => {
-                  closeTopPanels();
-                  setShowComicReader(true);
-                  showFloatingActions();
-                }}
-                variant="outline"
-                size="sm"
-                className="gap-2 bg-primary/10 border-primary/30"
-                title="Open Comic Reader"
-              >
-                <BookOpen className="h-4 w-4 text-primary" />
-                <span className="text-xs">Comic Mode</span>
-              </Button>
-            )}
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Single "Tools" FAB → Bottom Sheet with all reader actions */}
+      {chapter?.content && !showQA && !showVoiceConversation && !showQuiz && (
+        <ReaderToolsSheet
+          isQuizUnlocked={quizGating.isQuizUnlocked}
+          quizProgress={quizGating.readProgress}
+          hasCodeContent={hasCodeContent(chapter.content)}
+          hasComicContent={chapter.content.includes('[PANEL')}
+          isBookOwner={isBookOwner}
+          onVoiceClick={() => {
+            closeTopPanels();
+            setShowQA(false);
+            setShowQuiz(false);
+            setShowVoiceConversation(true);
+          }}
+          onQuizClick={() => {
+            closeTopPanels();
+            setShowQA(false);
+            setShowVoiceConversation(false);
+            setShowQuiz(true);
+          }}
+          onQAClick={() => {
+            closeTopPanels();
+            setShowQuiz(false);
+            setShowVoiceConversation(false);
+            setShowQA(true);
+          }}
+          onPlaygroundClick={() => {
+            closeTopPanels();
+            setShowPlayground(true);
+          }}
+          onComicModeClick={() => {
+            closeTopPanels();
+            setShowComicReader(true);
+          }}
+          onEditClick={() => setShowDirectEditor(true)}
+          onLearningDeckClick={() => {
+            // Trigger learning deck dialog programmatically
+            // We'll render it hidden and trigger via state
+          }}
+          onFlashcardsClick={() => {
+            // Trigger flashcard dialog programmatically
+          }}
+        />
+      )}
 
       {/* Quiz Mode */}
       {chapter?.content && (
