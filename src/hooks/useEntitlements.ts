@@ -3,6 +3,9 @@ import { useIsAdmin } from './useAdmin';
 import { SubscriptionTier } from '@/lib/subscription';
 import { isTrialActive } from '@/lib/config';
 
+// Reviewer accounts get unrestricted access for Google Play review
+const REVIEWER_EMAILS = ['reviewer@scrolllibrary.org'];
+
 export interface Entitlements {
   // Core access flags - use these, NOT tier names
   canPublish: boolean;
@@ -44,11 +47,14 @@ export interface Entitlements {
  * FAIL-SAFE: If resolution fails, default to MORE access for paid users
  */
 export function useEntitlements(): Entitlements {
-  const { tier, isLoading: subLoading } = useSubscription();
+  const { tier, user, isLoading: subLoading } = useSubscription();
   const { isAdmin, isLoading: adminLoading } = useIsAdmin();
 
   // Check if trial mode is active
   const trialActive = isTrialActive();
+
+  // Check if this is a reviewer account (full unrestricted access)
+  const isReviewer = user?.email ? REVIEWER_EMAILS.includes(user.email.toLowerCase()) : false;
 
   // Tier checks
   const isProphet = tier === 'prophet_tier';
@@ -87,8 +93,8 @@ export function useEntitlements(): Entitlements {
     };
   }
 
-  // ADMIN: GOD MODE - bypass everything, NO EXCEPTIONS
-  if (isAdmin) {
+  // REVIEWER or ADMIN: GOD MODE - bypass everything, NO EXCEPTIONS
+  if (isAdmin || isReviewer) {
     return {
       canPublish: true,
       canExport: true,

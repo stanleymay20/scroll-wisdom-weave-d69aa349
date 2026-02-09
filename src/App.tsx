@@ -137,6 +137,7 @@ const App = () => (
                   <Route path="/docs/how-certification-works" element={<HowCertificationWorks />} />
                   <Route path="/docs/trust-whitepaper" element={<TrustWhitepaper />} />
                   <Route path="/account/delete" element={<AccountDelete />} />
+                  <Route path="/delete-account" element={<AccountDelete />} />
                   <Route path="/certificate-test" element={<CertificateTest />} />
                   <Route path="/launch-checklist" element={<LaunchChecklist />} />
                   <Route path="/docs/institutional-readiness" element={<InstitutionalReadiness />} />

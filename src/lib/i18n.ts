@@ -762,7 +762,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'settings.saveFailed': 'Failed to save settings',
     'settings.loading': 'Loading settings...',
     'settings.accountDeletion': 'Account deletion',
-    'settings.contactSupport': 'Please contact support@scrolllibrary.com to delete your account',
+    'settings.contactSupport': 'Please contact support@scrolllibrary.org to delete your account',
     'settings.dataExport': 'Data export',
     'settings.dataExportDesc': "Your data export is being prepared. You'll receive an email when ready.",
     

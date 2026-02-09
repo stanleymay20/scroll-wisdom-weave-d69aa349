@@ -245,8 +245,8 @@ export default function Support() {
                           <Mail className="h-5 w-5 text-primary" />
                           <div>
                             <p className="text-sm text-muted-foreground">{t('support.email')}</p>
-                            <a href="mailto:support@scrolllibrary.com" className="text-foreground hover:text-primary">
-                              support@scrolllibrary.com
+                            <a href="mailto:support@scrolllibrary.org" className="text-foreground hover:text-primary">
+                              support@scrolllibrary.org
                             </a>
                           </div>
                         </div>
