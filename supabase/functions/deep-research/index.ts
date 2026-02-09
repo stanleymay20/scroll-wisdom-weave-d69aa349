@@ -54,7 +54,7 @@ async function queryOpenAlex(topic: string, category: string): Promise<AcademicS
       `https://api.openalex.org/works?search=${searchQuery}&filter=is_paratext:false,type:journal-article|book|book-chapter&per_page=20&sort=cited_by_count:desc`,
       {
         headers: {
-          "User-Agent": "ScrollLibrary/1.0 (mailto:support@scrolllibrary.com)"
+          "User-Agent": "ScrollLibrary/1.0 (mailto:support@scrolllibrary.org)"
         }
       }
     );
@@ -127,7 +127,7 @@ async function queryCrossRef(topic: string): Promise<AcademicSource[]> {
       `https://api.crossref.org/works?query=${searchQuery}&rows=15&filter=type:journal-article,has-abstract:true&sort=is-referenced-by-count&order=desc`,
       {
         headers: {
-          "User-Agent": "ScrollLibrary/1.0 (mailto:support@scrolllibrary.com)"
+          "User-Agent": "ScrollLibrary/1.0 (mailto:support@scrolllibrary.org)"
         }
       }
     );

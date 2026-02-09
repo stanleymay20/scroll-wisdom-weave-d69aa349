@@ -40,7 +40,7 @@ export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
                 <Github className="h-5 w-5" />
               </Link>
               <a
-                href="mailto:support@scrolllibrary.com"
+                href="mailto:support@scrolllibrary.org"
                 aria-label="Email"
                 className="text-muted-foreground hover:text-foreground transition-colors"
               >
@@ -96,13 +96,13 @@ export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
                 </Link>
               </li>
               <li>
-                <Link to="/docs/verification" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Verification API
+                <Link to="/contact" className="text-muted-foreground hover:text-foreground transition-colors">
+                  {t('footer.contact')}
                 </Link>
               </li>
               <li>
-                <Link to="/docs/trust-whitepaper" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Trust Whitepaper
+                <Link to="/delete-account" className="text-muted-foreground hover:text-foreground transition-colors">
+                  Delete Account
                 </Link>
               </li>
             </ul>

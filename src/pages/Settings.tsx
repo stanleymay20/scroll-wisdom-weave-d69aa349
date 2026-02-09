@@ -276,10 +276,23 @@ export default function Settings() {
                     </div>
                     <Separator className="bg-border/50" />
                     {tier !== 'free' && (
-                      <Button variant="outline" onClick={handleManageBilling} disabled={portalLoading}>
-                        {portalLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CreditCard className="h-4 w-4 mr-2" />}
-                        {t('settings.manageBilling')}
-                      </Button>
+                      <div className="space-y-3">
+                        <Button variant="outline" onClick={handleManageBilling} disabled={portalLoading} className="w-full sm:w-auto">
+                          {portalLoading ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <CreditCard className="h-4 w-4 mr-2" />}
+                          {t('settings.manageBilling')}
+                        </Button>
+                        <p className="text-xs text-muted-foreground">
+                          Use "Manage Billing" above to cancel your subscription, update payment method, or change your plan. 
+                          Cancellation takes effect at the end of your current billing period.
+                        </p>
+                      </div>
+                    )}
+                    {tier === 'free' && (
+                      <div className="bg-muted/30 rounded-lg p-4">
+                        <p className="text-sm text-muted-foreground">
+                          You're on the Free plan. <Link to="/pricing" className="text-primary hover:underline">Upgrade</Link> to unlock book generation, exports, and more.
+                        </p>
+                      </div>
                     )}
                   </CardContent>
                 </Card>

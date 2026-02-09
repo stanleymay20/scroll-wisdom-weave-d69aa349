@@ -164,8 +164,8 @@ export default function TermsOfService() {
                 </h2>
                 <p className="text-muted-foreground">
                   For questions about these terms, contact us at{" "}
-                  <a href="mailto:legal@scrolllibrary.com" className="text-primary hover:underline">
-                    legal@scrolllibrary.com
+                  <a href="mailto:legal@scrolllibrary.org" className="text-primary hover:underline">
+                    legal@scrolllibrary.org
                   </a>
                 </p>
               </section>

@@ -9,7 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { 
-  Mail, MessageSquare, MapPin, Send, Loader2, CheckCircle
+  Mail, Phone, MapPin, Send, Loader2, CheckCircle
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -50,7 +50,6 @@ export default function Contact() {
     e.preventDefault();
     setErrors({});
 
-    // Validate form data
     const result = contactSchema.safeParse(form);
     if (!result.success) {
       const fieldErrors: Record<string, string> = {};
@@ -105,14 +104,14 @@ export default function Contact() {
     {
       icon: Mail,
       title: "Email",
-      value: "support@scrolllibrary.com",
-      link: "mailto:support@scrolllibrary.com",
+      value: "support@scrolllibrary.org",
+      link: "mailto:support@scrolllibrary.org",
     },
     {
-      icon: MessageSquare,
-      title: "WhatsApp",
-      value: "Message us on WhatsApp",
-      link: "https://wa.me/1234567890",
+      icon: Phone,
+      title: "Phone",
+      value: "+49 179 1455906",
+      link: "tel:+491791455906",
     },
     {
       icon: MapPin,
@@ -162,8 +161,6 @@ export default function Contact() {
                           <a 
                             href={method.link} 
                             className="font-medium text-foreground hover:text-primary transition-colors"
-                            target={method.link.startsWith("http") ? "_blank" : undefined}
-                            rel={method.link.startsWith("http") ? "noopener noreferrer" : undefined}
                           >
                             {method.value}
                           </a>
@@ -188,11 +185,11 @@ export default function Contact() {
                   <CardContent className="space-y-2 text-sm">
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Monday - Friday</span>
-                      <span className="text-foreground">9:00 AM - 6:00 PM</span>
+                      <span className="text-foreground">9:00 AM - 6:00 PM CET</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Saturday</span>
-                      <span className="text-foreground">10:00 AM - 4:00 PM</span>
+                      <span className="text-foreground">10:00 AM - 4:00 PM CET</span>
                     </div>
                     <div className="flex justify-between">
                       <span className="text-muted-foreground">Sunday</span>
