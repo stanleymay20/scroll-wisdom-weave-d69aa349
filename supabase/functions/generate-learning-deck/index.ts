@@ -424,9 +424,9 @@ Return ONLY valid JSON matching the schema.`;
       title: `${bookTitle} - Learning Deck`,
       slides,
       metadata: {
-        bookId: params.certificationContext.bookId,
-        bookVersion: params.certificationContext.bookVersion,
-        contentHash: params.certificationContext.contentHash,
+        bookId: params.certificationContext?.bookId || bookId,
+        bookVersion: params.certificationContext?.bookVersion || '1.0',
+        contentHash: params.certificationContext?.contentHash || '',
         chaptersCovered: params.chapterNumbers || [],
         generatedAt: new Date().toISOString(),
         generatedAfterAssessment: true,
