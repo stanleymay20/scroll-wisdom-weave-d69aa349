@@ -50,6 +50,8 @@ interface FlashcardGeneratorProps {
   totalChapters: number;
   variant?: 'button' | 'inline';
   className?: string;
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 type FlashcardScope = 'chapter' | 'book';
@@ -62,10 +64,14 @@ export function FlashcardGenerator({
   totalChapters,
   variant = 'button',
   className,
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: FlashcardGeneratorProps) {
   const { toast } = useToast();
   
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const dialogOpen = controlledOpen ?? internalOpen;
+  const setDialogOpen = controlledOnOpenChange ?? setInternalOpen;
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedDeck, setGeneratedDeck] = useState<FlashcardDeck | null>(null);
   const [showViewer, setShowViewer] = useState(false);

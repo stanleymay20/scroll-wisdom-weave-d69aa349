@@ -82,6 +82,8 @@ interface LearningDeckGeneratorProps {
   contentHash?: string;
   className?: string;
   variant?: 'button' | 'card' | 'inline';
+  open?: boolean;
+  onOpenChange?: (open: boolean) => void;
 }
 
 export function LearningDeckGenerator({
@@ -94,6 +96,8 @@ export function LearningDeckGenerator({
   contentHash = '',
   className,
   variant = 'button',
+  open: controlledOpen,
+  onOpenChange: controlledOnOpenChange,
 }: LearningDeckGeneratorProps) {
   const { t } = useLanguage();
   const { toast } = useToast();
@@ -113,7 +117,9 @@ export function LearningDeckGenerator({
   const [includeVisuals, setIncludeVisuals] = useState(isPaidSubscriber); // Visuals default on for paid
 
   // UI state
-  const [dialogOpen, setDialogOpen] = useState(false);
+  const [internalOpen, setInternalOpen] = useState(false);
+  const dialogOpen = controlledOpen ?? internalOpen;
+  const setDialogOpen = controlledOnOpenChange ?? setInternalOpen;
   const [isGenerating, setIsGenerating] = useState(false);
   const [generatedDeck, setGeneratedDeck] = useState<LearningDeck | null>(null);
   const [showViewer, setShowViewer] = useState(false);
