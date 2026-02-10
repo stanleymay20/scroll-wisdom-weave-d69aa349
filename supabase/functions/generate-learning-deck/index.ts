@@ -69,6 +69,33 @@ serve(async (req) => {
       ? createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
       : null;
 
+    // ── Fetch actual chapter content from the database ──
+    let chapterContent = "";
+    if (storageClient) {
+      let query = storageClient
+        .from("chapters")
+        .select("chapter_number, title, content")
+        .eq("book_id", bookId)
+        .eq("is_generated", true)
+        .order("chapter_number", { ascending: true });
+
+      if (params.scope === "chapter" && params.chapterNumbers?.length) {
+        query = query.in("chapter_number", params.chapterNumbers);
+      }
+
+      const { data: chapters, error: chapError } = await query;
+      if (chapError) {
+        console.log("[VLD] Failed to fetch chapters:", chapError.message);
+      } else if (chapters && chapters.length > 0) {
+        // Concatenate chapter content (truncate each to ~3000 chars to stay within token budget)
+        chapterContent = chapters.map((ch: any) => {
+          const body = (ch.content || "").slice(0, 3000);
+          return `## Chapter ${ch.chapter_number}: ${ch.title}\n${body}`;
+        }).join("\n\n---\n\n");
+        console.log(`[VLD] Fetched ${chapters.length} chapter(s), total ${chapterContent.length} chars`);
+      }
+    }
+
     // Build NotebookLM-quality system prompt with strict presentation discipline
     const systemPrompt = `You are a premium Learning Deck generator for ScrollLibrary, trained to produce slides matching Google NotebookLM quality.
 
@@ -191,10 +218,15 @@ Target Audience: ${params.targetAudience}
 Tone: ${params.tone}
 Max Slides: ${params.maxSlides}
 
-CRITICAL: Follow the narrative arc (What → Why → How → Example → Takeaway).
+${chapterContent ? `## ACTUAL BOOK CONTENT (use ONLY this material for slides — do NOT hallucinate):
+
+${chapterContent}
+
+` : ''}CRITICAL: Follow the narrative arc (What → Why → How → Example → Takeaway).
 CRITICAL: Max 5 bullets per slide, max 15 words per bullet.
 CRITICAL: Include speaker notes for each slide.
 CRITICAL: Provide DETAILED visual descriptions for each slide that can be used for AI image generation.
+CRITICAL: Every bullet and concept MUST come from the book content above. Do NOT invent information.
 
 Return ONLY valid JSON matching the schema.`;
 

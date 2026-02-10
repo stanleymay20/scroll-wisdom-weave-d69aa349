@@ -44,6 +44,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { LearningDeck, SlideData, SlideLayout } from '@/lib/learningDeckContract';
+import { InstructionalVisual } from './InstructionalVisual';
 
 // Layout icon mapping
 const layoutIcons: Record<string, typeof BookOpen> = {
@@ -577,11 +578,14 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
 
                     {/* Visual placeholder */}
                     {!hasGeneratedVisual && currentSlide.visual && (
-                      <div className="mt-6 p-4 rounded-lg bg-muted/50 border border-dashed">
-                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                          <BarChart3 className="h-4 w-4" />
-                          <span>Visual: {currentSlide.visual.description}</span>
-                        </div>
+                      <div className="mt-6">
+                        <InstructionalVisual
+                          layout={currentSlide.layout}
+                          heading={currentSlide.heading}
+                          content={currentSlide.content}
+                          visualType={currentSlide.visual.type}
+                          visualDescription={currentSlide.visual.description}
+                        />
                       </div>
                     )}
                   </div>
