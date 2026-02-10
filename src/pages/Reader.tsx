@@ -54,6 +54,8 @@ import { CodePlayground } from "@/components/reader/CodePlayground";
 import { ComicReaderMode, parseComicContentToPanels, ComicPanelData } from "@/components/reader/ComicReaderMode";
 import { PreviouslyInBookCard, ReadingSessionTimer, DirectTextEditor } from "@/components/reader";
 import { ReaderToolsSheet } from "@/components/reader/ReaderToolsSheet";
+import { FlashcardGenerator } from "@/components/decks/FlashcardGenerator";
+import { LearningDeckGenerator } from "@/components/decks/LearningDeckGenerator";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -178,6 +180,8 @@ export default function Reader() {
   const [showDirectEditor, setShowDirectEditor] = useState(false);
   const [highlightedText, setHighlightedText] = useState("");
   const [isBookOwner, setIsBookOwner] = useState(false);
+  const [showFlashcardDialog, setShowFlashcardDialog] = useState(false);
+  const [showLearningDeckDialog, setShowLearningDeckDialog] = useState(false);
   
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
   const [shouldResumeTTS, setShouldResumeTTS] = useState(false);
@@ -327,15 +331,27 @@ export default function Reader() {
     enabled: settings.tts_enabled,
   });
 
-  // Helper function to extract the first code block from chapter content for playground
+  // Helper function to extract ALL code blocks from chapter content for playground
   const extractCodeFromChapter = (content: string): string => {
-    // Try structured code blocks first [CODE_BLOCK]
-    const structuredMatch = content.match(/\[CODE_BLOCK\][\s\S]*?code:\s*```[\w]*\n([\s\S]*?)```/);
-    if (structuredMatch) return structuredMatch[1].trim();
+    const allBlocks: string[] = [];
     
-    // Try standard markdown code blocks
-    const codeBlockMatch = content.match(/```[\w]*\n([\s\S]*?)```/);
-    if (codeBlockMatch) return codeBlockMatch[1].trim();
+    // Try structured code blocks first [CODE_BLOCK]
+    const structuredMatches = content.matchAll(/\[CODE_BLOCK\][\s\S]*?code:\s*```[\w]*\n([\s\S]*?)```/g);
+    for (const match of structuredMatches) {
+      allBlocks.push(match[1].trim());
+    }
+    
+    // Try standard markdown code blocks (skip if already found structured ones)
+    if (allBlocks.length === 0) {
+      const codeBlockMatches = content.matchAll(/```[\w]*\n([\s\S]*?)```/g);
+      for (const match of codeBlockMatches) {
+        allBlocks.push(match[1].trim());
+      }
+    }
+    
+    if (allBlocks.length > 0) {
+      return allBlocks.join('\n\n// --- Next Code Block ---\n\n');
+    }
     
     return '// No code examples found in this chapter\n// Try writing your own code here!';
   };
@@ -1046,11 +1062,10 @@ export default function Reader() {
           }}
           onEditClick={() => setShowDirectEditor(true)}
           onLearningDeckClick={() => {
-            // Trigger learning deck dialog programmatically
-            // We'll render it hidden and trigger via state
+            setShowLearningDeckDialog(true);
           }}
           onFlashcardsClick={() => {
-            // Trigger flashcard dialog programmatically
+            setShowFlashcardDialog(true);
           }}
         />
       )}
@@ -1122,10 +1137,47 @@ export default function Reader() {
           isOwner={isBookOwner}
           onSave={(newContent) => {
             setShowDirectEditor(false);
-            // Trigger refresh to show updated content
-            window.location.reload();
+            // Update chapter content in-place without full reload
+            if (chapter) {
+              (chapter as any).content = newContent;
+              (chapter as any).word_count = newContent.split(/\s+/).filter((w: string) => w.length > 0).length;
+            }
+            toast({
+              title: "Content updated",
+              description: "Your edits are now visible.",
+              duration: 2000,
+            });
           }}
           onCancel={() => setShowDirectEditor(false)}
+        />
+      )}
+
+      {/* Flashcard Generator (controlled from Tools sheet) */}
+      {bookId && book && (
+        <FlashcardGenerator
+          bookId={bookId}
+          bookTitle={book.title}
+          currentChapter={currentChapter}
+          totalChapters={totalChapters}
+          open={showFlashcardDialog}
+          onOpenChange={setShowFlashcardDialog}
+          variant="inline"
+          className="hidden"
+        />
+      )}
+
+      {/* Learning Deck Generator (controlled from Tools sheet) */}
+      {bookId && book && (
+        <LearningDeckGenerator
+          bookId={bookId}
+          bookTitle={book.title}
+          userId={userId}
+          totalChapters={totalChapters}
+          currentChapter={currentChapter}
+          open={showLearningDeckDialog}
+          onOpenChange={setShowLearningDeckDialog}
+          variant="inline"
+          className="hidden"
         />
       )}
 
