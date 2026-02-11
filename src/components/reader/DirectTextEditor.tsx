@@ -138,103 +138,67 @@ export function DirectTextEditor({
         paddingRight: "env(safe-area-inset-right)",
       }}
     >
-      {/* Toolbar */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border/50 bg-muted/30">
-        <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => insertFormatting('**')}
-            title="Bold (Ctrl+B)"
-            className="h-8 w-8 p-0"
-          >
+      {/* Toolbar - Save/Cancel FIRST (always visible), then formatting */}
+      <div className="flex flex-col border-b border-border/50 bg-muted/30">
+        {/* Primary actions row - always visible */}
+        <div className="flex items-center justify-between px-4 py-2">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={onCancel}
+              disabled={isSaving}
+            >
+              <X className="h-4 w-4 mr-1" />
+              Cancel
+            </Button>
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleSave}
+              disabled={isSaving || !hasChanges}
+            >
+              {isSaving ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-1" />
+                  Save
+                </>
+              )}
+            </Button>
+          </div>
+          {hasChanges && (
+            <span className="text-xs text-amber-500 font-medium">Unsaved</span>
+          )}
+        </div>
+        {/* Formatting toolbar row - scrollable */}
+        <div className="flex items-center gap-1 px-4 py-1.5 overflow-x-auto border-t border-border/30">
+          <Button variant="ghost" size="sm" onClick={() => insertFormatting('**')} title="Bold (Ctrl+B)" className="h-8 w-8 p-0 shrink-0">
             <Bold className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => insertFormatting('*')}
-            title="Italic (Ctrl+I)"
-            className="h-8 w-8 p-0"
-          >
+          <Button variant="ghost" size="sm" onClick={() => insertFormatting('*')} title="Italic (Ctrl+I)" className="h-8 w-8 p-0 shrink-0">
             <Italic className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => insertFormatting('<u>', '</u>')}
-            title="Underline"
-            className="h-8 w-8 p-0"
-          >
+          <Button variant="ghost" size="sm" onClick={() => insertFormatting('<u>', '</u>')} title="Underline" className="h-8 w-8 p-0 shrink-0">
             <Underline className="h-4 w-4" />
           </Button>
-          <div className="w-px h-6 bg-border mx-1" />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => insertFormatting('## ', '')}
-            title="Heading"
-            className="h-8 w-8 p-0"
-          >
+          <div className="w-px h-6 bg-border mx-1 shrink-0" />
+          <Button variant="ghost" size="sm" onClick={() => insertFormatting('## ', '')} title="Heading" className="h-8 w-8 p-0 shrink-0">
             <Heading1 className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => insertFormatting('### ', '')}
-            title="Subheading"
-            className="h-8 w-8 p-0"
-          >
+          <Button variant="ghost" size="sm" onClick={() => insertFormatting('### ', '')} title="Subheading" className="h-8 w-8 p-0 shrink-0">
             <Heading2 className="h-4 w-4" />
           </Button>
-          <div className="w-px h-6 bg-border mx-1" />
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => insertFormatting('- ', '')}
-            title="Bullet List"
-            className="h-8 w-8 p-0"
-          >
+          <div className="w-px h-6 bg-border mx-1 shrink-0" />
+          <Button variant="ghost" size="sm" onClick={() => insertFormatting('- ', '')} title="Bullet List" className="h-8 w-8 p-0 shrink-0">
             <List className="h-4 w-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => insertFormatting('1. ', '')}
-            title="Numbered List"
-            className="h-8 w-8 p-0"
-          >
+          <Button variant="ghost" size="sm" onClick={() => insertFormatting('1. ', '')} title="Numbered List" className="h-8 w-8 p-0 shrink-0">
             <ListOrdered className="h-4 w-4" />
-          </Button>
-        </div>
-
-        <div className="flex items-center gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={onCancel}
-            disabled={isSaving}
-          >
-            <X className="h-4 w-4 mr-1" />
-            Cancel
-          </Button>
-          <Button
-            variant="default"
-            size="sm"
-            onClick={handleSave}
-            disabled={isSaving || !hasChanges}
-          >
-            {isSaving ? (
-              <>
-                <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                Saving...
-              </>
-            ) : (
-              <>
-                <Save className="h-4 w-4 mr-1" />
-                Save
-              </>
-            )}
           </Button>
         </div>
       </div>
@@ -270,9 +234,6 @@ export function DirectTextEditor({
         <span>
           {localContent.split(/\s+/).filter(w => w.length > 0).length} words
         </span>
-        {hasChanges && (
-          <span className="text-amber-500">Unsaved changes</span>
-        )}
       </div>
     </motion.div>
   );
