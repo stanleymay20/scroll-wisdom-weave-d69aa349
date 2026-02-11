@@ -63,6 +63,7 @@ import { usePagePerformance } from "@/lib/performance";
 import { useReaderData } from "@/hooks/useReaderData";
 import { useReadingSession } from "@/hooks/useReadingSession";
 import { useAutoScroll } from "@/hooks/useAutoScroll";
+import { useAudioSync } from "@/hooks/useAudioSync";
 import { cn } from "@/lib/utils";
 import { useQuizGating } from "@/hooks/useQuizGating";
 
@@ -329,6 +330,14 @@ export default function Reader() {
     contentRef,
     estimatedDurationMs: wordCount > 0 ? (wordCount / 150) * 60 * 1000 : 60000, // ~150 wpm for TTS
     enabled: settings.tts_enabled,
+  });
+
+  // Sentence-level audio synchronization
+  const audioSync = useAudioSync({
+    chapterContent: chapter?.content || null,
+    isPlaying: isTTSPlaying,
+    contentRef,
+    wordCount,
   });
 
   // Helper function to extract ALL code blocks from chapter content for playground
@@ -778,9 +787,21 @@ export default function Reader() {
               </Button>
             </div>
             
-            {/* Auto-Scroll with Audio */}
+            {/* Sync scrolling with audio (sentence-level) */}
             <div className="flex items-center justify-between">
-              <span className="text-sm text-muted-foreground">Auto-scroll with audio</span>
+              <span className="text-sm text-muted-foreground">Sync scrolling with audio</span>
+              <Button
+                variant={audioSync.isSyncEnabled ? "default" : "outline"}
+                size="sm"
+                onClick={audioSync.toggleSync}
+              >
+                {audioSync.isSyncEnabled ? 'On' : 'Off'}
+              </Button>
+            </div>
+
+            {/* Legacy auto-scroll */}
+            <div className="flex items-center justify-between">
+              <span className="text-sm text-muted-foreground">Auto-scroll (linear)</span>
               <Button
                 variant={isAutoScrolling ? "default" : "outline"}
                 size="sm"
@@ -985,7 +1006,7 @@ export default function Reader() {
               setShowTTS(true);
             }}>
               <div 
-                className={`reading-content ${currentTheme.text}`}
+                className={`reading-content ${currentTheme.text} relative`}
                 style={{ fontSize: `${fontSize}px` }}
                 onMouseUp={() => {
                   // Capture selected text for TTS
@@ -997,6 +1018,25 @@ export default function Reader() {
               >
                 {renderContent()}
               </div>
+
+              {/* "Follow Audio" button when user scrolls away */}
+              {audioSync.isUserScrolledAway && isTTSPlaying && audioSync.isSyncEnabled && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40"
+                >
+                  <Button
+                    size="sm"
+                    onClick={audioSync.followAudio}
+                    className="shadow-lg gap-2 bg-primary text-primary-foreground"
+                  >
+                    <Volume2 className="h-4 w-4" />
+                    Follow Audio
+                  </Button>
+                </motion.div>
+              )}
             </TextHighlighter>
           </motion.div>
         </article>

@@ -1490,6 +1490,83 @@ RESULT OF THIS CONTRACT:
 `;
 
 // ===========================================
+// SECTION 17.1: CLEAN CODE GENERATION CONTRACT
+// ===========================================
+
+export const CLEAN_CODE_CONTRACT = `
+=== CLEAN CODE GENERATION CONTRACT (v1.0) ===
+
+When generating code examples in any chapter, ALL code MUST be production-grade.
+
+===========================================
+LANGUAGE & SYNTAX REQUIREMENTS:
+===========================================
+
+1. Use modern ES2022+ syntax (const/let, arrow functions, optional chaining, nullish coalescing)
+2. Use TypeScript types and interfaces when language is TypeScript
+3. Use async/await instead of raw Promises or callbacks
+4. Use descriptive variable and function names (no single-letter vars except loop indices)
+5. Follow single responsibility principle — one function does one thing
+
+===========================================
+STRUCTURAL REQUIREMENTS:
+===========================================
+
+1. Every code block MUST have structural comments explaining intent
+2. Functions MUST be modular — no monolithic blocks exceeding 30 lines
+3. Error handling is MANDATORY for any I/O, network, or user-input operation
+4. Avoid inline business logic inside UI rendering code
+5. Separate concerns: data fetching, transformation, and presentation
+
+===========================================
+ANTI-PATTERN PREVENTION (HARD FAILURE):
+===========================================
+
+❌ FORBIDDEN:
+- God functions (>50 lines doing multiple things)
+- Deeply nested callbacks (callback hell)
+- Magic numbers without named constants
+- Copy-pasted duplicate blocks
+- Mutable global state
+- console.log as error handling
+- Swallowed exceptions (empty catch blocks)
+- Any usage of \`var\`
+- Implicit \`any\` types in TypeScript
+
+✅ REQUIRED:
+- Named constants for magic values
+- Guard clauses for early returns
+- Proper error boundaries and try/catch
+- Type-safe function signatures
+- Consistent code style within a block
+
+===========================================
+FORMATTING & OUTPUT:
+===========================================
+
+1. Proper indentation (4 spaces for Python, 2 for JS/TS)
+2. Blank lines between logical sections
+3. Import statements grouped and sorted
+4. Comments explain WHY, not WHAT
+5. Output is ready for copy-paste into a real project
+
+===========================================
+VALIDATION:
+===========================================
+
+Before including code in output, verify:
+[ ] No anti-patterns present
+[ ] Functions are modular and focused
+[ ] Error handling is present
+[ ] Comments explain intent
+[ ] Code would pass a basic linter
+[ ] Code is production-grade, not prototype-grade
+
+If ANY check fails → REWRITE the code block.
+
+=== END CLEAN CODE CONTRACT ===
+`;
+
 // SECTION 18: OUTPUT MODE AWARENESS
 // ===========================================
 
@@ -1600,6 +1677,8 @@ ${ACADEMIC_TECHNICAL_PIPELINE}
 ${FORMATTING_CONTRACT}
 
 ${CODE_CONTRACT}
+
+${CLEAN_CODE_CONTRACT}
 
 ${ACADEMIC_CONTRACT}
 
@@ -1837,6 +1916,8 @@ ${EDIT_CONTROL_CONTRACT}
 ${FORMATTING_CONTRACT}
 
 ${CODE_CONTRACT}
+
+${CLEAN_CODE_CONTRACT}
 
 ${TABLE_CONTRACT}
 

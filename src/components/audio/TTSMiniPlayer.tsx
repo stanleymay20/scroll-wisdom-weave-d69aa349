@@ -874,7 +874,30 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
             
             <div className="space-y-1.5">
               <label className="text-xs font-medium">Voice</label>
-              <Select value={selectedVoice} onValueChange={setSelectedVoice}>
+              <Select
+                value={selectedVoice}
+                onValueChange={(newVoice) => {
+                  // Stop current playback and cleanup before switching
+                  const wasPlaying = isPlaying;
+                  stop();
+                  cleanupBlobUrls();
+                  setSelectedVoice(newVoice);
+                  setProgress(0);
+                  setCurrentChunk(0);
+                  setCurrentPosition(0);
+                  pausedAtChunkRef.current = 0;
+
+                  // Regenerate TTS with new voice after state update
+                  if (wasPlaying) {
+                    setTimeout(() => {
+                      generateSpeech(
+                        mode === 'selection' && selectedText ? selectedText : chapterText,
+                        mode === 'selection'
+                      );
+                    }, 100);
+                  }
+                }}
+              >
                 <SelectTrigger className="h-8 text-xs">
                   <SelectValue />
                 </SelectTrigger>

@@ -22,6 +22,7 @@ export { DirectTextEditor, DirectEditButton } from './DirectTextEditor';
 export { MobileReaderLayout, SwipeHintOverlay } from './MobileReaderLayout';
 export { PreviouslyInBookCard } from './PreviouslyInBookCard';
 export { ReadingSessionTimer } from './ReadingSessionTimer';
+export { SentenceHighlighter } from './SentenceHighlighter';
 export type { ReadingTheme } from './ReaderSettingsPanel';
 
 // Lazy-loaded panels for performance optimization
