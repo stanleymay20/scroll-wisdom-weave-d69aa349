@@ -263,6 +263,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         return;
       }
 
+      let resolved = false;
+      const safeResolve = (value: boolean) => {
+        if (!resolved) {
+          resolved = true;
+          resolve(value);
+        }
+      };
+
       // Reuse existing audio element if available, or create new
       const audio = audioRef.current || new Audio();
       audioRef.current = audio;
@@ -283,19 +291,22 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       
       audio.onended = () => {
         cleanup();
-        resolve(true);
+        safeResolve(true);
       };
       
       audio.onpause = () => {
-        if (stopRef.current || isStoppingRef.current) {
-          cleanup();
-          resolve(false);
+        // Always resolve false on pause — whether from user stop, system lockscreen, or Media Session
+        cleanup();
+        if (isMountedRef.current) {
+          setIsPlaying(false);
+          onPlayingChange?.(false);
         }
+        safeResolve(false);
       };
       
       audio.onerror = () => {
         cleanup();
-        resolve(false);
+        safeResolve(false);
       };
       
       audio.ontimeupdate = () => {
@@ -307,14 +318,13 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       audio.src = url;
       audio.play().catch((err) => {
         cleanup();
-        // AbortError is expected when stopping
         if (err?.name !== "AbortError") {
           console.error("[TTS] Play error:", err);
         }
-        resolve(false);
+        safeResolve(false);
       });
     });
-  }, [volume, playbackSpeed]);
+  }, [volume, playbackSpeed, onPlayingChange]);
 
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
