@@ -66,6 +66,8 @@ import { useAutoScroll } from "@/hooks/useAutoScroll";
 import { useAudioSync } from "@/hooks/useAudioSync";
 import { cn } from "@/lib/utils";
 import { useQuizGating } from "@/hooks/useQuizGating";
+import { useCompetencyProgress } from "@/hooks/useCompetencyProgress";
+import { CompetencyLearningPanel } from "@/components/reader/CompetencyLearningPanel";
 
 interface BookData {
   id: string;
@@ -125,6 +127,13 @@ export default function Reader() {
   
   // CONTRACT 5: Quiz Gating - chapters must be read before quizzes unlock
   const quizGating = useQuizGating({
+    bookId: bookId || '',
+    chapterNumber: currentChapter,
+    userId,
+  });
+
+  // Competency-Verified CPD Engine
+  const competency = useCompetencyProgress({
     bookId: bookId || '',
     chapterNumber: currentChapter,
     userId,
@@ -1038,6 +1047,25 @@ export default function Reader() {
                 </motion.div>
               )}
             </TextHighlighter>
+
+            {/* Competency Learning Panel — Kolb's 4-Phase Cycle */}
+            {guidedModeActive && chapter?.content && (
+              <div className="mt-8 mb-12">
+                <CompetencyLearningPanel
+                  progress={competency.progress}
+                  chapterContent={chapter.content}
+                  chapterTitle={chapter.title}
+                  bookTitle={book?.title || ''}
+                  bookId={bookId || ''}
+                  chapterId={chapter.id}
+                  onCompleteConceptPhase={competency.completeConceptPhase}
+                  onSubmitReflection={competency.submitReflection}
+                  onSubmitApplication={competency.submitApplication}
+                  onCompleteCompetencyCheck={competency.completeCompetencyCheck}
+                  isSaving={competency.isSaving}
+                />
+              </div>
+            )}
           </motion.div>
         </article>
       </main>

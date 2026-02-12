@@ -1,10 +1,8 @@
 /**
- * CONTRACT 6D — Public Verification API
+ * CONTRACT 6D — Public Verification API (v2.0 — Competency-Verified)
  * 
  * GET endpoint for employers and institutions to verify certificates.
- * Read-only, no auth required, cacheable.
- * 
- * Returns standardized JSON response with certificate validity.
+ * Supports both legacy publishing_certificates AND new competency_certificates.
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -13,60 +11,21 @@ const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
   'Access-Control-Allow-Methods': 'GET, OPTIONS',
-  'Cache-Control': 'public, max-age=300', // Cache for 5 minutes
+  'Cache-Control': 'public, max-age=300',
 };
 
-// 6A — Immutable Issuer Identity
 const CERTIFICATE_ISSUER = {
   authority: 'ScrollLibrary Certification Authority',
   representative: 'Founder',
-  title: 'Chief Executive Officer',
 } as const;
 
-interface VerificationResponse {
-  valid: boolean;
-  certificateNumber?: string;
-  certificateType?: 'completion' | 'mastery' | 'publishing' | 'authorship';
-  issuedAt?: string;
-  issuer?: {
-    authority: string;
-    representative: string;
-  };
-  recipient?: {
-    name: string;
-  };
-  book?: {
-    title: string;
-    category?: string;
-  };
-  integrityClassification?: 'trusted' | 'review' | 'flagged';
-  verificationHash?: string;
-  revoked?: boolean;
-  revokedAt?: string;
-  revokedReason?: string;
-  error?: string;
-  reason?: string;
-}
-
 Deno.serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
-  // Only allow GET requests
   if (req.method !== 'GET') {
-    return new Response(
-      JSON.stringify({ 
-        valid: false, 
-        error: 'Method not allowed',
-        reason: 'Only GET requests are supported' 
-      }),
-      { 
-        status: 405, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
+    return jsonResponse({ valid: false, error: 'Method not allowed' }, 405);
   }
 
   try {
@@ -74,158 +33,112 @@ Deno.serve(async (req) => {
     const certificateNumber = url.searchParams.get('number');
 
     if (!certificateNumber) {
-      return new Response(
-        JSON.stringify({ 
-          valid: false, 
-          error: 'Missing certificate number',
-          reason: 'Provide certificate number via ?number=SL-CERT-XXXX' 
-        }),
-        { 
-          status: 400, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
+      return jsonResponse({ valid: false, error: 'Missing certificate number', reason: 'Provide certificate number via ?number=SL-CERT-XXXX' }, 400);
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    // Fetch certificate with book details
-    const { data: cert, error: dbError } = await supabase
-      .from('publishing_certificates')
-      .select(`
-        id,
-        certificate_number,
-        certificate_type,
-        issued_at,
-        revoked_at,
-        revoked_reason,
-        verification_hash,
-        metadata,
-        book_id,
-        books (
-          id,
-          title,
-          category
-        )
-      `)
-      .eq('certificate_number', certificateNumber)
-      .maybeSingle();
+    // Try competency certificates first (new system)
+    const competencyResult = await verifyCompetencyCertificate(supabase, certificateNumber);
+    if (competencyResult) return jsonResponse(competencyResult, 200);
 
-    if (dbError) {
-      console.error('[verify-certificate] Database error:', dbError);
-      return new Response(
-        JSON.stringify({ 
-          valid: false, 
-          error: 'Verification failed',
-          reason: 'Database error during verification' 
-        }),
-        { 
-          status: 500, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
+    // Fall back to legacy publishing certificates
+    const legacyResult = await verifyLegacyCertificate(supabase, certificateNumber);
+    if (legacyResult) return jsonResponse(legacyResult, legacyResult.valid ? 200 : 200);
 
-    // Certificate not found
-    if (!cert) {
-      return new Response(
-        JSON.stringify({ 
-          valid: false, 
-          certificateNumber,
-          reason: 'Certificate not found or does not exist' 
-        }),
-        { 
-          status: 404, 
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-
-    // Parse metadata
-    const metadata = cert.metadata as Record<string, unknown> | null;
-    const book = (Array.isArray(cert.books) ? cert.books[0] : cert.books) as { id: string; title: string; category: string } | null;
-
-    // CRITICAL: Integrity score MUST exist in stored metadata - NO FALLBACK
-    // If missing, the certificate was issued incorrectly
-    const storedIntegrityScore = metadata?.integrityScore as number | undefined;
-    
-    if (storedIntegrityScore === undefined || storedIntegrityScore === null) {
-      console.warn(`[verify-certificate] Certificate ${certificateNumber} missing integrity score - STRICT MODE: invalidating`);
-      // STRICT POLICY: Certificates without integrity data are NOT verifiable
-      // This positions ScrollLibrary as post-AI-cheating era authority
-      return new Response(
-        JSON.stringify({ 
-          valid: false, // STRICT: Cannot verify without integrity data
-          certificateNumber: cert.certificate_number,
-          reason: 'Legacy certificate — not verifiable. Certificate was issued before integrity tracking was implemented.',
-        }),
-        { 
-          status: 200, // Still 200 - this is a valid response, just not a valid certificate
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-        }
-      );
-    }
-
-    // Determine integrity classification from STORED score only
-    let integrityClassification: 'trusted' | 'review' | 'flagged' = 'trusted';
-    if (storedIntegrityScore < 0.6) {
-      integrityClassification = 'flagged';
-    } else if (storedIntegrityScore < 0.9) {
-      integrityClassification = 'review';
-    }
-
-    // Build response using STORED data only - no defaults
-    const response: VerificationResponse = {
-      valid: !cert.revoked_at,
-      certificateNumber: cert.certificate_number,
-      certificateType: (cert.certificate_type || metadata?.certificateType) as VerificationResponse['certificateType'],
-      issuedAt: cert.issued_at,
-      issuer: {
-        authority: CERTIFICATE_ISSUER.authority,
-        representative: CERTIFICATE_ISSUER.representative,
-      },
-      recipient: {
-        name: (metadata?.recipientName as string) || 'Record unavailable',
-      },
-      book: {
-        title: (metadata?.bookTitle as string) || book?.title || 'Record unavailable',
-        category: book?.category,
-      },
-      integrityClassification,
-      verificationHash: cert.verification_hash || undefined,
-    };
-
-    // Add revocation info if revoked
-    if (cert.revoked_at) {
-      response.revoked = true;
-      response.revokedAt = cert.revoked_at;
-      response.revokedReason = cert.revoked_reason || 'Certificate has been revoked';
-    }
-
-    console.log(`[verify-certificate] Verified: ${certificateNumber}, valid: ${response.valid}`);
-
-    return new Response(
-      JSON.stringify(response),
-      { 
-        status: 200, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
+    return jsonResponse({ valid: false, certificateNumber, reason: 'Certificate not found or does not exist' }, 404);
 
   } catch (error) {
     console.error('[verify-certificate] Unexpected error:', error);
-    return new Response(
-      JSON.stringify({ 
-        valid: false, 
-        error: 'Internal server error',
-        reason: 'An unexpected error occurred during verification' 
-      }),
-      { 
-        status: 500, 
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
-      }
-    );
+    return jsonResponse({ valid: false, error: 'Internal server error' }, 500);
   }
 });
+
+// --- Competency Certificate Verification ---
+async function verifyCompetencyCertificate(supabase: any, certNumber: string) {
+  const { data: cert, error } = await supabase
+    .from('competency_certificates')
+    .select(`*, books (id, title, category)`)
+    .eq('certificate_number', certNumber)
+    .maybeSingle();
+
+  if (error || !cert) return null;
+
+  const book = Array.isArray(cert.books) ? cert.books[0] : cert.books;
+
+  return {
+    valid: !cert.revoked_at,
+    certificateNumber: cert.certificate_number,
+    certificateType: 'competency',
+    competency_level: cert.competency_level,
+    holder: cert.metadata?.recipientName || 'Record unavailable',
+    skills_validated: cert.skills_validated || [],
+    competency_summary: cert.competency_summary,
+    ai_evaluation_summary: cert.ai_evaluation_summary,
+    scores: {
+      reflection: cert.average_reflection_score,
+      application: cert.average_application_score,
+      competency: cert.average_competency_score,
+      overall: cert.overall_competency_score,
+    },
+    issuedAt: cert.issued_at,
+    issuer: CERTIFICATE_ISSUER,
+    book: book ? { title: book.title, category: book.category } : undefined,
+    verification_status: cert.revoked_at ? 'revoked' : 'verified',
+    revoked: !!cert.revoked_at,
+    revokedAt: cert.revoked_at,
+    revokedReason: cert.revoked_reason,
+  };
+}
+
+// --- Legacy Certificate Verification ---
+async function verifyLegacyCertificate(supabase: any, certNumber: string) {
+  const { data: cert, error } = await supabase
+    .from('publishing_certificates')
+    .select(`*, books (id, title, category)`)
+    .eq('certificate_number', certNumber)
+    .maybeSingle();
+
+  if (error || !cert) return null;
+
+  const metadata = cert.metadata as Record<string, unknown> | null;
+  const book = Array.isArray(cert.books) ? cert.books[0] : cert.books;
+  const storedIntegrityScore = metadata?.integrityScore as number | undefined;
+
+  if (storedIntegrityScore === undefined || storedIntegrityScore === null) {
+    return {
+      valid: false,
+      certificateNumber: cert.certificate_number,
+      reason: 'Legacy certificate — not verifiable. Issued before integrity tracking.',
+    };
+  }
+
+  let integrityClassification: 'trusted' | 'review' | 'flagged' = 'trusted';
+  if (storedIntegrityScore < 0.6) integrityClassification = 'flagged';
+  else if (storedIntegrityScore < 0.9) integrityClassification = 'review';
+
+  return {
+    valid: !cert.revoked_at,
+    certificateNumber: cert.certificate_number,
+    certificateType: cert.certificate_type || metadata?.certificateType,
+    issuedAt: cert.issued_at,
+    issuer: CERTIFICATE_ISSUER,
+    recipient: { name: (metadata?.recipientName as string) || 'Record unavailable' },
+    book: { title: (metadata?.bookTitle as string) || book?.title || 'Record unavailable', category: book?.category },
+    integrityClassification,
+    verificationHash: cert.verification_hash || undefined,
+    revoked: !!cert.revoked_at,
+    revokedAt: cert.revoked_at,
+    revokedReason: cert.revoked_reason || 'Certificate has been revoked',
+    verification_status: cert.revoked_at ? 'revoked' : 'verified',
+  };
+}
+
+function jsonResponse(body: unknown, status: number) {
+  return new Response(JSON.stringify(body), {
+    status,
+    headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+  });
+}

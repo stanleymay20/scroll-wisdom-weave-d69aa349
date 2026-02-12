@@ -283,6 +283,178 @@ export type Database = {
           },
         ]
       }
+      competency_certificates: {
+        Row: {
+          ai_evaluation_summary: string | null
+          average_application_score: number | null
+          average_competency_score: number | null
+          average_reflection_score: number | null
+          book_id: string
+          book_version_hash: string | null
+          certificate_number: string
+          chapters_completed: number | null
+          competency_level: Database["public"]["Enums"]["competency_level"]
+          competency_summary: string | null
+          created_at: string
+          id: string
+          issued_at: string
+          metadata: Json | null
+          overall_competency_score: number | null
+          revoked_at: string | null
+          revoked_reason: string | null
+          skills_validated: string[] | null
+          total_chapters: number | null
+          updated_at: string
+          user_id: string
+          verification_hash: string | null
+        }
+        Insert: {
+          ai_evaluation_summary?: string | null
+          average_application_score?: number | null
+          average_competency_score?: number | null
+          average_reflection_score?: number | null
+          book_id: string
+          book_version_hash?: string | null
+          certificate_number: string
+          chapters_completed?: number | null
+          competency_level?: Database["public"]["Enums"]["competency_level"]
+          competency_summary?: string | null
+          created_at?: string
+          id?: string
+          issued_at?: string
+          metadata?: Json | null
+          overall_competency_score?: number | null
+          revoked_at?: string | null
+          revoked_reason?: string | null
+          skills_validated?: string[] | null
+          total_chapters?: number | null
+          updated_at?: string
+          user_id: string
+          verification_hash?: string | null
+        }
+        Update: {
+          ai_evaluation_summary?: string | null
+          average_application_score?: number | null
+          average_competency_score?: number | null
+          average_reflection_score?: number | null
+          book_id?: string
+          book_version_hash?: string | null
+          certificate_number?: string
+          chapters_completed?: number | null
+          competency_level?: Database["public"]["Enums"]["competency_level"]
+          competency_summary?: string | null
+          created_at?: string
+          id?: string
+          issued_at?: string
+          metadata?: Json | null
+          overall_competency_score?: number | null
+          revoked_at?: string | null
+          revoked_reason?: string | null
+          skills_validated?: string[] | null
+          total_chapters?: number | null
+          updated_at?: string
+          user_id?: string
+          verification_hash?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competency_certificates_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      competency_progress: {
+        Row: {
+          application_ai_evaluation: Json | null
+          application_response: string | null
+          application_score: number | null
+          application_submitted: boolean | null
+          application_submitted_at: string | null
+          book_id: string
+          chapter_number: number
+          competency_check_passed: boolean | null
+          competency_checked_at: string | null
+          competency_responses: Json | null
+          competency_score: number | null
+          concept_completed: boolean | null
+          concept_completed_at: string | null
+          created_at: string
+          current_phase: string | null
+          id: string
+          overall_score: number | null
+          reflection_ai_feedback: string | null
+          reflection_quality_score: number | null
+          reflection_submitted: boolean | null
+          reflection_submitted_at: string | null
+          reflection_text: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          application_ai_evaluation?: Json | null
+          application_response?: string | null
+          application_score?: number | null
+          application_submitted?: boolean | null
+          application_submitted_at?: string | null
+          book_id: string
+          chapter_number: number
+          competency_check_passed?: boolean | null
+          competency_checked_at?: string | null
+          competency_responses?: Json | null
+          competency_score?: number | null
+          concept_completed?: boolean | null
+          concept_completed_at?: string | null
+          created_at?: string
+          current_phase?: string | null
+          id?: string
+          overall_score?: number | null
+          reflection_ai_feedback?: string | null
+          reflection_quality_score?: number | null
+          reflection_submitted?: boolean | null
+          reflection_submitted_at?: string | null
+          reflection_text?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          application_ai_evaluation?: Json | null
+          application_response?: string | null
+          application_score?: number | null
+          application_submitted?: boolean | null
+          application_submitted_at?: string | null
+          book_id?: string
+          chapter_number?: number
+          competency_check_passed?: boolean | null
+          competency_checked_at?: string | null
+          competency_responses?: Json | null
+          competency_score?: number | null
+          concept_completed?: boolean | null
+          concept_completed_at?: string | null
+          created_at?: string
+          current_phase?: string | null
+          id?: string
+          overall_score?: number | null
+          reflection_ai_feedback?: string | null
+          reflection_quality_score?: number | null
+          reflection_submitted?: boolean | null
+          reflection_submitted_at?: string | null
+          reflection_text?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "competency_progress_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_submissions: {
         Row: {
           created_at: string
@@ -1101,6 +1273,11 @@ export type Database = {
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
+      competency_level:
+        | "knowledge_verified"
+        | "applied_competency"
+        | "professional_integration"
+        | "mastery"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -1229,6 +1406,12 @@ export const Constants = {
   public: {
     Enums: {
       app_role: ["admin", "moderator", "user"],
+      competency_level: [
+        "knowledge_verified",
+        "applied_competency",
+        "professional_integration",
+        "mastery",
+      ],
     },
   },
 } as const
