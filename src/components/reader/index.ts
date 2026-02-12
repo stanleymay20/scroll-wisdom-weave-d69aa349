@@ -23,6 +23,7 @@ export { MobileReaderLayout, SwipeHintOverlay } from './MobileReaderLayout';
 export { PreviouslyInBookCard } from './PreviouslyInBookCard';
 export { ReadingSessionTimer } from './ReadingSessionTimer';
 export { SentenceHighlighter } from './SentenceHighlighter';
+export { CompetencyLearningPanel } from './CompetencyLearningPanel';
 export type { ReadingTheme } from './ReaderSettingsPanel';
 
 // Lazy-loaded panels for performance optimization
