@@ -1,26 +1,17 @@
 /**
  * Direct Text Editor Component
  * 
- * Allows book creators to directly edit chapter text inline
- * without requiring regeneration. Rich text editing with
- * bold, italic, underline support.
+ * Allows book creators to directly edit chapter text inline.
+ * Uses a ref-based approach for formatting to avoid stale closures.
  */
 
 import { useState, useCallback, useRef, useEffect } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { 
-  Save, 
-  X, 
-  Bold, 
-  Italic, 
-  Underline, 
-  List, 
-  ListOrdered,
-  Heading1,
-  Heading2,
-  Loader2,
-  Edit3
+  Save, X, Bold, Italic, Underline, 
+  List, ListOrdered, Heading1, Heading2,
+  Loader2, Edit3
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -44,9 +35,14 @@ export function DirectTextEditor({
   const [localContent, setLocalContent] = useState(content);
   const [isSaving, setIsSaving] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  // Keep a ref in sync with state to avoid stale closures in formatting
+  const contentRef = useRef(content);
 
   useEffect(() => {
-    // Focus and set cursor at end
+    contentRef.current = localContent;
+  }, [localContent]);
+
+  useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.focus();
       textareaRef.current.setSelectionRange(localContent.length, localContent.length);
@@ -59,27 +55,29 @@ export function DirectTextEditor({
 
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const selectedText = localContent.substring(start, end);
+    const currentContent = contentRef.current;
+    const selectedText = currentContent.substring(start, end);
     
     const newContent = 
-      localContent.substring(0, start) + 
+      currentContent.substring(0, start) + 
       prefix + selectedText + suffix + 
-      localContent.substring(end);
+      currentContent.substring(end);
     
     setLocalContent(newContent);
+    contentRef.current = newContent;
     
-    // Restore cursor position after formatting
-    setTimeout(() => {
+    // Restore cursor position after React re-render
+    requestAnimationFrame(() => {
       textarea.focus();
       if (selectedText) {
         textarea.setSelectionRange(start + prefix.length, end + prefix.length);
       } else {
         textarea.setSelectionRange(start + prefix.length, start + prefix.length);
       }
-    }, 0);
-  }, [localContent]);
+    });
+  }, []);
 
-  const handleSave = async () => {
+  const handleSave = useCallback(async () => {
     if (!isOwner) {
       toast({
         title: "Permission denied",
@@ -89,17 +87,19 @@ export function DirectTextEditor({
       return;
     }
 
+    const currentContent = contentRef.current;
     setIsSaving(true);
+
     try {
-      const wordCount = localContent.split(/\s+/).filter(w => w.length > 0).length;
+      const wordCount = currentContent.split(/\s+/).filter(w => w.length > 0).length;
       
       const { error } = await supabase
         .from("chapters")
         .update({
-          content: localContent,
+          content: currentContent,
           word_count: wordCount,
           updated_at: new Date().toISOString(),
-          user_locked: true, // Mark as user-edited
+          user_locked: true,
         })
         .eq("id", chapterId);
 
@@ -110,7 +110,7 @@ export function DirectTextEditor({
         description: "Your edits have been saved successfully.",
       });
       
-      onSave(localContent);
+      onSave(currentContent);
     } catch (error) {
       console.error("Save error:", error);
       toast({
@@ -121,7 +121,7 @@ export function DirectTextEditor({
     } finally {
       setIsSaving(false);
     }
-  };
+  }, [isOwner, chapterId, onSave, toast]);
 
   const hasChanges = localContent !== content;
 
@@ -138,17 +138,12 @@ export function DirectTextEditor({
         paddingRight: "env(safe-area-inset-right)",
       }}
     >
-      {/* Toolbar - Save/Cancel FIRST (always visible), then formatting */}
+      {/* Toolbar */}
       <div className="flex flex-col border-b border-border/50 bg-muted/30">
-        {/* Primary actions row - always visible */}
+        {/* Primary actions row */}
         <div className="flex items-center justify-between px-4 py-2">
           <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={onCancel}
-              disabled={isSaving}
-            >
+            <Button variant="outline" size="sm" onClick={onCancel} disabled={isSaving}>
               <X className="h-4 w-4 mr-1" />
               Cancel
             </Button>
@@ -175,7 +170,7 @@ export function DirectTextEditor({
             <span className="text-xs text-amber-500 font-medium">Unsaved</span>
           )}
         </div>
-        {/* Formatting toolbar row - scrollable */}
+        {/* Formatting toolbar */}
         <div className="flex items-center gap-1 px-4 py-1.5 overflow-x-auto border-t border-border/30">
           <Button variant="ghost" size="sm" onClick={() => insertFormatting('**')} title="Bold (Ctrl+B)" className="h-8 w-8 p-0 shrink-0">
             <Bold className="h-4 w-4" />
@@ -208,11 +203,13 @@ export function DirectTextEditor({
         <textarea
           ref={textareaRef}
           value={localContent}
-          onChange={(e) => setLocalContent(e.target.value)}
+          onChange={(e) => {
+            setLocalContent(e.target.value);
+            contentRef.current = e.target.value;
+          }}
           className="w-full h-full min-h-[calc(100vh-10rem)] bg-transparent border-none outline-none resize-none font-mono text-sm leading-relaxed"
           placeholder="Start typing..."
           onKeyDown={(e) => {
-            // Keyboard shortcuts
             if (e.ctrlKey || e.metaKey) {
               if (e.key === 'b') {
                 e.preventDefault();
