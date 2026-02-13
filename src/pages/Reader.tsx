@@ -862,7 +862,7 @@ export default function Reader() {
             }}
           >
             <TTSMiniPlayer
-              chapterText={chapter.content}
+              chapterText={chapter.content || ''}
               selectedText={selectedTextForTTS}
               language={book?.language || "en"}
               stopKey={`${bookId}-${currentChapter}`}

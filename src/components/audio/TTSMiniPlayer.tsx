@@ -460,10 +460,19 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     // Minimal delay for cleanup
     await new Promise(resolve => setTimeout(resolve, 50));
     
-    const cleaned = sanitizeText(textToRead);
-    if (!cleaned) {
+    const cleaned = sanitizeText(textToRead || '');
+    if (!cleaned || cleaned.length < 20) {
       setIsLoading(false);
       toast({ title: "No text", description: "No readable text found", variant: "destructive" });
+      return;
+    }
+
+    // Detect stub/placeholder content — warn user and don't auto-continue
+    const isStubContent = cleaned.length < 800 && 
+      (/content is being generated/i.test(cleaned) || /coming soon/i.test(cleaned) || /placeholder/i.test(cleaned));
+    if (isStubContent) {
+      toast({ title: "Chapter not ready", description: "This chapter hasn't been fully generated yet.", variant: "destructive" });
+      setIsLoading(false);
       return;
     }
 
