@@ -43,10 +43,14 @@ export function DirectTextEditor({
   }, [localContent]);
 
   useEffect(() => {
-    if (textareaRef.current) {
-      textareaRef.current.focus();
-      textareaRef.current.setSelectionRange(localContent.length, localContent.length);
-    }
+    // Small delay to ensure textarea is rendered before focusing
+    const timer = setTimeout(() => {
+      if (textareaRef.current) {
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(localContent.length, localContent.length);
+      }
+    }, 100);
+    return () => clearTimeout(timer);
   }, []);
 
   const insertFormatting = useCallback((prefix: string, suffix: string = prefix) => {
