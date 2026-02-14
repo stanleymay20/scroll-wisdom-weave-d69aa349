@@ -16,6 +16,7 @@ import {
   Presentation,
   X
 } from "lucide-react";
+import { FEATURES } from "@/lib/config";
 import { LearningDeckGenerator } from "@/components/decks";
 
 interface FloatingActionsProps {
@@ -57,12 +58,12 @@ export function FloatingActions({
 
   // Count available actions for badge
   const actionCount = [
-    true, // Voice AI always available
+    FEATURES.enableVoiceConversation, // Voice AI
     isQuizUnlocked, // Quiz
     true, // Q&A always available
-    hasCodeContent, // Playground
-    true, // Learning Deck
-    hasComicContent, // Comic mode
+    hasCodeContent && FEATURES.enableCodePlayground,
+    FEATURES.enableLearningDecks,
+    hasComicContent && FEATURES.enableComicMode,
   ].filter(Boolean).length;
 
   return (
@@ -94,7 +95,8 @@ export function FloatingActions({
               style={{ minWidth: '56px' }}
             >
             <div className="flex flex-col gap-1">
-                {/* Voice AI */}
+                {/* Voice AI - PMF gated */}
+                {FEATURES.enableVoiceConversation && (
                 <Button
                   onClick={() => {
                     onVoiceClick();
@@ -107,6 +109,7 @@ export function FloatingActions({
                 >
                   <MessageCircle className="h-5 w-5" />
                 </Button>
+                )}
 
                 {/* Quiz button with gating */}
                 <Button
@@ -139,8 +142,8 @@ export function FloatingActions({
                   <MessageCircle className="h-5 w-5" />
                 </Button>
 
-                {/* Playground button - only show for technical content */}
-                {hasCodeContent && (
+                {/* Playground button - PMF gated */}
+                {hasCodeContent && FEATURES.enableCodePlayground && (
                   <Button
                     onClick={() => {
                       onPlaygroundClick();
@@ -155,7 +158,8 @@ export function FloatingActions({
                   </Button>
                 )}
 
-                {/* VLD-1.0: Learning Deck Generator */}
+                {/* VLD-1.0: Learning Deck Generator - PMF gated */}
+                {FEATURES.enableLearningDecks && (
                 <LearningDeckGenerator
                   bookId={bookId}
                   bookTitle={bookTitle}
@@ -164,9 +168,10 @@ export function FloatingActions({
                   currentChapter={currentChapter}
                   variant="inline"
                 />
+                )}
 
-                {/* Comic Reader button - only show for comic content */}
-                {hasComicContent && (
+                {/* Comic Reader button - PMF gated */}
+                {hasComicContent && FEATURES.enableComicMode && (
                   <Button
                     onClick={() => {
                       onComicModeClick();

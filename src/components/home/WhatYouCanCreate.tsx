@@ -1,26 +1,26 @@
 import { motion } from "framer-motion";
-import { BookOpen, Brain, Library, PenLine } from "lucide-react";
+import { BookOpen, Brain, GraduationCap, Award } from "lucide-react";
 
 const creations = [
   {
     icon: BookOpen,
-    title: "Academic Textbooks",
-    description: "Generate formal, citation-ready textbooks aligned with university standards."
+    title: "Generate Study Guides",
+    description: "Enter any topic and get a structured, multi-chapter study guide in minutes."
   },
   {
     icon: Brain,
-    title: "Professional & Technical Guides",
-    description: "Create business, AI, engineering, and industry manuals with structured depth."
+    title: "Read & Learn",
+    description: "Guided reading with text-to-speech, highlights, and AI Q&A built in."
   },
   {
-    icon: Library,
-    title: "Reference Handbooks",
-    description: "Concise, accurate reference material for fast learning and revision."
+    icon: GraduationCap,
+    title: "Test Your Knowledge",
+    description: "Adaptive quizzes unlock after reading — from recall to applied reasoning."
   },
   {
-    icon: PenLine,
-    title: "Workbooks & Fill-In Guides",
-    description: "Interactive learning materials with exercises, prompts, and frameworks."
+    icon: Award,
+    title: "Earn Certificates",
+    description: "Prove your competency with verifiable, SHA-256 signed credentials."
   }
 ];
 
@@ -35,7 +35,7 @@ export function WhatYouCanCreate() {
           className="text-center mb-14"
         >
           <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-4">
-            What You Can Create
+            How It Works
           </h2>
         </motion.div>
 

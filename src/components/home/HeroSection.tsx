@@ -21,7 +21,7 @@ export function HeroSection() {
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-6"
           >
             <BookOpen className="h-4 w-4" strokeWidth={1.5} />
-            AI-Powered Academic Publishing Platform
+            AI-Powered Study Guide Generator
           </motion.div>
 
           {/* Main Headline */}
@@ -31,7 +31,8 @@ export function HeroSection() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-tight"
           >
-            Generate High-Quality Academic Books with Advanced AI
+            Generate AI-Powered Study Guides.{" "}
+            <span className="text-primary">Prove You Learned It.</span>
           </motion.h1>
 
           {/* Subheadline */}
@@ -41,7 +42,7 @@ export function HeroSection() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-lg md:text-xl text-muted-foreground mb-4 max-w-3xl mx-auto leading-relaxed"
           >
-            From syllabus to citation-ready textbooks — in hours, not months.
+            Turn any topic into a structured study guide with quizzes and competency certificates — in minutes.
           </motion.p>
 
           <motion.p
@@ -50,18 +51,24 @@ export function HeroSection() {
             transition={{ duration: 0.5, delay: 0.25 }}
             className="text-base text-muted-foreground mb-6 max-w-2xl mx-auto"
           >
-            ScrollLibrary is an AI-powered academic publishing platform that helps students, educators, and institutions generate structured, citation-compliant books, manuals, and learning materials with precision and integrity.
+            Perfect for university students preparing for exams, professionals upskilling, and self-learners who want proof of mastery.
           </motion.p>
 
-          {/* Differentiator statement */}
-          <motion.p
+          {/* How it works in one line */}
+          <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
-            className="text-sm font-medium text-foreground mb-8"
+            className="flex items-center justify-center gap-3 text-sm font-medium text-foreground mb-8 flex-wrap"
           >
-            No hallucinations. No fluff. Built for real academia.
-          </motion.p>
+            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">1. Generate Book</span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">2. Read & Learn</span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">3. Take Quiz</span>
+            <ArrowRight className="h-4 w-4 text-muted-foreground" />
+            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">4. Earn Certificate</span>
+          </motion.div>
 
           {/* CTAs */}
           <motion.div
@@ -71,11 +78,11 @@ export function HeroSection() {
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <Button 
-              onClick={() => navigate('/auth')}
+              onClick={() => navigate('/generate')}
               size="lg" 
               className="gap-2 min-w-[180px]"
             >
-              Get Started Free
+              Generate Your First Book Free
               <ArrowRight className="h-4 w-4" />
             </Button>
             <Button 
@@ -84,7 +91,7 @@ export function HeroSection() {
               size="lg" 
               className="min-w-[180px]"
             >
-              View Demo Book
+              See Example Books
             </Button>
           </motion.div>
         </div>
