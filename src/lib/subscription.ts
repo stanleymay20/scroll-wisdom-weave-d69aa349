@@ -8,12 +8,12 @@ export const SUBSCRIPTION_TIERS = {
     product_id: null,
     monthlyPrice: 0,
     features: {
-      canGenerateBooks: false,
-      maxBooksPerMonth: 5,
+      canGenerateBooks: true, // 1 book/month for PMF validation
+      maxBooksPerMonth: 1,
       maxWordCount: 2000,
       exportFormats: ['pdf_low'],
-      ttsMinutes: 0,
-      interactiveVoiceMinutes: 5, // Limited voice interaction
+      ttsMinutes: 10, // 10 min free TTS
+      interactiveVoiceMinutes: 5,
       aiCovers: false,
       commercialRights: false,
       batchGeneration: false,

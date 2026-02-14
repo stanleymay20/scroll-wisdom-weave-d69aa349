@@ -484,11 +484,23 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
 
     // Detect stub/placeholder content — warn user and don't auto-continue
-    const isStubContent = cleaned.length < 500 && 
-      (/content is being generated/i.test(cleaned) || /coming soon/i.test(cleaned) || /placeholder/i.test(cleaned));
+    const stubPatterns = [
+      /content is being generated/i,
+      /coming soon/i,
+      /placeholder/i,
+      /full chapter content/i,
+      /pending generation/i,
+      /key topics/i, // outline-only stub pattern
+    ];
+    const isStubContent = cleaned.length < 1500 && stubPatterns.some(p => p.test(cleaned));
     if (isStubContent) {
-      toast({ title: "Chapter not ready", description: "This chapter hasn't been fully generated yet.", variant: "destructive" });
+      toast({ 
+        title: "Chapter not ready", 
+        description: "Generate this chapter first — tap the chapter title in the book page to generate its full content.", 
+        variant: "destructive" 
+      });
       setIsLoading(false);
+      // Don't trigger auto-continue on stubs
       return;
     }
 

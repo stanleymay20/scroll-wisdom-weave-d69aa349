@@ -251,13 +251,12 @@ export default function Generate() {
 
     const trialActive = isTrialActive();
     
-    if (!trialActive && !entitlements.canGenerateBooks && !entitlements.isAdmin && !entitlements.isProphet) {
+    if (!trialActive && !entitlements.canGenerateBooks && !entitlements.isAdmin) {
       toast({
-        title: t('generate.subscriptionRequired'),
-        description: t('generate.upgradeToGenerate'),
-        variant: "destructive",
+        title: t('generate.signInRequired'),
+        description: "Sign in to generate books.",
       });
-      navigate("/pricing");
+      navigate("/auth");
       return;
     }
 
@@ -376,8 +375,8 @@ export default function Generate() {
     }
   };
 
-  // Show upgrade prompt for free users who cannot generate
-  if (!subLoading && !canGenerateBooks && user && !entitlements.isAdmin && !entitlements.isProphet && !entitlements.isPaid && !entitlements.isTrialMode) {
+  // Show sign-in prompt for unauthenticated users only
+  if (!subLoading && !user) {
     return (
       <div className="min-h-screen">
         <Navbar />
@@ -392,15 +391,14 @@ export default function Generate() {
                 <Lock className="h-12 w-12 text-scroll-gold" />
               </div>
               <h1 className="font-display text-3xl font-bold mb-4">
-                {t('generate.upgradeTitle')}
+                {t('generate.signInRequired')}
               </h1>
               <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-                {t('generate.upgradeDesc')}
+                Sign in to generate your first book for free.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button variant="hero" onClick={() => navigate("/pricing")}>
-                  <Crown className="h-4 w-4 mr-2" />
-                  {t('generate.viewPlans')}
+                <Button variant="hero" onClick={() => navigate("/auth")}>
+                  Sign In
                 </Button>
                 <Button variant="outline" onClick={() => navigate("/explore")}>
                   {t('generate.browseLibrary')}

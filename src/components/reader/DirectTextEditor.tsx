@@ -53,42 +53,73 @@ export function DirectTextEditor({
     return () => clearTimeout(timer);
   }, []);
 
+  // Determine if this is a line-start prefix (headings, lists)
+  const isLinePrefix = useCallback((prefix: string) => {
+    return /^(#{1,6}\s|[-*]\s|\d+\.\s)/.test(prefix);
+  }, []);
+
   const insertFormatting = useCallback((prefix: string, suffix: string = prefix) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
 
-    // Capture selection BEFORE any state changes
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    // Read directly from textarea.value to avoid stale ref
     const currentContent = textarea.value;
     const selectedText = currentContent.substring(start, end);
-    
-    const newContent = 
-      currentContent.substring(0, start) + 
-      prefix + selectedText + suffix + 
-      currentContent.substring(end);
-    
-    // Update both state and ref synchronously
+
+    let newContent: string;
+    let newCursorStart: number;
+    let newCursorEnd: number;
+
+    if (isLinePrefix(prefix)) {
+      // Line-start formatting: insert at beginning of current line
+      const lineStart = currentContent.lastIndexOf('\n', start - 1) + 1;
+      const lineEnd = currentContent.indexOf('\n', end);
+      const actualLineEnd = lineEnd === -1 ? currentContent.length : lineEnd;
+      const currentLine = currentContent.substring(lineStart, actualLineEnd);
+
+      // Toggle: if line already starts with this prefix, remove it
+      if (currentLine.startsWith(prefix)) {
+        newContent = currentContent.substring(0, lineStart) + currentLine.slice(prefix.length) + currentContent.substring(actualLineEnd);
+        newCursorStart = start - prefix.length;
+        newCursorEnd = end - prefix.length;
+      } else {
+        // Remove any existing line-prefix before adding new one
+        const stripped = currentLine.replace(/^(#{1,6}\s|[-*]\s|\d+\.\s)/, '');
+        const removedLen = currentLine.length - stripped.length;
+        newContent = currentContent.substring(0, lineStart) + prefix + stripped + currentContent.substring(actualLineEnd);
+        newCursorStart = start - removedLen + prefix.length;
+        newCursorEnd = end - removedLen + prefix.length;
+      }
+    } else {
+      // Wrap formatting (bold, italic, underline)
+      newContent = currentContent.substring(0, start) + prefix + selectedText + suffix + currentContent.substring(end);
+      if (selectedText) {
+        newCursorStart = start + prefix.length;
+        newCursorEnd = end + prefix.length;
+      } else {
+        newCursorStart = start + prefix.length;
+        newCursorEnd = start + prefix.length;
+      }
+    }
+
+    // Update state and ref synchronously
     setLocalContent(newContent);
     contentRef.current = newContent;
-    
-    // Restore cursor position after React re-render
-    // Use two nested rAF to ensure React has flushed the DOM update
+
+    // Restore cursor after React flush
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         if (textareaRef.current) {
           textareaRef.current.focus();
-          const cursorPos = start + prefix.length + (selectedText ? selectedText.length + suffix.length : 0);
-          if (selectedText) {
-            textareaRef.current.setSelectionRange(start + prefix.length, end + prefix.length);
-          } else {
-            textareaRef.current.setSelectionRange(start + prefix.length, start + prefix.length);
-          }
+          textareaRef.current.setSelectionRange(
+            Math.max(0, newCursorStart),
+            Math.max(0, newCursorEnd)
+          );
         }
       });
     });
-  }, []);
+  }, [isLinePrefix]);
 
   const handleSave = useCallback(async () => {
     if (!isOwner) {
