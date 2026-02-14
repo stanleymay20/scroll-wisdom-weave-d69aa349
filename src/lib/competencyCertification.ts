@@ -36,29 +36,29 @@ export const COMPETENCY_LEVELS: Record<CompetencyLevel, {
   knowledge_verified: {
     label: 'Level 1 — Knowledge Verified',
     description: 'Demonstrated understanding of core concepts',
-    minScore: 0,
-    requirements: ['Complete concept phase for all chapters'],
+    minScore: 50,
+    requirements: ['Complete all phases', 'Weighted score ≥ 50'],
     color: 'text-blue-500',
   },
   applied_competency: {
     label: 'Level 2 — Applied Competency',
     description: 'Successfully applied knowledge to scenarios',
-    minScore: 50,
-    requirements: ['Submit reflections', 'Complete application tasks', 'Average score ≥ 50'],
+    minScore: 70,
+    requirements: ['Complete all phases', 'Weighted score ≥ 70'],
     color: 'text-amber-500',
   },
   professional_integration: {
     label: 'Level 3 — Professional Integration',
     description: 'Integrated knowledge for professional practice',
-    minScore: 70,
-    requirements: ['Pass all competency checks', 'Average score ≥ 70'],
+    minScore: 85,
+    requirements: ['Pass all competency checks', 'Weighted score ≥ 85'],
     color: 'text-purple-500',
   },
   mastery: {
     label: 'Level 4 — Mastery',
     description: 'Expert-level competency demonstrated',
-    minScore: 90,
-    requirements: ['Pass all competency checks', 'Average score ≥ 90', 'Deep reflection quality'],
+    minScore: 95,
+    requirements: ['Pass all competency checks', 'Weighted score ≥ 95', 'Deep reflection quality'],
     color: 'text-emerald-500',
   },
 };
@@ -69,9 +69,10 @@ export function determineCompetencyLevel(
   allPhasesCompleted: boolean,
   allCompetencyChecksPassed: boolean,
 ): CompetencyLevel {
-  if (allCompetencyChecksPassed && overallScore >= 90) return 'mastery';
-  if (allCompetencyChecksPassed && overallScore >= 70) return 'professional_integration';
-  if (allPhasesCompleted && overallScore >= 50) return 'applied_competency';
+  if (allCompetencyChecksPassed && overallScore >= 95) return 'mastery';
+  if (allCompetencyChecksPassed && overallScore >= 85) return 'professional_integration';
+  if (allPhasesCompleted && overallScore >= 70) return 'applied_competency';
+  if (allPhasesCompleted && overallScore >= 50) return 'knowledge_verified';
   return 'knowledge_verified';
 }
 
