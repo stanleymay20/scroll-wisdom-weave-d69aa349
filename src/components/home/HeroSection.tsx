@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, BookOpen } from "lucide-react";
+import { ArrowRight, BookOpen, Upload } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 
 export function HeroSection() {
@@ -21,7 +21,7 @@ export function HeroSection() {
             className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-primary text-sm font-medium mb-6"
           >
             <BookOpen className="h-4 w-4" strokeWidth={1.5} />
-            AI-Powered Study Guide Generator
+            AI Competency Verification Engine
           </motion.div>
 
           {/* Main Headline */}
@@ -31,8 +31,7 @@ export function HeroSection() {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-6 leading-tight"
           >
-            Generate AI-Powered Study Guides.{" "}
-            <span className="text-primary">Prove You Learned It.</span>
+            Upload. Learn. <span className="text-primary">Prove Mastery.</span>
           </motion.h1>
 
           {/* Subheadline */}
@@ -42,7 +41,7 @@ export function HeroSection() {
             transition={{ duration: 0.5, delay: 0.2 }}
             className="text-lg md:text-xl text-muted-foreground mb-4 max-w-3xl mx-auto leading-relaxed"
           >
-            Turn any topic into a structured study guide with quizzes and competency certificates — in minutes.
+            Turn any document into a structured learning pathway with competency verification and verifiable certificates.
           </motion.p>
 
           <motion.p
@@ -51,26 +50,26 @@ export function HeroSection() {
             transition={{ duration: 0.5, delay: 0.25 }}
             className="text-base text-muted-foreground mb-6 max-w-2xl mx-auto"
           >
-            Perfect for university students preparing for exams, professionals upskilling, and self-learners who want proof of mastery.
+            Not a chatbot. Not a summary tool. A competency engine that proves you actually learned it.
           </motion.p>
 
-          {/* How it works in one line */}
+          {/* How it works */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.5, delay: 0.3 }}
             className="flex items-center justify-center gap-3 text-sm font-medium text-foreground mb-8 flex-wrap"
           >
-            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">1. Generate Book</span>
+            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">1. Upload or Generate</span>
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">2. Read & Learn</span>
+            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">2. Structured Reading</span>
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">3. Take Quiz</span>
+            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">3. Competency Quiz</span>
             <ArrowRight className="h-4 w-4 text-muted-foreground" />
-            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">4. Earn Certificate</span>
+            <span className="px-3 py-1.5 rounded-full bg-primary/10 border border-primary/20">4. Verified Certificate</span>
           </motion.div>
 
-          {/* CTAs */}
+          {/* Dual CTAs */}
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -78,20 +77,21 @@ export function HeroSection() {
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
             <Button 
-              onClick={() => navigate('/generate')}
+              onClick={() => navigate('/upload')}
               size="lg" 
-              className="gap-2 min-w-[180px]"
+              className="gap-2 min-w-[200px]"
             >
-              Generate Your First Book Free
-              <ArrowRight className="h-4 w-4" />
+              <Upload className="h-4 w-4" />
+              Upload a Document
             </Button>
             <Button 
-              onClick={() => navigate('/explore')}
+              onClick={() => navigate('/generate')}
               variant="outline" 
               size="lg" 
-              className="min-w-[180px]"
+              className="gap-2 min-w-[200px]"
             >
-              See Example Books
+              Generate a Study Guide
+              <ArrowRight className="h-4 w-4" />
             </Button>
           </motion.div>
         </div>
