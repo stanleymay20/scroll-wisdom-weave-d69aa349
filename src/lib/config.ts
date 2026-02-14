@@ -1,40 +1,49 @@
 // ScrollLibrary Global Configuration
+// ===========================================
+// 60-DAY PMF VALIDATION MODE
+// ===========================================
 
-// ===========================================
-// PRODUCTION MODE - Trial period has ended
-// ===========================================
 export const TRIAL_MODE = false;
-export const TRIAL_END_DATE = new Date('2026-01-20'); // Trial ended
+export const TRIAL_END_DATE = new Date('2026-01-20');
 
-// Check if trial is still active (now returns false)
-export const isTrialActive = (): boolean => {
-  return false; // Trial period ended - use normal subscription logic
-};
+export const isTrialActive = (): boolean => false;
 
-// Launch mode: When true, enables limited free generation for promotional period
-export const LAUNCH_MODE = false; // Disabled for production
+// Launch mode: free generation for validation
+export const LAUNCH_MODE = true;
 
-// Check if launch mode restrictions should apply
-export const isLaunchModeActive = (): boolean => {
-  return false; // Production mode - use full subscription logic
-};
+export const isLaunchModeActive = (): boolean => true;
 
-// Launch mode limits (kept for reference)
 export const LAUNCH_MODE_CONFIG = {
-  freeBookLimit: 1, // Books per day for free tier
-  freeMaxWordCount: 4000, // Max words per chapter for free tier
-  freeExportFormats: [] as const, // Free tier cannot export
-  showBanner: false, // No promotional banner in production
+  freeBookLimit: 1, // 1 book per month for free tier
+  freeMaxWordCount: 4000,
+  freeExportFormats: [] as const,
+  showBanner: false,
 };
 
-// Export formats (production-only, no HTML/markdown)
+// Export formats
 export const EXPORT_FORMATS = ['pdf', 'epub', 'docx'] as const;
 export type ExportFormat = typeof EXPORT_FORMATS[number];
 
-// Feature flags
+// ===========================================
+// PMF MODE: Feature flags
+// Only Generate → Read → Quiz → Certificate
+// ===========================================
+export const PMF_MODE = true; // Set to false to re-enable all features
+
 export const FEATURES = {
   enableTTS: true,
   enableAICovers: true,
-  enableBatchGeneration: true,
-  enableElevenLabsTTS: true,
+  enableBatchGeneration: false,
+  enableElevenLabsTTS: false,
+  // PMF-disabled features
+  enableComics: !PMF_MODE,
+  enableIllustrated: !PMF_MODE,
+  enableWorkbooks: !PMF_MODE,
+  enableFlashcards: !PMF_MODE,
+  enableLearningDecks: !PMF_MODE,
+  enableCodePlayground: !PMF_MODE,
+  enableVoiceConversation: !PMF_MODE,
+  enableDeepResearch: !PMF_MODE,
+  enableSkillRadar: !PMF_MODE,
+  enableComicMode: !PMF_MODE,
 };

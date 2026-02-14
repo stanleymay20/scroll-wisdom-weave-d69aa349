@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Badge } from "@/components/ui/badge";
+import { FEATURES } from "@/lib/config";
 
 /**
  * CONTRACT 3 — CONTENT-TYPE FIDELITY
@@ -38,9 +39,10 @@ interface BookTypeOption {
   icon: React.ComponentType<{ className?: string }>;
   contractHint: string;
   badge?: string;
+  featureFlag?: boolean;
 }
 
-const BOOK_TYPES: BookTypeOption[] = [
+const ALL_BOOK_TYPES: BookTypeOption[] = [
   {
     value: "academic",
     labelKey: "Academic Textbook",
@@ -76,6 +78,7 @@ const BOOK_TYPES: BookTypeOption[] = [
     descKey: "Interactive templates (max 1800 words)",
     icon: FileEdit,
     contractHint: "70%+ interactive, minimal prose",
+    featureFlag: FEATURES.enableWorkbooks,
   },
   {
     value: "comic",
@@ -84,6 +87,7 @@ const BOOK_TYPES: BookTypeOption[] = [
     icon: ImageIcon,
     contractHint: "4-6 panels, every panel has dialogue",
     badge: "Visual",
+    featureFlag: FEATURES.enableComics,
   },
   {
     value: "children",
@@ -92,6 +96,7 @@ const BOOK_TYPES: BookTypeOption[] = [
     icon: Baby,
     contractHint: "Short sentences, high image ratio",
     badge: "Visual",
+    featureFlag: FEATURES.enableIllustrated,
   },
   {
     value: "reference",
@@ -108,6 +113,10 @@ const BOOK_TYPES: BookTypeOption[] = [
     contractHint: "Flexible structure",
   },
 ];
+
+// Filter by feature flags
+const BOOK_TYPES = ALL_BOOK_TYPES.filter(t => t.featureFlag !== false);
+
 
 export function BookTypeSelector({
   value,

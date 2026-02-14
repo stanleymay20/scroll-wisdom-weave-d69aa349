@@ -54,6 +54,7 @@ const HowCertificationWorks = lazy(() => import("./pages/HowCertificationWorks")
 const InstitutionalReadiness = lazy(() => import("./pages/InstitutionalReadiness"));
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
 const AdminRecovery = lazy(() => import("./pages/AdminRecovery"));
+const PMFDashboard = lazy(() => import("./pages/PMFDashboard"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
@@ -143,6 +144,7 @@ const App = () => (
                   <Route path="/docs/institutional-readiness" element={<InstitutionalReadiness />} />
                   <Route path="/health-check" element={<HealthCheck />} />
                   <Route path="/admin-recovery" element={<AdminRecovery />} />
+                  <Route path="/pmf" element={<PMFDashboard />} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />

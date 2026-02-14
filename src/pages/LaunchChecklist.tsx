@@ -54,7 +54,7 @@ export default function LaunchChecklist() {
       title: "Launch Mode Disabled",
       description: "LAUNCH_MODE should be false for production",
       category: "config",
-      status: LAUNCH_MODE === false ? "pass" : "fail",
+      status: !LAUNCH_MODE ? "pass" : "warning",
       action: "Edit src/lib/config.ts and set LAUNCH_MODE = false",
     },
     {

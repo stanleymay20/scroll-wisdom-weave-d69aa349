@@ -1,8 +1,8 @@
 /**
  * Reader Tools Bottom Sheet
  * 
- * A single "Tools" FAB that opens a slide-up panel with all reader actions.
- * Default reading mode is clean and distraction-free.
+ * PMF MODE: Only Quiz + Edit visible.
+ * Voice AI, Flashcards, Learning Decks, Code Playground, Comic Mode hidden.
  */
 
 import { useState } from "react";
@@ -28,6 +28,7 @@ import {
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { FEATURES } from "@/lib/config";
 
 interface ToolAction {
   id: string;
@@ -80,6 +81,7 @@ export function ReaderToolsSheet({
       icon: <Mic className="h-5 w-5" />,
       onClick: onVoiceClick,
       variant: "primary",
+      hidden: !FEATURES.enableVoiceConversation,
     },
     {
       id: "qa",
@@ -100,26 +102,28 @@ export function ReaderToolsSheet({
       label: "Flashcards",
       icon: <Layers className="h-5 w-5" />,
       onClick: onFlashcardsClick,
+      hidden: !FEATURES.enableFlashcards,
     },
     {
       id: "deck",
       label: "Learning Deck",
       icon: <Presentation className="h-5 w-5" />,
       onClick: onLearningDeckClick,
+      hidden: !FEATURES.enableLearningDecks,
     },
     {
       id: "playground",
       label: "Code Playground",
       icon: <Code2 className="h-5 w-5" />,
       onClick: onPlaygroundClick,
-      hidden: !hasCodeContent,
+      hidden: !hasCodeContent || !FEATURES.enableCodePlayground,
     },
     {
       id: "comic",
       label: "Comic Mode",
       icon: <BookOpen className="h-5 w-5" />,
       onClick: onComicModeClick,
-      hidden: !hasComicContent,
+      hidden: !hasComicContent || !FEATURES.enableComicMode,
       variant: "accent",
     },
     {

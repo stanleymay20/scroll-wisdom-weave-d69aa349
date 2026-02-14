@@ -23,11 +23,9 @@ const RIGHT_NAV_ITEMS = [
   { icon: Settings, label: "Settings", path: "/settings" },
 ] as const;
 
-// Book type options for the create menu
+// PMF MODE: Only text books - no comics/workbooks in create menu
 const BOOK_TYPES = [
-  { id: "text", label: "Text Book", icon: BookOpen },
-  { id: "comic", label: "Comic", icon: Image },
-  { id: "workbook", label: "Workbook", icon: FileText },
+  { id: "text", label: "Study Guide", icon: BookOpen },
 ] as const;
 
 /**
