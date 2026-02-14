@@ -228,19 +228,19 @@ export function useEntitlements(): Entitlements {
     };
   }
 
-  // FREE TIER - restricted
+  // FREE TIER - limited access (1 book/month to validate PMF)
   return {
     canPublish: false,
     canExport: false,
     canDownload: false,
-    canGenerateBooks: false,
+    canGenerateBooks: true, // Free users can generate 1 book/month
     canUseAllFormats: false,
     canExportAllFormats: false,
     hasCommercialRights: false,
     bypassAllLimits: false,
     canUseAiCovers: false,
-    canUseTTS: false,
-    canUseOpenAITTS: false,
+    canUseTTS: true, // Basic TTS for free users
+    canUseOpenAITTS: true,
     canUseElevenLabsTTS: false,
     canBatchGenerate: false,
     tier,

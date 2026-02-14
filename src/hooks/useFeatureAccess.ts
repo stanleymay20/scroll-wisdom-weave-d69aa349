@@ -78,7 +78,7 @@ export function useFeatureAccess() {
         if (entitlements.isPaid) {
           return { hasAccess: true };
         }
-        if (tierConfig.features.ttsMinutes === 0) {
+        if (tierConfig.features.ttsMinutes <= 0) {
           return { 
             hasAccess: false, 
             reason: 'Text-to-speech requires Student tier or higher',

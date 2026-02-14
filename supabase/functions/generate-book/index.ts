@@ -7,10 +7,10 @@ const corsHeaders = {
 };
 
 const TIER_LIMITS = {
-  free: { booksPerDay: 1, maxChapters: 5 },
-  student: { booksPerDay: 5, maxChapters: 30 },
-  premium: { booksPerDay: 15, maxChapters: 50 },
-  prophet_tier: { booksPerDay: 100, maxChapters: 100 },
+  free: { booksPerDay: 1, maxChapters: 6, booksPerMonth: 1 },
+  student: { booksPerDay: 5, maxChapters: 30, booksPerMonth: 30 },
+  premium: { booksPerDay: 15, maxChapters: 50, booksPerMonth: -1 },
+  prophet_tier: { booksPerDay: 100, maxChapters: 100, booksPerMonth: -1 },
 } as const;
 
 const TRIAL_END_DATE_ISO = "2026-01-20";
