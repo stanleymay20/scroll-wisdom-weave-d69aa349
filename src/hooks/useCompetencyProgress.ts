@@ -189,8 +189,12 @@ export function useCompetencyProgress({ bookId, chapterNumber, userId }: UseComp
   };
 }
 
+/** Weighted formula: Reflection × 0.3 + Application × 0.3 + Quiz × 0.4 */
 function calculateOverall(reflection?: number, application?: number, competency?: number): number {
-  const scores = [reflection, application, competency].filter((s): s is number => s != null);
-  if (scores.length === 0) return 0;
-  return scores.reduce((sum, s) => sum + s, 0) / scores.length;
+  const r = reflection ?? 0;
+  const a = application ?? 0;
+  const q = competency ?? 0;
+  // If no scores at all, return 0
+  if (reflection == null && application == null && competency == null) return 0;
+  return (r * 0.3) + (a * 0.3) + (q * 0.4);
 }
