@@ -57,9 +57,11 @@ export function DirectTextEditor({
     const textarea = textareaRef.current;
     if (!textarea) return;
 
+    // Capture selection BEFORE any state changes
     const start = textarea.selectionStart;
     const end = textarea.selectionEnd;
-    const currentContent = contentRef.current;
+    // Read directly from textarea.value to avoid stale ref
+    const currentContent = textarea.value;
     const selectedText = currentContent.substring(start, end);
     
     const newContent = 
@@ -67,17 +69,24 @@ export function DirectTextEditor({
       prefix + selectedText + suffix + 
       currentContent.substring(end);
     
+    // Update both state and ref synchronously
     setLocalContent(newContent);
     contentRef.current = newContent;
     
     // Restore cursor position after React re-render
+    // Use two nested rAF to ensure React has flushed the DOM update
     requestAnimationFrame(() => {
-      textarea.focus();
-      if (selectedText) {
-        textarea.setSelectionRange(start + prefix.length, end + prefix.length);
-      } else {
-        textarea.setSelectionRange(start + prefix.length, start + prefix.length);
-      }
+      requestAnimationFrame(() => {
+        if (textareaRef.current) {
+          textareaRef.current.focus();
+          const cursorPos = start + prefix.length + (selectedText ? selectedText.length + suffix.length : 0);
+          if (selectedText) {
+            textareaRef.current.setSelectionRange(start + prefix.length, end + prefix.length);
+          } else {
+            textareaRef.current.setSelectionRange(start + prefix.length, start + prefix.length);
+          }
+        }
+      });
     });
   }, []);
 

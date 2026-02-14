@@ -258,7 +258,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
   const playUrl = useCallback((url: string): Promise<boolean> => {
     return new Promise((resolve) => {
-      if (stopRef.current || isStoppingRef.current) {
+      if (stopRef.current) {
         resolve(false);
         return;
       }
@@ -295,13 +295,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       };
       
       audio.onpause = () => {
-        // Always resolve false on pause — whether from user stop, system lockscreen, or Media Session
-        cleanup();
-        if (isMountedRef.current) {
-          setIsPlaying(false);
-          onPlayingChange?.(false);
+        // Only resolve false if user explicitly stopped — NOT on system pauses
+        if (stopRef.current) {
+          cleanup();
+          if (isMountedRef.current) {
+            setIsPlaying(false);
+            onPlayingChange?.(false);
+          }
+          safeResolve(false);
         }
-        safeResolve(false);
+        // System pause (tab switch, phone call) — do NOT resolve, audio will resume
       };
       
       audio.onerror = () => {
@@ -407,7 +410,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
     try {
       for (let i = 0; i < chunks.length; i++) {
-        if (stopRef.current || isStoppingRef.current) break;
+        if (stopRef.current) break;
 
         const globalIndex = startIndex + i;
         setCurrentChunk(globalIndex + 1);
@@ -417,7 +420,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           body: { text: chunks[i], voice: selectedVoice, language },
         });
 
-        if (stopRef.current || isStoppingRef.current) break;
+        if (stopRef.current) break;
         if (invokeError) throw new Error(invokeError.message || "TTS failed");
         if (data?.error) throw new Error(data.error);
         if (!data?.audioContent) throw new Error("No audio received");
@@ -454,11 +457,24 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     setMode(isSelection ? "selection" : "chapter");
     audioReliability.setState('loading');
     
-    // Stop any existing playback first
-    stop();
+    // Stop any existing playback first — but use direct cleanup instead of stop()
+    // to avoid the stopRef race condition
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      } catch { /* ignore */ }
+      audioRef.current = null;
+    }
+    cleanupBlobUrls();
     
-    // Minimal delay for cleanup
-    await new Promise(resolve => setTimeout(resolve, 50));
+    // Ensure clean state — these MUST be false before chunk loop starts
+    stopRef.current = false;
+    isStoppingRef.current = false;
+    pausedAtChunkRef.current = 0;
+    
+    // Small delay for audio element cleanup
+    await new Promise(resolve => setTimeout(resolve, 80));
     
     const cleaned = sanitizeText(textToRead || '');
     if (!cleaned || cleaned.length < 20) {
@@ -468,7 +484,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
 
     // Detect stub/placeholder content — warn user and don't auto-continue
-    const isStubContent = cleaned.length < 800 && 
+    const isStubContent = cleaned.length < 500 && 
       (/content is being generated/i.test(cleaned) || /coming soon/i.test(cleaned) || /placeholder/i.test(cleaned));
     if (isStubContent) {
       toast({ title: "Chapter not ready", description: "This chapter hasn't been fully generated yet.", variant: "destructive" });
@@ -476,14 +492,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       return;
     }
 
-    // Reset state for new playback
-    stopRef.current = false;
-    isStoppingRef.current = false;
-    pausedAtChunkRef.current = 0;
-    
     setProgress(0);
-
-    cleanupBlobUrls();
 
     // CONTRACT 5 - Rule 5.3: First chunk TINY (≤120 chars) for instant start
     let chunks = isSelection 
@@ -493,7 +502,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     // Store chunks for potential resume (Rule 5.4)
     chunksRef.current = chunks;
     setTotalChunks(chunks.length);
-    console.log("[TTS] Starting with", chunks.length, "chunks (first:", chunks[0]?.length, "chars)");
+    console.log("[TTS] Starting with", chunks.length, "chunks, total text:", cleaned.length, "chars");
 
     // Activate media session for OS controls (Rule 5.3)
     mediaSession.activate();
@@ -502,14 +511,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     // Prefetch helper with retry logic for network failures
     const fetchChunkAudio = async (chunk: string, retries = 2): Promise<string | null> => {
       for (let attempt = 0; attempt <= retries; attempt++) {
-        if (stopRef.current || isStoppingRef.current) return null;
+        if (stopRef.current) return null;
         
         try {
           const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
             body: { text: chunk, voice: selectedVoice, language },
           });
           
-          if (stopRef.current || isStoppingRef.current) return null;
+          if (stopRef.current) return null;
           
           if (invokeError) {
             console.error(`[TTS] Chunk fetch error (attempt ${attempt + 1}):`, invokeError);
@@ -555,7 +564,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       let nextChunkPromise: Promise<string | null> | null = fetchChunkAudio(chunks[0]);
       
       for (let i = 0; i < chunks.length; i++) {
-        if (stopRef.current || isStoppingRef.current) {
+        if (stopRef.current) {
           console.log("[TTS] Playback stopped at chunk", i);
           break;
         }
@@ -618,7 +627,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         
         // AUTO-CONTINUE: Trigger callback when chapter finishes naturally (not stopped)
         // Only trigger if we completed all chunks without being stopped
-        if (!stopRef.current && !isStoppingRef.current && mode === 'chapter' && autoContinue) {
+        if (!stopRef.current && mode === 'chapter' && autoContinue) {
           console.log("[TTS] Chapter complete - triggering auto-continue");
           onChapterComplete?.();
         }
@@ -626,7 +635,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       mediaSession.setPlaybackState('idle');
       cleanupBlobUrls();
     }
-  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, stop, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability]);
+  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability]);
 
   // Stop on stopKey change (page navigation)
   useEffect(() => {

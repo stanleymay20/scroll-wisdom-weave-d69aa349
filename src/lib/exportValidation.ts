@@ -203,3 +203,37 @@ export function detectUnrenderedCharts(content: string): boolean {
   
   return false;
 }
+
+/**
+ * Auto-repair mismatched [CODE_BLOCK] tags in chapter content.
+ * Appends missing [/CODE_BLOCK] closing tags where needed.
+ */
+export function repairCodeBlockTags(content: string): string {
+  if (!content) return content;
+  
+  const openCount = (content.match(/\[CODE_BLOCK\]/g) || []).length;
+  const closeCount = (content.match(/\[\/CODE_BLOCK\]/g) || []).length;
+  
+  if (openCount === closeCount) return content;
+  
+  if (openCount > closeCount) {
+    // Add missing closing tags at the end
+    const missing = openCount - closeCount;
+    let repaired = content;
+    for (let i = 0; i < missing; i++) {
+      repaired += '\n[/CODE_BLOCK]';
+    }
+    return repaired;
+  }
+  
+  // More closing than opening — remove excess closing tags from end
+  let repaired = content;
+  let excess = closeCount - openCount;
+  while (excess > 0) {
+    const lastIdx = repaired.lastIndexOf('[/CODE_BLOCK]');
+    if (lastIdx === -1) break;
+    repaired = repaired.substring(0, lastIdx) + repaired.substring(lastIdx + '[/CODE_BLOCK]'.length);
+    excess--;
+  }
+  return repaired;
+}
