@@ -72,11 +72,11 @@ export function Navbar() {
           </Link>
 
           <div className="hidden md:flex items-center gap-6 lg:gap-8">
+            <Link to="/upload" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Upload</Link>
+            <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
             <Link to="/explore" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.explore')}</Link>
             <Link to="/library" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.library')}</Link>
-            <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
             <Link to="/verify" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Verify</Link>
-            <Link to="/about" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('footer.about')}</Link>
           </div>
 
           <div className="hidden md:flex items-center gap-2">

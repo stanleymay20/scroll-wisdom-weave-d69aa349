@@ -172,6 +172,9 @@ export type Database = {
           is_featured: boolean | null
           is_published: boolean | null
           language: string | null
+          source_document_name: string | null
+          source_document_url: string | null
+          source_type: string | null
           target_audience: string | null
           title: string
           total_chapters: number | null
@@ -191,6 +194,9 @@ export type Database = {
           is_featured?: boolean | null
           is_published?: boolean | null
           language?: string | null
+          source_document_name?: string | null
+          source_document_url?: string | null
+          source_type?: string | null
           target_audience?: string | null
           title: string
           total_chapters?: number | null
@@ -210,6 +216,9 @@ export type Database = {
           is_featured?: boolean | null
           is_published?: boolean | null
           language?: string | null
+          source_document_name?: string | null
+          source_document_url?: string | null
+          source_type?: string | null
           target_audience?: string | null
           title?: string
           total_chapters?: number | null
