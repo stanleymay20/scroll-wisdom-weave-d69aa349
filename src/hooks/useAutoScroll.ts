@@ -41,7 +41,10 @@ export function useAutoScroll({
 
   const getScrollParams = useCallback(() => {
     if (!contentRef.current) return null;
-    const scrollHeight = contentRef.current.scrollHeight - contentRef.current.clientHeight;
+    // Use document total scroll height since page scrolls via window, not the element
+    const docHeight = document.documentElement.scrollHeight;
+    const viewHeight = window.innerHeight;
+    const scrollHeight = docHeight - viewHeight;
     return {
       scrollHeight,
       duration: estimatedDurationMs,
@@ -70,7 +73,8 @@ export function useAutoScroll({
       const progress = Math.min(elapsed / params.duration, 1);
       const targetScroll = params.scrollHeight * progress;
 
-      contentRef.current.scrollTop = targetScroll;
+      // Use window.scrollTo since page scrolls via window, not element
+      window.scrollTo({ top: targetScroll, behavior: 'instant' });
       setScrollProgress(progress * 100);
 
       if (progress < 1 && isPlayingRef.current) {
@@ -105,7 +109,7 @@ export function useAutoScroll({
     setScrollProgress(0);
     setIsAutoScrolling(false);
     if (contentRef.current) {
-      contentRef.current.scrollTop = 0;
+      window.scrollTo({ top: 0, behavior: 'instant' });
     }
   }, [contentRef]);
 
@@ -136,15 +140,14 @@ export function useAutoScroll({
 
   // Handle manual scroll interruption — threshold raised to 30px
   useEffect(() => {
-    const element = contentRef.current;
-    if (!element || !isAutoScrolling) return;
+    if (!contentRef.current || !isAutoScrolling) return;
 
-    let lastScrollTop = element.scrollTop;
+    let lastScrollTop = window.scrollY;
     let manualScrollTimeout: ReturnType<typeof setTimeout>;
     let isUserScrolling = false;
 
     const handleScroll = () => {
-      const currentScrollTop = element.scrollTop;
+      const currentScrollTop = window.scrollY;
       const scrollDiff = Math.abs(currentScrollTop - lastScrollTop);
 
       // 30px threshold avoids false positives from touch jitter
@@ -159,7 +162,7 @@ export function useAutoScroll({
             pausedTimeRef.current = 0;
             const params = getScrollParams();
             if (params && params.scrollHeight > 0) {
-              const currentProgress = element.scrollTop / params.scrollHeight;
+              const currentProgress = window.scrollY / params.scrollHeight;
               pausedTimeRef.current = currentProgress * params.duration;
             }
             startAutoScroll();
@@ -170,10 +173,10 @@ export function useAutoScroll({
       lastScrollTop = currentScrollTop;
     };
 
-    element.addEventListener('scroll', handleScroll, { passive: true });
+    window.addEventListener('scroll', handleScroll, { passive: true });
 
     return () => {
-      element.removeEventListener('scroll', handleScroll);
+      window.removeEventListener('scroll', handleScroll);
       clearTimeout(manualScrollTimeout);
     };
   }, [isAutoScrolling, pauseAutoScroll, startAutoScroll, getScrollParams, contentRef]);
