@@ -115,19 +115,27 @@ export default function UploadPage() {
         documentName = 'Pasted Text';
         sourceType = 'pasted';
       } else if (activeTab === 'url' && url.trim()) {
-        setProgressMessage('Fetching URL content...');
+        setProgressMessage('Fetching content from URL...');
         setProgress(10);
-        // Use a simple fetch approach
         sourceType = 'url';
         documentName = url;
         
-        // Call the edge function with URL - it will need to fetch
-        // For now, prompt user to paste content
-        toast({ 
-          title: "URL import", 
-          description: "For best results, please copy the article text and paste it in the Text tab.",
+        // Use Firecrawl to scrape the URL
+        const { data: scrapeData, error: scrapeError } = await supabase.functions.invoke('firecrawl-scrape', {
+          body: { url: url.trim() },
         });
-        return;
+
+        if (scrapeError || !scrapeData?.success) {
+          toast({ 
+            title: "URL fetch failed", 
+            description: scrapeData?.error || "Could not extract content from this URL. Try pasting the text directly.",
+            variant: "destructive",
+          });
+          return;
+        }
+
+        documentText = scrapeData.markdown || '';
+        if (scrapeData.title) documentName = scrapeData.title;
       } else {
         toast({ title: "No content", description: "Please provide a document, paste text, or enter a URL.", variant: "destructive" });
         return;
@@ -330,12 +338,6 @@ export default function UploadPage() {
                   <p className="text-xs text-muted-foreground">
                     We'll extract the main content from the page and structure it for learning.
                   </p>
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                    <p className="text-xs text-amber-700 dark:text-amber-400">
-                      URL import coming soon. For now, please copy the article text and use the "Text" tab.
-                    </p>
-                  </div>
                 </div>
               </TabsContent>
             </Tabs>
