@@ -277,6 +277,27 @@ function processMarkdownContent(text: string): {
   
   // EXTRACT HEADINGS - preserve them as structured data with placeholders
   // This must happen BEFORE stripping other markdown
+  
+  // First: detect plain-text headings (legacy content without ## markers)
+  // Short standalone lines between blank lines that look like section titles
+  processedText = processedText.replace(/\n\n([A-Z][A-Za-z0-9 :&,\-–—']{2,75})\n\n/g, (match, line) => {
+    const trimmed = line.trim();
+    if (/^#{1,6}\s/.test(trimmed) || /^[-*]\s/.test(trimmed) || /[.!?;,]$/.test(trimmed)) return match;
+    const words = trimmed.split(/\s+/);
+    if (words.length > 10) return match;
+    return `\n\n## ${trimmed}\n\n`;
+  });
+  // Detect numbered sub-headings like "4.3. Manufacturing and Logistics"
+  processedText = processedText.replace(/\n\n(\d+(?:\.\d+)*\.?\s+[A-Z][A-Za-z0-9 :&,\-–—']{2,70})\n\n/g, (match, line) => {
+    const trimmed = line.trim();
+    if (/[.!?;,]$/.test(trimmed) && !/\.\s*$/.test(trimmed)) return match;
+    const words = trimmed.split(/\s+/);
+    if (words.length > 12) return match;
+    return `\n\n### ${trimmed}\n\n`;
+  });
+  // Convert bullet dots (•) to standard markdown bullets
+  processedText = processedText.replace(/^[\s]*•\s+/gm, '- ');
+  
   processedText = processedText.replace(/^(#{1,6})\s+(.+)$/gm, (_, hashes, text) => {
     const level = hashes.length;
     headings.push({ level, text: text.trim(), index: -1 }); // index will be set after paragraph split
@@ -1762,8 +1783,22 @@ async function generateEPUB(
   for (const item of chapterItems) {
     let content = item.chapter.content || "";
     
-    // FIRST: Extract and store headings BEFORE any other processing
-    // This preserves heading text that would otherwise be lost in markdown stripping
+    // FIRST: Detect plain-text headings (legacy content without ## markers)
+    content = content.replace(/\n\n([A-Z][A-Za-z0-9 :&,\-–—']{2,75})\n\n/g, (match: string, line: string) => {
+      const trimmed = line.trim();
+      if (/^#{1,6}\s/.test(trimmed) || /^[-*]\s/.test(trimmed) || /[.!?;,]$/.test(trimmed)) return match;
+      if (trimmed.split(/\s+/).length > 10) return match;
+      return `\n\n## ${trimmed}\n\n`;
+    });
+    content = content.replace(/\n\n(\d+(?:\.\d+)*\.?\s+[A-Z][A-Za-z0-9 :&,\-–—']{2,70})\n\n/g, (match: string, line: string) => {
+      const trimmed = line.trim();
+      if (/[.!?;,]$/.test(trimmed) && !/\.\s*$/.test(trimmed)) return match;
+      if (trimmed.split(/\s+/).length > 12) return match;
+      return `\n\n### ${trimmed}\n\n`;
+    });
+    content = content.replace(/^[\s]*•\s+/gm, '- ');
+    
+    // Extract and store headings BEFORE any other processing
     const headingMap: Map<string, { level: number; text: string }> = new Map();
     let headingIdx = 0;
     content = content.replace(/^(#{1,6})\s+(.+)$/gm, (_match: string, hashes: string, text: string) => {
@@ -2214,8 +2249,22 @@ async function generateDOCX(
     // Strip images from content for text processing
     let textContent = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '[IMAGE_PLACEHOLDER]');
     
-    // FIRST: Extract headings BEFORE other markdown processing
-    // This preserves heading text that would otherwise be lost in stripMarkdown()
+    // FIRST: Detect plain-text headings (legacy content without ## markers)
+    textContent = textContent.replace(/\n\n([A-Z][A-Za-z0-9 :&,\-–—']{2,75})\n\n/g, (match: string, line: string) => {
+      const trimmed = line.trim();
+      if (/^#{1,6}\s/.test(trimmed) || /^[-*]\s/.test(trimmed) || /[.!?;,]$/.test(trimmed)) return match;
+      if (trimmed.split(/\s+/).length > 10) return match;
+      return `\n\n## ${trimmed}\n\n`;
+    });
+    textContent = textContent.replace(/\n\n(\d+(?:\.\d+)*\.?\s+[A-Z][A-Za-z0-9 :&,\-–—']{2,70})\n\n/g, (match: string, line: string) => {
+      const trimmed = line.trim();
+      if (/[.!?;,]$/.test(trimmed) && !/\.\s*$/.test(trimmed)) return match;
+      if (trimmed.split(/\s+/).length > 12) return match;
+      return `\n\n### ${trimmed}\n\n`;
+    });
+    textContent = textContent.replace(/^[\s]*•\s+/gm, '- ');
+    
+    // Extract headings BEFORE other markdown processing
     const docxHeadings: { level: number; text: string }[] = [];
     textContent = textContent.replace(/^(#{1,6})\s+(.+)$/gm, (_match: string, hashes: string, text: string) => {
       const level = hashes.length;
