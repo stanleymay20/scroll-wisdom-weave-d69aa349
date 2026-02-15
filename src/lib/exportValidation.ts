@@ -59,11 +59,11 @@ export function validateContentForExport(
     const closeBlocks = (content.match(/\[\/CODE_BLOCK\]/g) || []).length;
     if (openBlocks !== closeBlocks) {
       issues.push({
-        level: 'error',
+        level: 'warning',
         code: 'UNCLOSED_STRUCTURED_BLOCK',
-        message: `Chapter ${chapterNum} has mismatched [CODE_BLOCK] tags`,
+        message: `Chapter ${chapterNum} has mismatched [CODE_BLOCK] tags (auto-repaired on export)`,
         chapterNumber: chapterNum,
-        details: `Found ${openBlocks} opening and ${closeBlocks} closing tags.`,
+        details: `Found ${openBlocks} opening and ${closeBlocks} closing tags. These will be auto-repaired during export.`,
       });
     }
 
