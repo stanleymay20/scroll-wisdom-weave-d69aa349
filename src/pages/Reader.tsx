@@ -1038,11 +1038,12 @@ export default function Reader() {
       >
         <article 
           className={cn(
-            "container mx-auto px-4 overflow-x-hidden transition-all duration-300",
+            "mx-auto px-4 overflow-x-hidden transition-all duration-300",
             settings.reading_width === 'narrow' && "max-w-xl",
             settings.reading_width === 'normal' && "max-w-3xl",
             settings.reading_width === 'wide' && "max-w-5xl",
-            settings.reading_width === 'full' && "max-w-full",
+            settings.reading_width === 'full' && "max-w-full px-6",
+            !settings.reading_width && "max-w-3xl",
           )}
           style={{
             lineHeight: settings.line_spacing === 'compact' ? 1.4 
