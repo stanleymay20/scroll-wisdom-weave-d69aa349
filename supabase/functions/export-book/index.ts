@@ -133,24 +133,54 @@ interface StructuredCodeBlockData {
 
 // Parse structured code block format from text [CODE_BLOCK]...[/CODE_BLOCK]
 function parseStructuredCodeBlockFromText(blockContent: string): StructuredCodeBlockData | null {
+  const content = blockContent.trim();
+  if (!content) return null;
+
+  // Check if the block has structured field headers (language:, code:, etc.)
+  const hasStructuredFields = /^(?:language|title|purpose|code):\s/mi.test(content);
+
+  if (!hasStructuredFields) {
+    // Raw code content without structured fields - auto-detect language
+    const rawCode = content.trim();
+    if (!rawCode) return null;
+
+    let detectedLang = 'text';
+    if (/^import\s|^from\s.*import|def\s+\w+|print\s*\(|class\s+\w+.*:/m.test(rawCode)) detectedLang = 'python';
+    else if (/^(?:const|let|var|function|import|export)\s|=>\s*{|console\.\w+/m.test(rawCode)) detectedLang = 'javascript';
+    else if (/^(?:public|private|protected)\s|System\.out|class\s+\w+\s*{/m.test(rawCode)) detectedLang = 'java';
+    else if (/^#include|std::|int\s+main|cout\s*<</m.test(rawCode)) detectedLang = 'cpp';
+    else if (/^SELECT\s|^INSERT\s|^CREATE\s|^UPDATE\s|^DELETE\s/mi.test(rawCode)) detectedLang = 'sql';
+    else if (/^<\?php|^\$\w+\s*=/m.test(rawCode)) detectedLang = 'php';
+    else if (/^(?:func |package |import\s+")/m.test(rawCode)) detectedLang = 'go';
+    else if (/^(?:fn |let\s+mut |use\s+std::)/m.test(rawCode)) detectedLang = 'rust';
+
+    // Strip fenced code block markers if present
+    let cleanCode = rawCode.replace(/^```\w*\n/, '').replace(/\n```$/, '');
+
+    return {
+      language: detectedLang,
+      code: cleanCode,
+    };
+  }
+
   const extractField = (field: string): string | undefined => {
     const regex = new RegExp(`^${field}:\\s*["']?(.+?)["']?\\s*$`, 'mi');
-    const match = blockContent.match(regex);
+    const match = content.match(regex);
     return match?.[1]?.trim();
   };
 
   const extractMultilineField = (field: string): string | undefined => {
     const regex = new RegExp(`^${field}:\\s*\\n([\\s\\S]*?)(?=^(?:language|title|purpose|code|output|explanation|common_mistake):|$)`, 'mi');
-    const match = blockContent.match(regex);
+    const match = content.match(regex);
     return match?.[1]?.trim();
   };
 
   // Extract code specifically - look for fenced code block
-  const codeMatch = blockContent.match(/code:\s*\n```\w*\n([\s\S]*?)```/);
+  const codeMatch = content.match(/code:\s*\n```\w*\n([\s\S]*?)```/);
   const code = codeMatch?.[1]?.trim() || extractMultilineField('code') || '';
 
   // Extract output - may be multi-line
-  const outputMatch = blockContent.match(/output:\s*\n([\s\S]*?)(?=^(?:explanation|common_mistake):|$)/mi);
+  const outputMatch = content.match(/output:\s*\n([\s\S]*?)(?=^(?:explanation|common_mistake):|$)/mi);
   const output = outputMatch?.[1]?.trim();
 
   return {
