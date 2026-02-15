@@ -109,29 +109,48 @@ serve(async (req) => {
       throw new Error('AI API key not configured');
     }
 
-    const response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        model: 'google/gemini-2.5-flash',
-        messages: [
-          { role: 'system', content: STO_AUDIT_PROMPT },
-          {
-            role: 'user',
-            content: `Audit the following ${codeBlocks.length} code block(s) from Chapter ${chapterNumber}: "${chapterTitle}".\n\n${codeBlocksText}\n\nReturn ONLY valid JSON matching the specified format.`,
-          },
-        ],
-        temperature: 0.2,
-        max_tokens: 8000,
-      }),
-    });
+    // Retry logic for rate limits
+    let response: Response | null = null;
+    const maxRetries = 3;
+    for (let attempt = 0; attempt < maxRetries; attempt++) {
+      response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${apiKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          model: 'google/gemini-2.5-flash',
+          messages: [
+            { role: 'system', content: STO_AUDIT_PROMPT },
+            {
+              role: 'user',
+              content: `Audit the following ${codeBlocks.length} code block(s) from Chapter ${chapterNumber}: "${chapterTitle}".\n\n${codeBlocksText}\n\nReturn ONLY valid JSON matching the specified format.`,
+            },
+          ],
+          temperature: 0.2,
+          max_tokens: 8000,
+        }),
+      });
 
-    if (!response.ok) {
-      const errorText = await response.text();
-      throw new Error(`AI API error: ${response.status} - ${errorText}`);
+      if (response.status === 429) {
+        const waitTime = Math.pow(2, attempt + 1) * 2000; // 4s, 8s, 16s
+        console.log(`Rate limited on attempt ${attempt + 1}, waiting ${waitTime}ms...`);
+        await new Promise(r => setTimeout(r, waitTime));
+        continue;
+      }
+      break;
+    }
+
+    if (!response || !response.ok) {
+      const errorText = response ? await response.text() : 'No response';
+      if (response?.status === 429) {
+        return new Response(JSON.stringify({ error: 'Rate limited. Please wait a moment and try again with fewer chapters.' }), {
+          status: 429,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
+      throw new Error(`AI API error: ${response?.status} - ${errorText}`);
     }
 
     const aiData = await response.json();
