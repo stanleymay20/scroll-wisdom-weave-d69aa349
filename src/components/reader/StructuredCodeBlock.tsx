@@ -227,6 +227,35 @@ export function parseStructuredCodeBlock(text: string): StructuredCodeBlockData 
 
   const content = blockMatch[1];
   
+  // Check if this is a structured format (has field: value pairs) or raw code
+  const hasStructuredFields = /^(?:language|title|purpose|code):\s/mi.test(content);
+  
+  if (!hasStructuredFields) {
+    // Raw code format: [CODE_BLOCK]\ncode here\n[/CODE_BLOCK]
+    const rawCode = content.trim();
+    if (!rawCode) return null;
+    
+    // Auto-detect language from code content
+    let detectedLang = 'python';
+    if (/^\s*(import|from)\s+\w+/m.test(rawCode) || /def\s+\w+\(/.test(rawCode) || /class\s+\w+.*:/.test(rawCode)) {
+      detectedLang = 'python';
+    } else if (/^\s*(const|let|var|function|import)\s/m.test(rawCode) || /=>\s*{/.test(rawCode)) {
+      detectedLang = 'javascript';
+    } else if (/^\s*(public|private|protected)\s+(static\s+)?(void|int|String|class)/m.test(rawCode)) {
+      detectedLang = 'java';
+    } else if (/^\s*#include\s/m.test(rawCode)) {
+      detectedLang = 'cpp';
+    } else if (/^\s*(SELECT|INSERT|UPDATE|DELETE|CREATE|ALTER)\s/mi.test(rawCode)) {
+      detectedLang = 'sql';
+    }
+    
+    return {
+      language: detectedLang,
+      code: rawCode,
+    };
+  }
+  
+  // Structured format with field: value pairs
   const extractField = (field: string): string | undefined => {
     const regex = new RegExp(`^${field}:\\s*["']?(.+?)["']?\\s*$`, 'mi');
     const match = content.match(regex);
@@ -239,11 +268,9 @@ export function parseStructuredCodeBlock(text: string): StructuredCodeBlockData 
     return match?.[1]?.trim();
   };
 
-  // Extract code specifically - look for fenced code block
   const codeMatch = content.match(/code:\s*\n```\w*\n([\s\S]*?)```/);
   const code = codeMatch?.[1]?.trim() || extractMultilineField('code') || '';
 
-  // Extract output - may be multi-line
   const outputMatch = content.match(/output:\s*\n([\s\S]*?)(?=^(?:explanation|common_mistake):|$)/mi);
   const output = outputMatch?.[1]?.trim();
 
