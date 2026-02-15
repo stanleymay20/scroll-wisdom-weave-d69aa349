@@ -352,9 +352,7 @@ export function ExportDialog({
           <Label>{t('export.format')}</Label>
           <div className="grid gap-2">
             {formats.map(({ format, label, icon: Icon, description }) => {
-              // Check format-specific validation
               const formatValidation = validateContentForExport(chapters, bookType, format);
-              const hasFormatWarnings = formatValidation.issues.filter(i => i.level === 'warning').length > 0;
               const hasFormatErrors = !formatValidation.canProceed;
               
               return (
@@ -376,61 +374,35 @@ export function ExportDialog({
                     <Icon className="h-5 w-5 mr-3 text-scroll-gold" />
                   )}
                   <div className="text-left flex-1">
-                    <div className="font-medium flex items-center gap-2">
-                      {label}
-                      {hasFormatWarnings && !hasFormatErrors && (
-                        <AlertTriangle className="h-3 w-3 text-amber-500" />
-                      )}
-                      {hasFormatErrors && (
-                        <XCircle className="h-3 w-3 text-destructive" />
-                      )}
-                    </div>
+                    <div className="font-medium">{label}</div>
                     <div className="text-xs text-muted-foreground">{description}</div>
                   </div>
-                  {!hasFormatErrors && !hasFormatWarnings && (
-                    <CheckCircle2 className="h-4 w-4 ml-auto text-green-500 opacity-0 group-hover:opacity-100" />
-                  )}
                 </Button>
               );
             })}
           </div>
         </div>
 
-        {/* Pre-export Content Validation Issues */}
-        {contentValidation.issues.length > 0 && (
-          <div className="p-3 rounded-lg bg-amber-500/10 border border-amber-500/30 space-y-2">
+        {/* Pre-export Content Validation Issues - only show blocking errors */}
+        {!contentValidation.canProceed && contentValidation.issues.filter(i => i.level === 'error').length > 0 && (
+          <div className="p-3 rounded-lg bg-destructive/10 border border-destructive/30 space-y-2">
             <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              <span className="text-sm font-medium text-amber-400">
-                Content Issues Detected
+              <XCircle className="h-4 w-4 text-destructive" />
+              <span className="text-sm font-medium text-destructive">
+                Export Blocked
               </span>
             </div>
             <div className="space-y-1 max-h-32 overflow-y-auto">
-              {contentValidation.issues.slice(0, 5).map((issue, i) => (
+              {contentValidation.issues.filter(i => i.level === 'error').map((issue, i) => (
                 <div key={i} className="flex items-start gap-2 text-xs">
-                  {issue.level === 'error' ? (
-                    <XCircle className="h-3 w-3 text-destructive mt-0.5 shrink-0" />
-                  ) : issue.level === 'warning' ? (
-                    <AlertTriangle className="h-3 w-3 text-amber-500 mt-0.5 shrink-0" />
-                  ) : (
-                    <AlertCircle className="h-3 w-3 text-muted-foreground mt-0.5 shrink-0" />
-                  )}
-                  <span className={issue.level === 'error' ? 'text-destructive' : 'text-muted-foreground'}>
-                    {issue.message}
-                  </span>
+                  <XCircle className="h-3 w-3 text-destructive mt-0.5 shrink-0" />
+                  <span className="text-destructive">{issue.message}</span>
                 </div>
               ))}
-              {contentValidation.issues.length > 5 && (
-                <p className="text-xs text-muted-foreground">
-                  ...and {contentValidation.issues.length - 5} more issues
-                </p>
-              )}
             </div>
-            {!contentValidation.canProceed && (
-              <p className="text-xs text-destructive font-medium">
-                Fix errors before exporting.
-              </p>
-            )}
+            <p className="text-xs text-destructive font-medium">
+              Fix errors before exporting.
+            </p>
           </div>
         )}
 
