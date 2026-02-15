@@ -32,21 +32,23 @@ serve(async (req) => {
       throw new Error("Supabase configuration is missing");
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Authenticate user
+    // Authenticate user via getClaims
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Authentication required" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const supabaseAuth = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
+      global: { headers: { Authorization: authHeader } },
+    });
 
-    if (authError || !user) {
+    const token = authHeader.replace("Bearer ", "");
+    const { data: claimsData, error: authError } = await supabaseAuth.auth.getClaims(token);
+
+    if (authError || !claimsData?.claims?.sub) {
       console.error("[TTS] Auth error:", authError);
       return new Response(JSON.stringify({ error: "Invalid authentication" }), {
         status: 401,
@@ -54,13 +56,17 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[TTS] Authenticated user: ${user.id.slice(0, 8)}...`);
+    const userId = claimsData.claims.sub as string;
+    console.log(`[TTS] Authenticated user: ${userId.slice(0, 8)}...`);
+
+    // Service role client for DB operations
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Get user's plan from profiles (use user_id column, select only existing columns)
     const { data: profile } = await supabase
       .from("profiles")
       .select("plan")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .single();
 
     const userPlan = profile?.plan || "free";
@@ -72,7 +78,7 @@ serve(async (req) => {
     const { data: usageRow } = await supabase
       .from("tts_usage")
       .select("minutes_used")
-      .eq("user_id", user.id)
+      .eq("user_id", userId)
       .eq("month", currentMonth)
       .maybeSingle();
 
@@ -232,14 +238,14 @@ serve(async (req) => {
       await supabase
         .from("tts_usage")
         .update({ minutes_used: currentUsage + estimatedMinutes })
-        .eq("user_id", user.id)
+        .eq("user_id", userId)
         .eq("month", currentMonth);
     } else {
       // Insert new row for this month
       await supabase
         .from("tts_usage")
         .insert({
-          user_id: user.id,
+          user_id: userId,
           month: currentMonth,
           minutes_used: estimatedMinutes,
         });
