@@ -15,14 +15,24 @@ OBJECTIVES:
 5. ML Best Practices — Proper train-test split, no data leakage, correct metrics, cross-validation
 6. Deep Learning — Proper model patterns, correct loss functions, optimizer selection, training loops
 7. MLOps/Deployment — Valid API patterns, correct serialization, Docker-ready structure
+8. Data Visualization — If code includes matplotlib, seaborn, plotly, or any plotting library:
+   - Ensure plots have proper labels (xlabel, ylabel, title)
+   - Verify legends are included where multiple series exist
+   - Check for colorblind-friendly palettes
+   - Recommend plt.tight_layout() or fig.set_tight_layout(True)
+   - Ensure figures are properly sized (figsize parameter)
+   - Add concrete visualization examples if the chapter topic is data visualization
 
-OUTPUT FORMAT (JSON):
+CRITICAL: You MUST return ONLY valid JSON. No markdown fences. No explanatory text before or after.
+Do NOT wrap the output in backtick fences. Return raw JSON directly.
+
+OUTPUT FORMAT (raw JSON only):
 {
   "chapterScore": <1-10>,
   "riskLevel": "low" | "medium" | "high",
   "codeBlocks": [
     {
-      "index": <number>,
+      "index": <0-based number>,
       "language": "<detected language>",
       "originalSnippet": "<first 3 lines of original>",
       "issues": ["<issue 1>", "<issue 2>"],
@@ -34,9 +44,10 @@ OUTPUT FORMAT (JSON):
   "summary": "<2-3 sentence executive summary>"
 }
 
+IMPORTANT: "index" must be 0-based (first code block = 0, second = 1, etc.)
 Assume this book will be reviewed by a FAANG Staff Engineer. Rewrite any code that would not pass internal production review.
-Be thorough. Do not skip small issues. If any code is amateur-level, rewrite it to industry standard.`;
-
+Be thorough. Do not skip small issues. If any code is amateur-level, rewrite it to industry standard.
+If the chapter covers data visualization, ensure corrected code includes proper chart examples with labels, titles, and best practices.`;
 function extractCodeBlocks(content: string): { code: string; language: string; index: number }[] {
   const blocks: { code: string; language: string; index: number }[] = [];
   const fencedRegex = /```(\w+)?\s*\n([\s\S]*?)```/g;
@@ -128,18 +139,51 @@ serve(async (req) => {
     const aiData = await response.json();
     const rawContent = aiData.choices?.[0]?.message?.content || '';
     
-    let jsonStr = rawContent;
-    const jsonMatch = rawContent.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
-    if (jsonMatch) jsonStr = jsonMatch[1].trim();
-    
     let auditResult;
     try {
+      // Try multiple extraction strategies
+      let jsonStr = rawContent;
+      
+      // Strategy 1: Extract from ```json ... ``` fences
+      const jsonFenceMatch = rawContent.match(/```json\s*\n?([\s\S]*?)```/);
+      if (jsonFenceMatch) {
+        jsonStr = jsonFenceMatch[1].trim();
+      } else {
+        // Strategy 2: Extract from ``` ... ``` (any fence)
+        const anyFenceMatch = rawContent.match(/```\s*\n?([\s\S]*?)```/);
+        if (anyFenceMatch) {
+          jsonStr = anyFenceMatch[1].trim();
+        } else {
+          // Strategy 3: Find first { ... last } in raw text
+          const firstBrace = rawContent.indexOf('{');
+          const lastBrace = rawContent.lastIndexOf('}');
+          if (firstBrace !== -1 && lastBrace > firstBrace) {
+            jsonStr = rawContent.substring(firstBrace, lastBrace + 1);
+          }
+        }
+      }
+      
+      // Clean common AI artifacts before parsing
+      jsonStr = jsonStr
+        .replace(/,\s*}/g, '}')   // trailing commas in objects
+        .replace(/,\s*\]/g, ']')  // trailing commas in arrays
+        .replace(/[\x00-\x1F\x7F]/g, (ch) => ch === '\n' || ch === '\r' || ch === '\t' ? ch : ''); // control chars
+      
       auditResult = JSON.parse(jsonStr);
     } catch {
+      // Last resort: try to salvage any useful info from the raw text
+      const scoreMatch = rawContent.match(/"chapterScore"\s*:\s*(\d+)/);
+      const riskMatch = rawContent.match(/"riskLevel"\s*:\s*"(\w+)"/);
+      const summaryMatch = rawContent.match(/"summary"\s*:\s*"([^"]+)"/);
+      
       auditResult = {
-        chapterScore: 5, riskLevel: 'medium', codeBlocks: [],
-        overallRecommendations: ['AI response could not be parsed. Manual review recommended.'],
-        summary: rawContent.substring(0, 500),
+        chapterScore: scoreMatch ? parseInt(scoreMatch[1]) : 5,
+        riskLevel: riskMatch ? riskMatch[1] : 'medium',
+        codeBlocks: [],
+        overallRecommendations: summaryMatch 
+          ? [summaryMatch[1]]
+          : ['AI returned a non-standard format. Key findings: ' + rawContent.substring(0, 400).replace(/[{}"]/g, '').trim()],
+        summary: summaryMatch ? summaryMatch[1] : rawContent.substring(0, 300).replace(/[{}"]/g, '').trim(),
       };
     }
 
