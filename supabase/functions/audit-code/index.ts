@@ -140,50 +140,110 @@ serve(async (req) => {
     const rawContent = aiData.choices?.[0]?.message?.content || '';
     
     let auditResult;
-    try {
-      // Try multiple extraction strategies
-      let jsonStr = rawContent;
-      
+    
+    // --- Robust multi-strategy JSON extraction ---
+    function tryParseJSON(raw: string): object | null {
       // Strategy 1: Extract from ```json ... ``` fences
-      const jsonFenceMatch = rawContent.match(/```json\s*\n?([\s\S]*?)```/);
+      const jsonFenceMatch = raw.match(/```json\s*\n?([\s\S]*?)```/);
       if (jsonFenceMatch) {
-        jsonStr = jsonFenceMatch[1].trim();
-      } else {
-        // Strategy 2: Extract from ``` ... ``` (any fence)
-        const anyFenceMatch = rawContent.match(/```\s*\n?([\s\S]*?)```/);
-        if (anyFenceMatch) {
-          jsonStr = anyFenceMatch[1].trim();
-        } else {
-          // Strategy 3: Find first { ... last } in raw text
-          const firstBrace = rawContent.indexOf('{');
-          const lastBrace = rawContent.lastIndexOf('}');
-          if (firstBrace !== -1 && lastBrace > firstBrace) {
-            jsonStr = rawContent.substring(firstBrace, lastBrace + 1);
-          }
+        const parsed = cleanAndParse(jsonFenceMatch[1].trim());
+        if (parsed) return parsed;
+      }
+      
+      // Strategy 2: Extract from ``` ... ``` (any fence)
+      const anyFenceMatch = raw.match(/```\s*\n?([\s\S]*?)```/);
+      if (anyFenceMatch) {
+        const parsed = cleanAndParse(anyFenceMatch[1].trim());
+        if (parsed) return parsed;
+      }
+      
+      // Strategy 3: Find outermost { ... } in raw text
+      const firstBrace = raw.indexOf('{');
+      const lastBrace = raw.lastIndexOf('}');
+      if (firstBrace !== -1 && lastBrace > firstBrace) {
+        const parsed = cleanAndParse(raw.substring(firstBrace, lastBrace + 1));
+        if (parsed) return parsed;
+      }
+      
+      return null;
+    }
+    
+    function cleanAndParse(jsonStr: string): object | null {
+      try {
+        // Step 1: Remove control chars except whitespace
+        let cleaned = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+        
+        // Step 2: Fix trailing commas
+        cleaned = cleaned.replace(/,\s*}/g, '}').replace(/,\s*\]/g, ']');
+        
+        // Step 3: Try direct parse
+        return JSON.parse(cleaned);
+      } catch {
+        try {
+          // Step 4: More aggressive cleanup — fix unescaped newlines inside strings
+          let fixed = jsonStr
+            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
+            .replace(/,\s*}/g, '}')
+            .replace(/,\s*\]/g, ']');
+          
+          // Replace literal newlines inside JSON string values with \\n
+          fixed = fixed.replace(/"([^"]*?)"/g, (match) => {
+            return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
+          });
+          
+          return JSON.parse(fixed);
+        } catch {
+          return null;
+        }
+      }
+    }
+    
+    const parsed = tryParseJSON(rawContent);
+    
+    if (parsed && typeof parsed === 'object' && 'chapterScore' in parsed) {
+      auditResult = parsed;
+    } else {
+      // Regex-based field extraction as last resort
+      const scoreMatch = rawContent.match(/"chapterScore"\s*:\s*(\d+)/);
+      const riskMatch = rawContent.match(/"riskLevel"\s*:\s*"(\w+)"/);
+      const summaryMatch = rawContent.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      
+      // Extract individual issues from the raw text
+      const issueMatches = [...rawContent.matchAll(/"issues"\s*:\s*\[([\s\S]*?)\]/g)];
+      const extractedIssues: string[] = [];
+      for (const m of issueMatches) {
+        const inner = m[1];
+        const items = [...inner.matchAll(/"((?:[^"\\]|\\.)*)"/g)];
+        for (const item of items) {
+          extractedIssues.push(item[1].replace(/\\n/g, ' ').replace(/\\"/g, '"'));
         }
       }
       
-      // Clean common AI artifacts before parsing
-      jsonStr = jsonStr
-        .replace(/,\s*}/g, '}')   // trailing commas in objects
-        .replace(/,\s*\]/g, ']')  // trailing commas in arrays
-        .replace(/[\x00-\x1F\x7F]/g, (ch) => ch === '\n' || ch === '\r' || ch === '\t' ? ch : ''); // control chars
+      // Extract recommendations
+      const recMatches = [...rawContent.matchAll(/"(?:overall)?[Rr]ecommendations"\s*:\s*\[([\s\S]*?)\]/g)];
+      const extractedRecs: string[] = [];
+      for (const m of recMatches) {
+        const inner = m[1];
+        const items = [...inner.matchAll(/"((?:[^"\\]|\\.)*)"/g)];
+        for (const item of items) {
+          extractedRecs.push(item[1].replace(/\\n/g, ' ').replace(/\\"/g, '"'));
+        }
+      }
       
-      auditResult = JSON.parse(jsonStr);
-    } catch {
-      // Last resort: try to salvage any useful info from the raw text
-      const scoreMatch = rawContent.match(/"chapterScore"\s*:\s*(\d+)/);
-      const riskMatch = rawContent.match(/"riskLevel"\s*:\s*"(\w+)"/);
-      const summaryMatch = rawContent.match(/"summary"\s*:\s*"([^"]+)"/);
+      const summary = summaryMatch 
+        ? summaryMatch[1].replace(/\\n/g, ' ').replace(/\\"/g, '"')
+        : 'Audit completed but response format was non-standard. Key issues were still extracted where possible.';
       
       auditResult = {
         chapterScore: scoreMatch ? parseInt(scoreMatch[1]) : 5,
         riskLevel: riskMatch ? riskMatch[1] : 'medium',
         codeBlocks: [],
-        overallRecommendations: summaryMatch 
-          ? [summaryMatch[1]]
-          : ['AI returned a non-standard format. Key findings: ' + rawContent.substring(0, 400).replace(/[{}"]/g, '').trim()],
-        summary: summaryMatch ? summaryMatch[1] : rawContent.substring(0, 300).replace(/[{}"]/g, '').trim(),
+        overallRecommendations: extractedRecs.length > 0 
+          ? extractedRecs.slice(0, 5) 
+          : extractedIssues.length > 0
+            ? extractedIssues.slice(0, 5)
+            : [summary],
+        summary,
       };
     }
 
