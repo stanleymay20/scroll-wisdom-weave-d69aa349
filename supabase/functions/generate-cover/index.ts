@@ -204,14 +204,17 @@ serve(async (req) => {
 
     console.log(`[GENERATE-COVER] Authenticated user: ${user.id.slice(0, 8)}...`);
 
-    const { bookId, title, category, description, theme = "classic" } = await req.json();
+    const { bookId, title, category, description, theme = "classic", authorName: requestAuthorName } = await req.json();
 
-    // Get book details including comic-specific fields
+    // Get book details including comic-specific fields and author name
     const { data: book } = await supabase
       .from("books")
-      .select("creator_id, book_type, comic_style_id, palette_hint, line_weight_hint, character_sheet")
+      .select("creator_id, book_type, author_ai_agent, comic_style_id, palette_hint, line_weight_hint, character_sheet")
       .eq("id", bookId)
       .single();
+    
+    // Resolve author name: request param > book record > fallback
+    const authorName = requestAuthorName || book?.author_ai_agent || "ScrollLibrary";
 
     if (book && book.creator_id !== user.id) {
       console.log(`[GENERATE-COVER] User ${user.id.slice(0, 8)}... not authorized for book`);
@@ -269,7 +272,7 @@ serve(async (req) => {
 BOOK DETAILS:
 - Title: "${title}"
 - Category: ${category.replace(/_/g, " ")}
-- Author: "ScrollAuthor AI"
+- Author: "${authorName}"
 
 VISUAL STYLE (MUST MATCH COMIC PANELS EXACTLY):
 - Art Style: ${styleGuide.artStyle}
@@ -290,7 +293,7 @@ MANDATORY COVER REQUIREMENTS:
 2. Use the SAME art style as the comic panels - NO deviation
 3. Create a dynamic, action-packed composition reflecting the comic's tone
 4. Include the title "${title}" prominently displayed
-5. Include "By ScrollAuthor AI" as author credit
+5. Include "By ${authorName}" as author credit
 6. Match the color palette from the panels exactly
 7. The cover should look like it belongs to the same comic
 
@@ -308,34 +311,38 @@ Ultra high resolution, professional comic book cover quality.`;
       const selectedTheme = coverThemes[theme] || coverThemes.classic;
       console.log(`[GENERATE-COVER] Generating ${selectedTheme.name} cover for book: ${title}`);
 
-      coverPrompt = `Create a professional, elegant book cover design with the title and author clearly visible.
+      coverPrompt = `Create a STUNNING, BESTSELLER-QUALITY book cover that looks like it belongs on Amazon's Top 100.
 
 BOOK DETAILS:
 - Title: "${title}"
 - Category: ${category.replace(/_/g, " ")}
 - Theme: ${description || "A scholarly work on this topic"}
-- Author: "ScrollAuthor AI"
+- Author: "${authorName}"
 
 COVER STYLE - ${selectedTheme.name.toUpperCase()}:
 ${selectedTheme.style}
 
+PROFESSIONAL COVER DESIGN PRINCIPLES:
+1. CINEMATIC IMAGERY - Use dramatic, high-impact visuals: silhouettes against glowing backdrops, futuristic cityscapes, cosmic scenes, or powerful symbolic imagery
+2. BOLD TYPOGRAPHY - Title must be MASSIVE, bold, and impossible to miss. Use thick sans-serif or impactful display fonts. Mix colors for emphasis (e.g., white + gold/orange for different title words)
+3. LAYERED DEPTH - Create depth with foreground subjects, midground elements, and dramatic backgrounds
+4. DRAMATIC LIGHTING - Use lens flares, glowing edges, neon accents, or divine light rays
+5. DARK BACKGROUNDS preferred - deep navy, black, or dark blue with bright accent colors for contrast
+
 CRITICAL TEXT REQUIREMENTS:
-1. MUST include the book title "${title}" prominently displayed on the cover
-2. MUST include "By ScrollAuthor AI" or "ScrollAuthor AI" as the author credit
-3. Title should be the LARGEST text element, positioned for maximum visual impact
-4. Author name should be smaller, positioned below the title or at the bottom
-5. Use elegant, readable typography that matches the ${selectedTheme.name} style
-6. Ensure HIGH CONTRAST between text and background for readability
-7. Text should be properly spelled exactly as provided
+1. MUST include the book title "${title}" - make it HUGE and BOLD
+2. MUST include "${authorName}" as author credit at the bottom
+3. If the title has multiple words, consider making the KEY WORD a different color (gold, orange, or cyan) for emphasis
+4. Add a subtitle line if the description provides one
+5. Ensure PERFECT readability - white/bright text on dark backgrounds
+6. Text should be properly spelled exactly as provided
 
 DESIGN REQUIREMENTS:
-- Create a striking visual composition that evokes the ${category.replace(/_/g, " ")} subject matter
-- Use powerful imagery, patterns, and visual elements appropriate to the theme
-- Aspect ratio: vertical book cover (3:4)
-- Ultra high resolution, professional quality
-- The background should complement and not compete with the text
-- Create visual hierarchy: Title first, then imagery, then author name
-- Include appropriate symbolic or thematic imagery for the topic`;
+- Vertical book cover (3:4 aspect ratio)
+- Ultra high resolution, professional publishing quality
+- Should look like a real published book you'd find in a bookstore
+- Include thematic imagery relevant to ${category.replace(/_/g, " ")}
+- The cover should make someone STOP scrolling and click on it`;
     }
 
     // Retry logic for image generation
@@ -354,7 +361,7 @@ DESIGN REQUIREMENTS:
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash-image-preview",
+            model: "google/gemini-3-pro-image-preview",
             messages: [
               {
                 role: "user",
