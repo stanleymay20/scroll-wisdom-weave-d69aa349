@@ -1953,6 +1953,12 @@ async function generateEPUB(
       return `[HEADING_PLACEHOLDER_${_idx}_${level}]`;
     });
     
+    // Protect <pre> blocks from being split by \n\n paragraph splitting
+    // Replace double newlines inside <pre>...</pre> with a placeholder
+    content = content.replace(/<pre[\s\S]*?<\/pre>/g, (block: string) => {
+      return block.replace(/\n\n+/g, '\n');
+    });
+    
     // Convert paragraphs (skip already processed HTML) - with heading support
     const htmlContent = content
       .split(/\n\n+/)
@@ -1967,8 +1973,6 @@ async function generateEPUB(
         const headingMatch = p.match(/\[HEADING_PLACEHOLDER_(\d+)_(\d+)\](.*)$/);
         if (headingMatch) {
           const level = headingMatch[2];
-          // Extract actual heading text - need to find it from original markdown
-          // The heading text follows the placeholder pattern
           const headingText = p.replace(/\[HEADING_PLACEHOLDER_\d+_\d+\]/, '').trim();
           return `<h${level}>${escapeXml(headingText)}</h${level}>`;
         }
@@ -1976,9 +1980,12 @@ async function generateEPUB(
         // Handle remaining heading placeholders that contain the text
         const simpleHeadingMatch = p.match(/^\[HEADING_(\d+)_LEVEL_(\d+)\]$/);
         if (simpleHeadingMatch) {
-          // This is a placeholder only - we need to get the heading text from our data
-          // For now, skip the placeholder - the heading text should follow
           return '';
+        }
+        
+        // If paragraph contains already-converted HTML tags, pass through as-is
+        if (/<(?:code|strong|em|a|span|br)\b/.test(p)) {
+          return `<p>${p}</p>`;
         }
         
         return `<p>${escapeXml(p)}</p>`;
