@@ -1,21 +1,22 @@
 /**
  * Sentence-Level Audio Synchronization Hook
  *
- * Reads audio.currentTime from a real audio element ref (no internal simulation).
- * Parses chapter content into sentences, determines the active sentence,
- * highlights it, and scrolls it into the center of the viewport.
+ * Tracks cumulative playback time across TTS chunks to determine
+ * the active sentence, highlight it, and scroll it into view.
  *
- * FIXES (audit):
- * - Uses real audio.currentTime instead of simulated rAF timer
- * - Scroll listener attached to contentRef instead of window
- * - splitSentences imported from shared util
- * - Duration memoised to prevent sentence array rebuild
+ * Architecture (YouVersion-style):
+ * 1. Parse chapter → sentences with proportional timestamps
+ * 2. Track cumulative time: chunkStartTime + audio.currentTime
+ * 3. Match time → active sentence
+ * 4. Highlight + smooth scroll to center
+ *
+ * Supports two modes:
+ * - Real audioRef: reads audio.currentTime + cumulative offset
+ * - Simulated: rAF-based timer (fallback)
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { stripMarkdown, splitSentences } from '@/lib/sentenceUtils';
-
-// --- Types ---
+import { stripMarkdown } from '@/lib/sentenceUtils';
 
 export interface SentenceTimestamp {
   index: number;
@@ -27,9 +28,10 @@ export interface SentenceTimestamp {
 interface UseAudioSyncOptions {
   chapterContent: string | null;
   isPlaying: boolean;
-  /** Ref to the scrollable content container */
   contentRef: React.RefObject<HTMLElement>;
-  /** Optional ref to the real <audio> element for precise sync */
+  /** Cumulative seconds already played in previous chunks */
+  cumulativeTimeSec?: number;
+  /** Ref to the current <audio> element for precise sync */
   audioRef?: React.RefObject<HTMLAudioElement>;
   estimatedDurationSec?: number;
   wordCount?: number;
@@ -45,8 +47,6 @@ interface UseAudioSyncReturn {
   reset: () => void;
 }
 
-// --- Helpers ---
-
 function buildTimestamps(sentences: string[], totalDurationSec: number): SentenceTimestamp[] {
   const totalChars = sentences.reduce((sum, s) => sum + s.length, 0);
   if (totalChars === 0 || totalDurationSec <= 0) return [];
@@ -61,17 +61,15 @@ function buildTimestamps(sentences: string[], totalDurationSec: number): Sentenc
   });
 }
 
-// --- Hook ---
-
 export function useAudioSync({
   chapterContent,
   isPlaying,
   contentRef,
+  cumulativeTimeSec = 0,
   audioRef,
   estimatedDurationSec,
   wordCount = 0,
 }: UseAudioSyncOptions): UseAudioSyncReturn {
-  // Memoize duration to prevent sentence array rebuilds
   const duration = useMemo(
     () => estimatedDurationSec ?? (wordCount > 0 ? (wordCount / 150) * 60 : 60),
     [estimatedDurationSec, wordCount]
@@ -80,29 +78,29 @@ export function useAudioSync({
   const sentences = useMemo<SentenceTimestamp[]>(() => {
     if (!chapterContent) return [];
     const plain = stripMarkdown(chapterContent);
-    const sents = splitSentences(plain);
-    return buildTimestamps(sents, duration);
+    // Split by paragraphs (double newlines) to match MarkdownRenderer's data-sentence-index
+    const paragraphs = plain.split(/\n\n+/).map(s => s.trim()).filter(s => s.length > 0);
+    return buildTimestamps(paragraphs, duration);
   }, [chapterContent, duration]);
 
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
   const [isSyncEnabled, setIsSyncEnabled] = useState(true);
   const [isUserScrolledAway, setIsUserScrolledAway] = useState(false);
 
-  // Fallback simulated time when no audioRef is provided
   const playbackTimeRef = useRef(0);
   const lastTickRef = useRef(0);
   const rafRef = useRef<number>();
   const manualScrollTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const programmaticScrollRef = useRef(false);
 
-  // --- Tick: read real currentTime or fall back to simulation ---
+  // Tick: compute current global time and find active sentence
   const tick = useCallback((now: number) => {
     if (!isPlaying) return;
 
     let t: number;
     if (audioRef?.current && !isNaN(audioRef.current.currentTime)) {
-      // Real audio element — precise sync
-      t = audioRef.current.currentTime;
+      // Real audio: cumulative offset + current chunk position
+      t = cumulativeTimeSec + audioRef.current.currentTime;
     } else {
       // Fallback: simulate time via rAF delta
       if (lastTickRef.current > 0) {
@@ -113,7 +111,7 @@ export function useAudioSync({
       t = playbackTimeRef.current;
     }
 
-    // Find active sentence
+    // Binary-ish search for active sentence
     let idx = -1;
     for (let i = 0; i < sentences.length; i++) {
       if (t >= sentences[i].startTime && t < sentences[i].endTime) {
@@ -128,7 +126,7 @@ export function useAudioSync({
     setActiveSentenceIndex(prev => (prev === idx ? prev : idx));
 
     rafRef.current = requestAnimationFrame(tick);
-  }, [isPlaying, sentences, audioRef]);
+  }, [isPlaying, sentences, audioRef, cumulativeTimeSec]);
 
   // Start / stop tick loop
   useEffect(() => {
@@ -144,7 +142,7 @@ export function useAudioSync({
     };
   }, [isPlaying, tick, sentences.length]);
 
-  // --- Scroll active sentence into center ---
+  // Scroll active sentence into center
   useEffect(() => {
     if (!isSyncEnabled || activeSentenceIndex < 0 || isUserScrolledAway) return;
 
@@ -159,7 +157,7 @@ export function useAudioSync({
     }, 600);
   }, [activeSentenceIndex, isSyncEnabled, isUserScrolledAway, contentRef]);
 
-  // --- Detect manual scroll on contentRef (not window) ---
+  // Detect manual scroll
   useEffect(() => {
     if (!isSyncEnabled || !isPlaying) return;
 
@@ -182,8 +180,6 @@ export function useAudioSync({
       if (manualScrollTimeoutRef.current) clearTimeout(manualScrollTimeoutRef.current);
     };
   }, [isSyncEnabled, isPlaying, contentRef]);
-
-  // --- Public API ---
 
   const toggleSync = useCallback(() => {
     setIsSyncEnabled(prev => !prev);

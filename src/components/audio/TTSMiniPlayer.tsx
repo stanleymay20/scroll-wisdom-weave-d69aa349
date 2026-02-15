@@ -70,6 +70,10 @@ interface TTSMiniPlayerProps {
   totalChapters?: number;
   /** Callback when playing state changes - for auto-scroll sync */
   onPlayingChange?: (isPlaying: boolean) => void;
+  /** Expose audioRef for external sync (sentence highlighting) */
+  onAudioRefChange?: (ref: HTMLAudioElement | null) => void;
+  /** Expose cumulative playback time for sync across chunks */
+  onCumulativeTimeChange?: (seconds: number) => void;
 }
 
 export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(function TTSMiniPlayer({ 
@@ -86,6 +90,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   currentChapter,
   totalChapters,
   onPlayingChange,
+  onAudioRefChange,
+  onCumulativeTimeChange,
 }, ref) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -100,6 +106,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   // Track current position for resume (Interactive Guard Mode - Rule 5.4)
   const [currentPosition, setCurrentPosition] = useState(0);
   const pausedAtChunkRef = useRef(0);
+  // Cumulative playback time across chunks (for sentence sync)
+  const cumulativeTimeRef = useRef(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopRef = useRef(false);
@@ -276,6 +284,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       audioRef.current = audio;
       audio.volume = volume;
       audio.playbackRate = playbackSpeed;
+      
+      // Expose audioRef for external sync (sentence highlighting)
+      onAudioRefChange?.(audio);
 
       const cleanup = () => {
         audio.onplay = null;
@@ -290,6 +301,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       };
       
       audio.onended = () => {
+        // Track cumulative time for sentence sync
+        if (audio.duration && !isNaN(audio.duration)) {
+          cumulativeTimeRef.current += audio.duration;
+          onCumulativeTimeChange?.(cumulativeTimeRef.current);
+        }
         cleanup();
         safeResolve(true);
       };
@@ -472,6 +488,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     stopRef.current = false;
     isStoppingRef.current = false;
     pausedAtChunkRef.current = 0;
+    cumulativeTimeRef.current = 0;
+    onCumulativeTimeChange?.(0);
+    onAudioRefChange?.(null);
     
     // Small delay for audio element cleanup
     await new Promise(resolve => setTimeout(resolve, 80));
