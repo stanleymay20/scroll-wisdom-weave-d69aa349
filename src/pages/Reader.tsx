@@ -102,7 +102,7 @@ type ReadingTheme = keyof typeof READING_THEMES;
 
 export default function Reader() {
   const { t } = useLanguage();
-  const { settings } = useSettings();
+  const { settings, updateSettings } = useSettings();
   const { bookId, chapterId } = useParams();
   const navigate = useNavigate();
   
@@ -806,6 +806,61 @@ export default function Reader() {
               </div>
             </div>
 
+            {/* Screen Ratio */}
+            <div>
+              <label className="text-sm text-muted-foreground mb-2 block">Screen Ratio</label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {([
+                  { key: 'narrow' as const, label: 'Focus', icon: '▐▌' },
+                  { key: 'normal' as const, label: 'Normal', icon: '▐██▌' },
+                  { key: 'wide' as const, label: 'Wide', icon: '▐████▌' },
+                  { key: 'full' as const, label: 'Full', icon: '▐██████▌' },
+                ] as const).map(({ key, label, icon }) => (
+                  <button
+                    key={key}
+                    onClick={() => updateSettings({ reading_width: key })}
+                    className={cn(
+                      "flex flex-col items-center gap-0.5 p-1.5 rounded-md text-[10px] font-medium transition-all border",
+                      settings.reading_width === key
+                        ? 'ring-2 ring-primary ring-offset-1 bg-primary/10 border-primary/30'
+                        : 'bg-muted/30 border-border/30 hover:bg-muted/50'
+                    )}
+                  >
+                    <span className="text-[8px] opacity-50 font-mono leading-none">{icon}</span>
+                    <span>{label}</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Line Spacing */}
+            <div>
+              <label className="text-sm text-muted-foreground mb-2 block">
+                Line Spacing: {settings.line_spacing === 'compact' ? 'Compact' : settings.line_spacing === 'relaxed' ? 'Relaxed' : settings.line_spacing === 'spacious' ? 'Spacious' : 'Normal'}
+              </label>
+              <div className="grid grid-cols-4 gap-1.5">
+                {([
+                  { key: 'compact' as const, label: 'Compact' },
+                  { key: 'normal' as const, label: 'Normal' },
+                  { key: 'relaxed' as const, label: 'Relaxed' },
+                  { key: 'spacious' as const, label: 'Spacious' },
+                ] as const).map(({ key, label }) => (
+                  <button
+                    key={key}
+                    onClick={() => updateSettings({ line_spacing: key })}
+                    className={cn(
+                      "p-1.5 rounded-md text-[10px] font-medium transition-all border",
+                      settings.line_spacing === key
+                        ? 'ring-2 ring-primary ring-offset-1 bg-primary/10 border-primary/30'
+                        : 'bg-muted/30 border-border/30 hover:bg-muted/50'
+                    )}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <span className="text-sm text-muted-foreground">{t('reader.guidedMode')}</span>
               <Button
@@ -988,7 +1043,13 @@ export default function Reader() {
             settings.reading_width === 'normal' && "max-w-3xl",
             settings.reading_width === 'wide' && "max-w-5xl",
             settings.reading_width === 'full' && "max-w-full",
-          )} 
+          )}
+          style={{
+            lineHeight: settings.line_spacing === 'compact' ? 1.4 
+              : settings.line_spacing === 'relaxed' ? 2.0 
+              : settings.line_spacing === 'spacious' ? 2.4 
+              : 1.7,
+          }}
           ref={contentRef}
         >
           <motion.div
