@@ -1,12 +1,23 @@
-import { useLocation, Link } from "react-router-dom";
+import { useLocation, Link, Navigate } from "react-router-dom";
 import { useEffect } from "react";
+
+// UUID v4 pattern
+const UUID_REGEX = /^\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i;
 
 const NotFound = () => {
   const location = useLocation();
+  const uuidMatch = location.pathname.match(UUID_REGEX);
 
   useEffect(() => {
-    console.error("404 Error: User attempted to access non-existent route:", location.pathname);
-  }, [location.pathname]);
+    if (!uuidMatch) {
+      console.error("404 Error: User attempted to access non-existent route:", location.pathname);
+    }
+  }, [location.pathname, uuidMatch]);
+
+  // If the path is a bare UUID, redirect to /book/:id
+  if (uuidMatch) {
+    return <Navigate to={`/book/${uuidMatch[1]}`} replace />;
+  }
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-muted">
