@@ -86,47 +86,70 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
     setResults([]);
     setAuditProgress({ current: 0, total: generatedChapters.length });
 
-    const batchSize = 3;
     const newResults: ChapterAuditResult[] = [];
 
-    for (let i = 0; i < generatedChapters.length; i += batchSize) {
-      const batch = generatedChapters.slice(i, i + batchSize);
+    // Process one chapter at a time with delay to avoid rate limits
+    for (let i = 0; i < generatedChapters.length; i++) {
+      const chapter = generatedChapters[i];
       
-      const batchPromises = batch.map(async (chapter) => {
-        try {
-          const response = await supabase.functions.invoke('audit-code', {
-            body: {
-              chapterId: chapter.id,
-              chapterTitle: chapter.title,
-              chapterNumber: chapter.chapter_number,
-              content: chapter.content,
-            },
-          });
+      // Add delay between requests (skip first)
+      if (i > 0) {
+        await new Promise(r => setTimeout(r, 2000));
+      }
 
-          if (response.error) throw new Error(response.error.message);
-          return response.data as ChapterAuditResult;
-        } catch (error) {
-          console.error(`Audit failed for chapter ${chapter.chapter_number}:`, error);
-          return {
+      try {
+        const response = await supabase.functions.invoke('audit-code', {
+          body: {
             chapterId: chapter.id,
             chapterTitle: chapter.title,
             chapterNumber: chapter.chapter_number,
-            codeBlockCount: 0,
-            result: {
-              chapterScore: -1,
-              riskLevel: 'error',
-              codeBlocks: [],
-              overallRecommendations: [`Audit failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
-              summary: 'Audit could not be completed for this chapter.',
-            },
-          } as ChapterAuditResult;
-        }
-      });
+            content: chapter.content,
+          },
+        });
 
-      const batchResults = await Promise.all(batchPromises);
-      newResults.push(...batchResults);
+        if (response.error) {
+          const errMsg = response.error.message || '';
+          if (errMsg.includes('429') || errMsg.includes('rate')) {
+            toast({ title: "Rate limited — pausing 10s before retrying…", variant: "destructive" });
+            await new Promise(r => setTimeout(r, 10000));
+            // Retry once
+            const retry = await supabase.functions.invoke('audit-code', {
+              body: {
+                chapterId: chapter.id,
+                chapterTitle: chapter.title,
+                chapterNumber: chapter.chapter_number,
+                content: chapter.content,
+              },
+            });
+            if (!retry.error) {
+              newResults.push(retry.data as ChapterAuditResult);
+              setResults([...newResults]);
+              setAuditProgress({ current: i + 1, total: generatedChapters.length });
+              continue;
+            }
+          }
+          throw new Error(response.error.message);
+        }
+        newResults.push(response.data as ChapterAuditResult);
+      } catch (error) {
+        console.error(`Audit failed for chapter ${chapter.chapter_number}:`, error);
+        newResults.push({
+          chapterId: chapter.id,
+          chapterTitle: chapter.title,
+          chapterNumber: chapter.chapter_number,
+          codeBlockCount: 0,
+          result: {
+            chapterScore: -1,
+            riskLevel: 'error',
+            codeBlocks: [],
+            overallRecommendations: [`Audit failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+            summary: 'Audit could not be completed for this chapter.',
+          },
+        } as ChapterAuditResult);
+      }
+
       setResults([...newResults]);
-      setAuditProgress({ current: Math.min(i + batchSize, generatedChapters.length), total: generatedChapters.length });
+      setAuditProgress({ current: i + 1, total: generatedChapters.length });
     }
 
     setIsAuditing(false);
