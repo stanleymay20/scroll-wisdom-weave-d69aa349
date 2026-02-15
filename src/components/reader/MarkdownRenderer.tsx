@@ -95,7 +95,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     // Pre-process: detect plain-text headings (legacy content without ## markers)
     // A line that is short (<80 chars), standalone between blank lines, 
     // contains no punctuation ending, and looks like a title = likely a heading
-    html = html.replace(/\n\n([A-Z][A-Za-z0-9 :&,\-–—']{2,75})\n\n/g, (match, line) => {
+    html = html.replace(/\n\n([A-Z][A-Za-z0-9 :&,\-–—'()]{2,75})\n\n/g, (match, line) => {
       const trimmed = line.trim();
       if (/^#{1,6}\s/.test(trimmed) || /^[-*]\s/.test(trimmed) || /[.!?;,]$/.test(trimmed)) {
         return match;
@@ -105,12 +105,16 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       return `\n\n## ${trimmed}\n\n`;
     });
 
-    // Detect numbered sub-headings like "4.3. Manufacturing and Logistics"
-    html = html.replace(/\n\n(\d+(?:\.\d+)*\.?\s+[A-Z][A-Za-z0-9 :&,\-–—']{2,70})\n\n/g, (match, line) => {
+    // Detect numbered sub-headings like "4.3. Manufacturing and Logistics" or "1.1.2. Floating-Point Numbers (float)"
+    // Match with either double newline or single newline after (sub-headings often have body on next line)
+    html = html.replace(/\n\n(\d+(?:\.\d+)*\.?\s+[A-Za-z][A-Za-z0-9 :&,\-–—'()*/]{2,70})\n/g, (match, line) => {
       const trimmed = line.trim();
-      if (/[.!?;,]$/.test(trimmed) && !/\.\s*$/.test(trimmed)) return match;
+      // Skip if it ends with sentence-ending punctuation (but allow closing parenthesis)
+      if (/[.!?;,]$/.test(trimmed) && !/[)]$/.test(trimmed) && !/\.\s*$/.test(trimmed)) return match;
       const words = trimmed.split(/\s+/);
       if (words.length > 12) return match;
+      // Don't convert if it looks like a regular sentence (too many words or contains "the", "is", "are" etc.)
+      if (words.length > 8 && /\b(the|is|are|was|were|and|or|but|for|with|that|this|from|into|have|has)\b/i.test(trimmed)) return match;
       return `\n\n### ${trimmed}\n\n`;
     });
     
