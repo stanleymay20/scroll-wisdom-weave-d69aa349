@@ -217,9 +217,10 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/^[\s]*\d+\.\s+(.+)$/gm, '<li class="md-li-ordered">$1</li>');
     html = html.replace(/(<li class="md-li-ordered">.*?<\/li>\n?)+/g, '<ol class="md-ol">$&</ol>');
     
-    // Paragraphs (double newlines)
-    html = html.replace(/\n\n+/g, '</p><p class="md-p">');
-    html = `<p class="md-p">${html}</p>`;
+    // Paragraphs (double newlines) — add data-sentence-index for audio sync
+    let sentenceIdx = 0;
+    html = html.replace(/\n\n+/g, () => `</p><p class="md-p" data-sentence-index="${sentenceIdx++}">`);
+    html = `<p class="md-p" data-sentence-index="${sentenceIdx++}">${html}</p>`;
     
     // Clean up empty paragraphs
     html = html.replace(/<p class="md-p">\s*<\/p>/g, '');
@@ -588,5 +589,14 @@ export const markdownStyles = `
 .markdown-content del {
   text-decoration: line-through;
   opacity: 0.7;
+}
+
+/* Audio sync: active paragraph highlight */
+.markdown-content [data-sentence-index].audio-active {
+  background: hsl(var(--primary) / 0.15);
+  border-left: 3px solid hsl(var(--primary));
+  padding-left: 0.75rem;
+  border-radius: 0.25rem;
+  transition: background 0.3s ease, border-color 0.3s ease;
 }
 `;

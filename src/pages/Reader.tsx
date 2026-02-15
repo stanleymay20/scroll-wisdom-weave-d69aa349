@@ -150,6 +150,9 @@ export default function Reader() {
   
   // Track TTS playing state for auto-scroll
   const [isTTSPlaying, setIsTTSPlaying] = useState(false);
+  // Track audio element and cumulative time for sentence sync
+  const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
+  const [ttsCumulativeTime, setTtsCumulativeTime] = useState(0);
   
   // Auto-scroll is defined after wordCount is available (line ~312)
   
@@ -346,8 +349,26 @@ export default function Reader() {
     chapterContent: chapter?.content || null,
     isPlaying: isTTSPlaying,
     contentRef,
+    cumulativeTimeSec: ttsCumulativeTime,
+    audioRef: ttsAudioRef as React.RefObject<HTMLAudioElement>,
     wordCount,
   });
+
+  // Apply audio-active CSS class to the active paragraph
+  useEffect(() => {
+    if (!contentRef.current) return;
+    // Remove previous active
+    contentRef.current.querySelectorAll('.audio-active').forEach(el => {
+      el.classList.remove('audio-active');
+    });
+    // Add to current
+    if (audioSync.activeSentenceIndex >= 0 && isTTSPlaying && audioSync.isSyncEnabled) {
+      const el = contentRef.current.querySelector(`[data-sentence-index="${audioSync.activeSentenceIndex}"]`);
+      if (el) {
+        el.classList.add('audio-active');
+      }
+    }
+  }, [audioSync.activeSentenceIndex, isTTSPlaying, audioSync.isSyncEnabled]);
 
   // Helper function to extract ALL code blocks from chapter content for playground
   const extractCodeFromChapter = (content: string): string => {
@@ -878,6 +899,8 @@ export default function Reader() {
               currentChapter={currentChapter}
               totalChapters={totalChapters}
               onPlayingChange={setIsTTSPlaying}
+              onAudioRefChange={(el) => { ttsAudioRef.current = el; }}
+              onCumulativeTimeChange={setTtsCumulativeTime}
               onChapterComplete={async () => {
                 // AUTO-CONTINUE: Navigate to next chapter when audio finishes
                 if (currentChapter < totalChapters) {
