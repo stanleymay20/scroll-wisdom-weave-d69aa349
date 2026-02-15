@@ -70,27 +70,40 @@ export default function UploadPage() {
       return await f.text();
     }
 
-    // For PDF/DOCX, upload to storage and use a simpler approach
-    // We'll read as text for now (basic extraction)
-    // In production, this would use a proper parser
-    const text = await f.text();
-    
-    // If it looks like binary/garbled, we need to handle it
-    if (text.includes('%PDF') || text.charCodeAt(0) > 127) {
-      // Upload the file and let the edge function handle it via storage
-      const path = `${user!.id}/${Date.now()}-${f.name}`;
-      const { error: uploadError } = await supabase.storage
-        .from('documents')
-        .upload(path, f);
-
-      if (uploadError) throw new Error('Failed to upload file');
-
-      // For now, return a message indicating PDF parsing limitation
-      // TODO: Integrate proper PDF parsing in edge function
-      throw new Error('PDF and DOCX files require text extraction. Please copy-paste the text content directly, or use the Text tab.');
+    // PDF extraction using pdf.js
+    if (f.type === 'application/pdf' || f.name.endsWith('.pdf')) {
+      setProgressMessage('Extracting text from PDF...');
+      const pdfjsLib = await import('pdfjs-dist');
+      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+      
+      const arrayBuffer = await f.arrayBuffer();
+      const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
+      const pages: string[] = [];
+      
+      for (let i = 1; i <= pdf.numPages; i++) {
+        const page = await pdf.getPage(i);
+        const textContent = await page.getTextContent();
+        const pageText = textContent.items
+          .map((item: any) => item.str)
+          .join(' ');
+        pages.push(pageText);
+        setProgress(Math.min(5 + Math.round((i / pdf.numPages) * 15), 20));
+      }
+      
+      return pages.join('\n\n');
     }
 
-    return text;
+    // DOCX extraction using mammoth
+    if (f.type === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' || f.name.endsWith('.docx')) {
+      setProgressMessage('Extracting text from DOCX...');
+      const mammoth = await import('mammoth');
+      const arrayBuffer = await f.arrayBuffer();
+      const result = await mammoth.extractRawText({ arrayBuffer });
+      return result.value;
+    }
+
+    // Fallback: try reading as text
+    return await f.text();
   };
 
   const processDocument = useCallback(async () => {
@@ -299,12 +312,6 @@ export default function UploadPage() {
                         <p className="text-xs text-muted-foreground/70 mt-1">PDF, DOCX, TXT, MD</p>
                       </>
                     )}
-                  </div>
-                  <div className="flex items-start gap-2 p-3 rounded-lg bg-amber-500/10 border border-amber-500/20">
-                    <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
-                    <p className="text-xs text-amber-700 dark:text-amber-400">
-                      For best results with PDF/DOCX, copy the text content and use the "Text" tab. Direct file parsing support is coming soon.
-                    </p>
                   </div>
                 </div>
               </TabsContent>
