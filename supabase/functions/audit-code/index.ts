@@ -23,8 +23,11 @@ OBJECTIVES:
    - Ensure figures are properly sized (figsize parameter)
    - Add concrete visualization examples if the chapter topic is data visualization
 
-CRITICAL: You MUST return ONLY valid JSON. No markdown fences. No explanatory text before or after.
-Do NOT wrap the output in backtick fences. Return raw JSON directly.
+CRITICAL JSON RULES:
+- Return ONLY a single valid JSON object. No markdown. No backticks. No explanation.
+- All string values must have newlines escaped as \\n (two characters: backslash + n).
+- All double quotes inside string values must be escaped as \\"
+- Do NOT use literal line breaks inside JSON string values.
 
 OUTPUT FORMAT (raw JSON only):
 {
@@ -36,7 +39,7 @@ OUTPUT FORMAT (raw JSON only):
       "language": "<detected language>",
       "originalSnippet": "<first 3 lines of original>",
       "issues": ["<issue 1>", "<issue 2>"],
-      "correctedCode": "<full corrected code>",
+      "correctedCode": "<full corrected code with newlines as \\n>",
       "recommendations": ["<recommendation 1>"]
     }
   ],
@@ -45,12 +48,14 @@ OUTPUT FORMAT (raw JSON only):
 }
 
 IMPORTANT: "index" must be 0-based (first code block = 0, second = 1, etc.)
+In "correctedCode", use \\n for newlines. Example: "import numpy as np\\nnp.random.seed(42)\\nprint('hello')"
 Assume this book will be reviewed by a FAANG Staff Engineer. Rewrite any code that would not pass internal production review.
 Be thorough. Do not skip small issues. If any code is amateur-level, rewrite it to industry standard.
 If the chapter covers data visualization, ensure corrected code includes proper chart examples with labels, titles, and best practices.`;
+
 function extractCodeBlocks(content: string): { code: string; language: string; index: number }[] {
   const blocks: { code: string; language: string; index: number }[] = [];
-  const fencedRegex = /```(\w+)?\s*\n([\s\S]*?)```/g;
+  const fencedRegex = /\`\`\`(\w+)?\s*\n([\s\S]*?)\`\`\`/g;
   let match;
   let idx = 0;
   while ((match = fencedRegex.exec(content)) !== null) {
@@ -59,6 +64,146 @@ function extractCodeBlocks(content: string): { code: string; language: string; i
   const structuredRegex = /\[CODE_BLOCK\]([\s\S]*?)\[\/CODE_BLOCK\]/g;
   while ((match = structuredRegex.exec(content)) !== null) {
     blocks.push({ code: match[1].trim(), language: 'structured', index: idx++ });
+  }
+  return blocks;
+}
+
+/**
+ * Aggressively fix unescaped newlines inside JSON string values.
+ * Walks char-by-char to handle multiline correctedCode properly.
+ */
+function fixNewlinesInJsonStrings(raw: string): string {
+  let result = '';
+  let inString = false;
+  let escaped = false;
+  
+  for (let i = 0; i < raw.length; i++) {
+    const ch = raw[i];
+    
+    if (escaped) {
+      result += ch;
+      escaped = false;
+      continue;
+    }
+    
+    if (ch === '\\' && inString) {
+      escaped = true;
+      result += ch;
+      continue;
+    }
+    
+    if (ch === '"') {
+      inString = !inString;
+      result += ch;
+      continue;
+    }
+    
+    if (inString && ch === '\n') {
+      result += '\\n';
+      continue;
+    }
+    if (inString && ch === '\r') {
+      result += '\\r';
+      continue;
+    }
+    if (inString && ch === '\t') {
+      result += '\\t';
+      continue;
+    }
+    
+    result += ch;
+  }
+  
+  return result;
+}
+
+function cleanAndParse(jsonStr: string): Record<string, unknown> | null {
+  // Step 1: Remove non-whitespace control chars
+  let cleaned = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+  
+  // Step 2: Fix trailing commas
+  cleaned = cleaned.replace(/,\s*}/g, '}').replace(/,\s*\]/g, ']');
+  
+  // Step 3: Try direct parse
+  try {
+    return JSON.parse(cleaned) as Record<string, unknown>;
+  } catch { /* continue */ }
+  
+  // Step 4: Fix unescaped newlines inside string values
+  try {
+    const fixed = fixNewlinesInJsonStrings(cleaned);
+    return JSON.parse(fixed) as Record<string, unknown>;
+  } catch { /* continue */ }
+  
+  // Step 5: Try stripping all literal newlines and re-parsing
+  try {
+    const noNewlines = cleaned.replace(/\n/g, '\\n').replace(/\r/g, '');
+    return JSON.parse(noNewlines) as Record<string, unknown>;
+  } catch { /* continue */ }
+  
+  return null;
+}
+
+function tryParseJSON(raw: string): Record<string, unknown> | null {
+  // Strategy 1: Extract from ```json ... ``` fences
+  const jsonFenceMatch = raw.match(/```json\s*\n?([\s\S]*?)```/);
+  if (jsonFenceMatch) {
+    const parsed = cleanAndParse(jsonFenceMatch[1].trim());
+    if (parsed) return parsed;
+  }
+  
+  // Strategy 2: Extract from ``` ... ``` (any fence)
+  const anyFenceMatch = raw.match(/```\s*\n?([\s\S]*?)```/);
+  if (anyFenceMatch) {
+    const parsed = cleanAndParse(anyFenceMatch[1].trim());
+    if (parsed) return parsed;
+  }
+  
+  // Strategy 3: Find outermost { ... } in raw text
+  const firstBrace = raw.indexOf('{');
+  const lastBrace = raw.lastIndexOf('}');
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    const parsed = cleanAndParse(raw.substring(firstBrace, lastBrace + 1));
+    if (parsed) return parsed;
+  }
+  
+  // Strategy 4: Try the entire raw string
+  const parsed = cleanAndParse(raw.trim());
+  if (parsed) return parsed;
+  
+  return null;
+}
+
+/** Extract codeBlocks from raw text via regex when JSON parsing fails */
+function extractCodeBlocksFromRaw(raw: string): Array<Record<string, unknown>> {
+  const blocks: Array<Record<string, unknown>> = [];
+  // Find individual code block objects
+  const blockRegex = /\{\s*"index"\s*:\s*(\d+)\s*,\s*"language"\s*:\s*"(\w+)"\s*,[\s\S]*?"correctedCode"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
+  let m;
+  while ((m = blockRegex.exec(raw)) !== null) {
+    const idx = parseInt(m[1]);
+    const lang = m[2];
+    const corrected = m[3].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t');
+    
+    // Extract issues for this block
+    const blockSection = raw.substring(m.index, raw.indexOf('}', m.index + m[0].length) + 1);
+    const issuesMatch = blockSection.match(/"issues"\s*:\s*\[([\s\S]*?)\]/);
+    const issues: string[] = [];
+    if (issuesMatch) {
+      const items = [...issuesMatch[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)];
+      for (const item of items) {
+        issues.push(item[1].replace(/\\n/g, ' ').replace(/\\"/g, '"'));
+      }
+    }
+    
+    blocks.push({
+      index: idx,
+      language: lang,
+      originalSnippet: '',
+      issues,
+      correctedCode: corrected,
+      recommendations: [],
+    });
   }
   return blocks;
 }
@@ -88,7 +233,7 @@ serve(async (req) => {
     }
 
     const codeBlocksText = codeBlocks.map((b, i) => 
-      `--- Code Block ${i + 1} (${b.language}) ---\n${b.code}\n`
+      `--- Code Block ${i} (${b.language}) ---\n${b.code}\n`
     ).join('\n');
 
     const apiKey = Deno.env.get('LOVABLE_API_KEY');
@@ -103,13 +248,13 @@ serve(async (req) => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash-lite',
+          model: 'google/gemini-2.5-flash',
           messages: [
             { role: 'system', content: STO_AUDIT_PROMPT },
-            { role: 'user', content: `Audit the following ${codeBlocks.length} code block(s) from Chapter ${chapterNumber}: "${chapterTitle}".\n\n${codeBlocksText}\n\nReturn ONLY valid JSON matching the specified format.` },
+            { role: 'user', content: `Audit the following ${codeBlocks.length} code block(s) from Chapter ${chapterNumber}: "${chapterTitle}".\n\n${codeBlocksText}\n\nReturn ONLY raw JSON. No markdown fences. Escape all newlines in strings as \\n.` },
           ],
-          temperature: 0.2,
-          max_tokens: 6000,
+          temperature: 0.1,
+          max_tokens: 12000,
         }),
       });
 
@@ -139,85 +284,24 @@ serve(async (req) => {
     const aiData = await response.json();
     const rawContent = aiData.choices?.[0]?.message?.content || '';
     
+    console.log(`Raw AI response length: ${rawContent.length} chars`);
+    
     let auditResult;
-    
-    // --- Robust multi-strategy JSON extraction ---
-    function tryParseJSON(raw: string): object | null {
-      // Strategy 1: Extract from ```json ... ``` fences
-      const jsonFenceMatch = raw.match(/```json\s*\n?([\s\S]*?)```/);
-      if (jsonFenceMatch) {
-        const parsed = cleanAndParse(jsonFenceMatch[1].trim());
-        if (parsed) return parsed;
-      }
-      
-      // Strategy 2: Extract from ``` ... ``` (any fence)
-      const anyFenceMatch = raw.match(/```\s*\n?([\s\S]*?)```/);
-      if (anyFenceMatch) {
-        const parsed = cleanAndParse(anyFenceMatch[1].trim());
-        if (parsed) return parsed;
-      }
-      
-      // Strategy 3: Find outermost { ... } in raw text
-      const firstBrace = raw.indexOf('{');
-      const lastBrace = raw.lastIndexOf('}');
-      if (firstBrace !== -1 && lastBrace > firstBrace) {
-        const parsed = cleanAndParse(raw.substring(firstBrace, lastBrace + 1));
-        if (parsed) return parsed;
-      }
-      
-      return null;
-    }
-    
-    function cleanAndParse(jsonStr: string): object | null {
-      try {
-        // Step 1: Remove control chars except whitespace
-        let cleaned = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-        
-        // Step 2: Fix trailing commas
-        cleaned = cleaned.replace(/,\s*}/g, '}').replace(/,\s*\]/g, ']');
-        
-        // Step 3: Try direct parse
-        return JSON.parse(cleaned);
-      } catch {
-        try {
-          // Step 4: More aggressive cleanup — fix unescaped newlines inside strings
-          let fixed = jsonStr
-            .replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '')
-            .replace(/,\s*}/g, '}')
-            .replace(/,\s*\]/g, ']');
-          
-          // Replace literal newlines inside JSON string values with \\n
-          fixed = fixed.replace(/"([^"]*?)"/g, (match) => {
-            return match.replace(/\n/g, '\\n').replace(/\r/g, '\\r').replace(/\t/g, '\\t');
-          });
-          
-          return JSON.parse(fixed);
-        } catch {
-          return null;
-        }
-      }
-    }
-    
     const parsed = tryParseJSON(rawContent);
     
     if (parsed && typeof parsed === 'object' && 'chapterScore' in parsed) {
       auditResult = parsed;
+      console.log(`JSON parsed successfully. Score: ${parsed.chapterScore}, Blocks: ${(parsed.codeBlocks as unknown[])?.length || 0}`);
     } else {
+      console.log('JSON parse failed, using regex fallback');
+      
       // Regex-based field extraction as last resort
       const scoreMatch = rawContent.match(/"chapterScore"\s*:\s*(\d+)/);
       const riskMatch = rawContent.match(/"riskLevel"\s*:\s*"(\w+)"/);
       const summaryMatch = rawContent.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
       
-      // Extract individual issues from the raw text
-      const issueMatches = [...rawContent.matchAll(/"issues"\s*:\s*\[([\s\S]*?)\]/g)];
-      const extractedIssues: string[] = [];
-      for (const m of issueMatches) {
-        const inner = m[1];
-        const items = [...inner.matchAll(/"((?:[^"\\]|\\.)*)"/g)];
-        for (const item of items) {
-          extractedIssues.push(item[1].replace(/\\n/g, ' ').replace(/\\"/g, '"'));
-        }
-      }
+      // Try to extract codeBlocks via regex for auto-fix
+      const extractedBlocks = extractCodeBlocksFromRaw(rawContent);
       
       // Extract recommendations
       const recMatches = [...rawContent.matchAll(/"(?:overall)?[Rr]ecommendations"\s*:\s*\[([\s\S]*?)\]/g)];
@@ -226,25 +310,42 @@ serve(async (req) => {
         const inner = m[1];
         const items = [...inner.matchAll(/"((?:[^"\\]|\\.)*)"/g)];
         for (const item of items) {
-          extractedRecs.push(item[1].replace(/\\n/g, ' ').replace(/\\"/g, '"'));
+          const rec = item[1].replace(/\\n/g, ' ').replace(/\\"/g, '"');
+          if (rec.length > 5 && rec.length < 500) extractedRecs.push(rec);
+        }
+      }
+      
+      // Extract issues if no recommendations found
+      const extractedIssues: string[] = [];
+      if (extractedRecs.length === 0) {
+        const issueMatches = [...rawContent.matchAll(/"issues"\s*:\s*\[([\s\S]*?)\]/g)];
+        for (const m of issueMatches) {
+          const inner = m[1];
+          const items = [...inner.matchAll(/"((?:[^"\\]|\\.)*)"/g)];
+          for (const item of items) {
+            const issue = item[1].replace(/\\n/g, ' ').replace(/\\"/g, '"');
+            if (issue.length > 5 && issue.length < 500) extractedIssues.push(issue);
+          }
         }
       }
       
       const summary = summaryMatch 
         ? summaryMatch[1].replace(/\\n/g, ' ').replace(/\\"/g, '"')
-        : 'Audit completed but response format was non-standard. Key issues were still extracted where possible.';
+        : `Audit reviewed ${codeBlocks.length} code block(s). ${extractedBlocks.length > 0 ? `Found issues in ${extractedBlocks.length} block(s).` : ''} ${extractedRecs.length > 0 ? extractedRecs[0] : 'Review recommendations below.'}`;
       
       auditResult = {
         chapterScore: scoreMatch ? parseInt(scoreMatch[1]) : 5,
         riskLevel: riskMatch ? riskMatch[1] : 'medium',
-        codeBlocks: [],
+        codeBlocks: extractedBlocks,
         overallRecommendations: extractedRecs.length > 0 
-          ? extractedRecs.slice(0, 5) 
+          ? extractedRecs.slice(0, 8)
           : extractedIssues.length > 0
-            ? extractedIssues.slice(0, 5)
+            ? [...new Set(extractedIssues)].slice(0, 8)
             : [summary],
         summary,
       };
+      
+      console.log(`Fallback extracted: score=${auditResult.chapterScore}, blocks=${extractedBlocks.length}, recs=${auditResult.overallRecommendations.length}`);
     }
 
     return new Response(JSON.stringify({
