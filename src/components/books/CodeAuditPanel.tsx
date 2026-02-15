@@ -127,6 +127,36 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
 
   const generatedChapters = chapters.filter(ch => ch.is_generated && ch.content);
 
+  /** Invoke audit with client-side retry on 429 */
+  const auditWithRetry = async (chapter: ChapterData, maxRetries = 2): Promise<ChapterAuditResult> => {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      if (attempt > 0) {
+        const backoff = attempt * 30000; // 30s, 60s
+        toast({ title: `Rate limited — waiting ${backoff / 1000}s before retrying Ch ${chapter.chapter_number}…` });
+        await new Promise(r => setTimeout(r, backoff));
+      }
+
+      const response = await supabase.functions.invoke('audit-code', {
+        body: {
+          chapterId: chapter.id,
+          chapterTitle: chapter.title,
+          chapterNumber: chapter.chapter_number,
+          content: chapter.content,
+        },
+      });
+
+      if (response.error) {
+        const errMsg = response.error.message || '';
+        const is429 = errMsg.includes('429') || errMsg.includes('rate_limited') || errMsg.includes('rate');
+        if (is429 && attempt < maxRetries) continue;
+        throw new Error(response.error.message);
+      }
+
+      return response.data as ChapterAuditResult;
+    }
+    throw new Error('Max retries exceeded');
+  };
+
   const handleRunAudit = async () => {
     if (generatedChapters.length === 0) {
       toast({ title: "No generated chapters to audit", variant: "destructive" });
@@ -143,44 +173,14 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
     for (let i = 0; i < generatedChapters.length; i++) {
       const chapter = generatedChapters[i];
       
-      // 4s delay between requests to avoid rate limits
+      // 8s gap between chapters to stay well under rate limits
       if (i > 0) {
-        await new Promise(r => setTimeout(r, 4000));
+        await new Promise(r => setTimeout(r, 8000));
       }
 
       try {
-        const response = await supabase.functions.invoke('audit-code', {
-          body: {
-            chapterId: chapter.id,
-            chapterTitle: chapter.title,
-            chapterNumber: chapter.chapter_number,
-            content: chapter.content,
-          },
-        });
-
-        if (response.error) {
-          const errMsg = response.error.message || '';
-          if (errMsg.includes('429') || errMsg.includes('rate')) {
-            toast({ title: `Rate limited — pausing 15s before retrying Ch ${chapter.chapter_number}…` });
-            await new Promise(r => setTimeout(r, 15000));
-            const retry = await supabase.functions.invoke('audit-code', {
-              body: {
-                chapterId: chapter.id,
-                chapterTitle: chapter.title,
-                chapterNumber: chapter.chapter_number,
-                content: chapter.content,
-              },
-            });
-            if (!retry.error) {
-              newResults.push(retry.data as ChapterAuditResult);
-              setResults([...newResults]);
-              setAuditProgress({ current: i + 1, total: generatedChapters.length });
-              continue;
-            }
-          }
-          throw new Error(response.error.message);
-        }
-        newResults.push(response.data as ChapterAuditResult);
+        const result = await auditWithRetry(chapter);
+        newResults.push(result);
       } catch (error) {
         console.error(`Audit failed for chapter ${chapter.chapter_number}:`, error);
         newResults.push({
