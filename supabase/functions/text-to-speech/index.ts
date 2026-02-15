@@ -1,5 +1,5 @@
-import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,6 +32,11 @@ serve(async (req) => {
       throw new Error("Supabase configuration is missing");
     }
 
+    // Service role client for DB operations and auth verification
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      auth: { persistSession: false },
+    });
+
     // Authenticate user via getClaims
     const authHeader = req.headers.get("Authorization");
     if (!authHeader?.startsWith("Bearer ")) {
@@ -41,12 +46,8 @@ serve(async (req) => {
       });
     }
 
-    const supabaseAuth = createClient(SUPABASE_URL, Deno.env.get("SUPABASE_ANON_KEY")!, {
-      global: { headers: { Authorization: authHeader } },
-    });
-
     const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: authError } = await supabaseAuth.auth.getClaims(token);
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(token);
 
     if (authError || !claimsData?.claims?.sub) {
       console.error("[TTS] Auth error:", authError);
@@ -58,9 +59,6 @@ serve(async (req) => {
 
     const userId = claimsData.claims.sub as string;
     console.log(`[TTS] Authenticated user: ${userId.slice(0, 8)}...`);
-
-    // Service role client for DB operations
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
     // Get user's plan from profiles (use user_id column, select only existing columns)
     const { data: profile } = await supabase
