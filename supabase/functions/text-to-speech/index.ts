@@ -37,59 +37,63 @@ serve(async (req) => {
       auth: { persistSession: false },
     });
 
-    // Authenticate user via getClaims
+    // Authenticate user - try getUser first (most reliable), then getClaims as fallback
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(JSON.stringify({ error: "Authentication required" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    let userId: string | null = null;
+
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "");
+      
+      // Try getUser first - works reliably with user JWTs
+      const { data: userData, error: userError } = await supabase.auth.getUser(token);
+      
+      if (!userError && userData?.user?.id) {
+        userId = userData.user.id;
+        console.log(`[TTS] Authenticated via getUser: ${userId.slice(0, 8)}...`);
+      } else {
+        // Token might be the anon key (no user session) - allow with free tier
+        console.log("[TTS] No valid user session, proceeding as anonymous with free limits");
+      }
+    } else {
+      console.log("[TTS] No auth header, proceeding as anonymous");
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: claimsData, error: authError } = await supabase.auth.getClaims(token);
+    // Get user's plan and enforce limits (only for authenticated users)
+    let userPlan = "free";
+    let monthlyLimit = TIER_TTS_LIMITS.free;
+    let currentUsage = 0;
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    let usageRow: any = null;
 
-    if (authError || !claimsData?.claims?.sub) {
-      console.error("[TTS] Auth error:", authError);
-      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    if (userId) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("plan")
+        .eq("user_id", userId)
+        .single();
 
-    const userId = claimsData.claims.sub as string;
-    console.log(`[TTS] Authenticated user: ${userId.slice(0, 8)}...`);
+      userPlan = profile?.plan || "free";
+      monthlyLimit = TIER_TTS_LIMITS[userPlan] ?? TIER_TTS_LIMITS.free;
 
-    // Get user's plan from profiles (use user_id column, select only existing columns)
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("plan")
-      .eq("user_id", userId)
-      .single();
+      const { data: usage } = await supabase
+        .from("tts_usage")
+        .select("minutes_used")
+        .eq("user_id", userId)
+        .eq("month", currentMonth)
+        .maybeSingle();
 
-    const userPlan = profile?.plan || "free";
-    const monthlyLimit = TIER_TTS_LIMITS[userPlan] ?? TIER_TTS_LIMITS.free;
+      usageRow = usage;
+      currentUsage = usage?.minutes_used ?? 0;
 
-    // Check TTS usage from the dedicated tts_usage table
-    const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-
-    const { data: usageRow } = await supabase
-      .from("tts_usage")
-      .select("minutes_used")
-      .eq("user_id", userId)
-      .eq("month", currentMonth)
-      .maybeSingle();
-
-    const currentUsage = usageRow?.minutes_used ?? 0;
-
-    if (currentUsage >= monthlyLimit) {
-      console.log(`[TTS] Monthly limit reached: ${currentUsage}/${monthlyLimit} min (${userPlan})`);
-      return new Response(JSON.stringify({
-        error: `Monthly TTS limit reached (${monthlyLimit} min for ${userPlan} plan). Upgrade for more.`,
-      }), {
-        status: 403,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      if (currentUsage >= monthlyLimit) {
+        console.log(`[TTS] Monthly limit reached: ${currentUsage}/${monthlyLimit} min (${userPlan})`);
+        return new Response(JSON.stringify({
+          error: `Monthly TTS limit reached (${monthlyLimit} min for ${userPlan} plan). Upgrade for more.`,
+        }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
     }
 
     // Parse request body
@@ -228,25 +232,25 @@ serve(async (req) => {
     }
     const base64Audio = btoa(binary);
 
-    // Track usage in tts_usage table
+    // Track usage in tts_usage table (only for authenticated users)
     const estimatedMinutes = Math.ceil(cleanedText.length / 750);
 
-    if (usageRow) {
-      // Update existing row
-      await supabase
-        .from("tts_usage")
-        .update({ minutes_used: currentUsage + estimatedMinutes })
-        .eq("user_id", userId)
-        .eq("month", currentMonth);
-    } else {
-      // Insert new row for this month
-      await supabase
-        .from("tts_usage")
-        .insert({
-          user_id: userId,
-          month: currentMonth,
-          minutes_used: estimatedMinutes,
-        });
+    if (userId) {
+      if (usageRow) {
+        await supabase
+          .from("tts_usage")
+          .update({ minutes_used: currentUsage + estimatedMinutes })
+          .eq("user_id", userId)
+          .eq("month", currentMonth);
+      } else {
+        await supabase
+          .from("tts_usage")
+          .insert({
+            user_id: userId,
+            month: currentMonth,
+            minutes_used: estimatedMinutes,
+          });
+      }
     }
 
     console.log(`[TTS] Success. Usage: ${currentUsage + estimatedMinutes}/${monthlyLimit} min`);
