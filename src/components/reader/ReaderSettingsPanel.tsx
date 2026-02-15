@@ -73,23 +73,35 @@ export function ReaderSettingsPanel({
       <div>
         <label className="text-sm text-muted-foreground mb-2 block flex items-center gap-2">
           <AlignJustify className="h-4 w-4" />
-          Reading Width
+          Screen Ratio
         </label>
         <div className="grid grid-cols-4 gap-2">
-          {(['narrow', 'normal', 'wide', 'full'] as const).map((width) => (
+          {([
+            { key: 'narrow' as const, label: 'Focus', icon: '▐▌' },
+            { key: 'normal' as const, label: 'Normal', icon: '▐██▌' },
+            { key: 'wide' as const, label: 'Wide', icon: '▐████▌' },
+            { key: 'full' as const, label: 'Full', icon: '▐██████▌' },
+          ]).map(({ key, label, icon }) => (
             <button
-              key={width}
-              onClick={() => updateSettings({ reading_width: width })}
-              className={`p-2 rounded-md text-xs font-medium transition-all border ${
-                settings.reading_width === width
+              key={key}
+              onClick={() => updateSettings({ reading_width: key })}
+              className={`flex flex-col items-center gap-1 p-2 rounded-md text-xs font-medium transition-all border ${
+                settings.reading_width === key
                   ? 'ring-2 ring-primary ring-offset-1 bg-primary/10 border-primary/30'
                   : 'bg-muted/30 border-border/30 hover:bg-muted/50'
               }`}
             >
-              {width.charAt(0).toUpperCase() + width.slice(1)}
+              <span className="text-[10px] opacity-60 leading-none font-mono">{icon}</span>
+              <span>{label}</span>
             </button>
           ))}
         </div>
+        <p className="text-[10px] text-muted-foreground/60 mt-1.5">
+          {settings.reading_width === 'narrow' && 'Optimal for focused reading — reduces eye travel'}
+          {settings.reading_width === 'normal' && 'Balanced width for comfortable reading'}
+          {settings.reading_width === 'wide' && 'Expanded view for code-heavy or table content'}
+          {settings.reading_width === 'full' && 'Maximum width — uses entire screen'}
+        </p>
       </div>
 
       {/* Reading Speed */}

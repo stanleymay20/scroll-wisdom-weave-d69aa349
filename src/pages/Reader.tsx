@@ -981,7 +981,16 @@ export default function Reader() {
           paddingBottom: "calc(env(safe-area-inset-bottom) + 6rem)",
         }}
       >
-        <article className="container mx-auto px-4 max-w-3xl overflow-x-hidden" ref={contentRef}>
+        <article 
+          className={cn(
+            "container mx-auto px-4 overflow-x-hidden transition-all duration-300",
+            settings.reading_width === 'narrow' && "max-w-xl",
+            settings.reading_width === 'normal' && "max-w-3xl",
+            settings.reading_width === 'wide' && "max-w-5xl",
+            settings.reading_width === 'full' && "max-w-full",
+          )} 
+          ref={contentRef}
+        >
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
