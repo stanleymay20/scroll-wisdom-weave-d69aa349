@@ -82,9 +82,9 @@ function applyCodeFixes(content: string, fixes: CodeBlockAudit[]): string {
   for (let i = 0; i < fixes.length; i++) {
     const fix = fixes[i];
     if (fix.correctedCode && fix.issues.length > 0) {
-      // Determine the 0-based block index: if AI returned 1-based, subtract 1
-      const zeroIdx = fix.index >= 1 && fix.index <= fixes.length ? fix.index - 1 : i;
-      correctionMap.set(zeroIdx, fix.correctedCode);
+      // AI returns 0-based indices per prompt instructions
+      const blockIdx = typeof fix.index === 'number' ? fix.index : i;
+      correctionMap.set(blockIdx, fix.correctedCode);
     }
   }
   if (correctionMap.size === 0) return content;
