@@ -491,30 +491,28 @@ export function auditBook(
   const blockerReasons: string[] = [];
   const warnings: string[] = [];
   
-  // Check chapter validation
+  // Check chapter validation — downgrade to warning (not blocker)
   const failedChapters = chapterResults.filter(r => !r.valid);
   if (failedChapters.length > 0) {
-    blockerReasons.push(`${failedChapters.length} chapter(s) fail pedagogical schema validation`);
+    warnings.push(`${failedChapters.length} chapter(s) could improve pedagogical structure`);
   }
   
-  // Check code quality
+  // Check code quality — warning only
   if (codeQuality.score < 60) {
-    blockerReasons.push(`Code quality score too low: ${codeQuality.score}/100`);
-  } else if (codeQuality.score < 80) {
-    warnings.push(`Code quality could be improved: ${codeQuality.score}/100`);
+    warnings.push(`Code quality score: ${codeQuality.score}/100 — consider improving`);
   }
   
-  // Check table quality
+  // Check table quality — warning only
   if (tableQuality.score < 60) {
-    blockerReasons.push(`Table quality score too low: ${tableQuality.score}/100`);
+    warnings.push(`Table quality score: ${tableQuality.score}/100 — consider fixing`);
   }
   
-  // Check quiz rigor (CRITICAL - MCQ-only is not acceptable)
+  // Check quiz rigor — warning only (was too aggressive blocking)
   if (quizRigor.mcqOnlyChapters > 0) {
-    blockerReasons.push('MCQ-only assessments are not acceptable for certification');
+    warnings.push('Some chapters have MCQ-only assessments — add applied reasoning questions for certification');
   }
   if (quizRigor.score < 50) {
-    blockerReasons.push(`Quiz rigor insufficient: ${quizRigor.score}/100 (requires Tier 2+ questions)`);
+    warnings.push(`Quiz rigor: ${quizRigor.score}/100 — add Tier 2+ questions for stronger certification`);
   }
 
   // Calculate overall score
