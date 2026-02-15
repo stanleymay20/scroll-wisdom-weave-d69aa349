@@ -39,6 +39,7 @@ interface BookData {
   creator_id: string | null;
   language: string | null;
   book_type: string | null;
+  source_type: string | null;
 }
 
 interface ChapterData {
@@ -104,6 +105,7 @@ export function useBookDetailData({ bookId }: UseBookDetailDataOptions): UseBook
         creator_id: routeState.book.creator_id,
         language: routeState.book.language,
         book_type: routeState.book.book_type,
+        source_type: (routeState.book as any).source_type ?? null,
       });
       setLoadState('cached');
     }
@@ -132,6 +134,7 @@ export function useBookDetailData({ bookId }: UseBookDetailDataOptions): UseBook
         creator_id: cached.book.creator_id,
         language: cached.book.language,
         book_type: cached.book.book_type,
+        source_type: (cached.book as any).source_type ?? null,
       });
       
       if (cached.chapters.length > 0) {

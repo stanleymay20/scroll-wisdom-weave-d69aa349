@@ -90,6 +90,7 @@ interface BookData {
   creator_id: string | null;
   language: string | null;
   book_type: string | null;
+  source_type: string | null;
 }
 
 interface ChapterData {
@@ -426,7 +427,7 @@ export default function BookDetail() {
         is_generated: ch.is_generated,
       }));
       
-      const gateResult = checkPublishingGate(book.id, book.book_type, chaptersForAudit);
+      const gateResult = checkPublishingGate(book.id, book.book_type, chaptersForAudit, book.category, book.source_type);
       setAuditResult(gateResult);
       
       if (!gateResult.canPublish) {

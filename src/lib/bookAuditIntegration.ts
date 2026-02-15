@@ -19,6 +19,10 @@ import {
 // Book types that are exempt from strict pedagogical schema
 const EXEMPT_BOOK_TYPES = ['children', 'comic', 'novel', 'fiction', 'bestseller', 'poetry'];
 
+// Source types that are exempt from strict pedagogical schema
+// (uploaded/pasted/URL documents have their own structure)
+const EXEMPT_SOURCE_TYPES = ['uploaded', 'pasted', 'url'];
+
 // Book types that require illustration audit
 const ILLUSTRATED_BOOK_TYPES = ['illustrated', 'comic', 'children'];
 
@@ -35,8 +39,9 @@ export interface PublishingGateResult {
 /**
  * Check if a book type requires pedagogical audit
  */
-export function requiresPedagogicalAudit(bookType: string | null): boolean {
+export function requiresPedagogicalAudit(bookType: string | null, sourceType?: string | null): boolean {
   if (!bookType) return true; // Default to requiring audit
+  if (sourceType && EXEMPT_SOURCE_TYPES.includes(sourceType.toLowerCase())) return false;
   return !EXEMPT_BOOK_TYPES.includes(bookType.toLowerCase());
 }
 
@@ -60,7 +65,8 @@ export function checkPublishingGate(
     is_generated?: boolean | null;
     illustrations?: IllustrationMeta[];
   }[],
-  category?: string
+  category?: string,
+  sourceType?: string | null
 ): PublishingGateResult {
   const blockerReasons: string[] = [];
   const warnings: string[] = [];
@@ -72,7 +78,7 @@ export function checkPublishingGate(
   }
 
   // Check if book type requires pedagogical audit
-  const requiresAudit = requiresPedagogicalAudit(bookType);
+  const requiresAudit = requiresPedagogicalAudit(bookType, sourceType);
   const needsIllustrationAudit = requiresIllustrationAudit(bookType);
 
   // Run illustration audit if required (Contract 9 - ICG-1.0)
