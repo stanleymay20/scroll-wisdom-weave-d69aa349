@@ -1,7 +1,7 @@
 /**
  * STO Code Audit Panel
  * Senior Technical Officer review of all code blocks in book chapters.
- * Runs chapter-by-chapter audit via AI.
+ * Runs chapter-by-chapter audit via AI, with auto-fix capability.
  */
 
 import { useState } from "react";
@@ -24,6 +24,8 @@ import {
   Code2,
   Copy,
   Check,
+  Wrench,
+  Sparkles,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -64,13 +66,62 @@ interface CodeAuditPanelProps {
   bookId: string;
   chapters: ChapterData[];
   className?: string;
+  onChaptersUpdated?: () => void;
 }
 
-export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelProps) {
+/**
+ * Replace code blocks in chapter content with corrected versions.
+ * Matches fenced code blocks (```...```) and [CODE_BLOCK] tags in order.
+ */
+function applyCodeFixes(content: string, fixes: CodeBlockAudit[]): string {
+  if (!fixes || fixes.length === 0) return content;
+
+  // Build a list of corrected codes indexed by their original order
+  const correctionMap = new Map<number, string>();
+  for (const fix of fixes) {
+    if (fix.correctedCode && fix.issues.length > 0) {
+      correctionMap.set(fix.index, fix.correctedCode);
+    }
+  }
+  if (correctionMap.size === 0) return content;
+
+  let result = content;
+  let blockIndex = 0;
+
+  // Replace fenced code blocks in order
+  const fencedRegex = /```(\w+)?\s*\n([\s\S]*?)```/g;
+  result = result.replace(fencedRegex, (match, lang, code) => {
+    const currentIdx = blockIndex++;
+    const correction = correctionMap.get(currentIdx);
+    if (correction) {
+      const language = lang || '';
+      return `\`\`\`${language}\n${correction}\n\`\`\``;
+    }
+    return match;
+  });
+
+  // Replace [CODE_BLOCK] tags
+  const structuredRegex = /\[CODE_BLOCK\]([\s\S]*?)\[\/CODE_BLOCK\]/g;
+  result = result.replace(structuredRegex, (match, code) => {
+    const currentIdx = blockIndex++;
+    const correction = correctionMap.get(currentIdx);
+    if (correction) {
+      return `[CODE_BLOCK]\n${correction}\n[/CODE_BLOCK]`;
+    }
+    return match;
+  });
+
+  return result;
+}
+
+export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated }: CodeAuditPanelProps) {
   const { toast } = useToast();
   const [isAuditing, setIsAuditing] = useState(false);
+  const [isApplyingFixes, setIsApplyingFixes] = useState(false);
+  const [applyingChapterId, setApplyingChapterId] = useState<string | null>(null);
   const [auditProgress, setAuditProgress] = useState({ current: 0, total: 0 });
   const [results, setResults] = useState<ChapterAuditResult[]>([]);
+  const [fixedChapters, setFixedChapters] = useState<Set<string>>(new Set());
   const [expandedChapter, setExpandedChapter] = useState<string | null>(null);
   const [copiedIndex, setCopiedIndex] = useState<string | null>(null);
 
@@ -84,17 +135,17 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
 
     setIsAuditing(true);
     setResults([]);
+    setFixedChapters(new Set());
     setAuditProgress({ current: 0, total: generatedChapters.length });
 
     const newResults: ChapterAuditResult[] = [];
 
-    // Process one chapter at a time with delay to avoid rate limits
     for (let i = 0; i < generatedChapters.length; i++) {
       const chapter = generatedChapters[i];
       
-      // Add delay between requests (skip first)
+      // 4s delay between requests to avoid rate limits
       if (i > 0) {
-        await new Promise(r => setTimeout(r, 2000));
+        await new Promise(r => setTimeout(r, 4000));
       }
 
       try {
@@ -110,9 +161,8 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
         if (response.error) {
           const errMsg = response.error.message || '';
           if (errMsg.includes('429') || errMsg.includes('rate')) {
-            toast({ title: "Rate limited — pausing 10s before retrying…", variant: "destructive" });
-            await new Promise(r => setTimeout(r, 10000));
-            // Retry once
+            toast({ title: `Rate limited — pausing 15s before retrying Ch ${chapter.chapter_number}…` });
+            await new Promise(r => setTimeout(r, 15000));
             const retry = await supabase.functions.invoke('audit-code', {
               body: {
                 chapterId: chapter.id,
@@ -158,10 +208,91 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
     const avgScore = validResults.length > 0
       ? (validResults.reduce((sum, r) => sum + r.result.chapterScore, 0) / validResults.length).toFixed(1)
       : 'N/A';
+    
+    const fixableCount = newResults.filter(r => 
+      r.result.codeBlocks?.some(b => b.correctedCode && b.issues.length > 0)
+    ).length;
 
     toast({
       title: "STO Audit Complete",
-      description: `Reviewed ${generatedChapters.length} chapters. Average score: ${avgScore}/10`,
+      description: `Reviewed ${generatedChapters.length} chapters. Average: ${avgScore}/10. ${fixableCount} chapters have auto-fixable issues.`,
+    });
+  };
+
+  /** Apply corrected code to a single chapter */
+  const handleApplyFixes = async (result: ChapterAuditResult) => {
+    const chapter = chapters.find(ch => ch.id === result.chapterId);
+    if (!chapter?.content) return;
+
+    setIsApplyingFixes(true);
+    setApplyingChapterId(result.chapterId);
+
+    try {
+      const fixedContent = applyCodeFixes(chapter.content, result.result.codeBlocks);
+
+      const { error } = await supabase
+        .from('chapters')
+        .update({ content: fixedContent, updated_at: new Date().toISOString() })
+        .eq('id', result.chapterId);
+
+      if (error) throw error;
+
+      setFixedChapters(prev => new Set(prev).add(result.chapterId));
+      toast({
+        title: `Chapter ${result.chapterNumber} fixed`,
+        description: `Applied ${result.result.codeBlocks.filter(b => b.correctedCode && b.issues.length > 0).length} code corrections.`,
+      });
+      onChaptersUpdated?.();
+    } catch (error) {
+      console.error('Failed to apply fixes:', error);
+      toast({ title: "Failed to apply fixes", description: error instanceof Error ? error.message : 'Unknown error', variant: "destructive" });
+    } finally {
+      setIsApplyingFixes(false);
+      setApplyingChapterId(null);
+    }
+  };
+
+  /** Apply all fixes across all chapters with issues */
+  const handleApplyAllFixes = async () => {
+    const fixableResults = results.filter(r => 
+      r.result.codeBlocks?.some(b => b.correctedCode && b.issues.length > 0) &&
+      !fixedChapters.has(r.chapterId)
+    );
+
+    if (fixableResults.length === 0) {
+      toast({ title: "No fixes to apply" });
+      return;
+    }
+
+    setIsApplyingFixes(true);
+    let fixed = 0;
+
+    for (const result of fixableResults) {
+      setApplyingChapterId(result.chapterId);
+      const chapter = chapters.find(ch => ch.id === result.chapterId);
+      if (!chapter?.content) continue;
+
+      try {
+        const fixedContent = applyCodeFixes(chapter.content, result.result.codeBlocks);
+        const { error } = await supabase
+          .from('chapters')
+          .update({ content: fixedContent, updated_at: new Date().toISOString() })
+          .eq('id', result.chapterId);
+
+        if (error) throw error;
+        setFixedChapters(prev => new Set(prev).add(result.chapterId));
+        fixed++;
+      } catch (error) {
+        console.error(`Failed to fix chapter ${result.chapterNumber}:`, error);
+      }
+    }
+
+    setIsApplyingFixes(false);
+    setApplyingChapterId(null);
+    onChaptersUpdated?.();
+    toast({
+      title: "Auto-Fix Complete",
+      description: `Applied corrections to ${fixed}/${fixableResults.length} chapters.`,
     });
   };
 
@@ -184,6 +315,11 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
     return <XCircle className="h-4 w-4 text-destructive" />;
   };
 
+  const hasFixableIssues = (result: ChapterAuditResult) =>
+    result.result.codeBlocks?.some(b => b.correctedCode && b.issues.length > 0) && !fixedChapters.has(result.chapterId);
+
+  const totalFixable = results.filter(r => hasFixableIssues(r)).length;
+
   return (
     <div className={cn("rounded-xl border border-border/50 bg-muted/20 p-5", className)}>
       <div className="flex items-center justify-between mb-4">
@@ -196,24 +332,46 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
             </p>
           </div>
         </div>
-        <Button
-          variant="gold-outline"
-          size="sm"
-          onClick={handleRunAudit}
-          disabled={isAuditing || generatedChapters.length === 0}
-        >
-          {isAuditing ? (
-            <>
-              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-              Auditing {auditProgress.current}/{auditProgress.total}
-            </>
-          ) : (
-            <>
-              <Code2 className="h-4 w-4 mr-2" />
-              Run Full Audit
-            </>
+        <div className="flex items-center gap-2">
+          {totalFixable > 0 && !isAuditing && (
+            <Button
+              variant="default"
+              size="sm"
+              onClick={handleApplyAllFixes}
+              disabled={isApplyingFixes}
+            >
+              {isApplyingFixes ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Fixing…
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-4 w-4 mr-2" />
+                  Auto-Fix All ({totalFixable})
+                </>
+              )}
+            </Button>
           )}
-        </Button>
+          <Button
+            variant="gold-outline"
+            size="sm"
+            onClick={handleRunAudit}
+            disabled={isAuditing || isApplyingFixes || generatedChapters.length === 0}
+          >
+            {isAuditing ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Auditing {auditProgress.current}/{auditProgress.total}
+              </>
+            ) : (
+              <>
+                <Code2 className="h-4 w-4 mr-2" />
+                Run Full Audit
+              </>
+            )}
+          </Button>
+        </div>
       </div>
 
       {/* Progress */}
@@ -221,7 +379,7 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
         <div className="mb-4">
           <Progress value={(auditProgress.current / auditProgress.total) * 100} className="h-2" />
           <p className="text-xs text-muted-foreground mt-1">
-            Reviewing chapters in batches of 3…
+            Reviewing one chapter at a time (4s delay to avoid rate limits)…
           </p>
         </div>
       )}
@@ -247,6 +405,12 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
                     <XCircle className="h-3 w-3 text-destructive" />
                     {results.filter(r => r.result.chapterScore > 0 && r.result.chapterScore < 5).length} critical
                   </span>
+                  {fixedChapters.size > 0 && (
+                    <span className="flex items-center gap-1">
+                      <Wrench className="h-3 w-3 text-scroll-gold" />
+                      {fixedChapters.size} fixed
+                    </span>
+                  )}
                 </div>
               </div>
             </div>
@@ -255,6 +419,9 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
           {results.map((result) => {
             const badge = getScoreBadge(result.result.chapterScore);
             const isExpanded = expandedChapter === result.chapterId;
+            const isFixed = fixedChapters.has(result.chapterId);
+            const canFix = hasFixableIssues(result);
+            const isFixingThis = applyingChapterId === result.chapterId;
 
             return (
               <Collapsible
@@ -265,10 +432,13 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
                 <CollapsibleTrigger className="w-full flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/30 hover:border-scroll-gold/30 transition-colors text-left">
                   <div className="flex items-center gap-3">
                     {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    {getRiskIcon(result.result.riskLevel)}
+                    {isFixed ? <Wrench className="h-4 w-4 text-scroll-gold" /> : getRiskIcon(result.result.riskLevel)}
                     <span className="text-sm font-medium">
                       Ch {result.chapterNumber}: {result.chapterTitle}
                     </span>
+                    {isFixed && (
+                      <Badge variant="outline" className="text-scroll-gold border-scroll-gold/30 text-[10px]">Fixed</Badge>
+                    )}
                   </div>
                   <div className="flex items-center gap-2">
                     {result.codeBlockCount > 0 && (
@@ -281,8 +451,30 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="p-4 border border-t-0 border-border/30 rounded-b-lg bg-background/30 space-y-4">
-                    {/* Summary */}
-                    <p className="text-sm text-muted-foreground">{result.result.summary}</p>
+                    {/* Summary + Apply Fixes button */}
+                    <div className="flex items-start justify-between gap-3">
+                      <p className="text-sm text-muted-foreground flex-1">{result.result.summary}</p>
+                      {canFix && (
+                        <Button
+                          variant="default"
+                          size="sm"
+                          className="shrink-0"
+                          onClick={(e) => { e.stopPropagation(); handleApplyFixes(result); }}
+                          disabled={isApplyingFixes}
+                        >
+                          {isFixingThis ? (
+                            <><Loader2 className="h-3 w-3 mr-1 animate-spin" /> Applying…</>
+                          ) : (
+                            <><Wrench className="h-3 w-3 mr-1" /> Apply Fixes</>
+                          )}
+                        </Button>
+                      )}
+                      {isFixed && (
+                        <Badge variant="outline" className="text-green-600 border-green-500/30 shrink-0">
+                          <CheckCircle2 className="h-3 w-3 mr-1" /> Applied
+                        </Badge>
+                      )}
+                    </div>
 
                     {/* Code Block Details */}
                     {result.result.codeBlocks?.map((block, bi) => (
@@ -375,6 +567,8 @@ export function CodeAuditPanel({ bookId, chapters, className }: CodeAuditPanelPr
           Run a full audit to review all code blocks against FAANG-grade engineering standards.
           <br />
           Covers: correctness, PEP8, reproducibility, ML best practices, deployment patterns.
+          <br />
+          <span className="text-scroll-gold">Issues found will be auto-fixed in your chapters.</span>
         </p>
       )}
     </div>
