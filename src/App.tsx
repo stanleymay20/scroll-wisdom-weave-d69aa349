@@ -20,13 +20,13 @@ import { initContract5 } from "@/lib/contract5";
 import Index from "./pages/Index";
 import Auth from "./pages/Auth";
 import NotFound from "./pages/NotFound";
+import BookDetail from "./pages/BookDetail";
 
 // Lazy load non-critical pages for performance
 const Explore = lazy(() => import("./pages/Explore"));
 const Library = lazy(() => import("./pages/Library"));
 const Profile = lazy(() => import("./pages/Profile"));
 const Settings = lazy(() => import("./pages/Settings"));
-const BookDetail = lazy(() => import("./pages/BookDetail"));
 const Reader = lazy(() => import("./pages/Reader"));
 const Generate = lazy(() => import("./pages/Generate"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
