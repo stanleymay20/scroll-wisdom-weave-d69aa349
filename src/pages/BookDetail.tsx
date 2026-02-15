@@ -78,6 +78,7 @@ import { cn } from "@/lib/utils";
 import { checkPublishingGate, formatAuditReport, type PublishingGateResult } from "@/lib/bookAuditIntegration";
 import { isAcademicCategory } from "@/lib/academicCategories";
 import { CodeQualityBadge } from "@/components/books/CodeQualityBadge";
+import { CodeAuditPanel } from "@/components/books/CodeAuditPanel";
 interface BookData {
   id: string;
   title: string;
@@ -989,6 +990,21 @@ export default function BookDetail() {
                   totalChapters={chapters.length}
                   completedChapters={chapters.filter(ch => ch.is_generated).length}
                   progressPercent={Math.round((chapters.filter(ch => ch.is_generated).length / Math.max(chapters.length, 1)) * 100)}
+                  className="mt-6"
+                />
+              )}
+
+              {/* STO Code Audit Panel for technical books */}
+              {isOwner && chapters.some(ch => ch.is_generated) && (
+                <CodeAuditPanel
+                  bookId={book.id}
+                  chapters={chapters.map(ch => ({
+                    id: ch.id,
+                    chapter_number: ch.chapter_number,
+                    title: ch.title,
+                    content: ch.content,
+                    is_generated: ch.is_generated,
+                  }))}
                   className="mt-6"
                 />
               )}
