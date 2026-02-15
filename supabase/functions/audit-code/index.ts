@@ -39,29 +39,16 @@ Be thorough. Do not skip small issues. If any code is amateur-level, rewrite it 
 
 function extractCodeBlocks(content: string): { code: string; language: string; index: number }[] {
   const blocks: { code: string; language: string; index: number }[] = [];
-  
-  // Match fenced code blocks
   const fencedRegex = /```(\w+)?\s*\n([\s\S]*?)```/g;
   let match;
   let idx = 0;
   while ((match = fencedRegex.exec(content)) !== null) {
-    blocks.push({
-      code: match[2].trim(),
-      language: match[1] || 'unknown',
-      index: idx++,
-    });
+    blocks.push({ code: match[2].trim(), language: match[1] || 'unknown', index: idx++ });
   }
-  
-  // Match [CODE_BLOCK] tags
   const structuredRegex = /\[CODE_BLOCK\]([\s\S]*?)\[\/CODE_BLOCK\]/g;
   while ((match = structuredRegex.exec(content)) !== null) {
-    blocks.push({
-      code: match[1].trim(),
-      language: 'structured',
-      index: idx++,
-    });
+    blocks.push({ code: match[1].trim(), language: 'structured', index: idx++ });
   }
-  
   return blocks;
 }
 
@@ -75,8 +62,7 @@ serve(async (req) => {
     
     if (!content) {
       return new Response(JSON.stringify({ error: 'No content provided' }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
@@ -84,112 +70,86 @@ serve(async (req) => {
     
     if (codeBlocks.length === 0) {
       return new Response(JSON.stringify({
-        chapterId,
-        chapterTitle,
-        chapterNumber,
-        result: {
-          chapterScore: -1,
-          riskLevel: 'none',
-          codeBlocks: [],
-          overallRecommendations: [],
-          summary: 'No code blocks found in this chapter.',
-        },
-      }), {
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-      });
+        chapterId, chapterTitle, chapterNumber,
+        codeBlockCount: 0,
+        result: { chapterScore: -1, riskLevel: 'none', codeBlocks: [], overallRecommendations: [], summary: 'No code blocks found in this chapter.' },
+      }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
 
-    // Build the audit request
     const codeBlocksText = codeBlocks.map((b, i) => 
       `--- Code Block ${i + 1} (${b.language}) ---\n${b.code}\n`
     ).join('\n');
 
     const apiKey = Deno.env.get('LOVABLE_API_KEY');
-    if (!apiKey) {
-      throw new Error('AI API key not configured');
-    }
+    if (!apiKey) throw new Error('AI API key not configured');
 
-    // Retry logic for rate limits
+    // Retry with exponential backoff: 8s, 20s, 45s
     let response: Response | null = null;
-    const maxRetries = 3;
-    for (let attempt = 0; attempt < maxRetries; attempt++) {
+    const retryDelays = [8000, 20000, 45000];
+    
+    for (let attempt = 0; attempt <= retryDelays.length; attempt++) {
       response = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${apiKey}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
+          model: 'google/gemini-2.5-flash-lite',
           messages: [
             { role: 'system', content: STO_AUDIT_PROMPT },
-            {
-              role: 'user',
-              content: `Audit the following ${codeBlocks.length} code block(s) from Chapter ${chapterNumber}: "${chapterTitle}".\n\n${codeBlocksText}\n\nReturn ONLY valid JSON matching the specified format.`,
-            },
+            { role: 'user', content: `Audit the following ${codeBlocks.length} code block(s) from Chapter ${chapterNumber}: "${chapterTitle}".\n\n${codeBlocksText}\n\nReturn ONLY valid JSON matching the specified format.` },
           ],
           temperature: 0.2,
-          max_tokens: 8000,
+          max_tokens: 6000,
         }),
       });
 
-      if (response.status === 429) {
-        const waitTime = Math.pow(2, attempt + 1) * 2000; // 4s, 8s, 16s
-        console.log(`Rate limited on attempt ${attempt + 1}, waiting ${waitTime}ms...`);
-        await new Promise(r => setTimeout(r, waitTime));
-        continue;
-      }
-      break;
+      if (response.status !== 429 || attempt >= retryDelays.length) break;
+      
+      const wait = retryDelays[attempt];
+      console.log(`Rate limited attempt ${attempt + 1}, waiting ${wait / 1000}s...`);
+      await new Promise(r => setTimeout(r, wait));
     }
 
-    if (!response || !response.ok) {
-      const errorText = response ? await response.text() : 'No response';
-      if (response?.status === 429) {
-        return new Response(JSON.stringify({ error: 'Rate limited. Please wait a moment and try again with fewer chapters.' }), {
-          status: 429,
-          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-        });
-      }
-      throw new Error(`AI API error: ${response?.status} - ${errorText}`);
+    if (!response || response.status === 429) {
+      return new Response(JSON.stringify({ 
+        error: 'rate_limited',
+        message: 'AI service is busy. The client will retry automatically.',
+        retryAfter: 30,
+      }), {
+        status: 429,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '30' },
+      });
+    }
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      throw new Error(`AI API error: ${response.status} - ${errorText}`);
     }
 
     const aiData = await response.json();
     const rawContent = aiData.choices?.[0]?.message?.content || '';
     
-    // Extract JSON from response (handle markdown code fences)
     let jsonStr = rawContent;
     const jsonMatch = rawContent.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
-    if (jsonMatch) {
-      jsonStr = jsonMatch[1].trim();
-    }
+    if (jsonMatch) jsonStr = jsonMatch[1].trim();
     
     let auditResult;
     try {
       auditResult = JSON.parse(jsonStr);
     } catch {
       auditResult = {
-        chapterScore: 5,
-        riskLevel: 'medium',
-        codeBlocks: [],
+        chapterScore: 5, riskLevel: 'medium', codeBlocks: [],
         overallRecommendations: ['AI response could not be parsed. Manual review recommended.'],
         summary: rawContent.substring(0, 500),
       };
     }
 
     return new Response(JSON.stringify({
-      chapterId,
-      chapterTitle,
-      chapterNumber,
-      codeBlockCount: codeBlocks.length,
-      result: auditResult,
-    }), {
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
-    });
+      chapterId, chapterTitle, chapterNumber, codeBlockCount: codeBlocks.length, result: auditResult,
+    }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
     console.error('Audit error:', error);
     return new Response(JSON.stringify({ error: error.message }), {
-      status: 500,
-      headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+      status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
   }
 });
