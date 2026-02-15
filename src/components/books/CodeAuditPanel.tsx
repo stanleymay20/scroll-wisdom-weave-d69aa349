@@ -76,11 +76,15 @@ interface CodeAuditPanelProps {
 function applyCodeFixes(content: string, fixes: CodeBlockAudit[]): string {
   if (!fixes || fixes.length === 0) return content;
 
-  // Build a list of corrected codes indexed by their original order
+  // Build correction map keyed by 0-based index.
+  // The AI may return 1-based indices, so we normalise: use array position as fallback.
   const correctionMap = new Map<number, string>();
-  for (const fix of fixes) {
+  for (let i = 0; i < fixes.length; i++) {
+    const fix = fixes[i];
     if (fix.correctedCode && fix.issues.length > 0) {
-      correctionMap.set(fix.index, fix.correctedCode);
+      // Determine the 0-based block index: if AI returned 1-based, subtract 1
+      const zeroIdx = fix.index >= 1 && fix.index <= fixes.length ? fix.index - 1 : i;
+      correctionMap.set(zeroIdx, fix.correctedCode);
     }
   }
   if (correctionMap.size === 0) return content;
@@ -90,7 +94,7 @@ function applyCodeFixes(content: string, fixes: CodeBlockAudit[]): string {
 
   // Replace fenced code blocks in order
   const fencedRegex = /```(\w+)?\s*\n([\s\S]*?)```/g;
-  result = result.replace(fencedRegex, (match, lang, code) => {
+  result = result.replace(fencedRegex, (match, lang) => {
     const currentIdx = blockIndex++;
     const correction = correctionMap.get(currentIdx);
     if (correction) {
@@ -102,7 +106,7 @@ function applyCodeFixes(content: string, fixes: CodeBlockAudit[]): string {
 
   // Replace [CODE_BLOCK] tags
   const structuredRegex = /\[CODE_BLOCK\]([\s\S]*?)\[\/CODE_BLOCK\]/g;
-  result = result.replace(structuredRegex, (match, code) => {
+  result = result.replace(structuredRegex, (match) => {
     const currentIdx = blockIndex++;
     const correction = correctionMap.get(currentIdx);
     if (correction) {
