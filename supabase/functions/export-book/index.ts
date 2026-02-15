@@ -321,7 +321,7 @@ function stripMarkdown(text: string): string {
     .replace(/^#{1,6}\s+/gm, "")
     .replace(/\*\*([^*]+)\*\*/g, "$1")
     .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/`[^`]+`/g, "")
+    .replace(/`([^`]+)`/g, "$1")  // Keep inline code content (was deleting it!)
     .replace(/```[\s\S]*?```/g, "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/^\s*[-*]\s+/gm, "• ")
@@ -347,6 +347,13 @@ function sanitizeForPDF(text: string): string {
     .replace(/⇔/g, "<=>")
     .replace(/↑/g, "^")
     .replace(/↓/g, "v")
+    // ALL apostrophe & quote variants (CRITICAL - these were being silently dropped!)
+    .replace(/[\u2018\u2019\u201A\u02BC\u02B9\u02BB\u0060\u00B4]/g, "'")  // All single-quote-like chars
+    .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')  // All double-quote-like chars
+    .replace(/\u2032/g, "'")   // Prime → apostrophe
+    .replace(/\u2035/g, "'")   // Reversed prime
+    .replace(/\u02CA/g, "'")   // Modifier letter acute accent
+    .replace(/\u02CB/g, "'")   // Modifier letter grave accent
     // Superscript numbers and symbols
     .replace(/⁰/g, "0")
     .replace(/¹/g, "1")
@@ -386,10 +393,6 @@ function sanitizeForPDF(text: string): string {
     .replace(/−/g, "-")  // Minus sign (U+2212)
     .replace(/–/g, "-")  // En dash
     .replace(/—/g, "-")  // Em dash
-    .replace(/'/g, "'")  // Smart quotes
-    .replace(/'/g, "'")
-    .replace(/"/g, '"')
-    .replace(/"/g, '"')
     .replace(/…/g, "...")
     .replace(/•/g, "-")  // Bullet
     .replace(/◦/g, "o")  // White bullet
@@ -423,8 +426,12 @@ function sanitizeForPDF(text: string): string {
     .replace(/∂/g, "d")
     .replace(/∆/g, "delta")
     .replace(/∇/g, "nabla")
+    // Trademark/legal symbols that ARE in Latin-1
+    .replace(/™/g, "(TM)")
+    .replace(/℠/g, "(SM)")
+    .replace(/℗/g, "(P)")
     // German/international chars that ARE supported in WinAnsi
-    // Keep: ä ö ü ß Ä Ö Ü é è ê ë etc. (these are in Latin-1)
+    // Keep: ä ö ü ß Ä Ö Ü é è ê ë © ® ° ½ ¼ ¾ etc. (these are in Latin-1)
     // Fallback: remove any remaining non-WinAnsi characters (keep basic ASCII + Latin-1)
     .replace(/[^\x00-\xFF]/g, "");
 }
@@ -1932,8 +1939,14 @@ async function generateEPUB(
       return `<table class="data-table"><thead><tr>${headerHtml}</tr></thead><tbody>${rowsHtml}</tbody></table>`;
     });
     
-    // Convert inline code
-    content = content.replace(/`([^`]+)`/g, '<code>$1</code>');
+    // Convert bold and italic markdown to HTML (MUST happen before inline code)
+    content = content.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+    content = content.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    content = content.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    content = content.replace(/_([^_]+)_/g, '<em>$1</em>');
+    
+    // Convert inline code (with XML escaping for safety)
+    content = content.replace(/`([^`]+)`/g, (_m: string, code: string) => `<code>${escapeXml(code)}</code>`);
     
     // Convert HEADING placeholders to proper HTML heading tags
     content = content.replace(/\[HEADING_(\d+)_LEVEL_(\d+)\]/g, (_match: string, _idx: string, level: string) => {
