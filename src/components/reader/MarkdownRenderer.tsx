@@ -117,11 +117,17 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     // Pre-process: convert bullet dots (•) to standard markdown bullets
     html = html.replace(/^[\s]*•\s+/gm, '- ');
     
+    // Protect structured code block placeholders before HTML escaping
+    html = html.replace(/<!--STRUCTURED_CODE_BLOCK_(\d+)-->/g, '___STRUCTURED_CODE_BLOCK_$1___');
+    
     // Escape HTML entities first
     html = html
       .replace(/&/g, '&amp;')
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
+    
+    // Restore structured code block placeholders after escaping
+    html = html.replace(/___STRUCTURED_CODE_BLOCK_(\d+)___/g, '<!--STRUCTURED_CODE_BLOCK_$1-->');
     
     // Code blocks (```language ... ```) - render with syntax highlighting support
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
