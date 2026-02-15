@@ -359,7 +359,7 @@ Your output must be:
 If any of the following appear, the output is INVALID:
 • AI-sounding explanations
 • Academic essay tone
-• Markdown symbols (**, _, __, etc.)
+• Raw markdown visible without rendering (content must use proper markdown syntax)
 • Long unbroken paragraphs
 • Generic advice
 • Flat or emotionless writing
@@ -491,12 +491,14 @@ Every output MUST include:
    - Conclusion / closing
    - References (where applicable)
 
-2. CORRECT FORMATTING
-   - NO markdown symbols (**, _, ##) visible in final output
-   - Bold, italics, underline must render visually
-   - Proper paragraph spacing
-   - Readable tables (clear rows/columns)
-   - Proper indentation for code
+2. CORRECT MARKDOWN FORMATTING
+   - Use ## and ### for section headings (MANDATORY)
+   - Use **bold** for key terms and concepts
+   - Use *italic* for emphasis
+   - Use - or * for bullet lists, 1. for numbered lists
+   - Proper paragraph spacing with blank lines
+   - Readable tables using markdown pipe syntax
+   - Proper indentation for code blocks
 
 3. EXPORT-READY QUALITY
    - Suitable for PDF / EPUB / Print
@@ -1363,7 +1365,9 @@ export const VALIDATION_CONTRACT = `
 Before finalizing output, you MUST internally verify:
 
 FOR ALL CONTENT:
-[ ] No markdown symbols present (**, ##, backticks)
+[ ] Proper markdown headings (## and ###) used for sections
+[ ] Bold (**term**) used for key concepts
+[ ] Lists use - or 1. prefix formatting
 [ ] Proper section structure
 [ ] Content renders correctly
 [ ] Publishable without further editing
@@ -1431,7 +1435,7 @@ If compliance cannot be achieved:
 
 Priority order:
 1. Bestseller quality (hooks, quotables, dominant idea)
-2. Formatting compliance (no markdown)
+2. Formatting compliance (proper markdown headings, bold, lists)
 3. Structural compliance (required sections)
 4. Content quality (citations, dialogue, etc.)
 5. Word count limits

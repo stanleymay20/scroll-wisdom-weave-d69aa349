@@ -92,6 +92,31 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     
     let html = cleanedText;
     
+    // Pre-process: detect plain-text headings (legacy content without ## markers)
+    // A line that is short (<80 chars), standalone between blank lines, 
+    // contains no punctuation ending, and looks like a title = likely a heading
+    html = html.replace(/\n\n([A-Z][A-Za-z0-9 :&,\-–—']{2,75})\n\n/g, (match, line) => {
+      const trimmed = line.trim();
+      if (/^#{1,6}\s/.test(trimmed) || /^[-*]\s/.test(trimmed) || /[.!?;,]$/.test(trimmed)) {
+        return match;
+      }
+      const words = trimmed.split(/\s+/);
+      if (words.length > 10) return match;
+      return `\n\n## ${trimmed}\n\n`;
+    });
+
+    // Detect numbered sub-headings like "4.3. Manufacturing and Logistics"
+    html = html.replace(/\n\n(\d+(?:\.\d+)*\.?\s+[A-Z][A-Za-z0-9 :&,\-–—']{2,70})\n\n/g, (match, line) => {
+      const trimmed = line.trim();
+      if (/[.!?;,]$/.test(trimmed) && !/\.\s*$/.test(trimmed)) return match;
+      const words = trimmed.split(/\s+/);
+      if (words.length > 12) return match;
+      return `\n\n### ${trimmed}\n\n`;
+    });
+    
+    // Pre-process: convert bullet dots (•) to standard markdown bullets
+    html = html.replace(/^[\s]*•\s+/gm, '- ');
+    
     // Escape HTML entities first
     html = html
       .replace(/&/g, '&amp;')
@@ -154,6 +179,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/^###\s+(.+)$/gm, '<h3 class="md-h3">$1</h3>');
     html = html.replace(/^##\s+(.+)$/gm, '<h2 class="md-h2">$1</h2>');
     html = html.replace(/^#\s+(.+)$/gm, '<h1 class="md-h1">$1</h1>');
+    
+    // Bold + Italic (***text*** or ___text___)
+    html = html.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
     
     // Bold (**text** or __text__)
     html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');

@@ -153,12 +153,35 @@ CODE FORMATTING RULES (HARD REQUIREMENTS):
 - Missing indentation
 
 ===========================================
-TEXT FORMATTING:
+TEXT FORMATTING (MANDATORY MARKDOWN):
 ===========================================
 
-- Section headings: Plain text on its own line
-- Lists: Numbered (1. 2. 3.) or bulleted (• or -)
-- Avoid excessive markdown in prose
+ALL content MUST use proper Markdown formatting for rendering:
+
+HEADINGS (REQUIRED):
+- Main section headings: ## Heading (H2)
+- Sub-section headings: ### Sub-Heading (H3)
+- Sub-sub-sections: #### Detail Heading (H4)
+- NEVER use plain text for section titles — ALWAYS prefix with ## or ###
+
+EMPHASIS (REQUIRED):
+- Bold key terms and concepts: **important term**
+- Italic for emphasis or foreign words: *emphasized text*
+- Bold-italic for critical warnings: ***critical point***
+
+LISTS (REQUIRED):
+- Bullet lists: Use - or * prefix with a space
+- Numbered lists: Use 1. 2. 3. prefix with a space
+- Nested lists: Indent with 2-4 spaces
+
+PARAGRAPHS:
+- Separate paragraphs with blank lines
+- Keep paragraphs 2-5 sentences for readability
+
+❌ FORBIDDEN:
+- Plain text headings without ## prefix
+- Using • (bullet dot) instead of - or *
+- Missing emphasis on key terms
 
 === END FORMATTING CONTRACT ===
 `;
@@ -288,7 +311,10 @@ const VALIDATION_CONTRACT = `
 === QUALITY GATES — FINAL CHECK (BEFORE OUTPUT) ===
 
 Before finalizing, VERIFY ALL of these:
-[ ] No markdown symbols (**, ##, \`\`\`, _)
+[ ] Proper markdown headings (## and ###) used for all sections
+[ ] Bold (**text**) used for key terms and concepts
+[ ] Italic (*text*) used for emphasis where appropriate
+[ ] Lists use proper - or 1. prefix formatting
 [ ] Clean formatting throughout
 [ ] Genre rules fully obeyed
 [ ] Bestseller mechanics present (hook, principle, takeaways)
@@ -3329,8 +3355,9 @@ Format:
       }
     }
 
-    // Sanitize all markdown from final content before saving
-    finalContent = sanitizeMarkdown(finalContent);
+    // Preserve markdown formatting — MarkdownRenderer handles rendering
+    // Only clean up excessive whitespace
+    finalContent = finalContent.replace(/\n{4,}/g, '\n\n\n').trim();
     
     // ===========================================
     // CONTRACT 6 — HARD RUNTIME GATE (POST-GENERATION)
