@@ -19,6 +19,7 @@ interface UserSettings {
   reading_width: 'narrow' | 'normal' | 'wide' | 'full';
   reading_speed: 'slow' | 'normal' | 'fast';
   font_color: string;
+  line_spacing: 'compact' | 'normal' | 'relaxed' | 'spacious';
   // TTS Auto-continue between chapters
   tts_auto_continue: boolean;
   // TTS Playback speed multiplier
@@ -42,6 +43,7 @@ const defaultSettings: UserSettings = {
   reading_width: 'normal',
   reading_speed: 'normal',
   font_color: 'default',
+  line_spacing: 'normal',
   tts_auto_continue: true,
   tts_playback_speed: 1.0,
 };
@@ -181,6 +183,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
               reading_width: (learningPrefs.reading_width as UserSettings['reading_width']) || defaultSettings.reading_width,
               reading_speed: (learningPrefs.reading_speed as UserSettings['reading_speed']) || defaultSettings.reading_speed,
               font_color: (learningPrefs.font_color as string) || defaultSettings.font_color,
+              line_spacing: (learningPrefs.line_spacing as UserSettings['line_spacing']) || defaultSettings.line_spacing,
               tts_auto_continue: (learningPrefs.tts_auto_continue as boolean) ?? defaultSettings.tts_auto_continue,
               tts_playback_speed: (learningPrefs.tts_playback_speed as number) ?? defaultSettings.tts_playback_speed,
             };
@@ -239,10 +242,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (userId) {
       try {
         // Separate standard fields from learning_preferences fields
-        const { reading_width, reading_speed, font_color, tts_auto_continue, tts_playback_speed, ...standardUpdates } = updates;
+        const { reading_width, reading_speed, font_color, line_spacing, tts_auto_continue, tts_playback_speed, ...standardUpdates } = updates;
         
         // If there are new reader settings, update learning_preferences
-        if (reading_width || reading_speed || font_color || tts_auto_continue !== undefined || tts_playback_speed !== undefined) {
+        if (reading_width || reading_speed || font_color || line_spacing || tts_auto_continue !== undefined || tts_playback_speed !== undefined) {
           const { data: currentProfile } = await supabase
             .from('profiles')
             .select('learning_preferences')
@@ -260,6 +263,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 ...(reading_width && { reading_width }),
                 ...(reading_speed && { reading_speed }),
                 ...(font_color && { font_color }),
+                ...(line_spacing && { line_spacing }),
                 ...(tts_auto_continue !== undefined && { tts_auto_continue }),
                 ...(tts_playback_speed !== undefined && { tts_playback_speed }),
               },
