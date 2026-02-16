@@ -181,6 +181,12 @@ serve(async (req) => {
         try {
           const parsed = JSON.parse(errorData);
           if (response.status === 429) {
+            // Check if it's a quota exhaustion (not retryable) vs rate limit (retryable)
+            if (parsed.error?.code === "insufficient_quota" || parsed.error?.type === "insufficient_quota") {
+              msg = "TTS service quota exhausted. The API key needs additional credits. Please contact support.";
+              lastError = msg;
+              break;
+            }
             msg = "TTS service is temporarily busy. Please wait and try again.";
             if (attempt < maxRetries) {
               await new Promise((r) => setTimeout(r, 1000 * (attempt + 1)));
