@@ -892,6 +892,7 @@ async function generatePDF(
   const textWidth = pageWidth - (margin * 2);
   
   let pageNumber = 0;
+  let currentChapterTitle = "";
   
   const addPageNumber = (page: any, num: number) => {
     if (num > 5) {
@@ -1141,7 +1142,6 @@ async function generatePDF(
   }
 
   // Chapters
-  let currentChapterTitle = "";
   for (const chapter of chapters) {
     currentChapterTitle = chapter.title;
     page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -1920,6 +1920,7 @@ async function generateEPUB(
   const processedChapters: { id: string; href: string; xhtml: string }[] = [];
   
   for (const item of chapterItems) {
+    try {
     let content = item.chapter.content || "";
     
     // FIRST: Detect plain-text headings (legacy content without ## markers)
@@ -2178,6 +2179,20 @@ ${htmlContent}
 </html>`;
     
     processedChapters.push({ id: item.id, href: item.href, xhtml: chapterXhtml });
+    } catch (chapterError) {
+      console.error(`[EXPORT] EPUB chapter ${item.chapter.chapter_number} processing error:`, chapterError);
+      // Add a fallback chapter so it's not missing from the EPUB
+      const fallbackXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>${escapeXml(item.chapter.title)}</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<h1>Chapter ${item.chapter.chapter_number}: ${escapeXml(item.chapter.title)}</h1>
+<p>${escapeXml(item.chapter.content || 'Content could not be processed.')}</p>
+</body>
+</html>`;
+      processedChapters.push({ id: item.id, href: item.href, xhtml: fallbackXhtml });
+    }
   }
   
   // Now generate manifest with all collected images - use the actual stored path
