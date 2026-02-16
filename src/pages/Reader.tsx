@@ -1109,7 +1109,12 @@ export default function Reader() {
               setShowTTS(true);
             }}>
               <div 
-                className={`reading-content ${currentTheme.text} relative`}
+                className={cn(
+                  "reading-content relative",
+                  currentTheme.text,
+                  settings.reading_width === 'wide' && "reading-content-wide",
+                  settings.reading_width === 'full' && "reading-content-full",
+                )}
                 style={{ fontSize: `${fontSize}px` }}
                 onMouseUp={() => {
                   // Capture selected text for TTS

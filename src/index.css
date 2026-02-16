@@ -484,6 +484,14 @@
   padding-bottom: calc(env(safe-area-inset-bottom) + 6rem);
 }
 
+.reading-content-wide {
+  max-width: 90ch;
+}
+
+.reading-content-full {
+  max-width: 100%;
+}
+
 @media (min-width: 640px) {
   .reading-content {
     padding: 0;
