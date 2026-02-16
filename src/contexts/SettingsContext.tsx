@@ -24,6 +24,8 @@ interface UserSettings {
   tts_auto_continue: boolean;
   // TTS Playback speed multiplier
   tts_playback_speed: number;
+  // Font family for reader
+  font_family: 'sans' | 'serif' | 'mono';
 }
 
 const defaultSettings: UserSettings = {
@@ -46,6 +48,7 @@ const defaultSettings: UserSettings = {
   line_spacing: 'normal',
   tts_auto_continue: true,
   tts_playback_speed: 1.0,
+  font_family: 'sans',
 };
 
 interface SettingsContextType {
@@ -127,6 +130,14 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     const fontColor = fontColorPresets[currentSettings.font_color]?.value || 'inherit';
     root.style.setProperty('--reader-font-color', fontColor);
     
+    // Apply font family
+    const fontFamilyMap: Record<string, string> = {
+      sans: 'ui-sans-serif, system-ui, -apple-system, sans-serif',
+      serif: 'Georgia, Cambria, "Times New Roman", Times, serif',
+      mono: 'ui-monospace, SFMono-Regular, "SF Mono", Menlo, monospace',
+    };
+    root.style.setProperty('--reader-font-family', fontFamilyMap[currentSettings.font_family] || fontFamilyMap.sans);
+    
     // Apply animations preference
     if (!currentSettings.animations_enabled) {
       root.classList.add('reduce-motion');
@@ -186,6 +197,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
               line_spacing: (learningPrefs.line_spacing as UserSettings['line_spacing']) || defaultSettings.line_spacing,
               tts_auto_continue: (learningPrefs.tts_auto_continue as boolean) ?? defaultSettings.tts_auto_continue,
               tts_playback_speed: (learningPrefs.tts_playback_speed as number) ?? defaultSettings.tts_playback_speed,
+              font_family: (learningPrefs.font_family as UserSettings['font_family']) || defaultSettings.font_family,
             };
             setSettings(userSettings);
             applyVisualSettings(userSettings);
@@ -242,10 +254,10 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     if (userId) {
       try {
         // Separate standard fields from learning_preferences fields
-        const { reading_width, reading_speed, font_color, line_spacing, tts_auto_continue, tts_playback_speed, ...standardUpdates } = updates;
+        const { reading_width, reading_speed, font_color, line_spacing, tts_auto_continue, tts_playback_speed, font_family, ...standardUpdates } = updates;
         
         // If there are new reader settings, update learning_preferences
-        if (reading_width || reading_speed || font_color || line_spacing || tts_auto_continue !== undefined || tts_playback_speed !== undefined) {
+        if (reading_width || reading_speed || font_color || line_spacing || tts_auto_continue !== undefined || tts_playback_speed !== undefined || font_family) {
           const { data: currentProfile } = await supabase
             .from('profiles')
             .select('learning_preferences')
@@ -266,6 +278,7 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
                 ...(line_spacing && { line_spacing }),
                 ...(tts_auto_continue !== undefined && { tts_auto_continue }),
                 ...(tts_playback_speed !== undefined && { tts_playback_speed }),
+                ...(font_family && { font_family }),
               },
               updated_at: new Date().toISOString(),
             })

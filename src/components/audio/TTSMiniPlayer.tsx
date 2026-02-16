@@ -76,6 +76,8 @@ interface TTSMiniPlayerProps {
   onCumulativeTimeChange?: (seconds: number) => void;
   /** Expose estimated total audio duration (refined from actual chunk durations) */
   onEstimatedDurationChange?: (seconds: number) => void;
+  /** Auto-play chapter on mount (for auto-continue between chapters) */
+  autoPlay?: boolean;
 }
 
 export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(function TTSMiniPlayer({ 
@@ -95,6 +97,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   onAudioRefChange,
   onCumulativeTimeChange,
   onEstimatedDurationChange,
+  autoPlay = false,
 }, ref) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -724,6 +727,24 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
     prevStopKeyRef.current = stopKey;
   }, [stopKey, stop]);
+
+  // AUTO-PLAY: When autoPlay is true and chapter text is available, start playing automatically
+  const autoPlayTriggeredRef = useRef(false);
+  useEffect(() => {
+    if (autoPlay && chapterText && !isPlaying && !isLoading && !autoPlayTriggeredRef.current) {
+      autoPlayTriggeredRef.current = true;
+      // Small delay to let component mount and chapter content settle
+      const timer = setTimeout(() => {
+        console.log("[TTS] Auto-play triggered for new chapter");
+        generateSpeech(chapterText, false);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+    // Reset trigger when stopKey (chapter) changes
+    if (!autoPlay) {
+      autoPlayTriggeredRef.current = false;
+    }
+  }, [autoPlay, chapterText, isPlaying, isLoading]);
 
   // Cleanup on unmount
   useEffect(() => {
