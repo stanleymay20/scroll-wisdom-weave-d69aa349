@@ -360,24 +360,27 @@ export default function Reader() {
   // Apply audio-active CSS class to the active paragraph + dim others
   useEffect(() => {
     if (!contentRef.current) return;
-    const containers = contentRef.current.querySelectorAll('.markdown-content');
     
-    // Toggle audio-playing class for dimming non-active paragraphs (all fragments)
-    containers.forEach(container => {
-      if (isTTSPlaying && audioSync.isSyncEnabled) {
-        container.classList.add('audio-playing');
-      } else {
-        container.classList.remove('audio-playing');
-      }
-    });
+    // Find the reading-content div that wraps MarkdownRenderer output
+    const readingContent = contentRef.current.querySelector('.reading-content');
+    const target = readingContent || contentRef.current;
+    
+    const indexedEls = target.querySelectorAll('[data-sentence-index]');
+
+    // Toggle audio-playing class on the container for CSS-based dimming
+    if (isTTSPlaying && audioSync.isSyncEnabled) {
+      target.classList.add('audio-playing');
+    } else {
+      target.classList.remove('audio-playing');
+    }
 
     // Remove previous active
-    contentRef.current.querySelectorAll('.audio-active').forEach(el => {
+    target.querySelectorAll('.audio-active').forEach(el => {
       el.classList.remove('audio-active');
     });
     // Add to current
     if (audioSync.activeSentenceIndex >= 0 && isTTSPlaying && audioSync.isSyncEnabled) {
-      const el = contentRef.current.querySelector(`[data-sentence-index="${audioSync.activeSentenceIndex}"]`);
+      const el = target.querySelector(`[data-sentence-index="${audioSync.activeSentenceIndex}"]`);
       if (el) {
         el.classList.add('audio-active');
       }

@@ -693,7 +693,7 @@
 }
 
 /* Audio sync: active paragraph highlight */
-.markdown-content [data-sentence-index].audio-active {
+[data-sentence-index].audio-active {
   background: hsl(var(--primary) / 0.18);
   border-left: 3px solid hsl(var(--primary));
   padding-left: 0.75rem;
@@ -703,10 +703,10 @@
 }
 
 /* Dim non-active paragraphs during audio playback for focus */
-.markdown-content.audio-playing [data-sentence-index]:not(.audio-active) {
+.audio-playing [data-sentence-index]:not(.audio-active) {
   opacity: 0.55;
   transition: opacity 0.3s ease;
 }
-.markdown-content.audio-playing [data-sentence-index].audio-active {
+.audio-playing [data-sentence-index].audio-active {
   opacity: 1;
 }
