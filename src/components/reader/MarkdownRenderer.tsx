@@ -263,7 +263,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       return (
         <div 
           ref={containerRef}
-          className={`markdown-content prose prose-invert max-w-none ${className}`}
+          className={`markdown-content max-w-none ${className}`}
           dangerouslySetInnerHTML={{ __html: renderedContent }}
         />
       );
@@ -280,7 +280,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           elements.push(
             <div 
               key={`html-${i}`}
-              className="markdown-content prose prose-invert max-w-none"
+              className="markdown-content max-w-none"
               dangerouslySetInnerHTML={{ __html: parts[i] }}
             />
           );
@@ -313,7 +313,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
 // Add CSS for markdown rendering
 export const markdownStyles = `
 .markdown-content {
-  line-height: 1.7;
+  line-height: inherit;
   color: hsl(var(--foreground));
 }
 
