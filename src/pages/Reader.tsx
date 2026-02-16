@@ -355,9 +355,18 @@ export default function Reader() {
     wordCount,
   });
 
-  // Apply audio-active CSS class to the active paragraph
+  // Apply audio-active CSS class to the active paragraph + dim others
   useEffect(() => {
     if (!contentRef.current) return;
+    const container = contentRef.current.querySelector('.markdown-content');
+    
+    // Toggle audio-playing class for dimming non-active paragraphs
+    if (isTTSPlaying && audioSync.isSyncEnabled) {
+      container?.classList.add('audio-playing');
+    } else {
+      container?.classList.remove('audio-playing');
+    }
+
     // Remove previous active
     contentRef.current.querySelectorAll('.audio-active').forEach(el => {
       el.classList.remove('audio-active');
