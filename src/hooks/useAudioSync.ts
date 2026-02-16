@@ -70,15 +70,42 @@ export function useAudioSync({
   estimatedDurationSec,
   wordCount = 0,
 }: UseAudioSyncOptions): UseAudioSyncReturn {
-  const duration = useMemo(
+  const estimatedDuration = useMemo(
     () => estimatedDurationSec ?? (wordCount > 0 ? (wordCount / 150) * 60 : 60),
     [estimatedDurationSec, wordCount]
   );
 
+  // Use real audio duration once available, fall back to estimate
+  const [realDuration, setRealDuration] = useState<number | null>(null);
+  
+  useEffect(() => {
+    const audio = audioRef?.current;
+    if (!audio) { setRealDuration(null); return; }
+
+    const onMeta = () => {
+      if (audio.duration && isFinite(audio.duration)) {
+        setRealDuration(audio.duration);
+      }
+    };
+
+    // Check immediately in case already loaded
+    if (audio.duration && isFinite(audio.duration)) {
+      setRealDuration(audio.duration);
+    }
+
+    audio.addEventListener('loadedmetadata', onMeta);
+    audio.addEventListener('durationchange', onMeta);
+    return () => {
+      audio.removeEventListener('loadedmetadata', onMeta);
+      audio.removeEventListener('durationchange', onMeta);
+    };
+  }, [audioRef, audioRef?.current]);
+
+  const duration = realDuration ?? estimatedDuration;
+
   const sentences = useMemo<SentenceTimestamp[]>(() => {
     if (!chapterContent) return [];
     const plain = stripMarkdown(chapterContent);
-    // Split by paragraphs (double newlines) to match MarkdownRenderer's data-sentence-index
     const paragraphs = plain.split(/\n\n+/).map(s => s.trim()).filter(s => s.length > 0);
     return buildTimestamps(paragraphs, duration);
   }, [chapterContent, duration]);
