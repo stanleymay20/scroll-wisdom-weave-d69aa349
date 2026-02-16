@@ -237,36 +237,77 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     return html;
   }, [cleanedText]);
 
-  // POST-RENDER: Assign data-sentence-index to direct block children via DOM
-  // This replaces fragile regex-based indexing and guarantees indices exist
+  // POST-RENDER: Assign data-sentence-index at SENTENCE level for fine-grained audio sync.
+  // Large text blocks are split into individual sentence <span>s so the sync engine
+  // can highlight one sentence at a time instead of an entire paragraph.
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) {
-      console.warn('[MarkdownRenderer] containerRef is null');
-      return;
-    }
+    if (!container) return;
 
-    // Find all .markdown-content containers (may be multiple if structured code blocks split content)
+    // Remove any previous sentence indices to avoid stale state on re-render
+    container.querySelectorAll('[data-sentence-index]').forEach(el => {
+      el.removeAttribute('data-sentence-index');
+    });
+
     const mdContainers = container.classList.contains('markdown-content') 
       ? [container] 
       : Array.from(container.querySelectorAll('.markdown-content'));
     
-    if (mdContainers.length === 0) {
-      // Fallback: use the container itself
-      mdContainers.push(container);
-    }
-    
+    if (mdContainers.length === 0) mdContainers.push(container);
+
     let globalIdx = 0;
+
+    const splitIntoSentences = (text: string): string[] => {
+      // Split on sentence-ending punctuation followed by whitespace
+      const raw = text.split(/(?<=[.!?])\s+/);
+      return raw.map(s => s.trim()).filter(s => s.length > 0);
+    };
+
     mdContainers.forEach(mc => {
-      // Target direct children that are block-level content elements
-      const children = mc.children;
-      for (let i = 0; i < children.length; i++) {
-        const child = children[i] as HTMLElement;
-        if (child.hasAttribute('data-sentence-index')) continue;
-        child.setAttribute('data-sentence-index', String(globalIdx++));
+      const children = Array.from(mc.children) as HTMLElement[];
+      for (const child of children) {
+        // Skip code blocks, tables, figures — index them as single units
+        if (child.classList.contains('code-block') || 
+            child.tagName === 'TABLE' || 
+            child.tagName === 'FIGURE' ||
+            child.tagName === 'HR' ||
+            child.classList.contains('structured-code-block')) {
+          child.setAttribute('data-sentence-index', String(globalIdx++));
+          continue;
+        }
+
+        // For headings, blockquotes, short elements — index as single unit
+        const text = child.innerText || child.textContent || '';
+        if (child.tagName.match(/^H[1-6]$/) || 
+            child.classList.contains('md-blockquote') ||
+            text.length < 80) {
+          child.setAttribute('data-sentence-index', String(globalIdx++));
+          continue;
+        }
+
+        // For md-p or list containers with substantial text: split into sentences
+        const sentences = splitIntoSentences(text);
+        if (sentences.length <= 1) {
+          // Single sentence or unsplittable — index whole element
+          child.setAttribute('data-sentence-index', String(globalIdx++));
+          continue;
+        }
+
+        // Replace element innerHTML with sentence-level spans
+        // Preserve the original element but wrap each sentence
+        const fragment = document.createDocumentFragment();
+        sentences.forEach((sentence, _i) => {
+          const span = document.createElement('span');
+          span.setAttribute('data-sentence-index', String(globalIdx++));
+          span.textContent = sentence + ' ';
+          span.style.display = 'inline';
+          fragment.appendChild(span);
+        });
+        child.textContent = '';
+        child.appendChild(fragment);
       }
     });
-    console.log(`[MarkdownRenderer] Assigned data-sentence-index to ${globalIdx} elements`);
+    console.log(`[MarkdownRenderer] Assigned sentence-level indices: ${globalIdx} elements`);
   }, [renderedContent, structuredBlocks]);
 
   // Handle copy button clicks for legacy code blocks

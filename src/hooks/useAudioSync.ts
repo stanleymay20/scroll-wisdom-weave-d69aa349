@@ -91,7 +91,7 @@ export function useAudioSync({
       const els = contentRef.current.querySelectorAll('[data-sentence-index]');
       if (els.length === 0) {
         // Retry — DOM indices may not be assigned yet (useEffect ordering)
-        domScanRef.current = setTimeout(scan, 150);
+        domScanRef.current = setTimeout(scan, 200);
         return;
       }
       const texts: string[] = [];
@@ -100,10 +100,11 @@ export function useAudioSync({
         texts.push(text || ' ');
       });
       setSentences(buildTimestamps(texts, totalDuration));
+      console.log(`[useAudioSync] Built timestamps for ${texts.length} sentences, totalDuration=${totalDuration.toFixed(1)}s`);
     };
 
-    // Small delay to let MarkdownRenderer's useEffect assign indices first
-    domScanRef.current = setTimeout(scan, 100);
+    // Delay to let MarkdownRenderer's useEffect assign sentence-level indices first
+    domScanRef.current = setTimeout(scan, 300);
     return () => { if (domScanRef.current) clearTimeout(domScanRef.current); };
   }, [chapterContent, totalDuration, contentRef]);
 
