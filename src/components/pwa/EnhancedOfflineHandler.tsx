@@ -10,15 +10,14 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   WifiOff, 
   RefreshCw, 
-  AlertTriangle, 
   CheckCircle2,
-  CloudOff,
   Loader2,
   X
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Progress } from '@/components/ui/progress';
 import { cn } from '@/lib/utils';
+import { useOfflineIndicator } from '@/hooks/usePWA';
 
 interface RetryState {
   isRetrying: boolean;
@@ -48,28 +47,15 @@ export function EnhancedOfflineHandler({
     lastError: null,
     nextRetryIn: 0,
   });
-  const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const { showOffline, isOnline } = useOfflineIndicator();
   const [showDetails, setShowDetails] = useState(false);
 
-  // Listen for online/offline events
+  // Auto-retry when connection restored
   useEffect(() => {
-    const handleOnline = () => {
-      setIsOnline(true);
-      // Auto-retry when connection restored
-      if (onRetry) {
-        handleRetry();
-      }
-    };
-    const handleOffline = () => setIsOnline(false);
-
-    window.addEventListener('online', handleOnline);
-    window.addEventListener('offline', handleOffline);
-
-    return () => {
-      window.removeEventListener('online', handleOnline);
-      window.removeEventListener('offline', handleOffline);
-    };
-  }, [onRetry]);
+    if (isOnline && onRetry) {
+      handleRetry();
+    }
+  }, [isOnline]);
 
   // Countdown timer for next retry
   useEffect(() => {
@@ -173,7 +159,7 @@ export function EnhancedOfflineHandler({
       </div>
 
       {/* Retry Progress */}
-      {!isOnline && canAutoRetry && (
+      {showOffline && canAutoRetry && (
         <div className="px-4 py-2 border-t">
           <div className="flex items-center justify-between text-xs text-muted-foreground mb-2">
             <span>Retry attempt {retryState.retryCount}/{retryState.maxRetries}</span>

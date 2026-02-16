@@ -271,29 +271,27 @@ class OfflineStorageManager {
     await this.init();
     if (!this.db) return { books: 0, chapters: 0, downloads: 0, audio: 0, estimatedSize: 0 };
 
-    const booksStore = await this.getStore('books');
-    const chaptersStore = await this.getStore('chapters');
-    const downloadsStore = await this.getStore('downloads');
-    const audioStore = await this.getStore('audio');
+    // Use a single transaction for all stores
+    const transaction = this.db.transaction(['books', 'chapters', 'downloads', 'audio'], 'readonly');
 
     const [books, chapters, downloads, audio] = await Promise.all([
       new Promise<number>((resolve) => {
-        const req = booksStore.count();
+        const req = transaction.objectStore('books').count();
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => resolve(0);
       }),
       new Promise<number>((resolve) => {
-        const req = chaptersStore.count();
+        const req = transaction.objectStore('chapters').count();
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => resolve(0);
       }),
       new Promise<number>((resolve) => {
-        const req = downloadsStore.count();
+        const req = transaction.objectStore('downloads').count();
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => resolve(0);
       }),
       new Promise<number>((resolve) => {
-        const req = audioStore.count();
+        const req = transaction.objectStore('audio').count();
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => resolve(0);
       }),
