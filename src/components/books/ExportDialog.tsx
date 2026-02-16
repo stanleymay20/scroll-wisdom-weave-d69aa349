@@ -352,8 +352,7 @@ export function ExportDialog({
           <Label>{t('export.format')}</Label>
           <div className="grid gap-2">
             {formats.map(({ format, label, icon: Icon, description }) => {
-              const formatValidation = validateContentForExport(chapters, bookType, format);
-              const hasFormatErrors = !formatValidation.canProceed;
+              const hasFormatErrors = format === selectedFormat ? hasExportErrors : false;
               
               return (
                 <Button

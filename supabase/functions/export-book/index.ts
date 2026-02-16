@@ -712,7 +712,7 @@ serve(async (req) => {
     const { data: profile } = await supabase
       .from("profiles")
       .select("plan")
-      .eq("id", user.id)
+      .eq("user_id", user.id)
       .single();
 
     const userPlan = profile?.plan || "free";
@@ -750,7 +750,7 @@ serve(async (req) => {
     if (bookError || !book) throw new Error("Book not found");
     
     // Verify user owns the book or it's published (admins can export any book)
-    if (book.creator_id !== user.id && !book.is_published && !isAdmin) {
+    if (book.creator_id !== user.id && book.user_id !== user.id && !book.is_published && !isAdmin) {
       return new Response(JSON.stringify({ error: "Not authorized to export this book" }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -1073,9 +1073,7 @@ async function generatePDF(
   pageNumber++;
   y = pageHeight / 2 + 40;
   
-  const dedicationText = book.description 
-    ? "To all who dare to lead with integrity and purpose."
-    : "To all who dare to lead with integrity and purpose.";
+  const dedicationText = "To all who dare to lead with integrity and purpose.";
   
   page.drawText("DEDICATION", {
     x: pageWidth / 2 - timesRomanBold.widthOfTextAtSize("DEDICATION", 14) / 2,
@@ -1792,14 +1790,16 @@ async function generatePDF(
     }
     
     // Footer note
-    y -= 20;
-    page.drawText("All references are retrieved from verifiable academic databases.", {
-      x: margin,
-      y,
-      size: 9,
-      font: helvetica,
-      color: rgb(0.4, 0.4, 0.4),
-    });
+    if (isAcademic) {
+      y -= 20;
+      page.drawText("All references are retrieved from verifiable academic databases.", {
+        x: margin,
+        y,
+        size: 9,
+        font: helvetica,
+        color: rgb(0.4, 0.4, 0.4),
+      });
+    }
   }
 
   // About the Author Page
@@ -2866,9 +2866,11 @@ ${isAcademic ? `<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Citation Style: ${citationSt
       documentContent += `<w:p><w:pPr><w:ind w:left="720" w:hanging="720"/></w:pPr><w:r><w:t>${escapeXml(ref)}</w:t></w:r></w:p>`;
     }
 
-    documentContent += `
+    if (isAcademic) {
+      documentContent += `
 <w:p><w:r><w:t></w:t></w:r></w:p>
 <w:p><w:r><w:rPr><w:sz w:val="20"/><w:color w:val="666666"/></w:rPr><w:t>All references are retrieved from verifiable academic databases.</w:t></w:r></w:p>`;
+    }
   }
 
   // About the Author
