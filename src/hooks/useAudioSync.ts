@@ -70,45 +70,21 @@ export function useAudioSync({
   estimatedDurationSec,
   wordCount = 0,
 }: UseAudioSyncOptions): UseAudioSyncReturn {
-  const estimatedDuration = useMemo(
+  // Total chapter duration estimate — used for distributing timestamps across ALL sentences.
+  // IMPORTANT: Do NOT use per-chunk audio.duration here. Each TTS chunk is ~20-30s,
+  // but we need the total chapter duration to map sentence positions correctly.
+  // The position tracking (cumulativeTimeSec + audio.currentTime) handles real-time sync.
+  const totalDuration = useMemo(
     () => estimatedDurationSec ?? (wordCount > 0 ? (wordCount / 150) * 60 : 60),
     [estimatedDurationSec, wordCount]
   );
-
-  // Use real audio duration once available, fall back to estimate
-  const [realDuration, setRealDuration] = useState<number | null>(null);
-  
-  useEffect(() => {
-    const audio = audioRef?.current;
-    if (!audio) { setRealDuration(null); return; }
-
-    const onMeta = () => {
-      if (audio.duration && isFinite(audio.duration)) {
-        setRealDuration(audio.duration);
-      }
-    };
-
-    // Check immediately in case already loaded
-    if (audio.duration && isFinite(audio.duration)) {
-      setRealDuration(audio.duration);
-    }
-
-    audio.addEventListener('loadedmetadata', onMeta);
-    audio.addEventListener('durationchange', onMeta);
-    return () => {
-      audio.removeEventListener('loadedmetadata', onMeta);
-      audio.removeEventListener('durationchange', onMeta);
-    };
-  }, [audioRef, audioRef?.current]);
-
-  const duration = realDuration ?? estimatedDuration;
 
   const sentences = useMemo<SentenceTimestamp[]>(() => {
     if (!chapterContent) return [];
     const plain = stripMarkdown(chapterContent);
     const paragraphs = plain.split(/\n\n+/).map(s => s.trim()).filter(s => s.length > 0);
-    return buildTimestamps(paragraphs, duration);
-  }, [chapterContent, duration]);
+    return buildTimestamps(paragraphs, totalDuration);
+  }, [chapterContent, totalDuration]);
 
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
   const [isSyncEnabled, setIsSyncEnabled] = useState(true);
