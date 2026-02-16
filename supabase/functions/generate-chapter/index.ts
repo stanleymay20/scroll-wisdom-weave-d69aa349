@@ -3126,6 +3126,49 @@ BEGIN WRITING THE ACADEMIC/TECHNICAL CHAPTER:`;
       // BESTSELLER PIPELINE - for non-technical books
       console.log("[GENERATE-CHAPTER] Using BESTSELLER pipeline (narrative, engaging)");
       
+      // ===========================================
+      // WALL STREET INSTITUTIONAL UPGRADE
+      // Detect business/wealth/entrepreneurship books and inject institutional contract
+      // ===========================================
+      const BUSINESS_CATEGORIES = [
+        'business', 'entrepreneurship', 'finance', 'wealth', 'investing',
+        'startup', 'leadership', 'money', 'economics', 'strategy',
+        'marketing', 'sales', 'management', 'self-help', 'personal_development',
+        'personal development', 'self_help',
+      ];
+      
+      const isBusinessBook = BUSINESS_CATEGORIES.some(cat => 
+        (category || '').toLowerCase().includes(cat) ||
+        (bookTitle || '').toLowerCase().includes(cat)
+      ) || (bookTitle || '').toLowerCase().match(/billionaire|million|wealth|capital|business|entrepreneur|money|invest|startup|founder|ceo|empire/i);
+      
+      // Import institutional contract if business book
+      let institutionalPrompt = '';
+      if (isBusinessBook) {
+        try {
+          const { buildInstitutionalUpgradePrompt } = await import("../_shared/master-prompt.ts");
+          const DEEP_FINANCIAL_CHAPTERS = [1, 3, 5, 11, 17, 18];
+          const isDeepChapter = DEEP_FINANCIAL_CHAPTERS.includes(chapterNumber);
+          institutionalPrompt = buildInstitutionalUpgradePrompt(chapterNumber, chapterTitle, isDeepChapter);
+          console.log(`[GENERATE-CHAPTER] WALL STREET MODE: Active (deep=${isDeepChapter}) for Ch.${chapterNumber}`);
+        } catch (e) {
+          console.error("[GENERATE-CHAPTER] Failed to load institutional contract:", e);
+        }
+      }
+      
+      // Check if this is the Billionaire Roadmap chapter (Ch.21 or roadmap-titled)
+      let roadmapPrompt = '';
+      const isRoadmapChapter = (chapterTitle || '').toLowerCase().match(/roadmap|positioning|12.month|twelve.month|billionaire.*year/i);
+      if (isRoadmapChapter && isBusinessBook) {
+        try {
+          const { BILLIONAIRE_ROADMAP_CONTRACT } = await import("../_shared/master-prompt.ts");
+          roadmapPrompt = BILLIONAIRE_ROADMAP_CONTRACT;
+          console.log(`[GENERATE-CHAPTER] BILLIONAIRE ROADMAP MODE: Active for "${chapterTitle}"`);
+        } catch (e) {
+          console.error("[GENERATE-CHAPTER] Failed to load roadmap contract:", e);
+        }
+      }
+      
       systemPrompt = `${SYSTEM_ROLE}
 
 ${MASTER_FORMATTING_CONTRACT}
@@ -3134,12 +3177,14 @@ ${BESTSELLER_STRUCTURE_CONTRACT}
 
 ${NONFICTION_CONTRACT}
 
+${institutionalPrompt}
+
 ${VALIDATION_CONTRACT}
 
 ${FINAL_DIRECTIVE}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.
-Create comprehensive, bestseller-grade chapters that readers would pay $20+ for.`;
+Create comprehensive, bestseller-grade chapters that readers would pay $20+ for.${isBusinessBook ? '\nThis is a BUSINESS/WEALTH book — apply Wall Street institutional rigor while preserving narrative voice.' : ''}`;
       
       chapterPrompt = `${previousChaptersContext}Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
 
@@ -3155,14 +3200,23 @@ BESTSELLER STRUCTURE (MANDATORY):
 4. NAMED PRINCIPLE — Introduce a sticky, memorable concept name
 5. READER ENGAGEMENT — Reflection questions, mental pauses
 6. ACTIONABLE TAKEAWAYS — 3-7 bullet points the reader can apply
-
+${isBusinessBook ? `
+INSTITUTIONAL REQUIREMENTS (BUSINESS BOOK):
+7. FINANCIAL ENGINEERING — Include at least 1 markdown table with real numbers
+8. CAPITAL IMPACT — Include at least 1 formula or calculation
+9. RISK ANALYSIS — Address what kills this strategy
+10. EXECUTIVE ACTIONS — 3-5 measurable next steps with KPIs
+` : ''}${roadmapPrompt ? `
+ROADMAP CHAPTER SPECIAL REQUIREMENTS:
+${roadmapPrompt}
+` : ''}
 REQUIREMENTS:
 - Approximately ${targetWords} words
-- Plain text headings ONLY (e.g., "Introduction" not "## Introduction")
-- NO Markdown syntax (**, ##, backticks, code fences)
+- Use proper Markdown formatting (## headings, **bold**, tables)
 - NO AI-sounding phrases ("Let's dive in", "In this chapter we will explore")
-- Include real-world examples
+- Include real-world examples with SPECIFIC NUMBERS
 - Every paragraph must deliver VALUE
+${isBusinessBook ? '- Include markdown tables for frameworks and models\n- Include quantitative examples with dollar amounts, percentages, multiples' : ''}
 ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat introductions' : ''}
 
 BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
