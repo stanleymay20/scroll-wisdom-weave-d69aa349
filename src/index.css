@@ -532,7 +532,7 @@
 
 /* ===== MARKDOWN RENDERER STYLES ===== */
 .markdown-content {
-  line-height: 1.7;
+  line-height: var(--reader-line-height, 1.7);
   color: hsl(var(--foreground));
 }
 

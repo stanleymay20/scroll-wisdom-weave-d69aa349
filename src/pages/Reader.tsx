@@ -1046,10 +1046,10 @@ export default function Reader() {
             !settings.reading_width && "max-w-3xl",
           )}
           style={{
-            lineHeight: settings.line_spacing === 'compact' ? 1.4 
-              : settings.line_spacing === 'relaxed' ? 2.0 
-              : settings.line_spacing === 'spacious' ? 2.4 
-              : 1.7,
+            ['--reader-line-height' as string]: settings.line_spacing === 'compact' ? '1.4' 
+              : settings.line_spacing === 'relaxed' ? '2.0' 
+              : settings.line_spacing === 'spacious' ? '2.4' 
+              : '1.7',
           }}
           ref={contentRef}
         >
