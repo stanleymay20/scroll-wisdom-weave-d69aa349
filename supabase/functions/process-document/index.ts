@@ -268,10 +268,10 @@ function stripFrontMatter(text: string): string {
 function detectChapterBoundaries(text: string): Array<{ title: string; content: string }> {
   // Patterns that indicate chapter/section headings (ordered by specificity)
   const headingPatterns = [
-    // "Chapter N. Title" or "Chapter N: Title"
-    /(?:^|\n)\s*(?:Chapter|CHAPTER)\s+(\d+)[.:]\s*(.+?)(?:\n|$)/gm,
-    // "Part N. Title"
-    /(?:^|\n)\s*(?:Part|PART)\s+([IVXLCDM]+|\d+)[.:]?\s*(.+?)(?:\n|$)/gm,
+    // "Chapter N. Title" or "Chapter N: Title" or "CHAPTER N  Title" (variable whitespace, optional punctuation)
+    /(?:^|\n)\s*(?:Chapter|CHAPTER)\s+(\d+)\s*[.:\s]\s*([A-Z][^\n]{3,80})(?:\n|$)/gm,
+    // "Part N. Title" or "PART I  Title"
+    /(?:^|\n)\s*(?:Part|PART)\s+([IVXLCDM]+|\d+)\s*[.:\s]\s*([A-Z][^\n]{3,80})(?:\n|$)/gm,
     // Numbered sections like "1. Title" or "2. Title" (at line start, title-cased)
     /(?:^|\n)\s*(\d{1,2})\.\s+([A-Z][A-Za-z\s,':&-]{5,80})(?:\n|$)/gm,
   ];
