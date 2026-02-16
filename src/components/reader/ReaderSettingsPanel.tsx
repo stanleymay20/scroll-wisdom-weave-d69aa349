@@ -11,7 +11,7 @@
  * - TTS Auto-continue toggle
  */
 
-import { Palette, Type, AlignJustify, Zap, BookOpen, Volume2 } from "lucide-react";
+import { Palette, Type, AlignJustify, Zap, BookOpen, Volume2, CaseSensitive } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { useSettings, fontColorPresets } from "@/contexts/SettingsContext";
@@ -67,6 +67,36 @@ export function ReaderSettingsPanel({
           onChange={(e) => setFontSize(parseInt(e.target.value))}
           className="w-full accent-primary"
         />
+      </div>
+
+      {/* Font Family */}
+      <div>
+        <label className="text-sm text-muted-foreground mb-2 block flex items-center gap-2">
+          <CaseSensitive className="h-4 w-4" />
+          Font Family
+        </label>
+        <div className="grid grid-cols-3 gap-2">
+          {([
+            { key: 'sans' as const, label: 'Sans-Serif', sample: 'Aa' },
+            { key: 'serif' as const, label: 'Serif', sample: 'Aa' },
+            { key: 'mono' as const, label: 'Mono', sample: 'Aa' },
+          ]).map(({ key, label, sample }) => (
+            <button
+              key={key}
+              onClick={() => updateSettings({ font_family: key })}
+              className={`flex flex-col items-center gap-1 p-2 rounded-md text-xs font-medium transition-all border ${
+                settings.font_family === key
+                  ? 'ring-2 ring-primary ring-offset-1 bg-primary/10 border-primary/30'
+                  : 'bg-muted/30 border-border/30 hover:bg-muted/50'
+              }`}
+            >
+              <span className={`text-base leading-none ${
+                key === 'serif' ? 'font-serif' : key === 'mono' ? 'font-mono' : 'font-sans'
+              }`}>{sample}</span>
+              <span>{label}</span>
+            </button>
+          ))}
+        </div>
       </div>
 
       {/* Reading Width */}

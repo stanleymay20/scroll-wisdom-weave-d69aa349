@@ -203,6 +203,15 @@ export default function Reader() {
   
   // AUTO-CONTINUE: Use settings from context
   const autoContinueAudio = settings.tts_auto_continue;
+  const [pendingAutoPlay, setPendingAutoPlay] = useState(false);
+  
+  // Reset pendingAutoPlay after it's been consumed (when chapter content loads)
+  useEffect(() => {
+    if (pendingAutoPlay) {
+      const timer = setTimeout(() => setPendingAutoPlay(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [pendingAutoPlay]);
 
   const { toast } = useToast();
   const lastSavedProgress = useRef<number>(0);
@@ -969,13 +978,14 @@ export default function Reader() {
                 setShowVoiceConversation(true);
               }}
               autoContinue={autoContinueAudio}
+              autoPlay={pendingAutoPlay}
               currentChapter={currentChapter}
               totalChapters={totalChapters}
               onPlayingChange={setIsTTSPlaying}
               onAudioRefChange={(el) => { ttsAudioRef.current = el; }}
               onCumulativeTimeChange={(secs) => { ttsCumulativeTimeRef.current = secs; }}
               onEstimatedDurationChange={setTtsEstimatedDuration}
-              onChapterComplete={async () => {
+               onChapterComplete={async () => {
                 // AUTO-CONTINUE: Navigate to next chapter when audio finishes
                 if (currentChapter < totalChapters) {
                   console.log("[Reader] Audio complete - advancing to next chapter");
@@ -985,6 +995,9 @@ export default function Reader() {
                     const overallProgress = (currentChapter / book.total_chapters) * 100;
                     await saveProgress(currentChapter, overallProgress);
                   }
+                  
+                  // Set flag to auto-play next chapter
+                  setPendingAutoPlay(true);
                   
                   // Navigate to next chapter
                   window.scrollTo({ top: 0, behavior: 'instant' });
@@ -1134,7 +1147,7 @@ export default function Reader() {
                   settings.reading_width === 'wide' && "reading-content-wide",
                   settings.reading_width === 'full' && "reading-content-full",
                 )}
-                style={{ fontSize: `${fontSize}px` }}
+                style={{ fontSize: `${fontSize}px`, fontFamily: 'var(--reader-font-family, inherit)' }}
                 onMouseUp={() => {
                   // Capture selected text for TTS
                   const selection = window.getSelection();
