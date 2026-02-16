@@ -80,7 +80,7 @@ export function useReadingSession(bookId: string, chapterId: string | null) {
         .insert({
           user_id: user.id,
           book_id: bookId,
-          chapter_id: chapterId,
+          chapter_number: chapterId ? parseInt(chapterId, 10) || null : null,
           started_at: new Date().toISOString(),
         })
         .select('id')

@@ -263,9 +263,26 @@ function stripFrontMatter(text: string): string {
 }
 
 /**
+ * Normalize PDF text: insert newlines before chapter/part markers
+ * that appear mid-line (common in PDF text extraction)
+ */
+function normalizePdfText(text: string): string {
+  // Insert newline before "CHAPTER N" or "Chapter N" when preceded by text
+  text = text.replace(/([.!?)\s])\s*(CHAPTER\s+\d+)/g, '$1\n\n$2');
+  text = text.replace(/([.!?)\s])\s*(Chapter\s+\d+)/g, '$1\n\n$2');
+  // Insert newline before "PART I" or "Part I" etc.
+  text = text.replace(/([.!?)\s])\s*(PART\s+[IVXLCDM]+)/g, '$1\n\n$2');
+  text = text.replace(/([.!?)\s])\s*(Part\s+[IVXLCDM]+)/g, '$1\n\n$2');
+  return text;
+}
+
+/**
  * Detect chapter boundaries using heading patterns in the text
  */
-function detectChapterBoundaries(text: string): Array<{ title: string; content: string }> {
+function detectChapterBoundaries(rawText: string): Array<{ title: string; content: string }> {
+  // Normalize: insert newlines before chapter markers that appear mid-line
+  const text = normalizePdfText(rawText);
+  
   // Patterns that indicate chapter/section headings (ordered by specificity)
   // We match the whole line then extract the title by splitting on double-spaces
   const headingPatterns = [
