@@ -10,13 +10,12 @@
  * 3. Match time → active sentence
  * 4. Highlight + smooth scroll to center
  *
- * Supports two modes:
- * - Real audioRef: reads audio.currentTime + cumulative offset
- * - Simulated: rAF-based timer (fallback)
+ * FIX: Uses refs for all real-time values in the rAF tick loop
+ * to avoid stale closures when React state updates lag behind
+ * (e.g., between chunk transitions where cumulativeTimeSec updates).
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { stripMarkdown } from '@/lib/sentenceUtils';
 
 export interface SentenceTimestamp {
   index: number;
@@ -70,27 +69,24 @@ export function useAudioSync({
   estimatedDurationSec,
   wordCount = 0,
 }: UseAudioSyncOptions): UseAudioSyncReturn {
-  // Total chapter duration estimate — used for distributing timestamps across ALL sentences.
+  // Total chapter duration estimate
   const totalDuration = useMemo(
     () => estimatedDurationSec ?? (wordCount > 0 ? (wordCount / 150) * 60 : 60),
     [estimatedDurationSec, wordCount]
   );
 
-  // Build timestamps from ACTUAL DOM elements with data-sentence-index.
-  // This guarantees the sentence count matches the rendered output exactly.
+  // Build timestamps from DOM elements with data-sentence-index.
   const [sentences, setSentences] = useState<SentenceTimestamp[]>([]);
+  const sentencesRef = useRef<SentenceTimestamp[]>([]);
   const domScanRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
-    // Clear previous scan
     if (domScanRef.current) clearTimeout(domScanRef.current);
 
-    // Scan DOM shortly after render to find indexed elements
     const scan = () => {
       if (!contentRef.current) return;
       const els = contentRef.current.querySelectorAll('[data-sentence-index]');
       if (els.length === 0) {
-        // Retry — DOM indices may not be assigned yet (useEffect ordering)
         domScanRef.current = setTimeout(scan, 200);
         return;
       }
@@ -99,11 +95,12 @@ export function useAudioSync({
         const text = (el as HTMLElement).innerText || '';
         texts.push(text || ' ');
       });
-      setSentences(buildTimestamps(texts, totalDuration));
+      const ts = buildTimestamps(texts, totalDuration);
+      sentencesRef.current = ts;
+      setSentences(ts);
       console.log(`[useAudioSync] Built timestamps for ${texts.length} sentences, totalDuration=${totalDuration.toFixed(1)}s`);
     };
 
-    // Delay to let MarkdownRenderer's useEffect assign sentence-level indices first
     domScanRef.current = setTimeout(scan, 300);
     return () => { if (domScanRef.current) clearTimeout(domScanRef.current); };
   }, [chapterContent, totalDuration, contentRef]);
@@ -112,22 +109,29 @@ export function useAudioSync({
   const [isSyncEnabled, setIsSyncEnabled] = useState(true);
   const [isUserScrolledAway, setIsUserScrolledAway] = useState(false);
 
+  // === REFS for real-time tick values (avoids stale closures) ===
+  const cumulativeTimeSecRef = useRef(cumulativeTimeSec);
+  const isPlayingRef = useRef(isPlaying);
   const playbackTimeRef = useRef(0);
   const lastTickRef = useRef(0);
   const rafRef = useRef<number>();
   const manualScrollTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const programmaticScrollRef = useRef(false);
+  const activeSentenceRef = useRef(-1);
 
-  // Tick: compute current global time and find active sentence
+  // Keep refs in sync with props/state
+  useEffect(() => { cumulativeTimeSecRef.current = cumulativeTimeSec; }, [cumulativeTimeSec]);
+  useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+
+  // Tick: compute current global time and find active sentence.
+  // Uses REFS only — no closure dependency on changing props.
   const tick = useCallback((now: number) => {
-    if (!isPlaying) return;
+    if (!isPlayingRef.current) return;
 
     let t: number;
     if (audioRef?.current && !isNaN(audioRef.current.currentTime)) {
-      // Real audio: cumulative offset + current chunk position
-      t = cumulativeTimeSec + audioRef.current.currentTime;
+      t = cumulativeTimeSecRef.current + audioRef.current.currentTime;
     } else {
-      // Fallback: simulate time via rAF delta
       if (lastTickRef.current > 0) {
         const dt = (now - lastTickRef.current) / 1000;
         playbackTimeRef.current += dt;
@@ -136,22 +140,25 @@ export function useAudioSync({
       t = playbackTimeRef.current;
     }
 
-    // Binary-ish search for active sentence
+    const sents = sentencesRef.current;
     let idx = -1;
-    for (let i = 0; i < sentences.length; i++) {
-      if (t >= sentences[i].startTime && t < sentences[i].endTime) {
+    for (let i = 0; i < sents.length; i++) {
+      if (t >= sents[i].startTime && t < sents[i].endTime) {
         idx = i;
         break;
       }
     }
-    if (idx === -1 && sentences.length > 0 && t >= sentences[sentences.length - 1].startTime) {
-      idx = sentences.length - 1;
+    if (idx === -1 && sents.length > 0 && t >= sents[sents.length - 1].startTime) {
+      idx = sents.length - 1;
     }
 
-    setActiveSentenceIndex(prev => (prev === idx ? prev : idx));
+    if (idx !== activeSentenceRef.current) {
+      activeSentenceRef.current = idx;
+      setActiveSentenceIndex(idx);
+    }
 
     rafRef.current = requestAnimationFrame(tick);
-  }, [isPlaying, sentences, audioRef, cumulativeTimeSec]);
+  }, [audioRef]); // Only depends on audioRef identity (stable ref)
 
   // Start / stop tick loop
   useEffect(() => {
@@ -213,17 +220,18 @@ export function useAudioSync({
 
   const followAudio = useCallback(() => {
     setIsUserScrolledAway(false);
-    const el = contentRef.current?.querySelector(`[data-sentence-index="${activeSentenceIndex}"]`);
+    const el = contentRef.current?.querySelector(`[data-sentence-index="${activeSentenceRef.current}"]`);
     if (el) {
       programmaticScrollRef.current = true;
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
       setTimeout(() => { programmaticScrollRef.current = false; }, 600);
     }
-  }, [activeSentenceIndex, contentRef]);
+  }, [contentRef]);
 
   const reset = useCallback(() => {
     playbackTimeRef.current = 0;
     lastTickRef.current = 0;
+    activeSentenceRef.current = -1;
     setActiveSentenceIndex(-1);
     setIsUserScrolledAway(false);
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
