@@ -275,15 +275,14 @@ function detectChapterBoundaries(text: string): Array<{ title: string; content: 
 
   const headings: HeadingMatch[] = [];
 
-  // Try each pattern, use the one that finds the most reasonable matches
+  // Try each pattern, collect all candidates and pick the best one
+  const candidates: { matches: HeadingMatch[]; patternSrc: string }[] = [];
   for (const pattern of headingPatterns) {
     const matches: HeadingMatch[] = [];
     let match;
     while ((match = pattern.exec(text)) !== null) {
       const title = match[2]?.trim() || match[0].trim();
-      // Filter out false positives: too short, or looks like a list item / sentence
       if (title.length < 3 || title.length > 120) continue;
-      // Skip if title contains too many lowercase words (likely a sentence)
       const words = title.split(/\s+/);
       if (words.length > 10) continue;
       
@@ -294,11 +293,18 @@ function detectChapterBoundaries(text: string): Array<{ title: string; content: 
       });
     }
 
-    if (matches.length >= 3 && matches.length <= 40) {
-      headings.push(...matches);
-      console.log(`[detect-chapters] Found ${matches.length} headings with pattern: ${pattern.source.substring(0, 40)}...`);
-      break; // Use first pattern that works well
+    if (matches.length >= 3 && matches.length <= 50) {
+      candidates.push({ matches, patternSrc: pattern.source.substring(0, 40) });
+      console.log(`[detect-chapters] Pattern "${pattern.source.substring(0, 40)}..." found ${matches.length} headings`);
     }
+  }
+
+  // Pick the candidate with the most headings (prefer chapters over parts)
+  if (candidates.length > 0) {
+    candidates.sort((a, b) => b.matches.length - a.matches.length);
+    const best = candidates[0];
+    headings.push(...best.matches);
+    console.log(`[detect-chapters] Selected best pattern with ${best.matches.length} headings: ${best.patternSrc}...`);
   }
 
   // If no heading patterns work, try markdown-style headings
