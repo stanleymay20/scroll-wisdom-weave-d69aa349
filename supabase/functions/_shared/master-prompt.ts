@@ -1938,6 +1938,216 @@ ${FINAL_DIRECTIVE}
 LANGUAGE: Write EXCLUSIVELY in ${language}.`;
 }
 
+// ===========================================
+// SECTION 10: WALL STREET INSTITUTIONAL CONTRACT
+// Two-Layer Institutional Upgrade Model for Business/Wealth Books
+// ===========================================
+
+export const WALL_STREET_INSTITUTIONAL_CONTRACT = `
+=== WALL STREET INSTITUTIONAL UPGRADE CONTRACT ===
+
+STATUS: ACTIVE — Applied to ALL business, entrepreneurship, and wealth-building books.
+PURPOSE: Transform visionary content into institutional-grade material.
+
+===========================================
+LAYER 1 — INSTITUTIONAL SPINE (EVERY CHAPTER)
+===========================================
+
+Every chapter in a business/wealth book MUST contain these 5 embedded sections
+woven naturally into the narrative (not bolted-on appendices):
+
+1. **Strategic Thesis** (Opening)
+   - The chapter's core strategic argument in 1-2 sentences
+   - Must be falsifiable and defensible
+   - Frame as an investment thesis, not an opinion
+
+2. **Financial Engineering Layer**
+   - At least ONE quantitative framework per chapter
+   - Use markdown tables for financial models, matrices, or comparisons
+   - Include real numbers (revenue, multiples, percentages)
+   - Examples: Capital Allocation Matrix, Industry Timing Model, Moat Scoring
+
+3. **Capital Impact Analysis**
+   - How does this concept affect valuation?
+   - What is the capital efficiency implication?
+   - Include at least ONE formula or calculation
+   - Example: EV = (P × Upside) – Downside
+
+4. **Risk & Failure Modes**
+   - What kills this strategy?
+   - Include a risk matrix or failure scenario
+   - Address: market risk, execution risk, timing risk
+   - Be brutally honest about downside
+
+5. **Executive Action Framework**
+   - 3-5 concrete next steps with measurable outcomes
+   - Include KPIs or success metrics
+   - Time-bound (30/60/90 day actions)
+   - Must be executable, not aspirational
+
+===========================================
+LAYER 2 — DEEP FINANCIAL ENGINEERING (PRIORITY CHAPTERS)
+===========================================
+
+The following chapter themes require HEAVY institutional depth:
+
+CAPITAL ALLOCATION chapters:
+- Capital Allocation Matrix (table: Asset Type / Millionaire View / Billionaire View)
+- Decision Tree with expected value calculations
+- Portfolio construction: 70% stable / 20% scalable / 10% moonshot
+
+LEVERAGE & COMPOUNDING chapters:
+- Leverage Stack Model: Code → Media → Capital → AI → Network Effects
+- Compound growth calculations with real numbers
+- Example: 100K users × $20/mo = $24M ARR → 12× multiple = $288M valuation
+
+MARKET SIZING chapters:
+- TAM / SAM / SOM breakdown with real market data
+- Industry Timing Model table (Emerging/Growth/Mature/Decline phases)
+- Market entry strategy per phase
+
+AI & TECHNOLOGY chapters:
+- AI Moat Framework: Data moat, Model advantage, Distribution lock-in, Switching cost
+- Unit economics shift modeling (cost reduction → profit delta → valuation increase)
+- Self-Driving Company Architecture diagram
+
+CAPITAL RAISING chapters:
+- Cap Table Simulation with dilution math across rounds
+- Example: Founder 100% → Seed 80% → Series A 60% → Series B 48%
+- Term sheet anatomy and negotiation leverage points
+- Cost of capital analysis
+
+EQUITY & GOVERNANCE chapters:
+- Dual-class share structure explanation
+- Voting vs economic ownership
+- Holding Company structure: HoldCo → OpCo → IP Co → International Subs
+- IPO vs Acquisition trade-off framework
+
+===========================================
+TABLE REQUIREMENTS (MANDATORY)
+===========================================
+
+Business/wealth chapters MUST include at least 2 markdown tables per chapter:
+
+Example formats:
+
+| Metric | Millionaire | Billionaire |
+|--------|------------|-------------|
+| Time   | Income     | Ownership   |
+| Money  | ROI        | Strategic Control |
+| Risk   | Avoid      | Structure Asymmetry |
+
+| Phase     | Strategy              |
+|-----------|----------------------|
+| Emerging  | Risk capital          |
+| Growth    | Scale aggressively    |
+| Mature    | Acquire & consolidate |
+| Decline   | Extract cash          |
+
+===========================================
+QUANTITATIVE RIGOR (NON-NEGOTIABLE)
+===========================================
+
+Every business chapter MUST include:
+- At least 3 specific numbers (revenue, percentages, multiples, valuations)
+- At least 1 formula or calculation
+- At least 1 comparison table
+- Real-world math that readers can replicate
+
+FORBIDDEN:
+❌ Vague statements like "significant returns" or "substantial growth"
+❌ Concepts without numbers to back them up
+❌ Financial frameworks without worked examples
+❌ Strategy without measurable outcomes
+
+===========================================
+VOICE PRESERVATION
+===========================================
+
+CRITICAL: This contract ENHANCES the author's voice, it does NOT replace it.
+- Spiritual/philosophical frameworks remain
+- Narrative storytelling continues
+- The institutional layer is WOVEN IN, not bolted on
+- Think: Warren Buffett's letters (philosophical + quantitative)
+- Think: Ray Dalio's Principles (visionary + systematic)
+
+The goal is: Founder + Private Equity + Venture Capital + Institutional Strategy Manual
+
+=== END WALL STREET INSTITUTIONAL CONTRACT ===
+`;
+
+export const BILLIONAIRE_ROADMAP_CONTRACT = `
+=== 12-MONTH BILLIONAIRE POSITIONING ROADMAP ===
+
+This section is a standalone strategic chapter that must include:
+
+MONTH-BY-MONTH BREAKDOWN:
+
+| Month | Focus Area | Key Deliverables | Success Metric |
+|-------|-----------|-----------------|----------------|
+| 1-2   | Opportunity Thesis | Investment memo, TAM analysis, Competitive map | Validated thesis |
+| 3-4   | MVP + Distribution | AI-powered MVP, Landing page, 30 content assets | 1,000 users |
+| 5-6   | Traction & Metrics | CAC/LTV tracking, Retention analysis | Product-market fit |
+| 7-8   | Monetization Engine | Subscription/high-ticket launch | $20K-$100K MRR |
+| 9-10  | Systems & Moats | AI automation, Data flywheel, Advisory board | Defensibility |
+| 11-12 | Capital & Expansion | Pitch deck, Financial projections, Cap table | Seed round ready |
+
+Each month section MUST include:
+1. Specific deliverables (not vague goals)
+2. KPI targets with numbers
+3. Financial thresholds
+4. Capital readiness milestones
+5. Moat building checkpoints
+6. AI leverage implementation steps
+
+END STATE REQUIREMENTS:
+The reader must finish with clarity on:
+- Revenue trajectory
+- Data asset value
+- AI leverage points
+- Capital access pathway
+- Brand authority metrics
+- Defensible moat structure
+
+=== END BILLIONAIRE ROADMAP CONTRACT ===
+`;
+
+/**
+ * Build institutional upgrade prompt for business books
+ */
+export function buildInstitutionalUpgradePrompt(
+  chapterNumber: number,
+  chapterTitle: string,
+  isDeepFinancialChapter: boolean
+): string {
+  // Deep financial engineering chapters get extra depth
+  const deepChapterNumbers = [1, 3, 5, 11, 17, 18];
+  const isDeep = isDeepFinancialChapter || deepChapterNumbers.includes(chapterNumber);
+  
+  let prompt = WALL_STREET_INSTITUTIONAL_CONTRACT;
+  
+  if (isDeep) {
+    prompt += `
+
+=== DEEP FINANCIAL ENGINEERING MODE (ACTIVE FOR THIS CHAPTER) ===
+
+This is a PRIORITY institutional chapter. Apply MAXIMUM financial depth:
+- Include 3+ markdown tables with real numbers
+- Include 2+ formulas or calculations
+- Include worked examples with specific dollar amounts
+- Include scenario analysis (best case / base case / worst case)
+- Include institutional terminology (IRR, MOIC, LTV/CAC ratio, burn rate, runway)
+
+Chapter ${chapterNumber}: "${chapterTitle}" requires Wall Street-grade depth.
+Do NOT hold back on quantitative rigor.
+
+=== END DEEP FINANCIAL ENGINEERING MODE ===
+`;
+  }
+  
+  return prompt;
+}
+
 /**
  * Build edit intent prompt for chapter regeneration
  */
