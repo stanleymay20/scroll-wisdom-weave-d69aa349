@@ -81,11 +81,10 @@ export function useAudioSync({
 
   const sentences = useMemo<SentenceTimestamp[]>(() => {
     if (!chapterContent) return [];
-    // Collapse fenced code blocks to single placeholder before splitting,
-    // so block count matches MarkdownRenderer's DOM element count exactly
-    const preprocessed = chapterContent.replace(/```[\s\S]*?```/g, '[code]');
-    const blocks = preprocessed.split(/\n\n+/).map(s => s.trim()).filter(s => s.length > 0);
-    // Use stripped text for proportional timing; non-text blocks get minimal time
+    // Split by double newlines to get paragraph-level blocks
+    // This produces one entry per block, matching the DOM's direct children count
+    // (MarkdownRenderer assigns data-sentence-index to each direct child element)
+    const blocks = chapterContent.split(/\n\n+/).map(s => s.trim()).filter(s => s.length > 0);
     const textBlocks = blocks.map(b => {
       const stripped = stripMarkdown(b);
       return stripped || ' ';
