@@ -13,7 +13,8 @@ export function stripMarkdown(md: string): string {
     .replace(/#{1,6}\s*/g, '')             // headings
     .replace(/[*_]{1,3}/g, '')             // bold/italic
     .replace(/^\s*[-*>]\s+/gm, '')         // list / quote markers
-    .replace(/\n{2,}/g, '\n')
+    // Preserve paragraph breaks (double newlines) for sentence-index alignment
+    .replace(/\n{3,}/g, '\n\n')
     .trim();
 }
 
