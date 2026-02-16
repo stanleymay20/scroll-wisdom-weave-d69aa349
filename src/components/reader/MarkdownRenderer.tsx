@@ -223,34 +223,43 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     
     // Paragraphs (double newlines) — use <div> instead of <p> to prevent browser
     // auto-correction when block elements (ol, ul, table) appear inside.
-    // This keeps data-sentence-index on the correct wrapper element.
-    html = html.replace(/\n\n+/g, '</div><div class="md-p" data-sync-placeholder>');
-    html = `<div class="md-p" data-sync-placeholder>${html}</div>`;
+    html = html.replace(/\n\n+/g, '</div><div class="md-p">');
+    html = `<div class="md-p">${html}</div>`;
     
     // Clean up empty blocks
-    html = html.replace(/<div class="md-p"[^>]*>\s*<\/div>/g, '');
+    html = html.replace(/<div class="md-p">\s*<\/div>/g, '');
     
-    // Transfer sync placeholder to block elements before removing <div> wrappers
-    // This ensures headings, lists, etc. keep their audio-sync index
-    html = html.replace(/<div class="md-p" data-sync-placeholder>\s*(<(?:h[1-6]|blockquote|table|figure|div) class="[^"]*")(>)/g,
-      '$1 data-sync-placeholder$2');
-    html = html.replace(/<div class="md-p" data-sync-placeholder>\s*(<(?:ul|ol) class="[^"]*")(>)/g,
-      '$1 data-sync-placeholder$2');
-    html = html.replace(/<div class="md-p" data-sync-placeholder>\s*(<div class="code-block")(>)/g,
-      '$1 data-sync-placeholder$2');
-    html = html.replace(/<div class="md-p" data-sync-placeholder>\s*(<hr class="md-hr")\s*(\/?>)/g,
-      '$1 data-sync-placeholder $2');
+    // Remove <div class="md-p"> wrappers around block elements to avoid nesting issues
+    html = html.replace(/<div class="md-p">\s*(<(?:h[1-6]|blockquote|table|figure|div|ul|ol|hr)[^>]*>)/g, '$1');
+    html = html.replace(/(<\/(?:h[1-6]|blockquote|table|figure|div|ul|ol|hr)>)\s*<\/div>/g, '$1');
     
-    // Remove remaining <div> wrappers around block elements
-    html = html.replace(/<div class="md-p"[^>]*>(<(?:h[1-6]|ul|ol|blockquote|table|figure|div|hr))/g, '$1');
-    html = html.replace(/(<\/(?:h[1-6]|ul|ol|blockquote|table|figure|div|hr)>)<\/div>/g, '$1');
-    
-    // Assign sequential data-sentence-index to all surviving placeholders
-    let syncIdx = 0;
-    html = html.replace(/data-sync-placeholder/g, () => `data-sentence-index="${syncIdx++}"`);
-    
+    // data-sentence-index is assigned post-render via DOM useEffect (not regex)
     return html;
   }, [cleanedText]);
+
+  // POST-RENDER: Assign data-sentence-index to direct block children via DOM
+  // This replaces fragile regex-based indexing and guarantees indices exist
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+
+    // Find all .markdown-content containers (may be multiple if structured code blocks split content)
+    const mdContainers = container.classList.contains('markdown-content') 
+      ? [container] 
+      : Array.from(container.querySelectorAll('.markdown-content'));
+    
+    let globalIdx = 0;
+    mdContainers.forEach(mc => {
+      // Target direct children that are block-level content elements
+      const children = mc.children;
+      for (let i = 0; i < children.length; i++) {
+        const child = children[i] as HTMLElement;
+        // Skip if already indexed (shouldn't happen, but safety)
+        if (child.hasAttribute('data-sentence-index')) continue;
+        child.setAttribute('data-sentence-index', String(globalIdx++));
+      }
+    });
+  }, [renderedContent, structuredBlocks]);
 
   // Handle copy button clicks for legacy code blocks
   useEffect(() => {
