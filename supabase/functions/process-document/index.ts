@@ -50,8 +50,8 @@ Deno.serve(async (req) => {
       return jsonRes({ error: 'Document must contain at least 200 characters of text.' }, 400);
     }
 
-    if (documentText.length > 500000) {
-      return jsonRes({ error: 'Document exceeds maximum size (approx. 500K characters).' }, 400);
+    if (documentText.length > 2000000) {
+      return jsonRes({ error: 'Document exceeds maximum size (approx. 2M characters).' }, 400);
     }
 
     console.log(`[process-document] Processing for user ${userId}, source: ${sourceType}, length: ${documentText.length}`);
