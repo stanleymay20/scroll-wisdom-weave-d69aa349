@@ -770,6 +770,13 @@ serve(async (req) => {
     if (chaptersError) throw new Error("Failed to fetch chapters");
     if (!chapters || chapters.length === 0) throw new Error("No generated chapters found");
 
+    // Fetch book-level citations from book_citations table
+    const { data: bookCitations } = await supabase
+      .from("book_citations")
+      .select("*")
+      .eq("book_id", bookId)
+      .order("created_at");
+
     // Determine if this is academic content
     const isAcademicExport = academicMode || chapters.some(ch => ch.academic_mode);
     const effectiveCitationStyle = citationStyle || chapters.find(ch => ch.citation_style)?.citation_style || 'APA';
@@ -791,8 +798,20 @@ serve(async (req) => {
     const isISBN = isbn && isValidISBN(isbn);
     const year = new Date().getFullYear();
 
-    // Generate bibliography for academic exports
-    const bibliography = isAcademicExport ? generateBibliography(chapters, effectiveCitationStyle) : [];
+    // Generate bibliography for ALL books (from chapter refs + book_citations table)
+    let bibliography = generateBibliography(chapters, effectiveCitationStyle);
+    
+    // Also include book-level citations from the database
+    if (bookCitations && bookCitations.length > 0) {
+      const dbCitations = bookCitations.map(c => c.citation_text);
+      // Deduplicate against existing bibliography
+      const existingSet = new Set(bibliography.map(b => b.toLowerCase().trim()));
+      for (const citation of dbCitations) {
+        if (!existingSet.has(citation.toLowerCase().trim())) {
+          bibliography.push(citation);
+        }
+      }
+    }
 
     console.log(`[EXPORT] Found ${chapters.length} chapters, ${bibliography.length} unique references, generating ${format}`);
 
@@ -999,7 +1018,7 @@ async function generatePDF(
     });
   }
   
-  page.drawText(`Published by ${author}`, {
+  page.drawText(`Published by Scroll Nations Publishing`, {
     x: margin,
     y: margin + 50,
     size: 10,
@@ -1021,7 +1040,7 @@ async function generatePDF(
     "This work was created with AI assistance under the full authorship",
     "and ownership of the author. The author retains all commercial rights.",
     "",
-    `Published by ${author}`,
+    `Published by Scroll Nations Publishing`,
   ];
   
   // Add academic disclaimer if needed
@@ -1111,10 +1130,10 @@ async function generatePDF(
     }
   }
   
-  // Add References entry if academic
-  if (isAcademic && bibliography.length > 0) {
+  // Add Bibliography/References entry to TOC if we have any
+  if (bibliography.length > 0) {
     y -= 20;
-    page.drawText("References", {
+    page.drawText(isAcademic ? "References" : "Bibliography", {
       x: margin,
       y,
       size: 12,
@@ -1721,14 +1740,14 @@ async function generatePDF(
     }
   }
 
-  // Bibliography/References section for academic content
-  if (isAcademic && bibliography.length > 0) {
+  // Bibliography/References section for ALL books with citations
+  if (bibliography.length > 0) {
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     pageNumber++;
     addPageNumber(page, pageNumber);
     y = pageHeight - margin - 50;
     
-    page.drawText("REFERENCES", {
+    page.drawText(isAcademic ? "REFERENCES" : "BIBLIOGRAPHY", {
       x: margin,
       y,
       size: 18,
@@ -1737,14 +1756,17 @@ async function generatePDF(
     });
     y -= 40;
     
-    page.drawText(`Citation Style: ${citationStyle}`, {
-      x: margin,
-      y,
-      size: 10,
-      font: helvetica,
-      color: rgb(0.5, 0.5, 0.5),
-    });
-    y -= 30;
+    if (isAcademic) {
+      page.drawText(`Citation Style: ${citationStyle}`, {
+        x: margin,
+        y,
+        size: 10,
+        font: helvetica,
+        color: rgb(0.5, 0.5, 0.5),
+      });
+      y -= 30;
+    }
+    
     
     for (const ref of bibliography) {
       const refLines = wrapText(ref, timesRoman, 10, textWidth - 20);
@@ -1889,8 +1911,8 @@ async function generateEPUB(
     chapter: ch,
   }));
 
-  // Add references as separate document for academic
-  const hasRefs = isAcademic && bibliography.length > 0;
+  // Add references/bibliography as separate document for all books with citations
+  const hasRefs = bibliography.length > 0;
   
   // First, process all chapters to collect images and generate XHTML
   let imageCounter = 0;
@@ -2170,7 +2192,7 @@ ${htmlContent}
     <dc:title>${escapeXml(book.title)}</dc:title>
     <dc:creator>${escapeXml(author)}</dc:creator>
     <dc:language>${book.language || 'en'}</dc:language>
-    <dc:publisher>${escapeXml(author)}</dc:publisher>
+    <dc:publisher>Scroll Nations Publishing</dc:publisher>
     <dc:date>${year}</dc:date>
     <meta property="dcterms:modified">${new Date().toISOString().split('.')[0]}Z</meta>
     ${hasCover ? '<meta name="cover" content="cover-image"/>' : ''}
@@ -2279,7 +2301,7 @@ ${isAcademic ? `<p><em>[Academic Content - ${citationStyle} Citations]</em></p>`
 <hr/>
 <p>© ${year} ${escapeXml(author)}. All rights reserved.</p>
 <p>${isISBN ? `ISBN: ${identifier}` : `SPC: ${identifier}`}</p>
-<p>Published by ${escapeXml(author)}</p>`;
+<p>Published by Scroll Nations Publishing</p>`;
 
   if (isAcademic) {
     titleContent += `
@@ -2318,8 +2340,9 @@ All references in this document are retrieved from verifiable academic databases
     await zipWriter.add(img.path, new zip.Uint8ArrayReader(img.bytes));
   }
 
-  // References page for academic exports
+  // References/Bibliography page for all books with citations
   if (hasRefs) {
+    const sectionTitle = isAcademic ? 'References' : 'Bibliography';
     const refsContent = bibliography.map(ref => 
       `<p class="reference">${escapeXml(ref)}</p>`
     ).join('\n');
@@ -2327,13 +2350,12 @@ All references in this document are retrieved from verifiable academic databases
     const referencesXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>References</title><link rel="stylesheet" href="style.css"/></head>
+<head><title>${sectionTitle}</title><link rel="stylesheet" href="style.css"/></head>
 <body>
-<h1>References</h1>
-<p><em>Citation Style: ${citationStyle}</em></p>
+<h1>${sectionTitle}</h1>
+${isAcademic ? `<p><em>Citation Style: ${citationStyle}</em></p>` : ''}
 ${refsContent}
-<hr/>
-<p><small>All references are retrieved from verifiable academic databases.</small></p>
+${isAcademic ? '<hr/>\n<p><small>All references are retrieved from verifiable academic databases.</small></p>' : ''}
 </body>
 </html>`;
     await zipWriter.add("OEBPS/references.xhtml", new zip.TextReader(referencesXhtml));
@@ -2619,7 +2641,7 @@ async function generateDOCX(
 <w:p><w:r><w:t></w:t></w:r></w:p>
 <w:p><w:r><w:t>© ${year} ${escapeXml(author)}. All rights reserved.</w:t></w:r></w:p>
 <w:p><w:r><w:t>${isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`}</w:t></w:r></w:p>
-<w:p><w:r><w:t>Published by ${escapeXml(author)}</w:t></w:r></w:p>`;
+<w:p><w:r><w:t>Published by Scroll Nations Publishing</w:t></w:r></w:p>`;
 
   // Academic notice
   if (isAcademic) {
@@ -2832,11 +2854,12 @@ ${block.title ? `<w:r><w:t xml:space="preserve"> - ${escapeXml(block.title)}</w:
     documentContent += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
   }
 
-  // References section for academic content
-  if (isAcademic && bibliography.length > 0) {
+  // Bibliography/References section for ALL books with citations
+  if (bibliography.length > 0) {
+    const sectionTitle = isAcademic ? 'References' : 'Bibliography';
     documentContent += `
-<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>References</w:t></w:r></w:p>
-<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Citation Style: ${citationStyle}</w:t></w:r></w:p>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>${sectionTitle}</w:t></w:r></w:p>
+${isAcademic ? `<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Citation Style: ${citationStyle}</w:t></w:r></w:p>` : ''}
 <w:p><w:r><w:t></w:t></w:r></w:p>`;
 
     for (const ref of bibliography) {
