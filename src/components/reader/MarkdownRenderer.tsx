@@ -241,12 +241,20 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
   // This replaces fragile regex-based indexing and guarantees indices exist
   useEffect(() => {
     const container = containerRef.current;
-    if (!container) return;
+    if (!container) {
+      console.warn('[MarkdownRenderer] containerRef is null');
+      return;
+    }
 
     // Find all .markdown-content containers (may be multiple if structured code blocks split content)
     const mdContainers = container.classList.contains('markdown-content') 
       ? [container] 
       : Array.from(container.querySelectorAll('.markdown-content'));
+    
+    if (mdContainers.length === 0) {
+      // Fallback: use the container itself
+      mdContainers.push(container);
+    }
     
     let globalIdx = 0;
     mdContainers.forEach(mc => {
@@ -254,11 +262,11 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       const children = mc.children;
       for (let i = 0; i < children.length; i++) {
         const child = children[i] as HTMLElement;
-        // Skip if already indexed (shouldn't happen, but safety)
         if (child.hasAttribute('data-sentence-index')) continue;
         child.setAttribute('data-sentence-index', String(globalIdx++));
       }
     });
+    console.log(`[MarkdownRenderer] Assigned data-sentence-index to ${globalIdx} elements`);
   }, [renderedContent, structuredBlocks]);
 
   // Handle copy button clicks for legacy code blocks

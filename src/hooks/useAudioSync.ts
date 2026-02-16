@@ -71,26 +71,41 @@ export function useAudioSync({
   wordCount = 0,
 }: UseAudioSyncOptions): UseAudioSyncReturn {
   // Total chapter duration estimate — used for distributing timestamps across ALL sentences.
-  // IMPORTANT: Do NOT use per-chunk audio.duration here. Each TTS chunk is ~20-30s,
-  // but we need the total chapter duration to map sentence positions correctly.
-  // The position tracking (cumulativeTimeSec + audio.currentTime) handles real-time sync.
   const totalDuration = useMemo(
     () => estimatedDurationSec ?? (wordCount > 0 ? (wordCount / 150) * 60 : 60),
     [estimatedDurationSec, wordCount]
   );
 
-  const sentences = useMemo<SentenceTimestamp[]>(() => {
-    if (!chapterContent) return [];
-    // Split by double newlines to get paragraph-level blocks
-    // This produces one entry per block, matching the DOM's direct children count
-    // (MarkdownRenderer assigns data-sentence-index to each direct child element)
-    const blocks = chapterContent.split(/\n\n+/).map(s => s.trim()).filter(s => s.length > 0);
-    const textBlocks = blocks.map(b => {
-      const stripped = stripMarkdown(b);
-      return stripped || ' ';
-    });
-    return buildTimestamps(textBlocks, totalDuration);
-  }, [chapterContent, totalDuration]);
+  // Build timestamps from ACTUAL DOM elements with data-sentence-index.
+  // This guarantees the sentence count matches the rendered output exactly.
+  const [sentences, setSentences] = useState<SentenceTimestamp[]>([]);
+  const domScanRef = useRef<ReturnType<typeof setTimeout>>();
+
+  useEffect(() => {
+    // Clear previous scan
+    if (domScanRef.current) clearTimeout(domScanRef.current);
+
+    // Scan DOM shortly after render to find indexed elements
+    const scan = () => {
+      if (!contentRef.current) return;
+      const els = contentRef.current.querySelectorAll('[data-sentence-index]');
+      if (els.length === 0) {
+        // Retry — DOM indices may not be assigned yet (useEffect ordering)
+        domScanRef.current = setTimeout(scan, 150);
+        return;
+      }
+      const texts: string[] = [];
+      els.forEach(el => {
+        const text = (el as HTMLElement).innerText || '';
+        texts.push(text || ' ');
+      });
+      setSentences(buildTimestamps(texts, totalDuration));
+    };
+
+    // Small delay to let MarkdownRenderer's useEffect assign indices first
+    domScanRef.current = setTimeout(scan, 100);
+    return () => { if (domScanRef.current) clearTimeout(domScanRef.current); };
+  }, [chapterContent, totalDuration, contentRef]);
 
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
   const [isSyncEnabled, setIsSyncEnabled] = useState(true);
