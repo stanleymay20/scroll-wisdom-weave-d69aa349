@@ -786,7 +786,7 @@ serve(async (req) => {
     console.log(`[EXPORT] Fetching cover image...`);
     const coverImageBytes = await fetchImageBytes(book.cover_image_url);
     
-    const finalAuthorName = authorName || book.author_ai_agent || "ScrollLibrary Author";
+    const finalAuthorName = authorName || book.author_ai_agent || "Unknown Author";
     const publishingIdentifier = isbn && isValidISBN(isbn) ? isbn : generateSPC(bookId);
     const isISBN = isbn && isValidISBN(isbn);
     const year = new Date().getFullYear();
@@ -979,7 +979,7 @@ async function generatePDF(
     });
   }
   
-  page.drawText("ScrollLibrary Publishing", {
+  page.drawText(`Published by ${author}`, {
     x: margin,
     y: margin + 50,
     size: 10,
@@ -1001,7 +1001,7 @@ async function generatePDF(
     "This work was created with AI assistance under the full authorship",
     "and ownership of the author. The author retains all commercial rights.",
     "",
-    "Published by ScrollLibrary Publishing",
+    `Published by ${author}`,
   ];
   
   // Add academic disclaimer if needed
@@ -2085,7 +2085,7 @@ ${htmlContent}
     <dc:title>${escapeXml(book.title)}</dc:title>
     <dc:creator>${escapeXml(author)}</dc:creator>
     <dc:language>${book.language || 'en'}</dc:language>
-    <dc:publisher>ScrollLibrary Publishing</dc:publisher>
+    <dc:publisher>${escapeXml(author)}</dc:publisher>
     <dc:date>${year}</dc:date>
     <meta property="dcterms:modified">${new Date().toISOString().split('.')[0]}Z</meta>
     ${hasCover ? '<meta name="cover" content="cover-image"/>' : ''}
@@ -2190,7 +2190,7 @@ ${isAcademic ? `<p><em>[Academic Content - ${citationStyle} Citations]</em></p>`
 <hr/>
 <p>© ${year} ${escapeXml(author)}. All rights reserved.</p>
 <p>${isISBN ? `ISBN: ${identifier}` : `SPC: ${identifier}`}</p>
-<p>Published by ScrollLibrary Publishing</p>`;
+<p>Published by ${escapeXml(author)}</p>`;
 
   if (isAcademic) {
     titleContent += `
@@ -2504,7 +2504,7 @@ async function generateDOCX(
 <w:p><w:r><w:t></w:t></w:r></w:p>
 <w:p><w:r><w:t>© ${year} ${escapeXml(author)}. All rights reserved.</w:t></w:r></w:p>
 <w:p><w:r><w:t>${isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`}</w:t></w:r></w:p>
-<w:p><w:r><w:t>Published by ScrollLibrary Publishing</w:t></w:r></w:p>`;
+<w:p><w:r><w:t>Published by ${escapeXml(author)}</w:t></w:r></w:p>`;
 
   // Academic notice
   if (isAcademic) {
