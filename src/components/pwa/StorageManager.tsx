@@ -168,14 +168,51 @@ export function StorageManager({ onClear }: StorageManagerProps) {
       if (!offlineBookIds.includes(bookId)) {
         offlineBookIds.push(bookId);
       }
-      // Prefetch book data
+      // Prefetch book data and persist to IndexedDB
       try {
+        const { data: book } = await supabase
+          .from("books")
+          .select("id, title, cover_image_url")
+          .eq("id", bookId)
+          .single();
+
         const { data: chapters } = await supabase
           .from("chapters")
           .select("*")
           .eq("book_id", bookId);
         
-        // Data is now in memory and will be cached by service worker
+        if (chapters && chapters.length > 0) {
+          // Persist each chapter to IndexedDB for true offline access
+          const { offlineStorage } = await import("@/lib/offlineStorage");
+          await Promise.all(
+            chapters.map(ch =>
+              offlineStorage.cacheChapter({
+                id: ch.id,
+                bookId: ch.book_id,
+                title: ch.title,
+                content: ch.content || '',
+                chapterNumber: ch.chapter_number,
+              })
+            )
+          );
+          // Also cache book metadata
+          if (book) {
+            await offlineStorage.cacheBook({
+              id: book.id,
+              title: book.title,
+              coverUrl: book.cover_image_url || undefined,
+              chapters: chapters.map(ch => ({
+                id: ch.id,
+                bookId: ch.book_id,
+                title: ch.title,
+                content: ch.content || '',
+                chapterNumber: ch.chapter_number,
+                cachedAt: Date.now(),
+              })),
+            });
+          }
+        }
+
         toast({
           title: "Book Downloaded",
           description: "This book is now available offline.",

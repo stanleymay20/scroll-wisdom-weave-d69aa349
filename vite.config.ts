@@ -139,13 +139,14 @@ export default defineConfig(({ mode }) => ({
             },
           },
 
-          // ===== CacheFirst for reading content (already fetched) =====
+          // ===== NetworkFirst for reading content (fresh when online, cached fallback) =====
           {
-            // Books metadata - CacheFirst
+            // Books metadata - NetworkFirst with short timeout
             urlPattern: /\/rest\/v1\/books.*/i,
-            handler: "CacheFirst",
+            handler: "NetworkFirst",
             options: {
               cacheName: "books-cache",
+              networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 200,
                 maxAgeSeconds: 60 * 60 * 24 * 7, // 7 days
@@ -156,11 +157,12 @@ export default defineConfig(({ mode }) => ({
             },
           },
           {
-            // Chapter content - CacheFirst (main offline reading)
+            // Chapter content - NetworkFirst with short timeout
             urlPattern: /\/rest\/v1\/chapters.*/i,
-            handler: "CacheFirst",
+            handler: "NetworkFirst",
             options: {
               cacheName: "chapters-cache",
+              networkTimeoutSeconds: 3,
               expiration: {
                 maxEntries: 500,
                 maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
