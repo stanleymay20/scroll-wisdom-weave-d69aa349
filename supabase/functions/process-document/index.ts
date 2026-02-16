@@ -209,24 +209,34 @@ Return JSON:
  */
 function stripFrontMatter(text: string): string {
   // Common front matter markers to find the start of real content
+  // Try chapter-level first, then part-level (to avoid skipping to Part I too early)
   const contentStartPatterns = [
-    /(?:^|\n)(?:Chapter\s+1|CHAPTER\s+1|Part\s+I\b|PART\s+I\b)/m,
-    /(?:^|\n)#{1,3}\s*(?:Chapter\s+1|Part\s+I)/im,
-    /(?:^|\n)(?:1\.\s+[A-Z])/m, // "1. Chapter Title"
+    /(?:^|\n)(?:Chapter\s+1|CHAPTER\s+1)/m,
+    /(?:^|\n)#{1,3}\s*(?:Chapter\s+1)/im,
+    /(?:^|\n)(?:1\.\s+[A-Z])/m,
+    /(?:^|\n)(?:Part\s+I\b|PART\s+I\b)/m,
+    /(?:^|\n)#{1,3}\s*(?:Part\s+I)/im,
   ];
 
-  // Try to find where real content starts
   for (const pattern of contentStartPatterns) {
     const match = text.match(pattern);
-    if (match && match.index !== undefined && match.index > 500) {
-      // Found a content start marker after significant front matter
+    if (match && match.index !== undefined && match.index > 300) {
       console.log(`[strip-front-matter] Found content start at position ${match.index} via pattern`);
       return text.substring(match.index).trim();
     }
   }
 
-  // Fallback: try to detect end of TOC / copyright block
-  // Look for patterns like "ISBN:", "All rights reserved", table of contents dots
+  // Fallback: strip known front matter blocks inline
+  let cleaned = text;
+  const frontMatterPatterns = [
+    /(?:^|\n).*(?:All rights reserved|ISBN[:\s]|©\s*\d{4}|TABLE OF CONTENTS).*(?:\n|$)/gi,
+    /(?:^|\n).*(?:Scroll Publishing Code|Published by ScrollLibrary|ScrollAuthorGPT).*(?:\n|$)/gi,
+  ];
+  for (const pattern of frontMatterPatterns) {
+    cleaned = cleaned.replace(pattern, '\n');
+  }
+
+  // Also try TOC-end detection
   const tocEndPatterns = [
     /(?:Additional Resources|Conclusion|Index)\s*\.{3,}\s*\d+\s*\n/g,
     /\[LSI\]/g,
@@ -236,9 +246,9 @@ function stripFrontMatter(text: string): string {
   let lastFrontMatterEnd = 0;
   for (const pattern of tocEndPatterns) {
     let match;
-    while ((match = pattern.exec(text)) !== null) {
+    while ((match = pattern.exec(cleaned)) !== null) {
       const end = match.index + match[0].length;
-      if (end > lastFrontMatterEnd && end < text.length * 0.3) {
+      if (end > lastFrontMatterEnd && end < cleaned.length * 0.3) {
         lastFrontMatterEnd = end;
       }
     }
@@ -246,11 +256,10 @@ function stripFrontMatter(text: string): string {
 
   if (lastFrontMatterEnd > 500) {
     console.log(`[strip-front-matter] Stripping front matter up to position ${lastFrontMatterEnd}`);
-    return text.substring(lastFrontMatterEnd).trim();
+    return cleaned.substring(lastFrontMatterEnd).trim();
   }
 
-  // If nothing detected, strip first 200 chars of potential cover text at most
-  return text;
+  return cleaned;
 }
 
 /**
@@ -473,8 +482,12 @@ function buildEnrichedChapter(chapterMeta: any, rawContent: string): string {
     parts.push('');
   }
 
+  // Clean orphan figure/table references from extracted text
+  let cleanedContent = rawContent || chapterMeta.summary || 'Content from uploaded document.';
+  cleanedContent = stripOrphanFigureRefs(cleanedContent);
+
   parts.push(`## Content\n`);
-  parts.push(rawContent || chapterMeta.summary || 'Content from uploaded document.');
+  parts.push(cleanedContent);
   parts.push('');
 
   if (chapterMeta.terminology?.length) {
@@ -483,25 +496,34 @@ function buildEnrichedChapter(chapterMeta: any, rawContent: string): string {
     parts.push('');
   }
 
-  parts.push(`## Reflection\n`);
-  parts.push(`After reading this chapter, consider the following:`);
-  parts.push(`- How would you explain ${chapterMeta.key_concepts?.[0] || 'the main concept'} to someone unfamiliar with this topic?`);
-  parts.push(`- What connections do you see between the concepts in this chapter and your prior knowledge?`);
-  parts.push(`- Which idea challenged your existing understanding the most, and why?`);
-  parts.push('');
-
-  parts.push(`## Application Task\n`);
-  parts.push(`Apply what you've learned:`);
-  parts.push(`- Identify a real-world scenario where ${chapterMeta.key_concepts?.[0] || 'this concept'} would be critical.`);
-  parts.push(`- Draft a brief plan showing how you would use these concepts in practice.`);
-  parts.push('');
-
   if (chapterMeta.summary) {
     parts.push(`## Summary\n`);
     parts.push(chapterMeta.summary);
   }
 
   return parts.join('\n');
+}
+
+/**
+ * Strip or annotate orphan figure/table references since PDF text extraction loses images.
+ */
+function stripOrphanFigureRefs(text: string): string {
+  // Replace standalone figure/table caption lines like "Figure 1.1: Some Caption"
+  text = text.replace(
+    /(?:^|\n)\s*(?:Figure|Fig\.?|Table|Exhibit)\s+[\d.]+[.:]\s*[^\n]{0,120}(?:\n|$)/gi,
+    (match) => {
+      const caption = match.trim();
+      return `\n\n> 📎 *${caption}* — *(Visual from original document, not available in text format)*\n\n`;
+    }
+  );
+
+  // Replace inline references like "as shown in Figure 3.2" or "(see Table 2.1)"
+  text = text.replace(
+    /(?:as\s+(?:shown|illustrated|depicted|seen)\s+in\s+)?(?:\(?\s*(?:see\s+)?(?:Figure|Fig\.?|Table|Exhibit)\s+[\d.]+\s*\)?)/gi,
+    (match) => `*[${match.trim()} — original document]*`
+  );
+
+  return text;
 }
 
 function jsonRes(body: unknown, status: number) {
