@@ -57,9 +57,12 @@ Deno.serve(async (req) => {
       return jsonRes({ error: 'AI service not configured' }, 500);
     }
 
+    // Step 0: Normalize PDF text — insert newlines before chapter/part markers
+    const normalizedText = normalizePdfText(documentText);
+
     // Step 1: Strip front matter
-    const cleanedText = stripFrontMatter(documentText);
-    console.log(`[process-document] After stripping front matter: ${cleanedText.length} chars (removed ${documentText.length - cleanedText.length})`);
+    const cleanedText = stripFrontMatter(normalizedText);
+    console.log(`[process-document] After stripping front matter: ${cleanedText.length} chars (removed ${normalizedText.length - cleanedText.length})`);
 
     // Step 2: Detect chapter boundaries using heading patterns
     const detectedChapters = detectChapterBoundaries(cleanedText);
@@ -264,24 +267,25 @@ function stripFrontMatter(text: string): string {
 
 /**
  * Normalize PDF text: insert newlines before chapter/part markers
- * that appear mid-line (common in PDF text extraction)
+ * that appear mid-line (common in PDF text extraction).
+ * Must run BEFORE stripFrontMatter and detectChapterBoundaries.
  */
 function normalizePdfText(text: string): string {
-  // Insert newline before "CHAPTER N" or "Chapter N" when preceded by text
-  text = text.replace(/([.!?)\s])\s*(CHAPTER\s+\d+)/g, '$1\n\n$2');
-  text = text.replace(/([.!?)\s])\s*(Chapter\s+\d+)/g, '$1\n\n$2');
-  // Insert newline before "PART I" or "Part I" etc.
-  text = text.replace(/([.!?)\s])\s*(PART\s+[IVXLCDM]+)/g, '$1\n\n$2');
-  text = text.replace(/([.!?)\s])\s*(Part\s+[IVXLCDM]+)/g, '$1\n\n$2');
+  // Insert newline before "CHAPTER N" anywhere it appears without a preceding newline
+  // This handles: "...page 155  CHAPTER 5  Title...", "...text. CHAPTER 5...", "...text\nCHAPTER 5..."
+  text = text.replace(/(?<!\n)\s*(CHAPTER\s+\d+)/gi, '\n\n$1');
+  // Same for PART markers
+  text = text.replace(/(?<!\n)\s*(PART\s+[IVXLCDM]+\b)/gi, '\n\n$1');
+  // Clean up excessive newlines
+  text = text.replace(/\n{4,}/g, '\n\n\n');
   return text;
 }
 
 /**
  * Detect chapter boundaries using heading patterns in the text
  */
-function detectChapterBoundaries(rawText: string): Array<{ title: string; content: string }> {
-  // Normalize: insert newlines before chapter markers that appear mid-line
-  const text = normalizePdfText(rawText);
+function detectChapterBoundaries(text: string): Array<{ title: string; content: string }> {
+  // Text is already normalized by normalizePdfText() upstream
   
   // Patterns that indicate chapter/section headings (ordered by specificity)
   // We match the whole line then extract the title by splitting on double-spaces
