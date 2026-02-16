@@ -267,13 +267,14 @@ function stripFrontMatter(text: string): string {
  */
 function detectChapterBoundaries(text: string): Array<{ title: string; content: string }> {
   // Patterns that indicate chapter/section headings (ordered by specificity)
+  // We match the whole line then extract the title by splitting on double-spaces
   const headingPatterns = [
-    // "Chapter N. Title" or "Chapter N: Title" or "CHAPTER N  Title" (variable whitespace, optional punctuation)
-    /(?:^|\n)\s*(?:Chapter|CHAPTER)\s+(\d+)\s*[.:\s]\s*([A-Z][^\n]{3,80})(?:\n|$)/gm,
-    // "Part N. Title" or "PART I  Title"
-    /(?:^|\n)\s*(?:Part|PART)\s+([IVXLCDM]+|\d+)\s*[.:\s]\s*([A-Z][^\n]{3,80})(?:\n|$)/gm,
-    // Numbered sections like "1. Title" or "2. Title" (at line start, title-cased)
-    /(?:^|\n)\s*(\d{1,2})\.\s+([A-Z][A-Za-z\s,':&-]{5,80})(?:\n|$)/gm,
+    // "CHAPTER N  Title..." or "Chapter N: Title" or "Chapter N. Title"
+    /(?:^|\n)\s*((?:Chapter|CHAPTER)\s+\d+\s*[.:]?\s*[^\n]{0,120})(?:\n|$)/gm,
+    // "PART I  Title" or "Part 1: Title"
+    /(?:^|\n)\s*((?:Part|PART)\s+(?:[IVXLCDM]+|\d+)\s*[.:]?\s*[^\n]{0,120})(?:\n|$)/gm,
+    // Numbered sections like "1. Title"
+    /(?:^|\n)\s*(\d{1,2}\.\s+[A-Z][A-Za-z\s,':&-]{5,80})(?:\n|$)/gm,
   ];
 
   interface HeadingMatch {
@@ -290,10 +291,19 @@ function detectChapterBoundaries(text: string): Array<{ title: string; content: 
     const matches: HeadingMatch[] = [];
     let match;
     while ((match = pattern.exec(text)) !== null) {
-      const title = match[2]?.trim() || match[0].trim();
-      if (title.length < 3 || title.length > 120) continue;
+      const rawLine = match[1]?.trim() || match[0].trim();
+      
+      // Extract title: split on double-space (common in PDF extraction) to get just the heading
+      // e.g. "CHAPTER 1  Data Engineering Described  If you work in..." -> "Data Engineering Described"
+      const parts = rawLine.split(/\s{2,}/);
+      // The title is typically the second segment (first is "CHAPTER N")
+      let title = parts.length >= 2 ? parts[1] : parts[0];
+      // Remove "Chapter N" prefix if still present
+      title = title.replace(/^(?:Chapter|CHAPTER|Part|PART)\s+(?:\d+|[IVXLCDM]+)\s*[.:]?\s*/i, '').trim();
+      
+      if (!title || title.length < 3 || title.length > 120) continue;
       const words = title.split(/\s+/);
-      if (words.length > 10) continue;
+      if (words.length > 15) continue;
       
       matches.push({
         index: match.index,
@@ -302,7 +312,7 @@ function detectChapterBoundaries(text: string): Array<{ title: string; content: 
       });
     }
 
-    if (matches.length >= 3 && matches.length <= 50) {
+    if (matches.length >= 2 && matches.length <= 60) {
       candidates.push({ matches, patternSrc: pattern.source.substring(0, 40) });
       console.log(`[detect-chapters] Pattern "${pattern.source.substring(0, 40)}..." found ${matches.length} headings`);
     }
