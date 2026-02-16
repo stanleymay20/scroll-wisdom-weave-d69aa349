@@ -875,14 +875,34 @@ async function generatePDF(
   let pageNumber = 0;
   
   const addPageNumber = (page: any, num: number) => {
-    if (num > 3) {
-      page.drawText(String(num - 3), {
+    if (num > 5) {
+      // Page number at bottom center
+      page.drawText(String(num - 5), {
         x: pageWidth / 2 - 5,
         y: 30,
         size: 10,
         font: helvetica,
         color: rgb(0.5, 0.5, 0.5),
       });
+      // Running header: author left, chapter right
+      if (currentChapterTitle) {
+        page.drawText(sanitizeForPDF(author), {
+          x: margin,
+          y: pageHeight - 45,
+          size: 8,
+          font: helvetica,
+          color: rgb(0.6, 0.6, 0.6),
+        });
+        const truncTitle = currentChapterTitle.length > 50 ? currentChapterTitle.slice(0, 47) + "..." : currentChapterTitle;
+        const titleW = helvetica.widthOfTextAtSize(sanitizeForPDF(truncTitle), 8);
+        page.drawText(sanitizeForPDF(truncTitle), {
+          x: pageWidth - margin - titleW,
+          y: pageHeight - 45,
+          size: 8,
+          font: helvetica,
+          color: rgb(0.6, 0.6, 0.6),
+        });
+      }
     }
   };
 
@@ -1029,6 +1049,36 @@ async function generatePDF(
     y -= 16;
   }
 
+  // Dedication Page
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumber++;
+  y = pageHeight / 2 + 40;
+  
+  const dedicationText = book.description 
+    ? "To all who dare to lead with integrity and purpose."
+    : "To all who dare to lead with integrity and purpose.";
+  
+  page.drawText("DEDICATION", {
+    x: pageWidth / 2 - timesRomanBold.widthOfTextAtSize("DEDICATION", 14) / 2,
+    y: y + 40,
+    size: 14,
+    font: timesRomanBold,
+    color: rgb(0.3, 0.3, 0.3),
+  });
+  
+  const dedLines = wrapText(dedicationText, timesRoman, 14, textWidth - 80);
+  for (const line of dedLines) {
+    const lineW = timesRoman.widthOfTextAtSize(line, 14);
+    page.drawText(line, {
+      x: pageWidth / 2 - lineW / 2,
+      y,
+      size: 14,
+      font: timesRoman,
+      color: rgb(0.3, 0.3, 0.3),
+    });
+    y -= 22;
+  }
+
   // Table of Contents
   page = pdfDoc.addPage([pageWidth, pageHeight]);
   pageNumber++;
@@ -1074,7 +1124,9 @@ async function generatePDF(
   }
 
   // Chapters
+  let currentChapterTitle = "";
   for (const chapter of chapters) {
+    currentChapterTitle = chapter.title;
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     pageNumber++;
     addPageNumber(page, pageNumber);
@@ -1728,6 +1780,39 @@ async function generatePDF(
     });
   }
 
+  // About the Author Page
+  currentChapterTitle = "";
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumber++;
+  y = pageHeight - margin - 80;
+  
+  page.drawText("ABOUT THE AUTHOR", {
+    x: margin,
+    y,
+    size: 18,
+    font: timesRomanBold,
+    color: rgb(0.1, 0.1, 0.1),
+  });
+  y -= 50;
+  
+  const aboutLines = wrapText(
+    `${author} is the author of "${book.title}". ` +
+    `This work reflects a commitment to advancing knowledge and thought leadership ` +
+    `in the field of ${book.category?.replace(/_/g, ' ') || 'general studies'}. ` +
+    `The author retains full ownership and commercial rights to this publication.`,
+    timesRoman, 12, textWidth
+  );
+  for (const line of aboutLines) {
+    page.drawText(line, {
+      x: margin,
+      y,
+      size: 12,
+      font: timesRoman,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+    y -= 18;
+  }
+
   return pdfDoc.save();
 }
 
@@ -2095,7 +2180,9 @@ ${htmlContent}
     ${hasCover ? '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>' : ''}
     ${hasCover ? `<item id="cover-image" href="images/cover.${coverExt}" media-type="${coverMediaType}" properties="cover-image"/>` : ''}
     <item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>
+    <item id="dedication" href="dedication.xhtml" media-type="application/xhtml+xml"/>
     ${chapterItems.map(c => `<item id="${c.id}" href="${c.href}" media-type="application/xhtml+xml"/>`).join('\n    ')}
+    <item id="about-author" href="about-author.xhtml" media-type="application/xhtml+xml"/>
     ${hasRefs ? '<item id="references" href="references.xhtml" media-type="application/xhtml+xml"/>' : ''}
     ${imageManifestItems}
     <item id="css" href="style.css" media-type="text/css"/>
@@ -2104,7 +2191,9 @@ ${htmlContent}
     ${hasCover ? '<itemref idref="cover"/>' : ''}
     <itemref idref="nav"/>
     <itemref idref="title"/>
+    <itemref idref="dedication"/>
     ${chapterItems.map(c => `<itemref idref="${c.id}"/>`).join('\n    ')}
+    <itemref idref="about-author"/>
     ${hasRefs ? '<itemref idref="references"/>' : ''}
   </spine>
 </package>`;
@@ -2205,6 +2294,20 @@ All references in this document are retrieved from verifiable academic databases
 </html>`;
   await zipWriter.add("OEBPS/title.xhtml", new zip.TextReader(titleContent));
 
+  // Dedication Page
+  const dedicationXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Dedication</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<div style="text-align: center; margin-top: 40%; font-style: italic;">
+<h2>Dedication</h2>
+<p>To all who dare to lead with integrity and purpose.</p>
+</div>
+</body>
+</html>`;
+  await zipWriter.add("OEBPS/dedication.xhtml", new zip.TextReader(dedicationXhtml));
+
   // Write all processed chapters
   for (const chapter of processedChapters) {
     await zipWriter.add(`OEBPS/${chapter.href}`, new zip.TextReader(chapter.xhtml));
@@ -2235,6 +2338,18 @@ ${refsContent}
 </html>`;
     await zipWriter.add("OEBPS/references.xhtml", new zip.TextReader(referencesXhtml));
   }
+
+  // About the Author Page
+  const aboutAuthorXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>About the Author</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<h1>About the Author</h1>
+<p>${escapeXml(author)} is the author of <em>${escapeXml(book.title)}</em>. This work reflects a commitment to advancing knowledge and thought leadership in the field of ${escapeXml(book.category?.replace(/_/g, ' ') || 'general studies')}. The author retains full ownership and commercial rights to this publication.</p>
+</body>
+</html>`;
+  await zipWriter.add("OEBPS/about-author.xhtml", new zip.TextReader(aboutAuthorXhtml));
 
   await zipWriter.close();
   const blob = await blobWriter.getData();
@@ -2518,6 +2633,15 @@ async function generateDOCX(
 
   documentContent += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
 
+  // Dedication Page
+  documentContent += `
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:t>Dedication</w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>To all who dare to lead with integrity and purpose.</w:t></w:r></w:p>
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+
   // Chapters with embedded images and tables
   let docPicId = 2;
   for (const { chapter, processedContent, imageRefs, tables, structuredCodeBlocks, codeBlocks, headings } of processedChapters) {
@@ -2723,6 +2847,12 @@ ${block.title ? `<w:r><w:t xml:space="preserve"> - ${escapeXml(block.title)}</w:
 <w:p><w:r><w:t></w:t></w:r></w:p>
 <w:p><w:r><w:rPr><w:sz w:val="20"/><w:color w:val="666666"/></w:rPr><w:t>All references are retrieved from verifiable academic databases.</w:t></w:r></w:p>`;
   }
+
+  // About the Author
+  documentContent += `
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>About the Author</w:t></w:r></w:p>
+<w:p><w:r><w:t>${escapeXml(author)} is the author of "${escapeXml(book.title)}". This work reflects a commitment to advancing knowledge and thought leadership in the field of ${escapeXml(book.category?.replace(/_/g, ' ') || 'general studies')}. The author retains full ownership and commercial rights to this publication.</w:t></w:r></w:p>`;
 
   documentContent += `</w:body></w:document>`;
   await zipWriter.add("word/document.xml", new zip.TextReader(documentContent));
