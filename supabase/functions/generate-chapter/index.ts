@@ -3184,14 +3184,29 @@ BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
     });
 
     if (!response.ok) {
-      throw new Error("Failed to generate chapter");
+      const errText = await response.text();
+      console.error("[GENERATE-CHAPTER] AI gateway error:", response.status, errText.slice(0, 500));
+      throw new Error(`AI generation failed (${response.status}): ${errText.slice(0, 200)}`);
     }
 
-    const data = await response.json();
+    const responseText = await response.text();
+    if (!responseText || responseText.trim().length === 0) {
+      throw new Error("AI returned empty response — please retry");
+    }
+
+    let data: any;
+    try {
+      data = JSON.parse(responseText);
+    } catch (parseErr) {
+      console.error("[GENERATE-CHAPTER] JSON parse failed, body length:", responseText.length, "preview:", responseText.slice(0, 300));
+      throw new Error("AI returned malformed response — please retry");
+    }
+
     let chapterContent = data.choices?.[0]?.message?.content || "";
 
     if (!chapterContent) {
-      throw new Error("No content generated");
+      console.error("[GENERATE-CHAPTER] No content in response:", JSON.stringify(data).slice(0, 500));
+      throw new Error("No content generated — please retry");
     }
 
     let finalContent = chapterContent;
