@@ -691,3 +691,22 @@
   border-top: 1px solid hsl(var(--border));
   margin: 2rem 0;
 }
+
+/* Audio sync: active paragraph highlight */
+.markdown-content [data-sentence-index].audio-active {
+  background: hsl(var(--primary) / 0.18);
+  border-left: 3px solid hsl(var(--primary));
+  padding-left: 0.75rem;
+  border-radius: 0.25rem;
+  transition: background 0.3s ease, border-color 0.3s ease;
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.1);
+}
+
+/* Dim non-active paragraphs during audio playback for focus */
+.markdown-content.audio-playing [data-sentence-index]:not(.audio-active) {
+  opacity: 0.55;
+  transition: opacity 0.3s ease;
+}
+.markdown-content.audio-playing [data-sentence-index].audio-active {
+  opacity: 1;
+}
