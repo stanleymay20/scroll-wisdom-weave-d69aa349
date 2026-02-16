@@ -337,11 +337,12 @@ export default function Reader() {
   const estimatedReadingTime = Math.ceil(wordCount / 200); // 200 wpm average
 
   // Auto-scroll synchronized with audio playback
+  // DISABLED when sentence-level sync is active to prevent competing scroll systems
   const { isAutoScrolling, toggleAutoScroll, resetScroll } = useAutoScroll({
-    isPlaying: isTTSPlaying,
+    isPlaying: false, // Disabled — useAudioSync handles scrolling
     contentRef,
-    estimatedDurationMs: wordCount > 0 ? (wordCount / 150) * 60 * 1000 : 60000, // ~150 wpm for TTS
-    enabled: settings.tts_enabled,
+    estimatedDurationMs: wordCount > 0 ? (wordCount / 150) * 60 * 1000 : 60000,
+    enabled: false, // Disabled — useAudioSync is the sole scroll driver
   });
 
   // Sentence-level audio synchronization

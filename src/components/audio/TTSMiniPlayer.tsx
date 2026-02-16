@@ -98,6 +98,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const [error, setError] = useState<string | null>(null);
   const [volume, setVolume] = useState(1);
   const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
+  const playbackSpeedRef = useRef(1.0);
   const [selectedVoice, setSelectedVoice] = useState("alloy");
   const [progress, setProgress] = useState(0);
   const [currentChunk, setCurrentChunk] = useState(0);
@@ -283,7 +284,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       const audio = audioRef.current || new Audio();
       audioRef.current = audio;
       audio.volume = volume;
-      audio.playbackRate = playbackSpeed;
+      audio.playbackRate = playbackSpeedRef.current;
       
       // Expose audioRef for external sync (sentence highlighting)
       onAudioRefChange?.(audio);
@@ -297,6 +298,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       };
 
       audio.onplay = () => {
+        // Always apply latest speed when play starts
+        audio.playbackRate = playbackSpeedRef.current;
         if (isMountedRef.current) setIsPlaying(true);
       };
       
@@ -343,7 +346,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         safeResolve(false);
       });
     });
-  }, [volume, playbackSpeed, onPlayingChange]);
+  }, [volume, onPlayingChange]);
 
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
@@ -905,6 +908,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
                     key={speed}
                     onClick={() => {
                       setPlaybackSpeed(speed);
+                      playbackSpeedRef.current = speed;
                       if (audioRef.current) {
                         audioRef.current.playbackRate = speed;
                       }
