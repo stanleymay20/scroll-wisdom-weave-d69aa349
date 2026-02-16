@@ -3168,25 +3168,42 @@ ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat
 BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
     }
 
-    const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
-        messages: [
-          { role: "system", content: systemPrompt },
-          { role: "user", content: chapterPrompt }
-        ],
-      }),
-    });
-
-    if (!response.ok) {
+    // Retry logic for transient gateway errors (502, 503, 504)
+    const MAX_RETRIES = 3;
+    let response: Response | null = null;
+    let lastErr = "";
+    for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      if (attempt > 0) {
+        const delay = 2000 * attempt;
+        console.log(`[GENERATE-CHAPTER] Retry attempt ${attempt + 1} after ${delay}ms...`);
+        await new Promise(r => setTimeout(r, delay));
+      }
+      response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash",
+          messages: [
+            { role: "system", content: systemPrompt },
+            { role: "user", content: chapterPrompt }
+          ],
+        }),
+      });
+      if (response.ok) break;
       const errText = await response.text();
-      console.error("[GENERATE-CHAPTER] AI gateway error:", response.status, errText.slice(0, 500));
-      throw new Error(`AI generation failed (${response.status}): ${errText.slice(0, 200)}`);
+      lastErr = errText.slice(0, 200);
+      console.error(`[GENERATE-CHAPTER] AI gateway error (attempt ${attempt + 1}):`, response.status, lastErr);
+      // Only retry on transient errors
+      if (![502, 503, 504].includes(response.status)) {
+        throw new Error(`AI generation failed (${response.status}): ${lastErr}`);
+      }
+    }
+
+    if (!response || !response.ok) {
+      throw new Error(`AI generation failed after ${MAX_RETRIES} retries: ${lastErr}`);
     }
 
     const responseText = await response.text();
