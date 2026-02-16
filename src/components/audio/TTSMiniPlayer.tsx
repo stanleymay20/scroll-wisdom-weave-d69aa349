@@ -74,6 +74,8 @@ interface TTSMiniPlayerProps {
   onAudioRefChange?: (ref: HTMLAudioElement | null) => void;
   /** Expose cumulative playback time for sync across chunks */
   onCumulativeTimeChange?: (seconds: number) => void;
+  /** Expose estimated total audio duration (refined from actual chunk durations) */
+  onEstimatedDurationChange?: (seconds: number) => void;
 }
 
 export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(function TTSMiniPlayer({ 
@@ -92,6 +94,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   onPlayingChange,
   onAudioRefChange,
   onCumulativeTimeChange,
+  onEstimatedDurationChange,
 }, ref) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -109,6 +112,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const pausedAtChunkRef = useRef(0);
   // Cumulative playback time across chunks (for sentence sync)
   const cumulativeTimeRef = useRef(0);
+  // Track audio-seconds-per-character to estimate total duration accurately
+  const totalAudioSecsRef = useRef(0);
+  const totalAudioCharsRef = useRef(0);
+  const fullTextLengthRef = useRef(0);
+  const endedChunkCountRef = useRef(0);
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopRef = useRef(false);
@@ -308,6 +316,20 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         if (audio.duration && !isNaN(audio.duration)) {
           cumulativeTimeRef.current += audio.duration;
           onCumulativeTimeChange?.(cumulativeTimeRef.current);
+          
+          // Update actual duration estimate from real audio data
+          totalAudioSecsRef.current += audio.duration;
+          const chunkIdx = endedChunkCountRef.current;
+          endedChunkCountRef.current++;
+          if (chunksRef.current[chunkIdx]) {
+            totalAudioCharsRef.current += chunksRef.current[chunkIdx].length;
+          }
+          // Estimate total audio duration from actual rate
+          if (totalAudioCharsRef.current > 0 && fullTextLengthRef.current > 0) {
+            const secsPerChar = totalAudioSecsRef.current / totalAudioCharsRef.current;
+            const estimatedTotal = secsPerChar * fullTextLengthRef.current;
+            onEstimatedDurationChange?.(estimatedTotal);
+          }
         }
         cleanup();
         safeResolve(true);
@@ -492,7 +514,12 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     isStoppingRef.current = false;
     pausedAtChunkRef.current = 0;
     cumulativeTimeRef.current = 0;
+    totalAudioSecsRef.current = 0;
+    totalAudioCharsRef.current = 0;
+    fullTextLengthRef.current = 0;
+    endedChunkCountRef.current = 0;
     onCumulativeTimeChange?.(0);
+    onEstimatedDurationChange?.(0);
     onAudioRefChange?.(null);
     
     // Small delay for audio element cleanup
@@ -526,6 +553,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       return;
     }
 
+    fullTextLengthRef.current = cleaned.length;
     setProgress(0);
 
     // CONTRACT 5 - Rule 5.3: First chunk TINY (≤120 chars) for instant start
