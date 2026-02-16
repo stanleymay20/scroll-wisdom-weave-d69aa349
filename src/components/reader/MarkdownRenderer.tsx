@@ -632,6 +632,23 @@ export const markdownStyles = `
   opacity: 0.7;
 }
 
+/* Code blocks: always use light text on dark background regardless of reading theme */
+.markdown-content .code-block,
+.markdown-content .code-block pre,
+.markdown-content .code-block code {
+  color: #c9d1d9 !important;
+}
+
+.markdown-content .inline-code {
+  color: inherit;
+}
+
+/* Structured code blocks: enforce readable text */
+.structured-code-block pre,
+.structured-code-block code {
+  color: #c9d1d9 !important;
+}
+
 /* Audio sync: active paragraph highlight */
 .markdown-content [data-sentence-index].audio-active {
   background: hsl(var(--primary) / 0.18);

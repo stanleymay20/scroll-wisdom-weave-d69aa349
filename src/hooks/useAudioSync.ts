@@ -28,7 +28,9 @@ interface UseAudioSyncOptions {
   chapterContent: string | null;
   isPlaying: boolean;
   contentRef: React.RefObject<HTMLElement>;
-  /** Cumulative seconds already played in previous chunks */
+  /** Ref to cumulative seconds already played in previous chunks (written by TTS player) */
+  cumulativeTimeRef?: React.RefObject<number>;
+  /** @deprecated Use cumulativeTimeRef instead */
   cumulativeTimeSec?: number;
   /** Ref to the current <audio> element for precise sync */
   audioRef?: React.RefObject<HTMLAudioElement>;
@@ -64,6 +66,7 @@ export function useAudioSync({
   chapterContent,
   isPlaying,
   contentRef,
+  cumulativeTimeRef: externalCumulativeRef,
   cumulativeTimeSec = 0,
   audioRef,
   estimatedDurationSec,
@@ -110,7 +113,7 @@ export function useAudioSync({
   const [isUserScrolledAway, setIsUserScrolledAway] = useState(false);
 
   // === REFS for real-time tick values (avoids stale closures) ===
-  const cumulativeTimeSecRef = useRef(cumulativeTimeSec);
+  const internalCumulativeRef = useRef(cumulativeTimeSec);
   const isPlayingRef = useRef(isPlaying);
   const playbackTimeRef = useRef(0);
   const lastTickRef = useRef(0);
@@ -120,7 +123,7 @@ export function useAudioSync({
   const activeSentenceRef = useRef(-1);
 
   // Keep refs in sync with props/state
-  useEffect(() => { cumulativeTimeSecRef.current = cumulativeTimeSec; }, [cumulativeTimeSec]);
+  useEffect(() => { internalCumulativeRef.current = cumulativeTimeSec; }, [cumulativeTimeSec]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
 
   // Tick: compute current global time and find active sentence.
@@ -129,8 +132,10 @@ export function useAudioSync({
     if (!isPlayingRef.current) return;
 
     let t: number;
+    // Prefer external ref (direct from TTS player, no React state lag)
+    const cumTime = externalCumulativeRef?.current ?? internalCumulativeRef.current;
     if (audioRef?.current && !isNaN(audioRef.current.currentTime)) {
-      t = cumulativeTimeSecRef.current + audioRef.current.currentTime;
+      t = cumTime + audioRef.current.currentTime;
     } else {
       if (lastTickRef.current > 0) {
         const dt = (now - lastTickRef.current) / 1000;

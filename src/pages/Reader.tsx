@@ -151,8 +151,9 @@ export default function Reader() {
   // Track TTS playing state for auto-scroll
   const [isTTSPlaying, setIsTTSPlaying] = useState(false);
   // Track audio element and cumulative time for sentence sync
+  // Use REFS directly to avoid React state round-trip lag causing sync drift
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
-  const [ttsCumulativeTime, setTtsCumulativeTime] = useState(0);
+  const ttsCumulativeTimeRef = useRef(0);
   const [ttsEstimatedDuration, setTtsEstimatedDuration] = useState(0);
   
   // Auto-scroll is defined after wordCount is available (line ~312)
@@ -351,7 +352,7 @@ export default function Reader() {
     chapterContent: chapter?.content || null,
     isPlaying: isTTSPlaying,
     contentRef,
-    cumulativeTimeSec: ttsCumulativeTime,
+    cumulativeTimeRef: ttsCumulativeTimeRef,
     audioRef: ttsAudioRef as React.RefObject<HTMLAudioElement>,
     estimatedDurationSec: ttsEstimatedDuration > 0 ? ttsEstimatedDuration : undefined,
     wordCount,
@@ -972,7 +973,7 @@ export default function Reader() {
               totalChapters={totalChapters}
               onPlayingChange={setIsTTSPlaying}
               onAudioRefChange={(el) => { ttsAudioRef.current = el; }}
-              onCumulativeTimeChange={setTtsCumulativeTime}
+              onCumulativeTimeChange={(secs) => { ttsCumulativeTimeRef.current = secs; }}
               onEstimatedDurationChange={setTtsEstimatedDuration}
               onChapterComplete={async () => {
                 // AUTO-CONTINUE: Navigate to next chapter when audio finishes
