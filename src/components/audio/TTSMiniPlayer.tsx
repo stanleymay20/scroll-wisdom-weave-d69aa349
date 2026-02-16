@@ -303,6 +303,22 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         audio.onpause = null;
         audio.onerror = null;
         audio.ontimeupdate = null;
+        audio.onloadedmetadata = null;
+      };
+      
+      // Emit estimated total duration as soon as chunk metadata is available
+      audio.onloadedmetadata = () => {
+        if (audio.duration && !isNaN(audio.duration) && fullTextLengthRef.current > 0) {
+          const chunkIdx = endedChunkCountRef.current;
+          const chunkText = chunksRef.current[chunkIdx];
+          if (chunkText && chunkText.length > 0) {
+            // Use this chunk's actual duration to estimate total
+            const secsPerChar = audio.duration / chunkText.length;
+            const estimatedTotal = secsPerChar * fullTextLengthRef.current;
+            console.log(`[TTS Sync] Chunk ${chunkIdx} duration=${audio.duration.toFixed(1)}s, chars=${chunkText.length}, est total=${estimatedTotal.toFixed(0)}s`);
+            onEstimatedDurationChange?.(estimatedTotal);
+          }
+        }
       };
 
       audio.onplay = () => {

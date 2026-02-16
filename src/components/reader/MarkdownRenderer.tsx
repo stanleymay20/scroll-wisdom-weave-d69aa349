@@ -221,28 +221,29 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/^[\s]*\d+\.\s+(.+)$/gm, '<li class="md-li-ordered">$1</li>');
     html = html.replace(/(<li class="md-li-ordered">.*?<\/li>\n?)+/g, '<ol class="md-ol">$&</ol>');
     
-    // Paragraphs (double newlines) — use placeholder for audio sync indices
-    // Sequential indices are assigned AFTER cleanup to avoid gaps
-    html = html.replace(/\n\n+/g, '</p><p class="md-p" data-sync-placeholder>');
-    html = `<p class="md-p" data-sync-placeholder>${html}</p>`;
+    // Paragraphs (double newlines) — use <div> instead of <p> to prevent browser
+    // auto-correction when block elements (ol, ul, table) appear inside.
+    // This keeps data-sentence-index on the correct wrapper element.
+    html = html.replace(/\n\n+/g, '</div><div class="md-p" data-sync-placeholder>');
+    html = `<div class="md-p" data-sync-placeholder>${html}</div>`;
     
-    // Clean up empty paragraphs
-    html = html.replace(/<p class="md-p"[^>]*>\s*<\/p>/g, '');
+    // Clean up empty blocks
+    html = html.replace(/<div class="md-p"[^>]*>\s*<\/div>/g, '');
     
-    // Transfer sync placeholder to block elements before removing <p> wrappers
+    // Transfer sync placeholder to block elements before removing <div> wrappers
     // This ensures headings, lists, etc. keep their audio-sync index
-    html = html.replace(/<p class="md-p" data-sync-placeholder>\s*(<(?:h[1-6]|blockquote|table|figure|div) class="[^"]*")(>)/g,
+    html = html.replace(/<div class="md-p" data-sync-placeholder>\s*(<(?:h[1-6]|blockquote|table|figure|div) class="[^"]*")(>)/g,
       '$1 data-sync-placeholder$2');
-    html = html.replace(/<p class="md-p" data-sync-placeholder>\s*(<(?:ul|ol) class="[^"]*")(>)/g,
+    html = html.replace(/<div class="md-p" data-sync-placeholder>\s*(<(?:ul|ol) class="[^"]*")(>)/g,
       '$1 data-sync-placeholder$2');
-    html = html.replace(/<p class="md-p" data-sync-placeholder>\s*(<div class="code-block")(>)/g,
+    html = html.replace(/<div class="md-p" data-sync-placeholder>\s*(<div class="code-block")(>)/g,
       '$1 data-sync-placeholder$2');
-    html = html.replace(/<p class="md-p" data-sync-placeholder>\s*(<hr class="md-hr")\s*(\/?>)/g,
+    html = html.replace(/<div class="md-p" data-sync-placeholder>\s*(<hr class="md-hr")\s*(\/?>)/g,
       '$1 data-sync-placeholder $2');
     
-    // Remove remaining <p> wrappers around block elements
-    html = html.replace(/<p class="md-p"[^>]*>(<(?:h[1-6]|ul|ol|blockquote|table|figure|div|hr))/g, '$1');
-    html = html.replace(/(<\/(?:h[1-6]|ul|ol|blockquote|table|figure|div|hr)>)<\/p>/g, '$1');
+    // Remove remaining <div> wrappers around block elements
+    html = html.replace(/<div class="md-p"[^>]*>(<(?:h[1-6]|ul|ol|blockquote|table|figure|div|hr))/g, '$1');
+    html = html.replace(/(<\/(?:h[1-6]|ul|ol|blockquote|table|figure|div|hr)>)<\/div>/g, '$1');
     
     // Assign sequential data-sentence-index to all surviving placeholders
     let syncIdx = 0;
