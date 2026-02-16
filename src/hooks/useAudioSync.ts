@@ -81,9 +81,16 @@ export function useAudioSync({
 
   const sentences = useMemo<SentenceTimestamp[]>(() => {
     if (!chapterContent) return [];
-    const plain = stripMarkdown(chapterContent);
-    const paragraphs = plain.split(/\n\n+/).map(s => s.trim()).filter(s => s.length > 0);
-    return buildTimestamps(paragraphs, totalDuration);
+    // Collapse fenced code blocks to single placeholder before splitting,
+    // so block count matches MarkdownRenderer's DOM element count exactly
+    const preprocessed = chapterContent.replace(/```[\s\S]*?```/g, '[code]');
+    const blocks = preprocessed.split(/\n\n+/).map(s => s.trim()).filter(s => s.length > 0);
+    // Use stripped text for proportional timing; non-text blocks get minimal time
+    const textBlocks = blocks.map(b => {
+      const stripped = stripMarkdown(b);
+      return stripped || ' ';
+    });
+    return buildTimestamps(textBlocks, totalDuration);
   }, [chapterContent, totalDuration]);
 
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
