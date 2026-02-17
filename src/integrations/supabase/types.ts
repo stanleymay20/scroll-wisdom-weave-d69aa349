@@ -234,6 +234,7 @@ export type Database = {
           chapter_number: number
           chapter_references: Json | null
           citation_style: string | null
+          comic_metadata: Json | null
           content: string | null
           content_ownership: Json | null
           created_at: string
@@ -252,6 +253,7 @@ export type Database = {
           chapter_number: number
           chapter_references?: Json | null
           citation_style?: string | null
+          comic_metadata?: Json | null
           content?: string | null
           content_ownership?: Json | null
           created_at?: string
@@ -270,6 +272,7 @@ export type Database = {
           chapter_number?: number
           chapter_references?: Json | null
           citation_style?: string | null
+          comic_metadata?: Json | null
           content?: string | null
           content_ownership?: Json | null
           created_at?: string
