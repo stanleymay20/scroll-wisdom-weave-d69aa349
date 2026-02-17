@@ -175,7 +175,7 @@ export function HeroSection() {
                 <p className="flex items-center gap-2"><span className="text-primary">○</span> Choose one of the following...</p>
                 <p className="flex items-center gap-2"><span className="text-primary">□</span> While working on a research test...</p>
                 <p className="flex items-center gap-2"><span className="text-primary">□</span> Describe the process of...</p>
-                <p className="flex items-center gap-2"><span className="text-primary">◆</span> The salients of foundation and practice...</p>
+                <p className="flex items-center gap-2"><span className="text-primary">◆</span> Explain the key principles and their applications...</p>
               </div>
               <Button onClick={() => navigate("/generate")} size="sm" className="gap-1">
                 Generate Study Guide
