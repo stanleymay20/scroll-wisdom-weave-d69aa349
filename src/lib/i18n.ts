@@ -147,8 +147,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'auth.signedInSuccess': 'You have successfully signed in.',
     
     // Generate Page
-    'generate.title': 'Generate Your Book',
-    'generate.subtitle': 'Create unlimited books with chapters of 8,000+ words, scroll-aligned accuracy, and academic rigor.',
+    'generate.title': 'Generate a Book',
+    'generate.subtitle': 'Create AI-generated books with structured chapters, citations, and academic formatting.',
     'generate.booktitle': 'Book Title',
     'generate.booktitle.placeholder': 'Enter your book title...',
     'generate.description': 'Description (Optional)',
@@ -937,8 +937,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'auth.newPassword': 'Nouveau mot de passe',
     'auth.updatePassword': 'Mettre à jour le mot de passe',
     
-    'generate.title': 'Générer Votre Livre',
-    'generate.subtitle': 'Créez des livres illimités avec des chapitres de plus de 8 000 mots.',
+    'generate.title': 'Générer un Livre',
+    'generate.subtitle': 'Créez des livres avec des chapitres structurés, des citations et un format académique.',
     'generate.booktitle': 'Titre du livre',
     'generate.booktitle.placeholder': 'Entrez le titre de votre livre...',
     'generate.description': 'Description (Optionnel)',
@@ -1601,8 +1601,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'auth.newPassword': 'Neues Passwort',
     'auth.updatePassword': 'Passwort aktualisieren',
     
-    'generate.title': 'Buch Generieren',
-    'generate.subtitle': 'Erstellen Sie unbegrenzt Bücher mit Kapiteln von über 8.000 Wörtern.',
+    'generate.title': 'Buch Erstellen',
+    'generate.subtitle': 'Erstellen Sie Bücher mit strukturierten Kapiteln, Zitaten und akademischer Formatierung.',
     'generate.booktitle': 'Buchtitel',
     'generate.booktitle.placeholder': 'Geben Sie Ihren Buchtitel ein...',
     'generate.description': 'Beschreibung (Optional)',
@@ -2264,8 +2264,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'auth.newPassword': 'Nueva contraseña',
     'auth.updatePassword': 'Actualizar contraseña',
     
-    'generate.title': 'Genera Tu Libro',
-    'generate.subtitle': 'Crea libros ilimitados con capítulos de más de 8,000 palabras.',
+    'generate.title': 'Generar un Libro',
+    'generate.subtitle': 'Crea libros con capítulos estructurados, citas y formato académico.',
     'generate.booktitle': 'Título del libro',
     'generate.booktitle.placeholder': 'Ingresa el título de tu libro...',
     'generate.description': 'Descripción (Opcional)',
@@ -2927,8 +2927,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'auth.newPassword': 'كلمة المرور الجديدة',
     'auth.updatePassword': 'تحديث كلمة المرور',
     
-    'generate.title': 'أنشئ كتابك',
-    'generate.subtitle': 'أنشئ كتباً غير محدودة مع فصول تزيد عن 8,000 كلمة.',
+    'generate.title': 'إنشاء كتاب',
+    'generate.subtitle': 'أنشئ كتباً بفصول منظمة واقتباسات وتنسيق أكاديمي.',
     'generate.booktitle': 'عنوان الكتاب',
     'generate.booktitle.placeholder': 'أدخل عنوان كتابك...',
     'generate.description': 'الوصف (اختياري)',
@@ -3590,8 +3590,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'auth.newPassword': 'Nenosiri Jipya',
     'auth.updatePassword': 'Sasisha Nenosiri',
     
-    'generate.title': 'Tengeneza Kitabu Chako',
-    'generate.subtitle': 'Tengeneza vitabu visivyo na kikomo na sura za maneno zaidi ya 8,000.',
+    'generate.title': 'Tengeneza Kitabu',
+    'generate.subtitle': 'Tengeneza vitabu na sura zilizopangwa, marejeleo, na muundo wa kitaaluma.',
     'generate.booktitle': 'Jina la Kitabu',
     'generate.booktitle.placeholder': 'Ingiza jina la kitabu chako...',
     'generate.description': 'Maelezo (Hiari)',
