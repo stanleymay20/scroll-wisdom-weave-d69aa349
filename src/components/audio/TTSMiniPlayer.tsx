@@ -78,6 +78,8 @@ interface TTSMiniPlayerProps {
   onEstimatedDurationChange?: (seconds: number) => void;
   /** Auto-play chapter on mount (for auto-continue between chapters) */
   autoPlay?: boolean;
+  /** Callback with chunk playback info for word-level sync */
+  onChunkPlaybackInfo?: (info: { chunkIndex: number; chunkWordCounts: number[] }) => void;
 }
 
 export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(function TTSMiniPlayer({ 
@@ -98,6 +100,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   onCumulativeTimeChange,
   onEstimatedDurationChange,
   autoPlay = false,
+  onChunkPlaybackInfo,
 }, ref) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -583,6 +586,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     // Store chunks for potential resume (Rule 5.4)
     chunksRef.current = chunks;
     setTotalChunks(chunks.length);
+    
+    // Build word counts per chunk for precise word-level sync
+    const chunkWordCounts = chunks.map(c => c.split(/\s+/).filter(Boolean).length);
+    onChunkPlaybackInfo?.({ chunkIndex: 0, chunkWordCounts });
+    
     console.log("[TTS] Starting with", chunks.length, "chunks, total text:", cleaned.length, "chars");
 
     // Activate media session for OS controls (Rule 5.3)
@@ -652,6 +660,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
         setCurrentChunk(i + 1);
         setCurrentPosition(i);
+        onChunkPlaybackInfo?.({ chunkIndex: i, chunkWordCounts });
 
         console.log("[TTS] Playing chunk", i + 1, "/", chunks.length);
 

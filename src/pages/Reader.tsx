@@ -155,6 +155,7 @@ export default function Reader() {
   const ttsAudioRef = useRef<HTMLAudioElement | null>(null);
   const ttsCumulativeTimeRef = useRef(0);
   const [ttsEstimatedDuration, setTtsEstimatedDuration] = useState(0);
+  const [chunkPlaybackInfo, setChunkPlaybackInfo] = useState<{ chunkIndex: number; chunkWordCounts: number[] } | null>(null);
   
   // Auto-scroll is defined after wordCount is available (line ~312)
   
@@ -365,6 +366,7 @@ export default function Reader() {
     audioRef: ttsAudioRef as React.RefObject<HTMLAudioElement>,
     estimatedDurationSec: ttsEstimatedDuration > 0 ? ttsEstimatedDuration : undefined,
     wordCount,
+    chunkPlaybackInfo,
   });
 
   // Apply audio-active CSS class to the active paragraph + word-level highlight
@@ -997,6 +999,7 @@ export default function Reader() {
               onAudioRefChange={(el) => { ttsAudioRef.current = el; }}
               onCumulativeTimeChange={(secs) => { ttsCumulativeTimeRef.current = secs; }}
               onEstimatedDurationChange={setTtsEstimatedDuration}
+              onChunkPlaybackInfo={setChunkPlaybackInfo}
                onChapterComplete={async () => {
                 // AUTO-CONTINUE: Navigate to next chapter when audio finishes
                 if (currentChapter < totalChapters) {

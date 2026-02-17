@@ -1,18 +1,17 @@
 /**
- * Sentence-Level Audio Synchronization Hook
+ * Chunk-Aware Word-Level Audio Synchronization Hook
  *
- * Tracks cumulative playback time across TTS chunks to determine
- * the active sentence, highlight it, and scroll it into view.
+ * Instead of estimating global timestamps (which drift as duration estimates change),
+ * this uses per-chunk interpolation: audio.currentTime / audio.duration within the
+ * currently-playing chunk to precisely locate the active word.
  *
- * Architecture (YouVersion-style):
- * 1. Parse chapter → sentences with proportional timestamps
- * 2. Track cumulative time: chunkStartTime + audio.currentTime
- * 3. Match time → active sentence
- * 4. Highlight + smooth scroll to center
- *
- * FIX: Uses refs for all real-time values in the rAF tick loop
- * to avoid stale closures when React state updates lag behind
- * (e.g., between chunk transitions where cumulativeTimeSec updates).
+ * Architecture:
+ * 1. DOM walk assigns data-word-index to every word span
+ * 2. TTSMiniPlayer reports: current chunk index + word counts per chunk
+ * 3. Tick loop: fraction = audio.currentTime / audio.duration
+ *    → wordInChunk = floor(fraction * wordsInChunk)
+ *    → globalWordIndex = chunkWordOffset + wordInChunk
+ * 4. Highlight + smooth scroll to active word
  */
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
@@ -24,12 +23,9 @@ export interface SentenceTimestamp {
   endTime: number;
 }
 
-export interface WordTimestamp {
-  index: number;
-  text: string;
-  startTime: number;
-  endTime: number;
-  blockIndex: number; // which data-sentence-index block this word belongs to
+export interface ChunkPlaybackInfo {
+  chunkIndex: number;
+  chunkWordCounts: number[];
 }
 
 interface UseAudioSyncOptions {
@@ -44,6 +40,8 @@ interface UseAudioSyncOptions {
   audioRef?: React.RefObject<HTMLAudioElement>;
   estimatedDurationSec?: number;
   wordCount?: number;
+  /** Chunk playback info from TTS player for precise word-level sync */
+  chunkPlaybackInfo?: ChunkPlaybackInfo | null;
 }
 
 interface UseAudioSyncReturn {
@@ -80,26 +78,27 @@ export function useAudioSync({
   audioRef,
   estimatedDurationSec,
   wordCount: inputWordCount = 0,
+  chunkPlaybackInfo,
 }: UseAudioSyncOptions): UseAudioSyncReturn {
-  // Total chapter duration estimate
+  // Total chapter duration estimate (for block-level fallback)
   const totalDuration = useMemo(
     () => estimatedDurationSec ?? (inputWordCount > 0 ? (inputWordCount / 150) * 60 : 60),
     [estimatedDurationSec, inputWordCount]
   );
 
-  // Build timestamps from DOM elements with data-sentence-index (blocks) AND data-word-index (words).
+  // Block-level timestamps (for block highlighting)
   const [sentences, setSentences] = useState<SentenceTimestamp[]>([]);
   const sentencesRef = useRef<SentenceTimestamp[]>([]);
-  const wordsRef = useRef<WordTimestamp[]>([]);
+  const domWordCountRef = useRef(0);
   const domScanRef = useRef<ReturnType<typeof setTimeout>>();
 
+  // Scan DOM for block elements and count total words
   useEffect(() => {
     if (domScanRef.current) clearTimeout(domScanRef.current);
 
     const scan = () => {
       if (!contentRef.current) return;
       
-      // Scan block-level elements
       const blockEls = contentRef.current.querySelectorAll('[data-sentence-index]');
       if (blockEls.length === 0) {
         domScanRef.current = setTimeout(scan, 200);
@@ -114,34 +113,11 @@ export function useAudioSync({
       sentencesRef.current = ts;
       setSentences(ts);
       
-      // Scan word-level elements
+      // Count total DOM words
       const wordEls = contentRef.current.querySelectorAll('[data-word-index]');
-      const wordTexts: string[] = [];
-      const wordBlockMap: number[] = [];
-      wordEls.forEach(el => {
-        const text = (el as HTMLElement).textContent || '';
-        wordTexts.push(text);
-        // Find which block this word belongs to
-        const blockParent = (el as HTMLElement).closest('[data-sentence-index]');
-        const blockIdx = blockParent ? parseInt(blockParent.getAttribute('data-sentence-index') || '-1') : -1;
-        wordBlockMap.push(blockIdx);
-      });
+      domWordCountRef.current = wordEls.length;
       
-      // Build word timestamps proportional to character length
-      const totalChars = wordTexts.reduce((sum, w) => sum + w.length, 0);
-      if (totalChars > 0 && totalDuration > 0) {
-        let cursor = 0;
-        const wts: WordTimestamp[] = wordTexts.map((text, index) => {
-          const fraction = text.length / totalChars;
-          const duration = fraction * totalDuration;
-          const start = cursor;
-          cursor += duration;
-          return { index, text, startTime: start, endTime: cursor, blockIndex: wordBlockMap[index] };
-        });
-        wordsRef.current = wts;
-      }
-      
-      console.log(`[useAudioSync] Built timestamps for ${blockTexts.length} blocks, ${wordTexts.length} words, totalDuration=${totalDuration.toFixed(1)}s`);
+      console.log(`[useAudioSync] Scanned ${blockEls.length} blocks, ${wordEls.length} DOM words`);
     };
 
     domScanRef.current = setTimeout(scan, 300);
@@ -153,38 +129,55 @@ export function useAudioSync({
   const [isSyncEnabled, setIsSyncEnabled] = useState(true);
   const [isUserScrolledAway, setIsUserScrolledAway] = useState(false);
 
-  // === REFS for real-time tick values (avoids stale closures) ===
+  // === REFS for real-time tick values ===
   const internalCumulativeRef = useRef(cumulativeTimeSec);
   const isPlayingRef = useRef(isPlaying);
-  const playbackTimeRef = useRef(0);
-  const lastTickRef = useRef(0);
   const rafRef = useRef<number>();
   const manualScrollTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const programmaticScrollRef = useRef(false);
   const activeSentenceRef = useRef(-1);
   const activeWordRef = useRef(-1);
+  const chunkInfoRef = useRef<ChunkPlaybackInfo | null>(null);
 
-  // Keep refs in sync with props/state
+  // Keep refs in sync
   useEffect(() => { internalCumulativeRef.current = cumulativeTimeSec; }, [cumulativeTimeSec]);
   useEffect(() => { isPlayingRef.current = isPlaying; }, [isPlaying]);
+  useEffect(() => { chunkInfoRef.current = chunkPlaybackInfo || null; }, [chunkPlaybackInfo]);
 
-  // Tick: compute current global time and find active sentence.
-  // Uses REFS only — no closure dependency on changing props.
+  // Tick: compute active word using chunk-aware interpolation
   const tick = useCallback((now: number) => {
     if (!isPlayingRef.current) return;
 
-    let t: number;
-    // Prefer external ref (direct from TTS player, no React state lag)
-    const cumTime = externalCumulativeRef?.current ?? internalCumulativeRef.current;
-    if (audioRef?.current && !isNaN(audioRef.current.currentTime)) {
-      t = cumTime + audioRef.current.currentTime;
-    } else {
-      if (lastTickRef.current > 0) {
-        const dt = (now - lastTickRef.current) / 1000;
-        playbackTimeRef.current += dt;
+    const audio = audioRef?.current;
+    const info = chunkInfoRef.current;
+
+    // === WORD-LEVEL: Chunk-aware precise sync ===
+    if (audio && info && info.chunkWordCounts.length > 0 && !isNaN(audio.currentTime) && !isNaN(audio.duration) && audio.duration > 0) {
+      const fraction = Math.min(1, audio.currentTime / audio.duration);
+      
+      // Calculate word offset for current chunk
+      let wordOffset = 0;
+      for (let i = 0; i < info.chunkIndex && i < info.chunkWordCounts.length; i++) {
+        wordOffset += info.chunkWordCounts[i];
       }
-      lastTickRef.current = now;
-      t = playbackTimeRef.current;
+      
+      const wordsInChunk = info.chunkWordCounts[info.chunkIndex] || 1;
+      const wordInChunk = Math.floor(fraction * wordsInChunk);
+      const globalWordIdx = Math.min(wordOffset + wordInChunk, domWordCountRef.current - 1);
+      
+      if (globalWordIdx !== activeWordRef.current && globalWordIdx >= 0) {
+        activeWordRef.current = globalWordIdx;
+        setActiveWordIndex(globalWordIdx);
+      }
+    }
+
+    // === BLOCK-LEVEL: Use cumulative time for block highlighting ===
+    let t: number;
+    const cumTime = externalCumulativeRef?.current ?? internalCumulativeRef.current;
+    if (audio && !isNaN(audio.currentTime)) {
+      t = cumTime + audio.currentTime;
+    } else {
+      t = cumTime;
     }
 
     const sents = sentencesRef.current;
@@ -204,46 +197,26 @@ export function useAudioSync({
       setActiveSentenceIndex(idx);
     }
 
-    // Word-level tracking
-    const words = wordsRef.current;
-    let wIdx = -1;
-    for (let i = 0; i < words.length; i++) {
-      if (t >= words[i].startTime && t < words[i].endTime) {
-        wIdx = i;
-        break;
-      }
-    }
-    if (wIdx === -1 && words.length > 0 && t >= words[words.length - 1].startTime) {
-      wIdx = words.length - 1;
-    }
-    if (wIdx !== activeWordRef.current) {
-      activeWordRef.current = wIdx;
-      setActiveWordIndex(wIdx);
-    }
-
     rafRef.current = requestAnimationFrame(tick);
-  }, [audioRef]); // Only depends on audioRef identity (stable ref)
+  }, [audioRef]);
 
   // Start / stop tick loop
   useEffect(() => {
     if (isPlaying && sentences.length > 0) {
-      lastTickRef.current = 0;
       rafRef.current = requestAnimationFrame(tick);
     } else {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
-      lastTickRef.current = 0;
     }
     return () => {
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
   }, [isPlaying, tick, sentences.length]);
 
-  // Scroll active word (or block) into center
+  // Scroll active word into center
   useEffect(() => {
     if (!isSyncEnabled || isUserScrolledAway) return;
     if (activeWordIndex < 0 && activeSentenceIndex < 0) return;
 
-    // Prefer scrolling to the active word for precision
     const wordEl = activeWordIndex >= 0 
       ? contentRef.current?.querySelector(`[data-word-index="${activeWordIndex}"]`)
       : null;
@@ -289,7 +262,8 @@ export function useAudioSync({
 
   const followAudio = useCallback(() => {
     setIsUserScrolledAway(false);
-    const el = contentRef.current?.querySelector(`[data-sentence-index="${activeSentenceRef.current}"]`);
+    const el = contentRef.current?.querySelector(`[data-word-index="${activeWordRef.current}"]`) ||
+               contentRef.current?.querySelector(`[data-sentence-index="${activeSentenceRef.current}"]`);
     if (el) {
       programmaticScrollRef.current = true;
       el.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -298,8 +272,6 @@ export function useAudioSync({
   }, [contentRef]);
 
   const reset = useCallback(() => {
-    playbackTimeRef.current = 0;
-    lastTickRef.current = 0;
     activeSentenceRef.current = -1;
     activeWordRef.current = -1;
     setActiveSentenceIndex(-1);
