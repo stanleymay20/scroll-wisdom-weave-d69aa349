@@ -33,9 +33,9 @@ export default function About() {
   ];
 
   const stats = [
-    { value: "5,000+", label: "Words per chapter (avg)" },
+    { value: "4,000", label: "Words per chapter (max)" },
     { value: "Up to 30", label: "Chapters per book" },
-    { value: "10+", label: "Categories" },
+    { value: "15+", label: "Academic categories" },
     { value: "Free", label: "To get started" },
   ];
 
@@ -58,7 +58,7 @@ export default function About() {
             >
               <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/30 text-primary text-sm font-medium mb-6">
                 <GraduationCap className="h-4 w-4" />
-                AI-Powered Digital Publishing Platform
+                AI-Powered Academic Library
               </span>
               <h1 className="text-5xl md:text-6xl font-display font-bold text-gradient-gold mb-6">
                 About ScrollLibrary™
@@ -163,10 +163,10 @@ export default function About() {
                   with academic standards.
                 </p>
                 <p className="text-lg text-muted-foreground leading-relaxed">
-                  We believe in democratizing access to deep, transformative knowledge. Through our multi-agent 
-                  AI system, we generate books that don't just inform—they transform, equipping readers with 
-                  structured learning experiences that span academic texts, professional manuals, workbooks, 
-                  and guided learning content.
+                  We believe in democratizing access to structured, high-quality knowledge. Our AI system 
+                  generates well-organized study materials and processes uploaded textbooks into interactive 
+                  learning experiences — complete with progress tracking, adaptive quizzes, and verifiable 
+                  learning records.
                 </p>
               </div>
             </motion.div>
@@ -212,9 +212,9 @@ export default function About() {
                   <div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">Quality Commitment</h3>
                     <p className="text-muted-foreground leading-relaxed">
-                      We employ type-aware pipelines (Academic, Professional, Workbook, Bestseller, Comic) with 
-                      strict quality controls. Each pipeline enforces different standards—academic content follows 
-                      scholarly conventions, while creative content follows narrative best practices.
+                      We employ type-aware generation pipelines with strict quality controls. Academic content follows 
+                      scholarly conventions with citations and references, while professional content follows 
+                      structured best practices with clear learning objectives.
                     </p>
                   </div>
                 </div>
