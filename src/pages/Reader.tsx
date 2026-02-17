@@ -267,10 +267,10 @@ export default function Reader() {
       try {
         const { data } = await supabase
           .from('books')
-          .select('user_id')
+          .select('user_id, creator_id')
           .eq('id', bookId)
           .single();
-        setIsBookOwner(data?.user_id === userId);
+        setIsBookOwner(data?.user_id === userId || data?.creator_id === userId);
       } catch {
         setIsBookOwner(false);
       }

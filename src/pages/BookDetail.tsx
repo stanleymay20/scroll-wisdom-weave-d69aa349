@@ -134,6 +134,7 @@ export default function BookDetail() {
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
   const [isUpdatingPublish, setIsUpdatingPublish] = useState(false);
   const [coverTheme, setCoverTheme] = useState("classic");
+  const [coverAuthorName, setCoverAuthorName] = useState("");
 
   const [regenDialogOpen, setRegenDialogOpen] = useState(false);
   const [regenTarget, setRegenTarget] = useState<ChapterData | null>(null);
@@ -388,6 +389,7 @@ export default function BookDetail() {
           category: book.category,
           description: book.description,
           theme: theme || coverTheme,
+          authorName: coverAuthorName.trim() || book.author_ai_agent || undefined,
         }
       });
 
@@ -739,6 +741,14 @@ export default function BookDetail() {
                 {isOwner && (
                   <div className="absolute inset-x-0 bottom-0 p-3 bg-background/70 backdrop-blur-sm border-t border-border/50">
                     <div className="flex flex-col gap-2">
+                      <input
+                        type="text"
+                        value={coverAuthorName}
+                        onChange={(e) => setCoverAuthorName(e.target.value)}
+                        placeholder={book.author_ai_agent || "Author name for cover"}
+                        className="w-full px-3 py-2 rounded-md bg-background border border-border text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-1 focus:ring-primary"
+                      />
+
                       <Select value={coverTheme} onValueChange={setCoverTheme}>
                         <SelectTrigger className="w-full">
                           <Palette className="h-4 w-4 mr-2" />
@@ -1026,8 +1036,8 @@ export default function BookDetail() {
                 {t('book.tableOfContents')}
               </h2>
               
-              {/* Generate All Button */}
-              {chapters.some(ch => !ch.is_generated) && (
+              {/* Generate All Button - only for owners */}
+              {isOwner && chapters.some(ch => !ch.is_generated) && (
                 <Button
                   variant="hero"
                   onClick={handleGenerateAllChapters}
@@ -1127,15 +1137,17 @@ export default function BookDetail() {
                             </div>
                           ) : isGenerated ? (
                             <div className="flex items-center gap-2">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={(e) => handleGenerateChapter(chapter, e)}
-                                title="Regenerate chapter"
-                                className="text-muted-foreground hover:text-scroll-gold"
-                              >
-                                <RefreshCw className="h-4 w-4" />
-                              </Button>
+                              {isOwner && (
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={(e) => handleGenerateChapter(chapter, e)}
+                                  title="Regenerate chapter"
+                                  className="text-muted-foreground hover:text-scroll-gold"
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                              )}
                               <CheckCircle2 className="h-5 w-5 text-green-500" />
                               <ChevronRight 
                                 className="h-5 w-5 text-muted-foreground group-hover:text-scroll-gold transition-all cursor-pointer"
@@ -1151,7 +1163,7 @@ export default function BookDetail() {
                                 })}
                               />
                             </div>
-                          ) : (
+                          ) : isOwner ? (
                             <Button
                               variant="gold-outline"
                               size="sm"
@@ -1160,6 +1172,8 @@ export default function BookDetail() {
                               <Sparkles className="h-4 w-4 mr-1" />
                               {t('book.generateChapter')}
                             </Button>
+                          ) : (
+                            <span className="text-sm text-muted-foreground">{t('book.contentPending')}</span>
                           )}
                         </div>
                       </div>
