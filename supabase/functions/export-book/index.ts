@@ -1813,7 +1813,16 @@ async function generatePDF(
       
       if (hasFormatting) {
         // Use styled paragraph renderer for inline bold/italic
-        if (y < margin + 30) {
+        if (y < margin + 50) {
+          page = pdfDoc.addPage([pageWidth, pageHeight]);
+          pageNumber++;
+          addPageNumber(page, pageNumber);
+          y = pageHeight - margin - 30;
+        }
+        // drawStyledParagraph may run out of page space; pre-estimate lines needed
+        const estimatedLines = Math.ceil(paragraph.length / 70);
+        const estimatedHeight = estimatedLines * 15;
+        if (y - estimatedHeight < margin + 30) {
           page = pdfDoc.addPage([pageWidth, pageHeight]);
           pageNumber++;
           addPageNumber(page, pageNumber);
@@ -2229,10 +2238,8 @@ async function generateEPUB(
     // Convert inline code (with XML escaping for safety)
     content = content.replace(/`([^`]+)`/g, (_m: string, code: string) => `<code>${escapeXml(code)}</code>`);
     
-    // Convert HEADING placeholders to proper HTML heading tags
-    content = content.replace(/\[HEADING_(\d+)_LEVEL_(\d+)\]/g, (_match: string, _idx: string, level: string) => {
-      return `[HEADING_PLACEHOLDER_${_idx}_${level}]`;
-    });
+    // Note: headings are already converted to <hN> tags via headingMap above
+    // No additional heading placeholder conversion needed
     
     // Protect <pre> blocks from being split by \n\n paragraph splitting
     // Replace double newlines inside <pre>...</pre> with a placeholder
@@ -2246,26 +2253,12 @@ async function generateEPUB(
       .map((p: string) => {
         p = p.trim();
         if (!p) return '';
-        if (p.startsWith('<pre>') || p.startsWith('<code>') || p.startsWith('<figure>') || p.startsWith('<p>') || p.startsWith('<table>') || p.startsWith('<div')) return p;
+        if (p.startsWith('<pre>') || p.startsWith('<code>') || p.startsWith('<figure>') || p.startsWith('<p>') || p.startsWith('<table>') || p.startsWith('<div') || p.startsWith('<h')) return p;
         // Skip prose that's clearly table data (Row N: format)
         if (/^Row \d+:/.test(p)) return '';
         
-        // Check for heading placeholder and convert to proper HTML heading
-        const headingMatch = p.match(/\[HEADING_PLACEHOLDER_(\d+)_(\d+)\](.*)$/);
-        if (headingMatch) {
-          const level = headingMatch[2];
-          const headingText = p.replace(/\[HEADING_PLACEHOLDER_\d+_\d+\]/, '').trim();
-          return `<h${level}>${escapeXml(headingText)}</h${level}>`;
-        }
-        
-        // Handle remaining heading placeholders that contain the text
-        const simpleHeadingMatch = p.match(/^\[HEADING_(\d+)_LEVEL_(\d+)\]$/);
-        if (simpleHeadingMatch) {
-          return '';
-        }
-        
         // If paragraph contains already-converted HTML tags, pass through as-is
-        if (/<(?:code|strong|em|a|span|br)\b/.test(p)) {
+        if (/<(?:code|strong|em|a|span|br|h[1-6])\b/.test(p)) {
           return `<p>${p}</p>`;
         }
         
@@ -2665,8 +2658,16 @@ async function generateDOCX(
       }
     );
     
-    // Use stripMarkdown but preserve heading placeholders and bold/italic markers
-    const paragraphs = stripMarkdown(textContent).split(/\n\n+/);
+    // Strip markdown but PRESERVE bold/italic markers (**text**, *text*) for markdownToDocxRuns
+    // Also preserve heading/code/table placeholders
+    const strippedText = textContent
+      .replace(/`([^`]+)`/g, "$1")  // Remove inline code backticks
+      .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Remove links, keep text
+      .replace(/^\s*[-]\s+/gm, "- ")  // Normalize list bullets
+      .replace(/^\s*(\d+)\.\s+/gm, "$1. ")  // Preserve ordered list numbers
+      .replace(/\n{3,}/g, "\n\n")
+      .trim();
+    const paragraphs = strippedText.split(/\n\n+/);
     
     processedChapters.push({ 
       chapter, 
