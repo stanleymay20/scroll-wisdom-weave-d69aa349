@@ -58,7 +58,7 @@ const SectionHeader = memo(function SectionHeader({ title, linkTo }: { title: st
 });
 
 // Static categories - no computation needed
-const QUICK_CATEGORIES = ["Theology", "Science", "History", "Fiction", "Philosophy", "Arts"] as const;
+const QUICK_CATEGORIES = ["Technology", "Science", "Business", "History", "Psychology", "Philosophy"] as const;
 
 export function MobileHome() {
   // UI shell renders immediately with these defaults

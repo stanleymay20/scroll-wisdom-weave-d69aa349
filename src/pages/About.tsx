@@ -306,8 +306,8 @@ export default function About() {
                   <h2 className="text-3xl font-display font-bold text-foreground">Our Vision</h2>
                 </div>
                 <p className="text-lg text-muted-foreground leading-relaxed mb-6">
-                  We envision a world where every seeker of knowledge has access to comprehensive, 
-                  structured learning content across every discipline. From theology to technology, from 
+                  We envision a world where every learner has access to comprehensive, 
+                  structured learning content across every discipline. From science to technology, from 
                   medicine to philosophy—ScrollLibrary aims to be the definitive platform for 
                   AI-powered educational publishing.
                 </p>
