@@ -477,7 +477,7 @@ export default function Generate() {
               )}
             </div>
             <h1 className="font-display text-4xl md:text-5xl font-bold mb-4">
-              {t('generate.title')} <span className="text-gradient-gold">{t('generate.highlight')}</span>
+              {t('generate.title')}
             </h1>
             <p className="text-muted-foreground text-lg max-w-xl mx-auto">
               {t('generate.subtitle')}
