@@ -3520,6 +3520,7 @@ ${researchResult.references.map((ref, idx) => {
     }
 
     // ILLUSTRATED / CHILDREN'S BOOK - Generate inline illustrations from [FIGURE X] markers
+    // Upload images to storage instead of embedding base64 (prevents 5-10MB chapter content)
     if (bookType === 'illustrated' || bookType === 'children') {
       console.log("[GENERATE-CHAPTER] Generating inline illustrations from figure markers...");
 
@@ -3545,6 +3546,11 @@ ${researchResult.references.map((ref, idx) => {
             ? 'Children\'s book illustration style, soft warm colors, friendly characters, rounded shapes, whimsical and inviting, picture book quality.'
             : 'Professional book illustration, educational, clear composition, warm color palette, suitable for print publication.';
 
+          // Create a service-role Supabase client for storage uploads
+          const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+          const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          const storageClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
           for (let i = 0; i < Math.min(figures.length, 5); i++) {
             const fig = figures[i];
             try {
@@ -3567,16 +3573,51 @@ ${researchResult.references.map((ref, idx) => {
 
               if (imageResponse.ok) {
                 const imageData = await imageResponse.json();
-                const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+                const base64Url = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
                 
-                if (imageUrl) {
-                  // Replace the [FIGURE X: description] marker with the actual image
-                  const captionText = fig.description.split('.')[0] || `Figure ${fig.num}`;
-                  const imageMarkdown = `\n\n![${captionText}](${imageUrl})\n*Figure ${fig.num}: ${captionText}*\n\n`;
-                  finalContent = finalContent.replace(fig.fullMatch, imageMarkdown);
-                  console.log(`[GENERATE-CHAPTER] Figure ${fig.num} generated and inserted inline`);
+                if (base64Url && base64Url.startsWith('data:image/')) {
+                  // Upload to storage instead of embedding base64
+                  try {
+                    const base64Data = base64Url.split(',')[1];
+                    const mimeMatch = base64Url.match(/data:(image\/\w+);/);
+                    const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+                    const ext = mimeType.split('/')[1] || 'png';
+                    
+                    // Convert base64 to Uint8Array
+                    const binaryStr = atob(base64Data);
+                    const bytes = new Uint8Array(binaryStr.length);
+                    for (let b = 0; b < binaryStr.length; b++) {
+                      bytes[b] = binaryStr.charCodeAt(b);
+                    }
+                    
+                    const storagePath = `${user.id}/${chapter?.book_id || "unknown"}/ch${chapterNumber}-fig${fig.num}.${ext}`;
+                    
+                    const { error: uploadError } = await storageClient.storage
+                      .from('book-images')
+                      .upload(storagePath, bytes, {
+                        contentType: mimeType,
+                        upsert: true,
+                      });
+                    
+                    if (!uploadError) {
+                      const { data: publicUrl } = storageClient.storage
+                        .from('book-images')
+                        .getPublicUrl(storagePath);
+                      
+                      const captionText = fig.description.split('.')[0] || `Figure ${fig.num}`;
+                      const imageMarkdown = `\n\n![${captionText}](${publicUrl.publicUrl})\n*Figure ${fig.num}: ${captionText}*\n\n`;
+                      finalContent = finalContent.replace(fig.fullMatch, imageMarkdown);
+                      console.log(`[GENERATE-CHAPTER] Figure ${fig.num} uploaded to storage and inserted inline`);
+                    } else {
+                      console.error(`[GENERATE-CHAPTER] Storage upload failed for Figure ${fig.num}:`, uploadError);
+                      finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
+                    }
+                  } catch (uploadErr) {
+                    console.error(`[GENERATE-CHAPTER] Upload error for Figure ${fig.num}:`, uploadErr);
+                    finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
+                  }
                 } else {
-                  // Remove the marker if image generation failed
+                  // No base64 image returned — use placeholder
                   finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
                   console.log(`[GENERATE-CHAPTER] Figure ${fig.num}: No image returned, using placeholder`);
                 }
