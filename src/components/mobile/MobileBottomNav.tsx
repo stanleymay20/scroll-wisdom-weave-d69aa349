@@ -13,14 +13,14 @@ import { motion, AnimatePresence } from "framer-motion";
 
 // Left side nav items
 const LEFT_NAV_ITEMS = [
-  { icon: Home, label: "Home", path: "/" },
-  { icon: BookOpen, label: "Explore", path: "/explore" },
+  { icon: LibraryIcon, label: "Library", path: "/library" },
+  { icon: BookOpen, label: "Generate", path: "/generate" },
 ] as const;
 
 // Right side nav items
 const RIGHT_NAV_ITEMS = [
-  { icon: LibraryIcon, label: "Library", path: "/library" },
-  { icon: Settings, label: "Settings", path: "/settings" },
+  { icon: Home, label: "Upload", path: "/upload" },
+  { icon: Settings, label: "Profile", path: "/profile" },
 ] as const;
 
 // PMF MODE: Only text books - no comics/workbooks in create menu

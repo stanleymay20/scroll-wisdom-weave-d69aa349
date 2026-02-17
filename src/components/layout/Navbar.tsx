@@ -72,11 +72,10 @@ export function Navbar() {
           </Link>
 
           <div className="hidden md:flex items-center gap-6 lg:gap-8">
+            <Link to="/library" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.library')}</Link>
             <Link to="/upload" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Upload</Link>
             <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
-            <Link to="/explore" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.explore')}</Link>
-            <Link to="/library" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.library')}</Link>
-            <Link to="/verify" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Verify</Link>
+            <Link to="/certificate-status" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Certificates</Link>
           </div>
 
           <div className="hidden md:flex items-center gap-2">
@@ -144,26 +143,20 @@ export function Navbar() {
             className="md:hidden border-t border-border/50 bg-background/95 backdrop-blur-xl"
           >
             <div className="container mx-auto px-4 py-4 space-y-1">
-              <Link to="/explore" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                <Search className="h-4 w-4 text-muted-foreground" />
-                {t('nav.explore')}
-              </Link>
               <Link to="/library" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.library')}
+              </Link>
+              <Link to="/upload" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
+                Upload
               </Link>
               <Link to="/generate" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.generate')}
               </Link>
-              <Link to="/verify" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                <Shield className="h-4 w-4 text-muted-foreground" />
-                Verify
+              <Link to="/certificate-status" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
+                Certificates
               </Link>
-              <Link to="/about" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                {t('footer.about')}
-              </Link>
-              <Link to="/help" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                {t('footer.help')}
+              <Link to="/pricing" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
+                Pricing
               </Link>
               
               <div className="border-t border-border/50 pt-3 mt-3">
