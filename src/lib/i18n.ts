@@ -681,7 +681,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'explore.allCategories': 'All',
     
     // Generate extras (keys not already defined above)
-    'generate.highlight': 'Book',
+    'generate.highlight': '',
     'generate.aiGenerator': 'AI Book Generator',
     'generate.bookTitle': 'Book Title',
     'generate.bookTitlePlaceholder': 'Enter your book title...',
