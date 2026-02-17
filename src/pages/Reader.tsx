@@ -367,15 +367,13 @@ export default function Reader() {
     wordCount,
   });
 
-  // Apply audio-active CSS class to the active paragraph + dim others
+  // Apply audio-active CSS class to the active paragraph + word-level highlight
   useEffect(() => {
     if (!contentRef.current) return;
     
     // Find the reading-content div that wraps MarkdownRenderer output
     const readingContent = contentRef.current.querySelector('.reading-content');
     const target = readingContent || contentRef.current;
-    
-    const indexedEls = target.querySelectorAll('[data-sentence-index]');
 
     // Toggle audio-playing class on the container for CSS-based dimming
     if (isTTSPlaying && audioSync.isSyncEnabled) {
@@ -384,18 +382,32 @@ export default function Reader() {
       target.classList.remove('audio-playing');
     }
 
-    // Remove previous active
+    // Remove previous block active
     target.querySelectorAll('.audio-active').forEach(el => {
       el.classList.remove('audio-active');
     });
-    // Add to current
-    if (audioSync.activeSentenceIndex >= 0 && isTTSPlaying && audioSync.isSyncEnabled) {
-      const el = target.querySelector(`[data-sentence-index="${audioSync.activeSentenceIndex}"]`);
-      if (el) {
-        el.classList.add('audio-active');
+    // Remove previous word active
+    target.querySelectorAll('.audio-word-active').forEach(el => {
+      el.classList.remove('audio-word-active');
+    });
+    
+    if (isTTSPlaying && audioSync.isSyncEnabled) {
+      // Highlight active block
+      if (audioSync.activeSentenceIndex >= 0) {
+        const el = target.querySelector(`[data-sentence-index="${audioSync.activeSentenceIndex}"]`);
+        if (el) {
+          el.classList.add('audio-active');
+        }
+      }
+      // Highlight active word
+      if (audioSync.activeWordIndex >= 0) {
+        const wordEl = target.querySelector(`[data-word-index="${audioSync.activeWordIndex}"]`);
+        if (wordEl) {
+          wordEl.classList.add('audio-word-active');
+        }
       }
     }
-  }, [audioSync.activeSentenceIndex, isTTSPlaying, audioSync.isSyncEnabled]);
+  }, [audioSync.activeSentenceIndex, audioSync.activeWordIndex, isTTSPlaying, audioSync.isSyncEnabled]);
 
   // Helper function to extract ALL code blocks from chapter content for playground
   const extractCodeFromChapter = (content: string): string => {
