@@ -251,8 +251,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Initial check (deferred to not block render)
-    setTimeout(() => checkSubscription(true), 100);
+    // Initial check deferred — onAuthStateChange above already calls checkSubscription
+    // when a session exists, so only schedule a fallback for the no-session case.
+    const initialTimer = setTimeout(() => {
+      if (!user) checkSubscription(true);
+    }, 200);
 
     // Periodic check every 5 minutes
     const interval = setInterval(() => checkSubscription(false), 300000);
@@ -260,6 +263,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     return () => {
       subscription.unsubscribe();
       clearInterval(interval);
+      clearTimeout(initialTimer);
     };
   }, [checkSubscription]);
 

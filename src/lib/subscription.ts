@@ -10,7 +10,7 @@ export const SUBSCRIPTION_TIERS = {
     features: {
       canGenerateBooks: true, // 1 book/month for PMF validation
       maxBooksPerMonth: 1,
-      maxWordCount: 2000,
+      maxWordCount: 4000,
       exportFormats: ['pdf_low'],
       ttsMinutes: 10, // 10 min free TTS
       interactiveVoiceMinutes: 5,
