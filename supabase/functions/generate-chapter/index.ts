@@ -1239,7 +1239,7 @@ function validatePedagogicalSchema(content: string, bookType: string): Pedagogic
   const missingSections: string[] = [];
 
   // Skip validation for non-educational book types
-  const EXEMPT_BOOK_TYPES = ['children', 'comic', 'novel', 'fiction', 'bestseller', 'illustrated'];
+  const EXEMPT_BOOK_TYPES = ['children', 'comic', 'novel', 'fiction', 'bestseller'];
   if (EXEMPT_BOOK_TYPES.includes(bookType?.toLowerCase())) {
     console.log(`[PEDAGOGICAL] Skipping validation for book type: ${bookType}`);
     return {
@@ -3135,6 +3135,10 @@ BEGIN WRITING THE ACADEMIC/TECHNICAL CHAPTER:`;
 
 ${MASTER_FORMATTING_CONTRACT}
 
+${BESTSELLER_STRUCTURE_CONTRACT}
+
+${NONFICTION_CONTRACT}
+
 ===========================================
 ILLUSTRATED BOOK PIPELINE — HARD LOCK
 ===========================================
@@ -3199,7 +3203,10 @@ If ANY check fails → REWRITE
 
 ${VALIDATION_CONTRACT}
 
-LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
+${FINAL_DIRECTIVE}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.
+Create comprehensive, bestseller-grade illustrated chapters where both the TEXT and VISUALS are world-class.`;
 
       const illustratedWordTarget = isChildrens ? 1200 : targetWords;
       
