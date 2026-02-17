@@ -90,8 +90,8 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     };
   }, []);
   
-  // Pre-process: Extract base64 images using indexOf (regex crashes on multi-MB strings)
-  // Convert to blob URLs for efficient DOM rendering
+  // Pre-process: Extract base64 images and storage URLs
+  // Convert base64 to blob URLs for efficient DOM rendering; keep storage URLs as-is
   const { processedContent, extractedImages } = useMemo(() => {
     if (!content) return { processedContent: "", extractedImages: [] as { alt: string; src: string; caption: string }[] };
     
@@ -101,10 +101,20 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     
     const images: { alt: string; src: string; caption: string }[] = [];
     let processed = content;
-    let searchFrom = 0;
     
-    // indexOf-based extraction: avoids regex catastrophic backtracking on 10MB+ strings
-    while (true) {
+    // PHASE 1: Extract storage URL images first (safe regex — URLs are short)
+    processed = processed.replace(/!\[([^\]]*)\]\((https?:\/\/[^)]+)\)/g, (_, alt, url) => {
+      const idx = images.length;
+      images.push({ alt, src: url, caption: alt });
+      return `<!--BASE64_IMG_${idx}-->`;
+    });
+    
+    // PHASE 2: Extract base64 data URI images using indexOf (regex would crash)
+    let searchFrom = 0;
+    let iterations = 0;
+    const MAX_ITERATIONS = 200; // safety valve
+    
+    while (iterations++ < MAX_ITERATIONS) {
       const marker = '](data:image/';
       const markerIdx = processed.indexOf(marker, searchFrom);
       if (markerIdx === -1) break;
@@ -117,8 +127,10 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       const between = processed.substring(bangIdx, markerIdx);
       if (between.includes('\n')) { searchFrom = markerIdx + marker.length; continue; }
       
-      // Find closing paren — base64 chars never contain )
-      const closeIdx = processed.indexOf(')', markerIdx);
+      // Find closing paren — scan for the FIRST ')' that follows a valid base64 char
+      // Base64 uses A-Z a-z 0-9 + / = and the data URI header has : ; , /
+      // ')' is NOT a valid base64 character, so first ')' is always the closer
+      const closeIdx = processed.indexOf(')', markerIdx + marker.length);
       if (closeIdx === -1) break;
       
       const alt = processed.substring(bangIdx + 2, markerIdx);
@@ -128,28 +140,36 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       let renderSrc = '';
       try {
         const commaIdx = dataUri.indexOf(',');
-        if (commaIdx > 0) {
+        if (commaIdx > 0 && commaIdx < 100) { // meta part should be short
           const meta = dataUri.substring(0, commaIdx);
           const mime = meta.match(/:(.*?);/)?.[1] || 'image/png';
           const b64 = dataUri.substring(commaIdx + 1);
-          const byteString = atob(b64);
-          const ab = new Uint8Array(byteString.length);
-          for (let i = 0; i < byteString.length; i++) ab[i] = byteString.charCodeAt(i);
-          const blob = new Blob([ab], { type: mime });
-          renderSrc = URL.createObjectURL(blob);
-          blobUrlsRef.current.push(renderSrc);
+          // Validate it looks like base64 before decoding
+          if (b64.length > 100 && /^[A-Za-z0-9+/=\s]+$/.test(b64.substring(0, 100))) {
+            const byteString = atob(b64);
+            const ab = new Uint8Array(byteString.length);
+            for (let i = 0; i < byteString.length; i++) ab[i] = byteString.charCodeAt(i);
+            const blob = new Blob([ab], { type: mime });
+            renderSrc = URL.createObjectURL(blob);
+            blobUrlsRef.current.push(renderSrc);
+          }
         }
       } catch {
-        // If conversion fails, use data URI as fallback (slow but works)
-        renderSrc = dataUri;
+        // If conversion fails, skip this image entirely (don't use raw data URI)
+        renderSrc = '';
       }
       
-      const idx = images.length;
-      images.push({ alt, src: renderSrc, caption: alt });
-      
-      const placeholder = `<!--BASE64_IMG_${idx}-->`;
-      processed = processed.substring(0, bangIdx) + placeholder + processed.substring(closeIdx + 1);
-      searchFrom = bangIdx + placeholder.length;
+      if (renderSrc) {
+        const idx = images.length;
+        images.push({ alt, src: renderSrc, caption: alt });
+        const placeholder = `<!--BASE64_IMG_${idx}-->`;
+        processed = processed.substring(0, bangIdx) + placeholder + processed.substring(closeIdx + 1);
+        searchFrom = bangIdx + placeholder.length;
+      } else {
+        // Remove the broken image reference to prevent rendering issues
+        processed = processed.substring(0, bangIdx) + processed.substring(closeIdx + 1);
+        searchFrom = bangIdx;
+      }
     }
     
     return { processedContent: processed, extractedImages: images };
@@ -169,8 +189,10 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     // Pre-process: Ensure paragraphs are separated by double newlines.
     // AI-generated content often uses single newlines between paragraphs,
     // causing the entire chapter to render as ONE block (breaks audio sync).
-    // Convert single newlines between text lines into double newlines.
-    html = html.replace(/([^\n])\n(?=[^\n#\-*>\d|`])/g, '$1\n\n');
+    // PERFORMANCE: Only run on content < 500KB to avoid catastrophic backtracking
+    if (html.length < 500_000) {
+      html = html.replace(/([^\n])\n(?=[^\n#\-*>\d|`])/g, '$1\n\n');
+    }
     
     // Pre-process: detect plain-text headings (legacy content without ## markers)
     // A line that is short (<80 chars), standalone between blank lines, 
