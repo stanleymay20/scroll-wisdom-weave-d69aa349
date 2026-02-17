@@ -1,11 +1,14 @@
 /**
- * Document Processing Engine v2
+ * Document Processing Engine v3
  * 
- * Improved pipeline:
- * 1. Strip front matter (praise pages, copyright, TOC)
- * 2. Detect real chapter boundaries via heading patterns
- * 3. Multi-pass AI analysis for large documents
- * 4. Enrich each chapter with pedagogical structure
+ * Pipeline:
+ * 1. Authenticate user via getUser (reliable JWT validation)
+ * 2. Normalize PDF text (fix mid-line chapter markers)
+ * 3. Strip front matter (praise pages, copyright, TOC)
+ * 4. Detect real chapter boundaries via heading patterns
+ * 5. AI analysis via Lovable AI gateway (no API key required)
+ * 6. Enrich each chapter with pedagogical structure
+ * 7. Create book + chapters in database
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
@@ -27,17 +30,19 @@ Deno.serve(async (req) => {
     }
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseAnonKey, {
+    
+    // Auth: use getUser for reliable JWT validation
+    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
+    const { data: userData, error: authError } = await userClient.auth.getUser();
+    if (authError || !userData?.user) {
+      console.error('[process-document] Auth failed:', authError?.message);
       return jsonRes({ error: 'Unauthorized' }, 401);
     }
-    const userId = claimsData.claims.sub as string;
+    const userId = userData.user.id;
 
     const body = await req.json();
     const { documentText, documentName, sourceType, category, language } = body;
@@ -50,10 +55,10 @@ Deno.serve(async (req) => {
       return jsonRes({ error: 'Document exceeds maximum size (approx. 2M characters).' }, 400);
     }
 
-    console.log(`[process-document] Processing for user ${userId}, source: ${sourceType}, length: ${documentText.length}`);
+    console.log(`[process-document] Processing for user ${userId.slice(0, 8)}..., source: ${sourceType}, length: ${documentText.length}`);
 
-    const apiKey = Deno.env.get('OPENAI_API_KEY');
-    if (!apiKey) {
+    const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
+    if (!LOVABLE_API_KEY) {
       return jsonRes({ error: 'AI service not configured' }, 500);
     }
 
@@ -68,30 +73,32 @@ Deno.serve(async (req) => {
     const detectedChapters = detectChapterBoundaries(cleanedText);
     console.log(`[process-document] Detected ${detectedChapters.length} chapters from headings`);
 
-    // Step 3: AI analysis - use multi-pass for large documents
+    // Step 3: AI analysis via Lovable AI gateway
     const analysisText = buildAnalysisText(cleanedText, detectedChapters);
     
-    const analysisResponse = await fetch('https://api.openai.com/v1/chat/completions', {
+    const analysisResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
       method: 'POST',
-      headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
+      headers: { 'Authorization': `Bearer ${LOVABLE_API_KEY}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        model: 'gpt-4o-mini',
+        model: 'google/gemini-2.5-flash',
         temperature: 0.3,
-        response_format: { type: 'json_object' },
         messages: [
           {
             role: 'system',
             content: `You are a pedagogical content analyzer. You are given a document with pre-detected chapter boundaries.
 
 Your job:
-1. Extract a clear TITLE for the book
-2. Write a concise DESCRIPTION (2-3 sentences)
-3. Identify the CATEGORY
-4. For each chapter provided, extract: key_concepts (3-5), learning_objectives (2-3), terminology (3-5 terms with definitions), summary (2-3 sentences)
+1. Extract a clear TITLE for the book (the actual book title, not a description)
+2. Write a concise DESCRIPTION (2-3 sentences about what the book covers)
+3. Identify the CATEGORY (one of: technology, science, medicine, law, economics, finance, governance, history, philosophy, theology, self_help, business, general)
+4. For each chapter provided, extract: key_concepts (3-5), learning_objectives (2-3 measurable), terminology (3-5 terms with definitions), summary (2-3 sentences)
 
-IMPORTANT: Keep the exact chapter titles and order as provided. Do NOT merge or skip chapters.
+IMPORTANT: 
+- Keep the exact chapter titles and order as provided
+- Do NOT merge or skip chapters
+- The title must be the actual book title, not "Document Analysis" or similar
 
-Return JSON:
+Return ONLY valid JSON:
 {
   "title": "...",
   "description": "...",
@@ -117,18 +124,48 @@ Return JSON:
     });
 
     if (!analysisResponse.ok) {
-      console.error('[process-document] Analysis API error:', analysisResponse.status);
+      const errText = await analysisResponse.text();
+      console.error('[process-document] Analysis API error:', analysisResponse.status, errText.slice(0, 300));
       return jsonRes({ error: 'Failed to analyze document' }, 500);
     }
 
     const analysisData = await analysisResponse.json();
-    const analysis = JSON.parse(analysisData.choices[0].message.content);
+    const rawContent = analysisData.choices?.[0]?.message?.content || '';
+    
+    // Safe JSON parse — handle markdown code fences
+    let analysis: any;
+    try {
+      const jsonStr = rawContent.replace(/^```(?:json)?\s*/i, '').replace(/\s*```\s*$/i, '').trim();
+      analysis = JSON.parse(jsonStr);
+    } catch (parseErr) {
+      // Try extracting JSON from the response
+      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        try { analysis = JSON.parse(jsonMatch[0]); } catch { /* fall through */ }
+      }
+      if (!analysis) {
+        console.error('[process-document] Failed to parse AI response:', rawContent.slice(0, 500));
+        // Fallback: create minimal analysis
+        analysis = {
+          title: documentName || 'Uploaded Document',
+          description: `Learning material processed from: ${documentName}`,
+          category: category || 'general',
+          academic_level: 'intermediate',
+          chapters: detectedChapters.map(ch => ({
+            title: ch.title,
+            key_concepts: [],
+            learning_objectives: [],
+            terminology: [],
+            summary: '',
+          })),
+        };
+      }
+    }
 
     console.log(`[process-document] AI returned ${analysis.chapters?.length || 0} chapters: "${analysis.title}"`);
 
     // Step 4: Create book and chapters
-    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const adminSupabase = createClient(supabaseUrl, serviceKey);
+    const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: book, error: bookError } = await adminSupabase
       .from('books')
@@ -162,7 +199,7 @@ Return JSON:
         key_concepts: [], learning_objectives: [], terminology: [], summary: '' 
       };
 
-      const enrichedContent = buildEnrichedChapter(aiMeta, detected.content);
+      const enrichedContent = buildEnrichedChapter(detected.title, aiMeta, detected.content);
 
       chapterInserts.push({
         book_id: book.id,
@@ -207,12 +244,34 @@ Return JSON:
   }
 });
 
+// =========================================================
+// TEXT NORMALIZATION
+// =========================================================
+
 /**
- * Strip front matter: praise pages, copyright, TOC, preface metadata
+ * Normalize PDF text: insert newlines before chapter/part markers
+ * and restore paragraph breaks from PDF extraction artifacts.
  */
+function normalizePdfText(text: string): string {
+  // Insert newline before "CHAPTER N" anywhere it appears without a preceding newline
+  text = text.replace(/(?<!\n)\s*(CHAPTER\s+\d+)/gi, '\n\n$1');
+  // Same for PART markers
+  text = text.replace(/(?<!\n)\s*(PART\s+[IVXLCDM]+\b)/gi, '\n\n$1');
+  
+  // PDF extraction often joins paragraphs with single spaces.
+  // Detect sentence-ending period followed by uppercase start (paragraph boundary)
+  text = text.replace(/([.!?])\s{2,}([A-Z])/g, '$1\n\n$2');
+  
+  // Clean up excessive newlines
+  text = text.replace(/\n{4,}/g, '\n\n\n');
+  return text;
+}
+
+// =========================================================
+// FRONT MATTER STRIPPING
+// =========================================================
+
 function stripFrontMatter(text: string): string {
-  // Common front matter markers to find the start of real content
-  // Try chapter-level first, then part-level (to avoid skipping to Part I too early)
   const contentStartPatterns = [
     /(?:^|\n)(?:Chapter\s+1|CHAPTER\s+1)/m,
     /(?:^|\n)#{1,3}\s*(?:Chapter\s+1)/im,
@@ -224,7 +283,7 @@ function stripFrontMatter(text: string): string {
   for (const pattern of contentStartPatterns) {
     const match = text.match(pattern);
     if (match && match.index !== undefined && match.index > 300) {
-      console.log(`[strip-front-matter] Found content start at position ${match.index} via pattern`);
+      console.log(`[strip-front-matter] Found content start at position ${match.index}`);
       return text.substring(match.index).trim();
     }
   }
@@ -239,7 +298,7 @@ function stripFrontMatter(text: string): string {
     cleaned = cleaned.replace(pattern, '\n');
   }
 
-  // Also try TOC-end detection
+  // TOC-end detection
   const tocEndPatterns = [
     /(?:Additional Resources|Conclusion|Index)\s*\.{3,}\s*\d+\s*\n/g,
     /\[LSI\]/g,
@@ -258,43 +317,23 @@ function stripFrontMatter(text: string): string {
   }
 
   if (lastFrontMatterEnd > 500) {
-    console.log(`[strip-front-matter] Stripping front matter up to position ${lastFrontMatterEnd}`);
     return cleaned.substring(lastFrontMatterEnd).trim();
   }
 
   return cleaned;
 }
 
-/**
- * Normalize PDF text: insert newlines before chapter/part markers
- * that appear mid-line (common in PDF text extraction).
- * Must run BEFORE stripFrontMatter and detectChapterBoundaries.
- */
-function normalizePdfText(text: string): string {
-  // Insert newline before "CHAPTER N" anywhere it appears without a preceding newline
-  // This handles: "...page 155  CHAPTER 5  Title...", "...text. CHAPTER 5...", "...text\nCHAPTER 5..."
-  text = text.replace(/(?<!\n)\s*(CHAPTER\s+\d+)/gi, '\n\n$1');
-  // Same for PART markers
-  text = text.replace(/(?<!\n)\s*(PART\s+[IVXLCDM]+\b)/gi, '\n\n$1');
-  // Clean up excessive newlines
-  text = text.replace(/\n{4,}/g, '\n\n\n');
-  return text;
-}
+// =========================================================
+// CHAPTER BOUNDARY DETECTION
+// =========================================================
 
-/**
- * Detect chapter boundaries using heading patterns in the text
- */
 function detectChapterBoundaries(text: string): Array<{ title: string; content: string }> {
-  // Text is already normalized by normalizePdfText() upstream
-  
-  // Patterns that indicate chapter/section headings (ordered by specificity)
-  // We match the whole line then extract the title by splitting on double-spaces
   const headingPatterns = [
     // "CHAPTER N  Title..." or "Chapter N: Title" or "Chapter N. Title"
     /(?:^|\n)\s*((?:Chapter|CHAPTER)\s+\d+\s*[.:]?\s*[^\n]{0,120})(?:\n|$)/gm,
     // "PART I  Title" or "Part 1: Title"
     /(?:^|\n)\s*((?:Part|PART)\s+(?:[IVXLCDM]+|\d+)\s*[.:]?\s*[^\n]{0,120})(?:\n|$)/gm,
-    // Numbered sections like "1. Title"
+    // Numbered sections like "1. Title" (must start with capital, be short)
     /(?:^|\n)\s*(\d{1,2}\.\s+[A-Z][A-Za-z\s,':&-]{5,80})(?:\n|$)/gm,
   ];
 
@@ -304,47 +343,49 @@ function detectChapterBoundaries(text: string): Array<{ title: string; content: 
     fullMatch: string;
   }
 
-  const headings: HeadingMatch[] = [];
-
   // Try each pattern, collect all candidates and pick the best one
-  const candidates: { matches: HeadingMatch[]; patternSrc: string }[] = [];
-  for (const pattern of headingPatterns) {
+  const candidates: { matches: HeadingMatch[]; patternIdx: number }[] = [];
+  
+  for (let pi = 0; pi < headingPatterns.length; pi++) {
+    const pattern = headingPatterns[pi];
     const matches: HeadingMatch[] = [];
     let match;
     while ((match = pattern.exec(text)) !== null) {
       const rawLine = match[1]?.trim() || match[0].trim();
       
-      // Extract title: split on double-space (common in PDF extraction) to get just the heading
-      // e.g. "CHAPTER 1  Data Engineering Described  If you work in..." -> "Data Engineering Described"
-      const parts = rawLine.split(/\s{2,}/);
-      // The title is typically the second segment (first is "CHAPTER N")
-      let title = parts.length >= 2 ? parts[1] : parts[0];
-      // Remove "Chapter N" prefix if still present
-      title = title.replace(/^(?:Chapter|CHAPTER|Part|PART)\s+(?:\d+|[IVXLCDM]+)\s*[.:]?\s*/i, '').trim();
+      // Extract clean title from the heading line
+      const title = extractCleanTitle(rawLine);
       
       if (!title || title.length < 3 || title.length > 120) continue;
       const words = title.split(/\s+/);
       if (words.length > 15) continue;
       
+      // Skip lines that look like prose (>8 words with common stop words)
+      const stopWords = ['the', 'and', 'that', 'this', 'with', 'from', 'have', 'been', 'were', 'are', 'was', 'for'];
+      const lowerWords = words.map(w => w.toLowerCase());
+      const stopCount = lowerWords.filter(w => stopWords.includes(w)).length;
+      if (words.length > 8 && stopCount >= 3) continue;
+      
       matches.push({
         index: match.index,
-        title: title.replace(/\s+/g, ' '),
+        title,
         fullMatch: match[0],
       });
     }
 
     if (matches.length >= 2 && matches.length <= 60) {
-      candidates.push({ matches, patternSrc: pattern.source.substring(0, 40) });
-      console.log(`[detect-chapters] Pattern "${pattern.source.substring(0, 40)}..." found ${matches.length} headings`);
+      candidates.push({ matches, patternIdx: pi });
+      console.log(`[detect-chapters] Pattern ${pi} found ${matches.length} headings`);
     }
   }
 
   // Pick the candidate with the most headings (prefer chapters over parts)
+  const headings: HeadingMatch[] = [];
   if (candidates.length > 0) {
     candidates.sort((a, b) => b.matches.length - a.matches.length);
     const best = candidates[0];
     headings.push(...best.matches);
-    console.log(`[detect-chapters] Selected best pattern with ${best.matches.length} headings: ${best.patternSrc}...`);
+    console.log(`[detect-chapters] Selected pattern ${best.patternIdx} with ${best.matches.length} headings`);
   }
 
   // If no heading patterns work, try markdown-style headings
@@ -355,11 +396,11 @@ function detectChapterBoundaries(text: string): Array<{ title: string; content: 
     while ((match = mdPattern.exec(text)) !== null) {
       const title = match[1]?.trim();
       if (!title || title.length < 3 || title.length > 120) continue;
-      // Skip TOC-like entries with dots
       if (title.includes('...')) continue;
       mdHeadings.push({ index: match.index, title, fullMatch: match[0] });
     }
     if (mdHeadings.length >= 3) {
+      headings.length = 0;
       headings.push(...mdHeadings);
       console.log(`[detect-chapters] Found ${mdHeadings.length} markdown headings`);
     }
@@ -371,10 +412,9 @@ function detectChapterBoundaries(text: string): Array<{ title: string; content: 
     return fallbackSplit(text);
   }
 
-  // Sort by position and extract content between headings
+  // Sort by position and deduplicate
   headings.sort((a, b) => a.index - b.index);
 
-  // Deduplicate headings that are very close together
   const deduped: HeadingMatch[] = [];
   for (const h of headings) {
     if (deduped.length === 0 || h.index - deduped[deduped.length - 1].index > 200) {
@@ -401,17 +441,50 @@ function detectChapterBoundaries(text: string): Array<{ title: string; content: 
   if (chapters.length > 25) {
     return mergeSmallChapters(chapters, 15);
   }
+  
+  // If a single chapter has >80% of total content, re-split it
+  const totalLen = chapters.reduce((s, c) => s + c.content.length, 0);
+  const oversized = chapters.find(c => c.content.length > totalLen * 0.6 && chapters.length > 1);
+  if (oversized && totalLen > 10000) {
+    console.log(`[detect-chapters] Chapter "${oversized.title}" has ${Math.round(oversized.content.length / totalLen * 100)}% of content — re-splitting`);
+    const subChapters = fallbackSplit(oversized.content, Math.min(8, Math.ceil(oversized.content.length / 8000)));
+    const idx = chapters.indexOf(oversized);
+    chapters.splice(idx, 1, ...subChapters);
+  }
 
   return chapters.length >= 2 ? chapters : fallbackSplit(text);
 }
 
 /**
- * Merge small consecutive chapters to reach a target count
+ * Extract a clean title from a raw heading line.
+ * Handles: "CHAPTER 5  Data Engineering Described  If you work in..." -> "Data Engineering Described"
  */
+function extractCleanTitle(rawLine: string): string {
+  // Remove "Chapter N" / "CHAPTER N" / "Part I" prefix
+  let title = rawLine.replace(/^(?:Chapter|CHAPTER)\s+\d+\s*[.:]?\s*/i, '');
+  title = title.replace(/^(?:Part|PART)\s+(?:[IVXLCDM]+|\d+)\s*[.:]?\s*/i, '');
+  
+  // If the remaining text has double-spaces (PDF artifact), take only the first segment
+  // "Data Engineering Described  If you work in data" -> "Data Engineering Described"
+  const doubleSpaceParts = title.split(/\s{2,}/);
+  if (doubleSpaceParts.length >= 2 && doubleSpaceParts[0].length >= 5) {
+    title = doubleSpaceParts[0];
+  }
+  
+  // Clean trailing punctuation artifacts
+  title = title.replace(/[,;:\s]+$/, '').trim();
+  
+  // If title is still empty, use the raw line
+  if (!title || title.length < 3) {
+    title = rawLine.replace(/\s{2,}/g, ' ').trim();
+  }
+  
+  return title.replace(/\s+/g, ' ');
+}
+
 function mergeSmallChapters(chapters: Array<{ title: string; content: string }>, targetMax: number): Array<{ title: string; content: string }> {
   if (chapters.length <= targetMax) return chapters;
   
-  // Sort by content length, merge the smallest ones with their neighbors
   const result = [...chapters];
   while (result.length > targetMax) {
     let smallestIdx = 0;
@@ -422,7 +495,6 @@ function mergeSmallChapters(chapters: Array<{ title: string; content: string }>,
         smallestIdx = i;
       }
     }
-    // Merge with next chapter (or previous if last)
     const mergeWith = smallestIdx < result.length - 1 ? smallestIdx + 1 : smallestIdx - 1;
     if (mergeWith < 0) break;
     
@@ -439,9 +511,6 @@ function mergeSmallChapters(chapters: Array<{ title: string; content: string }>,
   return result;
 }
 
-/**
- * Fallback: split by paragraph clusters into ~5-8 chapters
- */
 function fallbackSplit(text: string, targetChapters = 6): Array<{ title: string; content: string }> {
   const chunkSize = Math.ceil(text.length / targetChapters);
   const results: Array<{ title: string; content: string }> = [];
@@ -450,7 +519,7 @@ function fallbackSplit(text: string, targetChapters = 6): Array<{ title: string;
     const start = i * chunkSize;
     let end = Math.min((i + 1) * chunkSize, text.length);
     
-    // Find natural break point
+    // Find natural break point (paragraph boundary)
     if (end < text.length) {
       const nextBreak = text.indexOf('\n\n', end - 300);
       if (nextBreak > 0 && nextBreak < end + 500) {
@@ -462,9 +531,12 @@ function fallbackSplit(text: string, targetChapters = 6): Array<{ title: string;
     if (content.length < 100) continue;
     
     // Extract a title from the first meaningful line
-    const firstLine = content.split('\n').find(l => l.trim().length > 5 && l.trim().length < 100);
+    const firstLine = content.split('\n').find(l => {
+      const trimmed = l.trim();
+      return trimmed.length > 5 && trimmed.length < 100 && !trimmed.startsWith('>');
+    });
     results.push({
-      title: firstLine?.trim().replace(/^#+\s*/, '') || `Section ${i + 1}`,
+      title: firstLine?.trim().replace(/^#+\s*/, '').replace(/^[\d.]+\s*/, '') || `Section ${i + 1}`,
       content,
     });
   }
@@ -472,17 +544,18 @@ function fallbackSplit(text: string, targetChapters = 6): Array<{ title: string;
   return results;
 }
 
-/**
- * Build analysis text for AI - includes chapter titles + samples from each chapter
- */
+// =========================================================
+// AI ANALYSIS TEXT BUILDER
+// =========================================================
+
 function buildAnalysisText(fullText: string, chapters: Array<{ title: string; content: string }>): string {
   const parts: string[] = [];
   parts.push(`Document with ${chapters.length} detected chapters:\n`);
   
-  // Budget: ~120K chars total for analysis, distributed across chapters
+  // Budget: ~100K chars total, distributed across chapters
   const perChapterBudget = Math.min(
-    Math.floor(120000 / chapters.length),
-    20000
+    Math.floor(100000 / chapters.length),
+    15000
   );
 
   for (let i = 0; i < chapters.length; i++) {
@@ -498,8 +571,15 @@ function buildAnalysisText(fullText: string, chapters: Array<{ title: string; co
   return parts.join('\n');
 }
 
-function buildEnrichedChapter(chapterMeta: any, rawContent: string): string {
+// =========================================================
+// CHAPTER ENRICHMENT
+// =========================================================
+
+function buildEnrichedChapter(chapterTitle: string, chapterMeta: any, rawContent: string): string {
   const parts: string[] = [];
+
+  // Add chapter title as main heading
+  parts.push(`# ${chapterTitle}\n`);
 
   if (chapterMeta.learning_objectives?.length) {
     parts.push(`## Learning Objectives\n`);
@@ -517,13 +597,18 @@ function buildEnrichedChapter(chapterMeta: any, rawContent: string): string {
   let cleanedContent = rawContent || chapterMeta.summary || 'Content from uploaded document.';
   cleanedContent = stripOrphanFigureRefs(cleanedContent);
 
-  parts.push(`## Content\n`);
+  parts.push(`---\n`);
   parts.push(cleanedContent);
   parts.push('');
 
   if (chapterMeta.terminology?.length) {
+    parts.push(`---\n`);
     parts.push(`## Key Terms\n`);
-    chapterMeta.terminology.forEach((t: any) => parts.push(`- **${t.term}**: ${t.definition}`));
+    chapterMeta.terminology.forEach((t: any) => {
+      if (t && t.term) {
+        parts.push(`- **${t.term}**: ${t.definition || 'See chapter content.'}`);
+      }
+    });
     parts.push('');
   }
 
@@ -535,11 +620,8 @@ function buildEnrichedChapter(chapterMeta: any, rawContent: string): string {
   return parts.join('\n');
 }
 
-/**
- * Strip or annotate orphan figure/table references since PDF text extraction loses images.
- */
 function stripOrphanFigureRefs(text: string): string {
-  // Replace standalone figure/table caption lines like "Figure 1.1: Some Caption"
+  // Replace standalone figure/table caption lines
   text = text.replace(
     /(?:^|\n)\s*(?:Figure|Fig\.?|Table|Exhibit)\s+[\d.]+[.:]\s*[^\n]{0,120}(?:\n|$)/gi,
     (match) => {
@@ -548,7 +630,7 @@ function stripOrphanFigureRefs(text: string): string {
     }
   );
 
-  // Replace inline references like "as shown in Figure 3.2" or "(see Table 2.1)"
+  // Replace inline references
   text = text.replace(
     /(?:as\s+(?:shown|illustrated|depicted|seen)\s+in\s+)?(?:\(?\s*(?:see\s+)?(?:Figure|Fig\.?|Table|Exhibit)\s+[\d.]+\s*\)?)/gi,
     (match) => `*[${match.trim()} — original document]*`
