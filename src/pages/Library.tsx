@@ -496,9 +496,13 @@ export default function Library() {
       result = result.filter(item => item.books.category === filterCategory);
     }
 
-    // Status filter - "reading" = any book not completed (matches stats query)
+    // Status filter - "reading" = opened but not completed; "completed" = 100%+
     if (filterStatus === "reading") {
-      result = result.filter(i => (i.progress_percent || 0) > 0 && (i.progress_percent || 0) < 100);
+      result = result.filter(i => {
+        const progress = i.progress_percent || 0;
+        const hasStarted = progress > 0 || (i.last_read_chapter != null && i.last_read_chapter >= 1);
+        return hasStarted && progress < 100;
+      });
     } else if (filterStatus === "completed") {
       result = result.filter(i => (i.progress_percent || 0) >= 100);
     }
