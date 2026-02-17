@@ -274,12 +274,13 @@ export function useLibraryData({
   useEffect(() => {
     if (!userId) return;
     
-    // Don't wait for initCompleteRef - hydrate as soon as we have userId
+    // When statusFilter changes, clear items immediately to avoid stale data flash
+    if (statusFilter !== 'all') {
+      setItems([]);
+    }
+    setLoadState('skeleton');
+    
     const hydrateData = async () => {
-      if (!hasCachedData.current) {
-        setLoadState('skeleton');
-      }
-      
       await Promise.all([
         fetchItems(0, true),
         fetchStats(),
@@ -291,7 +292,6 @@ export function useLibraryData({
       }
     };
     
-    // Start hydration immediately - no delay
     hydrateData();
   }, [userId, fetchItems, fetchStats]);
   
