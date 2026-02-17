@@ -37,10 +37,8 @@ import { markFirstContent, markInteractive } from "@/lib/contract5";
 
 const CATEGORIES = [
   "all",
-  "theology",
-  "prophecy",
-  "science",
   "technology",
+  "science",
   "business",
   "finance",
   "economics",
@@ -48,8 +46,6 @@ const CATEGORIES = [
   "law",
   "governance",
   "history",
-  "african_studies",
-  "culture",
   "philosophy",
   "psychology",
   "health",
@@ -316,7 +312,9 @@ export default function Explore() {
   // Filter and sort books
   const filteredBooks = useMemo(() => {
     let result = books.filter((book) => {
-      const matchesCategory = selectedCategory === "all" || book.category === selectedCategory;
+      const matchesCategory = selectedCategory === "all" || 
+        book.category.toLowerCase().replace(/\s+/g, '_') === selectedCategory.toLowerCase().replace(/\s+/g, '_') ||
+        book.category.toLowerCase() === selectedCategory.toLowerCase();
       const matchesSearch = book.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
         book.description?.toLowerCase().includes(searchQuery.toLowerCase());
       return matchesCategory && matchesSearch;

@@ -60,7 +60,7 @@ export const SUBSCRIPTION_TIERS = {
     }
   },
   prophet_tier: {
-    name: 'Prophet Tier',
+    name: 'Institutional',
     price_id: 'price_1SdFezJYFIBeCvefURsOgX3t',
     product_id: 'prod_TaQWA7MSUntiMy',
     monthlyPrice: 49,

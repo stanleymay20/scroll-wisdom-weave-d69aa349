@@ -59,10 +59,10 @@ export function Navbar() {
           </Link>
 
           <div className="hidden md:flex items-center gap-6 lg:gap-8">
+            <Link to="/explore" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Explore</Link>
             <Link to="/library" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.library')}</Link>
-            <Link to="/upload" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Upload</Link>
             <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
-            <Link to="/certificates" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Certificates</Link>
+            <Link to="/upload" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Upload</Link>
             <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</Link>
           </div>
 
@@ -131,20 +131,20 @@ export function Navbar() {
             className="md:hidden border-t border-border/50 bg-background/95 backdrop-blur-xl"
           >
             <div className="container mx-auto px-4 py-4 space-y-1">
+              <Link to="/explore" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
+                Explore
+              </Link>
               <Link to="/library" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.library')}
-              </Link>
-              <Link to="/upload" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                Upload
               </Link>
               <Link to="/generate" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                 {t('nav.generate')}
               </Link>
-              <Link to="/certificates" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                Certificates
+              <Link to="/upload" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
+                Upload
               </Link>
               <Link to="/pricing" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                {t('nav.library') === 'Library' ? 'Pricing' : 'Pricing'}
+                Pricing
               </Link>
               
               <div className="border-t border-border/50 pt-3 mt-3">

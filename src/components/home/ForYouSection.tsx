@@ -18,6 +18,8 @@ const CATEGORIES = [
   "Non Fiction",
   "History",
   "Governance",
+  "Philosophy",
+  "Medicine",
 ];
 
 // Map display labels to potential DB values (handles both "Non Fiction" and "non_fiction")
