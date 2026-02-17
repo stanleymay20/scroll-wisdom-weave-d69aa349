@@ -949,13 +949,6 @@ export default function BookDetail() {
                           <span className="block text-xs text-muted-foreground">{t('book.textIllustrations')}</span>
                         </Label>
                       </div>
-                      <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors">
-                        <RadioGroupItem value="comic" id="bt-comic" />
-                        <Label htmlFor="bt-comic" className="cursor-pointer flex-1">
-                          <span className="text-sm font-medium">{t('book.comic')}</span>
-                          <span className="block text-xs text-muted-foreground">{t('book.panelsCaptions')}</span>
-                        </Label>
-                      </div>
                     </RadioGroup>
                   </div>
 
