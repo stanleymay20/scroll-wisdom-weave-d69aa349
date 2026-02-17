@@ -617,7 +617,7 @@ export default function Library() {
         {/* Stats Section - show skeleton while loading */}
         {isLoading ? (
           <LibraryStatsSkeleton />
-        ) : items.length > 0 && (
+        ) : stats.total > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -646,7 +646,7 @@ export default function Library() {
         )}
 
         {/* Search & Filters */}
-        {items.length > 0 && (
+        {stats.total > 0 && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -755,7 +755,7 @@ export default function Library() {
               Your library will appear when you reconnect to the internet.
             </p>
           </motion.div>
-        ) : items.length === 0 ? (
+        ) : items.length === 0 && filterStatus === 'all' && !searchQuery && filterCategory === 'all' ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -781,7 +781,7 @@ export default function Library() {
               </Button>
             </div>
           </motion.div>
-        ) : filteredItems.length === 0 ? (
+        ) : (items.length === 0 || filteredItems.length === 0) ? (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
