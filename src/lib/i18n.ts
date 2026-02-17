@@ -36,7 +36,7 @@ export const translations: Record<Language, Record<string, string>> = {
     'home.authoritySubtitle': 'Generate, publish, and study books with structured AI — from academic texts to comics and guided learning experiences.',
     'home.title1': "The World's",
     'home.title2': 'Infinite Library',
-    'home.subtitle': 'Generate unlimited books across theology, science, history, and beyond. Each with chapters of 8,000+ words, scroll-aligned accuracy, and academic rigor.',
+    'home.subtitle': 'Generate structured study guides across science, technology, business, and beyond. Each with chapters of 5,000+ words, academic citations, and mastery tracking.',
     'home.cta.generate': 'Generate a Book',
     'home.cta.explore': 'Explore Library',
     'home.launchDisclaimer': 'Institutions certify outcomes. ScrollLibrary documents learning process. Certificates are learning records, not academic credits.',
@@ -776,8 +776,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'footer.library': 'Library',
     'footer.legal': 'Legal',
     'footer.tagline': 'AI-powered digital publishing & learning platform. Generate, publish, and study books with structured AI.',
-    'footer.copyright': '© 2025 ScrollLibrary™. AI-Powered Digital Publishing Platform.',
+    'footer.copyright': '© 2026 ScrollLibrary™. AI-Powered Digital Publishing Platform.',
     'footer.quickLinks': 'Quick Links',
+    'footer.deleteAccount': 'Delete Account',
     
     // Cover Themes
     'coverTheme.classic': 'Classic',
@@ -1440,8 +1441,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'footer.library': 'Bibliothèque',
     'footer.legal': 'Légal',
     'footer.tagline': 'La première bibliothèque infinie alimentée par l\'IA au monde.',
-    'footer.copyright': '© 2025 ScrollLibrary™. Sagesse alignée sur les rouleaux pour les âges.',
+    'footer.copyright': '© 2026 ScrollLibrary™. Sagesse alignée sur les rouleaux pour les âges.',
     'footer.quickLinks': 'Liens Rapides',
+    'footer.deleteAccount': 'Supprimer le compte',
     
     // Cover Themes
     'coverTheme.classic': 'Classique',
@@ -2103,8 +2105,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'footer.library': 'Bibliothek',
     'footer.legal': 'Rechtliches',
     'footer.tagline': 'Die weltweit erste KI-gestützte unendliche Bibliothek.',
-    'footer.copyright': '© 2025 ScrollLibrary™. Schriftrollenausgerichtete Weisheit für alle Zeiten.',
+    'footer.copyright': '© 2026 ScrollLibrary™. Schriftrollenausgerichtete Weisheit für alle Zeiten.',
     'footer.quickLinks': 'Schnelllinks',
+    'footer.deleteAccount': 'Konto löschen',
     
     // Cover Themes
     'coverTheme.classic': 'Klassisch',
@@ -2766,8 +2769,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'footer.library': 'Biblioteca',
     'footer.legal': 'Legal',
     'footer.tagline': 'La primera biblioteca infinita impulsada por IA del mundo.',
-    'footer.copyright': '© 2025 ScrollLibrary™. Sabiduría alineada con pergaminos para todas las edades.',
+    'footer.copyright': '© 2026 ScrollLibrary™. Sabiduría alineada con pergaminos para todas las edades.',
     'footer.quickLinks': 'Enlaces Rápidos',
+    'footer.deleteAccount': 'Eliminar cuenta',
     
     // Cover Themes
     'coverTheme.classic': 'Clásico',
@@ -3429,8 +3433,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'footer.library': 'المكتبة',
     'footer.legal': 'قانوني',
     'footer.tagline': 'أول مكتبة لا نهائية مدعومة بالذكاء الاصطناعي في العالم.',
-    'footer.copyright': '© 2025 ScrollLibrary™. حكمة متوافقة مع المخطوطات لجميع العصور.',
+    'footer.copyright': '© 2026 ScrollLibrary™. حكمة متوافقة مع المخطوطات لجميع العصور.',
     'footer.quickLinks': 'روابط سريعة',
+    'footer.deleteAccount': 'حذف الحساب',
     
     // Cover Themes
     'coverTheme.classic': 'كلاسيكي',
@@ -4092,8 +4097,9 @@ export const translations: Record<Language, Record<string, string>> = {
     'footer.library': 'Maktaba',
     'footer.legal': 'Kisheria',
     'footer.tagline': 'Maktaba ya kwanza isiyo na kikomo inayoendeshwa na AI duniani.',
-    'footer.copyright': '© 2025 ScrollLibrary™. Hekima iliyolingana na hati za kale kwa enzi zote.',
+    'footer.copyright': '© 2026 ScrollLibrary™. Hekima iliyolingana na hati za kale kwa enzi zote.',
     'footer.quickLinks': 'Viungo vya Haraka',
+    'footer.deleteAccount': 'Futa Akaunti',
     
     // Cover Themes
     'coverTheme.classic': 'Kiasili',

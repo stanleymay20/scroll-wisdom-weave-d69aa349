@@ -14,7 +14,7 @@ export const LAUNCH_MODE = true;
 export const isLaunchModeActive = (): boolean => true;
 
 export const LAUNCH_MODE_CONFIG = {
-  freeBookLimit: 1, // 1 book per month for free tier
+  freeBookLimit: 1, // 1 book per day for free tier (daily_book_count resets each day)
   freeMaxWordCount: 4000,
   freeExportFormats: [] as const,
   showBanner: false,

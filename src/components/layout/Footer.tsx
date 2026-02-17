@@ -97,7 +97,7 @@ export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
               </li>
               <li>
                 <Link to="/delete-account" className="text-muted-foreground hover:text-foreground transition-colors">
-                  Delete Account
+                  {t('footer.deleteAccount') || 'Delete Account'}
                 </Link>
               </li>
             </ul>
