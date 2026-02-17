@@ -7,7 +7,7 @@ import { User } from '@supabase/supabase-js';
 interface DailyLimitInfo {
   dailyBookCount: number;
   lastBookDate: string | null;
-  canGenerateToday: boolean;
+  canGenerateToday: boolean; // kept for API compat — now means "can generate this month"
 }
 
 interface SubscriptionContextType {
@@ -52,11 +52,12 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         .maybeSingle();
 
       if (profile) {
-        const today = new Date().toISOString().split('T')[0];
+        const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
         const lastDate = profile.last_book_date;
+        const lastMonth = lastDate ? lastDate.slice(0, 7) : null;
         
-        // Reset count if it's a new day
-        const count = lastDate === today ? (profile.daily_book_count || 0) : 0;
+        // Reset count if it's a new month
+        const count = lastMonth === currentMonth ? (profile.daily_book_count || 0) : 0;
         const canGenerate = count < LAUNCH_MODE_CONFIG.freeBookLimit;
 
         setDailyLimitInfo({
@@ -122,12 +123,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         supabase.functions.invoke('check-subscription'),
       ]);
 
-      // Process profile data (daily limits + plan)
+      // Process profile data (monthly limits + plan)
       if (profileResult.data) {
         const profile = profileResult.data;
-        const today = new Date().toISOString().split('T')[0];
+        const currentMonth = new Date().toISOString().slice(0, 7);
         const lastDate = profile.last_book_date;
-        const count = lastDate === today ? (profile.daily_book_count || 0) : 0;
+        const lastMonth = lastDate ? lastDate.slice(0, 7) : null;
+        const count = lastMonth === currentMonth ? (profile.daily_book_count || 0) : 0;
 
         setDailyLimitInfo({
           dailyBookCount: count,
@@ -187,7 +189,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     if (!user) return;
     
     const today = new Date().toISOString().split('T')[0];
-    const newCount = dailyLimitInfo.lastBookDate === today 
+    const currentMonth = today.slice(0, 7);
+    const lastMonth = dailyLimitInfo.lastBookDate ? dailyLimitInfo.lastBookDate.slice(0, 7) : null;
+    const newCount = lastMonth === currentMonth 
       ? dailyLimitInfo.dailyBookCount + 1 
       : 1;
 

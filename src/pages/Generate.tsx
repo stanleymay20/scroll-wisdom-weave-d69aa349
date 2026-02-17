@@ -261,7 +261,7 @@ export default function Generate() {
     if (!trialActive && !entitlements.isPaid && isLaunchModeActive() && tier === 'free' && !dailyLimitInfo.canGenerateToday) {
       toast({
         title: t('generate.dailyLimitReached'),
-        description: `${t('generate.dailyLimitDesc')} (${LAUNCH_MODE_CONFIG.freeBookLimit} book/day)`,
+        description: `${t('generate.dailyLimitDesc')} (${LAUNCH_MODE_CONFIG.freeBookLimit} book/month)`,
         variant: "destructive",
       });
       navigate("/pricing");
