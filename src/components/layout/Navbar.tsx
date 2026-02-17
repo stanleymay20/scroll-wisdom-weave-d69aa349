@@ -121,7 +121,7 @@ export function Navbar() {
                 </DropdownMenuContent>
               </DropdownMenu>
             ) : (
-              <Button variant="gold-outline" size="sm" onClick={() => navigate('/auth')}>
+              <Button size="sm" onClick={() => navigate('/auth')}>
                 <User className="h-4 w-4 mr-1.5" />{t('nav.signin')}
               </Button>
             )}
@@ -182,7 +182,7 @@ export function Navbar() {
                     </Button>
                   </>
                 ) : (
-                  <Button variant="gold" className="w-full" onClick={() => { setIsMenuOpen(false); navigate('/auth'); }}>
+                  <Button className="w-full" onClick={() => { setIsMenuOpen(false); navigate('/auth'); }}>
                     <User className="h-4 w-4 mr-2" />
                     {t('nav.signin')}
                   </Button>

@@ -14,130 +14,124 @@
 }
 @layer base {
   :root {
-    /* Default: Light theme with white background */
+    /* Default: Light theme — Academic Blue */
     --background: 0 0% 100%;
-    --foreground: 222 47% 11%;
+    --foreground: 215 25% 15%;
 
-    --card: 45 25% 95%;
-    --card-foreground: 222 47% 11%;
+    --card: 210 30% 97%;
+    --card-foreground: 215 25% 15%;
 
-    --popover: 45 25% 98%;
-    --popover-foreground: 222 47% 11%;
+    --popover: 210 30% 98%;
+    --popover-foreground: 215 25% 15%;
 
-    --primary: 43 74% 45%;
-    --primary-foreground: 45 30% 98%;
+    --primary: 215 65% 50%;
+    --primary-foreground: 0 0% 100%;
 
-    --secondary: 40 20% 90%;
-    --secondary-foreground: 222 47% 11%;
+    --secondary: 210 20% 93%;
+    --secondary-foreground: 215 25% 15%;
 
-    --muted: 45 15% 90%;
-    --muted-foreground: 222 20% 45%;
+    --muted: 210 15% 93%;
+    --muted-foreground: 215 15% 45%;
 
-    --accent: 35 70% 40%;
-    --accent-foreground: 45 30% 98%;
+    --accent: 215 55% 42%;
+    --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 45 30% 98%;
+    --destructive-foreground: 0 0% 100%;
 
-    --border: 45 15% 85%;
-    --input: 45 15% 85%;
-    --ring: 43 74% 45%;
+    --border: 210 15% 88%;
+    --input: 210 15% 88%;
+    --ring: 215 65% 50%;
 
     --radius: 0.75rem;
 
-    /* Custom ScrollLibrary tokens - warm palette for light mode */
-    --scroll-gold: 43 74% 45%;
-    --scroll-gold-light: 48 80% 55%;
-    --scroll-gold-dark: 38 65% 35%;
-    --scroll-indigo: 45 20% 94%;
-    --scroll-indigo-deep: 45 25% 92%;
-    --scroll-cream: 222 47% 11%;
-    --scroll-cream-dark: 222 30% 25%;
-    --scroll-bronze: 25 55% 40%;
+    /* Custom ScrollLibrary tokens — blue palette */
+    --scroll-gold: 215 65% 50%;
+    --scroll-gold-light: 215 70% 60%;
+    --scroll-gold-dark: 215 60% 40%;
+    --scroll-indigo: 210 25% 96%;
+    --scroll-indigo-deep: 210 30% 94%;
+    --scroll-cream: 215 25% 15%;
+    --scroll-cream-dark: 215 20% 25%;
+    --scroll-bronze: 215 45% 35%;
 
-    /* Gradients - light mode */
-    --gradient-gold: linear-gradient(135deg, hsl(43 74% 45%), hsl(35 70% 40%));
-    --gradient-hero: linear-gradient(180deg, hsl(45 30% 96%) 0%, hsl(45 25% 92%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(45 25% 96%) 0%, hsl(45 20% 92%) 100%);
-    --gradient-glow: radial-gradient(ellipse at center, hsl(43 74% 45% / 0.12) 0%, transparent 70%);
+    /* Gradients — blue */
+    --gradient-gold: linear-gradient(135deg, hsl(215 65% 50%), hsl(215 55% 42%));
+    --gradient-hero: linear-gradient(180deg, hsl(210 30% 97%) 0%, hsl(210 25% 94%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(210 30% 97%) 0%, hsl(210 25% 94%) 100%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(215 65% 50% / 0.12) 0%, transparent 70%);
 
-    /* Shadows - light mode */
-    --shadow-gold: 0 0 40px hsl(43 74% 45% / 0.2);
-    --shadow-card: 0 10px 40px -10px hsl(222 20% 70% / 0.25);
-    --shadow-hover: 0 20px 60px -15px hsl(43 74% 45% / 0.25);
+    /* Shadows */
+    --shadow-gold: 0 0 40px hsl(215 65% 50% / 0.2);
+    --shadow-card: 0 10px 40px -10px hsl(215 20% 70% / 0.25);
+    --shadow-hover: 0 20px 60px -15px hsl(215 65% 50% / 0.25);
 
-    /* Sidebar - light mode */
-    --sidebar-background: 45 25% 95%;
-    --sidebar-foreground: 222 47% 11%;
-    --sidebar-primary: 43 74% 45%;
-    --sidebar-primary-foreground: 45 30% 98%;
-    --sidebar-accent: 45 15% 90%;
-    --sidebar-accent-foreground: 222 47% 11%;
-    --sidebar-border: 45 15% 85%;
-    --sidebar-ring: 43 74% 45%;
+    /* Sidebar */
+    --sidebar-background: 210 25% 96%;
+    --sidebar-foreground: 215 25% 15%;
+    --sidebar-primary: 215 65% 50%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 210 15% 93%;
+    --sidebar-accent-foreground: 215 25% 15%;
+    --sidebar-border: 210 15% 88%;
+    --sidebar-ring: 215 65% 50%;
   }
 
   .dark {
-    --background: 30 25% 5%;
-    --foreground: 40 35% 92%;
+    --background: 215 25% 7%;
+    --foreground: 210 20% 92%;
 
-    --card: 28 30% 9%;
-    --card-foreground: 40 35% 92%;
+    --card: 215 25% 10%;
+    --card-foreground: 210 20% 92%;
 
-    --popover: 28 30% 7%;
-    --popover-foreground: 40 35% 92%;
+    --popover: 215 25% 8%;
+    --popover-foreground: 210 20% 92%;
 
-    /* Warm amber/gold primary from logo */
-    --primary: 38 90% 50%;
-    --primary-foreground: 30 25% 5%;
+    --primary: 215 70% 55%;
+    --primary-foreground: 0 0% 100%;
 
-    /* Warm cream secondary */
-    --secondary: 35 30% 18%;
-    --secondary-foreground: 40 35% 92%;
+    --secondary: 215 20% 18%;
+    --secondary-foreground: 210 20% 92%;
 
-    --muted: 30 20% 14%;
-    --muted-foreground: 35 15% 55%;
+    --muted: 215 15% 14%;
+    --muted-foreground: 210 10% 55%;
 
-    --accent: 28 80% 45%;
-    --accent-foreground: 40 35% 92%;
+    --accent: 215 60% 48%;
+    --accent-foreground: 210 20% 92%;
 
     --destructive: 0 72% 51%;
-    --destructive-foreground: 40 35% 92%;
+    --destructive-foreground: 210 20% 92%;
 
-    --border: 30 20% 16%;
-    --input: 30 20% 16%;
-    --ring: 38 90% 50%;
+    --border: 215 15% 16%;
+    --input: 215 15% 16%;
+    --ring: 215 70% 55%;
 
     --radius: 0.75rem;
 
-    /* Custom ScrollLibrary tokens - warm amber palette */
-    --scroll-gold: 38 90% 50%;
-    --scroll-gold-light: 42 95% 65%;
-    --scroll-gold-dark: 32 80% 38%;
-    --scroll-indigo: 30 25% 10%;
-    --scroll-indigo-deep: 30 25% 5%;
-    --scroll-cream: 40 35% 92%;
-    --scroll-cream-dark: 38 25% 80%;
-    --scroll-bronze: 25 65% 35%;
+    --scroll-gold: 215 70% 55%;
+    --scroll-gold-light: 215 75% 65%;
+    --scroll-gold-dark: 215 60% 40%;
+    --scroll-indigo: 215 25% 10%;
+    --scroll-indigo-deep: 215 25% 7%;
+    --scroll-cream: 210 20% 92%;
+    --scroll-cream-dark: 210 15% 80%;
+    --scroll-bronze: 215 45% 35%;
 
-    /* Gradients - warm amber glow */
-    --gradient-gold: linear-gradient(135deg, hsl(38 90% 50%), hsl(28 80% 45%));
-    --gradient-hero: linear-gradient(180deg, hsl(30 25% 7%) 0%, hsl(25 20% 4%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(28 30% 11%) 0%, hsl(28 30% 7%) 100%);
-    --gradient-glow: radial-gradient(ellipse at center, hsl(38 90% 50% / 0.18) 0%, transparent 70%);
+    --gradient-gold: linear-gradient(135deg, hsl(215 70% 55%), hsl(215 60% 48%));
+    --gradient-hero: linear-gradient(180deg, hsl(215 25% 8%) 0%, hsl(215 20% 5%) 100%);
+    --gradient-card: linear-gradient(145deg, hsl(215 25% 12%) 0%, hsl(215 25% 8%) 100%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(215 70% 55% / 0.18) 0%, transparent 70%);
 
-    /* Shadows - warm amber glow */
-    --shadow-gold: 0 0 50px hsl(38 90% 50% / 0.25);
-    --shadow-card: 0 10px 40px -10px hsl(25 30% 2% / 0.6);
-    --shadow-hover: 0 20px 60px -15px hsl(38 90% 50% / 0.3);
+    --shadow-gold: 0 0 50px hsl(215 70% 55% / 0.25);
+    --shadow-card: 0 10px 40px -10px hsl(215 20% 3% / 0.6);
+    --shadow-hover: 0 20px 60px -15px hsl(215 70% 55% / 0.3);
 
-    /* Sidebar */
-    --sidebar-background: 30 25% 7%;
-    --sidebar-foreground: 40 35% 92%;
-    --sidebar-primary: 38 90% 50%;
-    --sidebar-primary-foreground: 30 25% 5%;
-    --sidebar-accent: 30 20% 14%;
-    --sidebar-accent-foreground: 40 35% 92%;
+    --sidebar-background: 215 25% 8%;
+    --sidebar-foreground: 210 20% 92%;
+    --sidebar-primary: 215 70% 55%;
+    --sidebar-primary-foreground: 0 0% 100%;
+    --sidebar-accent: 215 15% 14%;
+    --sidebar-accent-foreground: 210 20% 92%;
     --sidebar-border: 30 20% 16%;
     --sidebar-ring: 38 90% 50%;
   }
