@@ -44,6 +44,7 @@ const PWATest = lazy(() => import("./pages/PWATest"));
 const Diagnostics = lazy(() => import("./pages/Diagnostics"));
 const CertificateVerify = lazy(() => import("./pages/CertificateVerify"));
 const CertificateStatus = lazy(() => import("./pages/CertificateStatus"));
+const Certificates = lazy(() => import("./pages/Certificates"));
 const OrganizationVerify = lazy(() => import("./pages/OrganizationVerify"));
 const VerificationDocs = lazy(() => import("./pages/VerificationDocs"));
 const TrustWhitepaper = lazy(() => import("./pages/TrustWhitepaper"));
@@ -141,6 +142,7 @@ const App = () => (
                   <Route path="/account/delete" element={<AccountDelete />} />
                   <Route path="/delete-account" element={<AccountDelete />} />
                   <Route path="/certificate-test" element={<CertificateTest />} />
+                  <Route path="/certificates" element={<Certificates />} />
                   <Route path="/launch-checklist" element={<LaunchChecklist />} />
                   <Route path="/docs/institutional-readiness" element={<InstitutionalReadiness />} />
                   <Route path="/health-check" element={<HealthCheck />} />
