@@ -422,7 +422,8 @@ export default function Library() {
     removeItem
   } = useLibraryData({
     isMobile,
-    userId: user?.id
+    userId: user?.id,
+    statusFilter: filterStatus
   });
 
   // Auth check - deferred to not block skeleton
@@ -496,12 +497,7 @@ export default function Library() {
       result = result.filter(item => item.books.category === filterCategory);
     }
 
-    // Status filter - "reading" = progress > 0 and < 100 (synced with In Progress stat)
-    if (filterStatus === "reading") {
-      result = result.filter(i => (i.progress_percent || 0) > 0 && (i.progress_percent || 0) < 100);
-    } else if (filterStatus === "completed") {
-      result = result.filter(i => (i.progress_percent || 0) >= 100);
-    }
+    // Status filter is now applied server-side via useLibraryData statusFilter param
 
     // Sorting
     result.sort((a, b) => {
