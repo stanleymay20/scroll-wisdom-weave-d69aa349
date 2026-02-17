@@ -338,14 +338,12 @@ function processMarkdownContent(text: string): {
   
   console.log(`[EXPORT] Found ${headings.length} headings`);
   
-  // Strip remaining markdown (but NOT placeholders and NOT headings - already extracted)
+  // Strip markdown EXCEPT bold/italic (preserve ** and * for styled rendering)
   const stripped = processedText
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
     .replace(/`[^`]+`/g, (match) => match.slice(1, -1))
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Regular links (not images)
     .replace(/^\s*[-*]\s+/gm, "• ")
-    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/^\s*(\d+)\.\s+/gm, "$1. ")  // Preserve ordered list numbers
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   
@@ -372,15 +370,105 @@ function stripMarkdown(text: string): string {
   if (!text) return "";
   return text
     .replace(/^#{1,6}\s+/gm, "")
-    .replace(/\*\*([^*]+)\*\*/g, "$1")
-    .replace(/\*([^*]+)\*/g, "$1")
-    .replace(/`([^`]+)`/g, "$1")  // Keep inline code content (was deleting it!)
+    .replace(/`([^`]+)`/g, "$1")  // Keep inline code content
     .replace(/```[\s\S]*?```/g, "")
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1")
     .replace(/^\s*[-*]\s+/gm, "• ")
-    .replace(/^\s*\d+\.\s+/gm, "")
+    .replace(/^\s*(\d+)\.\s+/gm, "$1. ")  // Preserve ordered list numbers
     .replace(/\n{3,}/g, "\n\n")
     .trim();
+}
+
+// Parse a paragraph into styled runs for PDF rendering (bold, italic, bold+italic, normal)
+interface StyledRun {
+  text: string;
+  bold: boolean;
+  italic: boolean;
+}
+
+function parseStyledRuns(text: string): StyledRun[] {
+  const runs: StyledRun[] = [];
+  // Match ***bold+italic***, **bold**, *italic*, and plain text
+  const regex = /(\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|\*([^*]+)\*|([^*]+))/g;
+  let match;
+  while ((match = regex.exec(text)) !== null) {
+    if (match[2]) {
+      runs.push({ text: match[2], bold: true, italic: true });
+    } else if (match[3]) {
+      runs.push({ text: match[3], bold: true, italic: false });
+    } else if (match[4]) {
+      runs.push({ text: match[4], bold: false, italic: true });
+    } else if (match[5]) {
+      runs.push({ text: match[5], bold: false, italic: false });
+    }
+  }
+  return runs.length > 0 ? runs : [{ text, bold: false, italic: false }];
+}
+
+// Draw a styled paragraph in PDF with inline bold/italic support
+function drawStyledParagraph(
+  page: any,
+  text: string,
+  x: number,
+  y: number,
+  maxWidth: number,
+  fontSize: number,
+  fonts: { regular: any; bold: any; italic: any; boldItalic: any },
+  color: any
+): number {
+  const runs = parseStyledRuns(sanitizeForPDF(text));
+  
+  // Word-wrap with style awareness
+  let currentX = x;
+  let currentY = y;
+  
+  for (const run of runs) {
+    const font = run.bold && run.italic ? fonts.boldItalic 
+               : run.bold ? fonts.bold 
+               : run.italic ? fonts.italic 
+               : fonts.regular;
+    
+    const words = run.text.split(/\s+/);
+    for (let i = 0; i < words.length; i++) {
+      const word = words[i];
+      if (!word) continue;
+      const wordWithSpace = (currentX > x ? ' ' : '') + word;
+      const wordWidth = font.widthOfTextAtSize(wordWithSpace, fontSize);
+      
+      if (currentX + wordWidth > x + maxWidth && currentX > x) {
+        // New line
+        currentX = x;
+        currentY -= fontSize + 4;
+      }
+      
+      const drawWord = currentX > x ? ' ' + word : word;
+      page.drawText(drawWord, {
+        x: currentX,
+        y: currentY,
+        size: fontSize,
+        font,
+        color,
+      });
+      currentX += font.widthOfTextAtSize(drawWord, fontSize);
+    }
+  }
+  
+  return currentY - (fontSize + 4); // Return next Y position
+}
+
+// Convert markdown text to WordprocessingML runs with bold/italic
+function markdownToDocxRuns(text: string): string {
+  const runs = parseStyledRuns(text);
+  return runs.map(run => {
+    let rPr = '';
+    if (run.bold || run.italic) {
+      rPr = '<w:rPr>';
+      if (run.bold) rPr += '<w:b/>';
+      if (run.italic) rPr += '<w:i/>';
+      rPr += '</w:rPr>';
+    }
+    return `<w:r>${rPr}<w:t xml:space="preserve">${escapeXml(run.text)}</w:t></w:r>`;
+  }).join('');
 }
 
 /**
@@ -883,8 +971,12 @@ async function generatePDF(
   const pdfDoc = await PDFDocument.create();
   const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
   const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+  const timesRomanItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const timesRomanBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const courier = await pdfDoc.embedFont(StandardFonts.Courier); // Monospace for code
+  
+  const bodyFonts = { regular: timesRoman, bold: timesRomanBold, italic: timesRomanItalic, boldItalic: timesRomanBoldItalic };
   
   const pageWidth = 612;
   const pageHeight = 792;
@@ -1716,23 +1808,37 @@ async function generatePDF(
         }
       }
       
-      const lines = wrapText(paragraph.trim(), timesRoman, 11, textWidth);
-      for (const line of lines) {
+      // Check if paragraph has bold/italic markers
+      const hasFormatting = /\*/.test(paragraph);
+      
+      if (hasFormatting) {
+        // Use styled paragraph renderer for inline bold/italic
         if (y < margin + 30) {
           page = pdfDoc.addPage([pageWidth, pageHeight]);
           pageNumber++;
           addPageNumber(page, pageNumber);
           y = pageHeight - margin - 30;
         }
-        
-        page.drawText(line, {
-          x: margin,
-          y,
-          size: 11,
-          font: timesRoman,
-          color: rgb(0.1, 0.1, 0.1),
-        });
-        y -= 16;
+        y = drawStyledParagraph(page, paragraph.trim(), margin, y, textWidth, 11, bodyFonts, rgb(0.1, 0.1, 0.1));
+      } else {
+        const lines = wrapText(paragraph.trim(), timesRoman, 11, textWidth);
+        for (const line of lines) {
+          if (y < margin + 30) {
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            addPageNumber(page, pageNumber);
+            y = pageHeight - margin - 30;
+          }
+          
+          page.drawText(line, {
+            x: margin,
+            y,
+            size: 11,
+            font: timesRoman,
+            color: rgb(0.1, 0.1, 0.1),
+          });
+          y -= 16;
+        }
       }
       y -= 8;
     }
@@ -2528,7 +2634,38 @@ async function generateDOCX(
       return `[DOCX_TABLE_${tableMatches.length - 1}]`;
     });
     
-    // Use stripMarkdown but preserve heading placeholders
+    // Extract PROPER markdown tables (pipe format) for DOCX
+    textContent = textContent.replace(/(?:(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/g,
+      (_match: string, boldTitle: string, plainTitle: string, tableContent: string) => {
+        const tableName = (boldTitle || plainTitle || '').trim();
+        const lines = tableContent.trim().split('\n');
+        if (lines.length < 2) return _match;
+        
+        const headerLine = lines[0];
+        const headers = headerLine.split('|')
+          .filter((cell: string) => cell.trim())
+          .map((cell: string) => cell.trim());
+        
+        const rows: string[][] = [];
+        for (let i = 2; i < lines.length; i++) {
+          const rowLine = lines[i];
+          if (!rowLine.includes('|')) continue;
+          const cells = rowLine.split('|')
+            .filter((cell: string, idx: number, arr: string[]) => idx > 0 && idx < arr.length - 1 || cell.trim())
+            .map((cell: string) => cell.trim())
+            .filter((cell: string) => cell);
+          if (cells.length > 0) rows.push(cells);
+        }
+        
+        if (headers.length > 0 && rows.length > 0) {
+          tableMatches.push({ original: _match, headers, rows });
+          return `[DOCX_TABLE_${tableMatches.length - 1}]`;
+        }
+        return _match;
+      }
+    );
+    
+    // Use stripMarkdown but preserve heading placeholders and bold/italic markers
     const paragraphs = stripMarkdown(textContent).split(/\n\n+/);
     
     processedChapters.push({ 
@@ -2863,7 +3000,13 @@ ${block.title ? `<w:r><w:t xml:space="preserve"> - ${escapeXml(block.title)}</w:
         // Image placeholder without corresponding image ref - skip silently
         imageIdx++;
       } else if (!trimmed.includes('[DOCX_TABLE_') && !trimmed.includes('[DOCX_STRUCTURED_CODE_') && !trimmed.includes('[DOCX_CODE_')) {
-        documentContent += `<w:p><w:r><w:t>${escapeXml(trimmed)}</w:t></w:r></w:p>`;
+        // Use styled runs for bold/italic support
+        const hasFormatting = /\*/.test(trimmed);
+        if (hasFormatting) {
+          documentContent += `<w:p>${markdownToDocxRuns(trimmed)}</w:p>`;
+        } else {
+          documentContent += `<w:p><w:r><w:t>${escapeXml(trimmed)}</w:t></w:r></w:p>`;
+        }
       }
     }
     documentContent += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
