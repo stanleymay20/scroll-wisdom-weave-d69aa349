@@ -52,7 +52,7 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
           .eq("user_id", user.id)
           .gt("progress_percent", 0)
           .lt("progress_percent", 100)
-          .order("created_at", { ascending: false })
+          .order("updated_at", { ascending: false })
           .limit(1)
           .maybeSingle();
 

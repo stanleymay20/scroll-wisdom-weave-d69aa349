@@ -219,14 +219,16 @@ export default function Reader() {
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Save reading progress to database with debounce (optimized)
-  // Only saves when progress changes by ≥10% OR on explicit save request
+  // Saves when progress changes by ≥5% OR on explicit save, OR on first chapter open
   const saveProgress = useCallback(async (chapterNum: number, progressPercent: number, showToast = false) => {
     if (!userId || !bookId) return;
     
     const roundedProgress = Math.round(progressPercent);
     
-    // Skip if progress hasn't changed significantly (< 10%) unless forcing save
-    if (!showToast && Math.abs(roundedProgress - lastSavedProgress.current) < 10) return;
+    // Always save if current saved progress is 0 (first read), or on explicit toast save
+    const isFirstSave = lastSavedProgress.current === 0 && roundedProgress > 0;
+    // Skip if progress hasn't changed significantly (< 5%) unless forcing save or first save
+    if (!showToast && !isFirstSave && Math.abs(roundedProgress - lastSavedProgress.current) < 5) return;
     
     try {
       // Use update with filter (more reliable than upsert for existing entries)
@@ -282,6 +284,17 @@ export default function Reader() {
   useEffect(() => {
     setReadingProgress(0);
   }, [currentChapter]);
+
+  // Save progress immediately on chapter open (ensures progress > 0 for "in progress" tracking)
+  useEffect(() => {
+    if (userId && bookId && book?.total_chapters && currentChapter > 0) {
+      const completedChapters = currentChapter - 1;
+      const overallProgress = ((completedChapters) / book.total_chapters) * 100;
+      // Minimum 1% so the book shows as "in progress" even on chapter 1
+      const minProgress = Math.max(overallProgress, 1);
+      saveProgress(currentChapter, minProgress, false);
+    }
+  }, [userId, bookId, currentChapter, book?.total_chapters]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // Save progress when chapter changes or user leaves - with toast
   useEffect(() => {
