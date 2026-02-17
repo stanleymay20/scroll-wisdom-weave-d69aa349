@@ -33,16 +33,17 @@ Deno.serve(async (req) => {
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
     
-    // Auth: use getUser for reliable JWT validation
+    // Auth: use getClaims for fast JWT validation
     const userClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
     });
-    const { data: userData, error: authError } = await userClient.auth.getUser();
-    if (authError || !userData?.user) {
+    const token = authHeader.replace('Bearer ', '');
+    const { data: claimsData, error: authError } = await userClient.auth.getClaims(token);
+    if (authError || !claimsData?.claims?.sub) {
       console.error('[process-document] Auth failed:', authError?.message);
       return jsonRes({ error: 'Unauthorized' }, 401);
     }
-    const userId = userData.user.id;
+    const userId = claimsData.claims.sub as string;
 
     const body = await req.json();
     const { documentText, documentName, sourceType, category, language } = body;
