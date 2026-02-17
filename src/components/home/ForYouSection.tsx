@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { BookOpen, ArrowRight } from "lucide-react";
@@ -6,16 +6,27 @@ import { supabase } from "@/integrations/supabase/client";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
+// Categories that match what's actually in the database
 const CATEGORIES = [
   "All",
   "Technology",
-  "Finance",
   "Science",
   "Business",
+  "Finance",
   "Psychology",
   "Health",
   "Non Fiction",
+  "History",
+  "Governance",
 ];
+
+// Map display labels to potential DB values (handles both "Non Fiction" and "non_fiction")
+function categoryFilter(cat: string): string[] {
+  if (cat === "All") return [];
+  const lower = cat.toLowerCase().replace(/\s+/g, '_');
+  // Return both forms to handle inconsistent data
+  return [cat, lower, cat.toLowerCase()];
+}
 
 interface Book {
   id: string;
@@ -46,7 +57,9 @@ export function ForYouSection() {
         .limit(8);
 
       if (selectedCategory !== "All") {
-        query = query.eq("category", selectedCategory);
+        const variants = categoryFilter(selectedCategory);
+        // Use .in() to match any variant of the category name
+        query = query.in("category", variants);
       }
 
       const { data } = await query;
@@ -58,16 +71,21 @@ export function ForYouSection() {
     }
   };
 
+  // Format category for display
+  const formatCategory = (cat: string) => {
+    return cat.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+  };
+
   return (
-    <section className="py-16 bg-muted/30">
+    <section className="py-16 bg-muted/30" aria-labelledby="for-you-heading">
       <div className="container mx-auto px-4 max-w-6xl">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h2 className="text-2xl font-display font-bold text-foreground">
+            <h2 id="for-you-heading" className="text-2xl font-display font-bold text-foreground">
               For You
             </h2>
             <p className="text-sm text-muted-foreground mt-1">
-              Popular publications from the library
+              Recently published books from the library
             </p>
           </div>
           <Link
@@ -79,11 +97,13 @@ export function ForYouSection() {
         </div>
 
         {/* Category filter */}
-        <div className="flex flex-wrap gap-2 mb-8">
+        <div className="flex flex-wrap gap-2 mb-8" role="tablist" aria-label="Filter by category">
           {CATEGORIES.map((cat) => (
             <button
               key={cat}
               onClick={() => setSelectedCategory(cat)}
+              role="tab"
+              aria-selected={selectedCategory === cat}
               className={`px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
                 selectedCategory === cat
                   ? "bg-primary text-primary-foreground"
@@ -105,10 +125,11 @@ export function ForYouSection() {
         ) : books.length === 0 ? (
           <div className="text-center py-12 text-muted-foreground">
             <BookOpen className="h-10 w-10 mx-auto mb-3 opacity-40" />
-            <p>No published books found in this category.</p>
+            <p>No published books found in this category yet.</p>
+            <p className="text-xs mt-1">Books appear here once they are generated and published.</p>
           </div>
         ) : (
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-4" role="list">
             {books.map((book, i) => (
               <motion.div
                 key={book.id}
@@ -116,6 +137,7 @@ export function ForYouSection() {
                 whileInView={{ opacity: 1, y: 0 }}
                 viewport={{ once: true }}
                 transition={{ duration: 0.3, delay: i * 0.05 }}
+                role="listitem"
               >
                 <Link
                   to={`/book/${book.id}`}
@@ -125,7 +147,7 @@ export function ForYouSection() {
                     {book.cover_image_url ? (
                       <img
                         src={book.cover_image_url}
-                        alt={book.title}
+                        alt={`Cover of ${book.title}`}
                         className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
                         loading="lazy"
                       />
@@ -140,7 +162,7 @@ export function ForYouSection() {
                       {book.title}
                     </h3>
                     <Badge variant="secondary" className="text-[10px]">
-                      {book.category}
+                      {formatCategory(book.category)}
                     </Badge>
                   </div>
                 </Link>

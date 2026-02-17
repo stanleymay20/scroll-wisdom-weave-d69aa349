@@ -67,19 +67,19 @@ export function AuthorImprint({
       case "pen_name":
         return penName || "Your Pen Name";
       case "ai":
-        return "ScrollAuthorGPT";
+        return "AI-Generated";
       case "hidden":
         return "Anonymous";
       default:
-        return "ScrollAuthorGPT";
+        return "AI-Generated";
     }
   })();
 
   return (
     <div className="space-y-4 p-4 rounded-lg bg-muted/30 border border-border/50">
       <div className="flex items-center gap-2">
-        <User className="h-4 w-4 text-scroll-gold" />
-        <Label className="text-foreground font-medium">Author & Imprint</Label>
+        <User className="h-4 w-4 text-primary" />
+        <Label className="text-foreground font-medium">Author Attribution</Label>
       </div>
 
       <RadioGroup
@@ -93,7 +93,7 @@ export function AuthorImprint({
           <RadioGroupItem value="user_name" id="author-user" />
           <Label htmlFor="author-user" className="flex items-center gap-2 cursor-pointer flex-1">
             <User className="h-4 w-4 text-primary" />
-            <span>Use my profile name</span>
+            <span>Use my name</span>
           </Label>
         </div>
         
@@ -120,7 +120,7 @@ export function AuthorImprint({
             <span>Use pen name</span>
             {!canUsePenName && (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Lock className="h-3 w-3" /> Premium+
+                <Lock className="h-3 w-3" /> Premium
               </span>
             )}
           </Label>
@@ -143,7 +143,7 @@ export function AuthorImprint({
           <RadioGroupItem value="ai" id="author-ai" />
           <Label htmlFor="author-ai" className="flex items-center gap-2 cursor-pointer flex-1">
             <Bot className="h-4 w-4 text-green-500" />
-            <span>AI Author (ScrollAuthorGPT)</span>
+            <span>AI-Generated (default)</span>
           </Label>
         </div>
 
@@ -167,7 +167,7 @@ export function AuthorImprint({
           <Input
             value={publisherImprint}
             onChange={(e) => onPublisherImprintChange(e.target.value)}
-            placeholder="e.g., Scroll Publishing House"
+            placeholder="e.g., Your Publishing Imprint"
             disabled={disabled}
             className="bg-background/50"
           />
