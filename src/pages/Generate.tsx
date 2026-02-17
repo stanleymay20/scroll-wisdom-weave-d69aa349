@@ -45,8 +45,6 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { cn } from "@/lib/utils";
 
 const CATEGORIES = [
-  { value: "theology", labelKey: "categories.theology" },
-  { value: "prophecy", labelKey: "categories.prophecy" },
   { value: "science", labelKey: "categories.science" },
   { value: "technology", labelKey: "categories.technology" },
   { value: "business", labelKey: "categories.business" },
@@ -56,9 +54,9 @@ const CATEGORIES = [
   { value: "law", labelKey: "categories.law" },
   { value: "governance", labelKey: "categories.governance" },
   { value: "history", labelKey: "categories.history" },
-  { value: "african_studies", labelKey: "categories.african_studies" },
-  { value: "culture", labelKey: "categories.culture" },
   { value: "philosophy", labelKey: "categories.philosophy" },
+  { value: "psychology", labelKey: "categories.psychology" },
+  { value: "health", labelKey: "categories.health" },
   { value: "arts", labelKey: "categories.arts" },
   { value: "fiction", labelKey: "categories.fiction" },
   { value: "non_fiction", labelKey: "categories.non_fiction" },
@@ -656,7 +654,7 @@ export default function Generate() {
                       </SelectContent>
                     </Select>
                     {tier === "prophet_tier" && (
-                      <p className="text-xs text-scroll-gold">{t('generate.prophetTier')}</p>
+                      <p className="text-xs text-scroll-gold">Institutional tier — maximum word count enabled</p>
                     )}
                   </div>
                 )}
