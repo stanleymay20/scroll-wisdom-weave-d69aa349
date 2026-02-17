@@ -18,7 +18,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
  * Free (1 book/month) + Pro ($5/month unlimited)
  */
 
-const PMF_PRICE_ID = SUBSCRIPTION_TIERS.student.price_id; // Use student tier as $5 PMF tier
+const PMF_PRICE_ID = SUBSCRIPTION_TIERS.student.price_id; // Use student tier as Pro tier
 
 interface PlanConfig {
   name: string;
@@ -53,7 +53,7 @@ const plans: PlanConfig[] = [
   {
     name: "Pro",
     description: "Unlimited study guides with full features",
-    price: "$5",
+    price: `$${SUBSCRIPTION_TIERS.student.monthlyPrice}`,
     period: "/month",
     icon: Zap,
     popular: true,
