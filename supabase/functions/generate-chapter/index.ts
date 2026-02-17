@@ -1239,7 +1239,7 @@ function validatePedagogicalSchema(content: string, bookType: string): Pedagogic
   const missingSections: string[] = [];
 
   // Skip validation for non-educational book types
-  const EXEMPT_BOOK_TYPES = ['children', 'comic', 'novel', 'fiction', 'bestseller'];
+  const EXEMPT_BOOK_TYPES = ['children', 'comic', 'novel', 'fiction', 'bestseller', 'illustrated'];
   if (EXEMPT_BOOK_TYPES.includes(bookType?.toLowerCase())) {
     console.log(`[PEDAGOGICAL] Skipping validation for book type: ${bookType}`);
     return {
@@ -3122,6 +3122,129 @@ ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts - do NOT repeat ba
 
 BEGIN WRITING THE ACADEMIC/TECHNICAL CHAPTER:`;
 
+    } else if (effectiveBookType === 'illustrated' || effectiveBookType === 'children') {
+      // ===========================================
+      // ILLUSTRATED / CHILDREN'S BOOK PIPELINE
+      // Visual-first content with inline illustration markers
+      // ===========================================
+      console.log(`[GENERATE-CHAPTER] Using ILLUSTRATED pipeline for book type: ${effectiveBookType}`);
+      
+      const isChildrens = effectiveBookType === 'children';
+      
+      systemPrompt = `${SYSTEM_ROLE}
+
+${MASTER_FORMATTING_CONTRACT}
+
+===========================================
+ILLUSTRATED BOOK PIPELINE — HARD LOCK
+===========================================
+
+You are writing a ${isChildrens ? "CHILDREN'S BOOK (ages 4-10)" : "RICHLY ILLUSTRATED BOOK"} where visuals are FIRST-CLASS content, not decoration.
+
+GENERATOR IDENTITY: ${isChildrens ? 'Children\'s Author · Educator · Child Psychologist' : 'Visual Storyteller · Illustrator-Author · Instructional Designer'}
+
+===========================================
+ILLUSTRATION PLACEMENT CONTRACT (MANDATORY)
+===========================================
+
+You MUST embed exactly 3-5 illustration markers throughout the chapter at KEY MOMENTS.
+These markers tell the illustration engine WHERE to place images.
+
+MARKER FORMAT (EXACT — DO NOT DEVIATE):
+
+[FIGURE 1: A descriptive scene for the illustrator — what to draw, who is in it, what action, what setting, what mood]
+
+RULES:
+1. Place [FIGURE X] markers INLINE where the illustration should appear
+2. Each marker MUST have a detailed visual description (20-40 words minimum)
+3. Illustrations must be PEDAGOGICALLY MEANINGFUL — they teach, clarify, or emotionally anchor
+4. NO decorative filler — every image must serve the narrative or learning
+5. Space illustrations evenly through the chapter (not clustered)
+6. The text BEFORE and AFTER each figure should reference or connect to the visual
+7. Number figures sequentially: [FIGURE 1], [FIGURE 2], etc.
+
+${isChildrens ? `
+CHILDREN'S BOOK RULES:
+- Simple, short sentences (max 12 words per sentence)
+- Reading level: ages 4-10
+- Warm, encouraging, safe emotional tone
+- Characters should be relatable and friendly
+- Each page-spread should have roughly 1 illustration
+- Total word count: 800-1500 words (SHORT — this is a picture book)
+- Story structure: clear beginning, middle, end
+- Moral or lesson woven naturally (never preachy)
+- Repetition and rhythm encouraged for younger readers
+` : `
+ILLUSTRATED BOOK RULES:
+- Rich, engaging prose with vivid descriptions
+- Illustrations should enhance understanding of complex ideas
+- Use figures for: diagrams, scenes, processes, comparisons, emotional moments
+- Each illustration should have a caption-worthy concept
+- Balance text and visual storytelling
+`}
+
+===========================================
+VALIDATION (HARD FAILURE):
+===========================================
+
+Before output, verify:
+[ ] 3-5 [FIGURE X] markers present
+[ ] Figures are spaced throughout (not all at end)
+[ ] Each figure has a detailed visual description
+[ ] Text references connect to the figures
+[ ] ${isChildrens ? 'Word count under 1500 words' : 'Content is visually-minded and engaging'}
+[ ] NO figures without descriptive text
+
+If ANY check fails → REWRITE
+
+${VALIDATION_CONTRACT}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
+
+      const illustratedWordTarget = isChildrens ? 1200 : targetWords;
+      
+      chapterPrompt = `${previousChaptersContext}Write ${isChildrens ? 'a children\'s book' : 'an illustrated'} Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+ILLUSTRATION PLACEMENT (MANDATORY):
+Insert exactly ${isChildrens ? '4-5' : '3-4'} [FIGURE X: description] markers throughout the text.
+Each figure description must be 20-40 words describing the scene for an illustrator.
+
+Example marker:
+[FIGURE 1: A young girl standing at the edge of a magical forest, looking up at glowing fireflies with wonder on her face, sunset colors in the background]
+
+${isChildrens ? `
+CHILDREN'S BOOK STRUCTURE:
+1. OPENING — Introduce character and setting with warmth (include [FIGURE 1])
+2. PROBLEM/ADVENTURE — Something happens that drives the story
+3. JOURNEY — Character tries to solve/explore (include [FIGURE 2] and [FIGURE 3])
+4. RESOLUTION — Satisfying ending with lesson learned (include [FIGURE 4])
+5. CLOSING — Warm, comforting end that makes the child feel safe
+
+Keep it SHORT (800-1200 words). This is a PICTURE BOOK.
+` : `
+ILLUSTRATED BOOK STRUCTURE:
+1. OPENING HOOK with visual anchor — Start with a scene worth illustrating
+2. CORE CONTENT with embedded figures — Place [FIGURE] markers at key teaching/story moments
+3. VISUAL EXPLANATIONS — Use figures to clarify complex ideas
+4. READER ENGAGEMENT — Questions and reflections connecting to illustrations
+5. TAKEAWAYS — Key points with visual references
+`}
+
+REQUIREMENTS:
+- Approximately ${illustratedWordTarget} words
+- Use proper Markdown formatting (## headings, **bold**)
+- Include ${isChildrens ? '4-5' : '3-4'} [FIGURE X: description] markers inline
+- Every figure must serve the story/learning
+- Text must flow naturally around figure markers
+${chapterNumber > 1 ? '- CONTINUE from previous chapter — do NOT repeat introductions' : ''}
+
+BEGIN WRITING THE ILLUSTRATED CHAPTER:`;
+
     } else {
       // BESTSELLER PIPELINE - for non-technical books
       console.log("[GENERATE-CHAPTER] Using BESTSELLER pipeline (narrative, engaging)");
@@ -3344,61 +3467,38 @@ ${researchResult.references.map((ref, idx) => {
       }
     }
 
-    // ILLUSTRATED BOOK - Add context-aware illustrations
-    if (bookType === 'illustrated') {
-      console.log("[GENERATE-CHAPTER] Generating illustrations...");
-
-      const contentSummary = chapterContent.slice(0, 2000);
+    // ILLUSTRATED / CHILDREN'S BOOK - Generate inline illustrations from [FIGURE X] markers
+    if (bookType === 'illustrated' || bookType === 'children') {
+      console.log("[GENERATE-CHAPTER] Generating inline illustrations from figure markers...");
 
       try {
-        const illustrationPrompt = `Analyze this chapter and create 3 illustration ideas:
+        // Extract [FIGURE X: description] markers from generated content
+        const figureRegex = /\[FIGURE\s*(\d+)\s*:\s*([\s\S]*?)\]/gi;
+        const figures: { num: number; description: string; fullMatch: string }[] = [];
+        
+        let figMatch;
+        while ((figMatch = figureRegex.exec(finalContent)) !== null) {
+          figures.push({
+            num: parseInt(figMatch[1]),
+            description: figMatch[2].trim(),
+            fullMatch: figMatch[0],
+          });
+        }
+        
+        console.log(`[GENERATE-CHAPTER] Found ${figures.length} figure markers to illustrate`);
 
-${contentSummary}
+        if (figures.length > 0) {
+          const isChildrens = bookType === 'children';
+          const styleHint = isChildrens 
+            ? 'Children\'s book illustration style, soft warm colors, friendly characters, rounded shapes, whimsical and inviting, picture book quality.'
+            : 'Professional book illustration, educational, clear composition, warm color palette, suitable for print publication.';
 
-Chapter: "${chapterTitle}" | Category: ${category}
-
-Format:
----
-[ILLUSTRATION 1]
-**Concept:** [Topic]
-**Visual:** [2-3 sentence scene description]
----`;
-
-        const illustrationResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
-            messages: [
-              { role: "system", content: "Create illustration concepts for educational books." },
-              { role: "user", content: illustrationPrompt }
-            ],
-          }),
-        });
-
-        if (illustrationResponse.ok) {
-          const illustrationData = await illustrationResponse.json();
-          const illustrationContent = illustrationData.choices?.[0]?.message?.content || "";
-          
-          const illustrationRegex = /\[ILLUSTRATION\s*(\d+)\]\s*(?:\*\*Concept:\*\*\s*([\s\S]*?))?\*\*Visual:\*\*\s*([\s\S]*?)(?=\s*---|\s*\[ILLUSTRATION|\s*$)/gi;
-          const illustrations: { num: number; concept: string; visual: string; imageUrl?: string }[] = [];
-          
-          let illMatch;
-          while ((illMatch = illustrationRegex.exec(illustrationContent)) !== null) {
-            illustrations.push({
-              num: parseInt(illMatch[1]),
-              concept: (illMatch[2] || '').trim(),
-              visual: illMatch[3].trim(),
-            });
-          }
-
-          for (let i = 0; i < Math.min(illustrations.length, 3); i++) {
-            const ill = illustrations[i];
+          for (let i = 0; i < Math.min(figures.length, 5); i++) {
+            const fig = figures[i];
             try {
-              const imagePrompt = `Educational illustration for ${category}. ${ill.visual} Professional, educational, clear. No text.`;
+              const imagePrompt = `${fig.description}. ${styleHint} Category: ${category}. No text or words in the image.`;
+              
+              console.log(`[GENERATE-CHAPTER] Generating Figure ${fig.num}: ${fig.description.slice(0, 80)}...`);
               
               const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
                 method: "POST",
@@ -3407,7 +3507,7 @@ Format:
                   "Content-Type": "application/json",
                 },
                 body: JSON.stringify({
-                  model: "google/gemini-2.5-flash-image-preview",
+                  model: "google/gemini-3-pro-image-preview",
                   messages: [{ role: "user", content: imagePrompt }],
                   modalities: ["image", "text"],
                 }),
@@ -3416,28 +3516,39 @@ Format:
               if (imageResponse.ok) {
                 const imageData = await imageResponse.json();
                 const imageUrl = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-                if (imageUrl) ill.imageUrl = imageUrl;
+                
+                if (imageUrl) {
+                  // Replace the [FIGURE X: description] marker with the actual image
+                  const captionText = fig.description.split('.')[0] || `Figure ${fig.num}`;
+                  const imageMarkdown = `\n\n![${captionText}](${imageUrl})\n*Figure ${fig.num}: ${captionText}*\n\n`;
+                  finalContent = finalContent.replace(fig.fullMatch, imageMarkdown);
+                  console.log(`[GENERATE-CHAPTER] Figure ${fig.num} generated and inserted inline`);
+                } else {
+                  // Remove the marker if image generation failed
+                  finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
+                  console.log(`[GENERATE-CHAPTER] Figure ${fig.num}: No image returned, using placeholder`);
+                }
+              } else {
+                const errStatus = imageResponse.status;
+                await imageResponse.text(); // consume body
+                console.error(`[GENERATE-CHAPTER] Figure ${fig.num} generation failed: status ${errStatus}`);
+                finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
               }
               
-              await new Promise(r => setTimeout(r, 1000));
-            } catch (imgError) {
-              console.error("[GENERATE-CHAPTER] Illustration error:", imgError);
-            }
-          }
-
-          if (illustrations.some(ill => ill.imageUrl)) {
-            let illustrationSection = '\n\n---\n\n## Chapter Illustrations\n\n';
-            for (const ill of illustrations) {
-              if (ill.imageUrl) {
-                illustrationSection += `### ${ill.concept || `Illustration ${ill.num}`}\n\n`;
-                illustrationSection += `![${ill.concept || `Illustration`}](${ill.imageUrl})\n\n`;
+              // Delay between image generations to avoid rate limiting
+              if (i < figures.length - 1) {
+                await new Promise(r => setTimeout(r, 1500));
               }
+            } catch (imgError) {
+              console.error(`[GENERATE-CHAPTER] Figure ${fig.num} error:`, imgError);
+              finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
             }
-            finalContent += illustrationSection;
           }
+        } else {
+          console.log("[GENERATE-CHAPTER] No [FIGURE] markers found in illustrated content — skipping illustration generation");
         }
       } catch (illustrationError) {
-        console.error("[GENERATE-CHAPTER] Illustration generation failed:", illustrationError);
+        console.error("[GENERATE-CHAPTER] Illustration pipeline failed:", illustrationError);
       }
     }
 
