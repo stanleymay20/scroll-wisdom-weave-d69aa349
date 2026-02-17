@@ -56,6 +56,7 @@ interface LibraryItem {
 interface UseLibraryDataOptions {
   isMobile?: boolean;
   userId?: string | null;
+  statusFilter?: 'all' | 'reading' | 'completed';
 }
 
 interface UseLibraryDataReturn {
@@ -81,7 +82,8 @@ interface UseLibraryDataReturn {
 
 export function useLibraryData({ 
   isMobile = false, 
-  userId 
+  userId,
+  statusFilter = 'all'
 }: UseLibraryDataOptions): UseLibraryDataReturn {
   // CRITICAL: Try SYNC cache IMMEDIATELY during initialization
   const cachedUserId = userId || sessionStorage.getItem('last-library-user');
@@ -167,7 +169,7 @@ export function useLibraryData({
     const to = from + limit - 1;
     
     try {
-      const { data, error: fetchError } = await supabase
+      let query = supabase
         .from('user_library')
         .select(`
           id,
@@ -184,7 +186,16 @@ export function useLibraryData({
             total_chapters
           )
         `)
-        .eq('user_id', userId)
+        .eq('user_id', userId);
+      
+      // Apply server-side status filter
+      if (statusFilter === 'reading') {
+        query = query.gt('progress_percent', 0).lt('progress_percent', 100);
+      } else if (statusFilter === 'completed') {
+        query = query.gte('progress_percent', 100);
+      }
+      
+      const { data, error: fetchError } = await query
         .order('created_at', { ascending: false })
         .range(from, to);
       
@@ -216,7 +227,7 @@ export function useLibraryData({
         setError(e.message || 'Failed to load library');
       }
     }
-  }, [userId, isMobile]);
+  }, [userId, isMobile, statusFilter]);
   
   // Fetch stats from network
   // "Reading" = any book in library that is NOT completed (< 100%)
