@@ -83,10 +83,28 @@ export default function UploadPage() {
       for (let i = 1; i <= pdf.numPages; i++) {
         const page = await pdf.getPage(i);
         const textContent = await page.getTextContent();
-        const pageText = textContent.items
-          .map((item: any) => item.str)
-          .join(' ');
-        pages.push(pageText);
+        
+        // Reconstruct text preserving paragraph breaks using Y-position changes
+        let lastY: number | null = null;
+        const lines: string[] = [];
+        let currentLine = '';
+        
+        for (const item of textContent.items as any[]) {
+          if (!item.str) continue;
+          const y = item.transform?.[5] ?? null;
+          
+          if (lastY !== null && y !== null && Math.abs(y - lastY) > 5) {
+            // Y position changed significantly — new line
+            if (currentLine.trim()) lines.push(currentLine.trim());
+            currentLine = item.str;
+          } else {
+            currentLine += (currentLine && !currentLine.endsWith(' ') ? ' ' : '') + item.str;
+          }
+          lastY = y;
+        }
+        if (currentLine.trim()) lines.push(currentLine.trim());
+        
+        pages.push(lines.join('\n'));
         setProgress(Math.min(5 + Math.round((i / pdf.numPages) * 15), 20));
       }
       
