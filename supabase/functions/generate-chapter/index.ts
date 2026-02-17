@@ -2229,8 +2229,18 @@ BEGIN REVISION:`;
     // ===========================================
     let researchResult: ResearchResult | null = null;
     
-    if (academicMode && bookType === 'text') {
-      console.log("[GENERATE-CHAPTER] Academic mode: conducting deep research FIRST...");
+    // ===========================================
+    // ACADEMIC RESEARCH — runs for ALL academic book types (text, illustrated, etc.)
+    // Universities require citations regardless of book format
+    // ===========================================
+    const ACADEMIC_RESEARCH_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'economics', 'finance', 'governance', 'history', 'philosophy'];
+    const needsAcademicResearch = academicMode === true || (
+      (bookType === 'illustrated' || bookType === 'text') && 
+      ACADEMIC_RESEARCH_CATEGORIES.includes(category?.toLowerCase())
+    );
+    
+    if (needsAcademicResearch) {
+      console.log(`[GENERATE-CHAPTER] Academic research pipeline for bookType=${bookType}, category=${category}`);
       
       researchResult = await conductDeepResearch(
         `${chapterTitle} - ${bookTitle}`,
@@ -3278,16 +3288,33 @@ Create comprehensive, bestseller-grade illustrated chapters where both the TEXT 
 
       const illustratedWordTarget = isChildrens ? 1200 : targetWords;
       
-      chapterPrompt = `${previousChaptersContext}Write ${isChildrens ? 'a children\'s book' : 'an illustrated'} Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+      // Inject verified sources for academic illustrated books
+      let illustratedSourcesSection = '';
+      if (isIllustratedAcademic && researchResult && researchResult.references.length > 0) {
+        illustratedSourcesSection = `
+VERIFIED SOURCES TO CITE (USE ONLY THESE — in-text citations MANDATORY):
+${researchResult.references.slice(0, 15).map((ref, i) => 
+  `${i + 1}. ${ref.author} (${ref.year}). "${ref.title}"${ref.journal ? ` — ${ref.journal}` : ''}${ref.doi ? ` DOI: ${ref.doi}` : ''}`
+).join('\n')}
+
+CITATION REQUIREMENTS:
+- Use ${citationStyle} format for ALL in-text citations
+- Mark unsupported claims with "[requires verification]"
+- Include a ## References section at the end with full bibliography
+`;
+      }
+
+      chapterPrompt = `${previousChaptersContext}Write ${isChildrens ? 'a children\'s book' : isIllustratedAcademic ? 'an academic illustrated' : 'an illustrated'} Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
 
 LANGUAGE: Generate ALL content in ${languageName}.
-
+${illustratedSourcesSection}
 Key topics:
 ${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
 
 ILLUSTRATION PLACEMENT (MANDATORY):
 Insert exactly ${isChildrens ? '4-5' : '3-4'} [FIGURE X: description] markers throughout the text.
 Each figure description must be 20-40 words describing the scene for an illustrator.
+${isIllustratedAcademic ? 'Figures MUST be PEDAGOGICAL: diagrams, charts, processes, or annotated visuals that teach. NO decorative illustrations.' : ''}
 
 Example marker:
 [FIGURE 1: A young girl standing at the edge of a magical forest, looking up at glowing fireflies with wonder on her face, sunset colors in the background]
@@ -3301,6 +3328,22 @@ CHILDREN'S BOOK STRUCTURE:
 5. CLOSING — Warm, comforting end that makes the child feel safe
 
 Keep it SHORT (800-1200 words). This is a PICTURE BOOK.
+` : isIllustratedAcademic ? `
+ACADEMIC ILLUSTRATED STRUCTURE (MANDATORY — university-grade):
+1. LEARNING OBJECTIVES — 3-5 specific, measurable Bloom's-taxonomy aligned objectives
+2. INTRODUCTION — Technical context and scope with citations. Include [FIGURE 1] for a conceptual overview diagram.
+3. CORE CONCEPTS — Structured explanation with in-text citations and proper academic terminology. Place [FIGURE 2] for a key process/architecture diagram.
+4. APPLIED EXAMPLES — Real-world applications with evidence and citations. Place [FIGURE 3] for a comparative chart or data visualization.
+5. CRITICAL ANALYSIS — Deeper analysis, implications, and limitations
+6. KEY TAKEAWAYS — Numbered summary of main points
+7. EXERCISES — 3 practice problems at varying difficulty levels
+8. REFERENCES — Full ${citationStyle} formatted bibliography
+
+STRICTLY FORBIDDEN:
+❌ Metaphors, storytelling, motivational language
+❌ Hero's journey framing or emotional appeals
+❌ AI-sounding transitions ("Let's dive in")
+❌ Marketing language ("Revolutionary", "Game-changing")
 ` : `
 BESTSELLER ILLUSTRATED STRUCTURE (MANDATORY — same depth as text-only):
 1. OPENING HOOK with visual anchor — Story, contradiction, or emotional moment (first 100 words). Include [FIGURE 1] at the key visual moment.
@@ -3321,16 +3364,14 @@ REQUIREMENTS:
 - Approximately ${illustratedWordTarget} words
 - Use proper Markdown formatting (## headings, **bold**, tables)
 - Include ${isChildrens ? '4-5' : '3-4'} [FIGURE X: description] markers inline
-- Every figure must serve the story/learning
+- Every figure must serve the ${isIllustratedAcademic ? 'learning objective' : 'story/learning'}
 - Text must flow naturally around figure markers
 - NO AI-sounding phrases ("Let's dive in", "In this chapter we will explore")
-- Include real-world examples with SPECIFIC NUMBERS
-- Every paragraph must deliver VALUE
+${isIllustratedAcademic ? '- Include in-text citations for ALL factual claims\n- Use proper academic terminology\n- Exercises at chapter end' : '- Include real-world examples with SPECIFIC NUMBERS\n- Every paragraph must deliver VALUE'}
 ${isIllustratedBusiness ? '- Include markdown tables for frameworks and models\n- Include quantitative examples with dollar amounts, percentages, multiples' : ''}
 ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts — do NOT repeat introductions' : ''}
 
-BEGIN WRITING THE FULL BESTSELLER-GRADE ILLUSTRATED CHAPTER:`;
-
+BEGIN WRITING THE FULL ${isIllustratedAcademic ? 'ACADEMIC' : 'BESTSELLER-GRADE'} ILLUSTRATED CHAPTER:`;
     } else {
       // BESTSELLER PIPELINE - for non-technical books
       console.log("[GENERATE-CHAPTER] Using BESTSELLER pipeline (narrative, engaging)");
@@ -3491,8 +3532,9 @@ BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
 
     let finalContent = chapterContent;
 
-    // Add academic front matter and references
-    if (academicMode && researchResult && researchResult.references.length > 0) {
+    // Add academic front matter and references (for ALL academic pipelines: text AND illustrated)
+    const isAcademicOutput = (academicMode || needsAcademicResearch) && researchResult && researchResult.references.length > 0;
+    if (isAcademicOutput) {
       const domainRules = DOMAIN_RULES[category.toLowerCase()] || DOMAIN_RULES.default;
       
       let frontMatter = `> **Academic Content Notice**
