@@ -2064,7 +2064,7 @@ serve(async (req) => {
     const { data: profile } = await supabase
       .from("profiles")
       .select("plan")
-      .eq("id", user.id)
+      .eq("user_id", user.id)
       .single();
 
     const userPlan = profile?.plan || "free";
@@ -2562,7 +2562,7 @@ This is MANDATORY. No exceptions.`;
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              model: "google/gemini-2.5-flash-image-preview",
+              model: "google/gemini-3-pro-image-preview",
               messages: [{ role: "user", content: imagePrompt }],
               modalities: ["image", "text"],
             }),
@@ -2592,8 +2592,8 @@ This is MANDATORY. No exceptions.`;
                 
                 console.log(`[GENERATE-CHAPTER] Uploading panel ${panel.num} to storage: ${storagePath}`);
                 
-                const { error: uploadError } = await supabase.storage
-                  .from("comic-panels")
+              const { error: uploadError } = await supabase.storage
+                  .from("book-images")
                   .upload(storagePath, bytes.buffer, {
                     contentType: mimeType,
                     upsert: true,
@@ -2602,7 +2602,7 @@ This is MANDATORY. No exceptions.`;
                 if (!uploadError) {
                   // Get public URL
                   const { data: publicUrlData } = supabase.storage
-                    .from("comic-panels")
+                    .from("book-images")
                     .getPublicUrl(storagePath);
                   
                   if (publicUrlData?.publicUrl) {
@@ -3372,6 +3372,139 @@ ${isIllustratedBusiness ? '- Include markdown tables for frameworks and models\n
 ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts — do NOT repeat introductions' : ''}
 
 BEGIN WRITING THE FULL ${isIllustratedAcademic ? 'ACADEMIC' : 'BESTSELLER-GRADE'} ILLUSTRATED CHAPTER:`;
+    } else if (effectiveBookType === 'professional') {
+      // ===========================================
+      // PROFESSIONAL / BUSINESS GUIDE PIPELINE
+      // Framework-driven, actionable, decision-oriented
+      // ===========================================
+      console.log("[GENERATE-CHAPTER] Using PROFESSIONAL pipeline (frameworks, strategy)");
+      
+      systemPrompt = `${SYSTEM_ROLE}
+
+${MASTER_FORMATTING_CONTRACT}
+
+You are a business consultant and strategist writing a PROFESSIONAL GUIDE.
+
+GENERATOR IDENTITY: Consultant · Strategist · Decision Architect
+
+MANDATORY ELEMENTS:
+- Strategic frameworks (Porter's 5 Forces, SWOT, BCG Matrix, etc.)
+- Actionable recommendations with measurable outcomes
+- Decision matrices and checklists in proper markdown tables
+- Industry context with real examples
+- Executive summaries for quick reference
+
+TONE: Professional, authoritative, practical — NO academic dryness, NO motivational fluff.
+Write like a McKinsey or BCG consultant presenting to a C-suite audience.
+
+FORBIDDEN:
+- Excessive academic-style citations
+- Personal anecdotes (excessive)
+- Informal or casual language
+- Vague advice without specifics
+
+${VALIDATION_CONTRACT}
+
+${FINAL_DIRECTIVE}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
+
+      chapterPrompt = `${previousChaptersContext}Write a PROFESSIONAL GUIDE Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+PROFESSIONAL GUIDE STRUCTURE (MANDATORY):
+1. EXECUTIVE SUMMARY — Key takeaway in 2-3 sentences
+2. STRATEGIC CONTEXT — Why this matters, market forces at play
+3. FRAMEWORK APPLICATION — Apply at least 1 strategic framework with a markdown table
+4. IMPLEMENTATION ROADMAP — Step-by-step with clear milestones
+5. DECISION MATRIX — When to use what approach (markdown table)
+6. RISK ASSESSMENT — What can go wrong, mitigation strategies
+7. ACTION ITEMS — 5-7 specific, measurable next steps with checkboxes
+
+REQUIREMENTS:
+- Approximately ${targetWords} words
+- Use proper Markdown formatting (## headings, **bold**, pipe-syntax tables)
+- Include at least 2 framework tables
+- Every recommendation must be specific and measurable
+- Include real industry examples with specific numbers
+${chapterNumber > 1 ? '- BUILD upon previous chapter concepts - do NOT repeat introductions' : ''}
+
+BEGIN WRITING THE PROFESSIONAL GUIDE CHAPTER:`;
+
+    } else if (effectiveBookType === 'reference') {
+      // ===========================================
+      // REFERENCE / HANDBOOK PIPELINE
+      // Structured lookup, encyclopedic, no narrative
+      // ===========================================
+      console.log("[GENERATE-CHAPTER] Using REFERENCE pipeline (structured, lookup-ready)");
+      
+      systemPrompt = `${SYSTEM_ROLE}
+
+${MASTER_FORMATTING_CONTRACT}
+
+You are a subject matter expert creating REFERENCE MATERIAL / HANDBOOK content.
+
+GENERATOR IDENTITY: Subject Matter Expert · Technical Editor · Information Architect
+
+MANDATORY ELEMENTS:
+- Structured information architecture with clear categorization
+- Quick-lookup format with consistent headings
+- Alphabetical or logical ordering within sections
+- Cross-references to related topics
+- Summary tables for quick reference
+- Definitions clearly separated from explanations
+
+TONE: Precise, neutral, encyclopedic — optimize for FINDABILITY and ACCURACY.
+
+FORMATTING RULES:
+- Use ## and ### headings extensively for scanability
+- Use definition lists or bold terms followed by explanation
+- Use markdown tables for comparative data
+- Use bullet lists for properties/characteristics
+- Keep paragraphs short (2-3 sentences max)
+
+FORBIDDEN:
+- Narrative flow or storytelling
+- Personal opinions or subjective assessments
+- Motivational language
+- Lengthy introductions
+
+${VALIDATION_CONTRACT}
+
+${FINAL_DIRECTIVE}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
+
+      chapterPrompt = `${previousChaptersContext}Write a REFERENCE/HANDBOOK Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+REFERENCE STRUCTURE (MANDATORY):
+1. OVERVIEW — 2-3 sentence scope statement
+2. KEY DEFINITIONS — Bold term + clear definition for each concept
+3. DETAILED ENTRIES — Structured, encyclopedic coverage of each topic
+4. COMPARISON TABLE — Markdown table comparing key approaches/options
+5. QUICK REFERENCE CARD — Summary table of essential information
+6. CROSS-REFERENCES — Links to related chapters/topics
+7. GLOSSARY — Key terms with brief definitions
+
+REQUIREMENTS:
+- Approximately ${targetWords} words
+- Use proper Markdown formatting (## headings, **bold**, pipe-syntax tables)
+- Include at least 2 reference tables
+- Optimize for scanning and quick lookup
+- Every entry must be self-contained and findable
+${chapterNumber > 1 ? '- BUILD upon previous chapter concepts' : ''}
+
+BEGIN WRITING THE REFERENCE/HANDBOOK CHAPTER:`;
+
     } else {
       // BESTSELLER PIPELINE - for non-technical books
       console.log("[GENERATE-CHAPTER] Using BESTSELLER pipeline (narrative, engaging)");

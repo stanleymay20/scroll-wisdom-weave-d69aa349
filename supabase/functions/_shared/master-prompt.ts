@@ -27,7 +27,6 @@ export type BookPipelineType =
   | 'bestseller'    // Mass-Market Bestseller / Self-Help
   | 'comic'         // Comic / Graphic Novel
   | 'children'      // Children's Book
-  | 'devotional'    // Devotional / Philosophy / Theology
   | 'reference'     // Reference / Handbook
   | 'text';         // Standard Text (legacy)
 
@@ -57,9 +56,6 @@ BOOK TYPE DECLARATIONS (SELECT ONE):
     
 [ ] CHILDREN'S BOOK — Educator · Child Psychologist identity
     → Age-appropriate, visual-first, emotional safety
-    
-[ ] DEVOTIONAL / PHILOSOPHY — Theologian · Reflective Writer identity
-    → Contemplative tone, reflection prompts, spiritual depth
 
 ===========================================
 CRITICAL ROUTING RULES:
@@ -83,7 +79,6 @@ PIPELINE → IDENTITY MAPPING (LOCKED):
 | Mass-Market Bestseller| Author · Storyteller            |
 | Comic / Graphic Novel | Screenwriter · Art Director     |
 | Children's Book       | Educator · Child Psychologist   |
-| Devotional / Philosophy| Theologian · Reflective Writer |
 
 Failure to obey the correct pipeline INVALIDATES the output.
 `;
