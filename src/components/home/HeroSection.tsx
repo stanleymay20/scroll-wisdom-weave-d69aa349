@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Upload, BookOpen, CheckCircle, ChevronDown, Search } from "lucide-react";
+import { Upload, BookOpen, Check, ChevronDown, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
 import heroLibraryBg from "@/assets/hero-library-bg.png";
 
@@ -112,10 +112,9 @@ export function HeroSection() {
               transition={{ duration: 0.5, delay: 0.3 }}
               className="flex items-center gap-2 text-sm text-muted-foreground"
             >
-              <CheckCircle className="h-4 w-4 text-primary" />
+              <Check className="h-4 w-4 text-primary" strokeWidth={2} />
               <span>
-                Over <strong className="text-foreground">500,000</strong>{" "}
-                chapters mastered
+                Free to start — no credit card required
               </span>
             </motion.div>
           </div>

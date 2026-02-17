@@ -102,7 +102,7 @@ const steps = [
           <Award className="h-5 w-5 text-primary" />
         </div>
         <p className="font-bold text-foreground text-[11px]">Certificate of Completion</p>
-        <p className="text-muted-foreground text-[9px]">One masterscriptOrCreate C096.51%</p>
+        <p className="text-muted-foreground text-[9px]">Competency Score: 96%</p>
         <p className="font-semibold text-foreground text-sm">Jane Doe</p>
         <p className="text-muted-foreground text-[10px]">AI Fundamentals</p>
         <p className="text-primary font-bold text-lg">88%</p>

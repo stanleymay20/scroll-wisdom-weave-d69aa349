@@ -1,6 +1,6 @@
 import { forwardRef } from "react";
 import { Link } from "react-router-dom";
-import { Github, Twitter, Mail } from "lucide-react";
+import { Mail } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import logo from "@/assets/logo.png";
 
@@ -25,20 +25,6 @@ export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
               {t('footer.tagline')}
             </p>
             <div className="flex items-center gap-4">
-              <Link
-                to="/contact"
-                aria-label="Twitter"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Twitter className="h-5 w-5" />
-              </Link>
-              <Link
-                to="/contact"
-                aria-label="GitHub"
-                className="text-muted-foreground hover:text-foreground transition-colors"
-              >
-                <Github className="h-5 w-5" />
-              </Link>
               <a
                 href="mailto:support@scrolllibrary.org"
                 aria-label="Email"
