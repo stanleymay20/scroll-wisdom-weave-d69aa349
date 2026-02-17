@@ -6,7 +6,7 @@ const audiences = [
   { icon: BookMarked, label: "Lecturers & Educators" },
   { icon: Briefcase, label: "Professionals & Consultants" },
   { icon: Building, label: "Academic Institutions" },
-  { icon: Search, label: "Independent Researchers" }
+  { icon: Search, label: "Independent Researchers" },
 ];
 
 export function WhoItsFor() {
@@ -17,11 +17,14 @@ export function WhoItsFor() {
           initial={{ opacity: 0, y: 20 }}
           whileInView={{ opacity: 1, y: 0 }}
           viewport={{ once: true }}
-          className="text-center mb-10"
+          className="text-center mb-8"
         >
-          <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-4">
-            Who It's For
+          <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-2">
+            Designed for serious learners
           </h2>
+          <p className="text-muted-foreground">
+            Structured, persistent, mastery-driven learning
+          </p>
         </motion.div>
 
         <div className="flex flex-wrap justify-center gap-4 max-w-4xl mx-auto">

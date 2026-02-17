@@ -2,27 +2,16 @@ import { motion } from "framer-motion";
 import { Check } from "lucide-react";
 
 const signals = [
-  "Academic-grade structure",
-  "Citation-aware generation",
-  "Institution-ready outputs",
-  "Built for universities & professionals"
+  "Structured learning pathways",
+  "Competency tracking & verification",
+  "Academic-grade assessments",
+  "Designed for serious learners",
 ];
 
 export function TrustSignals() {
   return (
-    <section className="py-12 border-y border-border bg-muted/20">
+    <section className="py-10 border-y border-border bg-muted/20">
       <div className="container mx-auto px-4">
-        <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          whileInView={{ opacity: 1, y: 0 }}
-          viewport={{ once: true }}
-          className="text-center mb-6"
-        >
-          <p className="text-sm font-medium text-muted-foreground uppercase tracking-wide">
-            Trusted by Students, Researchers & Educators
-          </p>
-        </motion.div>
-
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-3">
           {signals.map((signal, index) => (
             <motion.div

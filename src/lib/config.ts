@@ -41,7 +41,7 @@ export const FEATURES = {
   enableWorkbooks: !PMF_MODE,
   enableFlashcards: !PMF_MODE,
   enableLearningDecks: !PMF_MODE,
-  enableCodePlayground: true,
+  enableCodePlayground: !PMF_MODE,
   enableVoiceConversation: !PMF_MODE,
   enableDeepResearch: !PMF_MODE,
   enableSkillRadar: !PMF_MODE,

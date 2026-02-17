@@ -2,11 +2,11 @@ import { motion } from "framer-motion";
 import { Check } from "lucide-react";
 
 const useCases = [
-  "Create a GISMA-ready academic demo book",
-  "Draft a full AI & Digital Transformation textbook",
-  "Build custom course material for students",
-  "Generate professional training manuals",
-  "Convert outlines into complete structured books"
+  "Upload a textbook and track reading progress chapter by chapter",
+  "Generate a structured study guide for exam preparation",
+  "Test mastery with adaptive quizzes after reading",
+  "Earn verifiable certificates to prove competency",
+  "Build a personal academic library with all your learning materials",
 ];
 
 export function UseCases() {
@@ -20,7 +20,7 @@ export function UseCases() {
           className="text-center mb-10"
         >
           <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-4">
-            Example Use Cases
+            What you can do
           </h2>
         </motion.div>
 

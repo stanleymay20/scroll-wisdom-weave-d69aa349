@@ -1,27 +1,27 @@
 import { motion } from "framer-motion";
-import { BookOpen, Brain, GraduationCap, Award } from "lucide-react";
+import { Upload, BookOpen, HelpCircle, Award } from "lucide-react";
 
-const creations = [
+const features = [
+  {
+    icon: Upload,
+    title: "Upload or Generate",
+    description: "Upload PDF textbooks or generate structured study guides on any topic with AI.",
+  },
   {
     icon: BookOpen,
-    title: "Generate Study Guides",
-    description: "Enter any topic and get a structured, multi-chapter study guide in minutes."
+    title: "Structured Reading",
+    description: "Read through organized chapters with highlights, notes, bookmarks, and progress tracking.",
   },
   {
-    icon: Brain,
-    title: "Read & Learn",
-    description: "Guided reading with text-to-speech, highlights, and AI Q&A built in."
-  },
-  {
-    icon: GraduationCap,
-    title: "Test Your Knowledge",
-    description: "Adaptive quizzes unlock after reading — from recall to applied reasoning."
+    icon: HelpCircle,
+    title: "Adaptive Assessment",
+    description: "Multi-tier quizzes test recall, reasoning, and application — unlocking at 80% reading.",
   },
   {
     icon: Award,
-    title: "Earn Certificates",
-    description: "Prove your competency with verifiable, SHA-256 signed credentials."
-  }
+    title: "Mastery Certificates",
+    description: "Earn verifiable credentials that prove your competency level and learning journey.",
+  },
 ];
 
 export function WhatYouCanCreate() {
@@ -35,12 +35,15 @@ export function WhatYouCanCreate() {
           className="text-center mb-14"
         >
           <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-4">
-            How It Works
+            Your complete learning engine
           </h2>
+          <p className="text-muted-foreground max-w-2xl mx-auto">
+            Two paths, one mastery engine. Upload your own books or let AI generate study guides.
+          </p>
         </motion.div>
 
         <div className="grid md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-          {creations.map((item, index) => {
+          {features.map((item, index) => {
             const Icon = item.icon;
             return (
               <motion.div
