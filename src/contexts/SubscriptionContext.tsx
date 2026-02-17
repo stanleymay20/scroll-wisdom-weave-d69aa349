@@ -228,19 +228,21 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [user, ttsMinutesUsed]);
 
   useEffect(() => {
-    // Set loading to false immediately to unblock UI, then check subscription in background
-    setIsLoading(false);
-    
     // Set up auth state listener
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
-        setUser(session?.user ?? null);
+        // Only update if user actually changed to prevent cascading re-renders
+        setUser(prev => {
+          if (prev?.id === session?.user?.id) return prev;
+          return session?.user ?? null;
+        });
         if (session?.user) {
           // Force check on auth state change (deferred to avoid deadlock)
           setTimeout(() => checkSubscription(true), 0);
         } else {
           setTier('free');
           setSubscriptionEnd(null);
+          setIsLoading(false);
         }
       }
     );
