@@ -37,6 +37,7 @@ interface BookData {
   cover_image_url: string | null;
   is_published: boolean | null;
   creator_id: string | null;
+  user_id: string;
   language: string | null;
   book_type: string | null;
   source_type: string | null;
@@ -103,6 +104,7 @@ export function useBookDetailData({ bookId }: UseBookDetailDataOptions): UseBook
         cover_image_url: routeState.book.cover_image_url,
         is_published: routeState.book.is_published,
         creator_id: routeState.book.creator_id,
+        user_id: (routeState.book as any).user_id ?? '',
         language: routeState.book.language,
         book_type: routeState.book.book_type,
         source_type: (routeState.book as any).source_type ?? null,
@@ -132,6 +134,7 @@ export function useBookDetailData({ bookId }: UseBookDetailDataOptions): UseBook
         cover_image_url: cached.book.cover_image_url,
         is_published: cached.book.is_published,
         creator_id: cached.book.creator_id,
+        user_id: (cached.book as any).user_id ?? '',
         language: cached.book.language,
         book_type: cached.book.book_type,
         source_type: (cached.book as any).source_type ?? null,
