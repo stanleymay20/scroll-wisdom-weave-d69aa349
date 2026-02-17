@@ -81,11 +81,32 @@ interface MarkdownRendererProps {
 export function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
   
+  // Pre-process: Extract base64 images to prevent multi-MB string processing
+  // Replace inline base64 data URIs with indexed placeholders, render them separately
+  const { processedContent, extractedImages } = useMemo(() => {
+    if (!content) return { processedContent: "", extractedImages: [] as { alt: string; src: string; caption: string }[] };
+    
+    const images: { alt: string; src: string; caption: string }[] = [];
+    let processed = content;
+    
+    // Match markdown images with base64 data URIs: ![alt](data:image/...)
+    processed = processed.replace(/!\[([^\]]*)\]\((data:image\/[^)]+)\)/g, (_, alt, src) => {
+      const idx = images.length;
+      images.push({ alt, src, caption: alt });
+      return `<!--BASE64_IMG_${idx}-->`;
+    });
+    
+    // Also match caption lines after the placeholder: *Figure N: caption*
+    // (these are already separate lines, they'll render normally)
+    
+    return { processedContent: processed, extractedImages: images };
+  }, [content]);
+  
   // Extract structured code blocks first
   const { blocks: structuredBlocks, cleanedText } = useMemo(() => {
-    if (!content) return { blocks: [], cleanedText: "" };
-    return extractAllStructuredCodeBlocks(content);
-  }, [content]);
+    if (!processedContent) return { blocks: [], cleanedText: "" };
+    return extractAllStructuredCodeBlocks(processedContent);
+  }, [processedContent]);
 
   const renderedContent = useMemo(() => {
     if (!cleanedText) return "";
@@ -239,12 +260,22 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/<div class="md-p">\s*(<(?:h[1-6]|blockquote|table|figure|div|ul|ol|hr)[^>]*>)/g, '$1');
     html = html.replace(/(<\/(?:h[1-6]|blockquote|table|figure|div|ul|ol|hr)>)\s*<\/div>/g, '$1');
     
+    // Replace base64 image placeholders with actual image tags (lazy-loaded)
+    html = html.replace(/&lt;!--BASE64_IMG_(\d+)--&gt;/g, (_, idxStr) => {
+      const idx = parseInt(idxStr);
+      return `<!--BASE64_IMG_${idx}-->`;
+    });
+    
     // data-sentence-index is assigned post-render via DOM useEffect (not regex)
     return html;
   }, [cleanedText]);
 
   // POST-RENDER: Assign sequential data-sentence-index to block-level children
   // AND wrap text nodes into word-level spans for granular audio highlighting.
+  // PERFORMANCE GUARD: Skip expensive word-wrapping for content > 500KB (base64 images)
+  const contentSize = (content || '').length;
+  const skipWordWrapping = contentSize > 500_000;
+  
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -253,14 +284,16 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     container.querySelectorAll('[data-sentence-index]').forEach(el => {
       el.removeAttribute('data-sentence-index');
     });
-    container.querySelectorAll('[data-word-index]').forEach(el => {
-      // Unwrap word spans back to text nodes for clean re-indexing
-      const parent = el.parentNode;
-      if (parent) {
-        parent.replaceChild(document.createTextNode(el.textContent || ''), el);
-        parent.normalize();
-      }
-    });
+    
+    if (!skipWordWrapping) {
+      container.querySelectorAll('[data-word-index]').forEach(el => {
+        const parent = el.parentNode;
+        if (parent) {
+          parent.replaceChild(document.createTextNode(el.textContent || ''), el);
+          parent.normalize();
+        }
+      });
+    }
 
     const mdContainers = container.classList.contains('markdown-content') 
       ? [container] 
@@ -277,8 +310,8 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
         const el = children[i] as HTMLElement;
         el.setAttribute('data-sentence-index', String(globalBlockIdx++));
         
-        // Skip code blocks - don't wrap words inside code
-        if (el.classList.contains('code-block') || el.tagName === 'TABLE' || el.tagName === 'FIGURE') {
+        // Skip word-level wrapping for huge content or code/table/figure elements
+        if (skipWordWrapping || el.classList.contains('code-block') || el.tagName === 'TABLE' || el.tagName === 'FIGURE') {
           continue;
         }
         
@@ -315,8 +348,8 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
         }
       }
     });
-    console.log(`[MarkdownRenderer] Indexed ${globalBlockIdx} blocks, ${globalWordIdx} words`);
-  }, [renderedContent, structuredBlocks]);
+    console.log(`[MarkdownRenderer] Indexed ${globalBlockIdx} blocks, ${globalWordIdx} words${skipWordWrapping ? ' (word-wrap skipped: large content)' : ''}`);
+  }, [renderedContent, structuredBlocks, skipWordWrapping]);
 
   // Handle copy button clicks for legacy code blocks
   useEffect(() => {
@@ -341,9 +374,15 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     return () => container.removeEventListener('click', handleCopyClick);
   }, [renderedContent]);
 
-  // Render with structured code blocks injected
+  // Render with structured code blocks and base64 images injected
   const renderWithStructuredBlocks = () => {
-    if (structuredBlocks.length === 0) {
+    // Split by both structured code blocks and base64 image placeholders
+    const combinedRegex = /<!--STRUCTURED_CODE_BLOCK_(\d+)-->|<!--BASE64_IMG_(\d+)-->/;
+    const parts = renderedContent.split(combinedRegex);
+    const elements: React.ReactNode[] = [];
+    
+    // If no placeholders at all, render directly
+    if (structuredBlocks.length === 0 && extractedImages.length === 0) {
       return (
         <div 
           ref={containerRef}
@@ -353,25 +392,24 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       );
     }
 
-    // Split rendered content by placeholders and inject structured blocks
-    const parts = renderedContent.split(/<!--STRUCTURED_CODE_BLOCK_(\d+)-->/);
-    const elements: React.ReactNode[] = [];
-
-    for (let i = 0; i < parts.length; i++) {
-      if (i % 2 === 0) {
-        // Regular HTML content
-        if (parts[i].trim()) {
-          elements.push(
-            <div 
-              key={`html-${i}`}
-              className="markdown-content max-w-none"
-              dangerouslySetInnerHTML={{ __html: parts[i] }}
-            />
-          );
-        }
-      } else {
-        // Structured code block placeholder
-        const blockIndex = parseInt(parts[i], 10);
+    // parts array: [html, codeBlockIdx|undefined, imgIdx|undefined, html, ...]
+    // Every 3 entries: html, codeBlockIdx, imgIdx
+    for (let i = 0; i < parts.length; i += 3) {
+      // Regular HTML content
+      const htmlPart = parts[i];
+      if (htmlPart && htmlPart.trim()) {
+        elements.push(
+          <div 
+            key={`html-${i}`}
+            className="markdown-content max-w-none"
+            dangerouslySetInnerHTML={{ __html: htmlPart }}
+          />
+        );
+      }
+      
+      // Structured code block placeholder
+      if (i + 1 < parts.length && parts[i + 1] !== undefined) {
+        const blockIndex = parseInt(parts[i + 1], 10);
         if (structuredBlocks[blockIndex]) {
           elements.push(
             <StructuredCodeBlock 
@@ -379,6 +417,26 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
               data={structuredBlocks[blockIndex]}
               className="my-6"
             />
+          );
+        }
+      }
+      
+      // Base64 image placeholder
+      if (i + 2 < parts.length && parts[i + 2] !== undefined) {
+        const imgIndex = parseInt(parts[i + 2], 10);
+        if (extractedImages[imgIndex]) {
+          const img = extractedImages[imgIndex];
+          elements.push(
+            <figure key={`img-${imgIndex}`} className="md-figure my-6">
+              <img 
+                src={img.src} 
+                alt={img.alt} 
+                className="md-image w-full rounded-lg"
+                loading="lazy"
+                decoding="async"
+              />
+              {img.caption && <figcaption className="text-sm text-muted-foreground text-center mt-2">{img.caption}</figcaption>}
+            </figure>
           );
         }
       }
