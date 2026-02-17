@@ -3125,11 +3125,40 @@ BEGIN WRITING THE ACADEMIC/TECHNICAL CHAPTER:`;
     } else if (effectiveBookType === 'illustrated' || effectiveBookType === 'children') {
       // ===========================================
       // ILLUSTRATED / CHILDREN'S BOOK PIPELINE
-      // Visual-first content with inline illustration markers
+      // Same quality contracts as bestseller + visual-first content
       // ===========================================
       console.log(`[GENERATE-CHAPTER] Using ILLUSTRATED pipeline for book type: ${effectiveBookType}`);
       
       const isChildrens = effectiveBookType === 'children';
+      
+      // ===========================================
+      // WALL STREET INSTITUTIONAL UPGRADE (same as bestseller)
+      // Detect business/wealth books and inject institutional contract
+      // ===========================================
+      const ILLUSTRATED_BUSINESS_CATEGORIES = [
+        'business', 'entrepreneurship', 'finance', 'wealth', 'investing',
+        'startup', 'leadership', 'money', 'economics', 'strategy',
+        'marketing', 'sales', 'management', 'self-help', 'personal_development',
+        'personal development', 'self_help',
+      ];
+      
+      const isIllustratedBusiness = !isChildrens && ILLUSTRATED_BUSINESS_CATEGORIES.some(cat => 
+        (category || '').toLowerCase().includes(cat) ||
+        (bookTitle || '').toLowerCase().includes(cat)
+      ) || (!isChildrens && (bookTitle || '').toLowerCase().match(/billionaire|million|wealth|capital|business|entrepreneur|money|invest|startup|founder|ceo|empire/i));
+      
+      let illustratedInstitutionalPrompt = '';
+      if (isIllustratedBusiness) {
+        try {
+          const { buildInstitutionalUpgradePrompt } = await import("../_shared/master-prompt.ts");
+          const DEEP_FINANCIAL_CHAPTERS = [1, 3, 5, 11, 17, 18];
+          const isDeepChapter = DEEP_FINANCIAL_CHAPTERS.includes(chapterNumber);
+          illustratedInstitutionalPrompt = buildInstitutionalUpgradePrompt(chapterNumber, chapterTitle, isDeepChapter);
+          console.log(`[GENERATE-CHAPTER] ILLUSTRATED WALL STREET MODE: Active (deep=${isDeepChapter}) for Ch.${chapterNumber}`);
+        } catch (e) {
+          console.error("[GENERATE-CHAPTER] Failed to load institutional contract for illustrated:", e);
+        }
+      }
       
       systemPrompt = `${SYSTEM_ROLE}
 
@@ -3138,6 +3167,8 @@ ${MASTER_FORMATTING_CONTRACT}
 ${BESTSELLER_STRUCTURE_CONTRACT}
 
 ${NONFICTION_CONTRACT}
+
+${illustratedInstitutionalPrompt}
 
 ===========================================
 ILLUSTRATED BOOK PIPELINE — HARD LOCK
@@ -3185,6 +3216,8 @@ ILLUSTRATED BOOK RULES:
 - Use figures for: diagrams, scenes, processes, comparisons, emotional moments
 - Each illustration should have a caption-worthy concept
 - Balance text and visual storytelling
+- The TEXT must meet the SAME depth and quality as a text-only bestseller
+- Illustrations ADD to the text — they do NOT replace substance
 `}
 
 ===========================================
@@ -3196,8 +3229,9 @@ Before output, verify:
 [ ] Figures are spaced throughout (not all at end)
 [ ] Each figure has a detailed visual description
 [ ] Text references connect to the figures
-[ ] ${isChildrens ? 'Word count under 1500 words' : 'Content is visually-minded and engaging'}
+[ ] ${isChildrens ? 'Word count under 1500 words' : 'Content depth matches text-only bestseller standard'}
 [ ] NO figures without descriptive text
+[ ] Bestseller mechanics present (hook, named principle, takeaways)
 
 If ANY check fails → REWRITE
 
@@ -3234,23 +3268,34 @@ CHILDREN'S BOOK STRUCTURE:
 
 Keep it SHORT (800-1200 words). This is a PICTURE BOOK.
 ` : `
-ILLUSTRATED BOOK STRUCTURE:
-1. OPENING HOOK with visual anchor — Start with a scene worth illustrating
-2. CORE CONTENT with embedded figures — Place [FIGURE] markers at key teaching/story moments
-3. VISUAL EXPLANATIONS — Use figures to clarify complex ideas
-4. READER ENGAGEMENT — Questions and reflections connecting to illustrations
-5. TAKEAWAYS — Key points with visual references
+BESTSELLER ILLUSTRATED STRUCTURE (MANDATORY — same depth as text-only):
+1. OPENING HOOK with visual anchor — Story, contradiction, or emotional moment (first 100 words). Include [FIGURE 1] at the key visual moment.
+2. CORE IDEA — One central message explained clearly. The reader must understand in 2 minutes.
+3. ILLUSTRATION — Real-world story, analogy, or scenario (concrete, human, memorable). Place [FIGURE 2] to visually anchor this example.
+4. NAMED PRINCIPLE — Introduce at least ONE memorable, reusable concept name (e.g., "The Compound Effect")
+5. READER ENGAGEMENT — Questions, reflection prompts, mental pauses. Place [FIGURE 3] for visual reinforcement.
+6. ACTIONABLE TAKEAWAYS — 3-7 clear bullet points the reader can DO after reading. Include [FIGURE 4] if showing a process/framework.
 `}
-
+${isIllustratedBusiness ? `
+INSTITUTIONAL REQUIREMENTS (BUSINESS ILLUSTRATED BOOK):
+7. FINANCIAL ENGINEERING — Include at least 1 markdown table with real numbers
+8. CAPITAL IMPACT — Include at least 1 formula or calculation
+9. RISK ANALYSIS — Address what kills this strategy
+10. EXECUTIVE ACTIONS — 3-5 measurable next steps with KPIs
+` : ''}
 REQUIREMENTS:
 - Approximately ${illustratedWordTarget} words
-- Use proper Markdown formatting (## headings, **bold**)
+- Use proper Markdown formatting (## headings, **bold**, tables)
 - Include ${isChildrens ? '4-5' : '3-4'} [FIGURE X: description] markers inline
 - Every figure must serve the story/learning
 - Text must flow naturally around figure markers
-${chapterNumber > 1 ? '- CONTINUE from previous chapter — do NOT repeat introductions' : ''}
+- NO AI-sounding phrases ("Let's dive in", "In this chapter we will explore")
+- Include real-world examples with SPECIFIC NUMBERS
+- Every paragraph must deliver VALUE
+${isIllustratedBusiness ? '- Include markdown tables for frameworks and models\n- Include quantitative examples with dollar amounts, percentages, multiples' : ''}
+${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts — do NOT repeat introductions' : ''}
 
-BEGIN WRITING THE ILLUSTRATED CHAPTER:`;
+BEGIN WRITING THE FULL BESTSELLER-GRADE ILLUSTRATED CHAPTER:`;
 
     } else {
       // BESTSELLER PIPELINE - for non-technical books
