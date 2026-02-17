@@ -216,7 +216,15 @@ serve(async (req) => {
     // Resolve author name: request param > book record > fallback
     const authorName = requestAuthorName || book?.author_ai_agent || "ScrollLibrary";
 
-    if (book && book.creator_id !== user.id) {
+    // Check authorization: allow if user is creator_id OR user_id (for seed books with null creator_id)
+    const { data: bookOwner } = await supabase
+      .from("books")
+      .select("user_id")
+      .eq("id", bookId)
+      .single();
+    
+    const isAuthorized = book?.creator_id === user.id || bookOwner?.user_id === user.id;
+    if (book && !isAuthorized) {
       console.log(`[GENERATE-COVER] User ${user.id.slice(0, 8)}... not authorized for book`);
       return new Response(JSON.stringify({ error: "Not authorized to modify this book" }), {
         status: 403,

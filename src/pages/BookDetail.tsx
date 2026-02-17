@@ -89,6 +89,7 @@ interface BookData {
   cover_image_url: string | null;
   is_published: boolean | null;
   creator_id: string | null;
+  user_id: string;
   language: string | null;
   book_type: string | null;
   source_type: string | null;
@@ -142,7 +143,7 @@ export default function BookDetail() {
   const [auditResult, setAuditResult] = useState<PublishingGateResult | null>(null);
   const [showAuditDialog, setShowAuditDialog] = useState(false);
 
-  const isOwner = user && book?.creator_id === user.id;
+  const isOwner = user && (book?.creator_id === user.id || book?.user_id === user.id);
 
   const coverThemes = [
     { value: "classic", labelKey: "coverTheme.classic", descKey: "coverTheme.classicDesc" },
