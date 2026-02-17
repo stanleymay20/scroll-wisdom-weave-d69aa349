@@ -3,49 +3,36 @@ import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Search, User, Menu, X, Settings, LogOut, HelpCircle, Shield } from "lucide-react";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { LanguageSwitcher } from "@/components/LanguageSwitcher";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useIsAdmin } from "@/hooks/useAdmin";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import logo from "@/assets/logo.png";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [user, setUser] = useState<any>(null);
   const [profile, setProfile] = useState<any>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useLanguage();
   const { isAdmin } = useIsAdmin();
+  const { user } = useSubscription();
+  const lastUserIdRef = useRef<string | null>(null);
 
+  // Fetch profile only when user ID actually changes
   useEffect(() => {
-    let mounted = true;
-    
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      if (!mounted) return;
-      setUser(session?.user ?? null);
-      if (session?.user) fetchProfile(session.user.id);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-      if (!mounted) return;
-      const newUser = session?.user ?? null;
-      // Only update if user actually changed
-      if (newUser?.id !== user?.id) {
-        setUser(newUser);
-        if (newUser) fetchProfile(newUser.id);
-        else setProfile(null);
-      }
-    });
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, []);
+    if (user?.id && user.id !== lastUserIdRef.current) {
+      lastUserIdRef.current = user.id;
+      fetchProfile(user.id);
+    } else if (!user) {
+      lastUserIdRef.current = null;
+      setProfile(null);
+    }
+  }, [user?.id]);
 
   const fetchProfile = async (userId: string) => {
     const { data } = await supabase.from("profiles").select("full_name, avatar_url").or(`user_id.eq.${userId},id.eq.${userId}`).maybeSingle();
@@ -76,6 +63,7 @@ export function Navbar() {
             <Link to="/upload" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Upload</Link>
             <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
             <Link to="/certificates" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Certificates</Link>
+            <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</Link>
           </div>
 
           <div className="hidden md:flex items-center gap-2">
@@ -156,7 +144,7 @@ export function Navbar() {
                 Certificates
               </Link>
               <Link to="/pricing" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                Pricing
+                {t('nav.library') === 'Library' ? 'Pricing' : 'Pricing'}
               </Link>
               
               <div className="border-t border-border/50 pt-3 mt-3">
