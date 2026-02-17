@@ -51,6 +51,8 @@ const CATEGORIES = [
   "african_studies",
   "culture",
   "philosophy",
+  "psychology",
+  "health",
   "arts",
   "fiction",
   "non_fiction",

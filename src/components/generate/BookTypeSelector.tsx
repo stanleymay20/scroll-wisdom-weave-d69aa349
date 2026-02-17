@@ -10,8 +10,8 @@ import { Badge } from "@/components/ui/badge";
 import { FEATURES } from "@/lib/config";
 
 /**
- * CONTRACT 3 — CONTENT-TYPE FIDELITY
- * Book Type is a GOVERNING CONSTITUTION, not a hint.
+ * Book Type Selector
+ * Determines the structure and style of generated content.
  */
 export type ExtendedBookType = 
   | "academic"      // Academic Textbook
@@ -34,10 +34,10 @@ interface BookTypeSelectorProps {
 
 interface BookTypeOption {
   value: ExtendedBookType;
-  labelKey: string;
-  descKey: string;
+  label: string;
+  description: string;
   icon: React.ComponentType<{ className?: string }>;
-  contractHint: string;
+  hint: string;
   badge?: string;
   featureFlag?: boolean;
 }
@@ -45,72 +45,72 @@ interface BookTypeOption {
 const ALL_BOOK_TYPES: BookTypeOption[] = [
   {
     value: "academic",
-    labelKey: "Academic Textbook",
-    descKey: "Scholarly content with citations",
+    label: "Academic Textbook",
+    description: "Scholarly content with citations",
     icon: GraduationCap,
-    contractHint: "Formal tone, citations required, no storytelling",
-    badge: "ARM",
+    hint: "Formal tone, structured references, no storytelling",
+    badge: "Academic",
   },
   {
     value: "bestseller",
-    labelKey: "Bestseller / Trade",
-    descKey: "Narrative-driven transformation",
+    label: "Trade / General",
+    description: "Narrative-driven, accessible writing",
     icon: Sparkles,
-    contractHint: "Hooks, stories, emotional engagement",
+    hint: "Engaging hooks, stories, practical advice",
   },
   {
     value: "technical",
-    labelKey: "Technical Guide",
-    descKey: "Code-heavy, hands-on learning",
+    label: "Technical Guide",
+    description: "Code-heavy, hands-on learning",
     icon: Code,
-    contractHint: "40%+ code, exercises, literal titles",
+    hint: "Code examples, exercises, step-by-step tutorials",
   },
   {
     value: "professional",
-    labelKey: "Professional Guide",
-    descKey: "Business & industry frameworks",
+    label: "Professional Guide",
+    description: "Business & industry frameworks",
     icon: Briefcase,
-    contractHint: "Frameworks, actionable, decision tools",
+    hint: "Frameworks, actionable advice, decision tools",
   },
   {
     value: "workbook",
-    labelKey: "Workbook / Fill-In",
-    descKey: "Interactive templates (max 1800 words)",
+    label: "Workbook / Fill-In",
+    description: "Interactive templates (max 1800 words)",
     icon: FileEdit,
-    contractHint: "70%+ interactive, minimal prose",
+    hint: "Mostly interactive elements, minimal prose",
     featureFlag: FEATURES.enableWorkbooks,
   },
   {
     value: "comic",
-    labelKey: "Comic / Graphic",
-    descKey: "Visual storytelling with dialogue",
+    label: "Comic / Graphic",
+    description: "Visual storytelling with dialogue",
     icon: ImageIcon,
-    contractHint: "4-6 panels, every panel has dialogue",
+    hint: "Panel-based layout with dialogue",
     badge: "Visual",
     featureFlag: FEATURES.enableComics,
   },
   {
     value: "children",
-    labelKey: "Children's Book",
-    descKey: "Simple, visual-first storytelling",
+    label: "Children's Book",
+    description: "Simple, visual-first storytelling",
     icon: Baby,
-    contractHint: "Short sentences, high image ratio",
+    hint: "Short sentences, high image ratio",
     badge: "Visual",
     featureFlag: FEATURES.enableIllustrated,
   },
   {
     value: "reference",
-    labelKey: "Reference / Handbook",
-    descKey: "Quick reference materials",
+    label: "Reference / Handbook",
+    description: "Quick reference materials",
     icon: FileSpreadsheet,
-    contractHint: "Structured lookup, comprehensive",
+    hint: "Structured lookup, comprehensive coverage",
   },
   {
     value: "text",
-    labelKey: "Standard Text",
-    descKey: "Traditional book format",
+    label: "Standard Text",
+    description: "Traditional book format",
     icon: BookText,
-    contractHint: "Flexible structure",
+    hint: "Flexible structure, general purpose",
   },
 ];
 
@@ -125,8 +125,6 @@ export function BookTypeSelector({
   required = true,
   showError,
 }: BookTypeSelectorProps) {
-  const { t } = useLanguage();
-
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -134,7 +132,7 @@ export function BookTypeSelector({
           <Label className="text-foreground font-medium">
             Book Type {required ? "*" : ""}
           </Label>
-          <span className="text-xs text-muted-foreground">(Governs all generation)</span>
+          <span className="text-xs text-muted-foreground">(Determines content structure)</span>
         </div>
         {showError && (
           <span className="text-xs text-destructive">Required</span>
@@ -167,17 +165,17 @@ export function BookTypeSelector({
             >
               <div className="flex items-center gap-2">
                 <type.icon className="h-4 w-4 text-primary flex-shrink-0" />
-                <span className="text-sm font-medium">{type.labelKey}</span>
+                <span className="text-sm font-medium">{type.label}</span>
                 {type.badge && (
                   <Badge variant="secondary" className="text-[10px] px-1 py-0">
                     {type.badge}
                   </Badge>
                 )}
               </div>
-              <p className="text-xs text-muted-foreground">{type.descKey}</p>
+              <p className="text-xs text-muted-foreground">{type.description}</p>
               {value === type.value && (
                 <p className="text-[10px] text-primary/80 mt-1 border-t border-primary/20 pt-1">
-                  📋 {type.contractHint}
+                  {type.hint}
                 </p>
               )}
             </Label>
@@ -187,8 +185,7 @@ export function BookTypeSelector({
       
       {value && (
         <p className="text-xs text-muted-foreground bg-muted/50 p-2 rounded">
-          ⚠️ <strong>Contract 3:</strong> Once selected, book type governs all generation. 
-          Content will be validated against {BOOK_TYPES.find(t => t.value === value)?.labelKey} rules.
+          The selected book type determines the writing style, structure, and content format of your generated book.
         </p>
       )}
     </div>

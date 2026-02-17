@@ -3,9 +3,9 @@ import { Check } from "lucide-react";
 
 const signals = [
   "Structured learning pathways",
-  "Competency tracking & verification",
-  "Academic-grade assessments",
-  "Designed for serious learners",
+  "Competency tracking & scoring",
+  "Multi-tier assessments",
+  "Verifiable learning records",
 ];
 
 export function TrustSignals() {

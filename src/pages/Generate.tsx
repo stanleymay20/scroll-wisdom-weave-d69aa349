@@ -696,9 +696,9 @@ export default function Generate() {
                         <Database className="h-4 w-4 text-green-500" />
                         <span className="text-sm font-medium text-green-400">Deep Research Pipeline</span>
                       </div>
-                      <p className="text-xs text-muted-foreground">
-                        Academic mode will query real academic databases (OpenAlex, CrossRef, Semantic Scholar, arXiv, PubMed) 
-                        before generating content. Only verified, DOI-linked sources will be used.
+                     <p className="text-xs text-muted-foreground">
+                        Academic mode uses AI to generate content with structured references and citations. 
+                        Sources are included for reference but should be independently verified.
                       </p>
                       <div className="flex items-start gap-2 p-2 rounded bg-amber-500/10 border border-amber-500/20">
                         <AlertTriangle className="h-4 w-4 text-amber-500 flex-shrink-0 mt-0.5" />

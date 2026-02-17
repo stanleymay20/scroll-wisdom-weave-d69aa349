@@ -3,7 +3,6 @@ import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { cn } from "@/lib/utils";
-import { useLanguage } from "@/contexts/LanguageContext";
 
 interface BestsellerModeToggleProps {
   enabled: boolean;
@@ -18,7 +17,6 @@ export function BestsellerModeToggle({
   isPaidTier,
   disabled = false,
 }: BestsellerModeToggleProps) {
-  const { t } = useLanguage();
   const isLocked = !isPaidTier;
   const effectiveEnabled = isPaidTier ? enabled : false;
 
@@ -27,23 +25,18 @@ export function BestsellerModeToggle({
       className={cn(
         "relative rounded-xl border p-4 transition-all duration-300",
         effectiveEnabled
-          ? "bg-gradient-to-r from-scroll-gold/10 via-amber-500/5 to-scroll-gold/10 border-scroll-gold/50 shadow-lg shadow-scroll-gold/10"
+          ? "bg-primary/5 border-primary/30"
           : "bg-muted/30 border-border/50",
         isLocked && "opacity-70"
       )}
     >
-      {/* Glow effect when enabled */}
-      {effectiveEnabled && (
-        <div className="absolute inset-0 rounded-xl bg-gradient-to-r from-scroll-gold/5 to-amber-500/5 blur-xl -z-10" />
-      )}
-
       <div className="flex items-start justify-between gap-4">
         <div className="flex items-start gap-3">
           <div
             className={cn(
               "p-2 rounded-lg transition-colors",
               effectiveEnabled
-                ? "bg-scroll-gold/20 text-scroll-gold"
+                ? "bg-primary/10 text-primary"
                 : "bg-muted text-muted-foreground"
             )}
           >
@@ -60,15 +53,15 @@ export function BestsellerModeToggle({
                 htmlFor="bestseller-mode"
                 className={cn(
                   "text-base font-semibold cursor-pointer",
-                  effectiveEnabled && "text-scroll-gold"
+                  effectiveEnabled && "text-primary"
                 )}
               >
-                Bestseller Mode
+                Enhanced Quality Mode
               </Label>
               {effectiveEnabled && (
                 <Badge
                   variant="outline"
-                  className="bg-scroll-gold/20 text-scroll-gold border-scroll-gold/30 text-xs"
+                  className="bg-primary/10 text-primary border-primary/30 text-xs"
                 >
                   <Crown className="h-3 w-3 mr-1" />
                   ACTIVE
@@ -87,23 +80,23 @@ export function BestsellerModeToggle({
 
             <p className="text-xs text-muted-foreground max-w-sm">
               {effectiveEnabled
-                ? "Maximum quality enforcement: NYT-level writing, aggressive hooks, quotable lines, zero AI fatigue."
+                ? "Enhanced quality: stronger structure, clearer writing, better engagement techniques."
                 : isLocked
-                ? "Upgrade to unlock bestseller-grade content generation with market-dominant quality standards."
-                : "Enable for maximum quality enforcement with bestseller-grade output standards."}
+                ? "Upgrade to unlock enhanced content quality with improved structure and engagement."
+                : "Enable for improved content quality with better structure and writing clarity."}
             </p>
 
             {effectiveEnabled && (
               <div className="flex flex-wrap gap-2 mt-2">
                 {[
-                  "Aggressive Hooks",
-                  "Named Principles",
-                  "Quotable Lines",
-                  "Reader Psychology",
+                  "Stronger Hooks",
+                  "Clear Structure",
+                  "Engaging Writing",
+                  "Better Examples",
                 ].map((feature) => (
                   <span
                     key={feature}
-                    className="text-[10px] px-2 py-0.5 rounded-full bg-scroll-gold/10 text-scroll-gold border border-scroll-gold/20"
+                    className="text-[10px] px-2 py-0.5 rounded-full bg-primary/10 text-primary border border-primary/20"
                   >
                     {feature}
                   </span>
@@ -118,9 +111,6 @@ export function BestsellerModeToggle({
           checked={effectiveEnabled}
           onCheckedChange={onToggle}
           disabled={disabled || isLocked}
-          className={cn(
-            effectiveEnabled && "data-[state=checked]:bg-scroll-gold"
-          )}
         />
       </div>
     </div>
