@@ -11,6 +11,7 @@ import { ForYouSection } from "@/components/home/ForYouSection";
 import { GetInspiredSection } from "@/components/home/GetInspiredSection";
 import { HowItWorks } from "@/components/home/HowItWorks";
 import { WhyDifferent } from "@/components/home/WhyDifferent";
+import { FAQSection } from "@/components/home/FAQSection";
 import { FinalCTA } from "@/components/home/FinalCTA";
 import { Footer } from "@/components/layout/Footer";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
@@ -42,6 +43,7 @@ const Index = () => {
         <GetInspiredSection />
         <HowItWorks />
         <WhyDifferent />
+        <FAQSection />
         <FinalCTA />
       </main>
       <Footer />

@@ -12,31 +12,31 @@ export default function About() {
   const features = [
     {
       icon: Brain,
-      title: "Multi-Agent AI System",
-      description: "Our proprietary system uses specialized AI agents—ScrollResearchGPT, ScrollAuthorGPT, ScrollEditorGPT, and ScrollProphetGPT—working in harmony to create comprehensive, well-researched content."
+      title: "AI-Powered Content Generation",
+      description: "Our system uses advanced AI models to create structured, well-organized study guides and learning materials tailored to your topic and level."
     },
     {
       icon: Book,
-      title: "Comprehensive Libraries",
-      description: "Access and generate books across theology, prophecy, science, technology, business, finance, medicine, law, history, culture, philosophy, arts, and fiction."
+      title: "Comprehensive Subject Coverage",
+      description: "Generate or upload books across technology, science, business, finance, health, psychology, and many other academic and professional fields."
     },
     {
       icon: Sparkles,
-      title: "Scroll Alignment",
-      description: "Every piece of content maintains spiritual accuracy and scroll alignment while delivering academic rigor and practical wisdom."
+      title: "Structured Learning Pathways",
+      description: "Every book follows a structured curriculum: chapters build progressively, quizzes test understanding, and certificates track mastery."
     },
     {
       icon: Shield,
-      title: "Quality Assurance",
-      description: "Rigorous quality checks ensure no repetition padding, no random generation, and complete doctrinal coherence in every chapter."
+      title: "Quality & Transparency",
+      description: "All AI-generated content is clearly labeled. We enforce quality checks to minimize repetition and ensure coherent, well-structured output."
     },
   ];
 
   const stats = [
-    { value: "8,000+", label: "Words per chapter" },
-    { value: "30+", label: "Chapters per book" },
-    { value: "18", label: "Categories" },
-    { value: "∞", label: "Possibilities" },
+    { value: "5,000+", label: "Words per chapter (avg)" },
+    { value: "Up to 30", label: "Chapters per book" },
+    { value: "10+", label: "Categories" },
+    { value: "Free", label: "To get started" },
   ];
 
   return (
@@ -194,9 +194,9 @@ export default function About() {
                   <div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">AI-Assisted Content Generation</h3>
                     <p className="text-muted-foreground leading-relaxed">
-                      All books generated through ScrollLibrary are created using advanced AI systems. While our 
-                      multi-agent approach ensures high-quality, structured content, users should understand that 
-                      this is AI-generated material and should be treated accordingly.
+                      All books generated through ScrollLibrary are created using AI language models. While our 
+                      system ensures structured, high-quality output, users should understand that 
+                      this is AI-generated material and should be reviewed accordingly.
                     </p>
                   </div>
                   

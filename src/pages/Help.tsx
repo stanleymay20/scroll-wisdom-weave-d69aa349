@@ -41,7 +41,7 @@ export default function Help() {
       .from("faqs")
       .select("*")
       .eq("is_published", true)
-      .order("order_index");
+      .order("sort_order");
 
     if (data) {
       setFaqs(data);
