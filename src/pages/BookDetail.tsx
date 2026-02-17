@@ -593,16 +593,8 @@ export default function BookDetail() {
   // CONTRACT 5B-2: Skeleton-first loading with cached data support
   // Also handles offline states (RULE 5B-2.5)
   if (loadState === 'skeleton' || loadState === 'offline-empty') {
-    const PageShell = isMobile ? MobileLayout : ({ children }: { children: React.ReactNode }) => (
-      <div className="min-h-screen">
-        <Navbar />
-        {children}
-        <Footer />
-      </div>
-    );
-    
-    return (
-      <PageShell>
+    const skeletonContent = (
+      <>
         {loadState === 'offline-empty' && (
           <div className="container mx-auto px-4 pt-24 pb-4">
             <GentleOfflineBanner compact className="rounded-lg" />
@@ -611,7 +603,18 @@ export default function BookDetail() {
         <main className={loadState === 'offline-empty' ? 'pb-16' : 'pt-24 pb-16'}>
           <BookDetailSkeleton isMobile={isMobile} />
         </main>
-      </PageShell>
+      </>
+    );
+
+    if (isMobile) {
+      return <MobileLayout>{skeletonContent}</MobileLayout>;
+    }
+    return (
+      <div className="min-h-screen">
+        <Navbar />
+        {skeletonContent}
+        <Footer />
+      </div>
     );
   }
 
@@ -623,17 +626,11 @@ export default function BookDetail() {
   const totalWords = chapters.reduce((sum, ch) => sum + (ch.word_count || 0), 0);
   const readingTime = Math.ceil(totalWords / 200) || 1;
 
-  // Mobile layout wrapper
-  const PageWrapper = isMobile ? MobileLayout : ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen">
-      <Navbar />
-      {children}
-      <Footer />
-    </div>
-  );
+  // Mobile layout wrapper - use conditional rendering, not inline component
+  // (Defining wrapper inline causes remount on every state change, breaking input focus)
 
-  return (
-    <PageWrapper>
+  const content = (
+    <>
 
       {/* Delete Book Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -1216,6 +1213,18 @@ export default function BookDetail() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-    </PageWrapper>
+    </>
+  );
+
+  if (isMobile) {
+    return <MobileLayout>{content}</MobileLayout>;
+  }
+
+  return (
+    <div className="min-h-screen">
+      <Navbar />
+      {content}
+      <Footer />
+    </div>
   );
 }

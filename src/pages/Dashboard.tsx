@@ -196,16 +196,8 @@ export default function Dashboard() {
     { icon: Clock, label: "In Progress", value: stats.booksInProgress, color: "text-purple-400" },
   ];
 
-  const PageWrapper = isMobile ? MobileLayout : ({ children }: { children: React.ReactNode }) => (
-    <div className="min-h-screen flex flex-col">
-      <Navbar />
-      {children}
-      <Footer />
-    </div>
-  );
-
-  return (
-    <PageWrapper>
+  const dashboardContent = (
+    <>
       <main className={cn(
         "flex-1 pb-16",
         isMobile ? "pt-4 px-4" : "pt-24 container mx-auto px-4 max-w-6xl"
@@ -382,6 +374,18 @@ export default function Dashboard() {
           </motion.div>
         </div>
       </main>
-    </PageWrapper>
+    </>
+  );
+
+  if (isMobile) {
+    return <MobileLayout>{dashboardContent}</MobileLayout>;
+  }
+
+  return (
+    <div className="min-h-screen flex flex-col">
+      <Navbar />
+      {dashboardContent}
+      <Footer />
+    </div>
   );
 }
