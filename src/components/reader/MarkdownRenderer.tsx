@@ -243,9 +243,8 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     return html;
   }, [cleanedText]);
 
-  // POST-RENDER: Assign sequential data-sentence-index to block-level children.
-  // Preserves all HTML formatting (bold, links, etc.) while giving the
-  // audio sync engine targets for paragraph-level highlighting.
+  // POST-RENDER: Assign sequential data-sentence-index to block-level children
+  // AND wrap text nodes into word-level spans for granular audio highlighting.
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -254,6 +253,14 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     container.querySelectorAll('[data-sentence-index]').forEach(el => {
       el.removeAttribute('data-sentence-index');
     });
+    container.querySelectorAll('[data-word-index]').forEach(el => {
+      // Unwrap word spans back to text nodes for clean re-indexing
+      const parent = el.parentNode;
+      if (parent) {
+        parent.replaceChild(document.createTextNode(el.textContent || ''), el);
+        parent.normalize();
+      }
+    });
 
     const mdContainers = container.classList.contains('markdown-content') 
       ? [container] 
@@ -261,14 +268,54 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     
     if (mdContainers.length === 0) mdContainers.push(container);
 
-    let globalIdx = 0;
+    let globalBlockIdx = 0;
+    let globalWordIdx = 0;
+    
     mdContainers.forEach(mc => {
       const children = mc.children;
       for (let i = 0; i < children.length; i++) {
-        (children[i] as HTMLElement).setAttribute('data-sentence-index', String(globalIdx++));
+        const el = children[i] as HTMLElement;
+        el.setAttribute('data-sentence-index', String(globalBlockIdx++));
+        
+        // Skip code blocks - don't wrap words inside code
+        if (el.classList.contains('code-block') || el.tagName === 'TABLE' || el.tagName === 'FIGURE') {
+          continue;
+        }
+        
+        // Walk text nodes and wrap each word in a span with data-word-index
+        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+        const textNodes: Text[] = [];
+        let node: Text | null;
+        while ((node = walker.nextNode() as Text | null)) {
+          // Skip text inside code elements
+          if (node.parentElement?.closest('code, pre, .code-block')) continue;
+          if (node.textContent && node.textContent.trim().length > 0) {
+            textNodes.push(node);
+          }
+        }
+        
+        for (const textNode of textNodes) {
+          const text = textNode.textContent || '';
+          // Split into words keeping whitespace
+          const parts = text.split(/(\s+)/);
+          if (parts.length <= 1 && !text.trim()) continue;
+          
+          const fragment = document.createDocumentFragment();
+          for (const part of parts) {
+            if (/^\s+$/.test(part) || part === '') {
+              fragment.appendChild(document.createTextNode(part));
+            } else {
+              const span = document.createElement('span');
+              span.setAttribute('data-word-index', String(globalWordIdx++));
+              span.textContent = part;
+              fragment.appendChild(span);
+            }
+          }
+          textNode.parentNode?.replaceChild(fragment, textNode);
+        }
       }
     });
-    console.log(`[MarkdownRenderer] Assigned data-sentence-index to ${globalIdx} blocks`);
+    console.log(`[MarkdownRenderer] Indexed ${globalBlockIdx} blocks, ${globalWordIdx} words`);
   }, [renderedContent, structuredBlocks]);
 
   // Handle copy button clicks for legacy code blocks
@@ -649,22 +696,30 @@ export const markdownStyles = `
   color: #c9d1d9 !important;
 }
 
-/* Audio sync: active paragraph highlight */
+/* Audio sync: active block highlight */
 .markdown-content [data-sentence-index].audio-active {
-  background: hsl(var(--primary) / 0.18);
-  border-left: 3px solid hsl(var(--primary));
+  background: hsl(var(--primary) / 0.08);
+  border-left: 3px solid hsl(var(--primary) / 0.4);
   padding-left: 0.75rem;
   border-radius: 0.25rem;
-  transition: background 0.3s ease, border-color 0.3s ease;
-  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.1);
+  transition: background 0.3s ease;
 }
 
 /* Dim non-active paragraphs during audio playback for focus */
 .markdown-content.audio-playing [data-sentence-index]:not(.audio-active) {
-  opacity: 0.55;
+  opacity: 0.5;
   transition: opacity 0.3s ease;
 }
 .markdown-content.audio-playing [data-sentence-index].audio-active {
   opacity: 1;
+}
+
+/* Word-level highlight */
+.markdown-content [data-word-index].audio-word-active {
+  background: hsl(var(--primary) / 0.25);
+  border-radius: 2px;
+  padding: 1px 2px;
+  box-shadow: 0 0 0 1px hsl(var(--primary) / 0.15);
+  transition: background 0.1s ease;
 }
 `;

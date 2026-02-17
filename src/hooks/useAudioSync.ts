@@ -24,6 +24,14 @@ export interface SentenceTimestamp {
   endTime: number;
 }
 
+export interface WordTimestamp {
+  index: number;
+  text: string;
+  startTime: number;
+  endTime: number;
+  blockIndex: number; // which data-sentence-index block this word belongs to
+}
+
 interface UseAudioSyncOptions {
   chapterContent: string | null;
   isPlaying: boolean;
@@ -41,6 +49,7 @@ interface UseAudioSyncOptions {
 interface UseAudioSyncReturn {
   sentences: SentenceTimestamp[];
   activeSentenceIndex: number;
+  activeWordIndex: number;
   isSyncEnabled: boolean;
   toggleSync: () => void;
   isUserScrolledAway: boolean;
@@ -70,17 +79,18 @@ export function useAudioSync({
   cumulativeTimeSec = 0,
   audioRef,
   estimatedDurationSec,
-  wordCount = 0,
+  wordCount: inputWordCount = 0,
 }: UseAudioSyncOptions): UseAudioSyncReturn {
   // Total chapter duration estimate
   const totalDuration = useMemo(
-    () => estimatedDurationSec ?? (wordCount > 0 ? (wordCount / 150) * 60 : 60),
-    [estimatedDurationSec, wordCount]
+    () => estimatedDurationSec ?? (inputWordCount > 0 ? (inputWordCount / 150) * 60 : 60),
+    [estimatedDurationSec, inputWordCount]
   );
 
-  // Build timestamps from DOM elements with data-sentence-index.
+  // Build timestamps from DOM elements with data-sentence-index (blocks) AND data-word-index (words).
   const [sentences, setSentences] = useState<SentenceTimestamp[]>([]);
   const sentencesRef = useRef<SentenceTimestamp[]>([]);
+  const wordsRef = useRef<WordTimestamp[]>([]);
   const domScanRef = useRef<ReturnType<typeof setTimeout>>();
 
   useEffect(() => {
@@ -88,20 +98,50 @@ export function useAudioSync({
 
     const scan = () => {
       if (!contentRef.current) return;
-      const els = contentRef.current.querySelectorAll('[data-sentence-index]');
-      if (els.length === 0) {
+      
+      // Scan block-level elements
+      const blockEls = contentRef.current.querySelectorAll('[data-sentence-index]');
+      if (blockEls.length === 0) {
         domScanRef.current = setTimeout(scan, 200);
         return;
       }
-      const texts: string[] = [];
-      els.forEach(el => {
+      const blockTexts: string[] = [];
+      blockEls.forEach(el => {
         const text = (el as HTMLElement).innerText || '';
-        texts.push(text || ' ');
+        blockTexts.push(text || ' ');
       });
-      const ts = buildTimestamps(texts, totalDuration);
+      const ts = buildTimestamps(blockTexts, totalDuration);
       sentencesRef.current = ts;
       setSentences(ts);
-      console.log(`[useAudioSync] Built timestamps for ${texts.length} sentences, totalDuration=${totalDuration.toFixed(1)}s`);
+      
+      // Scan word-level elements
+      const wordEls = contentRef.current.querySelectorAll('[data-word-index]');
+      const wordTexts: string[] = [];
+      const wordBlockMap: number[] = [];
+      wordEls.forEach(el => {
+        const text = (el as HTMLElement).textContent || '';
+        wordTexts.push(text);
+        // Find which block this word belongs to
+        const blockParent = (el as HTMLElement).closest('[data-sentence-index]');
+        const blockIdx = blockParent ? parseInt(blockParent.getAttribute('data-sentence-index') || '-1') : -1;
+        wordBlockMap.push(blockIdx);
+      });
+      
+      // Build word timestamps proportional to character length
+      const totalChars = wordTexts.reduce((sum, w) => sum + w.length, 0);
+      if (totalChars > 0 && totalDuration > 0) {
+        let cursor = 0;
+        const wts: WordTimestamp[] = wordTexts.map((text, index) => {
+          const fraction = text.length / totalChars;
+          const duration = fraction * totalDuration;
+          const start = cursor;
+          cursor += duration;
+          return { index, text, startTime: start, endTime: cursor, blockIndex: wordBlockMap[index] };
+        });
+        wordsRef.current = wts;
+      }
+      
+      console.log(`[useAudioSync] Built timestamps for ${blockTexts.length} blocks, ${wordTexts.length} words, totalDuration=${totalDuration.toFixed(1)}s`);
     };
 
     domScanRef.current = setTimeout(scan, 300);
@@ -109,6 +149,7 @@ export function useAudioSync({
   }, [chapterContent, totalDuration, contentRef]);
 
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
+  const [activeWordIndex, setActiveWordIndex] = useState(-1);
   const [isSyncEnabled, setIsSyncEnabled] = useState(true);
   const [isUserScrolledAway, setIsUserScrolledAway] = useState(false);
 
@@ -121,6 +162,7 @@ export function useAudioSync({
   const manualScrollTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const programmaticScrollRef = useRef(false);
   const activeSentenceRef = useRef(-1);
+  const activeWordRef = useRef(-1);
 
   // Keep refs in sync with props/state
   useEffect(() => { internalCumulativeRef.current = cumulativeTimeSec; }, [cumulativeTimeSec]);
@@ -162,6 +204,23 @@ export function useAudioSync({
       setActiveSentenceIndex(idx);
     }
 
+    // Word-level tracking
+    const words = wordsRef.current;
+    let wIdx = -1;
+    for (let i = 0; i < words.length; i++) {
+      if (t >= words[i].startTime && t < words[i].endTime) {
+        wIdx = i;
+        break;
+      }
+    }
+    if (wIdx === -1 && words.length > 0 && t >= words[words.length - 1].startTime) {
+      wIdx = words.length - 1;
+    }
+    if (wIdx !== activeWordRef.current) {
+      activeWordRef.current = wIdx;
+      setActiveWordIndex(wIdx);
+    }
+
     rafRef.current = requestAnimationFrame(tick);
   }, [audioRef]); // Only depends on audioRef identity (stable ref)
 
@@ -179,11 +238,16 @@ export function useAudioSync({
     };
   }, [isPlaying, tick, sentences.length]);
 
-  // Scroll active sentence into center
+  // Scroll active word (or block) into center
   useEffect(() => {
-    if (!isSyncEnabled || activeSentenceIndex < 0 || isUserScrolledAway) return;
+    if (!isSyncEnabled || isUserScrolledAway) return;
+    if (activeWordIndex < 0 && activeSentenceIndex < 0) return;
 
-    const el = contentRef.current?.querySelector(`[data-sentence-index="${activeSentenceIndex}"]`);
+    // Prefer scrolling to the active word for precision
+    const wordEl = activeWordIndex >= 0 
+      ? contentRef.current?.querySelector(`[data-word-index="${activeWordIndex}"]`)
+      : null;
+    const el = wordEl || contentRef.current?.querySelector(`[data-sentence-index="${activeSentenceIndex}"]`);
     if (!el) return;
 
     programmaticScrollRef.current = true;
@@ -192,7 +256,7 @@ export function useAudioSync({
     setTimeout(() => {
       programmaticScrollRef.current = false;
     }, 600);
-  }, [activeSentenceIndex, isSyncEnabled, isUserScrolledAway, contentRef]);
+  }, [activeWordIndex, activeSentenceIndex, isSyncEnabled, isUserScrolledAway, contentRef]);
 
   // Detect manual scroll
   useEffect(() => {
@@ -237,7 +301,9 @@ export function useAudioSync({
     playbackTimeRef.current = 0;
     lastTickRef.current = 0;
     activeSentenceRef.current = -1;
+    activeWordRef.current = -1;
     setActiveSentenceIndex(-1);
+    setActiveWordIndex(-1);
     setIsUserScrolledAway(false);
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, []);
@@ -250,6 +316,7 @@ export function useAudioSync({
   return {
     sentences,
     activeSentenceIndex,
+    activeWordIndex,
     isSyncEnabled,
     toggleSync,
     isUserScrolledAway,
