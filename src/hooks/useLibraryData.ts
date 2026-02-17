@@ -234,7 +234,8 @@ export function useLibraryData({
           .from('user_library')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', userId)
-          .lt('progress_percent', 100), // Any book not completed = reading
+          .gt('progress_percent', 0) // Only count books actually started
+          .lt('progress_percent', 100), // But not yet completed
         supabase
           .from('user_library')
           .select('id', { count: 'exact', head: true })
