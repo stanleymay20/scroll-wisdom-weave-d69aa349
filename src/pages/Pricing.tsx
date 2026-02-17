@@ -40,7 +40,7 @@ const plans: PlanConfig[] = [
     icon: BookOpen,
     tierKey: "free",
     features: [
-      { text: "1 book per day (up to 5 chapters)", included: true },
+      { text: "1 book per month (up to 5 chapters)", included: true },
       { text: "Full reader with text-to-speech", included: true },
       { text: "1 quiz per book", included: true },
       { text: "1 competency certificate", included: true },
