@@ -51,7 +51,7 @@ import { VoiceConversation } from "@/components/reader/VoiceConversation";
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 import { CodePlayground } from "@/components/reader/CodePlayground";
-import { ComicReaderMode, parseComicContentToPanels, ComicPanelData } from "@/components/reader/ComicReaderMode";
+
 import { PreviouslyInBookCard, ReadingSessionTimer, DirectTextEditor } from "@/components/reader";
 import { ReaderToolsSheet } from "@/components/reader/ReaderToolsSheet";
 import { FlashcardGenerator } from "@/components/decks/FlashcardGenerator";
@@ -192,7 +192,7 @@ export default function Reader() {
   const [showQuiz, setShowQuiz] = useState(false);
   const [showVoiceConversation, setShowVoiceConversation] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
-  const [showComicReader, setShowComicReader] = useState(false);
+  
   const [showDirectEditor, setShowDirectEditor] = useState(false);
   const [highlightedText, setHighlightedText] = useState("");
   const [isBookOwner, setIsBookOwner] = useState(false);
@@ -1246,7 +1246,7 @@ export default function Reader() {
           isQuizUnlocked={quizGating.isQuizUnlocked}
           quizProgress={quizGating.readProgress}
           hasCodeContent={hasCodeContent(chapter.content)}
-          hasComicContent={chapter.content.includes('[PANEL')}
+          hasComicContent={false}
           isBookOwner={isBookOwner}
           onVoiceClick={() => {
             closeTopPanels();
@@ -1270,10 +1270,7 @@ export default function Reader() {
             closeTopPanels();
             setShowPlayground(true);
           }}
-          onComicModeClick={() => {
-            closeTopPanels();
-            setShowComicReader(true);
-          }}
+          onComicModeClick={() => {}}
           onEditClick={() => setShowDirectEditor(true)}
           onLearningDeckClick={() => {
             setShowLearningDeckDialog(true);
@@ -1395,22 +1392,6 @@ export default function Reader() {
         />
       )}
 
-      {/* Comic Reader Mode */}
-      {showComicReader && chapter?.content && (
-        <ComicReaderMode
-          panels={parseComicContentToPanels(chapter.content)}
-          chapterTitle={chapter.title}
-          bookTitle={book?.title || ""}
-          onClose={() => setShowComicReader(false)}
-          onComplete={() => {
-            toast({
-              title: "Chapter complete!",
-              description: "Great job reading this comic chapter.",
-            });
-            quizGating.markChapterComplete(currentChapter);
-          }}
-        />
-      )}
 
       {/* CONTRACT 5.2: Navigation Footer with HARD safe area inset - NEVER overlaps home indicator */}
       <footer 
