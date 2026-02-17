@@ -1,4 +1,4 @@
-import { useMemo, useEffect, useRef, useState } from "react";
+import { useMemo, useEffect, useRef } from "react";
 import hljs from 'highlight.js/lib/core';
 import { StructuredCodeBlock, extractAllStructuredCodeBlocks, StructuredCodeBlockData } from "./StructuredCodeBlock";
 
@@ -80,24 +80,77 @@ interface MarkdownRendererProps {
  */
 export function MarkdownRenderer({ content, className = "" }: MarkdownRendererProps) {
   const containerRef = useRef<HTMLDivElement>(null);
+  const blobUrlsRef = useRef<string[]>([]);
   
-  // Pre-process: Extract base64 images to prevent multi-MB string processing
-  // Replace inline base64 data URIs with indexed placeholders, render them separately
+  // Cleanup blob URLs on unmount
+  useEffect(() => {
+    return () => {
+      blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+      blobUrlsRef.current = [];
+    };
+  }, []);
+  
+  // Pre-process: Extract base64 images using indexOf (regex crashes on multi-MB strings)
+  // Convert to blob URLs for efficient DOM rendering
   const { processedContent, extractedImages } = useMemo(() => {
     if (!content) return { processedContent: "", extractedImages: [] as { alt: string; src: string; caption: string }[] };
     
+    // Revoke previous blob URLs
+    blobUrlsRef.current.forEach(url => URL.revokeObjectURL(url));
+    blobUrlsRef.current = [];
+    
     const images: { alt: string; src: string; caption: string }[] = [];
     let processed = content;
+    let searchFrom = 0;
     
-    // Match markdown images with base64 data URIs: ![alt](data:image/...)
-    processed = processed.replace(/!\[([^\]]*)\]\((data:image\/[^)]+)\)/g, (_, alt, src) => {
+    // indexOf-based extraction: avoids regex catastrophic backtracking on 10MB+ strings
+    while (true) {
+      const marker = '](data:image/';
+      const markerIdx = processed.indexOf(marker, searchFrom);
+      if (markerIdx === -1) break;
+      
+      // Find the opening ![
+      const bangIdx = processed.lastIndexOf('![', markerIdx);
+      if (bangIdx === -1 || bangIdx < searchFrom) { searchFrom = markerIdx + marker.length; continue; }
+      
+      // Verify no newline between ![ and ](
+      const between = processed.substring(bangIdx, markerIdx);
+      if (between.includes('\n')) { searchFrom = markerIdx + marker.length; continue; }
+      
+      // Find closing paren — base64 chars never contain )
+      const closeIdx = processed.indexOf(')', markerIdx);
+      if (closeIdx === -1) break;
+      
+      const alt = processed.substring(bangIdx + 2, markerIdx);
+      const dataUri = processed.substring(markerIdx + 2, closeIdx);
+      
+      // Convert base64 data URI to blob URL for efficient rendering
+      let renderSrc = '';
+      try {
+        const commaIdx = dataUri.indexOf(',');
+        if (commaIdx > 0) {
+          const meta = dataUri.substring(0, commaIdx);
+          const mime = meta.match(/:(.*?);/)?.[1] || 'image/png';
+          const b64 = dataUri.substring(commaIdx + 1);
+          const byteString = atob(b64);
+          const ab = new Uint8Array(byteString.length);
+          for (let i = 0; i < byteString.length; i++) ab[i] = byteString.charCodeAt(i);
+          const blob = new Blob([ab], { type: mime });
+          renderSrc = URL.createObjectURL(blob);
+          blobUrlsRef.current.push(renderSrc);
+        }
+      } catch {
+        // If conversion fails, use data URI as fallback (slow but works)
+        renderSrc = dataUri;
+      }
+      
       const idx = images.length;
-      images.push({ alt, src, caption: alt });
-      return `<!--BASE64_IMG_${idx}-->`;
-    });
-    
-    // Also match caption lines after the placeholder: *Figure N: caption*
-    // (these are already separate lines, they'll render normally)
+      images.push({ alt, src: renderSrc, caption: alt });
+      
+      const placeholder = `<!--BASE64_IMG_${idx}-->`;
+      processed = processed.substring(0, bangIdx) + placeholder + processed.substring(closeIdx + 1);
+      searchFrom = bangIdx + placeholder.length;
+    }
     
     return { processedContent: processed, extractedImages: images };
   }, [content]);
