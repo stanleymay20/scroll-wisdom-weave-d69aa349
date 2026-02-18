@@ -234,7 +234,7 @@ function MobileLibraryContent({
       />
 
       {/* Quick Stats */}
-      {items.length > 0 && (
+      {stats.total > 0 && (
         <div className="grid grid-cols-3 gap-3 mb-6">
           <div className="bg-card rounded-lg p-3 text-center border border-border/50">
             <p className="text-lg font-bold">{stats.total}</p>
@@ -252,7 +252,7 @@ function MobileLibraryContent({
       )}
 
       {/* Search */}
-      {items.length > 0 && (
+      {stats.total > 0 && (
         <div className="relative mb-4">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
@@ -265,7 +265,7 @@ function MobileLibraryContent({
       )}
 
       {/* Filter Tabs */}
-      {items.length > 0 && (
+      {stats.total > 0 && (
         <Tabs value={filterStatus} onValueChange={(v) => setFilterStatus(v as any)} className="mb-4">
           <TabsList className="w-full">
             <TabsTrigger value="all" className="flex-1">All</TabsTrigger>
@@ -276,7 +276,7 @@ function MobileLibraryContent({
       )}
 
       {/* Category Filter & Sort */}
-      {items.length > 0 && (
+      {stats.total > 0 && (
         <div className="flex gap-2 mb-6">
           <Select value={filterCategory} onValueChange={setFilterCategory}>
             <SelectTrigger className="flex-1">
