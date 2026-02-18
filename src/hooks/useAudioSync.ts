@@ -42,6 +42,8 @@ interface UseAudioSyncOptions {
   wordCount?: number;
   /** Chunk playback info from TTS player for precise word-level sync */
   chunkPlaybackInfo?: ChunkPlaybackInfo | null;
+  /** Number of words prepended to TTS text that are NOT in the DOM (e.g. "Chapter 1: Title") */
+  ttsWordOffset?: number;
 }
 
 interface UseAudioSyncReturn {
@@ -79,6 +81,7 @@ export function useAudioSync({
   estimatedDurationSec,
   wordCount: inputWordCount = 0,
   chunkPlaybackInfo,
+  ttsWordOffset = 0,
 }: UseAudioSyncOptions): UseAudioSyncReturn {
   // Total chapter duration estimate (for block-level fallback)
   const totalDuration = useMemo(
@@ -162,19 +165,22 @@ export function useAudioSync({
     if (audio && info && info.chunkWordCounts.length > 0 && !isNaN(audio.currentTime) && !isNaN(audio.duration) && audio.duration > 0) {
       const fraction = Math.min(1, audio.currentTime / audio.duration);
       
-      let ttsWordOffset = 0;
+      let ttsWordOffset_chunk = 0;
       for (let i = 0; i < info.chunkIndex && i < info.chunkWordCounts.length; i++) {
-        ttsWordOffset += info.chunkWordCounts[i];
+        ttsWordOffset_chunk += info.chunkWordCounts[i];
       }
       
       const wordsInChunk = info.chunkWordCounts[info.chunkIndex] || 1;
       const wordInChunk = Math.floor(fraction * wordsInChunk);
-      const ttsGlobalWord = ttsWordOffset + wordInChunk;
+      const ttsGlobalWord = ttsWordOffset_chunk + wordInChunk;
       
+      // Subtract preamble words (e.g. "Chapter 1: Title.") that exist in TTS but not in DOM
+      const adjustedTTSWord = Math.max(0, ttsGlobalWord - ttsWordOffset);
       const totalTTSWords = info.chunkWordCounts.reduce((sum, c) => sum + c, 0);
+      const adjustedTotalTTS = Math.max(1, totalTTSWords - ttsWordOffset);
       const domCount = domWordCountRef.current;
-      const globalWordIdx = domCount > 0 && totalTTSWords > 0
-        ? Math.min(Math.floor((ttsGlobalWord / totalTTSWords) * domCount), domCount - 1)
+      const globalWordIdx = domCount > 0 && adjustedTotalTTS > 0
+        ? Math.min(Math.floor((adjustedTTSWord / adjustedTotalTTS) * domCount), domCount - 1)
         : -1;
       
       if (globalWordIdx !== activeWordRef.current && globalWordIdx >= 0) {

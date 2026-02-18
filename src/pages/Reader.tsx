@@ -15,7 +15,7 @@
  * - Zero layout shift
  */
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
@@ -408,6 +408,13 @@ export default function Reader() {
   });
 
   // Sentence-level audio synchronization
+  // Compute TTS preamble word offset ("Chapter X: Title.\n\n" words not in DOM)
+  const ttsPreambleOffset = useMemo(() => {
+    if (!chapter?.title) return 0;
+    const preamble = `Chapter ${currentChapter}: ${chapter.title}.`;
+    return preamble.split(/\s+/).filter(Boolean).length;
+  }, [currentChapter, chapter?.title]);
+
   const audioSync = useAudioSync({
     chapterContent: chapter?.content || null,
     isPlaying: isTTSPlaying,
@@ -417,6 +424,7 @@ export default function Reader() {
     estimatedDurationSec: ttsEstimatedDuration > 0 ? ttsEstimatedDuration : undefined,
     wordCount,
     chunkPlaybackInfo,
+    ttsWordOffset: ttsPreambleOffset,
   });
 
   // Audio highlighting is now handled directly in useAudioSync via DOM manipulation
