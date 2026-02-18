@@ -83,3 +83,6 @@ verify_jwt = false
 
 [functions.audit-code]
 verify_jwt = false
+
+[functions.chief-editor-audit]
+verify_jwt = false
