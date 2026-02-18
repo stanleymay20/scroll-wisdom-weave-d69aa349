@@ -62,6 +62,74 @@ export type Database = {
           },
         ]
       }
+      book_audits: {
+        Row: {
+          academic_findings: Json
+          academic_score: number
+          book_id: string
+          chapter_suggestions: Json
+          created_at: string
+          flagged_sections: Json
+          id: string
+          improvements_applied: boolean
+          improvements_applied_at: string | null
+          overall_score: number
+          pedagogical_findings: Json
+          pedagogical_score: number
+          status: string
+          structural_findings: Json
+          structural_score: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          academic_findings?: Json
+          academic_score?: number
+          book_id: string
+          chapter_suggestions?: Json
+          created_at?: string
+          flagged_sections?: Json
+          id?: string
+          improvements_applied?: boolean
+          improvements_applied_at?: string | null
+          overall_score?: number
+          pedagogical_findings?: Json
+          pedagogical_score?: number
+          status?: string
+          structural_findings?: Json
+          structural_score?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          academic_findings?: Json
+          academic_score?: number
+          book_id?: string
+          chapter_suggestions?: Json
+          created_at?: string
+          flagged_sections?: Json
+          id?: string
+          improvements_applied?: boolean
+          improvements_applied_at?: string | null
+          overall_score?: number
+          pedagogical_findings?: Json
+          pedagogical_score?: number
+          status?: string
+          structural_findings?: Json
+          structural_score?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_audits_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       book_citations: {
         Row: {
           author: string | null
