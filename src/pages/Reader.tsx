@@ -533,19 +533,22 @@ export default function Reader() {
   // The Reader UI already shows "Chapter X" + title as <h2>/<h3>, so remove from content
   const stripDuplicateTitle = (content: string, title: string): string => {
     let cleaned = content;
-    const titleEscaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    const patterns = [
-      new RegExp(`^\\s*#{1,3}\\s*(?:Chapter\\s+\\d+[:\\s-]*)?${titleEscaped}\\s*\\n+`, 'i'),
-      /^\s*#{1,3}\s*Chapter\s+\d+\s*\n+/i,
-      new RegExp(`^\\s*#{1,3}\\s*${titleEscaped}\\s*\\n+`, 'i'),
-      new RegExp(`^\\s*Chapter\\s+\\d+[:\\s-]*${titleEscaped}\\s*\\n+`, 'i'),
-      /^\s*Chapter\s+\d+\s*\n+/i,
-    ];
-    for (const pattern of patterns) {
-      const match = cleaned.match(pattern);
-      if (match) {
-        cleaned = cleaned.slice(match[0].length);
-        break;
+    // Strip leading lines that are chapter number headings or title headings (with optional bold **)
+    // Loop to remove multiple consecutive heading lines (e.g. "## **Chapter 1**\n## **Title**\n")
+    let changed = true;
+    while (changed) {
+      changed = false;
+      // Match heading lines like: ## **Chapter 1** or ## Chapter 1: Title or ## **Title**
+      const headingMatch = cleaned.match(/^\s*#{1,3}\s*\**\s*(?:Chapter\s+\d+[:\s\-–—]*)?[^]*?\**\s*\n/i);
+      if (headingMatch) {
+        const line = headingMatch[0].replace(/[#*\s\n]/g, '').toLowerCase();
+        const titleClean = title.replace(/[#*\s]/g, '').toLowerCase();
+        const isChapterLine = /chapter\s*\d+/i.test(headingMatch[0]);
+        const isTitleLine = titleClean.length > 3 && line.includes(titleClean);
+        if (isChapterLine || isTitleLine) {
+          cleaned = cleaned.slice(headingMatch[0].length);
+          changed = true;
+        }
       }
     }
     return cleaned;
