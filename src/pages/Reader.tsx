@@ -215,24 +215,54 @@ export default function Reader() {
   }, [pendingAutoPlay]);
 
   const { toast } = useToast();
-  const lastSavedProgress = useRef<number>(0);
+  const lastSavedProgress = useRef<number>(-1); // -1 = not yet initialized from DB
   const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const dbProgressLoaded = useRef(false);
+
+  // Initialize lastSavedProgress from database on mount (prevents overwriting higher values)
+  useEffect(() => {
+    if (!userId || !bookId || dbProgressLoaded.current) return;
+    
+    const loadExistingProgress = async () => {
+      try {
+        const { data } = await supabase
+          .from("user_library")
+          .select("progress_percent")
+          .eq("user_id", userId)
+          .eq("book_id", bookId)
+          .single();
+        
+        if (data?.progress_percent != null) {
+          lastSavedProgress.current = Number(data.progress_percent);
+        } else {
+          lastSavedProgress.current = 0;
+        }
+      } catch {
+        lastSavedProgress.current = 0;
+      }
+      dbProgressLoaded.current = true;
+    };
+    
+    loadExistingProgress();
+  }, [userId, bookId]);
 
   // Save reading progress to database with debounce (optimized)
-  // Saves when progress changes by ≥5% OR on explicit save, OR on first chapter open
+  // CRITICAL: Never save a LOWER value than what's already stored
   const saveProgress = useCallback(async (chapterNum: number, progressPercent: number, showToast = false) => {
     if (!userId || !bookId) return;
+    // Don't save until we know the existing progress
+    if (lastSavedProgress.current < 0) return;
     
     const roundedProgress = Math.round(progressPercent);
     
-    // Always save if current saved progress is 0 (first read), or on explicit toast save
-    const isFirstSave = lastSavedProgress.current === 0 && roundedProgress > 0;
-    // Skip if progress hasn't changed significantly (< 5%) unless forcing save or first save
-    if (!showToast && !isFirstSave && Math.abs(roundedProgress - lastSavedProgress.current) < 5) return;
+    // NEVER decrease progress — completed books must stay at 100%
+    if (roundedProgress <= lastSavedProgress.current) return;
+    
+    // Skip if progress hasn't changed significantly (< 5%) unless forcing save
+    if (!showToast && Math.abs(roundedProgress - lastSavedProgress.current) < 5) return;
     
     try {
-      // Use update with filter (more reliable than upsert for existing entries)
-      const { error, count } = await supabase
+      const { error } = await supabase
         .from("user_library")
         .update({
           last_read_chapter: chapterNum,
@@ -286,8 +316,9 @@ export default function Reader() {
   }, [currentChapter]);
 
   // Save progress immediately on chapter open (ensures progress > 0 for "in progress" tracking)
+  // saveProgress already prevents decreasing, so this is safe
   useEffect(() => {
-    if (userId && bookId && book?.total_chapters && currentChapter > 0) {
+    if (userId && bookId && book?.total_chapters && currentChapter > 0 && dbProgressLoaded.current) {
       const completedChapters = currentChapter - 1;
       const overallProgress = ((completedChapters) / book.total_chapters) * 100;
       // Minimum 1% so the book shows as "in progress" even on chapter 1
