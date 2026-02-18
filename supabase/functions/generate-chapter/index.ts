@@ -2082,9 +2082,11 @@ serve(async (req) => {
       .single();
 
     const userPlan = profile?.plan || "free";
-    const generationModel = getModelForPlan(userPlan);
+    // Admin gets best model regardless of profile plan
+    const effectiveModelPlan = isAdmin ? "prophet_tier" : userPlan;
+    const generationModel = getModelForPlan(effectiveModelPlan);
     const maxWordCount = TIER_WORD_LIMITS[userPlan as keyof typeof TIER_WORD_LIMITS] || TIER_WORD_LIMITS.free;
-    console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel}`);
+    console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel} | Admin: ${isAdmin}`);
 
     // ===========================================
     // INPUT NORMALIZATION — Defensive layer for multi-path orchestration

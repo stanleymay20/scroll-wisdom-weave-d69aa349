@@ -92,6 +92,9 @@ serve(async (req) => {
 
     const userPlan = (profile?.plan || "free") as keyof typeof TIER_LIMITS;
     const trialActive = isTrialActive();
+
+    // Admin gets best model regardless of profile plan
+    const effectiveModelPlan = isAdmin ? "prophet_tier" : userPlan;
     const effectivePlan: keyof typeof TIER_LIMITS = isAdmin ? "prophet_tier" : (trialActive ? "premium" : userPlan);
     const limits = TIER_LIMITS[effectivePlan] || TIER_LIMITS.free;
 
@@ -123,7 +126,7 @@ serve(async (req) => {
       : authorMode === "pen_name" ? (penName || "Anonymous")
       : authorMode === "hidden" ? "Anonymous" : "ScrollAuthorGPT";
 
-    const generationModel = getModelForPlan(userPlan);
+    const generationModel = getModelForPlan(effectiveModelPlan);
     console.log(`[GENERATE-BOOK] "${title}" | ${effectiveChapters}ch | ${languageName} | ${effectiveBookType} | model: ${generationModel}`);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");

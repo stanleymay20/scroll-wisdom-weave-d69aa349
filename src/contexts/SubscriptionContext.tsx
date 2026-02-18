@@ -170,12 +170,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           .or(`user_id.eq.${session.user.id},id.eq.${session.user.id}`)
           .then(() => {});
       } else {
-        // FAIL-OPEN: if profile shows a paid plan, do NOT downgrade to free
-        if (profileData?.plan && profileData.plan !== 'free') {
-          setTier(profileData.plan as SubscriptionTier);
-        } else {
-          setTier('free');
-        }
+        // Stripe says no active subscription — trust Stripe as source of truth
+        // The check-subscription function also syncs this to the profile
+        setTier('free');
         setSubscriptionEnd(null);
       }
     } catch (error) {

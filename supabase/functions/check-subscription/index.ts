@@ -90,8 +90,19 @@ serve(async (req) => {
       logStep("Active subscription found", { subscriptionId: subscription.id, endDate: subscriptionEnd });
       productId = subscription.items.data[0].price.product;
       logStep("Determined subscription tier", { productId });
+
+      // Sync plan to profile (fire-and-forget)
+      const tier = productId === 'prod_TaQU3ILEUpbXOT' ? 'premium'
+        : productId === 'prod_TaQWA7MSUntiMy' ? 'prophet_tier'
+        : productId === 'prod_TaQSrotoUkTuPC' ? 'student'
+        : 'free';
+      supabaseClient.from("profiles").update({ plan: tier }).eq("user_id", userId).then(() => {});
     } else {
       logStep("No active subscription found");
+      // CRITICAL: Sync downgrade to profile so edge functions see correct plan
+      supabaseClient.from("profiles").update({ plan: 'free' }).eq("user_id", userId).then(() => {
+        logStep("Profile synced to free tier");
+      });
     }
 
     return new Response(JSON.stringify({

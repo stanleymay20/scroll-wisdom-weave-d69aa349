@@ -7,17 +7,11 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, stripe-signature",
 };
 
-// Mask email for logging
 const maskEmail = (email: string | null): string => {
   if (!email) return "none";
   const [local, domain] = email.split("@");
   if (!local || !domain) return "invalid";
   return `${local[0]}***@${domain}`;
-};
-
-// Mask user ID for logging
-const maskUserId = (id: string): string => {
-  return `${id.slice(0, 8)}...`;
 };
 
 const logStep = (step: string, details?: Record<string, unknown>) => {
@@ -41,7 +35,6 @@ serve(async (req) => {
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
     if (!supabaseUrl || !supabaseServiceKey) throw new Error("Supabase configuration missing");
     
-    // SECURITY: Webhook signature verification is REQUIRED in production
     if (!webhookSecret) {
       logStep("SECURITY ERROR: STRIPE_WEBHOOK_SECRET is not configured");
       throw new Error("STRIPE_WEBHOOK_SECRET must be configured. Unsigned webhooks are not accepted.");
@@ -55,7 +48,6 @@ serve(async (req) => {
     const signature = req.headers.get("stripe-signature");
     const body = await req.text();
 
-    // SECURITY: Signature verification is mandatory
     if (!signature) {
       logStep("SECURITY ERROR: Missing stripe-signature header");
       return new Response(JSON.stringify({ error: "Missing stripe-signature header" }), {
@@ -90,6 +82,35 @@ serve(async (req) => {
       return productMap[productId] || 'free';
     };
 
+    // ===========================================
+    // FIXED: Use user_id column (not id) for profile updates
+    // The profiles table has: id (auto UUID), user_id (auth.users FK)
+    // We must match on user_id to update the correct row
+    // ===========================================
+    const updateProfilePlan = async (authUserId: string, plan: ValidPlan) => {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ 
+          plan,
+          updated_at: new Date().toISOString() 
+        })
+        .eq("user_id", authUserId);
+
+      if (error) {
+        logStep("Error updating profile plan", { error: error.message, userId: authUserId.slice(0, 8) });
+      } else {
+        logStep("Profile plan updated successfully", { plan, userId: authUserId.slice(0, 8) });
+      }
+      return error;
+    };
+
+    // Find Supabase user by email
+    const findUserByEmail = async (email: string) => {
+      const { data: users, error } = await supabase.auth.admin.listUsers();
+      if (error || !users?.users) return null;
+      return users.users.find(u => u.email === email) || null;
+    };
+
     switch (event.type) {
       case "checkout.session.completed": {
         const session = event.data.object as Stripe.Checkout.Session;
@@ -100,29 +121,15 @@ serve(async (req) => {
           const productId = subscription.items.data[0]?.price?.product as string;
           const tier = getTierFromProductId(productId);
           
-          logStep("Subscription created", { tier });
+          logStep("Subscription created", { tier, productId });
 
           const customerEmail = session.customer_email;
           if (customerEmail) {
-            const { data: users, error: userError } = await supabase.auth.admin.listUsers();
-            
-            if (!userError && users?.users) {
-              const user = users.users.find(u => u.email === customerEmail);
-              if (user) {
-                const { error: updateError } = await supabase
-                  .from("profiles")
-                  .upsert({
-                    id: user.id,
-                    plan: tier,
-                    updated_at: new Date().toISOString(),
-                  }, { onConflict: "id" });
-
-                if (updateError) {
-                  logStep("Error updating profile", { error: updateError.message });
-                } else {
-                  logStep("Profile updated successfully", { tier });
-                }
-              }
+            const user = await findUserByEmail(customerEmail);
+            if (user) {
+              await updateProfilePlan(user.id, tier);
+            } else {
+              logStep("No Supabase user found for email", { email: maskEmail(customerEmail) });
             }
           }
         }
@@ -139,23 +146,11 @@ serve(async (req) => {
           const tier = getTierFromProductId(productId);
           
           const customer = await stripe.customers.retrieve(invoice.customer as string);
-          if (customer && !customer.deleted && "email" in customer) {
-            const customerEmail = customer.email;
-            if (customerEmail) {
-              const { data: users } = await supabase.auth.admin.listUsers();
-              const user = users?.users?.find(u => u.email === customerEmail);
-              
-              if (user) {
-                await supabase
-                  .from("profiles")
-                  .update({ 
-                    plan: tier,
-                    updated_at: new Date().toISOString() 
-                  })
-                  .eq("id", user.id);
-                
-                logStep("Subscription renewed", { tier });
-              }
+          if (customer && !customer.deleted && "email" in customer && customer.email) {
+            const user = await findUserByEmail(customer.email);
+            if (user) {
+              await updateProfilePlan(user.id, tier);
+              logStep("Subscription renewed", { tier });
             }
           }
         }
@@ -170,23 +165,10 @@ serve(async (req) => {
         const tier = subscription.status === "active" ? getTierFromProductId(productId) : "free";
 
         const customer = await stripe.customers.retrieve(subscription.customer as string);
-        if (customer && !customer.deleted && "email" in customer) {
-          const customerEmail = customer.email;
-          if (customerEmail) {
-            const { data: users } = await supabase.auth.admin.listUsers();
-            const user = users?.users?.find(u => u.email === customerEmail);
-            
-            if (user) {
-              await supabase
-                .from("profiles")
-                .update({ 
-                  plan: tier,
-                  updated_at: new Date().toISOString() 
-                })
-                .eq("id", user.id);
-              
-              logStep("Profile tier updated", { tier, status: subscription.status });
-            }
+        if (customer && !customer.deleted && "email" in customer && customer.email) {
+          const user = await findUserByEmail(customer.email);
+          if (user) {
+            await updateProfilePlan(user.id, tier);
           }
         }
         break;
@@ -197,23 +179,11 @@ serve(async (req) => {
         logStep("Subscription deleted/cancelled");
 
         const customer = await stripe.customers.retrieve(subscription.customer as string);
-        if (customer && !customer.deleted && "email" in customer) {
-          const customerEmail = customer.email;
-          if (customerEmail) {
-            const { data: users } = await supabase.auth.admin.listUsers();
-            const user = users?.users?.find(u => u.email === customerEmail);
-            
-            if (user) {
-              await supabase
-                .from("profiles")
-                .update({ 
-                  plan: "free" as const,
-                  updated_at: new Date().toISOString() 
-                })
-                .eq("id", user.id);
-              
-              logStep("User downgraded to free");
-            }
+        if (customer && !customer.deleted && "email" in customer && customer.email) {
+          const user = await findUserByEmail(customer.email);
+          if (user) {
+            await updateProfilePlan(user.id, "free");
+            logStep("User downgraded to free");
           }
         }
         break;
