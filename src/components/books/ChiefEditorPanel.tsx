@@ -22,6 +22,8 @@ import {
   Gavel,
   Award,
   Undo2,
+  History,
+  Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -34,6 +36,7 @@ interface ChiefEditorPanelProps {
     content: string | null;
     is_generated: boolean | null;
   }>;
+  onChaptersUpdated?: () => void;
   className?: string;
 }
 
@@ -52,6 +55,9 @@ interface AuditData {
   evidence_citations: any[];
   pre_penalty_scores: Record<string, number>;
   certification_eligible: boolean;
+  certification_blockers: string[];
+  audit_model: string;
+  audit_prompt_version: string;
   status: string;
   improvements_applied: boolean;
   created_at: string;
@@ -82,15 +88,17 @@ const severityColor = (severity: string) => {
 
 const CERT_THRESHOLDS = { structural: 75, academic: 80, pedagogical: 75, overall: 78 };
 
-export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPanelProps) {
+export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, className }: ChiefEditorPanelProps) {
   const { toast } = useToast();
   const [audit, setAudit] = useState<AuditData | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [isRollingBack, setIsRollingBack] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
   const [showPenalties, setShowPenalties] = useState(false);
   const [showEvidence, setShowEvidence] = useState(false);
+  const [showBlockers, setShowBlockers] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const generatedCount = chapters.filter(ch => ch.is_generated).length;
@@ -165,7 +173,7 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
         const improvementPrompt = suggestion.improvements?.join("\n- ") || "";
         if (!improvementPrompt) continue;
 
-        // Save previous content for versioning (via direct update before regeneration)
+        // Save previous content for versioning
         await supabase.from("chapters").update({
           previous_content: chapter.content,
           version_number: ((chapter as any).version_number || 1) + 1,
@@ -194,6 +202,7 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
       }).eq("id", audit.id);
 
       setAudit(prev => prev ? { ...prev, improvements_applied: true } : null);
+      onChaptersUpdated?.();
 
       toast({
         title: "Improvements Applied",
@@ -203,6 +212,56 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
       toast({ title: "Failed to apply improvements", description: String(err), variant: "destructive" });
     } finally {
       setIsApplying(false);
+    }
+  };
+
+  // ============================================================
+  // ROLLBACK: Restore previous content
+  // ============================================================
+  const rollbackImprovements = async () => {
+    if (!audit) return;
+
+    setIsRollingBack(true);
+    let rolledBack = 0;
+
+    try {
+      // Find chapters linked to this audit that have previous_content
+      const { data: versionedChapters, error } = await supabase
+        .from("chapters")
+        .select("id, chapter_number, previous_content, version_number")
+        .eq("book_id", bookId)
+        .eq("audit_id", audit.id)
+        .not("previous_content", "is", null);
+
+      if (error) throw error;
+
+      for (const ch of versionedChapters || []) {
+        await supabase.from("chapters").update({
+          content: ch.previous_content,
+          previous_content: null,
+          version_number: Math.max(1, (ch.version_number || 2) - 1),
+          audit_id: null,
+        }).eq("id", ch.id);
+        rolledBack++;
+      }
+
+      // Reset improvements_applied flag
+      await supabase.from("book_audits").update({
+        improvements_applied: false,
+        improvements_applied_at: null,
+      }).eq("id", audit.id);
+
+      setAudit(prev => prev ? { ...prev, improvements_applied: false } : null);
+      onChaptersUpdated?.();
+
+      toast({
+        title: "Rollback Complete",
+        description: `${rolledBack} chapter(s) restored to pre-improvement state.`,
+      });
+    } catch (err) {
+      toast({ title: "Rollback Failed", description: String(err), variant: "destructive" });
+    } finally {
+      setIsRollingBack(false);
     }
   };
 
@@ -218,6 +277,7 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
   const prePenalty = (audit?.pre_penalty_scores || {}) as Record<string, number>;
   const hasPenalties = penalties.length > 0;
   const evidenceCitations = (audit?.evidence_citations || []) as any[];
+  const blockers = (audit?.certification_blockers || []) as string[];
 
   return (
     <div className={cn("rounded-xl border border-border/50 bg-gradient-card overflow-hidden", className)}>
@@ -246,7 +306,7 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
                 </Badge>
               ) : (
                 <Badge variant="outline" className="text-xs text-amber-500 border-amber-500/30">
-                  Below Threshold
+                  {blockers.length} Blocker{blockers.length !== 1 ? 's' : ''}
                 </Badge>
               )}
               <Badge variant="outline" className={cn("text-xs", scoreColor(audit.overall_score))}>
@@ -287,7 +347,6 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
                 </Button>
               </div>
 
-              {/* Scores */}
               {audit?.status === "completed" && (
                 <>
                   {/* Overall Score */}
@@ -304,25 +363,48 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
                     </p>
                   </div>
 
-                  {/* Certification Eligibility Gate */}
+                  {/* Certification Gate with Specific Blockers */}
                   <div className={cn(
                     "p-3 rounded-lg border text-xs",
                     audit.certification_eligible
-                      ? "bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400"
-                      : "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400"
+                      ? "bg-green-500/10 border-green-500/30"
+                      : "bg-amber-500/10 border-amber-500/30"
                   )}>
                     <div className="flex items-center gap-2 mb-1">
-                      <Award className="h-4 w-4" />
-                      <span className="font-medium">
-                        {audit.certification_eligible ? "Certification Eligible" : "Below Certification Threshold"}
+                      <Award className={cn("h-4 w-4", audit.certification_eligible ? "text-green-500" : "text-amber-500")} />
+                      <span className={cn("font-medium", audit.certification_eligible ? "text-green-600 dark:text-green-400" : "text-amber-600 dark:text-amber-400")}>
+                        {audit.certification_eligible ? "Certification Eligible ✓" : "Certification Blocked"}
                       </span>
                     </div>
-                    <p>
-                      Required: Structural ≥{CERT_THRESHOLDS.structural} · Academic ≥{CERT_THRESHOLDS.academic} · Pedagogical ≥{CERT_THRESHOLDS.pedagogical} · Overall ≥{CERT_THRESHOLDS.overall}
-                    </p>
+                    {blockers.length > 0 ? (
+                      <>
+                        <button
+                          onClick={() => setShowBlockers(!showBlockers)}
+                          className="flex items-center gap-1 text-amber-600 dark:text-amber-400 hover:underline mt-1"
+                        >
+                          <AlertTriangle className="h-3 w-3" />
+                          {blockers.length} reason{blockers.length !== 1 ? 's' : ''} blocking certification
+                          {showBlockers ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                        </button>
+                        {showBlockers && (
+                          <ul className="mt-2 space-y-1">
+                            {blockers.map((b, i) => (
+                              <li key={i} className="flex items-start gap-1.5 text-amber-700 dark:text-amber-300">
+                                <XCircle className="h-3 w-3 mt-0.5 shrink-0" />
+                                <span>{b}</span>
+                              </li>
+                            ))}
+                          </ul>
+                        )}
+                      </>
+                    ) : (
+                      <p className="text-green-600 dark:text-green-400">
+                        All thresholds met: Structural ≥{CERT_THRESHOLDS.structural} · Academic ≥{CERT_THRESHOLDS.academic} · Pedagogical ≥{CERT_THRESHOLDS.pedagogical} · Overall ≥{CERT_THRESHOLDS.overall}
+                      </p>
+                    )}
                   </div>
 
-                  {/* Dimension Scores with penalty indicators */}
+                  {/* Dimension Scores */}
                   {dimensions.map(dim => {
                     const rawScore = prePenalty[dim.key];
                     const wasCapped = rawScore !== undefined && rawScore > dim.score;
@@ -339,7 +421,7 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
                             <span className="text-sm font-medium">{dim.label}</span>
                             {wasCapped && (
                               <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">
-                                <Gavel className="h-2.5 w-2.5 mr-0.5" />Capped from {rawScore}
+                                <Gavel className="h-2.5 w-2.5 mr-0.5" />AI {rawScore} → Capped {dim.score}
                               </Badge>
                             )}
                           </div>
@@ -388,7 +470,7 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
                     );
                   })}
 
-                  {/* Hard Penalty Log */}
+                  {/* Deterministic Penalty Log */}
                   {hasPenalties && (
                     <div className="space-y-2">
                       <button
@@ -476,14 +558,29 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
                     </div>
                   )}
 
-                  {/* Apply Improvements Button */}
+                  {/* Apply / Rollback Buttons */}
                   {audit.chapter_suggestions?.length > 0 && (
                     <div className="pt-2 space-y-2">
                       {audit.improvements_applied ? (
-                        <div className="flex items-center gap-2 text-sm text-green-500">
-                          <CheckCircle2 className="h-4 w-4" />
-                          Improvements applied (versioned). Re-run audit to verify quality gains.
-                        </div>
+                        <>
+                          <div className="flex items-center gap-2 text-sm text-green-500">
+                            <CheckCircle2 className="h-4 w-4" />
+                            Improvements applied (versioned). Re-run audit to verify quality gains.
+                          </div>
+                          <Button
+                            onClick={rollbackImprovements}
+                            disabled={isRollingBack}
+                            variant="outline"
+                            size="sm"
+                            className="w-full text-destructive border-destructive/30 hover:bg-destructive/10"
+                          >
+                            {isRollingBack ? (
+                              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Rolling back...</>
+                            ) : (
+                              <><Undo2 className="h-4 w-4 mr-2" />Restore Previous Versions</>
+                            )}
+                          </Button>
+                        </>
                       ) : (
                         <>
                           <Button
@@ -501,10 +598,18 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
                           </Button>
                           <p className="text-[10px] text-muted-foreground text-center">
                             <Undo2 className="h-3 w-3 inline mr-1" />
-                            Previous content is saved for rollback
+                            Previous content saved — rollback available after applying
                           </p>
                         </>
                       )}
+                    </div>
+                  )}
+
+                  {/* Audit Provenance */}
+                  {audit.audit_model && (
+                    <div className="flex items-center gap-2 text-[10px] text-muted-foreground pt-1 border-t border-border/30">
+                      <History className="h-3 w-3" />
+                      <span>Model: {audit.audit_model} · Prompt: {audit.audit_prompt_version} · {new Date(audit.created_at).toLocaleString()}</span>
                     </div>
                   )}
                 </>
@@ -516,7 +621,7 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
                   <Loader2 className="h-5 w-5 animate-spin text-scroll-gold" />
                   <div>
                     <p className="text-sm font-medium">Audit in progress...</p>
-                    <p className="text-xs text-muted-foreground">Evaluating {generatedCount} chapters across 3 dimensions with hard penalty rules</p>
+                    <p className="text-xs text-muted-foreground">Evaluating {generatedCount} chapters with proportional penalty rules</p>
                   </div>
                 </div>
               )}
