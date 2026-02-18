@@ -895,11 +895,14 @@ export type Database = {
       }
       profiles: {
         Row: {
+          accepted_terms: boolean | null
+          accepted_terms_at: string | null
           ai_voice_preference: string | null
           animations_enabled: boolean | null
           avatar_url: string | null
           bio: string | null
           complexity_level: string | null
+          consent_ip: string | null
           country: string | null
           course_reminders: boolean | null
           created_at: string
@@ -911,6 +914,8 @@ export type Database = {
           last_book_date: string | null
           learning_preferences: Json | null
           new_book_alerts: boolean | null
+          newsletter_subscribed: boolean | null
+          newsletter_subscribed_at: string | null
           plan: string | null
           reader_theme: string | null
           spiritual_strictness: string | null
@@ -922,11 +927,14 @@ export type Database = {
           writing_tone: string | null
         }
         Insert: {
+          accepted_terms?: boolean | null
+          accepted_terms_at?: string | null
           ai_voice_preference?: string | null
           animations_enabled?: boolean | null
           avatar_url?: string | null
           bio?: string | null
           complexity_level?: string | null
+          consent_ip?: string | null
           country?: string | null
           course_reminders?: boolean | null
           created_at?: string
@@ -938,6 +946,8 @@ export type Database = {
           last_book_date?: string | null
           learning_preferences?: Json | null
           new_book_alerts?: boolean | null
+          newsletter_subscribed?: boolean | null
+          newsletter_subscribed_at?: string | null
           plan?: string | null
           reader_theme?: string | null
           spiritual_strictness?: string | null
@@ -949,11 +959,14 @@ export type Database = {
           writing_tone?: string | null
         }
         Update: {
+          accepted_terms?: boolean | null
+          accepted_terms_at?: string | null
           ai_voice_preference?: string | null
           animations_enabled?: boolean | null
           avatar_url?: string | null
           bio?: string | null
           complexity_level?: string | null
+          consent_ip?: string | null
           country?: string | null
           course_reminders?: boolean | null
           created_at?: string
@@ -965,6 +978,8 @@ export type Database = {
           last_book_date?: string | null
           learning_preferences?: Json | null
           new_book_alerts?: boolean | null
+          newsletter_subscribed?: boolean | null
+          newsletter_subscribed_at?: string | null
           plan?: string | null
           reader_theme?: string | null
           spiritual_strictness?: string | null
