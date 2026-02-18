@@ -370,59 +370,86 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       });
     }
 
-    const mdContainers = container.classList.contains('markdown-content') 
-      ? [container] 
-      : Array.from(container.querySelectorAll('.markdown-content'));
+    // When content has illustrations/structured blocks, the renderer creates
+    // multiple .markdown-content divs with <figure> and code block elements
+    // between them as direct children of containerRef. We must index ALL
+    // block-level elements in document order for audio sync to work seamlessly.
+    const hasMultipleContainers = !container.classList.contains('markdown-content') 
+      && container.querySelectorAll('.markdown-content').length > 0;
     
-    if (mdContainers.length === 0) mdContainers.push(container);
+    // Collect ALL block-level elements in document order
+    const allBlockElements: HTMLElement[] = [];
+    
+    if (hasMultipleContainers) {
+      // Walk direct children of containerRef — includes .markdown-content divs,
+      // <figure> elements (illustrations), and code block wrappers
+      for (let i = 0; i < container.children.length; i++) {
+        const child = container.children[i] as HTMLElement;
+        if (child.classList.contains('markdown-content')) {
+          // Expand: add each child of the markdown-content div
+          for (let j = 0; j < child.children.length; j++) {
+            allBlockElements.push(child.children[j] as HTMLElement);
+          }
+        } else {
+          // Direct block element (figure, structured code block wrapper, etc.)
+          allBlockElements.push(child);
+        }
+      }
+    } else if (container.classList.contains('markdown-content')) {
+      for (let i = 0; i < container.children.length; i++) {
+        allBlockElements.push(container.children[i] as HTMLElement);
+      }
+    } else {
+      // Fallback: single markdown-content or bare container
+      const mc = container.querySelector('.markdown-content') || container;
+      for (let i = 0; i < mc.children.length; i++) {
+        allBlockElements.push(mc.children[i] as HTMLElement);
+      }
+    }
 
     let globalBlockIdx = 0;
     let globalWordIdx = 0;
     
-    mdContainers.forEach(mc => {
-      const children = mc.children;
-      for (let i = 0; i < children.length; i++) {
-        const el = children[i] as HTMLElement;
-        el.setAttribute('data-sentence-index', String(globalBlockIdx++));
-        
-        // Skip word-level wrapping for huge content or code/table/figure elements
-        if (skipWordWrapping || el.classList.contains('code-block') || el.tagName === 'TABLE' || el.tagName === 'FIGURE') {
-          continue;
-        }
-        
-        // Walk text nodes and wrap each word in a span with data-word-index
-        const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
-        const textNodes: Text[] = [];
-        let node: Text | null;
-        while ((node = walker.nextNode() as Text | null)) {
-          // Skip text inside code elements
-          if (node.parentElement?.closest('code, pre, .code-block')) continue;
-          if (node.textContent && node.textContent.trim().length > 0) {
-            textNodes.push(node);
-          }
-        }
-        
-        for (const textNode of textNodes) {
-          const text = textNode.textContent || '';
-          // Split into words keeping whitespace
-          const parts = text.split(/(\s+)/);
-          if (parts.length <= 1 && !text.trim()) continue;
-          
-          const fragment = document.createDocumentFragment();
-          for (const part of parts) {
-            if (/^\s+$/.test(part) || part === '') {
-              fragment.appendChild(document.createTextNode(part));
-            } else {
-              const span = document.createElement('span');
-              span.setAttribute('data-word-index', String(globalWordIdx++));
-              span.textContent = part;
-              fragment.appendChild(span);
-            }
-          }
-          textNode.parentNode?.replaceChild(fragment, textNode);
+    for (const el of allBlockElements) {
+      el.setAttribute('data-sentence-index', String(globalBlockIdx++));
+      
+      // Skip word-level wrapping for huge content or code/table/figure elements
+      if (skipWordWrapping || el.classList.contains('code-block') || el.tagName === 'TABLE' || el.tagName === 'FIGURE') {
+        continue;
+      }
+      
+      // Walk text nodes and wrap each word in a span with data-word-index
+      const walker = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null);
+      const textNodes: Text[] = [];
+      let node: Text | null;
+      while ((node = walker.nextNode() as Text | null)) {
+        // Skip text inside code elements
+        if (node.parentElement?.closest('code, pre, .code-block')) continue;
+        if (node.textContent && node.textContent.trim().length > 0) {
+          textNodes.push(node);
         }
       }
-    });
+      
+      for (const textNode of textNodes) {
+        const text = textNode.textContent || '';
+        // Split into words keeping whitespace
+        const parts = text.split(/(\s+)/);
+        if (parts.length <= 1 && !text.trim()) continue;
+        
+        const fragment = document.createDocumentFragment();
+        for (const part of parts) {
+          if (/^\s+$/.test(part) || part === '') {
+            fragment.appendChild(document.createTextNode(part));
+          } else {
+            const span = document.createElement('span');
+            span.setAttribute('data-word-index', String(globalWordIdx++));
+            span.textContent = part;
+            fragment.appendChild(span);
+          }
+        }
+        textNode.parentNode?.replaceChild(fragment, textNode);
+      }
+    }
     console.log(`[MarkdownRenderer] Indexed ${globalBlockIdx} blocks, ${globalWordIdx} words${skipWordWrapping ? ' (word-wrap skipped: large content)' : ''}`);
   }, [renderedContent, structuredBlocks, skipWordWrapping]);
 
