@@ -66,7 +66,10 @@ export type Database = {
         Row: {
           academic_findings: Json
           academic_score: number
+          audit_model: string
+          audit_prompt_version: string
           book_id: string
+          certification_blockers: string[]
           certification_eligible: boolean
           chapter_suggestions: Json
           created_at: string
@@ -89,7 +92,10 @@ export type Database = {
         Insert: {
           academic_findings?: Json
           academic_score?: number
+          audit_model?: string
+          audit_prompt_version?: string
           book_id: string
+          certification_blockers?: string[]
           certification_eligible?: boolean
           chapter_suggestions?: Json
           created_at?: string
@@ -112,7 +118,10 @@ export type Database = {
         Update: {
           academic_findings?: Json
           academic_score?: number
+          audit_model?: string
+          audit_prompt_version?: string
           book_id?: string
+          certification_blockers?: string[]
           certification_eligible?: boolean
           chapter_suggestions?: Json
           created_at?: string

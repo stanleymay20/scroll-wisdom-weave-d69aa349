@@ -11,6 +11,12 @@ const log = (step: string, details?: any) => {
 };
 
 // ============================================================
+// AUDIT PROVENANCE — Locked model + prompt version
+// ============================================================
+const AUDIT_MODEL = "google/gemini-2.5-flash";
+const AUDIT_PROMPT_VERSION = "v2.1"; // Increment on any prompt change
+
+// ============================================================
 // CERTIFICATION ELIGIBILITY THRESHOLDS
 // ============================================================
 const CERT_THRESHOLDS = {
@@ -60,99 +66,104 @@ const RUBRIC = {
 };
 
 // ============================================================
-// DETERMINISTIC PENALTY ENGINE (Pre-AI, Hard Rules)
+// PROPORTIONAL PENALTY ENGINE (Pre-AI, Hard Rules)
 // ============================================================
 interface PenaltyResult {
   structuralCap: number;
   academicCap: number;
   pedagogicalCap: number;
-  penalties: Array<{ dimension: string; rule: string; cap: number; evidence: string }>;
+  penalties: Array<{ dimension: string; rule: string; cap: number; evidence: string; chapterNumber: number }>;
 }
 
-function computeDeterministicPenalties(chapters: any[]): PenaltyResult {
-  let structuralCap = 100;
-  let academicCap = 100;
-  let pedagogicalCap = 100;
+function computeProportionalPenalties(chapters: any[], totalChapters: number): PenaltyResult {
   const penalties: PenaltyResult["penalties"] = [];
+
+  // Track violations per dimension per rule
+  const violationCounts: Record<string, number> = {};
 
   for (const ch of chapters) {
     const content = ch.content || "";
     const wordCount = ch.word_count || content.split(/\s+/).filter(Boolean).length;
-    const chLabel = `Ch.${ch.chapter_number}`;
+    const chNum = ch.chapter_number;
 
-    // STRUCTURAL: Word count < 800 → cap at 60
-    if (wordCount < 800) {
-      structuralCap = Math.min(structuralCap, 60);
-      penalties.push({
-        dimension: "structural",
-        rule: "WORD_COUNT_LOW",
-        cap: 60,
-        evidence: `${chLabel}: ${wordCount} words (minimum 800)`,
-      });
-    }
-
-    // STRUCTURAL: Word count < 400 → cap at 40
+    // STRUCTURAL: Word count checks
     if (wordCount < 400) {
-      structuralCap = Math.min(structuralCap, 40);
-      penalties.push({
-        dimension: "structural",
-        rule: "WORD_COUNT_CRITICAL",
-        cap: 40,
-        evidence: `${chLabel}: ${wordCount} words (critically low)`,
-      });
+      violationCounts["WORD_COUNT_CRITICAL"] = (violationCounts["WORD_COUNT_CRITICAL"] || 0) + 1;
+      penalties.push({ dimension: "structural", rule: "WORD_COUNT_CRITICAL", cap: 0, evidence: `Ch.${chNum}: ${wordCount} words (critically low, <400)`, chapterNumber: chNum });
+    } else if (wordCount < 800) {
+      violationCounts["WORD_COUNT_LOW"] = (violationCounts["WORD_COUNT_LOW"] || 0) + 1;
+      penalties.push({ dimension: "structural", rule: "WORD_COUNT_LOW", cap: 0, evidence: `Ch.${chNum}: ${wordCount} words (<800)`, chapterNumber: chNum });
     }
 
-    // PEDAGOGICAL: No examples detected → cap at 65
+    // PEDAGOGICAL: No examples
     const examplePatterns = /\b(for example|e\.g\.|for instance|such as|consider|let's say|imagine|suppose)\b/gi;
-    const exampleCount = (content.match(examplePatterns) || []).length;
-    if (exampleCount === 0) {
-      pedagogicalCap = Math.min(pedagogicalCap, 65);
-      penalties.push({
-        dimension: "pedagogical",
-        rule: "NO_EXAMPLES",
-        cap: 65,
-        evidence: `${chLabel}: Zero examples or illustrative phrases detected`,
-      });
+    if ((content.match(examplePatterns) || []).length === 0) {
+      violationCounts["NO_EXAMPLES"] = (violationCounts["NO_EXAMPLES"] || 0) + 1;
+      penalties.push({ dimension: "pedagogical", rule: "NO_EXAMPLES", cap: 0, evidence: `Ch.${chNum}: No examples or illustrative phrases`, chapterNumber: chNum });
     }
 
-    // ACADEMIC: No definitions detected → cap at 70
+    // ACADEMIC: No definitions
     const definitionPatterns = /\b(is defined as|refers to|means that|can be described as|is a|are called)\b/gi;
-    const definitionCount = (content.match(definitionPatterns) || []).length;
-    if (definitionCount === 0) {
-      academicCap = Math.min(academicCap, 70);
-      penalties.push({
-        dimension: "academic",
-        rule: "NO_DEFINITIONS",
-        cap: 70,
-        evidence: `${chLabel}: No key concept definitions detected`,
-      });
+    if ((content.match(definitionPatterns) || []).length === 0) {
+      violationCounts["NO_DEFINITIONS"] = (violationCounts["NO_DEFINITIONS"] || 0) + 1;
+      penalties.push({ dimension: "academic", rule: "NO_DEFINITIONS", cap: 0, evidence: `Ch.${chNum}: No key concept definitions`, chapterNumber: chNum });
     }
 
-    // STRUCTURAL: No headings detected → cap at 55
+    // STRUCTURAL: No headings
     const headingCount = (content.match(/^#{1,4}\s/gm) || []).length;
     if (headingCount < 2 && wordCount > 500) {
-      structuralCap = Math.min(structuralCap, 55);
-      penalties.push({
-        dimension: "structural",
-        rule: "NO_STRUCTURE",
-        cap: 55,
-        evidence: `${chLabel}: Only ${headingCount} headings for ${wordCount} words`,
-      });
+      violationCounts["NO_STRUCTURE"] = (violationCounts["NO_STRUCTURE"] || 0) + 1;
+      penalties.push({ dimension: "structural", rule: "NO_STRUCTURE", cap: 0, evidence: `Ch.${chNum}: Only ${headingCount} headings for ${wordCount} words`, chapterNumber: chNum });
     }
 
-    // PEDAGOGICAL: No questions or exercises → cap at 70
+    // PEDAGOGICAL: No questions or exercises
     const questionCount = (content.match(/\?/g) || []).length;
     const exercisePatterns = /\b(exercise|try it|practice|quiz|question|task|activity|challenge)\b/gi;
-    const exerciseCount = (content.match(exercisePatterns) || []).length;
-    if (questionCount === 0 && exerciseCount === 0) {
-      pedagogicalCap = Math.min(pedagogicalCap, 70);
-      penalties.push({
-        dimension: "pedagogical",
-        rule: "NO_ENGAGEMENT",
-        cap: 70,
-        evidence: `${chLabel}: No questions or exercises detected`,
-      });
+    if (questionCount === 0 && (content.match(exercisePatterns) || []).length === 0) {
+      violationCounts["NO_ENGAGEMENT"] = (violationCounts["NO_ENGAGEMENT"] || 0) + 1;
+      penalties.push({ dimension: "pedagogical", rule: "NO_ENGAGEMENT", cap: 0, evidence: `Ch.${chNum}: No questions or exercises`, chapterNumber: chNum });
     }
+  }
+
+  // ============================================================
+  // PROPORTIONAL SCALING: penalty = f(violation count / total chapters)
+  // 1 weak chapter → -10, 2 → -20, 3+ → hard limit
+  // ============================================================
+  const baseCaps: Record<string, { dimension: string; hardLimit: number }> = {
+    WORD_COUNT_LOW: { dimension: "structural", hardLimit: 60 },
+    WORD_COUNT_CRITICAL: { dimension: "structural", hardLimit: 40 },
+    NO_EXAMPLES: { dimension: "pedagogical", hardLimit: 65 },
+    NO_DEFINITIONS: { dimension: "academic", hardLimit: 70 },
+    NO_STRUCTURE: { dimension: "structural", hardLimit: 55 },
+    NO_ENGAGEMENT: { dimension: "pedagogical", hardLimit: 70 },
+  };
+
+  let structuralCap = 100;
+  let academicCap = 100;
+  let pedagogicalCap = 100;
+
+  for (const [rule, count] of Object.entries(violationCounts)) {
+    const config = baseCaps[rule];
+    if (!config) continue;
+
+    let cap: number;
+    if (count >= 3 || count >= totalChapters * 0.5) {
+      // 3+ violations or ≥50% of chapters → hard limit
+      cap = config.hardLimit;
+    } else if (count === 2) {
+      // 2 violations → interpolate: hardLimit + 10
+      cap = config.hardLimit + 10;
+    } else {
+      // 1 violation → mild: hardLimit + 20
+      cap = config.hardLimit + 20;
+    }
+
+    // Update the cap for each penalty entry of this rule
+    penalties.filter(p => p.rule === rule).forEach(p => p.cap = cap);
+
+    if (config.dimension === "structural") structuralCap = Math.min(structuralCap, cap);
+    if (config.dimension === "academic") academicCap = Math.min(academicCap, cap);
+    if (config.dimension === "pedagogical") pedagogicalCap = Math.min(pedagogicalCap, cap);
   }
 
   return { structuralCap, academicCap, pedagogicalCap, penalties };
@@ -225,28 +236,30 @@ serve(async (req) => {
     }
 
     // ============================================================
-    // STEP 1: Deterministic Penalties (Hard Rules, Pre-AI)
+    // STEP 1: Proportional Deterministic Penalties
     // ============================================================
-    const penaltyResult = computeDeterministicPenalties(generatedChapters);
+    const penaltyResult = computeProportionalPenalties(generatedChapters, generatedChapters.length);
     log("Penalties computed", {
       caps: { s: penaltyResult.structuralCap, a: penaltyResult.academicCap, p: penaltyResult.pedagogicalCap },
       count: penaltyResult.penalties.length,
     });
 
-    // Create audit record with 'running' status
+    // Create audit record
     const { data: auditRecord, error: insertError } = await supabase
       .from("book_audits").insert({
         book_id: bookId,
         user_id: user.id,
         status: "running",
         penalty_log: penaltyResult.penalties,
+        audit_model: AUDIT_MODEL,
+        audit_prompt_version: AUDIT_PROMPT_VERSION,
       }).select().single();
 
     if (insertError) throw new Error(`Failed to create audit: ${insertError.message}`);
 
-    log("Audit started", { auditId: auditRecord.id.slice(0, 8), chapters: generatedChapters.length });
+    log("Audit started", { auditId: auditRecord.id.slice(0, 8), chapters: generatedChapters.length, model: AUDIT_MODEL, promptVersion: AUDIT_PROMPT_VERSION });
 
-    // Build chapter summaries for AI (truncate to fit context)
+    // Build chapter summaries
     const chapterSummaries = generatedChapters.map((ch: any) => ({
       number: ch.chapter_number,
       title: ch.title,
@@ -255,7 +268,7 @@ serve(async (req) => {
     }));
 
     // ============================================================
-    // STEP 2: AI Evaluation with Contrastive Evidence Requirement
+    // STEP 2: AI Evaluation with Contrastive Evidence
     // ============================================================
     const auditPrompt = `You are a Chief Editor performing a rigorous quality audit of an educational book.
 
@@ -321,7 +334,7 @@ Respond as JSON:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: AUDIT_MODEL,
         messages: [
           { role: "system", content: "You are a rigorous academic editor. Score honestly against textbook benchmarks. Never inflate. Every score MUST have a direct quote from the text as evidence. Output valid JSON only." },
           { role: "user", content: auditPrompt },
@@ -333,7 +346,6 @@ Respond as JSON:
       const status = aiResponse.status;
       await aiResponse.text();
       log("AI error", { status });
-
       await supabase.from("book_audits").update({ status: "failed" }).eq("id", auditRecord.id);
 
       if (status === 429) {
@@ -352,7 +364,6 @@ Respond as JSON:
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
 
-    // Parse JSON from response
     let auditResults;
     try {
       const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
@@ -370,20 +381,14 @@ Respond as JSON:
     }
 
     // ============================================================
-    // STEP 3: Apply Deterministic Penalty Caps to AI Scores
+    // STEP 3: Apply Proportional Penalty Caps
     // ============================================================
     const rawStructural = Math.min(100, Math.max(0, auditResults.structural?.score || 0));
     const rawAcademic = Math.min(100, Math.max(0, auditResults.academic?.score || 0));
     const rawPedagogical = Math.min(100, Math.max(0, auditResults.pedagogical?.score || 0));
 
-    // Store pre-penalty scores for transparency
-    const prePenaltyScores = {
-      structural: rawStructural,
-      academic: rawAcademic,
-      pedagogical: rawPedagogical,
-    };
+    const prePenaltyScores = { structural: rawStructural, academic: rawAcademic, pedagogical: rawPedagogical };
 
-    // Apply hard caps
     const structuralScore = Math.min(rawStructural, penaltyResult.structuralCap);
     const academicScore = Math.min(rawAcademic, penaltyResult.academicCap);
     const pedagogicalScore = Math.min(rawPedagogical, penaltyResult.pedagogicalCap);
@@ -395,15 +400,33 @@ Respond as JSON:
     );
 
     // ============================================================
-    // STEP 4: Certification Eligibility Check
+    // STEP 4: Build Certification Blockers (Specific Reasons)
     // ============================================================
-    const certificationEligible =
-      structuralScore >= CERT_THRESHOLDS.structural &&
-      academicScore >= CERT_THRESHOLDS.academic &&
-      pedagogicalScore >= CERT_THRESHOLDS.pedagogical &&
-      overallScore >= CERT_THRESHOLDS.overall;
+    const certificationBlockers: string[] = [];
 
-    // Extract evidence citations from findings
+    if (structuralScore < CERT_THRESHOLDS.structural) {
+      certificationBlockers.push(`Structural Integrity score ${structuralScore} < required ${CERT_THRESHOLDS.structural}`);
+    }
+    if (academicScore < CERT_THRESHOLDS.academic) {
+      certificationBlockers.push(`Academic Rigor score ${academicScore} < required ${CERT_THRESHOLDS.academic}`);
+    }
+    if (pedagogicalScore < CERT_THRESHOLDS.pedagogical) {
+      certificationBlockers.push(`Pedagogical Quality score ${pedagogicalScore} < required ${CERT_THRESHOLDS.pedagogical}`);
+    }
+    if (overallScore < CERT_THRESHOLDS.overall) {
+      certificationBlockers.push(`Overall score ${overallScore} < required ${CERT_THRESHOLDS.overall}`);
+    }
+
+    // Add penalty-specific blockers
+    for (const p of penaltyResult.penalties) {
+      if (p.cap <= 70) {
+        certificationBlockers.push(`Penalty ${p.rule}: ${p.evidence}`);
+      }
+    }
+
+    const certificationEligible = certificationBlockers.length === 0;
+
+    // Extract evidence citations
     const evidenceCitations = [
       ...(auditResults.structural?.findings || []),
       ...(auditResults.academic?.findings || []),
@@ -429,6 +452,9 @@ Respond as JSON:
       evidence_citations: evidenceCitations,
       pre_penalty_scores: prePenaltyScores,
       certification_eligible: certificationEligible,
+      certification_blockers: certificationBlockers,
+      audit_model: AUDIT_MODEL,
+      audit_prompt_version: AUDIT_PROMPT_VERSION,
       status: "completed",
     }).eq("id", auditRecord.id);
 
@@ -443,6 +469,9 @@ Respond as JSON:
       capped: { structural: structuralScore, academic: academicScore, pedagogical: pedagogicalScore },
       penalties: penaltyResult.penalties.length,
       certEligible: certificationEligible,
+      blockers: certificationBlockers.length,
+      model: AUDIT_MODEL,
+      promptVersion: AUDIT_PROMPT_VERSION,
     });
 
     return new Response(JSON.stringify({
@@ -452,10 +481,12 @@ Respond as JSON:
       prePenaltyScores,
       penalties: penaltyResult.penalties,
       certificationEligible,
+      certificationBlockers,
       certThresholds: CERT_THRESHOLDS,
       flaggedSections: auditResults.flaggedSections || [],
       chapterSuggestions: auditResults.chapterSuggestions || [],
       evidenceCitations: evidenceCitations.length,
+      provenance: { model: AUDIT_MODEL, promptVersion: AUDIT_PROMPT_VERSION },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {
