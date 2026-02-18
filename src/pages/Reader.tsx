@@ -419,47 +419,8 @@ export default function Reader() {
     chunkPlaybackInfo,
   });
 
-  // Apply audio-active CSS class to the active paragraph + word-level highlight
-  useEffect(() => {
-    if (!contentRef.current) return;
-    
-    // Find the reading-content div that wraps MarkdownRenderer output
-    const readingContent = contentRef.current.querySelector('.reading-content');
-    const target = readingContent || contentRef.current;
-
-    // Toggle audio-playing class on the container for CSS-based dimming
-    if (isTTSPlaying && audioSync.isSyncEnabled) {
-      target.classList.add('audio-playing');
-    } else {
-      target.classList.remove('audio-playing');
-    }
-
-    // Remove previous block active
-    target.querySelectorAll('.audio-active').forEach(el => {
-      el.classList.remove('audio-active');
-    });
-    // Remove previous word active
-    target.querySelectorAll('.audio-word-active').forEach(el => {
-      el.classList.remove('audio-word-active');
-    });
-    
-    if (isTTSPlaying && audioSync.isSyncEnabled) {
-      // Highlight active block
-      if (audioSync.activeSentenceIndex >= 0) {
-        const el = target.querySelector(`[data-sentence-index="${audioSync.activeSentenceIndex}"]`);
-        if (el) {
-          el.classList.add('audio-active');
-        }
-      }
-      // Highlight active word
-      if (audioSync.activeWordIndex >= 0) {
-        const wordEl = target.querySelector(`[data-word-index="${audioSync.activeWordIndex}"]`);
-        if (wordEl) {
-          wordEl.classList.add('audio-word-active');
-        }
-      }
-    }
-  }, [audioSync.activeSentenceIndex, audioSync.activeWordIndex, isTTSPlaying, audioSync.isSyncEnabled]);
+  // Audio highlighting is now handled directly in useAudioSync via DOM manipulation
+  // for reliable mobile sync (bypasses React render cycle throttling)
 
   // Helper function to extract ALL code blocks from chapter content for playground
   const extractCodeFromChapter = (content: string): string => {

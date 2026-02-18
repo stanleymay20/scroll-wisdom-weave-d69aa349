@@ -132,12 +132,15 @@ export function useAudioSync({
   // === REFS for real-time tick values ===
   const internalCumulativeRef = useRef(cumulativeTimeSec);
   const isPlayingRef = useRef(isPlaying);
-  const rafRef = useRef<number>();
+  const intervalRef = useRef<ReturnType<typeof setInterval>>();
   const manualScrollTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const programmaticScrollRef = useRef(false);
   const activeSentenceRef = useRef(-1);
   const activeWordRef = useRef(-1);
   const chunkInfoRef = useRef<ChunkPlaybackInfo | null>(null);
+  // Direct DOM refs for bypassing React render cycle (critical for mobile perf)
+  const lastHighlightedWordEl = useRef<Element | null>(null);
+  const lastHighlightedBlockEl = useRef<Element | null>(null);
 
   // Keep refs in sync
   useEffect(() => { internalCumulativeRef.current = cumulativeTimeSec; }, [cumulativeTimeSec]);
@@ -145,17 +148,20 @@ export function useAudioSync({
   useEffect(() => { chunkInfoRef.current = chunkPlaybackInfo || null; }, [chunkPlaybackInfo]);
 
   // Tick: compute active word using chunk-aware interpolation
-  const tick = useCallback((now: number) => {
+  // Uses direct DOM manipulation to bypass React render cycle for smooth mobile sync
+  const tick = useCallback(() => {
     if (!isPlayingRef.current) return;
 
     const audio = audioRef?.current;
     const info = chunkInfoRef.current;
+    const container = contentRef.current;
+    const readingContent = container?.querySelector('.reading-content');
+    const target = readingContent || container;
 
     // === WORD-LEVEL: Chunk-aware precise sync with proportional DOM mapping ===
     if (audio && info && info.chunkWordCounts.length > 0 && !isNaN(audio.currentTime) && !isNaN(audio.duration) && audio.duration > 0) {
       const fraction = Math.min(1, audio.currentTime / audio.duration);
       
-      // Calculate TTS word offset for current chunk
       let ttsWordOffset = 0;
       for (let i = 0; i < info.chunkIndex && i < info.chunkWordCounts.length; i++) {
         ttsWordOffset += info.chunkWordCounts[i];
@@ -165,11 +171,7 @@ export function useAudioSync({
       const wordInChunk = Math.floor(fraction * wordsInChunk);
       const ttsGlobalWord = ttsWordOffset + wordInChunk;
       
-      // Total TTS words (may differ from DOM word count due to markdown stripping)
       const totalTTSWords = info.chunkWordCounts.reduce((sum, c) => sum + c, 0);
-      
-      // Proportionally map TTS position → DOM word index
-      // This handles the mismatch between sanitized TTS text and rendered DOM text
       const domCount = domWordCountRef.current;
       const globalWordIdx = domCount > 0 && totalTTSWords > 0
         ? Math.min(Math.floor((ttsGlobalWord / totalTTSWords) * domCount), domCount - 1)
@@ -177,6 +179,26 @@ export function useAudioSync({
       
       if (globalWordIdx !== activeWordRef.current && globalWordIdx >= 0) {
         activeWordRef.current = globalWordIdx;
+        
+        // DIRECT DOM: Remove old highlight, add new one (skip React state)
+        if (lastHighlightedWordEl.current) {
+          lastHighlightedWordEl.current.classList.remove('audio-word-active');
+        }
+        if (target) {
+          const wordEl = target.querySelector(`[data-word-index="${globalWordIdx}"]`);
+          if (wordEl) {
+            wordEl.classList.add('audio-word-active');
+            lastHighlightedWordEl.current = wordEl;
+            
+            // Scroll word into view (direct, no React state)
+            if (isSyncEnabled && !isUserScrolledAway) {
+              programmaticScrollRef.current = true;
+              wordEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              setTimeout(() => { programmaticScrollRef.current = false; }, 600);
+            }
+          }
+        }
+        // Update React state at reduced frequency for external consumers
         setActiveWordIndex(globalWordIdx);
       }
     }
@@ -204,42 +226,53 @@ export function useAudioSync({
 
     if (idx !== activeSentenceRef.current) {
       activeSentenceRef.current = idx;
+      
+      // DIRECT DOM: block-level highlight
+      if (lastHighlightedBlockEl.current) {
+        lastHighlightedBlockEl.current.classList.remove('audio-active');
+      }
+      if (target && idx >= 0) {
+        const el = target.querySelector(`[data-sentence-index="${idx}"]`);
+        if (el) {
+          el.classList.add('audio-active');
+          lastHighlightedBlockEl.current = el;
+        }
+      }
       setActiveSentenceIndex(idx);
     }
+  }, [audioRef, isSyncEnabled, isUserScrolledAway, contentRef]);
 
-    rafRef.current = requestAnimationFrame(tick);
-  }, [audioRef]);
-
-  // Start / stop tick loop
+  // Start / stop tick loop — use setInterval (50ms) instead of RAF for reliable mobile timing
   useEffect(() => {
     if (isPlaying && sentences.length > 0) {
-      rafRef.current = requestAnimationFrame(tick);
+      // Add/remove audio-playing class on container
+      const container = contentRef.current;
+      const readingContent = container?.querySelector('.reading-content');
+      const target = readingContent || container;
+      target?.classList.add('audio-playing');
+      
+      intervalRef.current = setInterval(tick, 50);
     } else {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
+      
+      // Clean up highlights when stopped
+      if (lastHighlightedWordEl.current) {
+        lastHighlightedWordEl.current.classList.remove('audio-word-active');
+        lastHighlightedWordEl.current = null;
+      }
+      if (lastHighlightedBlockEl.current) {
+        lastHighlightedBlockEl.current.classList.remove('audio-active');
+        lastHighlightedBlockEl.current = null;
+      }
+      const container = contentRef.current;
+      const readingContent = container?.querySelector('.reading-content');
+      const target = readingContent || container;
+      target?.classList.remove('audio-playing');
     }
     return () => {
-      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      if (intervalRef.current) clearInterval(intervalRef.current);
     };
-  }, [isPlaying, tick, sentences.length]);
-
-  // Scroll active word into center
-  useEffect(() => {
-    if (!isSyncEnabled || isUserScrolledAway) return;
-    if (activeWordIndex < 0 && activeSentenceIndex < 0) return;
-
-    const wordEl = activeWordIndex >= 0 
-      ? contentRef.current?.querySelector(`[data-word-index="${activeWordIndex}"]`)
-      : null;
-    const el = wordEl || contentRef.current?.querySelector(`[data-sentence-index="${activeSentenceIndex}"]`);
-    if (!el) return;
-
-    programmaticScrollRef.current = true;
-    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-
-    setTimeout(() => {
-      programmaticScrollRef.current = false;
-    }, 600);
-  }, [activeWordIndex, activeSentenceIndex, isSyncEnabled, isUserScrolledAway, contentRef]);
+  }, [isPlaying, tick, sentences.length, contentRef]);
 
   // Detect manual scroll
   useEffect(() => {
@@ -287,7 +320,15 @@ export function useAudioSync({
     setActiveSentenceIndex(-1);
     setActiveWordIndex(-1);
     setIsUserScrolledAway(false);
-    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    if (intervalRef.current) clearInterval(intervalRef.current);
+    if (lastHighlightedWordEl.current) {
+      lastHighlightedWordEl.current.classList.remove('audio-word-active');
+      lastHighlightedWordEl.current = null;
+    }
+    if (lastHighlightedBlockEl.current) {
+      lastHighlightedBlockEl.current.classList.remove('audio-active');
+      lastHighlightedBlockEl.current = null;
+    }
   }, []);
 
   // Reset when chapter content changes
