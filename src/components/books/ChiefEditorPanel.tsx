@@ -187,7 +187,24 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
           audit_id: audit.id,
         }).eq("id", chapter.id);
 
-
+        // Build comprehensive Chief Editor edit intent with full audit context
+        const auditContext = [
+          `CURRENT AUDIT SCORES: Structural=${audit.structural_score}/100, Academic=${audit.academic_score}/100, Pedagogical=${audit.pedagogical_score}/100, Overall=${audit.overall_score}/100`,
+          `TARGET: ALL dimensions must reach 95-100/100 after this revision.`,
+          ``,
+          `SPECIFIC IMPROVEMENTS FOR THIS CHAPTER:`,
+          `- ${improvementPrompt}`,
+          ``,
+          `PENALTY VIOLATIONS TO FIX:`,
+          ...(audit.penalty_log || [])
+            .filter((p: any) => p.chapterNumber === chapter.chapter_number)
+            .map((p: any) => `- ${p.rule}: ${p.evidence}`),
+          ``,
+          `FLAGGED SECTIONS:`,
+          ...(audit.flagged_sections || [])
+            .filter((f: any) => f.chapterNumber === chapter.chapter_number)
+            .map((f: any) => `- [${f.severity}] ${f.section}: ${f.issue} → ${f.suggestion}`),
+        ].join("\n");
 
         const { error } = await supabase.functions.invoke("generate-chapter", {
           body: {
@@ -201,7 +218,7 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
             regenerate: true,
             isRegeneration: true,
             originalContent: chapter.content,
-            editIntent: `Chief Editor improvements:\n- ${improvementPrompt}`,
+            editIntent: `[CHIEF_EDITOR_REWRITE]\n${auditContext}`,
           },
         });
 

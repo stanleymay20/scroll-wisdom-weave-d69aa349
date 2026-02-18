@@ -2237,7 +2237,63 @@ serve(async (req) => {
     
     let editIntentPrompt = '';
     if (editIntent && existingContent) {
-      editIntentPrompt = `
+      const isChiefEditorRewrite = editIntent.startsWith('[CHIEF_EDITOR_REWRITE]');
+      
+      if (isChiefEditorRewrite) {
+        // CHIEF EDITOR MODE: Comprehensive rewrite targeting near-perfect scores
+        editIntentPrompt = `
+
+=== CHIEF EDITOR COMPREHENSIVE REWRITE ===
+
+You are performing a FULL QUALITY REWRITE of this chapter based on a Chief Editor audit.
+The goal is to produce a chapter that scores 95-100/100 on ALL audit dimensions.
+
+ORIGINAL CONTENT (USE AS FOUNDATION — IMPROVE EVERYTHING):
+${existingContent.slice(0, 8000)}${existingContent.length > 8000 ? '\n[...content truncated...]' : ''}
+
+${editIntent.replace('[CHIEF_EDITOR_REWRITE]\n', '')}
+
+AUDIT RUBRIC — YOU MUST SCORE 95+ ON ALL:
+
+**STRUCTURAL INTEGRITY (30% weight) — Target 95-100:**
+- Clear title accurately reflecting content
+- Logical progression with smooth transitions
+- Well-organized sections with appropriate headings (minimum 3+ subsections)
+- Appropriate word count (1000+ words minimum for depth)
+- Engaging opening hook (first 100 words must grab attention)
+- Strong closing that summarizes or transitions effectively
+
+**ACADEMIC RIGOR (35% weight) — Target 95-100:**
+- ALL claims supported with evidence or reasoning
+- Technical terminology used correctly and consistently
+- Deep coverage matching stated objectives (not surface-level)
+- Zero factual errors or misleading statements
+- Key concepts DEFINED BEFORE USE (use "is defined as", "refers to", etc.)
+- Appropriate complexity for target audience
+
+**PEDAGOGICAL QUALITY (35% weight) — Target 95-100:**
+- Clear learning objectives stated or implied
+- Multiple examples and illustrations (use "for example", "consider", "imagine", etc.)
+- Content builds progressively on prior knowledge
+- Active learning prompts: questions, exercises, reflection points
+- Clear key takeaways identifiable
+- Variety of explanation methods (narrative, examples, analogies, scenarios)
+- Assessment-ready content (quiz questions could test this)
+
+PENALTY AVOIDANCE — ENSURE ALL OF THESE:
+- Word count MUST be 1200+ words (avoids WORD_COUNT_LOW penalty)
+- Include 3+ concrete examples with example phrases (avoids NO_EXAMPLES penalty)
+- Define 3+ key terms explicitly (avoids NO_DEFINITIONS penalty)
+- Use 4+ markdown headings (## or ###) (avoids NO_STRUCTURE penalty)
+- Include 3+ questions or exercises (avoids NO_ENGAGEMENT penalty)
+
+REWRITE THE ENTIRE CHAPTER to achieve near-perfect scores.
+Preserve the topic and core ideas but dramatically improve structure, depth, examples, definitions, and engagement.
+
+BEGIN COMPREHENSIVE REWRITE:`;
+      } else {
+        // Standard edit intent: targeted changes only
+        editIntentPrompt = `
 
 === CHAPTER REVISION REQUEST ===
 
@@ -2255,6 +2311,7 @@ INSTRUCTIONS:
 5. Return the COMPLETE revised chapter
 
 BEGIN REVISION:`;
+      }
     }
 
     // ===========================================
