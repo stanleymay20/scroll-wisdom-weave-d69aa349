@@ -14,7 +14,7 @@ const log = (step: string, details?: any) => {
 // AUDIT PROVENANCE — Locked model + prompt version
 // ============================================================
 const AUDIT_MODEL = "google/gemini-2.5-flash";
-const AUDIT_PROMPT_VERSION = "v2.1"; // Increment on any prompt change
+const AUDIT_PROMPT_VERSION = "v2.2"; // v2.2: Enforce mandatory chapterSuggestions for low-scoring chapters
 
 // ============================================================
 // CERTIFICATION ELIGIBILITY THRESHOLDS
@@ -305,6 +305,8 @@ CRITICAL EVALUATION RULES:
 CONTRASTIVE BENCHMARK: Compare each chapter against what a well-written textbook chapter looks like:
 - A good chapter has 1000+ words, 3+ subsections, 2+ examples, defined terminology, and engagement questions.
 - Score relative to this benchmark, not relative to "AI-generated content standards."
+
+MANDATORY: The "chapterSuggestions" array MUST contain an entry for EVERY chapter that scores below 80 in any dimension. Each entry MUST have at least 2 specific, actionable improvements. The "flaggedSections" array MUST contain entries for any section with critical or major issues. Do NOT return empty arrays for these fields unless every chapter scores 80+ across all dimensions.
 
 Respond as JSON:
 {
