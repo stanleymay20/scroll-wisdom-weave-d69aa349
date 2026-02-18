@@ -67,8 +67,10 @@ export type Database = {
           academic_findings: Json
           academic_score: number
           book_id: string
+          certification_eligible: boolean
           chapter_suggestions: Json
           created_at: string
+          evidence_citations: Json
           flagged_sections: Json
           id: string
           improvements_applied: boolean
@@ -76,6 +78,8 @@ export type Database = {
           overall_score: number
           pedagogical_findings: Json
           pedagogical_score: number
+          penalty_log: Json
+          pre_penalty_scores: Json
           status: string
           structural_findings: Json
           structural_score: number
@@ -86,8 +90,10 @@ export type Database = {
           academic_findings?: Json
           academic_score?: number
           book_id: string
+          certification_eligible?: boolean
           chapter_suggestions?: Json
           created_at?: string
+          evidence_citations?: Json
           flagged_sections?: Json
           id?: string
           improvements_applied?: boolean
@@ -95,6 +101,8 @@ export type Database = {
           overall_score?: number
           pedagogical_findings?: Json
           pedagogical_score?: number
+          penalty_log?: Json
+          pre_penalty_scores?: Json
           status?: string
           structural_findings?: Json
           structural_score?: number
@@ -105,8 +113,10 @@ export type Database = {
           academic_findings?: Json
           academic_score?: number
           book_id?: string
+          certification_eligible?: boolean
           chapter_suggestions?: Json
           created_at?: string
+          evidence_citations?: Json
           flagged_sections?: Json
           id?: string
           improvements_applied?: boolean
@@ -114,6 +124,8 @@ export type Database = {
           overall_score?: number
           pedagogical_findings?: Json
           pedagogical_score?: number
+          penalty_log?: Json
+          pre_penalty_scores?: Json
           status?: string
           structural_findings?: Json
           structural_score?: number
@@ -298,6 +310,7 @@ export type Database = {
       chapters: {
         Row: {
           academic_mode: boolean | null
+          audit_id: string | null
           book_id: string
           chapter_number: number
           chapter_references: Json | null
@@ -309,14 +322,17 @@ export type Database = {
           id: string
           is_generated: boolean | null
           last_ai_content: string | null
+          previous_content: string | null
           research_metadata: Json | null
           title: string
           updated_at: string
           user_locked: boolean | null
+          version_number: number
           word_count: number | null
         }
         Insert: {
           academic_mode?: boolean | null
+          audit_id?: string | null
           book_id: string
           chapter_number: number
           chapter_references?: Json | null
@@ -328,14 +344,17 @@ export type Database = {
           id?: string
           is_generated?: boolean | null
           last_ai_content?: string | null
+          previous_content?: string | null
           research_metadata?: Json | null
           title: string
           updated_at?: string
           user_locked?: boolean | null
+          version_number?: number
           word_count?: number | null
         }
         Update: {
           academic_mode?: boolean | null
+          audit_id?: string | null
           book_id?: string
           chapter_number?: number
           chapter_references?: Json | null
@@ -347,13 +366,22 @@ export type Database = {
           id?: string
           is_generated?: boolean | null
           last_ai_content?: string | null
+          previous_content?: string | null
           research_metadata?: Json | null
           title?: string
           updated_at?: string
           user_locked?: boolean | null
+          version_number?: number
           word_count?: number | null
         }
         Relationships: [
+          {
+            foreignKeyName: "chapters_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "book_audits"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "chapters_book_id_fkey"
             columns: ["book_id"]
