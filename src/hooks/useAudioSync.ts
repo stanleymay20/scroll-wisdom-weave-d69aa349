@@ -174,9 +174,8 @@ export function useAudioSync({
       const wordInChunk = Math.floor(fraction * wordsInChunk);
       const ttsGlobalWord = ttsWordOffset_chunk + wordInChunk;
       
-      // If TTS is still speaking preamble words (e.g. "Chapter 1: Title."), don't highlight anything
+      // If TTS is still speaking preamble words, don't highlight anything
       if (ttsGlobalWord < ttsWordOffset) {
-        // Still in preamble — clear any existing highlight
         if (activeWordRef.current !== -1) {
           activeWordRef.current = -1;
           if (lastHighlightedWordEl.current) {
@@ -187,6 +186,7 @@ export function useAudioSync({
         }
       } else {
         const adjustedTTSWord = ttsGlobalWord - ttsWordOffset;
+        // Cache totalTTSWords — only recompute when chunkInfo changes (handled by ref)
         const totalTTSWords = info.chunkWordCounts.reduce((sum, c) => sum + c, 0);
         const adjustedTotalTTS = Math.max(1, totalTTSWords - ttsWordOffset);
         const domCount = domWordCountRef.current;
@@ -195,8 +195,6 @@ export function useAudioSync({
           : -1;
       
         if (globalWordIdx !== activeWordRef.current && globalWordIdx >= 0) {
-          activeWordRef.current = globalWordIdx;
-          
           // DIRECT DOM: Remove old highlight, add new one (skip React state)
           if (lastHighlightedWordEl.current) {
             lastHighlightedWordEl.current.classList.remove('audio-word-active');
@@ -207,16 +205,19 @@ export function useAudioSync({
               wordEl.classList.add('audio-word-active');
               lastHighlightedWordEl.current = wordEl;
               
-              // Scroll word into view (direct, no React state)
-              if (isSyncEnabled && !isUserScrolledAway) {
+              // Scroll only every ~5 words to avoid constant reflow
+              if (isSyncEnabled && !isUserScrolledAway && (globalWordIdx % 5 === 0 || globalWordIdx === 0)) {
                 programmaticScrollRef.current = true;
                 wordEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 setTimeout(() => { programmaticScrollRef.current = false; }, 600);
               }
             }
           }
-          // Update React state at reduced frequency for external consumers
-          setActiveWordIndex(globalWordIdx);
+          activeWordRef.current = globalWordIdx;
+          // Debounce React state updates — only update every 3rd word
+          if (globalWordIdx % 3 === 0) {
+            setActiveWordIndex(globalWordIdx);
+          }
         }
       }
     }
@@ -269,7 +270,7 @@ export function useAudioSync({
       const target = readingContent || container;
       target?.classList.add('audio-playing');
       
-      intervalRef.current = setInterval(tick, 50);
+      intervalRef.current = setInterval(tick, 30);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
       
