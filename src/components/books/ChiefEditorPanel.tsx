@@ -166,6 +166,13 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
     let improved = 0;
 
     try {
+      // Fetch book details once outside the loop
+      const { data: bookData } = await supabase
+        .from("books")
+        .select("title, category, book_type, language")
+        .eq("id", bookId)
+        .single();
+
       for (const suggestion of audit.chapter_suggestions) {
         const chapter = chapters.find(ch => ch.chapter_number === suggestion.chapterNumber);
         if (!chapter || !chapter.content) continue;
@@ -180,13 +187,19 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
           audit_id: audit.id,
         }).eq("id", chapter.id);
 
+
+
         const { error } = await supabase.functions.invoke("generate-chapter", {
           body: {
             chapterId: chapter.id,
-            bookTitle: "",
+            bookTitle: bookData?.title || "",
             chapterTitle: chapter.title,
             chapterNumber: chapter.chapter_number,
+            category: bookData?.category || "general",
+            bookType: bookData?.book_type || "text",
+            language: bookData?.language || "en",
             regenerate: true,
+            isRegeneration: true,
             originalContent: chapter.content,
             editIntent: `Chief Editor improvements:\n- ${improvementPrompt}`,
           },
