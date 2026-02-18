@@ -65,7 +65,19 @@ serve(async (req) => {
     const currentMonth = new Date().toISOString().slice(0, 7);
     let usageRow: any = null;
 
+    let isAdmin = false;
+
     if (userId) {
+      // Check admin role - admins bypass all limits
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", userId)
+        .eq("role", "admin")
+        .maybeSingle();
+
+      isAdmin = !!roleData;
+
       const { data: profile } = await supabase
         .from("profiles")
         .select("plan")
@@ -73,7 +85,11 @@ serve(async (req) => {
         .single();
 
       userPlan = profile?.plan || "free";
-      monthlyLimit = TIER_TTS_LIMITS[userPlan] ?? TIER_TTS_LIMITS.free;
+      monthlyLimit = isAdmin ? -1 : (TIER_TTS_LIMITS[userPlan] ?? TIER_TTS_LIMITS.free);
+
+      if (isAdmin) {
+        console.log(`[TTS] Admin user - bypassing limits`);
+      }
 
       const { data: usage } = await supabase
         .from("tts_usage")
@@ -85,7 +101,7 @@ serve(async (req) => {
       usageRow = usage;
       currentUsage = usage?.minutes_used ?? 0;
 
-      if (currentUsage >= monthlyLimit) {
+      if (!isAdmin && monthlyLimit > 0 && currentUsage >= monthlyLimit) {
         console.log(`[TTS] Monthly limit reached: ${currentUsage}/${monthlyLimit} min (${userPlan})`);
         return new Response(JSON.stringify({
           error: `Monthly TTS limit reached (${monthlyLimit} min for ${userPlan} plan). Upgrade for more.`,
