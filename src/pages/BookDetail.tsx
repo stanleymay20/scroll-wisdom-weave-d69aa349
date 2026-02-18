@@ -1061,6 +1061,32 @@ export default function BookDetail() {
           </motion.div>
           )}
 
+          {/* Chief Editor & STO Panels (both mobile and desktop) */}
+          {isMobile && isOwner && chapters.some(ch => ch.is_generated) && (
+            <div className="px-4 mt-4 space-y-4">
+              <ChiefEditorPanel
+                bookId={book.id}
+                chapters={chapters.map(ch => ({
+                  id: ch.id,
+                  chapter_number: ch.chapter_number,
+                  title: ch.title,
+                  content: ch.content,
+                  is_generated: ch.is_generated,
+                }))}
+              />
+              <CodeAuditPanel
+                bookId={book.id}
+                chapters={chapters.map(ch => ({
+                  id: ch.id,
+                  chapter_number: ch.chapter_number,
+                  title: ch.title,
+                  content: ch.content,
+                  is_generated: ch.is_generated,
+                }))}
+              />
+            </div>
+          )}
+
           {/* Mobile Cover Controls (compact) */}
           {isMobile && isOwner && (
             <div className="px-4 mt-4 space-y-2">
