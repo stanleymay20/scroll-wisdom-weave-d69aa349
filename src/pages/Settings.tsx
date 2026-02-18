@@ -5,6 +5,7 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
@@ -199,7 +200,7 @@ export default function Settings() {
         </div>
 
         <Tabs defaultValue="system" className="space-y-4">
-          <TabsList className="bg-muted/50 flex-wrap h-auto gap-1 p-1 w-full justify-start overflow-x-auto">
+          <TabsList className={cn("bg-muted/50 h-auto gap-1 p-1 w-full justify-start", isMobile ? "flex overflow-x-auto flex-nowrap scrollbar-none" : "flex-wrap")}>
             <TabsTrigger value="system" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
               <Palette className="h-4 w-4 mr-1 sm:mr-2" />
               <span className="hidden sm:inline">{t('settings.system')}</span>
