@@ -2070,22 +2070,37 @@ serve(async (req) => {
     const userPlan = profile?.plan || "free";
     const maxWordCount = TIER_WORD_LIMITS[userPlan as keyof typeof TIER_WORD_LIMITS] || TIER_WORD_LIMITS.free;
 
-    // Use already-parsed requestBody instead of re-reading req.json()
-    const chapterId = requestBody?.chapterId as string | undefined;
-    const bookTitle = requestBody?.bookTitle as string;
-    const chapterTitle = requestBody?.chapterTitle as string;
-    const chapterNumber = requestBody?.chapterNumber as number;
+    // ===========================================
+    // INPUT NORMALIZATION — Defensive layer for multi-path orchestration
+    // ===========================================
+    const chapterId = (requestBody?.chapterId as string | undefined) || undefined;
+    const bookTitle = (requestBody?.bookTitle as string) || '';
+    const chapterTitle = (requestBody?.chapterTitle as string) || '';
+    const chapterNumber = (requestBody?.chapterNumber as number) || 1;
     const keyTopics = (requestBody?.keyTopics as string[]) || [];
     const category = (requestBody?.category as string) || 'general';
     const wordCount = (requestBody?.wordCount as number) || 4000;
     const language = (requestBody?.language as string) || 'English';
     const bookType = (requestBody?.bookType as string) || 'text';
-    const academicMode = (requestBody?.academicMode as boolean) || false;
+    const academicMode = Boolean(requestBody?.academicMode);
     const citationStyle = (requestBody?.citationStyle as string) || 'APA';
     const comicStyle = (requestBody?.comicStyle as string) || 'children_book';
-    // Edit control parameters
     const editIntent = (requestBody?.editIntent as string | null) || null;
-    const isRegeneration = (requestBody?.isRegeneration as boolean) || false;
+    const isRegeneration = Boolean(requestBody?.isRegeneration);
+
+    // Structured observability for orchestration debugging
+    console.log(`[GENERATE-CHAPTER] Input normalization: ${JSON.stringify({
+      hasChapterId: !!chapterId,
+      hasBookTitle: !!bookTitle,
+      hasCategory: !!category,
+      category,
+      bookType,
+      language,
+      isRegeneration,
+      hasEditIntent: !!editIntent,
+      academicMode,
+      wordCount,
+    })}`);
 
     // ===========================================
     // EDIT CONTROL CONTRACT ENFORCEMENT
