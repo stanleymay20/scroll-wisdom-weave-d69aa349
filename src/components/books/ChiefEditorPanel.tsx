@@ -18,6 +18,10 @@ import {
   RefreshCw,
   XCircle,
   CheckCircle2,
+  Quote,
+  Gavel,
+  Award,
+  Undo2,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 
@@ -44,6 +48,10 @@ interface AuditData {
   pedagogical_findings: any[];
   flagged_sections: any[];
   chapter_suggestions: any[];
+  penalty_log: any[];
+  evidence_citations: any[];
+  pre_penalty_scores: Record<string, number>;
+  certification_eligible: boolean;
   status: string;
   improvements_applied: boolean;
   created_at: string;
@@ -72,6 +80,8 @@ const severityColor = (severity: string) => {
   }
 };
 
+const CERT_THRESHOLDS = { structural: 75, academic: 80, pedagogical: 75, overall: 78 };
+
 export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPanelProps) {
   const { toast } = useToast();
   const [audit, setAudit] = useState<AuditData | null>(null);
@@ -79,11 +89,12 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
   const [isApplying, setIsApplying] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
+  const [showPenalties, setShowPenalties] = useState(false);
+  const [showEvidence, setShowEvidence] = useState(false);
   const [loading, setLoading] = useState(true);
 
   const generatedCount = chapters.filter(ch => ch.is_generated).length;
 
-  // Fetch latest audit on mount
   useEffect(() => {
     const fetchAudit = async () => {
       const { data, error } = await supabase
@@ -117,7 +128,6 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
       if (error) throw new Error(error.message);
       if (data?.error) throw new Error(data.error);
 
-      // Refetch the saved audit
       const { data: freshAudit } = await supabase
         .from("book_audits")
         .select("*")
@@ -155,10 +165,17 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
         const improvementPrompt = suggestion.improvements?.join("\n- ") || "";
         if (!improvementPrompt) continue;
 
+        // Save previous content for versioning (via direct update before regeneration)
+        await supabase.from("chapters").update({
+          previous_content: chapter.content,
+          version_number: ((chapter as any).version_number || 1) + 1,
+          audit_id: audit.id,
+        }).eq("id", chapter.id);
+
         const { error } = await supabase.functions.invoke("generate-chapter", {
           body: {
             chapterId: chapter.id,
-            bookTitle: "", // Will be fetched by the function
+            bookTitle: "",
             chapterTitle: chapter.title,
             chapterNumber: chapter.chapter_number,
             regenerate: true,
@@ -168,11 +185,9 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
         });
 
         if (!error) improved++;
-        // Brief delay between chapters to avoid rate limits
         await new Promise(r => setTimeout(r, 2000));
       }
 
-      // Mark improvements applied
       await supabase.from("book_audits").update({
         improvements_applied: true,
         improvements_applied_at: new Date().toISOString(),
@@ -182,7 +197,7 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
 
       toast({
         title: "Improvements Applied",
-        description: `${improved}/${audit.chapter_suggestions.length} chapters improved. Re-run audit to verify.`,
+        description: `${improved}/${audit.chapter_suggestions.length} chapters improved (versioned). Re-run audit to verify.`,
       });
     } catch (err) {
       toast({ title: "Failed to apply improvements", description: String(err), variant: "destructive" });
@@ -194,10 +209,15 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
   if (loading) return null;
 
   const dimensions = audit ? [
-    { key: "structural", label: "Structural Integrity", icon: LayoutList, score: audit.structural_score, findings: audit.structural_findings },
-    { key: "academic", label: "Academic Rigor", icon: GraduationCap, score: audit.academic_score, findings: audit.academic_findings },
-    { key: "pedagogical", label: "Pedagogical Quality", icon: BookOpen, score: audit.pedagogical_score, findings: audit.pedagogical_findings },
+    { key: "structural", label: "Structural Integrity", icon: LayoutList, score: audit.structural_score, findings: audit.structural_findings, threshold: CERT_THRESHOLDS.structural },
+    { key: "academic", label: "Academic Rigor", icon: GraduationCap, score: audit.academic_score, findings: audit.academic_findings, threshold: CERT_THRESHOLDS.academic },
+    { key: "pedagogical", label: "Pedagogical Quality", icon: BookOpen, score: audit.pedagogical_score, findings: audit.pedagogical_findings, threshold: CERT_THRESHOLDS.pedagogical },
   ] : [];
+
+  const penalties = (audit?.penalty_log || []) as any[];
+  const prePenalty = (audit?.pre_penalty_scores || {}) as Record<string, number>;
+  const hasPenalties = penalties.length > 0;
+  const evidenceCitations = (audit?.evidence_citations || []) as any[];
 
   return (
     <div className={cn("rounded-xl border border-border/50 bg-gradient-card overflow-hidden", className)}>
@@ -219,9 +239,20 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
         </div>
         <div className="flex items-center gap-2">
           {audit?.status === "completed" && (
-            <Badge variant="outline" className={cn("text-xs", scoreColor(audit.overall_score))}>
-              {audit.overall_score}/100
-            </Badge>
+            <>
+              {audit.certification_eligible ? (
+                <Badge variant="outline" className="text-xs text-green-500 border-green-500/30">
+                  <Award className="h-3 w-3 mr-1" />Cert Eligible
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="text-xs text-amber-500 border-amber-500/30">
+                  Below Threshold
+                </Badge>
+              )}
+              <Badge variant="outline" className={cn("text-xs", scoreColor(audit.overall_score))}>
+                {audit.overall_score}/100
+              </Badge>
+            </>
           )}
           {expanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
         </div>
@@ -273,49 +304,132 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
                     </p>
                   </div>
 
-                  {/* Dimension Scores */}
-                  {dimensions.map(dim => (
-                    <div key={dim.key} className="rounded-lg border border-border/50 overflow-hidden">
-                      <button
-                        onClick={() => setExpandedDimension(expandedDimension === dim.key ? null : dim.key)}
-                        className="w-full flex items-center justify-between p-3 hover:bg-muted/20 transition-colors"
-                      >
-                        <div className="flex items-center gap-2">
-                          <dim.icon className="h-4 w-4 text-muted-foreground" />
-                          <span className="text-sm font-medium">{dim.label}</span>
-                        </div>
-                        <div className="flex items-center gap-2">
-                          <span className={cn("text-sm font-bold", scoreColor(dim.score))}>{dim.score}/100</span>
-                          {expandedDimension === dim.key ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
-                        </div>
-                      </button>
-
-                      <AnimatePresence>
-                        {expandedDimension === dim.key && dim.findings?.length > 0 && (
-                          <motion.div
-                            initial={{ height: 0 }}
-                            animate={{ height: "auto" }}
-                            exit={{ height: 0 }}
-                            className="overflow-hidden"
-                          >
-                            <div className="px-3 pb-3 space-y-2">
-                              {dim.findings.map((finding: any, i: number) => (
-                                <div key={i} className="text-xs p-2 rounded bg-muted/30">
-                                  <p className="font-medium text-foreground">{finding.criterion}</p>
-                                  <p className="text-muted-foreground mt-0.5">{finding.assessment}</p>
-                                  {finding.chapterNumbers?.length > 0 && (
-                                    <p className="text-muted-foreground mt-0.5">
-                                      Chapters: {finding.chapterNumbers.join(", ")}
-                                    </p>
-                                  )}
-                                </div>
-                              ))}
-                            </div>
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
+                  {/* Certification Eligibility Gate */}
+                  <div className={cn(
+                    "p-3 rounded-lg border text-xs",
+                    audit.certification_eligible
+                      ? "bg-green-500/10 border-green-500/30 text-green-600 dark:text-green-400"
+                      : "bg-amber-500/10 border-amber-500/30 text-amber-600 dark:text-amber-400"
+                  )}>
+                    <div className="flex items-center gap-2 mb-1">
+                      <Award className="h-4 w-4" />
+                      <span className="font-medium">
+                        {audit.certification_eligible ? "Certification Eligible" : "Below Certification Threshold"}
+                      </span>
                     </div>
-                  ))}
+                    <p>
+                      Required: Structural ≥{CERT_THRESHOLDS.structural} · Academic ≥{CERT_THRESHOLDS.academic} · Pedagogical ≥{CERT_THRESHOLDS.pedagogical} · Overall ≥{CERT_THRESHOLDS.overall}
+                    </p>
+                  </div>
+
+                  {/* Dimension Scores with penalty indicators */}
+                  {dimensions.map(dim => {
+                    const rawScore = prePenalty[dim.key];
+                    const wasCapped = rawScore !== undefined && rawScore > dim.score;
+                    const meetsThreshold = dim.score >= dim.threshold;
+
+                    return (
+                      <div key={dim.key} className="rounded-lg border border-border/50 overflow-hidden">
+                        <button
+                          onClick={() => setExpandedDimension(expandedDimension === dim.key ? null : dim.key)}
+                          className="w-full flex items-center justify-between p-3 hover:bg-muted/20 transition-colors"
+                        >
+                          <div className="flex items-center gap-2">
+                            <dim.icon className="h-4 w-4 text-muted-foreground" />
+                            <span className="text-sm font-medium">{dim.label}</span>
+                            {wasCapped && (
+                              <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">
+                                <Gavel className="h-2.5 w-2.5 mr-0.5" />Capped from {rawScore}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-2">
+                            {meetsThreshold ? (
+                              <CheckCircle2 className="h-3.5 w-3.5 text-green-500" />
+                            ) : (
+                              <XCircle className="h-3.5 w-3.5 text-destructive" />
+                            )}
+                            <span className={cn("text-sm font-bold", scoreColor(dim.score))}>{dim.score}/100</span>
+                            {expandedDimension === dim.key ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+                          </div>
+                        </button>
+
+                        <AnimatePresence>
+                          {expandedDimension === dim.key && dim.findings?.length > 0 && (
+                            <motion.div
+                              initial={{ height: 0 }}
+                              animate={{ height: "auto" }}
+                              exit={{ height: 0 }}
+                              className="overflow-hidden"
+                            >
+                              <div className="px-3 pb-3 space-y-2">
+                                {dim.findings.map((finding: any, i: number) => (
+                                  <div key={i} className="text-xs p-2 rounded bg-muted/30">
+                                    <p className="font-medium text-foreground">{finding.criterion}</p>
+                                    <p className="text-muted-foreground mt-0.5">{finding.assessment}</p>
+                                    {finding.quote && finding.quote !== "N/A" && (
+                                      <p className="text-muted-foreground mt-1 italic border-l-2 border-scroll-gold/50 pl-2">
+                                        <Quote className="h-3 w-3 inline mr-1 text-scroll-gold" />
+                                        "{finding.quote.slice(0, 200)}{finding.quote.length > 200 ? '...' : ''}"
+                                      </p>
+                                    )}
+                                    {finding.chapterNumbers?.length > 0 && (
+                                      <p className="text-muted-foreground mt-0.5">
+                                        Chapters: {finding.chapterNumbers.join(", ")}
+                                      </p>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+                        </AnimatePresence>
+                      </div>
+                    );
+                  })}
+
+                  {/* Hard Penalty Log */}
+                  {hasPenalties && (
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => setShowPenalties(!showPenalties)}
+                        className="flex items-center gap-2 text-sm font-medium w-full hover:text-foreground transition-colors"
+                      >
+                        <Gavel className="h-4 w-4 text-destructive" />
+                        Deterministic Penalties ({penalties.length})
+                        {showPenalties ? <ChevronUp className="h-3 w-3 ml-auto" /> : <ChevronDown className="h-3 w-3 ml-auto" />}
+                      </button>
+                      {showPenalties && penalties.map((p: any, i: number) => (
+                        <div key={i} className="text-xs p-2 rounded bg-destructive/5 border border-destructive/20">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium text-destructive">{p.rule}</span>
+                            <Badge variant="outline" className="text-[10px]">Cap: {p.cap}</Badge>
+                          </div>
+                          <p className="text-muted-foreground mt-0.5">{p.evidence}</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Evidence Citations */}
+                  {evidenceCitations.length > 0 && (
+                    <div className="space-y-2">
+                      <button
+                        onClick={() => setShowEvidence(!showEvidence)}
+                        className="flex items-center gap-2 text-sm font-medium w-full hover:text-foreground transition-colors"
+                      >
+                        <Quote className="h-4 w-4 text-scroll-gold" />
+                        Evidence Citations ({evidenceCitations.length})
+                        {showEvidence ? <ChevronUp className="h-3 w-3 ml-auto" /> : <ChevronDown className="h-3 w-3 ml-auto" />}
+                      </button>
+                      {showEvidence && evidenceCitations.map((e: any, i: number) => (
+                        <div key={i} className="text-xs p-2 rounded bg-muted/30 border-l-2 border-scroll-gold/50">
+                          <p className="font-medium text-foreground">{e.criterion}</p>
+                          <p className="italic text-muted-foreground mt-1">"{e.quote?.slice(0, 300)}{(e.quote?.length || 0) > 300 ? '...' : ''}"</p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
 
                   {/* Flagged Sections */}
                   {audit.flagged_sections?.length > 0 && (
@@ -364,26 +478,32 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
 
                   {/* Apply Improvements Button */}
                   {audit.chapter_suggestions?.length > 0 && (
-                    <div className="pt-2">
+                    <div className="pt-2 space-y-2">
                       {audit.improvements_applied ? (
                         <div className="flex items-center gap-2 text-sm text-green-500">
                           <CheckCircle2 className="h-4 w-4" />
-                          Improvements applied. Re-run audit to verify quality gains.
+                          Improvements applied (versioned). Re-run audit to verify quality gains.
                         </div>
                       ) : (
-                        <Button
-                          onClick={applyImprovements}
-                          disabled={isApplying}
-                          variant="hero"
-                          size="sm"
-                          className="w-full"
-                        >
-                          {isApplying ? (
-                            <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Applying improvements...</>
-                          ) : (
-                            <><Sparkles className="h-4 w-4 mr-2" />Apply Improvements ({audit.chapter_suggestions.length} chapters)</>
-                          )}
-                        </Button>
+                        <>
+                          <Button
+                            onClick={applyImprovements}
+                            disabled={isApplying}
+                            variant="hero"
+                            size="sm"
+                            className="w-full"
+                          >
+                            {isApplying ? (
+                              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Applying improvements (with versioning)...</>
+                            ) : (
+                              <><Sparkles className="h-4 w-4 mr-2" />Apply Improvements ({audit.chapter_suggestions.length} chapters)</>
+                            )}
+                          </Button>
+                          <p className="text-[10px] text-muted-foreground text-center">
+                            <Undo2 className="h-3 w-3 inline mr-1" />
+                            Previous content is saved for rollback
+                          </p>
+                        </>
                       )}
                     </div>
                   )}
@@ -396,7 +516,7 @@ export function ChiefEditorPanel({ bookId, chapters, className }: ChiefEditorPan
                   <Loader2 className="h-5 w-5 animate-spin text-scroll-gold" />
                   <div>
                     <p className="text-sm font-medium">Audit in progress...</p>
-                    <p className="text-xs text-muted-foreground">Evaluating {generatedCount} chapters across 3 dimensions</p>
+                    <p className="text-xs text-muted-foreground">Evaluating {generatedCount} chapters across 3 dimensions with hard penalty rules</p>
                   </div>
                 </div>
               )}
