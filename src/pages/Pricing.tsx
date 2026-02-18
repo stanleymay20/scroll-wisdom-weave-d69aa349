@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useState, useEffect } from "react";
+import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
@@ -15,7 +15,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 
 /**
  * PMF MODE: Simplified pricing
- * Free (1 book/month) + Pro ($5/month unlimited)
+ * Free (1 book/month) + Pro ($9/month, 10 books/month)
  */
 
 const PMF_PRICE_ID = SUBSCRIPTION_TIERS.student.price_id; // Use student tier as Pro tier
@@ -59,7 +59,7 @@ const plans: PlanConfig[] = [
     popular: true,
     tierKey: "student",
     features: [
-      { text: "Unlimited books per month", included: true },
+      { text: "Up to 10 books per month", included: true },
       { text: "Up to 30 chapters per book", included: true },
       { text: "Full reader with text-to-speech", included: true },
       { text: "Unlimited quizzes", included: true },
@@ -72,12 +72,34 @@ const plans: PlanConfig[] = [
 ];
 
 export default function Pricing() {
-  const { user, tier, isSubscribed } = useSubscription();
+  const { user, tier, isSubscribed, checkSubscription } = useSubscription();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
+  const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useLanguage();
+
+  // Handle post-checkout redirect
+  useEffect(() => {
+    if (searchParams.get("success") === "true") {
+      toast({
+        title: "Subscription activated!",
+        description: "Welcome to Pro. Your features are now unlocked.",
+      });
+      // Force refresh subscription state
+      checkSubscription();
+      // Clean URL
+      setSearchParams({}, { replace: true });
+    } else if (searchParams.get("canceled") === "true") {
+      toast({
+        title: "Checkout canceled",
+        description: "No charges were made. You can try again anytime.",
+        variant: "default",
+      });
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams]);
 
   const handleSelectPlan = async (planTierKey: string) => {
     if (!user) {
@@ -94,7 +116,7 @@ export default function Pricing() {
 
     try {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { priceId: PMF_PRICE_ID },
+        body: { priceId: PMF_PRICE_ID, tier: "student" },
       });
 
       if (error) throw error;
