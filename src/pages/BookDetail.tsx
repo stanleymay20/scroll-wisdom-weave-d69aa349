@@ -15,6 +15,7 @@ import { motion } from "framer-motion";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { MobileLayout } from "@/components/layout/MobileLayout";
+import { MobileBookDetailHeader } from "@/components/mobile/MobileBookDetailHeader";
 import { Button } from "@/components/ui/button";
 import {
   Book,
@@ -22,6 +23,7 @@ import {
   Bookmark,
   Clock,
   User,
+  ChevronLeft,
   ChevronRight,
   Play,
   Loader2,
@@ -630,8 +632,34 @@ export default function BookDetail() {
   // Mobile layout wrapper - use conditional rendering, not inline component
   // (Defining wrapper inline causes remount on every state change, breaking input focus)
 
+  const hasGeneratedChapters = chapters.some(ch => ch.is_generated);
+
   const content = (
     <>
+      {/* Mobile Back Button */}
+      {isMobile && (
+        <div className="sticky top-0 z-30 bg-background/95 backdrop-blur-sm border-b border-border/30 px-4 py-2" style={{ marginTop: "-56px", paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)" }}>
+          <Button variant="ghost" size="sm" onClick={() => navigate(-1)} className="text-muted-foreground -ml-2">
+            <ChevronLeft className="h-5 w-5 mr-1" />
+            Back
+          </Button>
+        </div>
+      )}
+
+      {/* Mobile Book Detail Header */}
+      {isMobile && (
+        <MobileBookDetailHeader
+          book={book}
+          chaptersCount={chapters.length || book.total_chapters || 0}
+          readingTime={readingTime}
+          isSaved={isSaved}
+          isOwner={!!isOwner}
+          hasGeneratedChapters={hasGeneratedChapters}
+          onSave={handleSaveToLibrary}
+          onStartReading={() => navigate(`/read/${id}/1`)}
+          onShare={() => {}}
+        />
+      )}
 
       {/* Delete Book Confirmation Dialog */}
       <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
@@ -711,9 +739,10 @@ export default function BookDetail() {
         </AlertDialogContent>
       </AlertDialog>
 
-      <main className="pt-24 pb-16">
+      <main className={cn("pb-16", isMobile ? "pt-4" : "pt-24")}>
         <div className="container mx-auto px-4">
-          {/* Book Header */}
+          {/* Book Header - Desktop only (mobile uses MobileBookDetailHeader above) */}
+          {!isMobile && (
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1030,6 +1059,44 @@ export default function BookDetail() {
               <ContentDisclaimer type="ai" className="mt-6" />
             </div>
           </motion.div>
+          )}
+
+          {/* Mobile Cover Controls (compact) */}
+          {isMobile && isOwner && (
+            <div className="px-4 mt-4 space-y-2">
+              <div className="flex gap-2">
+                <Select value={coverTheme} onValueChange={setCoverTheme}>
+                  <SelectTrigger className="flex-1 h-9 text-xs">
+                    <Palette className="h-3.5 w-3.5 mr-1.5" />
+                    <SelectValue placeholder="Theme" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {coverThemes.map((theme) => (
+                      <SelectItem key={theme.value} value={theme.value}>
+                        {t(theme.labelKey)}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <Button
+                  variant="gold-outline"
+                  size="sm"
+                  className="h-9 text-xs"
+                  onClick={() => handleGenerateCover()}
+                  disabled={isGeneratingCover}
+                >
+                  {isGeneratingCover ? (
+                    <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                  ) : (
+                    <>
+                      <RefreshCw className="h-3.5 w-3.5 mr-1" />
+                      Cover
+                    </>
+                  )}
+                </Button>
+              </div>
+            </div>
+          )}
 
           {/* Chapters */}
           <motion.div

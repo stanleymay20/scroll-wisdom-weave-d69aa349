@@ -6,7 +6,7 @@
  */
 
 import { memo, forwardRef, useState } from "react";
-import { Home, BookOpen, Library as LibraryIcon, Settings, Plus, X, Image, FileText } from "lucide-react";
+import { Upload, BookOpen, Library as LibraryIcon, Settings, Plus, X, Image, FileText } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";
@@ -19,7 +19,7 @@ const LEFT_NAV_ITEMS = [
 
 // Right side nav items
 const RIGHT_NAV_ITEMS = [
-  { icon: Home, label: "Upload", path: "/upload" },
+  { icon: Upload, label: "Upload", path: "/upload" },
   { icon: Settings, label: "Profile", path: "/profile" },
 ] as const;
 
