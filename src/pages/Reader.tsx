@@ -1014,7 +1014,7 @@ export default function Reader() {
             }}
           >
             <TTSMiniPlayer
-              chapterText={`Chapter ${currentChapter}: ${chapter.title}.\n\n${chapter.content || ''}`}
+              chapterText={`Chapter ${currentChapter}: ${chapter.title}.\n\n${stripDuplicateTitle(chapter.content || '', chapter.title || '')}`}
               selectedText={selectedTextForTTS}
               language={book?.language || "en"}
               stopKey={`${bookId}-${currentChapter}`}
