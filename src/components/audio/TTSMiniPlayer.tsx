@@ -133,6 +133,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const chunksRef = useRef<string[]>([]);
   // Track if audio context is unlocked (user has interacted)
   const audioUnlockedRef = useRef(false);
+  // Track if playback was blocked by browser autoplay policy
+  const autoplayBlockedRef = useRef(false);
   const { toast } = useToast();
   const entitlements = useEntitlements();
   
@@ -384,7 +386,10 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       audio.src = url;
       audio.play().catch((err) => {
         cleanup();
-        if (err?.name !== "AbortError") {
+        if (err?.name === "NotAllowedError") {
+          console.error("[TTS] Play blocked by autoplay policy — requires user gesture");
+          autoplayBlockedRef.current = true;
+        } else if (err?.name !== "AbortError") {
           console.error("[TTS] Play error:", err);
         }
         safeResolve(false);
@@ -534,6 +539,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     // Ensure clean state — these MUST be false before chunk loop starts
     stopRef.current = false;
     isStoppingRef.current = false;
+    autoplayBlockedRef.current = false;
     pausedAtChunkRef.current = 0;
     cumulativeTimeRef.current = 0;
     totalAudioSecsRef.current = 0;
@@ -715,11 +721,13 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         setProgress(0);
         setCurrentChunk(0);
         
-        // AUTO-CONTINUE: Trigger callback when chapter finishes naturally (not stopped)
-        // Only trigger if we completed all chunks without being stopped
-        if (!stopRef.current && mode === 'chapter' && autoContinue) {
+        // AUTO-CONTINUE: Only if chapter finished naturally (not stopped, not autoplay-blocked)
+        if (!stopRef.current && !autoplayBlockedRef.current && mode === 'chapter' && autoContinue) {
           console.log("[TTS] Chapter complete - triggering auto-continue");
           onChapterComplete?.();
+        } else if (autoplayBlockedRef.current) {
+          console.log("[TTS] Autoplay blocked by browser - stopping instead of auto-continuing");
+          toast({ title: "Audio paused", description: "Tap play to continue listening", variant: "default" });
         }
       }
       mediaSession.setPlaybackState('idle');
