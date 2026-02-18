@@ -1,5 +1,5 @@
 import { useState, useEffect, forwardRef, useRef } from "react";
-import { useNavigate, useSearchParams } from "react-router-dom";
+import { useNavigate, useSearchParams, useLocation } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -31,6 +31,8 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   const [authError, setAuthError] = useState<string | null>(null);
   const { toast } = useToast();
   const navigate = useNavigate();
+  const location = useLocation();
+  const redirectTo = (location.state as any)?.redirectTo || "/";
   const isRecoveryRef = useRef(false);
 
   // Clear error when mode changes
@@ -60,7 +62,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
         // If we're in recovery, stay on the reset screen.
         if (isRecoveryRef.current || mode === "reset-password") return;
         // Defer navigation to avoid potential deadlocks
-        setTimeout(() => navigate("/"), 0);
+        setTimeout(() => navigate(redirectTo), 0);
       }
     });
 
@@ -94,7 +96,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
     // For normal signed-in visits, redirect home.
     supabase.auth.getSession().then(({ data: { session } }) => {
       if (session?.user && mode !== "reset-password" && !isRecoveryRef.current) {
-        navigate("/");
+        navigate(redirectTo);
       }
     });
 
