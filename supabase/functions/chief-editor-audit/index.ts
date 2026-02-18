@@ -175,6 +175,7 @@ serve(async (req) => {
   }
 
   try {
+    const auditStartTime = Date.now();
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -463,13 +464,49 @@ Respond as JSON:
       throw new Error(`Failed to save audit: ${updateError.message}`);
     }
 
+    // ============================================================
+    // STEP 5: Audit Telemetry
+    // ============================================================
+    const durationMs = Date.now() - auditStartTime;
+
+    // Fetch previous audit for improvement delta
+    const { data: prevAudits } = await supabase
+      .from("book_audits")
+      .select("overall_score, structural_score, academic_score, pedagogical_score")
+      .eq("book_id", bookId)
+      .eq("status", "completed")
+      .neq("id", auditRecord.id)
+      .order("created_at", { ascending: false })
+      .limit(1);
+
+    const prevAudit = prevAudits?.[0];
+    const improvementDelta = prevAudit ? {
+      overall: overallScore - (prevAudit.overall_score || 0),
+      structural: structuralScore - (prevAudit.structural_score || 0),
+      academic: academicScore - (prevAudit.academic_score || 0),
+      pedagogical: pedagogicalScore - (prevAudit.pedagogical_score || 0),
+    } : null;
+
+    await supabase.from("audit_telemetry").insert({
+      audit_id: auditRecord.id,
+      book_id: bookId,
+      user_id: user.id,
+      duration_ms: durationMs,
+      chapters_audited: generatedChapters.length,
+      penalties_applied: penaltyResult.penalties.length,
+      certification_result: certificationEligible,
+      score_before: prevAudit ? { s: prevAudit.structural_score, a: prevAudit.academic_score, p: prevAudit.pedagogical_score, o: prevAudit.overall_score } : {},
+      score_after: { s: structuralScore, a: academicScore, p: pedagogicalScore, o: overallScore },
+      improvement_delta: improvementDelta || {},
+      audit_model: AUDIT_MODEL,
+      prompt_version: AUDIT_PROMPT_VERSION,
+    });
+
     log("Audit complete", {
       overall: overallScore,
-      raw: prePenaltyScores,
-      capped: { structural: structuralScore, academic: academicScore, pedagogical: pedagogicalScore },
-      penalties: penaltyResult.penalties.length,
+      durationMs,
+      improvementDelta,
       certEligible: certificationEligible,
-      blockers: certificationBlockers.length,
       model: AUDIT_MODEL,
       promptVersion: AUDIT_PROMPT_VERSION,
     });
