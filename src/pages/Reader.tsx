@@ -1043,7 +1043,10 @@ export default function Reader() {
                     duration: 2000,
                   });
                 } else {
-                  // Book complete
+                  // Book complete - save 100% progress
+                  if (userId && book?.total_chapters) {
+                    await saveProgress(currentChapter, 100, true);
+                  }
                   toast({
                     title: "🎉 Book complete!",
                     description: "You've finished listening to all chapters.",
@@ -1430,7 +1433,8 @@ export default function Reader() {
                 const completedChapters = currentChapter - 1;
                 const currentChapterContribution = readingProgress / 100;
                 const overallProgress = ((completedChapters + currentChapterContribution) / book.total_chapters) * 100;
-                await saveProgress(currentChapter, overallProgress);
+                const isBookComplete = currentChapter === book.total_chapters && readingProgress >= 95;
+                await saveProgress(currentChapter, isBookComplete ? 100 : overallProgress);
               }
               // Scroll to top for new chapter
               window.scrollTo({ top: 0, behavior: 'instant' });
