@@ -2187,7 +2187,7 @@ serve(async (req) => {
     if (chapter) {
       const { data: book } = await supabase
         .from("books")
-        .select("creator_id, book_type, workbook_density, comic_style_id, palette_hint, line_weight_hint, character_sheet, layout_template, text_in_image, scenes_per_panel")
+        .select("creator_id, book_type")
         .eq("id", chapter.book_id)
         .single();
 
