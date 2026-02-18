@@ -367,20 +367,98 @@ Respond as JSON:
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
 
+    // ============================================================
+    // ROBUST JSON PARSER — Multi-strategy extraction (ported from STO audit)
+    // ============================================================
+    function fixNewlinesInJsonStrings(raw: string): string {
+      let result = '';
+      let inString = false;
+      let escaped = false;
+      for (let i = 0; i < raw.length; i++) {
+        const ch = raw[i];
+        if (escaped) { result += ch; escaped = false; continue; }
+        if (ch === '\\' && inString) { escaped = true; result += ch; continue; }
+        if (ch === '"') { inString = !inString; result += ch; continue; }
+        if (inString && ch === '\n') { result += '\\n'; continue; }
+        if (inString && ch === '\r') { result += '\\r'; continue; }
+        if (inString && ch === '\t') { result += '\\t'; continue; }
+        result += ch;
+      }
+      return result;
+    }
+
+    function cleanAndParseJSON(jsonStr: string): any {
+      let cleaned = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
+      cleaned = cleaned.replace(/,\s*}/g, '}').replace(/,\s*\]/g, ']');
+      try { return JSON.parse(cleaned); } catch { /* continue */ }
+      try { return JSON.parse(fixNewlinesInJsonStrings(cleaned)); } catch { /* continue */ }
+      try { return JSON.parse(cleaned.replace(/\n/g, '\\n').replace(/\r/g, '')); } catch { /* continue */ }
+      return null;
+    }
+
+    function tryParseAuditJSON(raw: string): any {
+      // Strategy 1: JSON fenced block
+      const jsonFence = raw.match(/```json\s*\n?([\s\S]*?)```/);
+      if (jsonFence) { const p = cleanAndParseJSON(jsonFence[1].trim()); if (p) return p; }
+      // Strategy 2: Any fenced block
+      const anyFence = raw.match(/```\s*\n?([\s\S]*?)```/);
+      if (anyFence) { const p = cleanAndParseJSON(anyFence[1].trim()); if (p) return p; }
+      // Strategy 3: First-to-last brace
+      const first = raw.indexOf('{');
+      const last = raw.lastIndexOf('}');
+      if (first !== -1 && last > first) { const p = cleanAndParseJSON(raw.substring(first, last + 1)); if (p) return p; }
+      // Strategy 4: Raw
+      const p = cleanAndParseJSON(raw.trim());
+      if (p) return p;
+      return null;
+    }
+
     let auditResults;
-    try {
-      const jsonMatch = rawContent.match(/\{[\s\S]*\}/);
-      auditResults = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-      if (!auditResults) throw new Error("No JSON found");
-    } catch (parseErr) {
-      log("Parse error, using fallback", { error: String(parseErr) });
+    let parseStrategy = 'unknown';
+    const parsed = tryParseAuditJSON(rawContent);
+
+    if (parsed && typeof parsed === 'object' && (parsed.structural || parsed.academic || parsed.pedagogical)) {
+      auditResults = parsed;
+      parseStrategy = 'json';
+      log("JSON parsed", { structural: parsed.structural?.score, academic: parsed.academic?.score, pedagogical: parsed.pedagogical?.score, suggestions: parsed.chapterSuggestions?.length || 0 });
+    } else {
+      parseStrategy = 'regex_fallback';
+      log("JSON parse failed, using regex fallback", { rawPreview: rawContent.slice(0, 300) });
+
+      // Extract scores via regex
+      const sScore = rawContent.match(/"structural"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
+      const aScore = rawContent.match(/"academic"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
+      const pScore = rawContent.match(/"pedagogical"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
+
+      // Extract chapterSuggestions via regex
+      const suggestionsBlock = rawContent.match(/"chapterSuggestions"\s*:\s*\[([\s\S]*?)\]\s*}/);
+      const extractedSuggestions: any[] = [];
+      if (suggestionsBlock) {
+        const chapterMatches = [...suggestionsBlock[1].matchAll(/"chapterNumber"\s*:\s*(\d+)/g)];
+        for (const cm of chapterMatches) {
+          const chNum = parseInt(cm[1]);
+          // Find improvements array near this chapter
+          const startIdx = cm.index || 0;
+          const slice = suggestionsBlock[1].substring(startIdx, startIdx + 1000);
+          const impMatch = slice.match(/"improvements"\s*:\s*\[([\s\S]*?)\]/);
+          const improvements: string[] = [];
+          if (impMatch) {
+            const items = [...impMatch[1].matchAll(/"((?:[^"\\]|\\.)*)"/g)];
+            for (const item of items) improvements.push(item[1].replace(/\\n/g, ' ').replace(/\\"/g, '"'));
+          }
+          if (improvements.length > 0) extractedSuggestions.push({ chapterNumber: chNum, improvements });
+        }
+      }
+
       auditResults = {
-        structural: { score: 50, findings: [{ criterion: "Parse error", assessment: "Could not parse AI response", quote: "N/A", chapterNumbers: [] }] },
-        academic: { score: 50, findings: [{ criterion: "Parse error", assessment: "Could not parse AI response", quote: "N/A", chapterNumbers: [] }] },
-        pedagogical: { score: 50, findings: [{ criterion: "Parse error", assessment: "Could not parse AI response", quote: "N/A", chapterNumbers: [] }] },
+        structural: { score: sScore ? parseInt(sScore) : 50, findings: [{ criterion: "Partial parse", assessment: "AI response was partially parsed via regex", quote: "N/A", chapterNumbers: [] }] },
+        academic: { score: aScore ? parseInt(aScore) : 50, findings: [{ criterion: "Partial parse", assessment: "AI response was partially parsed via regex", quote: "N/A", chapterNumbers: [] }] },
+        pedagogical: { score: pScore ? parseInt(pScore) : 50, findings: [{ criterion: "Partial parse", assessment: "AI response was partially parsed via regex", quote: "N/A", chapterNumbers: [] }] },
         flaggedSections: [],
-        chapterSuggestions: [],
+        chapterSuggestions: extractedSuggestions,
       };
+
+      log("Regex extracted", { s: sScore, a: aScore, p: pScore, suggestions: extractedSuggestions.length });
     }
 
     // ============================================================
