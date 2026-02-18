@@ -62,6 +62,72 @@ export type Database = {
           },
         ]
       }
+      audit_telemetry: {
+        Row: {
+          audit_id: string
+          audit_model: string
+          book_id: string
+          certification_result: boolean
+          chapters_audited: number
+          created_at: string
+          duration_ms: number
+          id: string
+          improvement_delta: Json | null
+          penalties_applied: number
+          prompt_version: string
+          score_after: Json | null
+          score_before: Json | null
+          user_id: string
+        }
+        Insert: {
+          audit_id: string
+          audit_model?: string
+          book_id: string
+          certification_result?: boolean
+          chapters_audited?: number
+          created_at?: string
+          duration_ms?: number
+          id?: string
+          improvement_delta?: Json | null
+          penalties_applied?: number
+          prompt_version?: string
+          score_after?: Json | null
+          score_before?: Json | null
+          user_id: string
+        }
+        Update: {
+          audit_id?: string
+          audit_model?: string
+          book_id?: string
+          certification_result?: boolean
+          chapters_audited?: number
+          created_at?: string
+          duration_ms?: number
+          id?: string
+          improvement_delta?: Json | null
+          penalties_applied?: number
+          prompt_version?: string
+          score_after?: Json | null
+          score_before?: Json | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_telemetry_audit_id_fkey"
+            columns: ["audit_id"]
+            isOneToOne: false
+            referencedRelation: "book_audits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "audit_telemetry_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       book_audits: {
         Row: {
           academic_findings: Json
