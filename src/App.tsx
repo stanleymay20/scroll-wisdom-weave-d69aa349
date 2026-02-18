@@ -12,6 +12,7 @@ import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
 import { ErrorBoundary, SectionErrorBoundary } from "@/components/ErrorBoundary";
 import { DiagnosticsPanel } from "@/components/system/DiagnosticsPanel";
 import { createLogger, setTraceId } from "@/lib/logger";
+import { notifyError } from "@/lib/errorNotifier";
 import { SkeletonPage } from "@/components/ui/page-shell";
 import { InlineSplash } from "@/components/brand";
 import { initContract5 } from "@/lib/contract5";
@@ -76,6 +77,9 @@ const queryClient = new QueryClient({
     },
     mutations: {
       retry: 1,
+      onError: (error) => {
+        notifyError(error);
+      },
     },
   },
 });
