@@ -236,8 +236,11 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
 
       toast({
         title: "Improvements Applied",
-        description: `${improved}/${audit.chapter_suggestions.length} chapters improved (versioned). Re-run audit to verify.`,
+        description: `${improved}/${audit.chapter_suggestions.length} chapters improved. Re-running audit to verify…`,
       });
+
+      // Auto re-run audit to show new scores
+      setTimeout(() => runAudit(), 1500);
     } catch (err) {
       toast({ title: "Failed to apply improvements", description: String(err), variant: "destructive" });
     } finally {
