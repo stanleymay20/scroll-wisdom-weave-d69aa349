@@ -7,7 +7,7 @@
  * SLA: First content ≤ 1.5s, Interactive ≤ 2.0s
  */
 
-import { useEffect, useState, useCallback, memo } from "react";
+import { useEffect, useState, useCallback, memo, forwardRef } from "react";
 import { ChevronRight } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
@@ -42,9 +42,9 @@ const BookGridSkeleton = memo(function BookGridSkeleton({ count = 4 }: { count?:
 });
 
 // Memoized section header
-const SectionHeader = memo(function SectionHeader({ title, linkTo }: { title: string; linkTo: string }) {
+const SectionHeader = memo(forwardRef<HTMLDivElement, { title: string; linkTo: string }>(function SectionHeader({ title, linkTo }, ref) {
   return (
-    <div className="flex items-center justify-between mb-4">
+    <div ref={ref} className="flex items-center justify-between mb-4">
       <h2 className="text-lg font-display font-semibold text-foreground">{title}</h2>
       <Link 
         to={linkTo} 
@@ -55,7 +55,7 @@ const SectionHeader = memo(function SectionHeader({ title, linkTo }: { title: st
       </Link>
     </div>
   );
-});
+}));
 
 // Static categories - no computation needed
 const QUICK_CATEGORIES = ["Technology", "Science", "Business", "History", "Psychology", "Philosophy"] as const;

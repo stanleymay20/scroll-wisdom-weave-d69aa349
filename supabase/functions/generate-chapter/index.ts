@@ -2087,7 +2087,10 @@ serve(async (req) => {
 
     const userPlan = profile?.plan || "free";
     // Admin gets best model regardless of profile plan
-    const effectiveModelPlan = isAdmin ? "prophet_tier" : userPlan;
+    // Chief Editor rewrites always use a high-quality model to ensure scores reach ~100
+    const editIntent_raw = (requestBody?.editIntent as string | null) || null;
+    const isChiefEditorRewrite = editIntent_raw?.startsWith('[CHIEF_EDITOR_REWRITE]') || false;
+    const effectiveModelPlan = isAdmin ? "prophet_tier" : (isChiefEditorRewrite ? "premium" : userPlan);
     const generationModel = getModelForPlan(effectiveModelPlan);
     const maxWordCount = TIER_WORD_LIMITS[userPlan as keyof typeof TIER_WORD_LIMITS] || TIER_WORD_LIMITS.free;
     console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel} | Admin: ${isAdmin}`);
@@ -2253,7 +2256,7 @@ You are performing a FULL QUALITY REWRITE of this chapter based on a Chief Edito
 The goal is to produce a chapter that scores 95-100/100 on ALL audit dimensions.
 
 ORIGINAL CONTENT (USE AS FOUNDATION — IMPROVE EVERYTHING):
-${existingContent.slice(0, 8000)}${existingContent.length > 8000 ? '\n[...content truncated...]' : ''}
+${existingContent.slice(0, 15000)}${existingContent.length > 15000 ? '\n[...content truncated...]' : ''}
 
 ${editIntent.replace('[CHIEF_EDITOR_REWRITE]\n', '')}
 
@@ -2284,15 +2287,35 @@ AUDIT RUBRIC — YOU MUST SCORE 95+ ON ALL:
 - Variety of explanation methods (narrative, examples, analogies, scenarios)
 - Assessment-ready content (quiz questions could test this)
 
-PENALTY AVOIDANCE — ENSURE ALL OF THESE:
-- Word count MUST be 1200+ words (avoids WORD_COUNT_LOW penalty)
-- Include 3+ concrete examples with example phrases (avoids NO_EXAMPLES penalty)
-- Define 3+ key terms explicitly (avoids NO_DEFINITIONS penalty)
-- Use 4+ markdown headings (## or ###) (avoids NO_STRUCTURE penalty)
-- Include 3+ questions or exercises (avoids NO_ENGAGEMENT penalty)
+PENALTY AVOIDANCE — ENSURE ALL OF THESE (CRITICAL — these are deterministic checks that WILL cap your score):
+- Word count MUST be 1500+ words (avoids WORD_COUNT_LOW penalty, cap 60)
+- Include 5+ concrete examples using phrases like "for example", "e.g.", "for instance", "such as", "consider", "let's say", "imagine", "suppose" (avoids NO_EXAMPLES penalty, cap 65)
+- Define 5+ key terms explicitly using phrases like "is defined as", "refers to", "means that", "can be described as", "is a", "are called" (avoids NO_DEFINITIONS penalty, cap 70)
+- Use 5+ markdown headings (## or ###) throughout the chapter (avoids NO_STRUCTURE penalty, cap 55)
+- Include 5+ questions (using ?) AND exercises/activities using words like "exercise", "try it", "practice", "quiz", "question", "task", "activity", "challenge" (avoids NO_ENGAGEMENT penalty, cap 70)
 
-REWRITE THE ENTIRE CHAPTER to achieve near-perfect scores.
+STRUCTURAL REQUIREMENTS FOR 95+ SCORE:
+- Opening hook in first 100 words (story, contradiction, or insight — NOT a definition)
+- 4+ well-organized subsections with ## or ### headings
+- Smooth transitions between sections
+- Strong closing that summarizes key takeaways
+
+ACADEMIC REQUIREMENTS FOR 95+ SCORE:
+- Every claim supported with evidence or reasoning
+- Technical terms defined before use
+- Deep coverage, not surface-level summaries
+- Zero factual errors
+
+PEDAGOGICAL REQUIREMENTS FOR 95+ SCORE:
+- Clear learning objectives stated at the beginning
+- Multiple varied examples (narrative, code, analogies, scenarios)
+- Progressive knowledge building
+- Active learning prompts throughout (questions, reflection, exercises)
+- Clear actionable takeaways at the end
+
+REWRITE THE ENTIRE CHAPTER to achieve 95-100/100 on ALL dimensions.
 Preserve the topic and core ideas but dramatically improve structure, depth, examples, definitions, and engagement.
+The output MUST be 1500-3000 words minimum to ensure sufficient depth.
 
 BEGIN COMPREHENSIVE REWRITE:`;
       } else {
