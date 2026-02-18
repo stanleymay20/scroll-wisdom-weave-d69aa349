@@ -324,6 +324,10 @@ HARD FAILURE: If a chapter reads like an essay or textbook → FAIL
 const VALIDATION_CONTRACT = `
 === QUALITY GATES — FINAL CHECK (BEFORE OUTPUT) ===
 
+CRITICAL: Do NOT start the chapter with the chapter number or title as a heading (e.g., "# Chapter 1: Title").
+The reading interface already displays the chapter number and title separately.
+Start DIRECTLY with the content (opening hook, learning objectives, etc.).
+
 Before finalizing, VERIFY ALL of these:
 [ ] Proper markdown headings (## and ###) used for all sections
 [ ] Bold (**text**) used for key terms and concepts
