@@ -56,6 +56,7 @@ const InstitutionalReadiness = lazy(() => import("./pages/InstitutionalReadiness
 const HealthCheck = lazy(() => import("./pages/HealthCheck"));
 const AdminRecovery = lazy(() => import("./pages/AdminRecovery"));
 const PMFDashboard = lazy(() => import("./pages/PMFDashboard"));
+const AuditDashboard = lazy(() => import("./pages/AuditDashboard"));
 const UploadPage = lazy(() => import("./pages/Upload"));
 
 // Lazy load legal components
@@ -148,6 +149,7 @@ const App = () => (
                   <Route path="/health-check" element={<HealthCheck />} />
                   <Route path="/admin-recovery" element={<AdminRecovery />} />
                   <Route path="/pmf" element={<PMFDashboard />} />
+                  <Route path="/audit-dashboard" element={<AuditDashboard />} />
                   <Route path="/upload" element={<UploadPage />} />
                   
                   {/* 404 - eager loaded */}
