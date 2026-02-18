@@ -57,6 +57,7 @@ interface UseLibraryDataOptions {
   isMobile?: boolean;
   userId?: string | null;
   statusFilter?: 'all' | 'reading' | 'completed';
+  searchQuery?: string;
 }
 
 interface UseLibraryDataReturn {
@@ -83,7 +84,8 @@ interface UseLibraryDataReturn {
 export function useLibraryData({ 
   isMobile = false, 
   userId,
-  statusFilter = 'all'
+  statusFilter = 'all',
+  searchQuery = ''
 }: UseLibraryDataOptions): UseLibraryDataReturn {
   // CRITICAL: Try SYNC cache IMMEDIATELY during initialization
   const cachedUserId = userId || sessionStorage.getItem('last-library-user');
@@ -195,6 +197,11 @@ export function useLibraryData({
         query = query.eq('progress_percent', 100);
       }
       
+      // Apply server-side search filter on book title
+      if (searchQuery.trim()) {
+        query = query.ilike('books.title', `%${searchQuery.trim()}%`);
+      }
+      
       const { data, error: fetchError } = await query
         .order('created_at', { ascending: false })
         .range(from, to);
@@ -227,7 +234,7 @@ export function useLibraryData({
         setError(e.message || 'Failed to load library');
       }
     }
-  }, [userId, isMobile, statusFilter]);
+  }, [userId, isMobile, statusFilter, searchQuery]);
   
   // Fetch stats from network
   // "Reading" = any book in library that is NOT completed (< 100%)
@@ -274,25 +281,32 @@ export function useLibraryData({
   useEffect(() => {
     if (!userId) return;
     
-    // When statusFilter changes, clear items immediately to avoid stale data flash
-    if (statusFilter !== 'all') {
+    // When statusFilter or searchQuery changes, clear items to avoid stale data flash
+    if (statusFilter !== 'all' || searchQuery.trim()) {
       setItems([]);
     }
     setLoadState('skeleton');
     
-    const hydrateData = async () => {
-      await Promise.all([
-        fetchItems(0, true),
-        fetchStats(),
-      ]);
-      
-      if (mountedRef.current) {
-        setLoadState('ready');
-        markInteractive('Library');
-      }
-    };
+    // Debounce search queries to avoid excessive server calls
+    const delay = searchQuery.trim() ? 300 : 0;
     
-    hydrateData();
+    const timeoutId = setTimeout(() => {
+      const hydrateData = async () => {
+        await Promise.all([
+          fetchItems(0, true),
+          fetchStats(),
+        ]);
+        
+        if (mountedRef.current) {
+          setLoadState('ready');
+          markInteractive('Library');
+        }
+      };
+      
+      hydrateData();
+    }, delay);
+    
+    return () => clearTimeout(timeoutId);
   }, [userId, fetchItems, fetchStats]);
   
   // Load more (pagination)
