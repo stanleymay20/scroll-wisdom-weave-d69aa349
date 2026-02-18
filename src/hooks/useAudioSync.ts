@@ -174,38 +174,50 @@ export function useAudioSync({
       const wordInChunk = Math.floor(fraction * wordsInChunk);
       const ttsGlobalWord = ttsWordOffset_chunk + wordInChunk;
       
-      // Subtract preamble words (e.g. "Chapter 1: Title.") that exist in TTS but not in DOM
-      const adjustedTTSWord = Math.max(0, ttsGlobalWord - ttsWordOffset);
-      const totalTTSWords = info.chunkWordCounts.reduce((sum, c) => sum + c, 0);
-      const adjustedTotalTTS = Math.max(1, totalTTSWords - ttsWordOffset);
-      const domCount = domWordCountRef.current;
-      const globalWordIdx = domCount > 0 && adjustedTotalTTS > 0
-        ? Math.min(Math.floor((adjustedTTSWord / adjustedTotalTTS) * domCount), domCount - 1)
-        : -1;
-      
-      if (globalWordIdx !== activeWordRef.current && globalWordIdx >= 0) {
-        activeWordRef.current = globalWordIdx;
-        
-        // DIRECT DOM: Remove old highlight, add new one (skip React state)
-        if (lastHighlightedWordEl.current) {
-          lastHighlightedWordEl.current.classList.remove('audio-word-active');
+      // If TTS is still speaking preamble words (e.g. "Chapter 1: Title."), don't highlight anything
+      if (ttsGlobalWord < ttsWordOffset) {
+        // Still in preamble — clear any existing highlight
+        if (activeWordRef.current !== -1) {
+          activeWordRef.current = -1;
+          if (lastHighlightedWordEl.current) {
+            lastHighlightedWordEl.current.classList.remove('audio-word-active');
+            lastHighlightedWordEl.current = null;
+          }
+          setActiveWordIndex(-1);
         }
-        if (target) {
-          const wordEl = target.querySelector(`[data-word-index="${globalWordIdx}"]`);
-          if (wordEl) {
-            wordEl.classList.add('audio-word-active');
-            lastHighlightedWordEl.current = wordEl;
-            
-            // Scroll word into view (direct, no React state)
-            if (isSyncEnabled && !isUserScrolledAway) {
-              programmaticScrollRef.current = true;
-              wordEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-              setTimeout(() => { programmaticScrollRef.current = false; }, 600);
+      } else {
+        const adjustedTTSWord = ttsGlobalWord - ttsWordOffset;
+        const totalTTSWords = info.chunkWordCounts.reduce((sum, c) => sum + c, 0);
+        const adjustedTotalTTS = Math.max(1, totalTTSWords - ttsWordOffset);
+        const domCount = domWordCountRef.current;
+        const globalWordIdx = domCount > 0 && adjustedTotalTTS > 0
+          ? Math.min(Math.floor((adjustedTTSWord / adjustedTotalTTS) * domCount), domCount - 1)
+          : -1;
+      
+        if (globalWordIdx !== activeWordRef.current && globalWordIdx >= 0) {
+          activeWordRef.current = globalWordIdx;
+          
+          // DIRECT DOM: Remove old highlight, add new one (skip React state)
+          if (lastHighlightedWordEl.current) {
+            lastHighlightedWordEl.current.classList.remove('audio-word-active');
+          }
+          if (target) {
+            const wordEl = target.querySelector(`[data-word-index="${globalWordIdx}"]`);
+            if (wordEl) {
+              wordEl.classList.add('audio-word-active');
+              lastHighlightedWordEl.current = wordEl;
+              
+              // Scroll word into view (direct, no React state)
+              if (isSyncEnabled && !isUserScrolledAway) {
+                programmaticScrollRef.current = true;
+                wordEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                setTimeout(() => { programmaticScrollRef.current = false; }, 600);
+              }
             }
           }
+          // Update React state at reduced frequency for external consumers
+          setActiveWordIndex(globalWordIdx);
         }
-        // Update React state at reduced frequency for external consumers
-        setActiveWordIndex(globalWordIdx);
       }
     }
 
