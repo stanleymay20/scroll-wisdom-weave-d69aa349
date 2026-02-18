@@ -330,39 +330,67 @@ Respond as JSON:
   ]
 }`;
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({
-        model: AUDIT_MODEL,
-        messages: [
-          { role: "system", content: "You are a rigorous academic editor. Score honestly against textbook benchmarks. Never inflate. Every score MUST have a direct quote from the text as evidence. Output valid JSON only." },
-          { role: "user", content: auditPrompt },
-        ],
-      }),
-    });
+    // Retry with model fallback: primary → flash-lite → error
+    const FALLBACK_MODELS = [AUDIT_MODEL, "google/gemini-2.5-flash-lite"];
+    const auditMessages = [
+      { role: "system", content: "You are a rigorous academic editor. Score honestly against textbook benchmarks. Never inflate. Every score MUST have a direct quote from the text as evidence. Output valid JSON only." },
+      { role: "user", content: auditPrompt },
+    ];
 
-    if (!aiResponse.ok) {
-      const status = aiResponse.status;
-      await aiResponse.text();
-      log("AI error", { status });
+    let aiResponse: Response | null = null;
+    let usedModel = AUDIT_MODEL;
+
+    for (let attempt = 0; attempt < FALLBACK_MODELS.length; attempt++) {
+      const model = FALLBACK_MODELS[attempt];
+      log("AI attempt", { attempt: attempt + 1, model });
+
+      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ model, messages: auditMessages }),
+      });
+
+      if (resp.ok) {
+        aiResponse = resp;
+        usedModel = model;
+        break;
+      }
+
+      const status = resp.status;
+      await resp.text();
+      log("AI error", { status, model, attempt: attempt + 1 });
+
+      // For 402/429, try fallback model before giving up
+      if ((status === 402 || status === 429) && attempt < FALLBACK_MODELS.length - 1) {
+        log("Falling back to cheaper model", { next: FALLBACK_MODELS[attempt + 1] });
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+
+      // Last attempt failed
       await supabase.from("book_audits").update({ status: "failed" }).eq("id", auditRecord.id);
-
       if (status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited. Try again later." }), {
+        return new Response(JSON.stringify({ error: "Rate limited. Try again in a few minutes." }), {
           status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       if (status === 402) {
-        return new Response(JSON.stringify({ error: "Payment required." }), {
+        return new Response(JSON.stringify({ error: "AI quota temporarily exhausted. Please try again in a few minutes." }), {
           status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
       throw new Error(`AI error: ${status}`);
     }
+
+    if (!aiResponse) {
+      await supabase.from("book_audits").update({ status: "failed" }).eq("id", auditRecord.id);
+      throw new Error("All AI models failed");
+    }
+
+    log("AI success", { model: usedModel });
 
     const aiData = await aiResponse.json();
     const rawContent = aiData.choices?.[0]?.message?.content || "";
