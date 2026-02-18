@@ -100,7 +100,7 @@ export default function Generate() {
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [category, setCategory] = useState("");
-  const [numChapters, setNumChapters] = useState("10");
+  const [numChapters, setNumChapters] = useState("5");
   const [wordCount, setWordCount] = useState("4000");
   const [language, setLanguage] = useState<string>(uiLanguage);
   const [coverOption, setCoverOption] = useState<"ai" | "upload">("ai");
@@ -243,7 +243,7 @@ export default function Generate() {
         title: t('generate.signInRequired'),
         description: t('generate.signInToGenerate'),
       });
-      navigate("/auth");
+      navigate("/auth", { state: { redirectTo: "/generate" } });
       return;
     }
 
@@ -254,7 +254,7 @@ export default function Generate() {
         title: t('generate.signInRequired'),
         description: "Sign in to generate books.",
       });
-      navigate("/auth");
+      navigate("/auth", { state: { redirectTo: "/generate" } });
       return;
     }
 
@@ -395,7 +395,7 @@ export default function Generate() {
                 Sign in to generate your first book for free.
               </p>
               <div className="flex flex-col sm:flex-row gap-4 justify-center">
-                <Button variant="hero" onClick={() => navigate("/auth")}>
+              <Button variant="hero" onClick={() => navigate("/auth", { state: { redirectTo: "/generate" } })}>
                   Sign In
                 </Button>
                 <Button variant="outline" onClick={() => navigate("/explore")}>
@@ -547,11 +547,13 @@ export default function Generate() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      {[6, 8, 10, 12, 15, 20, 25, 30].map((num) => (
-                        <SelectItem key={num} value={num.toString()}>
-                          {num} {t('generate.chapters')}
-                        </SelectItem>
-                      ))}
+                      {[3, 5, 6, 8, 10, 12, 15, 20, 25, 30]
+                        .filter((num) => entitlements.isPaid || entitlements.isAdmin ? true : num <= 5)
+                        .map((num) => (
+                          <SelectItem key={num} value={num.toString()}>
+                            {num} {t('generate.chapters')}
+                          </SelectItem>
+                        ))}
                     </SelectContent>
                   </Select>
                 </div>
