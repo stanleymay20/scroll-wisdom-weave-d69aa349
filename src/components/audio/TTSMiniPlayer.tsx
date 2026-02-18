@@ -407,7 +407,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         audioRef.current.pause();
         audioRef.current.src = "";
       } catch { /* ignore */ }
-      audioRef.current = null;
+      // Keep audioRef alive to preserve browser autoplay permission
     }
 
     cleanupBlobUrls();
@@ -532,7 +532,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         audioRef.current.pause();
         audioRef.current.src = "";
       } catch { /* ignore */ }
-      audioRef.current = null;
+      // Keep audioRef alive to preserve browser autoplay permission
     }
     cleanupBlobUrls();
     
@@ -721,13 +721,10 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         setProgress(0);
         setCurrentChunk(0);
         
-        // AUTO-CONTINUE: Only if chapter finished naturally (not stopped, not autoplay-blocked)
-        if (!stopRef.current && !autoplayBlockedRef.current && mode === 'chapter' && autoContinue) {
+        // AUTO-CONTINUE: Only if chapter finished naturally (not stopped by user)
+        if (!stopRef.current && mode === 'chapter' && autoContinue) {
           console.log("[TTS] Chapter complete - triggering auto-continue");
           onChapterComplete?.();
-        } else if (autoplayBlockedRef.current) {
-          console.log("[TTS] Autoplay blocked by browser - stopping instead of auto-continuing");
-          toast({ title: "Audio paused", description: "Tap play to continue listening", variant: "default" });
         }
       }
       mediaSession.setPlaybackState('idle');
