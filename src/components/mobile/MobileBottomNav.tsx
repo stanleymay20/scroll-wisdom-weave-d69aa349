@@ -6,7 +6,7 @@
  */
 
 import { memo, forwardRef, useState } from "react";
-import { Upload, BookOpen, Library as LibraryIcon, Settings, Plus, X, Image, FileText, Compass } from "lucide-react";
+import { Upload, BookOpen, Library as LibraryIcon, Settings, Plus, Compass } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
 import { motion, AnimatePresence } from "framer-motion";

@@ -192,7 +192,7 @@ export function useLibraryData({
       if (statusFilter === 'reading') {
         query = query.gt('progress_percent', 0).lt('progress_percent', 100);
       } else if (statusFilter === 'completed') {
-        query = query.gte('progress_percent', 100);
+        query = query.eq('progress_percent', 100);
       }
       
       const { data, error: fetchError } = await query
@@ -251,7 +251,7 @@ export function useLibraryData({
           .from('user_library')
           .select('id', { count: 'exact', head: true })
           .eq('user_id', userId)
-          .gte('progress_percent', 100),
+          .eq('progress_percent', 100),
       ]);
       
       if (!mountedRef.current) return;

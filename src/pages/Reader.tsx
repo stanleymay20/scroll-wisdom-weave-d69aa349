@@ -310,7 +310,10 @@ export default function Reader() {
         const completedChapters = currentChapter - 1;
         const currentChapterContribution = readingProgress / 100;
         const overallProgress = ((completedChapters + currentChapterContribution) / book.total_chapters) * 100;
-        saveProgress(currentChapter, overallProgress, true); // Show toast on exit
+        // Ensure 100% is saved when last chapter is fully read
+        const isBookComplete = currentChapter === book.total_chapters && readingProgress >= 95;
+        const finalProgress = isBookComplete ? 100 : overallProgress;
+        saveProgress(currentChapter, finalProgress, true); // Show toast on exit
       }
     };
   }, [userId, bookId, currentChapter, readingProgress, book?.total_chapters, saveProgress]);
@@ -347,7 +350,10 @@ export default function Reader() {
         const completedChapters = currentChapter - 1;
         const currentChapterContribution = progress / 100;
         const overallProgress = ((completedChapters + currentChapterContribution) / book.total_chapters) * 100;
-        saveProgress(currentChapter, overallProgress, false); // Silent save
+        // Force-save completion immediately when user finishes last chapter
+        const isBookComplete = currentChapter === book.total_chapters && progress >= 95;
+        const finalProgress = isBookComplete ? 100 : overallProgress;
+        saveProgress(currentChapter, finalProgress, isBookComplete); // Show toast on completion
       }
     }, 5000);
   }, [userId, bookId, book?.total_chapters, currentChapter, saveProgress, quizGating]);
