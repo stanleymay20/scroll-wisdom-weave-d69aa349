@@ -223,7 +223,7 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
     });
   };
 
-  /** Apply corrected code to a single chapter */
+  /** Apply corrected code to a single chapter — with versioning for rollback */
   const handleApplyFixes = async (result: ChapterAuditResult) => {
     const chapter = chapters.find(ch => ch.id === result.chapterId);
     if (!chapter?.content) return;
@@ -234,9 +234,15 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
     try {
       const fixedContent = applyCodeFixes(chapter.content, result.result.codeBlocks);
 
+      // Save previous_content for rollback (matches Chief Editor pattern)
       const { error } = await supabase
         .from('chapters')
-        .update({ content: fixedContent, updated_at: new Date().toISOString() })
+        .update({ 
+          content: fixedContent, 
+          previous_content: chapter.content,
+          version_number: ((chapter as any).version_number || 1) + 1,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', result.chapterId);
 
       if (error) throw error;
@@ -244,7 +250,7 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
       setFixedChapters(prev => new Set(prev).add(result.chapterId));
       toast({
         title: `Chapter ${result.chapterNumber} fixed`,
-        description: `Applied ${result.result.codeBlocks.filter(b => b.correctedCode && b.issues.length > 0).length} code corrections.`,
+        description: `Applied ${result.result.codeBlocks.filter(b => b.correctedCode && b.issues.length > 0).length} code corrections. Rollback available.`,
       });
       onChaptersUpdated?.();
     } catch (error) {
@@ -278,9 +284,15 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
 
       try {
         const fixedContent = applyCodeFixes(chapter.content, result.result.codeBlocks);
+        // Save previous_content for rollback (matches Chief Editor pattern)
         const { error } = await supabase
           .from('chapters')
-          .update({ content: fixedContent, updated_at: new Date().toISOString() })
+          .update({ 
+            content: fixedContent, 
+            previous_content: chapter.content,
+            version_number: ((chapter as any).version_number || 1) + 1,
+            updated_at: new Date().toISOString(),
+          })
           .eq('id', result.chapterId);
 
         if (error) throw error;

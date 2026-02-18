@@ -5,6 +5,16 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// ============================================================
+// AUDIT PROVENANCE — Locked model + prompt version
+// ============================================================
+const STO_AUDIT_MODEL = "google/gemini-2.5-flash";
+const STO_PROMPT_VERSION = "v1.1"; // v1.1: Input normalization + mandatory output enforcement
+
+const log = (step: string, details?: any) => {
+  console.log(`[STO-AUDIT] ${step}${details ? ` - ${JSON.stringify(details)}` : ''}`);
+};
+
 const STO_AUDIT_PROMPT = `You are a Senior Technical Officer (STO) conducting a rigorous code audit.
 
 OBJECTIVES:
@@ -51,7 +61,9 @@ IMPORTANT: "index" must be 0-based (first code block = 0, second = 1, etc.)
 In "correctedCode", use \\n for newlines. Example: "import numpy as np\\nnp.random.seed(42)\\nprint('hello')"
 Assume this book will be reviewed by a FAANG Staff Engineer. Rewrite any code that would not pass internal production review.
 Be thorough. Do not skip small issues. If any code is amateur-level, rewrite it to industry standard.
-If the chapter covers data visualization, ensure corrected code includes proper chart examples with labels, titles, and best practices.`;
+If the chapter covers data visualization, ensure corrected code includes proper chart examples with labels, titles, and best practices.
+
+MANDATORY: The "codeBlocks" array MUST contain an entry for EVERY code block audited. Each entry MUST have at least 1 issue and a correctedCode field (even if it's minor style improvements). The "overallRecommendations" array MUST have at least 2 entries. Do NOT return empty arrays.`;
 
 function extractCodeBlocks(content: string): { code: string; language: string; index: number }[] {
   const blocks: { code: string; language: string; index: number }[] = [];
@@ -70,7 +82,6 @@ function extractCodeBlocks(content: string): { code: string; language: string; i
 
 /**
  * Aggressively fix unescaped newlines inside JSON string values.
- * Walks char-by-char to handle multiline correctedCode properly.
  */
 function fixNewlinesInJsonStrings(raw: string): string {
   let result = '';
@@ -118,24 +129,18 @@ function fixNewlinesInJsonStrings(raw: string): string {
 }
 
 function cleanAndParse(jsonStr: string): Record<string, unknown> | null {
-  // Step 1: Remove non-whitespace control chars
   let cleaned = jsonStr.replace(/[\x00-\x08\x0B\x0C\x0E-\x1F\x7F]/g, '');
-  
-  // Step 2: Fix trailing commas
   cleaned = cleaned.replace(/,\s*}/g, '}').replace(/,\s*\]/g, ']');
   
-  // Step 3: Try direct parse
   try {
     return JSON.parse(cleaned) as Record<string, unknown>;
   } catch { /* continue */ }
   
-  // Step 4: Fix unescaped newlines inside string values
   try {
     const fixed = fixNewlinesInJsonStrings(cleaned);
     return JSON.parse(fixed) as Record<string, unknown>;
   } catch { /* continue */ }
   
-  // Step 5: Try stripping all literal newlines and re-parsing
   try {
     const noNewlines = cleaned.replace(/\n/g, '\\n').replace(/\r/g, '');
     return JSON.parse(noNewlines) as Record<string, unknown>;
@@ -145,21 +150,18 @@ function cleanAndParse(jsonStr: string): Record<string, unknown> | null {
 }
 
 function tryParseJSON(raw: string): Record<string, unknown> | null {
-  // Strategy 1: Extract from ```json ... ``` fences
   const jsonFenceMatch = raw.match(/```json\s*\n?([\s\S]*?)```/);
   if (jsonFenceMatch) {
     const parsed = cleanAndParse(jsonFenceMatch[1].trim());
     if (parsed) return parsed;
   }
   
-  // Strategy 2: Extract from ``` ... ``` (any fence)
   const anyFenceMatch = raw.match(/```\s*\n?([\s\S]*?)```/);
   if (anyFenceMatch) {
     const parsed = cleanAndParse(anyFenceMatch[1].trim());
     if (parsed) return parsed;
   }
   
-  // Strategy 3: Find outermost { ... } in raw text
   const firstBrace = raw.indexOf('{');
   const lastBrace = raw.lastIndexOf('}');
   if (firstBrace !== -1 && lastBrace > firstBrace) {
@@ -167,7 +169,6 @@ function tryParseJSON(raw: string): Record<string, unknown> | null {
     if (parsed) return parsed;
   }
   
-  // Strategy 4: Try the entire raw string
   const parsed = cleanAndParse(raw.trim());
   if (parsed) return parsed;
   
@@ -177,7 +178,6 @@ function tryParseJSON(raw: string): Record<string, unknown> | null {
 /** Extract codeBlocks from raw text via regex when JSON parsing fails */
 function extractCodeBlocksFromRaw(raw: string): Array<Record<string, unknown>> {
   const blocks: Array<Record<string, unknown>> = [];
-  // Find individual code block objects
   const blockRegex = /\{\s*"index"\s*:\s*(\d+)\s*,\s*"language"\s*:\s*"(\w+)"\s*,[\s\S]*?"correctedCode"\s*:\s*"((?:[^"\\]|\\.)*)"/g;
   let m;
   while ((m = blockRegex.exec(raw)) !== null) {
@@ -185,7 +185,6 @@ function extractCodeBlocksFromRaw(raw: string): Array<Record<string, unknown>> {
     const lang = m[2];
     const corrected = m[3].replace(/\\n/g, '\n').replace(/\\"/g, '"').replace(/\\t/g, '\t');
     
-    // Extract issues for this block
     const blockSection = raw.substring(m.index, raw.indexOf('}', m.index + m[0].length) + 1);
     const issuesMatch = blockSection.match(/"issues"\s*:\s*\[([\s\S]*?)\]/);
     const issues: string[] = [];
@@ -213,9 +212,29 @@ serve(async (req) => {
     return new Response(null, { headers: corsHeaders });
   }
 
+  const auditStartTime = Date.now();
+
   try {
-    const { chapterId, chapterTitle, chapterNumber, content } = await req.json();
-    
+    const requestBody = await req.json();
+
+    // ============================================================
+    // INPUT NORMALIZATION — Defensive defaults for all parameters
+    // ============================================================
+    const chapterId = (requestBody?.chapterId as string) || '';
+    const chapterTitle = (requestBody?.chapterTitle as string) || 'Untitled';
+    const chapterNumber = Number(requestBody?.chapterNumber) || 0;
+    const content = (requestBody?.content as string) || '';
+
+    // Structured observability logging
+    log("Input normalization", {
+      hasChapterId: !!chapterId,
+      hasContent: !!content,
+      contentLength: content.length,
+      chapterNumber,
+      model: STO_AUDIT_MODEL,
+      promptVersion: STO_PROMPT_VERSION,
+    });
+
     if (!content) {
       return new Response(JSON.stringify({ error: 'No content provided' }), {
         status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
@@ -224,10 +243,13 @@ serve(async (req) => {
 
     const codeBlocks = extractCodeBlocks(content);
     
+    log("Code extraction", { codeBlockCount: codeBlocks.length, chapterNumber });
+
     if (codeBlocks.length === 0) {
       return new Response(JSON.stringify({
         chapterId, chapterTitle, chapterNumber,
         codeBlockCount: 0,
+        provenance: { model: STO_AUDIT_MODEL, promptVersion: STO_PROMPT_VERSION },
         result: { chapterScore: -1, riskLevel: 'none', codeBlocks: [], overallRecommendations: [], summary: 'No code blocks found in this chapter.' },
       }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
     }
@@ -248,7 +270,7 @@ serve(async (req) => {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${apiKey}`, 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          model: 'google/gemini-2.5-flash',
+          model: STO_AUDIT_MODEL,
           messages: [
             { role: 'system', content: STO_AUDIT_PROMPT },
             { role: 'user', content: `Audit the following ${codeBlocks.length} code block(s) from Chapter ${chapterNumber}: "${chapterTitle}".\n\n${codeBlocksText}\n\nReturn ONLY raw JSON. No markdown fences. Escape all newlines in strings as \\n.` },
@@ -261,11 +283,12 @@ serve(async (req) => {
       if (response.status !== 429 || attempt >= retryDelays.length) break;
       
       const wait = retryDelays[attempt];
-      console.log(`Rate limited attempt ${attempt + 1}, waiting ${wait / 1000}s...`);
+      log("Rate limited", { attempt: attempt + 1, waitMs: wait });
       await new Promise(r => setTimeout(r, wait));
     }
 
     if (!response || response.status === 429) {
+      log("Rate limit exhausted", { chapterNumber });
       return new Response(JSON.stringify({ 
         error: 'rate_limited',
         message: 'AI service is busy. The client will retry automatically.',
@@ -278,32 +301,33 @@ serve(async (req) => {
 
     if (!response.ok) {
       const errorText = await response.text();
+      log("AI error", { status: response.status, preview: errorText.slice(0, 200) });
       throw new Error(`AI API error: ${response.status} - ${errorText}`);
     }
 
     const aiData = await response.json();
     const rawContent = aiData.choices?.[0]?.message?.content || '';
     
-    console.log(`Raw AI response length: ${rawContent.length} chars`);
+    log("AI response received", { responseLength: rawContent.length, chapterNumber });
     
     let auditResult;
+    let parseStrategy = 'unknown';
     const parsed = tryParseJSON(rawContent);
     
     if (parsed && typeof parsed === 'object' && 'chapterScore' in parsed) {
       auditResult = parsed;
-      console.log(`JSON parsed successfully. Score: ${parsed.chapterScore}, Blocks: ${(parsed.codeBlocks as unknown[])?.length || 0}`);
+      parseStrategy = 'json';
+      log("JSON parsed", { score: parsed.chapterScore, blocks: (parsed.codeBlocks as unknown[])?.length || 0 });
     } else {
-      console.log('JSON parse failed, using regex fallback');
+      parseStrategy = 'regex_fallback';
+      log("JSON parse failed, using regex fallback", { rawPreview: rawContent.slice(0, 200) });
       
-      // Regex-based field extraction as last resort
       const scoreMatch = rawContent.match(/"chapterScore"\s*:\s*(\d+)/);
       const riskMatch = rawContent.match(/"riskLevel"\s*:\s*"(\w+)"/);
       const summaryMatch = rawContent.match(/"summary"\s*:\s*"((?:[^"\\]|\\.)*)"/);
       
-      // Try to extract codeBlocks via regex for auto-fix
       const extractedBlocks = extractCodeBlocksFromRaw(rawContent);
       
-      // Extract recommendations
       const recMatches = [...rawContent.matchAll(/"(?:overall)?[Rr]ecommendations"\s*:\s*\[([\s\S]*?)\]/g)];
       const extractedRecs: string[] = [];
       for (const m of recMatches) {
@@ -315,7 +339,6 @@ serve(async (req) => {
         }
       }
       
-      // Extract issues if no recommendations found
       const extractedIssues: string[] = [];
       if (extractedRecs.length === 0) {
         const issueMatches = [...rawContent.matchAll(/"issues"\s*:\s*\[([\s\S]*?)\]/g)];
@@ -345,14 +368,31 @@ serve(async (req) => {
         summary,
       };
       
-      console.log(`Fallback extracted: score=${auditResult.chapterScore}, blocks=${extractedBlocks.length}, recs=${auditResult.overallRecommendations.length}`);
+      log("Fallback extracted", { score: auditResult.chapterScore, blocks: extractedBlocks.length, recs: auditResult.overallRecommendations.length });
     }
 
+    const durationMs = Date.now() - auditStartTime;
+
+    log("Audit complete", {
+      chapterNumber,
+      score: auditResult.chapterScore,
+      riskLevel: auditResult.riskLevel,
+      codeBlocksAudited: codeBlocks.length,
+      fixableBlocks: (auditResult.codeBlocks as any[])?.filter((b: any) => b.correctedCode && b.issues?.length > 0).length || 0,
+      durationMs,
+      parseStrategy,
+      model: STO_AUDIT_MODEL,
+      promptVersion: STO_PROMPT_VERSION,
+    });
+
     return new Response(JSON.stringify({
-      chapterId, chapterTitle, chapterNumber, codeBlockCount: codeBlocks.length, result: auditResult,
+      chapterId, chapterTitle, chapterNumber, codeBlockCount: codeBlocks.length,
+      provenance: { model: STO_AUDIT_MODEL, promptVersion: STO_PROMPT_VERSION, durationMs, parseStrategy },
+      result: auditResult,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
   } catch (error) {
-    console.error('Audit error:', error);
+    const durationMs = Date.now() - auditStartTime;
+    log("ERROR", { message: error.message, durationMs });
     return new Response(JSON.stringify({ error: error.message }), {
       status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
     });
