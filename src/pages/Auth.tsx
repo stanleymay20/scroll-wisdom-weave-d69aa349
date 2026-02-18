@@ -1,9 +1,10 @@
- import { useState, useEffect, forwardRef, useRef } from "react";
+import { useState, useEffect, forwardRef, useRef } from "react";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Loader2, Mail, Lock, User, Wand2, AlertCircle } from "lucide-react";
 import logo from "@/assets/logo.png";
 import { useToast } from "@/hooks/use-toast";
@@ -24,6 +25,8 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   const [password, setPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
   const [fullName, setFullName] = useState("");
+  const [acceptedTerms, setAcceptedTerms] = useState(false);
+  const [newsletterSubscribed, setNewsletterSubscribed] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [authError, setAuthError] = useState<string | null>(null);
   const { toast } = useToast();
@@ -189,16 +192,33 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
         if (error) throw error;
         toast({ title: "Welcome back!", description: "You have successfully signed in." });
       } else if (mode === "signup") {
+        if (!acceptedTerms) {
+          throw new Error("You must accept the Terms of Service and Privacy Policy to create an account.");
+        }
         const redirectUrl = `${window.location.origin}/`;
         const { data, error } = await supabase.auth.signUp({
           email: safeEmail,
           password: safePassword,
           options: {
             emailRedirectTo: redirectUrl,
-            data: { full_name: fullName.trim() },
+            data: {
+              full_name: fullName.trim(),
+              accepted_terms: true,
+              newsletter_subscribed: newsletterSubscribed,
+            },
           },
         });
         if (error) throw error;
+
+        // Store consent in profiles
+        if (data.user) {
+          await supabase.from("profiles").update({
+            accepted_terms: true,
+            accepted_terms_at: new Date().toISOString(),
+            newsletter_subscribed: newsletterSubscribed,
+            newsletter_subscribed_at: newsletterSubscribed ? new Date().toISOString() : null,
+          }).eq("user_id", data.user.id);
+        }
 
         // Check if user was actually created (not just returned existing)
         if (data.user && !data.session) {
@@ -408,6 +428,38 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
                     required
                     minLength={6}
                   />
+                </div>
+              </div>
+            )}
+
+            {mode === "signup" && (
+              <div className="space-y-3 pt-1">
+                <div className="flex items-start space-x-2">
+                  <Checkbox
+                    id="terms"
+                    checked={acceptedTerms}
+                    onCheckedChange={(checked) => setAcceptedTerms(checked === true)}
+                    className="mt-0.5"
+                    required
+                  />
+                  <Label htmlFor="terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+                    I agree to the{" "}
+                    <a href="/terms-of-service" target="_blank" className="text-primary hover:underline">Terms of Service</a>
+                    {" "}and{" "}
+                    <a href="/privacy-policy" target="_blank" className="text-primary hover:underline">Privacy Policy</a>
+                    <span className="text-destructive ml-0.5">*</span>
+                  </Label>
+                </div>
+                <div className="flex items-start space-x-2">
+                  <Checkbox
+                    id="newsletter"
+                    checked={newsletterSubscribed}
+                    onCheckedChange={(checked) => setNewsletterSubscribed(checked === true)}
+                    className="mt-0.5"
+                  />
+                  <Label htmlFor="newsletter" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
+                    Subscribe to ScrollLibrary updates and newsletters
+                  </Label>
                 </div>
               </div>
             )}
