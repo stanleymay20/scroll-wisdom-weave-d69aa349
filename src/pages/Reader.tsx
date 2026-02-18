@@ -529,6 +529,28 @@ export default function Reader() {
     return elements.length > 0 ? elements : null;
   };
 
+  // Strip duplicate chapter title/number from AI-generated content
+  // The Reader UI already shows "Chapter X" + title as <h2>/<h3>, so remove from content
+  const stripDuplicateTitle = (content: string, title: string): string => {
+    let cleaned = content;
+    const titleEscaped = title.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const patterns = [
+      new RegExp(`^\\s*#{1,3}\\s*(?:Chapter\\s+\\d+[:\\s-]*)?${titleEscaped}\\s*\\n+`, 'i'),
+      /^\s*#{1,3}\s*Chapter\s+\d+\s*\n+/i,
+      new RegExp(`^\\s*#{1,3}\\s*${titleEscaped}\\s*\\n+`, 'i'),
+      new RegExp(`^\\s*Chapter\\s+\\d+[:\\s-]*${titleEscaped}\\s*\\n+`, 'i'),
+      /^\s*Chapter\s+\d+\s*\n+/i,
+    ];
+    for (const pattern of patterns) {
+      const match = cleaned.match(pattern);
+      if (match) {
+        cleaned = cleaned.slice(match[0].length);
+        break;
+      }
+    }
+    return cleaned;
+  };
+
   const renderContent = () => {
     if (!chapter?.content) {
       return (
@@ -538,16 +560,18 @@ export default function Reader() {
       );
     }
 
+    const displayContent = stripDuplicateTitle(chapter.content, chapter.title || '');
+
     // Check if this is comic content (contains base64 images or panel markers)
-    const isComicContent = chapter.content.includes('![Panel') || chapter.content.includes('Panel 1') || chapter.content.includes('[PANEL');
+    const isComicContent = displayContent.includes('![Panel') || displayContent.includes('Panel 1') || displayContent.includes('[PANEL');
 
     // For non-comic content, use MarkdownRenderer for proper table/code rendering
     if (!isComicContent) {
-      return <MarkdownRenderer content={chapter.content} className={currentTheme.text} />;
+      return <MarkdownRenderer content={displayContent} className={currentTheme.text} />;
     }
 
     // Comic content rendering with speech bubbles
-    return chapter.content.split('\n\n').map((paragraph, index) => {
+    return displayContent.split('\n\n').map((paragraph, index) => {
       // Handle comic page headers
       if (paragraph.startsWith('## Page') || paragraph.match(/^Page\s+\d+/i)) {
         return (
@@ -990,7 +1014,7 @@ export default function Reader() {
             }}
           >
             <TTSMiniPlayer
-              chapterText={chapter.content || ''}
+              chapterText={`Chapter ${currentChapter}: ${chapter.title}.\n\n${chapter.content || ''}`}
               selectedText={selectedTextForTTS}
               language={book?.language || "en"}
               stopKey={`${bookId}-${currentChapter}`}
