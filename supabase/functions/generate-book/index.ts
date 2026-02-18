@@ -16,6 +16,20 @@ const TIER_LIMITS = {
 const TRIAL_END_DATE_ISO = "2026-01-20";
 const isTrialActive = () => new Date().toISOString().split("T")[0] <= TRIAL_END_DATE_ISO;
 
+// Tier-based model routing: better models for paid users, cost-efficient for free
+const getModelForPlan = (plan: string): string => {
+  switch (plan) {
+    case "prophet_tier":
+    case "premium":
+      return "google/gemini-2.5-pro";
+    case "student":
+      return "google/gemini-2.5-flash";
+    case "free":
+    default:
+      return "google/gemini-2.5-flash-lite";
+  }
+};
+
 const LANG_MAP: Record<string, string> = {
   en: "English", fr: "French", de: "German", es: "Spanish",
   ar: "Arabic", sw: "Swahili", pt: "Portuguese",
@@ -109,7 +123,8 @@ serve(async (req) => {
       : authorMode === "pen_name" ? (penName || "Anonymous")
       : authorMode === "hidden" ? "Anonymous" : "ScrollAuthorGPT";
 
-    console.log(`[GENERATE-BOOK] "${title}" | ${effectiveChapters}ch | ${languageName} | ${effectiveBookType}`);
+    const generationModel = getModelForPlan(userPlan);
+    console.log(`[GENERATE-BOOK] "${title}" | ${effectiveChapters}ch | ${languageName} | ${effectiveBookType} | model: ${generationModel}`);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
@@ -143,7 +158,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: generationModel,
         messages: [
           { role: "system", content: "You create detailed book outlines. Respond with valid JSON only. No markdown in titles." },
           { role: "user", content: outlinePrompt },

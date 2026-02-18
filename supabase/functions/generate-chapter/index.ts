@@ -6,6 +6,20 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
+// Tier-based model routing: better models for paid users, cost-efficient for free
+const getModelForPlan = (plan: string): string => {
+  switch (plan) {
+    case "prophet_tier":
+    case "premium":
+      return "google/gemini-2.5-pro";
+    case "student":
+      return "google/gemini-2.5-flash";
+    case "free":
+    default:
+      return "google/gemini-2.5-flash-lite";
+  }
+};
+
 // ===========================================
 // SCROLLLIBRARY MASTER GENERATION PROMPT v2.0
 // Authority-Grade | Bestseller-Quality | Hard-Failure Enforced
@@ -1993,7 +2007,7 @@ serve(async (req) => {
         method: "POST",
         headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: generationModel,
           messages: [{
             role: "user",
             content: [
@@ -2068,7 +2082,9 @@ serve(async (req) => {
       .single();
 
     const userPlan = profile?.plan || "free";
+    const generationModel = getModelForPlan(userPlan);
     const maxWordCount = TIER_WORD_LIMITS[userPlan as keyof typeof TIER_WORD_LIMITS] || TIER_WORD_LIMITS.free;
+    console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel}`);
 
     // ===========================================
     // INPUT NORMALIZATION — Defensive layer for multi-path orchestration
@@ -2422,7 +2438,7 @@ This is MANDATORY. No exceptions.`;
             "Content-Type": "application/json",
           },
           body: JSON.stringify({
-            model: "google/gemini-2.5-flash",
+            model: generationModel,
             messages: [
               { role: "system", content: systemPrompt },
               { role: "user", content: attemptPrompt }
@@ -2807,7 +2823,7 @@ Return JSON only:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: generationModel,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: chapterPrompt }
@@ -3637,7 +3653,7 @@ BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: generationModel,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: chapterPrompt }
