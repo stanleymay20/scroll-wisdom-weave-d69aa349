@@ -325,7 +325,7 @@ function MobileLibraryContent({
           <p className="text-muted-foreground mb-2">You're offline</p>
           <p className="text-sm text-muted-foreground/70">Your library will appear when you reconnect</p>
         </div>
-      ) : items.length === 0 ? (
+      ) : items.length === 0 && filterStatus === 'all' && !searchQuery ? (
         <div className="text-center py-12">
           <Sparkles className="h-12 w-12 text-primary/50 mx-auto mb-4" />
           <h2 className="font-semibold text-lg mb-2">Your library is empty</h2>
@@ -343,10 +343,16 @@ function MobileLibraryContent({
             </Button>
           </div>
         </div>
-      ) : filteredItems.length === 0 ? (
+      ) : items.length === 0 ? (
         <div className="text-center py-12">
           <Search className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
-          <p className="text-muted-foreground mb-4">No books found</p>
+          <p className="text-muted-foreground mb-4">
+            {filterStatus === 'completed' 
+              ? "No completed books yet — keep reading!" 
+              : filterStatus === 'reading'
+              ? "No books in progress"
+              : "No books match your search"}
+          </p>
           <Button variant="outline" onClick={() => { setSearchQuery(""); setFilterStatus("all"); setFilterCategory("all"); setSortBy("recent"); }}>
             Clear Filters
           </Button>
@@ -423,7 +429,8 @@ export default function Library() {
   } = useLibraryData({
     isMobile,
     userId: user?.id,
-    statusFilter: filterStatus
+    statusFilter: filterStatus,
+    searchQuery: searchQuery
   });
 
   // Auth check - deferred to not block skeleton
@@ -482,15 +489,7 @@ export default function Library() {
   const filteredItems = useMemo(() => {
     let result = [...items];
 
-    // Search filter
-    if (searchQuery) {
-      const query = searchQuery.toLowerCase();
-      result = result.filter(item => 
-        item.books.title.toLowerCase().includes(query) ||
-        item.books.category.toLowerCase().includes(query) ||
-        item.books.description?.toLowerCase().includes(query)
-      );
-    }
+    // Search is now handled server-side via useLibraryData searchQuery param
 
     // Category filter
     if (filterCategory && filterCategory !== "all") {
