@@ -151,19 +151,29 @@ export function useAudioSync({
     const audio = audioRef?.current;
     const info = chunkInfoRef.current;
 
-    // === WORD-LEVEL: Chunk-aware precise sync ===
+    // === WORD-LEVEL: Chunk-aware precise sync with proportional DOM mapping ===
     if (audio && info && info.chunkWordCounts.length > 0 && !isNaN(audio.currentTime) && !isNaN(audio.duration) && audio.duration > 0) {
       const fraction = Math.min(1, audio.currentTime / audio.duration);
       
-      // Calculate word offset for current chunk
-      let wordOffset = 0;
+      // Calculate TTS word offset for current chunk
+      let ttsWordOffset = 0;
       for (let i = 0; i < info.chunkIndex && i < info.chunkWordCounts.length; i++) {
-        wordOffset += info.chunkWordCounts[i];
+        ttsWordOffset += info.chunkWordCounts[i];
       }
       
       const wordsInChunk = info.chunkWordCounts[info.chunkIndex] || 1;
       const wordInChunk = Math.floor(fraction * wordsInChunk);
-      const globalWordIdx = Math.min(wordOffset + wordInChunk, domWordCountRef.current - 1);
+      const ttsGlobalWord = ttsWordOffset + wordInChunk;
+      
+      // Total TTS words (may differ from DOM word count due to markdown stripping)
+      const totalTTSWords = info.chunkWordCounts.reduce((sum, c) => sum + c, 0);
+      
+      // Proportionally map TTS position → DOM word index
+      // This handles the mismatch between sanitized TTS text and rendered DOM text
+      const domCount = domWordCountRef.current;
+      const globalWordIdx = domCount > 0 && totalTTSWords > 0
+        ? Math.min(Math.floor((ttsGlobalWord / totalTTSWords) * domCount), domCount - 1)
+        : -1;
       
       if (globalWordIdx !== activeWordRef.current && globalWordIdx >= 0) {
         activeWordRef.current = globalWordIdx;
