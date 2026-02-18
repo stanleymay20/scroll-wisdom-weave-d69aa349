@@ -475,6 +475,13 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     
     mediaSession.activate();
     mediaSession.setPlaybackState('playing');
+    
+    // Re-report chunk playback info so word-level sync works on resume
+    const allChunks = chunksRef.current;
+    if (allChunks.length > 0) {
+      const chunkWordCounts = allChunks.map(c => c.split(/\s+/).filter(Boolean).length);
+      onChunkPlaybackInfo?.({ chunkIndex: startIndex, chunkWordCounts });
+    }
 
     try {
       for (let i = 0; i < chunks.length; i++) {
@@ -483,6 +490,12 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         const globalIndex = startIndex + i;
         setCurrentChunk(globalIndex + 1);
         setCurrentPosition(globalIndex);
+        
+        // Update chunk index for word-level sync
+        if (allChunks.length > 0) {
+          const chunkWordCounts = allChunks.map(c => c.split(/\s+/).filter(Boolean).length);
+          onChunkPlaybackInfo?.({ chunkIndex: globalIndex, chunkWordCounts });
+        }
 
         const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
           body: { text: chunks[i], voice: selectedVoice, language },
