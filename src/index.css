@@ -682,6 +682,54 @@
   color: #c9d1d9 !important;
 }
 
+/* Force light syntax highlighting colors on dark code background */
+.markdown-content .code-block code.hljs,
+.markdown-content .code-block .hljs {
+  background: transparent !important;
+  color: #c9d1d9 !important;
+}
+.markdown-content .code-block .hljs-keyword,
+.markdown-content .code-block .hljs-selector-tag { color: #ff7b72 !important; }
+.markdown-content .code-block .hljs-string,
+.markdown-content .code-block .hljs-attr { color: #a5d6ff !important; }
+.markdown-content .code-block .hljs-comment,
+.markdown-content .code-block .hljs-doctag { color: #8b949e !important; }
+.markdown-content .code-block .hljs-function,
+.markdown-content .code-block .hljs-title { color: #d2a8ff !important; }
+.markdown-content .code-block .hljs-number,
+.markdown-content .code-block .hljs-literal { color: #79c0ff !important; }
+.markdown-content .code-block .hljs-built_in,
+.markdown-content .code-block .hljs-type { color: #ffa657 !important; }
+.markdown-content .code-block .hljs-params { color: #c9d1d9 !important; }
+.markdown-content .code-block .hljs-variable,
+.markdown-content .code-block .hljs-template-variable { color: #ffa657 !important; }
+.markdown-content .code-block .hljs-name,
+.markdown-content .code-block .hljs-tag { color: #7ee787 !important; }
+
+/* Same overrides for StructuredCodeBlock */
+.structured-code-block code.hljs,
+.structured-code-block .hljs {
+  background: transparent !important;
+  color: #c9d1d9 !important;
+}
+.structured-code-block .hljs-keyword,
+.structured-code-block .hljs-selector-tag { color: #ff7b72 !important; }
+.structured-code-block .hljs-string,
+.structured-code-block .hljs-attr { color: #a5d6ff !important; }
+.structured-code-block .hljs-comment,
+.structured-code-block .hljs-doctag { color: #8b949e !important; }
+.structured-code-block .hljs-function,
+.structured-code-block .hljs-title { color: #d2a8ff !important; }
+.structured-code-block .hljs-number,
+.structured-code-block .hljs-literal { color: #79c0ff !important; }
+.structured-code-block .hljs-built_in,
+.structured-code-block .hljs-type { color: #ffa657 !important; }
+.structured-code-block .hljs-params { color: #c9d1d9 !important; }
+.structured-code-block .hljs-variable,
+.structured-code-block .hljs-template-variable { color: #ffa657 !important; }
+.structured-code-block .hljs-name,
+.structured-code-block .hljs-tag { color: #7ee787 !important; }
+
 .markdown-content .inline-code {
   background: hsl(var(--muted));
   padding: 0.15rem 0.4rem;
