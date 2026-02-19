@@ -381,11 +381,20 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
                 onClick={async () => {
                   setIsLoading(true);
                   setAuthError(null);
-                  const { error } = await lovable.auth.signInWithOAuth("google", {
-                    redirect_uri: window.location.origin,
-                  });
-                  if (error) {
-                    setAuthError(getErrorMessage(error));
+                  try {
+                    console.log("[Auth] Starting Google OAuth, redirect_uri:", window.location.origin);
+                    const result = await lovable.auth.signInWithOAuth("google", {
+                      redirect_uri: window.location.origin,
+                    });
+                    console.log("[Auth] Google OAuth result:", JSON.stringify(result, null, 2));
+                    if (result?.error) {
+                      console.error("[Auth] Google OAuth error:", result.error);
+                      setAuthError(getErrorMessage(result.error));
+                      setIsLoading(false);
+                    }
+                  } catch (err) {
+                    console.error("[Auth] Google OAuth exception:", err);
+                    setAuthError(getErrorMessage(err));
                     setIsLoading(false);
                   }
                 }}
