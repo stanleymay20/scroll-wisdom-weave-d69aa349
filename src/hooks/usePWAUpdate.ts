@@ -32,11 +32,11 @@ export function usePWAUpdate() {
       onRegisteredSW(swUrl, registration) {
         console.log("Service worker registered:", swUrl);
         
-        // Check for updates every hour (silent background check)
+        // Check for updates every 15 minutes (more aggressive for faster rollouts)
         if (registration) {
           setInterval(() => {
             registration.update();
-          }, 60 * 60 * 1000);
+          }, 15 * 60 * 1000);
         }
       },
       onRegisterError(error) {

@@ -18,12 +18,13 @@ export function PWAUpdateNotification() {
     }
   }, [offlineReady, dismissOfflineReady]);
 
-  // Show update available notification (non-blocking)
+  // Show update available notification (persistent until acted on)
   useEffect(() => {
     if (needRefresh) {
       toast("A new version is available", {
+        id: "pwa-update",
         icon: <RefreshCw className="h-4 w-4" />,
-        duration: 10000, // 10 seconds, then auto-dismiss
+        duration: Infinity, // Persistent - won't auto-dismiss
         action: {
           label: "Update now",
           onClick: updateApp,
@@ -33,7 +34,6 @@ export function PWAUpdateNotification() {
           onClick: dismissUpdate,
         },
         onDismiss: dismissUpdate,
-        onAutoClose: dismissUpdate,
       });
     }
   }, [needRefresh, updateApp, dismissUpdate]);
