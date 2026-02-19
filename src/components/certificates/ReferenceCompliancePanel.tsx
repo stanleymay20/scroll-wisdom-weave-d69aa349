@@ -10,6 +10,7 @@ import {
   CheckCircle2,
   XCircle,
   FileCheck,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
@@ -31,6 +32,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
   if (!report) return null;
 
   const currentTierIdx = tierOrder.indexOf(report.tier.tier);
+  const sr = report.semanticReport;
 
   return (
     <div className={cn("rounded-xl border border-border/50 bg-gradient-card overflow-hidden", className)}>
@@ -44,6 +46,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
             <h3 className="font-medium text-foreground">ScrollVerified™ Reference Compliance</h3>
             <p className="text-xs text-muted-foreground">
               DOI Validated: {report.doiValidatedPct}% · Tier: {report.tier.label}
+              {sr ? ` · Semantic: ${sr.averageScore}/100` : ''}
             </p>
           </div>
         </div>
@@ -75,6 +78,65 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
                 </div>
                 <Progress value={report.doiValidatedPct} className="h-2" />
               </div>
+
+              {/* Semantic Integrity Section */}
+              {sr && (
+                <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Brain className="h-4 w-4 text-scroll-gold" />
+                    <span className="text-sm font-medium">Semantic Citation Integrity</span>
+                    {sr.ornamentalPct > 5 && (
+                      <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/30">
+                        <AlertTriangle className="h-2.5 w-2.5 mr-0.5" />
+                        {sr.ornamentalPct}% ornamental
+                      </Badge>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Average Support Score</span>
+                    <span className={cn("text-lg font-bold",
+                      sr.averageScore >= 75 ? "text-green-500" :
+                      sr.averageScore >= 60 ? "text-amber-500" : "text-destructive"
+                    )}>
+                      {sr.averageScore}/100
+                    </span>
+                  </div>
+                  <Progress value={sr.averageScore} className="h-2" />
+
+                  {/* Distribution bar */}
+                  <div className="space-y-1">
+                    <span className="text-[10px] text-muted-foreground">Citation Support Distribution</span>
+                    <div className="flex h-3 rounded-full overflow-hidden">
+                      {sr.strong > 0 && (
+                        <div className="bg-green-500" style={{ width: `${(sr.strong / sr.totalCitations) * 100}%` }} title={`Strong: ${sr.strong}`} />
+                      )}
+                      {sr.moderate > 0 && (
+                        <div className="bg-amber-400" style={{ width: `${(sr.moderate / sr.totalCitations) * 100}%` }} title={`Moderate: ${sr.moderate}`} />
+                      )}
+                      {sr.weak > 0 && (
+                        <div className="bg-orange-400" style={{ width: `${(sr.weak / sr.totalCitations) * 100}%` }} title={`Weak: ${sr.weak}`} />
+                      )}
+                      {sr.ornamental > 0 && (
+                        <div className="bg-destructive" style={{ width: `${(sr.ornamental / sr.totalCitations) * 100}%` }} title={`Ornamental: ${sr.ornamental}`} />
+                      )}
+                    </div>
+                    <div className="flex gap-3 text-[9px] text-muted-foreground flex-wrap">
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Strong ({sr.strong})</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Moderate ({sr.moderate})</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />Weak ({sr.weak})</span>
+                      <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-destructive inline-block" />Ornamental ({sr.ornamental})</span>
+                    </div>
+                  </div>
+
+                  {sr.empiricalClaimsUnsupported > 0 && (
+                    <div className="flex items-center gap-2 p-2 rounded bg-destructive/10 text-xs text-destructive">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{sr.empiricalClaimsUnsupported} empirical claim(s) without adequate citation support</span>
+                    </div>
+                  )}
+                </div>
+              )}
 
               {/* Compliance Tier Visual */}
               <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
@@ -140,7 +202,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
               {/* Provenance */}
               {(report.auditModel || report.promptVersion) && (
                 <p className="text-[10px] text-muted-foreground">
-                  Verified by ScrollLibrary Research Integrity Engine
+                  ScrollVerified™ 2026 — Institutional Semantic Compliance
                   {report.auditModel && ` · Model: ${report.auditModel}`}
                   {report.promptVersion && ` · Prompt: ${report.promptVersion}`}
                 </p>

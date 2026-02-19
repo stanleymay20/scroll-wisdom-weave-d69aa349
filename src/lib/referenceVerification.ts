@@ -29,6 +29,17 @@ export interface ReferenceVerificationMetrics {
   post2018Pct: number;
 }
 
+export interface SemanticIntegrityReport {
+  totalCitations: number;
+  strong: number;
+  moderate: number;
+  weak: number;
+  ornamental: number;
+  averageScore: number;
+  empiricalClaimsUnsupported: number;
+  ornamentalPct: number;
+}
+
 export interface ReferenceTransparencyReport {
   canonicalAnchorsPresent: boolean;
   doiValidatedPct: number;
@@ -42,6 +53,7 @@ export interface ReferenceTransparencyReport {
   tier: ComplianceTierResult;
   hardFailures: string[];
   certificationBlocked: boolean;
+  semanticReport?: SemanticIntegrityReport;
   auditModel?: string;
   promptVersion?: string;
 }
@@ -80,7 +92,7 @@ export function generateTransparencyMarkdown(report: ReferenceTransparencyReport
   lines.push('');
   lines.push('---');
   lines.push('');
-  lines.push('## 📋 Reference Integrity Summary (ScrollVerified™ 2026)');
+  lines.push('## 📋 Reference Integrity Summary (ScrollVerified™ 2026 — Institutional Semantic Compliance)');
   lines.push('');
   lines.push(`| Metric | Status |`);
   lines.push(`|--------|--------|`);
@@ -94,6 +106,19 @@ export function generateTransparencyMarkdown(report: ReferenceTransparencyReport
   lines.push(`| Semantic Support Integrity | ${report.semanticIntegrity} |`);
   lines.push(`| Fabrication Risk | ${report.fabricationRisk} |`);
   lines.push(`| Compliance Tier | ${getTierIcon(report.tier.tier)} **${report.tier.label}** |`);
+
+  if (report.semanticReport) {
+    lines.push('');
+    lines.push('### Semantic Citation Analysis');
+    lines.push(`| Metric | Value |`);
+    lines.push(`|--------|-------|`);
+    lines.push(`| Average Support Score | ${report.semanticReport.averageScore}/100 |`);
+    lines.push(`| Strong Citations | ${report.semanticReport.strong} |`);
+    lines.push(`| Moderate Citations | ${report.semanticReport.moderate} |`);
+    lines.push(`| Weak Citations | ${report.semanticReport.weak} |`);
+    lines.push(`| Ornamental Citations | ${report.semanticReport.ornamental} (${report.semanticReport.ornamentalPct}%) |`);
+    lines.push(`| Unsupported Empirical Claims | ${report.semanticReport.empiricalClaimsUnsupported} |`);
+  }
   lines.push('');
 
   if (report.hardFailures.length > 0) {
