@@ -80,6 +80,8 @@ interface TTSMiniPlayerProps {
   autoPlay?: boolean;
   /** Callback with chunk playback info for word-level sync */
   onChunkPlaybackInfo?: (info: { chunkIndex: number; chunkWordCounts: number[] }) => void;
+  /** Callback when playback speed changes — needed for block-level timestamp alignment */
+  onPlaybackSpeedChange?: (speed: number) => void;
 }
 
 export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(function TTSMiniPlayer({ 
@@ -101,6 +103,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   onEstimatedDurationChange,
   autoPlay = false,
   onChunkPlaybackInfo,
+  onPlaybackSpeedChange,
 }, ref) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
@@ -243,18 +246,13 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   }, []);
 
   const cleanupBlobUrls = useCallback(() => {
-    for (const url of activeBlobUrlsRef.current) {
-      try { URL.revokeObjectURL(url); } catch { /* ignore */ }
-    }
+    // Data URIs don't need revocation, but clear the array
     activeBlobUrlsRef.current = [];
   }, []);
 
   const base64ToBlobUrl = useCallback((base64: string, mimeType = "audio/mpeg") => {
-    const binary = atob(base64);
-    const bytes = new Uint8Array(binary.length);
-    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-    const blob = new Blob([bytes], { type: mimeType });
-    return URL.createObjectURL(blob);
+    // Use data URI for maximum browser compatibility — avoids atob() binary corruption
+    return `data:${mimeType};base64,${base64}`;
   }, []);
 
   // Unlock audio context on user gesture - call this synchronously in click handler
@@ -395,7 +393,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         safeResolve(false);
       });
     });
-  }, [volume, onPlayingChange]);
+  }, [volume, onPlayingChange, onAudioRefChange]);
 
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
@@ -1001,6 +999,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
                     onClick={() => {
                       setPlaybackSpeed(speed);
                       playbackSpeedRef.current = speed;
+                      onPlaybackSpeedChange?.(speed);
                       if (audioRef.current) {
                         audioRef.current.playbackRate = speed;
                       }

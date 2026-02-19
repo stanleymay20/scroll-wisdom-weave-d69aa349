@@ -44,6 +44,8 @@ interface UseAudioSyncOptions {
   chunkPlaybackInfo?: ChunkPlaybackInfo | null;
   /** Number of words prepended to TTS text that are NOT in the DOM (e.g. "Chapter 1: Title") */
   ttsWordOffset?: number;
+  /** Current playback speed (1.0 = normal). Needed for accurate block timestamp alignment. */
+  playbackSpeed?: number;
 }
 
 interface UseAudioSyncReturn {
@@ -57,14 +59,17 @@ interface UseAudioSyncReturn {
   reset: () => void;
 }
 
-function buildTimestamps(sentences: string[], totalDurationSec: number): SentenceTimestamp[] {
+function buildTimestamps(sentences: string[], totalDurationSec: number, playbackSpeed = 1): SentenceTimestamp[] {
   const totalChars = sentences.reduce((sum, s) => sum + s.length, 0);
   if (totalChars === 0 || totalDurationSec <= 0) return [];
+
+  // Adjust duration for playback speed — at 1.5x the audio completes in totalDuration/1.5 real seconds
+  const adjustedDuration = totalDurationSec / playbackSpeed;
 
   let cursor = 0;
   return sentences.map((text, index) => {
     const fraction = text.length / totalChars;
-    const duration = fraction * totalDurationSec;
+    const duration = fraction * adjustedDuration;
     const start = cursor;
     cursor += duration;
     return { index, text, startTime: start, endTime: cursor };
@@ -82,6 +87,7 @@ export function useAudioSync({
   wordCount: inputWordCount = 0,
   chunkPlaybackInfo,
   ttsWordOffset = 0,
+  playbackSpeed = 1,
 }: UseAudioSyncOptions): UseAudioSyncReturn {
   // Total chapter duration estimate (for block-level fallback)
   const totalDuration = useMemo(
@@ -96,6 +102,7 @@ export function useAudioSync({
   const domScanRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Scan DOM for block elements and count total words
+  // Rescan whenever chunk info changes (word count may have updated from TTS)
   useEffect(() => {
     if (domScanRef.current) clearTimeout(domScanRef.current);
 
@@ -112,7 +119,7 @@ export function useAudioSync({
         const text = (el as HTMLElement).innerText || '';
         blockTexts.push(text || ' ');
       });
-      const ts = buildTimestamps(blockTexts, totalDuration);
+      const ts = buildTimestamps(blockTexts, totalDuration, playbackSpeed);
       sentencesRef.current = ts;
       setSentences(ts);
       
@@ -125,7 +132,7 @@ export function useAudioSync({
 
     domScanRef.current = setTimeout(scan, 300);
     return () => { if (domScanRef.current) clearTimeout(domScanRef.current); };
-  }, [chapterContent, totalDuration, contentRef]);
+  }, [chapterContent, totalDuration, contentRef, chunkPlaybackInfo, playbackSpeed]);
 
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(-1);
   const [activeWordIndex, setActiveWordIndex] = useState(-1);
@@ -261,7 +268,7 @@ export function useAudioSync({
     }
   }, [audioRef, isSyncEnabled, isUserScrolledAway, contentRef]);
 
-  // Start / stop tick loop — use setInterval (50ms) instead of RAF for reliable mobile timing
+  // Start / stop tick loop — 50ms interval balances accuracy vs CPU/battery
   useEffect(() => {
     if (isPlaying && sentences.length > 0) {
       // Add/remove audio-playing class on container
@@ -270,7 +277,7 @@ export function useAudioSync({
       const target = readingContent || container;
       target?.classList.add('audio-playing');
       
-      intervalRef.current = setInterval(tick, 30);
+      intervalRef.current = setInterval(tick, 50);
     } else {
       if (intervalRef.current) clearInterval(intervalRef.current);
       
