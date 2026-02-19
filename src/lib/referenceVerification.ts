@@ -54,6 +54,25 @@ export interface ClaimIntegrityReport {
   uncitedClaimsPct: number;
   analysisComplete: boolean;
   verdictLabel: 'Conceptually Sound' | 'Requires Revision' | 'Academically Unsafe' | 'Analysis Incomplete';
+  manualReviewRequired?: number;
+}
+
+export interface EpistemicConflict {
+  claimA: { id: string; text: string };
+  claimB: { id: string; text: string };
+  conflictType: 'direct_contradiction' | 'methodological_inconsistency' | 'theoretical_tension';
+  severity: 'critical' | 'moderate' | 'minor';
+  explanation: string;
+}
+
+export interface EpistemicCoherenceReport {
+  totalClaimsAnalyzed: number;
+  conflicts: EpistemicConflict[];
+  conflictCount: number;
+  criticalConflicts: number;
+  coherenceScore: number;
+  coherenceVerdict: 'Epistemically Coherent' | 'Minor Tensions' | 'Significant Inconsistencies' | 'Epistemically Incoherent' | 'Analysis Incomplete';
+  analysisComplete: boolean;
 }
 
 export interface ReferenceTransparencyReport {
@@ -71,6 +90,8 @@ export interface ReferenceTransparencyReport {
   certificationBlocked: boolean;
   semanticReport?: SemanticIntegrityReport;
   claimReport?: ClaimIntegrityReport;
+  epistemicReport?: EpistemicCoherenceReport;
+  citationStyle?: string;
   auditModel?: string;
   promptVersion?: string;
 }
@@ -112,6 +133,16 @@ export function getVerdictColor(label: ClaimIntegrityReport['verdictLabel']): st
   }
 }
 
+export function getCoherenceVerdictColor(verdict: EpistemicCoherenceReport['coherenceVerdict']): string {
+  switch (verdict) {
+    case 'Epistemically Coherent': return 'text-green-600 dark:text-green-400 bg-green-500/10 border-green-500/30';
+    case 'Minor Tensions': return 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30';
+    case 'Significant Inconsistencies': return 'text-orange-600 dark:text-orange-400 bg-orange-500/10 border-orange-500/30';
+    case 'Epistemically Incoherent': return 'text-destructive bg-destructive/10 border-destructive/30';
+    case 'Analysis Incomplete': return 'text-muted-foreground bg-muted/30 border-border/50';
+  }
+}
+
 // ===========================================
 // TRANSPARENCY REPORT MARKDOWN GENERATOR
 // ===========================================
@@ -122,7 +153,7 @@ export function generateTransparencyMarkdown(report: ReferenceTransparencyReport
   lines.push('');
   lines.push('---');
   lines.push('');
-  lines.push('## 📋 Reference Integrity Summary (ScrollVerified™ 2026 — Institutional Conceptual Integrity Certified)');
+  lines.push('## 📋 Reference Integrity Summary (ScrollVerified™ 2026 — Institutional Epistemic Integrity Certified)');
   lines.push('');
   lines.push(`| Metric | Status |`);
   lines.push(`|--------|--------|`);
@@ -165,6 +196,22 @@ export function generateTransparencyMarkdown(report: ReferenceTransparencyReport
     lines.push(`| Contradictions | ${cr.contradiction} |`);
     lines.push(`| Unsupported Empirical | ${cr.unsupportedEmpiricalClaims} |`);
     lines.push(`| Institutional Verdict | **${cr.verdictLabel}** |`);
+    if (cr.manualReviewRequired && cr.manualReviewRequired > 0) {
+      lines.push(`| Manual Review Required | ${cr.manualReviewRequired} verdict(s) |`);
+    }
+  }
+
+  if (report.epistemicReport) {
+    const er = report.epistemicReport;
+    lines.push('');
+    lines.push('### Epistemic Coherence Analysis');
+    lines.push(`| Metric | Value |`);
+    lines.push(`|--------|-------|`);
+    lines.push(`| Claims Analyzed | ${er.totalClaimsAnalyzed} |`);
+    lines.push(`| Coherence Score | ${er.coherenceScore}/100 |`);
+    lines.push(`| Internal Conflicts | ${er.conflictCount} |`);
+    lines.push(`| Critical Conflicts | ${er.criticalConflicts} |`);
+    lines.push(`| Coherence Verdict | **${er.coherenceVerdict}** |`);
   }
 
   lines.push('');

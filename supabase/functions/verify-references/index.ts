@@ -28,6 +28,45 @@ async function crossrefValidate(doi: string, title: string, author: string, year
   } catch { return { matched: false, sim: 0, authorMatch: false, yearMatch: false, status: "unverified" as const, crWork: undefined }; }
 }
 
+// ===========================================
+// MULTI-STYLE CITATION PARSING (Fix #1)
+// ===========================================
+
+const APA_RE = /\(([A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s(?:&|and)\s[A-ZÀ-Ÿ][a-zà-ÿ]+)*(?:\s+et\s+al\.?)?),?\s*(\d{4})(?:[a-z])?(?:,\s*p{1,2}\.?\s*[\d–-]+)?\)/g;
+const HARVARD_RE = /\(([A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s(?:and|&)\s[A-ZÀ-Ÿ][a-zà-ÿ]+)*(?:\s+et\s+al\.?)?)\s+(\d{4})(?:,\s*p{1,2}\.?\s*[\d–-]+)?\)/g;
+const NARRATIVE_RE = /([A-ZÀ-Ÿ][a-zà-ÿ]+(?:\s(?:and|&)\s[A-ZÀ-Ÿ][a-zà-ÿ]+)*(?:\s+et\s+al\.?)?)\s+\((\d{4})(?:[a-z])?\)/g;
+const IEEE_RE = /\[(\d+(?:\s*[,–-]\s*\d+)*)\]/g;
+
+function detectStyle(content: string): string {
+  const apa = (content.match(APA_RE) || []).length;
+  const harvard = (content.match(HARVARD_RE) || []).length;
+  const ieee = (content.match(IEEE_RE) || []).length;
+  if (ieee > apa && ieee > harvard) return 'IEEE';
+  if (apa >= harvard) return 'APA';
+  return 'Harvard';
+}
+
+function extractCitKeys(text: string, style?: string): string[] {
+  const keys: string[] = [];
+  const seen = new Set<string>();
+  const add = (k: string) => { const l = k.toLowerCase().trim(); if (l && !seen.has(l)) { seen.add(l); keys.push(k.trim()); } };
+
+  // APA-style parenthetical
+  let m: RegExpExecArray | null;
+  let re = new RegExp(APA_RE.source, 'g');
+  while ((m = re.exec(text)) !== null) add(m[1]);
+
+  // Harvard-style (no comma before year)
+  re = new RegExp(HARVARD_RE.source, 'g');
+  while ((m = re.exec(text)) !== null) add(m[1]);
+
+  // Narrative citations
+  re = new RegExp(NARRATIVE_RE.source, 'g');
+  while ((m = re.exec(text)) !== null) add(m[1]);
+
+  return keys;
+}
+
 const EMP_IND = ['study','studies','data','sample','experiment','rct','regression','panel data','meta-analysis','survey','longitudinal','findings show','results indicate','evidence suggests'];
 const STOPS = new Set('the a an is are was were be been have has had do does did will would could should may might can to of in for on with at by from as into and but or not so yet this that it its they them their we our he she his her who which what'.split(' '));
 const kw = (t: string) => t.toLowerCase().replace(/[^a-z0-9\s-]/g, ' ').split(/\s+/).filter(w => w.length > 2 && !STOPS.has(w));
@@ -46,7 +85,7 @@ function kwSupport(para: string, cit: { title: string; abstract?: string; keywor
   return { score: sc, level: sc >= 80 ? 'strong' : sc >= 65 ? 'moderate' : sc >= 40 ? 'weak' : 'ornamental' };
 }
 
-const CIT_RE = /\(([A-Z][a-zÀ-ÿ]+(?:\s(?:&|and)\s[A-Z][a-zÀ-ÿ]+)*(?:\s+et\s+al\.?)?),?\s*\d{4}/g;
+// Updated claim extraction with multi-style support
 function extractClaims(content: string, max = 25) {
   const paras = content.split(/\n\n+/).map(p => p.trim()).filter(p => p.length > 30);
   const claims: any[] = []; let id = 0;
@@ -58,8 +97,8 @@ function extractClaims(content: string, max = 25) {
       let type: string = 'descriptive';
       if (EMP_IND.some(i => lo.includes(i))) type = 'empirical';
       else if (/\b(theory|framework|model|hypothesis|posits|proposes|argues|paradigm)\b/i.test(lo)) type = 'theoretical';
-      const cks: string[] = []; let m; const re = new RegExp(CIT_RE.source, 'g');
-      while ((m = re.exec(paras[pi])) !== null) cks.push(m[1].trim());
+      // Multi-style citation key extraction
+      const cks = extractCitKeys(paras[pi]);
       claims.push({ id: `c${id++}`, text: s, type, pi, cks: [...new Set(cks)] });
     }
   }
@@ -87,6 +126,107 @@ async function llmEval(claim: any, metas: any[], apiKey: string) {
   } catch { return { id: claim.id, v: 'weak', c: 0, r: 'Timeout' }; }
 }
 
+// ===========================================
+// FIX #2: VERDICT REVALIDATION
+// Re-run contradiction verdicts once for confirmation
+// ===========================================
+
+async function revalidateContradictions(contradictions: any[], claims: any[], refMap: Map<string, any>, crCache: Map<string, any>, apiKey: string): Promise<any[]> {
+  if (!contradictions.length) return contradictions;
+  log("Revalidation", { count: contradictions.length });
+
+  const revalidated: any[] = [];
+  for (const cv of contradictions) {
+    const cl = claims.find((c: any) => c.id === cv.id);
+    if (!cl) { revalidated.push(cv); continue; }
+    const metas: any[] = [];
+    for (const ck of cl.cks) {
+      for (const [k, ref] of refMap.entries()) {
+        if (k.includes(ck.toLowerCase()) || ck.toLowerCase().includes(k)) {
+          const cw = crCache.get(ref.doi || ref.title || '');
+          metas.push({ title: cw?.title || ref.title || ck, abstract: cw?.abstract, year: ref.year || 0 });
+          break;
+        }
+      }
+    }
+    if (!metas.length) metas.push({ title: cl.cks.join(', '), year: 0 });
+    const rv = await llmEval(cl, metas, apiKey);
+    if (rv.v === 'contradiction') {
+      // Confirmed contradiction
+      revalidated.push({ ...rv, revalidated: true, confirmed: true });
+    } else {
+      // Mismatch — downgrade to 'weak' and flag for manual review
+      revalidated.push({ ...rv, v: rv.v, revalidated: true, confirmed: false, r: `Revalidation changed verdict: ${rv.r}. Requires manual review.` });
+    }
+  }
+  return revalidated;
+}
+
+// ===========================================
+// PHASE 6: EPISTEMIC COHERENCE ENGINE
+// ===========================================
+
+const CONTRA_PAIRS: [RegExp, RegExp][] = [
+  [/\bincreases?\b/i, /\bdecreases?\b/i],
+  [/\bpositively?\s+(?:correlat|associat|relat)/i, /\bnegatively?\s+(?:correlat|associat|relat)/i],
+  [/\bsupports?\b/i, /\bcontradicts?\b/i],
+  [/\bsignificant\b/i, /\bnot?\s+significant\b/i],
+  [/\bconfirms?\b/i, /\brefutes?\b/i],
+  [/\bcauses?\b/i, /\bdoes\s+not\s+cause\b/i],
+  [/\beffective\b/i, /\bineffective\b/i],
+  [/\bbeneficial\b/i, /\bharmful\b/i],
+];
+
+function preScreenConflicts(claims: any[]): Array<[any, any]> {
+  const candidates: Array<[any, any]> = [];
+  const substantiveTerms = (text: string) => text.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').split(/\s+/).filter(w => w.length > 3 && !STOPS.has(w));
+
+  for (let i = 0; i < claims.length; i++) {
+    for (let j = i + 1; j < claims.length; j++) {
+      for (const [pA, pB] of CONTRA_PAIRS) {
+        if ((pA.test(claims[i].text) && pB.test(claims[j].text)) || (pB.test(claims[i].text) && pA.test(claims[j].text))) {
+          const nA = substantiveTerms(claims[i].text), nB = substantiveTerms(claims[j].text);
+          if (nA.filter(n => nB.includes(n)).length >= 2) {
+            candidates.push([claims[i], claims[j]]);
+            break;
+          }
+        }
+      }
+    }
+  }
+  return candidates.slice(0, 10);
+}
+
+async function evaluateCoherence(pairs: Array<[any, any]>, apiKey: string) {
+  const conflicts: any[] = [];
+  for (let i = 0; i < pairs.length; i += 3) {
+    const batch = pairs.slice(i, i + 3);
+    const batchResults = await Promise.all(batch.map(async ([a, b]) => {
+      try {
+        const r = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST", headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({ model: "google/gemini-2.5-flash-lite", messages: [
+            { role: "system", content: 'Academic consistency reviewer. Two claims from the same chapter. Determine if they contradict each other. Return ONLY JSON: {"isContradiction":true|false,"conflictType":"direct_contradiction|methodological_inconsistency|theoretical_tension","severity":"critical|moderate|minor","explanation":"brief"}' },
+            { role: "user", content: `CLAIM A: "${a.text}"\nCLAIM B: "${b.text}"\nAre these internally contradictory? Return JSON only.` }
+          ], temperature: 0.1, max_tokens: 150 }), signal: AbortSignal.timeout(8000),
+        });
+        if (!r.ok) return null;
+        const content = (await r.json()).choices?.[0]?.message?.content || '';
+        const jm = content.match(/\{[\s\S]*?\}/);
+        if (!jm) return null;
+        const p = JSON.parse(jm[0]);
+        if (p.isContradiction) {
+          return { claimA: { id: a.id, text: a.text.slice(0, 200) }, claimB: { id: b.id, text: b.text.slice(0, 200) }, conflictType: p.conflictType || 'direct_contradiction', severity: p.severity || 'moderate', explanation: String(p.explanation || '').slice(0, 200) };
+        }
+        return null;
+      } catch { return null; }
+    }));
+    conflicts.push(...batchResults.filter(Boolean));
+    if (i + 3 < pairs.length) await new Promise(r => setTimeout(r, 300));
+  }
+  return conflicts;
+}
+
 const VS: Record<string, number> = { strong: 100, partial: 70, weak: 40, contradiction: 0 };
 
 serve(async (req) => {
@@ -102,9 +242,15 @@ serve(async (req) => {
     log("Auth", { u: user.id.slice(0, 8) });
 
     const { references, bookCategory = "general", chapterContent = "" } = await req.json();
-    if (!Array.isArray(references) || !references.length) return json({ success: true, references: [], metrics: { total: 0, verifiedPct: 0 }, tier: { tier: "non-compliant", label: "No References" }, semanticIntegrityReport: { totalCitations: 0, strong: 0, moderate: 0, weak: 0, ornamental: 0, averageScore: 0, empiricalClaimsUnsupported: 0, ornamentalPct: 0 }, claimIntegrityReport: { totalClaims: 0, analyzedClaims: 0, strong: 0, partial: 0, weak: 0, contradiction: 0, avgSupportScore: 0, unsupportedEmpiricalClaims: 0, contradictions: 0, strongPct: 0, uncitedClaimsPct: 0, analysisComplete: false, verdictLabel: 'Analysis Incomplete' } });
+    const emptyResp = { totalClaims: 0, analyzedClaims: 0, strong: 0, partial: 0, weak: 0, contradiction: 0, avgSupportScore: 0, unsupportedEmpiricalClaims: 0, contradictions: 0, strongPct: 0, uncitedClaimsPct: 0, analysisComplete: false, verdictLabel: 'Analysis Incomplete' };
+    const emptyCoherence = { totalClaimsAnalyzed: 0, conflicts: [], conflictCount: 0, criticalConflicts: 0, coherenceScore: 100, coherenceVerdict: 'Analysis Incomplete', analysisComplete: false };
 
-    log("Verify", { n: references.length });
+    if (!Array.isArray(references) || !references.length) return json({ success: true, references: [], metrics: { total: 0, verifiedPct: 0 }, tier: { tier: "non-compliant", label: "No References" }, semanticIntegrityReport: { totalCitations: 0, strong: 0, moderate: 0, weak: 0, ornamental: 0, averageScore: 0, empiricalClaimsUnsupported: 0, ornamentalPct: 0 }, claimIntegrityReport: emptyResp, epistemicCoherenceReport: emptyCoherence });
+
+    // Detect citation style
+    const citStyle = chapterContent ? detectStyle(chapterContent) : 'APA';
+    log("Verify", { n: references.length, citStyle });
+
     // Phase 1: DOI + CrossRef
     const results: any[] = [];
     for (let i = 0; i < references.length; i += 3) {
@@ -148,11 +294,13 @@ serve(async (req) => {
     const metrics = { total: tot, verified: ver, verifiedPct: tot > 0 ? Math.round((ver / tot) * 100) : 0, suspicious: sus, suspiciousPct: tot > 0 ? Math.round((sus / tot) * 100) : 0, doiFailures: doiF, post2010Pct: tot > 0 ? Math.round((p10 / tot) * 100) : 0, post2018Pct: tot > 0 ? Math.round((p18 / tot) * 100) : 0 };
     const semReport = { totalCitations: tot, strong: semEvals.filter(e => e.level === 'strong').length, moderate: semEvals.filter(e => e.level === 'moderate').length, weak: semEvals.filter(e => e.level === 'weak').length, ornamental: orn, averageScore: semAvg, empiricalClaimsUnsupported: empUnsup, ornamentalPct: ornPct };
 
-    // Phase 5: Claim-level LLM
-    let claimReport: any = { totalClaims: 0, analyzedClaims: 0, strong: 0, partial: 0, weak: 0, contradiction: 0, avgSupportScore: 0, unsupportedEmpiricalClaims: 0, contradictions: 0, strongPct: 0, uncitedClaimsPct: 0, analysisComplete: false, verdictLabel: 'Analysis Incomplete' };
+    // Phase 5: Claim-level LLM + Revalidation
+    let claimReport: any = { ...emptyResp };
+    let allClaims: any[] = [];
     if (chapterContent && LK) {
       log("Phase 5: Claims");
       const claims = extractClaims(chapterContent, 25);
+      allClaims = claims;
       const uncited = claims.filter(c => c.type !== 'descriptive' && !c.cks.length);
       const cited = claims.filter(c => c.cks.length > 0);
       const refMap = new Map<string, any>(); for (const r of results) { for (const k of [r.authors?.[0], r.author, r.title].filter(Boolean)) refMap.set(k.toLowerCase(), r); }
@@ -168,23 +316,64 @@ serve(async (req) => {
         verdicts.push(...bv);
         if (i + 3 < cited.length) await new Promise(r => setTimeout(r, 300));
       }
+
+      // Fix #2: Revalidate contradictions
+      const initialContradictions = verdicts.filter(v => v.v === 'contradiction');
+      if (initialContradictions.length > 0) {
+        log("Revalidating contradictions", { count: initialContradictions.length });
+        const revalidated = await revalidateContradictions(initialContradictions, cited, refMap, crCache, LK);
+        // Replace contradiction verdicts with revalidated ones
+        for (const rv of revalidated) {
+          const idx = verdicts.findIndex(v => v.id === rv.id);
+          if (idx >= 0) verdicts[idx] = rv;
+        }
+      }
+
       const sV = verdicts.filter(v => v.v === 'strong').length, pV = verdicts.filter(v => v.v === 'partial').length, wV = verdicts.filter(v => v.v === 'weak').length, cV = verdicts.filter(v => v.v === 'contradiction').length;
       const ta = verdicts.length, avg = ta > 0 ? Math.round(verdicts.reduce((s, v) => s + VS[v.v], 0) / ta) : 0;
       const uemp = claims.filter(c => c.type === 'empirical' && !c.cks.length).length + verdicts.filter(v => { const c = cited.find((cc: any) => cc.id === v.id); return c?.type === 'empirical' && (v.v === 'weak' || v.v === 'contradiction'); }).length;
       const ucPct = claims.length > 0 ? Math.round((uncited.length / claims.length) * 100) : 0;
+      const manualReview = verdicts.filter(v => v.revalidated && !v.confirmed).length;
       let vl = 'Analysis Incomplete'; if (ta > 0) { if (cV > 0 || avg < 50) vl = 'Academically Unsafe'; else if (avg < 65 || uemp > 0) vl = 'Requires Revision'; else vl = 'Conceptually Sound'; }
-      claimReport = { totalClaims: claims.length, analyzedClaims: ta, strong: sV, partial: pV, weak: wV, contradiction: cV, avgSupportScore: avg, unsupportedEmpiricalClaims: uemp, contradictions: cV, strongPct: ta > 0 ? Math.round((sV / ta) * 100) : 0, uncitedClaimsPct: ucPct, analysisComplete: true, verdictLabel: vl };
-      log("Phase 5 done", { avg, contradictions: cV, verdict: vl });
+      claimReport = { totalClaims: claims.length, analyzedClaims: ta, strong: sV, partial: pV, weak: wV, contradiction: cV, avgSupportScore: avg, unsupportedEmpiricalClaims: uemp, contradictions: cV, strongPct: ta > 0 ? Math.round((sV / ta) * 100) : 0, uncitedClaimsPct: ucPct, analysisComplete: true, verdictLabel: vl, manualReviewRequired: manualReview };
+      log("Phase 5 done", { avg, contradictions: cV, manualReview, verdict: vl });
+    }
+
+    // Phase 6: Epistemic Coherence
+    let coherenceReport: any = { ...emptyCoherence };
+    if (allClaims.length > 0 && LK) {
+      log("Phase 6: Epistemic Coherence");
+      const conflictPairs = preScreenConflicts(allClaims);
+      log("Pre-screened conflicts", { pairs: conflictPairs.length });
+      if (conflictPairs.length > 0) {
+        const conflicts = await evaluateCoherence(conflictPairs, LK);
+        const critCount = conflicts.filter(c => c.severity === 'critical').length;
+        const modCount = conflicts.filter(c => c.severity === 'moderate').length;
+        let score = 100;
+        score -= critCount * 20;
+        score -= modCount * 10;
+        score -= conflicts.filter(c => c.severity === 'minor').length * 3;
+        score = Math.max(0, Math.min(100, score));
+        let verdict = 'Analysis Incomplete';
+        if (critCount > 0 || score < 40) verdict = 'Epistemically Incoherent';
+        else if (score < 70) verdict = 'Significant Inconsistencies';
+        else if (score < 90) verdict = 'Minor Tensions';
+        else verdict = 'Epistemically Coherent';
+        coherenceReport = { totalClaimsAnalyzed: allClaims.length, conflicts, conflictCount: conflicts.length, criticalConflicts: critCount, coherenceScore: score, coherenceVerdict: verdict, analysisComplete: true };
+      } else {
+        coherenceReport = { totalClaimsAnalyzed: allClaims.length, conflicts: [], conflictCount: 0, criticalConflicts: 0, coherenceScore: 100, coherenceVerdict: 'Epistemically Coherent', analysisComplete: true };
+      }
+      log("Phase 6 done", { score: coherenceReport.coherenceScore, verdict: coherenceReport.coherenceVerdict });
     }
 
     // Tier
-    const checks: Record<string, boolean> = { noFab: true, noDup: true, doiVal: metrics.verifiedPct >= 80, recency: metrics.post2010Pct >= 30 && metrics.post2018Pct >= 15, canon: true, semSup: semAvg >= 65, noOrph: true, susLow: metrics.suspiciousPct < 5, fullDoi: metrics.verifiedPct >= 95, ornLow: ornPct < 5, claimGold: claimReport.avgSupportScore >= 65, claimPlat: claimReport.avgSupportScore >= 80, noContra: claimReport.contradictions === 0, noUnsupEmp: claimReport.unsupportedEmpiricalClaims === 0 };
+    const checks: Record<string, boolean> = { noFab: true, noDup: true, doiVal: metrics.verifiedPct >= 80, recency: metrics.post2010Pct >= 30 && metrics.post2018Pct >= 15, canon: true, semSup: semAvg >= 65, noOrph: true, susLow: metrics.suspiciousPct < 5, fullDoi: metrics.verifiedPct >= 95, ornLow: ornPct < 5, claimGold: claimReport.avgSupportScore >= 65, claimPlat: claimReport.avgSupportScore >= 80, noContra: claimReport.contradictions === 0, noUnsupEmp: claimReport.unsupportedEmpiricalClaims === 0, coherent: coherenceReport.coherenceScore >= 80 };
     const met: string[] = [], unmet: string[] = []; for (const [k, v] of Object.entries(checks)) (v ? met : unmet).push(k);
     let tier = "non-compliant", tLabel = "Non-Compliant";
     if (checks.noFab && checks.noDup) { tier = "bronze"; tLabel = "Bronze"; }
     if (tier === "bronze" && checks.doiVal && checks.recency) { tier = "silver"; tLabel = "Silver"; }
     if (tier === "silver" && checks.canon && checks.semSup && checks.claimGold) { tier = "gold"; tLabel = "Gold"; }
-    if (tier === "gold" && checks.fullDoi && checks.noOrph && checks.susLow && checks.ornLow && checks.claimPlat && checks.noContra && checks.noUnsupEmp) { tier = "platinum"; tLabel = "Platinum"; }
+    if (tier === "gold" && checks.fullDoi && checks.noOrph && checks.susLow && checks.ornLow && checks.claimPlat && checks.noContra && checks.noUnsupEmp && checks.coherent) { tier = "platinum"; tLabel = "Platinum"; }
 
     // Hard failures
     const hf: string[] = [];
@@ -193,11 +382,13 @@ serve(async (req) => {
     if (ornPct >= 10) hf.push(`${ornPct}% ornamental`);
     if (semAvg < 50) hf.push(`Semantic ${semAvg}/100 < 50`);
     if (empUnsup > 0) hf.push(`${empUnsup} empirical unsupported`);
-    if (claimReport.contradictions > 0) hf.push(`${claimReport.contradictions} contradiction(s)`);
+    if (claimReport.contradictions > 0) hf.push(`${claimReport.contradictions} contradiction(s) (revalidated)`);
     if (claimReport.avgSupportScore > 0 && claimReport.avgSupportScore < 60) hf.push(`Claim score ${claimReport.avgSupportScore}/100 < 60`);
     if (claimReport.uncitedClaimsPct >= 5) hf.push(`${claimReport.uncitedClaimsPct}% uncited claims`);
+    if (coherenceReport.criticalConflicts > 0) hf.push(`${coherenceReport.criticalConflicts} critical epistemic conflict(s)`);
+    if (coherenceReport.coherenceScore < 50) hf.push(`Epistemic coherence ${coherenceReport.coherenceScore}/100 < 50`);
 
-    log("Done", { tier, hf: hf.length, verdict: claimReport.verdictLabel });
-    return json({ success: true, references: results, metrics, semanticIntegrityReport: semReport, claimIntegrityReport: claimReport, tier: { tier, label: tLabel, met, unmet }, hardFailures: hf, certificationBlocked: hf.length > 0, standard: "ScrollVerified™ 2026 — Institutional Conceptual Integrity Certified" });
+    log("Done", { tier, hf: hf.length, verdict: claimReport.verdictLabel, coherence: coherenceReport.coherenceVerdict, citStyle });
+    return json({ success: true, references: results, metrics, semanticIntegrityReport: semReport, claimIntegrityReport: claimReport, epistemicCoherenceReport: coherenceReport, tier: { tier, label: tLabel, met, unmet }, hardFailures: hf, certificationBlocked: hf.length > 0, citationStyle: citStyle, standard: "ScrollVerified™ 2026 — Institutional Epistemic Integrity Certified" });
   } catch (e) { const m = e instanceof Error ? e.message : String(e); log("ERR", { m }); return json({ error: m }, 500); }
 });
