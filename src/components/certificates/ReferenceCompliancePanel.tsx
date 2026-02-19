@@ -12,13 +12,15 @@ import {
   FileCheck,
   Brain,
   Scale,
+  GitCompareArrows,
+  Eye,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   ComplianceTier,
   ReferenceTransparencyReport,
 } from "@/lib/referenceVerification";
-import { getTierColor, getTierIcon, getVerdictColor } from "@/lib/referenceVerification";
+import { getTierColor, getTierIcon, getVerdictColor, getCoherenceVerdictColor } from "@/lib/referenceVerification";
 
 interface ReferenceCompliancePanelProps {
   report: ReferenceTransparencyReport | null;
@@ -35,6 +37,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
   const currentTierIdx = tierOrder.indexOf(report.tier.tier);
   const sr = report.semanticReport;
   const cr = report.claimReport;
+  const er = report.epistemicReport;
 
   return (
     <div className={cn("rounded-xl border border-border/50 bg-gradient-card overflow-hidden", className)}>
@@ -49,10 +52,16 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
             <p className="text-xs text-muted-foreground">
               DOI: {report.doiValidatedPct}% · Tier: {report.tier.label}
               {cr?.analysisComplete ? ` · Claim: ${cr.avgSupportScore}/100` : sr ? ` · Semantic: ${sr.averageScore}/100` : ''}
+              {er?.analysisComplete ? ` · Coherence: ${er.coherenceScore}/100` : ''}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {er?.analysisComplete && (
+            <Badge variant="outline" className={cn("text-[10px] border", getCoherenceVerdictColor(er.coherenceVerdict))}>
+              {er.coherenceVerdict === 'Epistemically Coherent' ? '🧠 Coherent' : er.coherenceVerdict === 'Minor Tensions' ? '🧠 Tensions' : er.coherenceVerdict}
+            </Badge>
+          )}
           {cr?.analysisComplete && (
             <Badge variant="outline" className={cn("text-[10px] border", getVerdictColor(cr.verdictLabel))}>
               {cr.verdictLabel}
@@ -85,6 +94,73 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
                 </div>
                 <Progress value={report.doiValidatedPct} className="h-2" />
               </div>
+
+              {/* Epistemic Coherence Section */}
+              {er && (
+                <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <GitCompareArrows className="h-4 w-4 text-scroll-gold" />
+                    <span className="text-sm font-medium">Epistemic Coherence</span>
+                    <Badge variant="outline" className={cn("text-[10px] border ml-auto", getCoherenceVerdictColor(er.coherenceVerdict))}>
+                      {er.coherenceVerdict}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Coherence Score</span>
+                    <span className={cn("text-lg font-bold",
+                      er.coherenceScore >= 80 ? "text-green-500" :
+                      er.coherenceScore >= 60 ? "text-amber-500" : "text-destructive"
+                    )}>
+                      {er.coherenceScore}/100
+                    </span>
+                  </div>
+                  <Progress value={er.coherenceScore} className="h-2" />
+
+                  {er.conflictCount > 0 && (
+                    <div className="space-y-2">
+                      <span className="text-[10px] text-muted-foreground">
+                        {er.conflictCount} internal conflict(s) detected ({er.criticalConflicts} critical)
+                      </span>
+                      {er.conflicts.slice(0, 3).map((conflict, i) => (
+                        <div key={i} className={cn(
+                          "p-2 rounded text-xs space-y-1",
+                          conflict.severity === 'critical' ? "bg-destructive/10 border border-destructive/30" :
+                          conflict.severity === 'moderate' ? "bg-amber-500/10 border border-amber-500/30" :
+                          "bg-muted/40 border border-border/50"
+                        )}>
+                          <div className="flex items-center gap-1">
+                            <Badge variant="outline" className={cn("text-[9px]",
+                              conflict.severity === 'critical' ? "text-destructive border-destructive/30" :
+                              conflict.severity === 'moderate' ? "text-amber-600 border-amber-500/30" :
+                              "text-muted-foreground border-border/50"
+                            )}>
+                              {conflict.severity} · {conflict.conflictType.replace(/_/g, ' ')}
+                            </Badge>
+                          </div>
+                          <p className="text-muted-foreground italic">"{conflict.claimA.text.slice(0, 80)}..."</p>
+                          <p className="text-muted-foreground italic">vs "{conflict.claimB.text.slice(0, 80)}..."</p>
+                          <p className="text-foreground/80">{conflict.explanation}</p>
+                        </div>
+                      ))}
+                      {er.conflictCount > 3 && (
+                        <p className="text-[10px] text-muted-foreground">+{er.conflictCount - 3} more conflict(s)</p>
+                      )}
+                    </div>
+                  )}
+
+                  {er.conflictCount === 0 && er.analysisComplete && (
+                    <div className="flex items-center gap-2 p-2 rounded bg-green-500/10 text-xs text-green-600 dark:text-green-400">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+                      <span>No internal contradictions detected — epistemically consistent</span>
+                    </div>
+                  )}
+
+                  {!er.analysisComplete && (
+                    <p className="text-[10px] text-muted-foreground italic">Epistemic analysis incomplete</p>
+                  )}
+                </div>
+              )}
 
               {/* Claim-Level Justification Section */}
               {cr && (
@@ -131,7 +207,13 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
                   {cr.contradiction > 0 && (
                     <div className="flex items-center gap-2 p-2 rounded bg-destructive/10 text-xs text-destructive">
                       <XCircle className="h-3.5 w-3.5 shrink-0" />
-                      <span>{cr.contradiction} citation contradiction(s) — sources contradict the claims they support</span>
+                      <span>{cr.contradiction} citation contradiction(s) — revalidated and confirmed</span>
+                    </div>
+                  )}
+                  {cr.manualReviewRequired && cr.manualReviewRequired > 0 && (
+                    <div className="flex items-center gap-2 p-2 rounded bg-amber-500/10 text-xs text-amber-600 dark:text-amber-400">
+                      <Eye className="h-3.5 w-3.5 shrink-0" />
+                      <span>{cr.manualReviewRequired} verdict(s) require manual review (revalidation changed initial result)</span>
                     </div>
                   )}
                   {cr.unsupportedEmpiricalClaims > 0 && (
@@ -230,6 +312,9 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
                 <MetricRow icon={report.post2018Compliance >= 15 ? CheckCircle2 : XCircle} label="Post-2018" value={`${report.post2018Compliance}%`} ok={report.post2018Compliance >= 15} />
                 <MetricRow icon={ShieldCheck} label="Semantic Integrity" value={report.semanticIntegrity} ok={report.semanticIntegrity === 'Strong'} />
                 <MetricRow icon={report.fabricationRisk === 'None Detected' ? CheckCircle2 : AlertTriangle} label="Fabrication Risk" value={report.fabricationRisk} ok={report.fabricationRisk === 'None Detected'} />
+                {report.citationStyle && (
+                  <MetricRow icon={CheckCircle2} label="Citation Style" value={report.citationStyle} ok />
+                )}
               </div>
 
               {/* Hard Failures */}
@@ -260,7 +345,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
 
               {/* Provenance */}
               <p className="text-[10px] text-muted-foreground">
-                ScrollVerified™ 2026 — Institutional Conceptual Integrity Certified
+                ScrollVerified™ 2026 — Institutional Epistemic Integrity Certified
                 {report.auditModel && ` · Model: ${report.auditModel}`}
                 {report.promptVersion && ` · Prompt: ${report.promptVersion}`}
               </p>
