@@ -47,7 +47,7 @@ export const SUBSCRIPTION_TIERS = {
     monthlyPrice: 19,
     features: {
       canGenerateBooks: true,
-      maxBooksPerMonth: -1, // unlimited
+      maxBooksPerMonth: 30,
       maxWordCount: 6000,
       exportFormats: ['pdf', 'epub', 'docx', 'mobi'],
       ttsMinutes: 60,
@@ -63,7 +63,7 @@ export const SUBSCRIPTION_TIERS = {
     name: 'Institutional',
     price_id: 'price_1SdFezJYFIBeCvefURsOgX3t',
     product_id: 'prod_TaQWA7MSUntiMy',
-    monthlyPrice: 49,
+    monthlyPrice: 79,
     features: {
       canGenerateBooks: true,
       maxBooksPerMonth: -1,

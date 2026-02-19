@@ -68,7 +68,7 @@ const plans: PlanConfig[] = [
     popular: true,
     tierKey: "premium",
     features: [
-      { text: "Unlimited books", included: true },
+      { text: "Up to 30 books per month", included: true },
       { text: "Up to 6,000 words per chapter", included: true },
       { text: "All export formats (PDF, EPUB, DOCX, MOBI)", included: true },
       { text: "AI-generated covers", included: true },
