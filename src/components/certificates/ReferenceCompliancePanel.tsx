@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import {
   ChevronDown,
@@ -14,6 +15,9 @@ import {
   Scale,
   GitCompareArrows,
   Eye,
+  Download,
+  Fingerprint,
+  RefreshCw,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
@@ -342,6 +346,67 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
                   <span className="text-green-600 dark:text-green-400 font-medium">✅ Reference compliance achieved — Eligible for certification</span>
                 )}
               </div>
+
+              {/* Immutable Audit Artifact */}
+              {report.auditArtifact && (
+                <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Fingerprint className="h-4 w-4 text-scroll-gold" />
+                    <span className="text-sm font-medium">Immutable Audit Artifact</span>
+                    <Badge variant="outline" className="text-[10px] border ml-auto">
+                      v{report.auditArtifact.schemaVersion}
+                    </Badge>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-2 text-[10px]">
+                    <div className="p-1.5 rounded bg-muted/20">
+                      <span className="text-muted-foreground">Artifact ID</span>
+                      <p className="font-mono text-foreground font-medium">{report.auditArtifact.artifactId}</p>
+                    </div>
+                    <div className="p-1.5 rounded bg-muted/20">
+                      <span className="text-muted-foreground">Integrity Hash</span>
+                      <p className="font-mono text-foreground font-medium">{report.auditArtifact.integrityHash}</p>
+                    </div>
+                    <div className="p-1.5 rounded bg-muted/20">
+                      <span className="text-muted-foreground">Model</span>
+                      <p className="text-foreground">{report.auditArtifact.model}</p>
+                    </div>
+                    <div className="p-1.5 rounded bg-muted/20">
+                      <span className="text-muted-foreground">Prompt Version</span>
+                      <p className="text-foreground">{report.auditArtifact.promptVersion}</p>
+                    </div>
+                  </div>
+
+                  <div className="p-1.5 rounded bg-muted/20 text-[10px]">
+                    <span className="text-muted-foreground">Replicability Key</span>
+                    <p className="font-mono text-foreground break-all">{report.auditArtifact.replicabilityKey}</p>
+                  </div>
+
+                  <div className="flex gap-2">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="text-xs h-7 flex-1"
+                      onClick={() => {
+                        const blob = new Blob([JSON.stringify(report.auditArtifact, null, 2)], { type: 'application/json' });
+                        const url = URL.createObjectURL(blob);
+                        const a = document.createElement('a');
+                        a.href = url;
+                        a.download = `scrollverified-audit-${report.auditArtifact!.artifactId}.json`;
+                        a.click();
+                        URL.revokeObjectURL(url);
+                      }}
+                    >
+                      <Download className="h-3 w-3 mr-1" />
+                      Export Artifact (JSON)
+                    </Button>
+                  </div>
+
+                  <p className="text-[9px] text-muted-foreground italic">
+                    {report.auditArtifact.disclaimer}
+                  </p>
+                </div>
+              )}
 
               {/* Provenance */}
               <p className="text-[10px] text-muted-foreground">

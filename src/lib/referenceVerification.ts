@@ -75,6 +75,35 @@ export interface EpistemicCoherenceReport {
   analysisComplete: boolean;
 }
 
+export interface AuditArtifact {
+  schemaVersion: string;
+  standard: string;
+  artifactId: string;
+  generatedAt: string;
+  model: string;
+  promptVersion: string;
+  replicabilityKey: string;
+  summary: {
+    complianceTier: string;
+    doiValidatedPct: number;
+    semanticAvgScore: number;
+    claimSupportScore: number;
+    claimVerdict: string;
+    contradictions: number;
+    unsupportedEmpirical: number;
+    coherenceScore: number;
+    coherenceVerdict: string;
+    criticalConflicts: number;
+    hardFailures: string[];
+    certificationBlocked: boolean;
+    totalReferences: number;
+    citationStyle: string;
+    manualReviewRequired: number;
+  };
+  integrityHash: string;
+  disclaimer: string;
+}
+
 export interface ReferenceTransparencyReport {
   canonicalAnchorsPresent: boolean;
   doiValidatedPct: number;
@@ -91,6 +120,7 @@ export interface ReferenceTransparencyReport {
   semanticReport?: SemanticIntegrityReport;
   claimReport?: ClaimIntegrityReport;
   epistemicReport?: EpistemicCoherenceReport;
+  auditArtifact?: AuditArtifact;
   citationStyle?: string;
   auditModel?: string;
   promptVersion?: string;
@@ -212,6 +242,24 @@ export function generateTransparencyMarkdown(report: ReferenceTransparencyReport
     lines.push(`| Internal Conflicts | ${er.conflictCount} |`);
     lines.push(`| Critical Conflicts | ${er.criticalConflicts} |`);
     lines.push(`| Coherence Verdict | **${er.coherenceVerdict}** |`);
+  }
+
+  // Audit Artifact section
+  if (report.auditArtifact) {
+    const aa = report.auditArtifact;
+    lines.push('');
+    lines.push('### 🔏 Immutable Audit Artifact');
+    lines.push(`| Field | Value |`);
+    lines.push(`|-------|-------|`);
+    lines.push(`| Artifact ID | \`${aa.artifactId}\` |`);
+    lines.push(`| Schema Version | ${aa.schemaVersion} |`);
+    lines.push(`| Generated At | ${aa.generatedAt} |`);
+    lines.push(`| Model | ${aa.model} |`);
+    lines.push(`| Prompt Version | ${aa.promptVersion} |`);
+    lines.push(`| Replicability Key | \`${aa.replicabilityKey}\` |`);
+    lines.push(`| Integrity Hash | \`${aa.integrityHash}\` |`);
+    lines.push('');
+    lines.push(`> *${aa.disclaimer}*`);
   }
 
   lines.push('');
