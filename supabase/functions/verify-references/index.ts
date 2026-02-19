@@ -407,23 +407,27 @@ serve(async (req) => {
       hardFailures: hf, citStyle, totalReferences: tot, timestamp: auditTimestamp
     });
     
-    // Generate deterministic hash
-    let artifactHash = 0;
-    for (let i = 0; i < artifactPayload.length; i++) {
-      const ch = artifactPayload.charCodeAt(i);
-      artifactHash = ((artifactHash << 5) - artifactHash) + ch;
-      artifactHash = artifactHash & artifactHash;
-    }
-    const hashHex = `SVA-${Math.abs(artifactHash).toString(16).padStart(8, '0').toUpperCase()}`;
+    // SHA-256 cryptographic hash via Web Crypto API
+    const encoder = new TextEncoder();
+    const artifactData = encoder.encode(artifactPayload);
+    const artifactHashBuffer = await crypto.subtle.digest('SHA-256', artifactData);
+    const artifactHashArray = Array.from(new Uint8Array(artifactHashBuffer));
+    const hashHex = 'SVA-' + artifactHashArray.map(b => b.toString(16).padStart(2, '0')).join('').toUpperCase().slice(0, 16);
+
+    // Chapter content hash for replicability
+    const chapterData = encoder.encode(chapterContent || '');
+    const chapterHashBuffer = await crypto.subtle.digest('SHA-256', chapterData);
+    const chapterHashArray = Array.from(new Uint8Array(chapterHashBuffer));
+    const chapterHash = chapterHashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 12);
 
     const auditArtifact = {
-      schemaVersion: "3.0",
+      schemaVersion: "3.1",
       standard: "ScrollVerified™ 2026 — Institutional Epistemic Integrity Certified",
       artifactId: hashHex,
       generatedAt: auditTimestamp,
       model: auditModelUsed,
       promptVersion: promptVersionUsed,
-      replicabilityKey: `${auditModelUsed}|${promptVersionUsed}|${citStyle}|${tot}`,
+      replicabilityKey: `${auditModelUsed}|${promptVersionUsed}|${citStyle}|${tot}|${chapterHash}`,
       summary: {
         complianceTier: tLabel,
         doiValidatedPct: metrics.verifiedPct,
