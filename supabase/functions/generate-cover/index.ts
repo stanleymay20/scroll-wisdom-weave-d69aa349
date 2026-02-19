@@ -213,8 +213,18 @@ serve(async (req) => {
       .eq("id", bookId)
       .single();
     
-    // Resolve author name: request param > book record > fallback
-    const authorName = requestAuthorName || book?.author_ai_agent || "ScrollLibrary";
+    // Resolve author name: request param > book record > user profile > generic fallback
+    let authorName = requestAuthorName || book?.author_ai_agent || "";
+    
+    // If still no author name, try to get the user's profile name
+    if (!authorName) {
+      const { data: profile } = await supabase
+        .from("profiles")
+        .select("full_name")
+        .eq("user_id", user.id)
+        .maybeSingle();
+      authorName = profile?.full_name || "The Author";
+    }
 
     // Check authorization: allow if user is creator_id OR user_id (for seed books with null creator_id)
     const { data: bookOwner } = await supabase
