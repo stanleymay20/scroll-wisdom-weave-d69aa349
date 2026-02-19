@@ -26,6 +26,8 @@ import {
   Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ReferenceCompliancePanel } from "@/components/certificates/ReferenceCompliancePanel";
+import type { ReferenceTransparencyReport } from "@/lib/referenceVerification";
 
 interface ChiefEditorPanelProps {
   bookId: string;
@@ -93,6 +95,7 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
   const [audit, setAudit] = useState<AuditData | null>(null);
   const [isRunning, setIsRunning] = useState(false);
   const [isApplying, setIsApplying] = useState(false);
+  const [refReport, setRefReport] = useState<ReferenceTransparencyReport | null>(null);
   const [isRollingBack, setIsRollingBack] = useState(false);
   const [expanded, setExpanded] = useState(false);
   const [expandedDimension, setExpandedDimension] = useState<string | null>(null);
@@ -650,6 +653,9 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
                       <span>Model: {audit.audit_model} · Prompt: {audit.audit_prompt_version} · {new Date(audit.created_at).toLocaleString()}</span>
                     </div>
                   )}
+
+                  {/* ScrollVerified™ Reference Compliance */}
+                  <ReferenceCompliancePanel report={refReport} />
                 </>
               )}
 
