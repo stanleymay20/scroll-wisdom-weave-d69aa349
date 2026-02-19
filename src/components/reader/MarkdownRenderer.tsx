@@ -1,6 +1,8 @@
 import { useMemo, useEffect, useRef } from "react";
 import hljs from 'highlight.js/lib/core';
 import { StructuredCodeBlock, extractAllStructuredCodeBlocks, StructuredCodeBlockData } from "./StructuredCodeBlock";
+import { ComputationalEvidencePanel } from "./ComputationalEvidencePanel";
+import { parseEvidenceBlocks, type ParsedEvidenceBlock } from "@/lib/computationalEvidence";
 
 // Import common languages for syntax highlighting
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -175,11 +177,17 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     return { processedContent: processed, extractedImages: images };
   }, [content]);
   
-  // Extract structured code blocks first
-  const { blocks: structuredBlocks, cleanedText } = useMemo(() => {
-    if (!processedContent) return { blocks: [], cleanedText: "" };
-    return extractAllStructuredCodeBlocks(processedContent);
+  // Extract evidence blocks first, then structured code blocks
+  const { blocks: evidenceBlocks, cleanedAfterEvidence } = useMemo(() => {
+    if (!processedContent) return { blocks: [] as ParsedEvidenceBlock[], cleanedAfterEvidence: "" };
+    const result = parseEvidenceBlocks(processedContent);
+    return { blocks: result.blocks, cleanedAfterEvidence: result.cleanedText };
   }, [processedContent]);
+
+  const { blocks: structuredBlocks, cleanedText } = useMemo(() => {
+    if (!cleanedAfterEvidence) return { blocks: [], cleanedText: "" };
+    return extractAllStructuredCodeBlocks(cleanedAfterEvidence);
+  }, [cleanedAfterEvidence]);
 
   const renderedContent = useMemo(() => {
     if (!cleanedText) return "";
@@ -223,8 +231,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     // Pre-process: convert bullet dots (•) to standard markdown bullets
     html = html.replace(/^[\s]*•\s+/gm, '- ');
     
-    // Protect structured code block placeholders before HTML escaping
+    // Protect structured code block and evidence block placeholders before HTML escaping
     html = html.replace(/<!--STRUCTURED_CODE_BLOCK_(\d+)-->/g, '___STRUCTURED_CODE_BLOCK_$1___');
+    html = html.replace(/<!--EVIDENCE_BLOCK_(\d+)-->/g, '___EVIDENCE_BLOCK_$1___');
     
     // Escape HTML entities first
     html = html
@@ -232,8 +241,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
     
-    // Restore structured code block placeholders after escaping
+    // Restore structured code block and evidence block placeholders after escaping
     html = html.replace(/___STRUCTURED_CODE_BLOCK_(\d+)___/g, '<!--STRUCTURED_CODE_BLOCK_$1-->');
+    html = html.replace(/___EVIDENCE_BLOCK_(\d+)___/g, '<!--EVIDENCE_BLOCK_$1-->');
     
     // Code blocks (```language ... ```) - render with syntax highlighting support
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
@@ -485,13 +495,13 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
 
   // Render with structured code blocks and base64 images injected
   const renderWithStructuredBlocks = () => {
-    // Split by both structured code blocks and base64 image placeholders
-    const combinedRegex = /<!--STRUCTURED_CODE_BLOCK_(\d+)-->|<!--BASE64_IMG_(\d+)-->/;
+    // Split by structured code blocks, base64 image placeholders, and evidence blocks
+    const combinedRegex = /<!--STRUCTURED_CODE_BLOCK_(\d+)-->|<!--BASE64_IMG_(\d+)-->|<!--EVIDENCE_BLOCK_(\d+)-->/;
     const parts = renderedContent.split(combinedRegex);
     const elements: React.ReactNode[] = [];
     
     // If no placeholders at all, render directly
-    if (structuredBlocks.length === 0 && extractedImages.length === 0) {
+    if (structuredBlocks.length === 0 && extractedImages.length === 0 && evidenceBlocks.length === 0) {
       return (
         <div 
           ref={containerRef}
@@ -501,9 +511,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       );
     }
 
-    // parts array: [html, codeBlockIdx|undefined, imgIdx|undefined, html, ...]
-    // Every 3 entries: html, codeBlockIdx, imgIdx
-    for (let i = 0; i < parts.length; i += 3) {
+    // parts array: [html, codeBlockIdx|undefined, imgIdx|undefined, evidenceIdx|undefined, html, ...]
+    // Every 4 entries: html, codeBlockIdx, imgIdx, evidenceIdx
+    for (let i = 0; i < parts.length; i += 4) {
       // Regular HTML content
       const htmlPart = parts[i];
       if (htmlPart && htmlPart.trim()) {
@@ -546,6 +556,20 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
               />
               {img.caption && <figcaption className="text-sm text-muted-foreground text-center mt-2">{img.caption}</figcaption>}
             </figure>
+          );
+        }
+      }
+
+      // Evidence block placeholder
+      if (i + 3 < parts.length && parts[i + 3] !== undefined) {
+        const evidenceIndex = parseInt(parts[i + 3], 10);
+        if (evidenceBlocks[evidenceIndex]) {
+          elements.push(
+            <ComputationalEvidencePanel
+              key={`evidence-${evidenceIndex}`}
+              block={evidenceBlocks[evidenceIndex]}
+              index={evidenceIndex}
+            />
           );
         }
       }

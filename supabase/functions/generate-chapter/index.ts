@@ -3207,6 +3207,42 @@ ${ACADEMIC_CONTRACT}
 
 ${VALIDATION_CONTRACT}
 
+===========================================
+EXECUTABLE COMPUTATIONAL EVIDENCE (MANDATORY FOR QUANTITATIVE CLAIMS)
+===========================================
+
+When your chapter contains quantitative claims (regression, simulation, Monte Carlo,
+statistical tests, optimization, machine learning, forecasting), you MUST include
+[EVIDENCE_BLOCK] markers with executable Python code that demonstrates the claim.
+
+[EVIDENCE_BLOCK] FORMAT:
+[EVIDENCE_BLOCK]
+claim_id: "c1"
+language: python
+libraries: numpy, pandas, statsmodels, matplotlib
+seed: 42
+status: reproducible
+data_disclaimer: "Simulated dataset for demonstration purposes."
+
+code:
+\`\`\`python
+import numpy as np
+np.random.seed(42)
+# ... executable code
+\`\`\`
+
+output:
+Expected numeric results here
+[/EVIDENCE_BLOCK]
+
+RULES:
+- ALWAYS use Python with numpy, pandas, statsmodels, sklearn, scipy, matplotlib
+- ALWAYS set np.random.seed(42)
+- ALWAYS include plt.xlabel(), plt.ylabel(), plt.title() in visualizations
+- ALWAYS label synthetic data: "Simulated dataset for demonstration purposes."
+- If citing a real dataset, include DOI
+- Status: reproducible | demonstrative | non-executable
+
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.
 CATEGORY: ${category}
 CITATION STYLE: ${citationStyle}

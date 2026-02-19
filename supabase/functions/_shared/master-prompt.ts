@@ -2222,6 +2222,125 @@ The goal is: Founder + Private Equity + Venture Capital + Institutional Strategy
 === END WALL STREET INSTITUTIONAL CONTRACT ===
 `;
 
+// ===========================================
+// SECTION 11: EXECUTABLE COMPUTATIONAL EVIDENCE CONTRACT
+// ===========================================
+
+export const EXECUTABLE_EVIDENCE_CONTRACT = `
+=== SCROLLVERIFIED™ — EXECUTABLE COMPUTATIONAL EVIDENCE CONTRACT ===
+
+STATUS: ACTIVE for academic/technical content containing quantitative claims.
+
+===========================================
+WHEN TO GENERATE EXECUTABLE EVIDENCE
+===========================================
+
+Generate an [EVIDENCE_BLOCK] when ANY of these quantitative indicators appear:
+- regression, simulation, Monte Carlo, forecast
+- panel data, statistical, optimization
+- machine learning, neural network, model estimation
+- hypothesis test, p-value, confidence interval
+- time series, clustering, classification
+
+===========================================
+[EVIDENCE_BLOCK] FORMAT (MANDATORY)
+===========================================
+
+[EVIDENCE_BLOCK]
+claim_id: "c12"
+language: python
+libraries: numpy, pandas, statsmodels, matplotlib
+seed: 42
+status: reproducible
+data_disclaimer: "Simulated dataset for demonstration purposes."
+
+code:
+\`\`\`python
+import numpy as np
+import pandas as pd
+import statsmodels.api as sm
+import matplotlib.pyplot as plt
+
+np.random.seed(42)
+
+# Synthetic dataset (for demonstration)
+n = 200
+X = np.random.normal(0, 1, n)
+Y = 2.5 * X + np.random.normal(0, 0.8, n)
+
+df = pd.DataFrame({'X': X, 'Y': Y})
+X_const = sm.add_constant(df['X'])
+model = sm.OLS(df['Y'], X_const).fit()
+
+print(model.summary())
+
+plt.figure(figsize=(8, 5))
+plt.scatter(X, Y, alpha=0.5, label='Observations (n=200)')
+plt.plot(np.sort(X), model.predict(sm.add_constant(np.sort(X))), color='red', label='OLS Fit')
+plt.xlabel('Independent Variable (X)')
+plt.ylabel('Dependent Variable (Y)')
+plt.title('Linear Regression — OLS Estimation')
+plt.legend()
+plt.tight_layout()
+plt.show()
+\`\`\`
+
+output:
+R² = 0.907, F-statistic = 1927, p < 0.001
+Coefficient: 2.50 (std err: 0.057)
+[/EVIDENCE_BLOCK]
+
+===========================================
+MANDATORY RULES
+===========================================
+
+1. Language: ALWAYS Python
+2. Libraries: ONLY numpy, pandas, matplotlib, statsmodels, sklearn, scipy
+3. Seed: ALWAYS set np.random.seed(42) FIRST
+4. Comments: Every major step MUST be commented
+5. Output: Show numeric results (R², p-values, coefficients)
+6. Visualization (if applicable):
+   - MUST include plt.xlabel() and plt.ylabel()
+   - MUST include plt.title()
+   - MUST include sample size in label or caption
+   - NO exaggerated scaling
+   - NO stylistic manipulation
+7. Data source:
+   - If real empirical dataset: MUST cite DOI
+   - If synthetic: label clearly as "Simulated dataset for demonstration purposes."
+   - NEVER present synthetic data as real empirical data
+
+===========================================
+STATUS CLASSIFICATION
+===========================================
+
+- reproducible: Seed fixed, all libraries specified, code is copy-paste runnable
+- demonstrative: Illustrative code that shows the concept but is not a full analysis
+- non-executable: Pseudocode or conceptual explanation only
+
+===========================================
+AUDIT TRACEABILITY
+===========================================
+
+Each [EVIDENCE_BLOCK] MUST include:
+- claim_id: Unique identifier linking to the quantitative claim
+- seed: Random seed value
+- status: reproducible | demonstrative | non-executable
+- data_disclaimer: Source attribution or synthetic notice
+
+===========================================
+VALIDATION (HARD FAILURE)
+===========================================
+
+If code block contains quantitative claims without evidence:
+- [ ] Visualization missing axis labels → REJECT
+- [ ] No random seed → REJECT
+- [ ] Synthetic data presented as empirical → REJECT
+- [ ] No data source disclaimer → REJECT
+
+=== END EXECUTABLE EVIDENCE CONTRACT ===
+`;
+
 export const BILLIONAIRE_ROADMAP_CONTRACT = `
 === 12-MONTH BILLIONAIRE POSITIONING ROADMAP ===
 
