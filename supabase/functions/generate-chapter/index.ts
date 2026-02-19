@@ -4020,11 +4020,13 @@ ${researchResult.references.map((ref, idx) => {
           const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
           const storageClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-          for (let i = 0; i < Math.min(figures.length, 5); i++) {
-            const fig = figures[i];
-            try {
+          // Cap at 2 figures to stay within edge function timeout (150s)
+          const figuresToGenerate = figures.slice(0, 2);
+          
+          // Generate ALL images in parallel to save time
+          const imageResults = await Promise.allSettled(
+            figuresToGenerate.map(async (fig) => {
               const imagePrompt = `${fig.description}. ${styleHint} Category: ${category}. No text or words in the image.`;
-              
               console.log(`[GENERATE-CHAPTER] Generating Figure ${fig.num}: ${fig.description.slice(0, 80)}...`);
               
               const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -4040,71 +4042,71 @@ ${researchResult.references.map((ref, idx) => {
                 }),
               });
 
-              if (imageResponse.ok) {
-                const imageData = await imageResponse.json();
-                const base64Url = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
-                
-                if (base64Url && base64Url.startsWith('data:image/')) {
-                  // Upload to storage instead of embedding base64
-                  try {
-                    const base64Data = base64Url.split(',')[1];
-                    const mimeMatch = base64Url.match(/data:(image\/\w+);/);
-                    const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
-                    const ext = mimeType.split('/')[1] || 'png';
-                    
-                    // Convert base64 to Uint8Array
-                    const binaryStr = atob(base64Data);
-                    const bytes = new Uint8Array(binaryStr.length);
-                    for (let b = 0; b < binaryStr.length; b++) {
-                      bytes[b] = binaryStr.charCodeAt(b);
-                    }
-                    
-                    const storagePath = `${user.id}/${chapter?.book_id || "unknown"}/ch${chapterNumber}-fig${fig.num}.${ext}`;
-                    
-                    const { error: uploadError } = await storageClient.storage
+              if (!imageResponse.ok) {
+                const errStatus = imageResponse.status;
+                await imageResponse.text();
+                throw new Error(`Image generation failed: status ${errStatus}`);
+              }
+
+              const imageData = await imageResponse.json();
+              const base64Url = imageData.choices?.[0]?.message?.images?.[0]?.image_url?.url;
+              return { fig, base64Url };
+            })
+          );
+
+          // Process results and upload to storage
+          for (const result of imageResults) {
+            if (result.status === 'fulfilled') {
+              const { fig, base64Url } = result.value;
+              if (base64Url && base64Url.startsWith('data:image/')) {
+                try {
+                  const base64Data = base64Url.split(',')[1];
+                  const mimeMatch = base64Url.match(/data:(image\/\w+);/);
+                  const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+                  const ext = mimeType.split('/')[1] || 'png';
+                  
+                  const binaryStr = atob(base64Data);
+                  const bytes = new Uint8Array(binaryStr.length);
+                  for (let b = 0; b < binaryStr.length; b++) {
+                    bytes[b] = binaryStr.charCodeAt(b);
+                  }
+                  
+                  const storagePath = `${user.id}/${chapter?.book_id || "unknown"}/ch${chapterNumber}-fig${fig.num}.${ext}`;
+                  
+                  const { error: uploadError } = await storageClient.storage
+                    .from('book-images')
+                    .upload(storagePath, bytes, { contentType: mimeType, upsert: true });
+                  
+                  if (!uploadError) {
+                    const { data: publicUrl } = storageClient.storage
                       .from('book-images')
-                      .upload(storagePath, bytes, {
-                        contentType: mimeType,
-                        upsert: true,
-                      });
+                      .getPublicUrl(storagePath);
                     
-                    if (!uploadError) {
-                      const { data: publicUrl } = storageClient.storage
-                        .from('book-images')
-                        .getPublicUrl(storagePath);
-                      
-                      const captionText = fig.description.split('.')[0] || `Figure ${fig.num}`;
-                      const imageMarkdown = `\n\n![${captionText}](${publicUrl.publicUrl})\n*Figure ${fig.num}: ${captionText}*\n\n`;
-                      finalContent = finalContent.replace(fig.fullMatch, imageMarkdown);
-                      console.log(`[GENERATE-CHAPTER] Figure ${fig.num} uploaded to storage and inserted inline`);
-                    } else {
-                      console.error(`[GENERATE-CHAPTER] Storage upload failed for Figure ${fig.num}:`, uploadError);
-                      finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
-                    }
-                  } catch (uploadErr) {
-                    console.error(`[GENERATE-CHAPTER] Upload error for Figure ${fig.num}:`, uploadErr);
+                    const captionText = fig.description.split('.')[0] || `Figure ${fig.num}`;
+                    const imageMarkdown = `\n\n![${captionText}](${publicUrl.publicUrl})\n*Figure ${fig.num}: ${captionText}*\n\n`;
+                    finalContent = finalContent.replace(fig.fullMatch, imageMarkdown);
+                    console.log(`[GENERATE-CHAPTER] Figure ${fig.num} uploaded to storage and inserted inline`);
+                  } else {
+                    console.error(`[GENERATE-CHAPTER] Storage upload failed for Figure ${fig.num}:`, uploadError);
                     finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
                   }
-                } else {
-                  // No base64 image returned — use placeholder
+                } catch (uploadErr) {
+                  console.error(`[GENERATE-CHAPTER] Upload error for Figure ${fig.num}:`, uploadErr);
                   finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
-                  console.log(`[GENERATE-CHAPTER] Figure ${fig.num}: No image returned, using placeholder`);
                 }
               } else {
-                const errStatus = imageResponse.status;
-                await imageResponse.text(); // consume body
-                console.error(`[GENERATE-CHAPTER] Figure ${fig.num} generation failed: status ${errStatus}`);
+                console.log(`[GENERATE-CHAPTER] Figure ${fig.num}: No image returned, using placeholder`);
                 finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
               }
-              
-              // Delay between image generations to avoid rate limiting
-              if (i < figures.length - 1) {
-                await new Promise(r => setTimeout(r, 1500));
-              }
-            } catch (imgError) {
-              console.error(`[GENERATE-CHAPTER] Figure ${fig.num} error:`, imgError);
-              finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
+            } else {
+              // Find which figure failed from the error
+              console.error(`[GENERATE-CHAPTER] Figure generation failed:`, result.reason);
             }
+          }
+
+          // Replace any remaining unfulfilled figure markers (figures 3+ that were capped)
+          for (const fig of figures.slice(2)) {
+            finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
           }
         } else {
           console.log("[GENERATE-CHAPTER] No [FIGURE] markers found in illustrated content — skipping illustration generation");
