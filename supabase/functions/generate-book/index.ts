@@ -13,8 +13,7 @@ const TIER_LIMITS = {
   prophet_tier: { booksPerDay: 100, maxChapters: 100, booksPerMonth: -1 },
 } as const;
 
-const TRIAL_END_DATE_ISO = "2026-01-20";
-const isTrialActive = () => new Date().toISOString().split("T")[0] <= TRIAL_END_DATE_ISO;
+// Trial period ended — all limits now enforced based on subscription tier
 
 // Tier-based model routing: better models for paid users, cost-efficient for free
 const getModelForPlan = (plan: string): string => {
@@ -91,19 +90,17 @@ serve(async (req) => {
       .eq("user_id", user.id).maybeSingle();
 
     const userPlan = (profile?.plan || "free") as keyof typeof TIER_LIMITS;
-    const trialActive = isTrialActive();
 
-    // Admin gets best model regardless of profile plan
-    const effectiveModelPlan = isAdmin ? "prophet_tier" : userPlan;
-    const effectivePlan: keyof typeof TIER_LIMITS = isAdmin ? "prophet_tier" : (trialActive ? "premium" : userPlan);
+    // Model routing respects subscription tier — admin bypass is for limits only
+    const effectivePlan: keyof typeof TIER_LIMITS = isAdmin ? "prophet_tier" : userPlan;
     const limits = TIER_LIMITS[effectivePlan] || TIER_LIMITS.free;
 
     const today = new Date().toISOString().split("T")[0];
     const currentCount = profile?.last_book_date === today ? (profile?.daily_book_count || 0) : 0;
 
-    if (!isAdmin && !trialActive && currentCount >= limits.booksPerDay) {
+    if (!isAdmin && currentCount >= limits.booksPerDay) {
       return new Response(JSON.stringify({
-        error: `Daily book limit reached (${limits.booksPerDay}/day for ${effectivePlan}). Upgrade for more.`,
+        error: `Daily book limit reached (${limits.booksPerDay}/day for ${userPlan}). Upgrade for more.`,
       }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
     }
 
@@ -126,8 +123,8 @@ serve(async (req) => {
       : authorMode === "pen_name" ? (penName || "Anonymous")
       : authorMode === "hidden" ? "Anonymous" : "ScrollAuthorGPT";
 
-    const generationModel = getModelForPlan(effectiveModelPlan);
-    console.log(`[GENERATE-BOOK] "${title}" | ${effectiveChapters}ch | ${languageName} | ${effectiveBookType} | model: ${generationModel}`);
+    const generationModel = getModelForPlan(userPlan);
+    console.log(`[GENERATE-BOOK] "${title}" | ${effectiveChapters}ch | ${languageName} | ${effectiveBookType} | model: ${generationModel} | plan: ${userPlan}`);
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
