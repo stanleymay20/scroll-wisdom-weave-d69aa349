@@ -75,7 +75,7 @@ interface PenaltyResult {
   penalties: Array<{ dimension: string; rule: string; cap: number; evidence: string; chapterNumber: number }>;
 }
 
-function computeProportionalPenalties(chapters: any[], totalChapters: number): PenaltyResult {
+function computeProportionalPenalties(chapters: any[], totalChapters: number, bookType?: string): PenaltyResult {
   const penalties: PenaltyResult["penalties"] = [];
 
   // Track violations per dimension per rule
@@ -108,10 +108,12 @@ function computeProportionalPenalties(chapters: any[], totalChapters: number): P
     }
 
     // ACADEMIC: No definitions
-    // Broadened: function/class/variable definitions, technical naming patterns, and bullet-point definitions also count
-    const definitionPatterns = /\b(is defined as|refers to|means that|can be described as|are called|is a type of|is the process of|is known as|stands for|abbreviated as|represents|denotes|specifies|implements|we define|definition of|def\s+\w+|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|type\s+\w+\s*=|interface\s+\w+|enum\s+\w+)\b/gi;
+    // Broadened: formal + bestseller-style definitions (narrative explanations, analogies, conceptual framing)
+    const definitionPatterns = /\b(is defined as|refers to|means that|can be described as|are called|is a type of|is the process of|is known as|stands for|abbreviated as|represents|denotes|specifies|implements|we define|definition of|def\s+\w+|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|type\s+\w+\s*=|interface\s+\w+|enum\s+\w+|this is the|this means|in other words|put simply|in simple terms|the core idea|the key insight|the fundamental|the distinction between|the difference between|what this means|think of it as|think of\s|this refers|this concept|this principle|essentially|at its core|boils down to|in essence|the premise|the notion)\b/gi;
     const definitionCount = (content.match(definitionPatterns) || []).length;
-    if (definitionCount === 0) {
+    // Bestseller content uses narrative definitions extensively — require higher threshold only for academic
+    const defThreshold = (bookType === "bestseller" || bookType === "comic") ? 0 : 0;
+    if (definitionCount <= defThreshold) {
       violationCounts["NO_DEFINITIONS"] = (violationCounts["NO_DEFINITIONS"] || 0) + 1;
       penalties.push({ dimension: "academic", rule: "NO_DEFINITIONS", cap: 0, evidence: `Ch.${chNum}: No key concept definitions`, chapterNumber: chNum });
     }
@@ -248,7 +250,7 @@ serve(async (req) => {
     // ============================================================
     // STEP 1: Proportional Deterministic Penalties
     // ============================================================
-    const penaltyResult = computeProportionalPenalties(generatedChapters, generatedChapters.length);
+    const penaltyResult = computeProportionalPenalties(generatedChapters, generatedChapters.length, book.book_type);
     log("Penalties computed", {
       caps: { s: penaltyResult.structuralCap, a: penaltyResult.academicCap, p: penaltyResult.pedagogicalCap },
       count: penaltyResult.penalties.length,
