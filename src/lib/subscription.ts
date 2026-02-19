@@ -61,8 +61,8 @@ export const SUBSCRIPTION_TIERS = {
   },
   prophet_tier: {
     name: 'Institutional',
-    price_id: 'price_1SdFezJYFIBeCvefURsOgX3t',
-    product_id: 'prod_TaQWA7MSUntiMy',
+    price_id: 'price_1T2eR8JYFIBeCvefx02IXTz6',
+    product_id: 'prod_U0fmlf14TPlMKj',
     monthlyPrice: 79,
     features: {
       canGenerateBooks: true,
