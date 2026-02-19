@@ -44,3 +44,6 @@ export type {
   ChartExplainerProps,
   IllustratedContentProps 
 } from './illustrated';
+
+// Contract 11 - Computational Evidence (ScrollVerified™)
+export { ComputationalEvidencePanel } from './ComputationalEvidencePanel';
