@@ -193,6 +193,11 @@ Return ONLY valid JSON:
     }
 
     // Build chapter inserts using detected boundaries + AI metadata
+    // PDF uploads: preserve original content untouched, store AI metadata separately
+    // Text/URL uploads: enrich content with learning scaffolding
+    const isPdfUpload = sourceType === 'uploaded' && documentName?.toLowerCase().endsWith('.pdf');
+    console.log(`[process-document] Source type: ${sourceType}, isPdfUpload: ${isPdfUpload}`);
+
     const chapterInserts = [];
     for (let i = 0; i < detectedChapters.length; i++) {
       const detected = detectedChapters[i];
@@ -200,8 +205,6 @@ Return ONLY valid JSON:
         key_concepts: [], learning_objectives: [], terminology: [], summary: '' 
       };
 
-      // Preserve original content untouched — store AI metadata separately
-      const originalContent = detected.content;
       const chapterMetadata = {
         learning_objectives: aiMeta.learning_objectives || [],
         key_concepts: aiMeta.key_concepts || [],
@@ -209,13 +212,18 @@ Return ONLY valid JSON:
         summary: aiMeta.summary || '',
       };
 
+      // PDF: keep original content as-is; Text/URL: enrich with pedagogical structure
+      const chapterContent = isPdfUpload 
+        ? detected.content 
+        : buildEnrichedChapter(detected.title, aiMeta, detected.content);
+
       chapterInserts.push({
         book_id: book.id,
         chapter_number: i + 1,
         title: detected.title,
-        content: originalContent,
-        is_generated: false,
-        word_count: originalContent.split(/\s+/).length,
+        content: chapterContent,
+        is_generated: !isPdfUpload,
+        word_count: chapterContent.split(/\s+/).length,
         academic_mode: true,
         research_metadata: chapterMetadata,
       });
