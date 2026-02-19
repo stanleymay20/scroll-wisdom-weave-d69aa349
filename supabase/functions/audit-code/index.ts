@@ -75,7 +75,27 @@ function extractCodeBlocks(content: string): { code: string; language: string; i
   }
   const structuredRegex = /\[CODE_BLOCK\]([\s\S]*?)\[\/CODE_BLOCK\]/g;
   while ((match = structuredRegex.exec(content)) !== null) {
-    blocks.push({ code: match[1].trim(), language: 'structured', index: idx++ });
+    const blockContent = match[1].trim();
+    // Extract only the actual code from structured blocks, ignoring metadata fields
+    const codeMatch = blockContent.match(/code:\s*\n```\w*\n([\s\S]*?)```/);
+    if (codeMatch) {
+      // Structured format with code field - extract just the code
+      const langMatch = blockContent.match(/^language:\s*["']?(\w+)["']?\s*$/mi);
+      blocks.push({ code: codeMatch[1].trim(), language: langMatch?.[1] || 'python', index: idx++ });
+    } else {
+      // Check if it has structured fields but code without fences
+      const hasFields = /^(?:language|title|purpose|code):\s/mi.test(blockContent);
+      if (hasFields) {
+        const inlineCodeMatch = blockContent.match(/code:\s*\n([\s\S]*?)(?=^(?:output|explanation|common_mistake):|$)/mi);
+        const langMatch = blockContent.match(/^language:\s*["']?(\w+)["']?\s*$/mi);
+        if (inlineCodeMatch) {
+          blocks.push({ code: inlineCodeMatch[1].trim(), language: langMatch?.[1] || 'python', index: idx++ });
+        }
+      } else {
+        // Raw code block without metadata
+        blocks.push({ code: blockContent, language: 'python', index: idx++ });
+      }
+    }
   }
   return blocks;
 }
