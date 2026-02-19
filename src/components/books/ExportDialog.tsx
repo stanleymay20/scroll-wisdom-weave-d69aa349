@@ -189,8 +189,8 @@ export function ExportDialog({
       <DialogContent className="sm:max-w-md gap-5">
         <DialogHeader>
           <DialogTitle className="text-lg">{t('export.title')}</DialogTitle>
-          <DialogDescription className="text-sm">
-            Download "{title}" as a file
+          <DialogDescription className="text-sm truncate">
+            Download "{title}"
           </DialogDescription>
         </DialogHeader>
 
