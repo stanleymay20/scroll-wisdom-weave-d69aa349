@@ -327,22 +327,18 @@ export function ExportDialog({
             placeholder={t('export.isbnPlaceholder')}
             className="bg-background font-mono"
           />
-          <p className="text-xs text-muted-foreground">
-            {t('export.isbnNote')}
-          </p>
         </div>
-
 
         {/* Academic Mode Notice */}
         {isAcademicMode && (
           <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/30">
             <div className="flex items-center gap-2 mb-2">
               <GraduationCap className="h-4 w-4 text-green-500" />
-              <span className="text-sm font-medium text-green-400">Academic Export</span>
+              <span className="text-sm font-medium text-green-400">{t('export.academicExport') || 'Academic Export'}</span>
               <span className="text-xs text-muted-foreground">({citationStyle})</span>
             </div>
             <p className="text-xs text-muted-foreground">
-              This export includes a full bibliography with DOI links. All references are from verified academic databases.
+              {t('export.academicExportDesc') || 'This export includes a bibliography section with references used during generation.'}
             </p>
           </div>
         )}
@@ -466,21 +462,13 @@ export function ExportDialog({
           </p>
         )}
 
-        {/* Ownership Statement */}
-        <div className="p-4 rounded-xl bg-gradient-to-br from-scroll-gold/5 to-scroll-gold/10 border border-scroll-gold/20">
+        {/* Content Disclaimer */}
+        <div className="p-3 rounded-xl bg-muted/30 border border-border/50">
           <div className="flex items-start gap-3">
-            <Shield className="h-5 w-5 text-scroll-gold flex-shrink-0 mt-0.5" />
-            <div className="space-y-1">
-              <p className="text-sm font-medium text-foreground">{t('export.ownership')}</p>
-              <p className="text-xs text-muted-foreground">
-                {t('export.ownershipDesc')}
-              </p>
-              {isAcademicMode && (
-                <p className="text-xs text-green-400 mt-2">
-                  All references in this document are retrieved from verifiable academic databases.
-                </p>
-              )}
-            </div>
+            <Shield className="h-4 w-4 text-muted-foreground flex-shrink-0 mt-0.5" />
+            <p className="text-xs text-muted-foreground">
+              Exported content is AI-generated. You are responsible for reviewing accuracy before publishing or distributing.
+            </p>
           </div>
         </div>
 
