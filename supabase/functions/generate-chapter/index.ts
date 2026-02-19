@@ -2193,12 +2193,10 @@ serve(async (req) => {
       .single();
 
     const userPlan = profile?.plan || "free";
-    // Admin gets best model regardless of profile plan
-    // Chief Editor rewrites use the user's own tier model (no forced upgrade)
+    // Model routing respects subscription tier — admin bypass is for limits only, not model upgrade
     const editIntent_raw = (requestBody?.editIntent as string | null) || null;
     const isChiefEditorRewrite = editIntent_raw?.startsWith('[CHIEF_EDITOR_REWRITE]') || false;
-    const effectiveModelPlan = isAdmin ? "prophet_tier" : userPlan;
-    const generationModel = getModelForPlan(effectiveModelPlan);
+    const generationModel = getModelForPlan(userPlan);
     const maxWordCount = TIER_WORD_LIMITS[userPlan as keyof typeof TIER_WORD_LIMITS] || TIER_WORD_LIMITS.free;
     console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel} | Admin: ${isAdmin}`);
 
