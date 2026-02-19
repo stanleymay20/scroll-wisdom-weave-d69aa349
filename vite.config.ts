@@ -263,6 +263,8 @@ export default defineConfig(({ mode }) => ({
           /^\/rest\//,
           /^\/auth\//,
           /^\/storage\//,
+          // OAuth redirect must always hit the network
+          /^\/~oauth/,
         ],
       },
       devOptions: {
