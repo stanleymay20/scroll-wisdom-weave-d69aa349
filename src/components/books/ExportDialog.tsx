@@ -114,7 +114,7 @@ export function ExportDialog({
   }, [bookType, chapterContents]);
 
   const isComicBlocked = bookType === 'comic' && comicValidation && !comicValidation.canExport;
-  const hasExportErrors = !contentValidation.canProceed;
+  const hasAnyExportErrors = !contentValidation.canProceed;
 
   useEffect(() => {
     if (defaultAuthorName) {
@@ -255,7 +255,7 @@ export function ExportDialog({
   ];
 
   const hasCover = !!coverImageUrl;
-  const canProceed = hasGeneratedChapters && hasCover && !isComicBlocked && isAuthenticated && !hasExportErrors;
+  const canProceed = hasGeneratedChapters && hasCover && !isComicBlocked && isAuthenticated;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -352,20 +352,30 @@ export function ExportDialog({
           <Label>{t('export.format')}</Label>
           <div className="grid gap-2">
             {formats.map(({ format, label, icon: Icon, description }) => {
-              const hasFormatErrors = format === selectedFormat ? hasExportErrors : false;
+              // Validate each format independently
+              const formatValidation = chapters.length > 0 
+                ? validateContentForExport(chapters, bookType, format)
+                : { valid: true, issues: [], canProceed: true };
+              const formatHasErrors = !formatValidation.canProceed;
               
               return (
                 <Button
                   key={format}
                   variant="outline"
-                  className={`w-full justify-start h-auto py-3 px-4 hover:border-scroll-gold/50 ${hasFormatErrors ? 'opacity-50' : ''}`}
+                  className={`w-full justify-start h-auto py-3 px-4 hover:border-scroll-gold/50 ${formatHasErrors ? 'opacity-50' : ''}`}
                   onClick={() => {
                     setSelectedFormat(format);
-                    if (!hasFormatErrors) {
+                    if (!formatHasErrors) {
                       handleExport(format);
+                    } else {
+                      toast({
+                        title: "Export Blocked",
+                        description: `Fix ${formatValidation.issues.filter(i => i.level === 'error').length} error(s) before exporting as ${format.toUpperCase()}.`,
+                        variant: "destructive",
+                      });
                     }
                   }}
-                  disabled={isExporting !== null || !canProceed || !canExport || !authorName.trim() || hasFormatErrors}
+                  disabled={isExporting !== null || !canProceed || !canExport || !authorName.trim()}
                 >
                   {isExporting === format ? (
                     <Loader2 className="h-5 w-5 mr-3 animate-spin" />
@@ -376,6 +386,9 @@ export function ExportDialog({
                     <div className="font-medium">{label}</div>
                     <div className="text-xs text-muted-foreground">{description}</div>
                   </div>
+                  {formatHasErrors && (
+                    <XCircle className="h-4 w-4 text-destructive ml-2" />
+                  )}
                 </Button>
               );
             })}
@@ -471,13 +484,15 @@ export function ExportDialog({
           </div>
         </div>
 
-        {/* Publishing Ready Badge */}
-        <div className="flex items-center justify-center gap-2 py-2">
-          <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30">
-            <CheckCircle2 className="h-4 w-4 text-green-500" />
-            <span className="text-sm font-medium text-green-600 dark:text-green-400">{t('export.publishingReady')}</span>
+        {/* Publishing Ready Badge - only show when actually ready */}
+        {canProceed && canExport && authorName.trim() && (
+          <div className="flex items-center justify-center gap-2 py-2">
+            <div className="flex items-center gap-2 px-4 py-2 rounded-full bg-green-500/10 border border-green-500/30">
+              <CheckCircle2 className="h-4 w-4 text-green-500" />
+              <span className="text-sm font-medium text-green-600 dark:text-green-400">{t('export.publishingReady')}</span>
+            </div>
           </div>
-        </div>
+        )}
       </DialogContent>
     </Dialog>
   );
