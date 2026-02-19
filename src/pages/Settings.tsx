@@ -187,56 +187,52 @@ export default function Settings() {
 
   // Settings content - shared between mobile and desktop
   const SettingsContent = (
-    <div className={isMobile ? "px-4 py-4 pb-24" : ""}>
+    <div className={isMobile ? "px-4 py-4 pb-28" : ""}>
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}
       >
         <div className="mb-6">
-          <h1 className={`font-display font-bold text-gradient-gold mb-2 ${isMobile ? 'text-2xl' : 'text-3xl'}`}>
+          <h1 className={`font-display font-bold text-foreground mb-1 ${isMobile ? 'text-xl' : 'text-3xl'}`}>
             {t('settings.title')}
           </h1>
           <p className="text-muted-foreground text-sm">{t('settings.subtitle')}</p>
         </div>
 
         <Tabs defaultValue="system" className="space-y-4">
-          <TabsList className={cn("bg-muted/50 h-auto gap-1 p-1 w-full justify-start", isMobile ? "flex overflow-x-auto flex-nowrap scrollbar-none" : "flex-wrap")}>
-            <TabsTrigger value="system" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
-              <Palette className="h-4 w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">{t('settings.system')}</span>
-              <span className="sm:hidden">Theme</span>
-            </TabsTrigger>
-            <TabsTrigger value="notifications" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
-              <Bell className="h-4 w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">{t('settings.notifications')}</span>
-              <span className="sm:hidden">Alerts</span>
-            </TabsTrigger>
-            <TabsTrigger value="ai" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
-              <Brain className="h-4 w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">{t('settings.ai')}</span>
-              <span className="sm:hidden">AI</span>
-            </TabsTrigger>
-            <TabsTrigger value="billing" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
-              <CreditCard className="h-4 w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">{t('settings.billing')}</span>
-              <span className="sm:hidden">Plan</span>
-            </TabsTrigger>
-            <TabsTrigger value="storage" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
-              <HardDrive className="h-4 w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">Storage</span>
-              <span className="sm:hidden">Data</span>
-            </TabsTrigger>
-            <TabsTrigger value="about" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
-              <Info className="h-4 w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">About & Trust</span>
-              <span className="sm:hidden">About</span>
-            </TabsTrigger>
-            <TabsTrigger value="privacy" className="data-[state=active]:bg-primary data-[state=active]:text-primary-foreground text-xs sm:text-sm">
-              <Shield className="h-4 w-4 mr-1 sm:mr-2" />
-              <span className="hidden sm:inline">{t('settings.privacy')}</span>
-              <span className="sm:hidden">Privacy</span>
-            </TabsTrigger>
-          </TabsList>
+          <div className={cn(isMobile && "-mx-4 px-4")}>
+            <TabsList className={cn(
+              "bg-muted/50 h-auto gap-1 p-1 w-full justify-start",
+              isMobile 
+                ? "flex overflow-x-auto flex-nowrap scrollbar-none snap-x snap-mandatory" 
+                : "flex-wrap"
+            )}>
+              {[
+                { value: "system", icon: Palette, label: t('settings.system'), shortLabel: "Theme" },
+                { value: "notifications", icon: Bell, label: t('settings.notifications'), shortLabel: "Alerts" },
+                { value: "ai", icon: Brain, label: t('settings.ai'), shortLabel: "AI" },
+                { value: "billing", icon: CreditCard, label: t('settings.billing'), shortLabel: "Plan" },
+                { value: "storage", icon: HardDrive, label: "Storage", shortLabel: "Data" },
+                { value: "about", icon: Info, label: "About & Trust", shortLabel: "About" },
+                { value: "privacy", icon: Shield, label: t('settings.privacy'), shortLabel: "Privacy" },
+              ].map((tab) => {
+                const Icon = tab.icon;
+                return (
+                  <TabsTrigger 
+                    key={tab.value} 
+                    value={tab.value} 
+                    className={cn(
+                      "data-[state=active]:bg-primary data-[state=active]:text-primary-foreground snap-start shrink-0",
+                      isMobile ? "text-xs px-3 py-2" : "text-sm"
+                    )}
+                  >
+                    <Icon className="h-4 w-4 mr-1.5" />
+                    {isMobile ? tab.shortLabel : tab.label}
+                  </TabsTrigger>
+                );
+              })}
+            </TabsList>
+          </div>
 
               {/* Billing Tab */}
               <TabsContent value="billing" className="space-y-6">
@@ -469,7 +465,7 @@ export default function Settings() {
                   </CardHeader>
                   <CardContent className="space-y-6">
                     {/* Light/Dark Mode */}
-                    <div className="flex items-center justify-between">
+                    <div className={cn("gap-3", isMobile ? "flex flex-col" : "flex items-center justify-between")}>
                       <div className="space-y-0.5">
                         <Label>{t('settings.mode')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.modeDesc')}</p>
@@ -478,7 +474,7 @@ export default function Settings() {
                         value={settings.theme_preference}
                         onValueChange={(value) => handleSettingChange('theme_preference', value)}
                       >
-                        <SelectTrigger className="w-32">
+                        <SelectTrigger className={isMobile ? "w-full" : "w-32"}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -554,7 +550,7 @@ export default function Settings() {
 
                     <Separator className="bg-border/50" />
 
-                    <div className="flex items-center justify-between">
+                    <div className={cn("gap-3", isMobile ? "flex flex-col" : "flex items-center justify-between")}>
                       <div className="space-y-0.5">
                         <Label>{t('settings.fontSize')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.fontSizeDesc')}</p>
@@ -563,7 +559,7 @@ export default function Settings() {
                         value={settings.font_size}
                         onValueChange={(value) => handleSettingChange('font_size', value)}
                       >
-                        <SelectTrigger className="w-32">
+                        <SelectTrigger className={isMobile ? "w-full" : "w-32"}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -577,7 +573,7 @@ export default function Settings() {
 
                     <Separator className="bg-border/50" />
 
-                    <div className="flex items-center justify-between">
+                    <div className={cn("gap-3", isMobile ? "flex flex-col" : "flex items-center justify-between")}>
                       <div className="space-y-0.5">
                         <Label>{t('settings.readerTheme')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.readerThemeDesc')}</p>
@@ -586,7 +582,7 @@ export default function Settings() {
                         value={settings.reader_theme}
                         onValueChange={(value) => handleSettingChange('reader_theme', value)}
                       >
-                        <SelectTrigger className="w-32">
+                        <SelectTrigger className={isMobile ? "w-full" : "w-32"}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -600,7 +596,7 @@ export default function Settings() {
 
                     <Separator className="bg-border/50" />
 
-                    <div className="flex items-center justify-between">
+                    <div className={cn("gap-3", isMobile ? "flex flex-col" : "flex items-center justify-between")}>
                       <div className="space-y-0.5">
                         <Label>{t('settings.ttsVoice')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.ttsVoiceDesc')}</p>
@@ -609,7 +605,7 @@ export default function Settings() {
                         value={settings.ai_voice_preference}
                         onValueChange={(value) => handleSettingChange('ai_voice_preference', value)}
                       >
-                        <SelectTrigger className="w-32">
+                        <SelectTrigger className={isMobile ? "w-full" : "w-32"}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -708,7 +704,7 @@ export default function Settings() {
                     <CardDescription>{t('settings.aiPrefsDesc')}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div className="flex items-center justify-between">
+                    <div className={cn("gap-3", isMobile ? "flex flex-col" : "flex items-center justify-between")}>
                       <div className="space-y-0.5">
                         <Label>{t('settings.writingTone')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.writingToneDesc')}</p>
@@ -717,7 +713,7 @@ export default function Settings() {
                         value={settings.writing_tone}
                         onValueChange={(value) => handleSettingChange('writing_tone', value)}
                       >
-                        <SelectTrigger className="w-40">
+                        <SelectTrigger className={isMobile ? "w-full" : "w-40"}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -731,7 +727,7 @@ export default function Settings() {
 
                     <Separator className="bg-border/50" />
 
-                    <div className="flex items-center justify-between">
+                    <div className={cn("gap-3", isMobile ? "flex flex-col" : "flex items-center justify-between")}>
                       <div className="space-y-0.5">
                         <Label>{t('settings.spiritualAlignment')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.spiritualAlignmentDesc')}</p>
@@ -740,7 +736,7 @@ export default function Settings() {
                         value={settings.spiritual_strictness}
                         onValueChange={(value) => handleSettingChange('spiritual_strictness', value)}
                       >
-                        <SelectTrigger className="w-40">
+                        <SelectTrigger className={isMobile ? "w-full" : "w-40"}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -754,7 +750,7 @@ export default function Settings() {
 
                     <Separator className="bg-border/50" />
 
-                    <div className="flex items-center justify-between">
+                    <div className={cn("gap-3", isMobile ? "flex flex-col" : "flex items-center justify-between")}>
                       <div className="space-y-0.5">
                         <Label>{t('settings.complexityLevel')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.complexityLevelDesc')}</p>
@@ -763,7 +759,7 @@ export default function Settings() {
                         value={settings.complexity_level}
                         onValueChange={(value) => handleSettingChange('complexity_level', value)}
                       >
-                        <SelectTrigger className="w-40">
+                        <SelectTrigger className={isMobile ? "w-full" : "w-40"}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -777,7 +773,7 @@ export default function Settings() {
 
                     <Separator className="bg-border/50" />
 
-                    <div className="flex items-center justify-between">
+                    <div className={cn("gap-3", isMobile ? "flex flex-col" : "flex items-center justify-between")}>
                       <div className="space-y-0.5">
                         <Label>{t('settings.studySpeed')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.studySpeedDesc')}</p>
@@ -786,7 +782,7 @@ export default function Settings() {
                         value={settings.study_speed}
                         onValueChange={(value) => handleSettingChange('study_speed', value)}
                       >
-                        <SelectTrigger className="w-40">
+                        <SelectTrigger className={isMobile ? "w-full" : "w-40"}>
                           <SelectValue />
                         </SelectTrigger>
                         <SelectContent>
@@ -811,12 +807,12 @@ export default function Settings() {
                     <CardDescription>{t('settings.privacyDataDesc')}</CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-6">
-                    <div className="flex items-center justify-between">
+                    <div className={cn("gap-3", isMobile ? "flex flex-col" : "flex items-center justify-between")}>
                       <div className="space-y-0.5">
                         <Label>{t('settings.exportYourData')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.exportYourDataDesc')}</p>
                       </div>
-                      <Button variant="outline" onClick={handleExportData}>
+                      <Button variant="outline" onClick={handleExportData} className={isMobile ? "w-full" : ""}>
                         <Download className="h-4 w-4 mr-2" />
                         {t('settings.export')}
                       </Button>
@@ -824,12 +820,12 @@ export default function Settings() {
 
                     <Separator className="bg-border/50" />
 
-                    <div className="flex items-center justify-between">
+                    <div className={cn("gap-3", isMobile ? "flex flex-col" : "flex items-center justify-between")}>
                       <div className="space-y-0.5">
                         <Label className="text-destructive">{t('settings.deleteAccount')}</Label>
                         <p className="text-sm text-muted-foreground">{t('settings.deleteAccountDesc')}</p>
                       </div>
-                      <Button variant="destructive" onClick={handleDeleteAccount}>
+                      <Button variant="destructive" onClick={handleDeleteAccount} className={isMobile ? "w-full" : ""}>
                         <Trash2 className="h-4 w-4 mr-2" />
                         {t('settings.delete')}
                       </Button>
