@@ -306,6 +306,13 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     // Underline (<u>text</u> - HTML tag passthrough)
     html = html.replace(/&lt;u&gt;([^<]+)&lt;\/u&gt;/g, '<u class="md-underline">$1</u>');
     
+    // Subscript (<sub>text</sub>) and Superscript (<sup>text</sup>) passthrough
+    html = html.replace(/&lt;sub&gt;([\s\S]*?)&lt;\/sub&gt;/g, '<sub>$1</sub>');
+    html = html.replace(/&lt;sup&gt;([\s\S]*?)&lt;\/sup&gt;/g, '<sup>$1</sup>');
+    
+    // Mark/highlight (<mark>text</mark>) passthrough
+    html = html.replace(/&lt;mark&gt;([\s\S]*?)&lt;\/mark&gt;/g, '<mark>$1</mark>');
+    
     // Strikethrough (~~text~~)
     html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
     
