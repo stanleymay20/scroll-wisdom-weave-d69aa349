@@ -15,7 +15,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
   User, Camera, BookOpen, Download, Award, Clock, 
-  Loader2, Save, History
+  Loader2, Save, History, Settings, LogOut, ChevronRight
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -319,6 +319,39 @@ export default function Profile() {
           </Badge>
         </div>
       </div>
+
+      {/* Mobile Quick Actions */}
+      {isMobile && (
+        <div className="mb-4 space-y-1">
+          <button
+            onClick={() => navigate("/settings")}
+            className="flex items-center justify-between w-full p-3 rounded-xl bg-card border border-border/50 active:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-primary/10 flex items-center justify-center">
+                <Settings className="h-4 w-4 text-primary" />
+              </div>
+              <span className="font-medium text-sm">Settings</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
+          <button
+            onClick={async () => {
+              await supabase.auth.signOut();
+              navigate("/auth");
+            }}
+            className="flex items-center justify-between w-full p-3 rounded-xl bg-card border border-border/50 active:bg-muted/50 transition-colors"
+          >
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-full bg-destructive/10 flex items-center justify-center">
+                <LogOut className="h-4 w-4 text-destructive" />
+              </div>
+              <span className="font-medium text-sm text-destructive">Sign Out</span>
+            </div>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </button>
+        </div>
+      )}
 
       <Tabs defaultValue="profile" className="space-y-4">
         <TabsList className={cn("bg-muted/50", isMobile && "w-full grid grid-cols-3")}>
