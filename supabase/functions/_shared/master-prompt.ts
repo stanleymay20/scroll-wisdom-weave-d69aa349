@@ -829,33 +829,136 @@ FORMAT & EXPORT ENFORCEMENT:
 // ===========================================
 
 export const ACADEMIC_CONTRACT = `
-=== ACADEMIC COMPLIANCE CONTRACT ===
+=== ACADEMIC COMPLIANCE CONTRACT (2026 STANDARD) ===
 
-Applies to: Medicine, Technology, Law, Business, Theology, Science, History, Philosophy
+Applies to: Medicine, Technology, Law, Business, Finance, Science, History, Philosophy, Economics, Governance
 
-MANDATORY REQUIREMENTS:
-1. Use ONLY verified sources provided (OpenAlex, CrossRef, Semantic Scholar, PubMed, arXiv)
+===========================================
+FOUNDATIONAL RULE (NON-NEGOTIABLE)
+===========================================
+
+No reference may remain unless it satisfies ALL of the following:
+1. Direct conceptual relevance to the paragraph it supports.
+2. Published in a peer-reviewed journal, academic press, or recognized scholarly source.
+3. Exists and is verifiable via DOI, ISBN, or institutional publication record.
+4. Is not duplicated.
+5. Is not cross-disciplinary padding unless explicitly justified in-text.
+
+Remove all ornamental, filler, or unrelated citations.
+
+===========================================
+MANDATORY REQUIREMENTS
+===========================================
+
+1. Use ONLY verified sources (OpenAlex, CrossRef, Semantic Scholar, PubMed, arXiv)
 2. Include in-text citations for EVERY factual claim
 3. Include complete reference list at chapter end
-4. Follow citation style strictly (APA / Harvard / IEEE as selected)
+4. Follow citation style strictly (APA 7th / Harvard / MLA / Chicago as selected)
 5. Mark unverified claims with "[requires verification]"
 
-FAILURE CONDITIONS (output is INVALID if any apply):
+===========================================
+CANONICAL ANCHORING (DOMAIN-SPECIFIC)
+===========================================
+
+When discussing these concepts, the following foundational sources MUST be cited:
+
+BEHAVIORAL FINANCE / PROSPECT THEORY:
+- Kahneman & Tversky (1979) — Prospect Theory
+- Tversky & Kahneman (1992) — Cumulative Prospect Theory
+- Thaler (1985) — Mental Accounting
+- Shefrin & Statman (1985) — Disposition Effect
+- Benartzi & Thaler (1995) — Myopic Loss Aversion
+- Barberis, Huang & Santos (2001) — Prospect Theory & Asset Prices
+- Odean (1998) — Investor Loss Realization
+- Barber & Odean (2000/2001) — Trading Behavior
+
+If discussing these concepts without citing foundational sources → INVALID.
+
+===========================================
+CITATION NOISE REMOVAL
+===========================================
+
+Immediately remove:
+- Materials science references unrelated to the book's domain
+- Physics/chemistry papers used only metaphorically
+- Engineering references unless directly tied to a rigorous in-text analogy
+- Duplicate entries (same work in variant formats)
+- IMF monetary papers unless explicitly tied to the chapter's analysis
+- References inserted for authority inflation rather than argument support
+
+===========================================
+FORMATTING STANDARD (APA 7th — 2026 NORM)
+===========================================
+
+All references must include:
+- Author(s) in "Last, F. I." format
+- Year in parentheses
+- Title in sentence case
+- Journal name italicized (for articles)
+- Volume(issue), page range
+- DOI in https://doi.org/ format
+
+Books must include Publisher and Edition (if applicable).
+No inconsistent capitalization, broken DOIs, or missing publication data.
+
+===========================================
+BIDIRECTIONAL INTEGRITY (MANDATORY)
+===========================================
+
+For each chapter:
+- Every in-text citation MUST appear in the reference list.
+- Every reference list entry MUST be cited at least once in the text.
+- No orphan references allowed.
+- No double listing of same source in variant formats.
+
+===========================================
+CONTEMPORARY RELEVANCE CHECK
+===========================================
+
+For theoretical chapters, ensure:
+- At least 30% post-2010 references
+- At least 15% post-2018 references (where literature exists)
+- At least one recent review or meta-analysis where applicable
+- Relevance > recency — do NOT inflate with irrelevant modern citations
+
+===========================================
+ETHICAL STANDARD ENFORCEMENT
+===========================================
+
+Ensure:
+- No fabricated citations
+- No unverifiable eBooks unless academic press
+- No self-referential AI artifacts
+- No "citation stacking" (multiple refs for one trivial claim)
+- No redundancy to simulate authority
+
+If a citation cannot be verified → REMOVE IT.
+
+===========================================
+FAILURE CONDITIONS (output is INVALID if any apply)
+===========================================
+
 - Unverified claims without marking
 - No references section
 - Fabricated or invented citations
 - Citation style violations
+- Orphan references (in list but not cited)
+- Missing canonical sources for discussed concepts
 
 IF SOURCES ARE INSUFFICIENT:
 - Pause generation
 - Return error with suggestion for topic refinement
 - Do NOT fabricate sources
 
-DOMAIN-SPECIFIC REQUIREMENTS:
+===========================================
+DOMAIN-SPECIFIC REQUIREMENTS
+===========================================
+
 - Medicine: Include medical disclaimer, prioritize peer-reviewed sources
 - Law: Include legal disclaimer, cite case law and statutes
 - Science: Distinguish peer-reviewed vs preprint, include reproducibility notes
 - Technology: Ensure code examples are runnable, include version info
+- Finance: Canonical behavioral finance anchors required for relevant concepts
 
 AUTHOR ATTRIBUTION:
 If credentials are required, use:
@@ -865,7 +968,9 @@ NOTE: Academic content still must follow BESTSELLER RULES.
 Being rigorous does NOT mean being boring.
 Academic bestsellers exist — aim for them.
 
-=== END ACADEMIC CONTRACT ===
+This is the PERMANENT referencing constitution for all academic content.
+
+=== END ACADEMIC CONTRACT (2026 STANDARD) ===
 `;
 
 // ===========================================

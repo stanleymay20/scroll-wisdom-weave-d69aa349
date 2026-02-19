@@ -11,6 +11,56 @@ const logStep = (step: string, details?: any) => {
   console.log(`[GENERATE-REFERENCES] ${step}${detailsStr}`);
 };
 
+// 2026 Academic Reference Standard — Perplexity system prompt
+const REFERENCE_SYSTEM_PROMPT = `You are a senior academic research librarian enforcing 2026 peer-reviewed publishing standards.
+
+RULES (NON-NEGOTIABLE):
+1. Return ONLY sources that are REAL and VERIFIABLE via DOI, ISBN, or institutional record.
+2. Every source must be directly relevant to the specific paragraph/concept it supports.
+3. Prioritize peer-reviewed journals, academic press books, and recognized scholarly databases.
+4. NO ornamental, filler, or authority-inflation citations.
+5. NO cross-disciplinary padding (e.g., materials science references in a finance book).
+6. NO duplicate entries (same work in variant formats).
+
+RECENCY REQUIREMENTS:
+- At least 30% of references must be post-2010.
+- At least 15% must be post-2018.
+- Include at least one recent review or meta-analysis where applicable.
+- Relevance > recency — do not inflate with irrelevant modern citations.
+
+CANONICAL ANCHORING:
+- If the topic involves Prospect Theory, include Kahneman & Tversky (1979).
+- If the topic involves Loss Aversion, include Tversky & Kahneman (1992).
+- If the topic involves Mental Accounting, include Thaler (1985).
+- If the topic involves Disposition Effect, include Shefrin & Statman (1985).
+- If the topic involves Equity Premium, include Benartzi & Thaler (1995).
+- If the topic involves Behavioral Asset Pricing, include Barberis, Huang & Santos (2001).
+- If the topic involves Investor Behavior, include Odean (1998) and Barber & Odean (2000/2001).
+- For other domains, include foundational works appropriate to the field.
+
+FORMAT: Return as JSON array with STRICT APA 7th fields:
+[{
+  "author": "Last, First Initial.",
+  "title": "Full Title in Sentence Case",
+  "year": 2023,
+  "type": "journal|book|article|conference|preprint|thesis|report",
+  "doi": "10.xxxx/xxxx (REQUIRED if available)",
+  "url": "full URL if no DOI",
+  "journal": "Journal Name (for journal articles)",
+  "publisher": "Publisher (for books)",
+  "volume": "vol number",
+  "issue": "issue number",
+  "pages": "page range",
+  "peer_reviewed": true,
+  "requires_verification": false
+}]
+
+ETHICAL STANDARDS:
+- If you cannot verify a source exists, set "requires_verification": true.
+- NEVER fabricate citations.
+- NEVER use self-referential AI artifacts.
+- If fewer than 5 verifiable sources exist, say so honestly.`;
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -26,7 +76,7 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Authenticate user from JWT token
+    // Authenticate user
     const authHeader = req.headers.get("Authorization");
     if (!authHeader) {
       return new Response(JSON.stringify({ error: "Authentication required" }), {
@@ -48,9 +98,9 @@ serve(async (req) => {
 
     logStep("Authenticated user", { userId: user.id.slice(0, 8) + "..." });
 
-    const { topic, category, language = "English" } = await req.json();
+    const { topic, category, language = "English", chapterContent } = await req.json();
 
-    logStep("Generating references", { topic: topic.slice(0, 100), category, language });
+    logStep("Generating references", { topic: topic?.slice(0, 100), category, language });
 
     const PERPLEXITY_API_KEY = Deno.env.get("PERPLEXITY_API_KEY");
     if (!PERPLEXITY_API_KEY) {
@@ -65,9 +115,16 @@ serve(async (req) => {
       );
     }
 
-    // Use Perplexity to find real academic references
-    const searchQuery = `Academic sources and scholarly references for: ${topic} in ${category}. 
-    Find peer-reviewed articles, books, and academic papers. Return author names, publication titles, years, and DOIs when available.`;
+    // Build context-aware search query
+    const searchQuery = `Find REAL, VERIFIABLE academic references for: "${topic}" in the domain of ${category}.
+${chapterContent ? `\nChapter context (first 2000 chars):\n${chapterContent.slice(0, 2000)}` : ''}
+
+Requirements:
+- Peer-reviewed journal articles, academic books, and scholarly papers ONLY.
+- Include foundational/canonical works for the core concepts discussed.
+- Include at least 30% post-2010 and 15% post-2018 sources.
+- Return author names, full titles, years, DOIs, journal names, volumes, issues, and page ranges.
+- Language preference: ${language}.`;
 
     const response = await fetch("https://api.perplexity.ai/chat/completions", {
       method: "POST",
@@ -78,13 +135,7 @@ serve(async (req) => {
       body: JSON.stringify({
         model: "sonar",
         messages: [
-          { 
-            role: "system", 
-            content: `You are an academic research assistant. Find and return REAL, VERIFIABLE academic references.
-            Return as JSON array with format:
-            [{"author": "Last, First", "title": "Full Title", "year": 2023, "type": "journal|book|article", "doi": "optional", "url": "optional"}]
-            Only return sources that actually exist and can be verified. If uncertain, mark as "requires_verification": true.`
-          },
+          { role: "system", content: REFERENCE_SYSTEM_PROMPT },
           { role: "user", content: searchQuery }
         ],
         search_mode: "academic",
@@ -119,23 +170,54 @@ serve(async (req) => {
         type: "web",
         url,
         requires_verification: true,
+        peer_reviewed: false,
       }));
+    }
+
+    // Post-processing: enforce 2026 standards
+    // Remove duplicates by DOI or title
+    const seen = new Map();
+    const deduped = [];
+    const removed = [];
+    for (const ref of references) {
+      const key = ref.doi || `${(ref.title || '').toLowerCase().slice(0, 60)}|${ref.year}`;
+      if (seen.has(key)) {
+        removed.push({ ...ref, removal_reason: 'Duplicate entry' });
+        continue;
+      }
+      seen.set(key, true);
+      deduped.push(ref);
     }
 
     // Add citation URLs from Perplexity
     if (citations.length > 0) {
-      references = references.map((ref: any, i: number) => ({
-        ...ref,
-        sourceUrl: citations[i] || ref.url,
-      }));
+      for (let i = 0; i < deduped.length; i++) {
+        if (citations[i] && !deduped[i].url) {
+          deduped[i].sourceUrl = citations[i];
+        }
+      }
     }
+
+    // Recency stats
+    const total = deduped.length;
+    const post2010 = deduped.filter((r: any) => r.year >= 2010).length;
+    const post2018 = deduped.filter((r: any) => r.year >= 2018).length;
 
     return new Response(
       JSON.stringify({
         success: true,
-        references,
+        references: deduped,
+        removed,
         citations,
-        note: "References sourced via Perplexity AI academic search. Verify before publication.",
+        recencyStats: {
+          total,
+          post2010,
+          post2018,
+          post2010Pct: total > 0 ? Math.round((post2010 / total) * 100) : 0,
+          post2018Pct: total > 0 ? Math.round((post2018 / total) * 100) : 0,
+        },
+        note: "References sourced via Perplexity AI academic search with 2026 compliance standards. Verify DOIs before publication.",
+        standard: "2026 Academic Reference Standard — APA 7th Edition",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
