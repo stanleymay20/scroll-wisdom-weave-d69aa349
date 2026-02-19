@@ -331,6 +331,67 @@ export default function InstitutionalReadiness() {
           </Card>
         </motion.section>
 
+        {/* Integration Readiness */}
+        <motion.section
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.65 }}
+          className="mb-12"
+        >
+          <h2 className="text-2xl font-bold text-foreground mb-6 flex items-center gap-2">
+            <Lock className="h-6 w-6 text-primary" />
+            Integration & SSO Readiness
+          </h2>
+          <Card>
+            <CardContent className="p-6 space-y-4">
+              <p className="text-muted-foreground">
+                ScrollLibrary supports modern authentication standards and is designed for seamless institutional integration:
+              </p>
+              <div className="grid md:grid-cols-2 gap-4">
+                <div className="p-4 rounded-lg bg-primary/5 border border-primary/20">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge className="bg-primary/10 text-primary border-primary/20">Available</Badge>
+                    <h4 className="font-medium text-foreground">Google SSO</h4>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Students and faculty can sign in with institutional Google Workspace accounts — no separate credentials needed.
+                  </p>
+                </div>
+                <div className="p-4 rounded-lg bg-muted/30 border border-border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline">Roadmap</Badge>
+                    <h4 className="font-medium text-foreground">SAML / OIDC</h4>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Enterprise SAML and OpenID Connect for Shibboleth, Azure AD, and Okta integration — planned for institutional tier.
+                  </p>
+                </div>
+                <div className="p-4 rounded-lg bg-muted/30 border border-border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline">Roadmap</Badge>
+                    <h4 className="font-medium text-foreground">LTI 1.3 (Canvas, Blackboard, Moodle)</h4>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Deep-link ScrollLibrary content directly into LMS modules. Competency scores pass back via LTI Advantage.
+                  </p>
+                </div>
+                <div className="p-4 rounded-lg bg-muted/30 border border-border">
+                  <div className="flex items-center gap-2 mb-2">
+                    <Badge variant="outline">Roadmap</Badge>
+                    <h4 className="font-medium text-foreground">SCORM / xAPI</h4>
+                  </div>
+                  <p className="text-sm text-muted-foreground">
+                    Export learning activities as SCORM packages or stream xAPI statements to institutional learning record stores.
+                  </p>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Institutions interested in early access to SAML, LTI, or xAPI integration can <Link to="/contact" className="text-primary hover:underline">contact us</Link> for a pilot program.
+              </p>
+            </CardContent>
+          </Card>
+        </motion.section>
+
         {/* CTA */}
         <motion.section 
           initial={{ opacity: 0, y: 20 }}
