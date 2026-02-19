@@ -40,6 +40,22 @@ export interface SemanticIntegrityReport {
   ornamentalPct: number;
 }
 
+export interface ClaimIntegrityReport {
+  totalClaims: number;
+  analyzedClaims: number;
+  strong: number;
+  partial: number;
+  weak: number;
+  contradiction: number;
+  avgSupportScore: number;
+  unsupportedEmpiricalClaims: number;
+  contradictions: number;
+  strongPct: number;
+  uncitedClaimsPct: number;
+  analysisComplete: boolean;
+  verdictLabel: 'Conceptually Sound' | 'Requires Revision' | 'Academically Unsafe' | 'Analysis Incomplete';
+}
+
 export interface ReferenceTransparencyReport {
   canonicalAnchorsPresent: boolean;
   doiValidatedPct: number;
@@ -54,6 +70,7 @@ export interface ReferenceTransparencyReport {
   hardFailures: string[];
   certificationBlocked: boolean;
   semanticReport?: SemanticIntegrityReport;
+  claimReport?: ClaimIntegrityReport;
   auditModel?: string;
   promptVersion?: string;
 }
@@ -83,6 +100,19 @@ export function getTierIcon(tier: ComplianceTier): string {
 }
 
 // ===========================================
+// VERDICT HELPERS
+// ===========================================
+
+export function getVerdictColor(label: ClaimIntegrityReport['verdictLabel']): string {
+  switch (label) {
+    case 'Conceptually Sound': return 'text-green-600 dark:text-green-400 bg-green-500/10 border-green-500/30';
+    case 'Requires Revision': return 'text-amber-600 dark:text-amber-400 bg-amber-500/10 border-amber-500/30';
+    case 'Academically Unsafe': return 'text-destructive bg-destructive/10 border-destructive/30';
+    case 'Analysis Incomplete': return 'text-muted-foreground bg-muted/30 border-border/50';
+  }
+}
+
+// ===========================================
 // TRANSPARENCY REPORT MARKDOWN GENERATOR
 // ===========================================
 
@@ -92,7 +122,7 @@ export function generateTransparencyMarkdown(report: ReferenceTransparencyReport
   lines.push('');
   lines.push('---');
   lines.push('');
-  lines.push('## 📋 Reference Integrity Summary (ScrollVerified™ 2026 — Institutional Semantic Compliance)');
+  lines.push('## 📋 Reference Integrity Summary (ScrollVerified™ 2026 — Institutional Conceptual Integrity Certified)');
   lines.push('');
   lines.push(`| Metric | Status |`);
   lines.push(`|--------|--------|`);
@@ -119,6 +149,24 @@ export function generateTransparencyMarkdown(report: ReferenceTransparencyReport
     lines.push(`| Ornamental Citations | ${report.semanticReport.ornamental} (${report.semanticReport.ornamentalPct}%) |`);
     lines.push(`| Unsupported Empirical Claims | ${report.semanticReport.empiricalClaimsUnsupported} |`);
   }
+
+  if (report.claimReport) {
+    const cr = report.claimReport;
+    lines.push('');
+    lines.push('### Claim-Level Justification Analysis');
+    lines.push(`| Metric | Value |`);
+    lines.push(`|--------|-------|`);
+    lines.push(`| Total Claims Extracted | ${cr.totalClaims} |`);
+    lines.push(`| Claims Analyzed | ${cr.analyzedClaims} |`);
+    lines.push(`| Average Support Score | ${cr.avgSupportScore}/100 |`);
+    lines.push(`| Strong Verdicts | ${cr.strong} (${cr.strongPct}%) |`);
+    lines.push(`| Partial Verdicts | ${cr.partial} |`);
+    lines.push(`| Weak Verdicts | ${cr.weak} |`);
+    lines.push(`| Contradictions | ${cr.contradiction} |`);
+    lines.push(`| Unsupported Empirical | ${cr.unsupportedEmpiricalClaims} |`);
+    lines.push(`| Institutional Verdict | **${cr.verdictLabel}** |`);
+  }
+
   lines.push('');
 
   if (report.hardFailures.length > 0) {
