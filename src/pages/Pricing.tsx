@@ -6,19 +6,12 @@ import { Footer } from "@/components/layout/Footer";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Check, Sparkles, Zap, BookOpen, Download, Volume2, Shield, Loader2 } from "lucide-react";
+import { Check, Sparkles, Zap, BookOpen, Download, Volume2, Shield, Loader2, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
-import { SUBSCRIPTION_TIERS } from "@/lib/subscription";
+import { SUBSCRIPTION_TIERS, SubscriptionTier } from "@/lib/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
-
-/**
- * PMF MODE: Simplified pricing
- * Free (1 book/month) + Pro ($9/month, 10 books/month)
- */
-
-const PMF_PRICE_ID = SUBSCRIPTION_TIERS.student.price_id; // Use student tier as Pro tier
 
 interface PlanConfig {
   name: string;
@@ -28,7 +21,7 @@ interface PlanConfig {
   icon: typeof BookOpen;
   popular?: boolean;
   features: { text: string; included: boolean }[];
-  tierKey: string;
+  tierKey: SubscriptionTier;
 }
 
 const plans: PlanConfig[] = [
@@ -46,27 +39,59 @@ const plans: PlanConfig[] = [
       { text: "1 competency certificate", included: true },
       { text: "AI Q&A per chapter", included: true },
       { text: "Export (PDF/EPUB)", included: false },
-      { text: "Unlimited books", included: false },
       { text: "AI-generated covers", included: false },
     ],
   },
   {
-    name: "Pro",
-    description: "Unlimited study guides with full features",
+    name: "Student",
+    description: "For learners who need more content",
     price: `$${SUBSCRIPTION_TIERS.student.monthlyPrice}`,
     period: "/month",
     icon: Zap,
-    popular: true,
     tierKey: "student",
     features: [
       { text: "Up to 10 books per month", included: true },
       { text: "Up to 30 chapters per book", included: true },
       { text: "Full reader with text-to-speech", included: true },
-      { text: "Unlimited quizzes", included: true },
-      { text: "Unlimited certificates", included: true },
+      { text: "Unlimited quizzes & certificates", included: true },
       { text: "PDF, EPUB, DOCX exports", included: true },
       { text: "AI-generated covers", included: true },
+      { text: "30 min voice interaction", included: true },
+    ],
+  },
+  {
+    name: "Premium",
+    description: "Full power for professionals & educators",
+    price: `$${SUBSCRIPTION_TIERS.premium.monthlyPrice}`,
+    period: "/month",
+    icon: Sparkles,
+    popular: true,
+    tierKey: "premium",
+    features: [
+      { text: "Unlimited books", included: true },
+      { text: "Up to 6,000 words per chapter", included: true },
+      { text: "All export formats (PDF, EPUB, DOCX, MOBI)", included: true },
+      { text: "AI-generated covers", included: true },
+      { text: "Commercial publishing rights", included: true },
+      { text: "2 hours voice interaction", included: true },
       { text: "Priority support", included: true },
+    ],
+  },
+  {
+    name: "Institutional",
+    description: "For universities & organizations",
+    price: `$${SUBSCRIPTION_TIERS.prophet_tier.monthlyPrice}`,
+    period: "/month",
+    icon: Building2,
+    tierKey: "prophet_tier",
+    features: [
+      { text: "Everything in Premium", included: true },
+      { text: "Unlimited voice interaction", included: true },
+      { text: "ElevenLabs premium TTS", included: true },
+      { text: "Batch generation", included: true },
+      { text: "AI research assistant", included: true },
+      { text: "All export formats (incl. KPF)", included: true },
+      { text: "Dedicated support", included: true },
     ],
   },
 ];
@@ -85,11 +110,9 @@ export default function Pricing() {
     if (searchParams.get("success") === "true") {
       toast({
         title: "Subscription activated!",
-        description: "Welcome to Pro. Your features are now unlocked.",
+        description: "Welcome! Your features are now unlocked.",
       });
-      // Force refresh subscription state
       checkSubscription();
-      // Clean URL
       setSearchParams({}, { replace: true });
     } else if (searchParams.get("canceled") === "true") {
       toast({
@@ -101,7 +124,7 @@ export default function Pricing() {
     }
   }, [searchParams]);
 
-  const handleSelectPlan = async (planTierKey: string) => {
+  const handleSelectPlan = async (planTierKey: SubscriptionTier) => {
     if (!user) {
       navigate("/auth");
       return;
@@ -112,11 +135,14 @@ export default function Pricing() {
       return;
     }
 
+    const tierConfig = SUBSCRIPTION_TIERS[planTierKey];
+    if (!tierConfig.price_id) return;
+
     setCheckoutLoading(planTierKey);
 
     try {
       const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { priceId: PMF_PRICE_ID, tier: "student" },
+        body: { priceId: tierConfig.price_id, tier: planTierKey },
       });
 
       if (error) throw error;
@@ -153,12 +179,18 @@ export default function Pricing() {
     }
   };
 
+  // Determine if a plan is the user's current plan
+  const isCurrentPlan = (planTierKey: SubscriptionTier) => {
+    if (planTierKey === "free" && !isSubscribed) return true;
+    return planTierKey === tier;
+  };
+
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       
       <main className="flex-1 pt-24 pb-16">
-        <div className="container mx-auto px-4 max-w-4xl">
+        <div className="container mx-auto px-4 max-w-6xl">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -166,25 +198,24 @@ export default function Pricing() {
             {/* Header */}
             <div className="text-center mb-16">
               <h1 className="text-4xl md:text-5xl font-display font-bold text-foreground mb-4">
-                Simple Pricing
+                Plans & Pricing
               </h1>
               <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                Start free. Upgrade when you need more.
+                Start free. Scale as you grow.
               </p>
             </div>
 
             {/* Plans Grid */}
-            <div className="grid md:grid-cols-2 gap-8 max-w-3xl mx-auto mb-16">
+            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto mb-16">
               {plans.map((plan, index) => {
-                const isCurrentPlan = (plan.tierKey === "free" && !isSubscribed) || 
-                  (plan.tierKey !== "free" && isSubscribed);
+                const isCurrent = isCurrentPlan(plan.tierKey);
                 
                 return (
                   <motion.div
                     key={plan.tierKey}
                     initial={{ opacity: 0, y: 20 }}
                     animate={{ opacity: 1, y: 0 }}
-                    transition={{ delay: index * 0.1 }}
+                    transition={{ delay: index * 0.08 }}
                     className="relative"
                   >
                     {plan.popular && (
@@ -196,32 +227,32 @@ export default function Pricing() {
                     )}
                     <Card className={`h-full bg-card border ${
                       plan.popular ? "border-primary/50 shadow-lg shadow-primary/10" : "border-border"
-                    }`}>
+                    } ${isCurrent ? "ring-2 ring-primary/40" : ""}`}>
                       <CardHeader className="text-center pb-4">
                         <div className={`mx-auto p-3 rounded-xl w-fit ${
                           plan.popular ? "bg-primary/20" : "bg-muted/50"
                         }`}>
-                          <plan.icon className={`h-8 w-8 ${
+                          <plan.icon className={`h-7 w-7 ${
                             plan.popular ? "text-primary" : "text-foreground"
                           }`} />
                         </div>
-                        <CardTitle className="text-2xl font-display mt-4">
+                        <CardTitle className="text-xl font-display mt-3">
                           {plan.name}
                         </CardTitle>
-                        <CardDescription>{plan.description}</CardDescription>
-                        <div className="mt-4">
-                          <span className="text-4xl font-bold text-foreground">{plan.price}</span>
-                          <span className="text-muted-foreground">{plan.period}</span>
+                        <CardDescription className="text-sm">{plan.description}</CardDescription>
+                        <div className="mt-3">
+                          <span className="text-3xl font-bold text-foreground">{plan.price}</span>
+                          <span className="text-muted-foreground text-sm">{plan.period}</span>
                         </div>
                       </CardHeader>
                       <CardContent className="space-y-4">
-                        <ul className="space-y-3">
+                        <ul className="space-y-2.5">
                           {plan.features.map((feature, i) => (
-                            <li key={i} className="flex items-start gap-3">
-                              <Check className={`h-5 w-5 flex-shrink-0 mt-0.5 ${
+                            <li key={i} className="flex items-start gap-2.5">
+                              <Check className={`h-4 w-4 flex-shrink-0 mt-0.5 ${
                                 feature.included ? "text-primary" : "text-muted-foreground/30"
                               }`} />
-                              <span className={feature.included ? "text-foreground" : "text-muted-foreground/50 line-through"}>
+                              <span className={`text-sm ${feature.included ? "text-foreground" : "text-muted-foreground/50 line-through"}`}>
                                 {feature.text}
                               </span>
                             </li>
@@ -229,18 +260,19 @@ export default function Pricing() {
                         </ul>
                         <Button
                           variant={plan.popular ? "default" : "outline"}
-                          className="w-full mt-6"
+                          className="w-full mt-4"
+                          size="sm"
                           onClick={() => handleSelectPlan(plan.tierKey)}
-                          disabled={isCurrentPlan || !!checkoutLoading}
+                          disabled={isCurrent || !!checkoutLoading}
                         >
                           {checkoutLoading === plan.tierKey ? (
                             <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing...</>
-                          ) : isCurrentPlan ? (
+                          ) : isCurrent ? (
                             "Current Plan"
                           ) : plan.tierKey === "free" ? (
                             "Get Started Free"
                           ) : (
-                            "Upgrade to Pro"
+                            `Upgrade to ${plan.name}`
                           )}
                         </Button>
                       </CardContent>
