@@ -239,8 +239,13 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
         description: `${improved}/${audit.chapter_suggestions.length} chapters improved. Re-running audit to verify…`,
       });
 
-      // Auto re-run audit to show new scores
-      setTimeout(() => runAudit(), 1500);
+      // Wait for all chapter saves to propagate before re-auditing
+      // Each chapter takes ~2s gap + generation time; add buffer for DB consistency
+      const waitTime = Math.max(5000, improved * 2000);
+      setTimeout(() => {
+        onChaptersUpdated?.();
+        runAudit();
+      }, waitTime);
     } catch (err) {
       toast({ title: "Failed to apply improvements", description: String(err), variant: "destructive" });
     } finally {
