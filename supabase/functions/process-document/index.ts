@@ -200,16 +200,24 @@ Return ONLY valid JSON:
         key_concepts: [], learning_objectives: [], terminology: [], summary: '' 
       };
 
-      const enrichedContent = buildEnrichedChapter(detected.title, aiMeta, detected.content);
+      // Preserve original content untouched — store AI metadata separately
+      const originalContent = detected.content;
+      const chapterMetadata = {
+        learning_objectives: aiMeta.learning_objectives || [],
+        key_concepts: aiMeta.key_concepts || [],
+        terminology: aiMeta.terminology || [],
+        summary: aiMeta.summary || '',
+      };
 
       chapterInserts.push({
         book_id: book.id,
         chapter_number: i + 1,
         title: detected.title,
-        content: enrichedContent,
-        is_generated: true,
-        word_count: enrichedContent.split(/\s+/).length,
+        content: originalContent,
+        is_generated: false,
+        word_count: originalContent.split(/\s+/).length,
         academic_mode: true,
+        research_metadata: chapterMetadata,
       });
     }
 
