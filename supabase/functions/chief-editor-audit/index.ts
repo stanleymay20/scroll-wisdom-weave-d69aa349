@@ -96,15 +96,22 @@ function computeProportionalPenalties(chapters: any[], totalChapters: number): P
     }
 
     // PEDAGOGICAL: No examples
-    const examplePatterns = /\b(for example|e\.g\.|for instance|such as|consider|let's say|imagine|suppose)\b/gi;
-    if ((content.match(examplePatterns) || []).length === 0) {
+    // Broadened: code blocks, inline code, numbered lists, and comparison phrases also count as examples
+    const examplePatterns = /\b(for example|e\.g\.|for instance|such as|consider|let's say|imagine|suppose|here is|here's|the following|as shown|as illustrated|in practice|in this case|to illustrate|let us|let's look|take a look|notice how|observe that|demonstrated|walkthrough|step[\s-]by[\s-]step)\b/gi;
+    const codeBlockCount = (content.match(/```[\s\S]*?```/g) || []).length;
+    const inlineCodeCount = (content.match(/`[^`]+`/g) || []).length;
+    const examplePhraseCount = (content.match(examplePatterns) || []).length;
+    const totalExampleSignals = examplePhraseCount + codeBlockCount + Math.floor(inlineCodeCount / 3);
+    if (totalExampleSignals === 0) {
       violationCounts["NO_EXAMPLES"] = (violationCounts["NO_EXAMPLES"] || 0) + 1;
-      penalties.push({ dimension: "pedagogical", rule: "NO_EXAMPLES", cap: 0, evidence: `Ch.${chNum}: No examples or illustrative phrases`, chapterNumber: chNum });
+      penalties.push({ dimension: "pedagogical", rule: "NO_EXAMPLES", cap: 0, evidence: `Ch.${chNum}: No examples, code blocks, or illustrative phrases`, chapterNumber: chNum });
     }
 
     // ACADEMIC: No definitions
-    const definitionPatterns = /\b(is defined as|refers to|means that|can be described as|is a|are called)\b/gi;
-    if ((content.match(definitionPatterns) || []).length === 0) {
+    // Broadened: function/class/variable definitions, technical naming patterns, and bullet-point definitions also count
+    const definitionPatterns = /\b(is defined as|refers to|means that|can be described as|are called|is a type of|is the process of|is known as|stands for|abbreviated as|represents|denotes|specifies|implements|we define|definition of|def\s+\w+|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|type\s+\w+\s*=|interface\s+\w+|enum\s+\w+)\b/gi;
+    const definitionCount = (content.match(definitionPatterns) || []).length;
+    if (definitionCount === 0) {
       violationCounts["NO_DEFINITIONS"] = (violationCounts["NO_DEFINITIONS"] || 0) + 1;
       penalties.push({ dimension: "academic", rule: "NO_DEFINITIONS", cap: 0, evidence: `Ch.${chNum}: No key concept definitions`, chapterNumber: chNum });
     }
@@ -117,9 +124,11 @@ function computeProportionalPenalties(chapters: any[], totalChapters: number): P
     }
 
     // PEDAGOGICAL: No questions or exercises
+    // Broadened: code comments with TODO/NOTE, numbered steps, and reflection prompts also count
     const questionCount = (content.match(/\?/g) || []).length;
-    const exercisePatterns = /\b(exercise|try it|practice|quiz|question|task|activity|challenge)\b/gi;
-    if (questionCount === 0 && (content.match(exercisePatterns) || []).length === 0) {
+    const exercisePatterns = /\b(exercise|try it|practice|quiz|question|task|activity|challenge|try this|your turn|hands[\s-]on|experiment|implement|modify the|build a|create a|write a|extend the|homework|lab|worksheet|reflection|think about|what would happen|what if|how would you|can you)\b/gi;
+    const exerciseCount = (content.match(exercisePatterns) || []).length;
+    if (questionCount === 0 && exerciseCount === 0) {
       violationCounts["NO_ENGAGEMENT"] = (violationCounts["NO_ENGAGEMENT"] || 0) + 1;
       penalties.push({ dimension: "pedagogical", rule: "NO_ENGAGEMENT", cap: 0, evidence: `Ch.${chNum}: No questions or exercises`, chapterNumber: chNum });
     }
