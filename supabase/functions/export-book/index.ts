@@ -414,13 +414,21 @@ function drawStyledParagraph(
   maxWidth: number,
   fontSize: number,
   fonts: { regular: any; bold: any; italic: any; boldItalic: any },
-  color: any
+  color: any,
+  pdfDoc?: any,
+  pageWidth?: number,
+  pageHeight?: number,
+  margin?: number,
+  addPageNumberFn?: (page: any, num: number) => void,
+  pageNumberRef?: { current: number }
 ): number {
   const runs = parseStyledRuns(sanitizeForPDF(text));
+  const lineHeight = fontSize + 4;
+  const bottomMargin = (margin || 72) + 30;
   
-  // Word-wrap with style awareness
   let currentX = x;
   let currentY = y;
+  let currentPage = page;
   
   for (const run of runs) {
     const font = run.bold && run.italic ? fonts.boldItalic 
@@ -438,11 +446,21 @@ function drawStyledParagraph(
       if (currentX + wordWidth > x + maxWidth && currentX > x) {
         // New line
         currentX = x;
-        currentY -= fontSize + 4;
+        currentY -= lineHeight;
+        
+        // Page break check
+        if (currentY < bottomMargin && pdfDoc && pageWidth && pageHeight) {
+          currentPage = pdfDoc.addPage([pageWidth, pageHeight]);
+          if (pageNumberRef) {
+            pageNumberRef.current++;
+            addPageNumberFn?.(currentPage, pageNumberRef.current);
+          }
+          currentY = (pageHeight || 792) - (margin || 72) - 30;
+        }
       }
       
       const drawWord = currentX > x ? ' ' + word : word;
-      page.drawText(drawWord, {
+      currentPage.drawText(drawWord, {
         x: currentX,
         y: currentY,
         size: fontSize,
@@ -453,7 +471,7 @@ function drawStyledParagraph(
     }
   }
   
-  return currentY - (fontSize + 4); // Return next Y position
+  return currentY - lineHeight; // Return next Y position
 }
 
 // Convert markdown text to WordprocessingML runs with bold/italic
@@ -796,24 +814,28 @@ serve(async (req) => {
     // Check if trial mode is active - bypass all restrictions
     const trialActive = isTrialActive();
     
-    // Get user's subscription plan
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("plan")
+    // Get user's subscription plan from subscriptions table (single source of truth)
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select("tier, status")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
-    const userPlan = profile?.plan || "free";
+    // Only use tier if subscription is active, otherwise fall back to free
+    const userPlan = (subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free";
     
     // During trial or admin, allow all formats
     const allowedFormats = (trialActive || isAdmin)
       ? ALL_FORMATS 
       : (TIER_FORMATS[userPlan as keyof typeof TIER_FORMATS] || TIER_FORMATS.free);
 
-    const { bookId, format, authorName, isbn, academicMode, citationStyle } = await req.json();
+    const { bookId, format, authorName, isbn, isAcademicMode, academicMode, citationStyle } = await req.json();
+    
+    // Support both param names (client sends isAcademicMode, legacy sends academicMode)
+    const resolvedAcademicMode = isAcademicMode || academicMode || false;
 
     console.log(`[EXPORT] Trial active: ${trialActive}, User plan: ${userPlan}, Admin: ${isAdmin}, Requested format: ${format}`);
-    console.log(`[EXPORT] Academic mode: ${academicMode}, Citation style: ${citationStyle}`);
+    console.log(`[EXPORT] Academic mode: ${resolvedAcademicMode}, Citation style: ${citationStyle}`);
 
     // Check format permissions (skip during trial or admin)
     if (!trialActive && !isAdmin && !allowedFormats.includes(format)) {
@@ -858,6 +880,30 @@ serve(async (req) => {
     if (chaptersError) throw new Error("Failed to fetch chapters");
     if (!chapters || chapters.length === 0) throw new Error("No generated chapters found");
 
+    // Auto-repair mismatched [CODE_BLOCK] tags before export
+    for (const chapter of chapters) {
+      if (chapter.content) {
+        const openCount = (chapter.content.match(/\[CODE_BLOCK\]/g) || []).length;
+        const closeCount = (chapter.content.match(/\[\/CODE_BLOCK\]/g) || []).length;
+        if (openCount !== closeCount) {
+          console.log(`[EXPORT] Repairing mismatched CODE_BLOCK tags in chapter ${chapter.chapter_number} (${openCount} open, ${closeCount} close)`);
+          if (openCount > closeCount) {
+            for (let i = 0; i < openCount - closeCount; i++) {
+              chapter.content += '\n[/CODE_BLOCK]';
+            }
+          } else {
+            let excess = closeCount - openCount;
+            while (excess > 0) {
+              const lastIdx = chapter.content.lastIndexOf('[/CODE_BLOCK]');
+              if (lastIdx === -1) break;
+              chapter.content = chapter.content.substring(0, lastIdx) + chapter.content.substring(lastIdx + '[/CODE_BLOCK]'.length);
+              excess--;
+            }
+          }
+        }
+      }
+    }
+
     // Fetch book-level citations from book_citations table
     const { data: bookCitations } = await supabase
       .from("book_citations")
@@ -866,7 +912,7 @@ serve(async (req) => {
       .order("created_at");
 
     // Determine if this is academic content
-    const isAcademicExport = academicMode || chapters.some(ch => ch.academic_mode);
+    const isAcademicExport = resolvedAcademicMode || chapters.some(ch => ch.academic_mode);
     const effectiveCitationStyle = citationStyle || chapters.find(ch => ch.citation_style)?.citation_style || 'APA';
 
     // VALIDATION for academic exports
@@ -984,6 +1030,7 @@ async function generatePDF(
   const textWidth = pageWidth - (margin * 2);
   
   let pageNumber = 0;
+  const pageNumberRef = { current: 0 };
   let currentChapterTitle = "";
   
   const addPageNumber = (page: any, num: number) => {
@@ -1812,23 +1859,17 @@ async function generatePDF(
       const hasFormatting = /\*/.test(paragraph);
       
       if (hasFormatting) {
-        // Use styled paragraph renderer for inline bold/italic
+        // Use styled paragraph renderer for inline bold/italic with page break support
         if (y < margin + 50) {
           page = pdfDoc.addPage([pageWidth, pageHeight]);
           pageNumber++;
+          pageNumberRef.current = pageNumber;
           addPageNumber(page, pageNumber);
           y = pageHeight - margin - 30;
         }
-        // drawStyledParagraph may run out of page space; pre-estimate lines needed
-        const estimatedLines = Math.ceil(paragraph.length / 70);
-        const estimatedHeight = estimatedLines * 15;
-        if (y - estimatedHeight < margin + 30) {
-          page = pdfDoc.addPage([pageWidth, pageHeight]);
-          pageNumber++;
-          addPageNumber(page, pageNumber);
-          y = pageHeight - margin - 30;
-        }
-        y = drawStyledParagraph(page, paragraph.trim(), margin, y, textWidth, 11, bodyFonts, rgb(0.1, 0.1, 0.1));
+        pageNumberRef.current = pageNumber;
+        y = drawStyledParagraph(page, paragraph.trim(), margin, y, textWidth, 11, bodyFonts, rgb(0.1, 0.1, 0.1), pdfDoc, pageWidth, pageHeight, margin, addPageNumber, pageNumberRef);
+        pageNumber = pageNumberRef.current;
       } else {
         const lines = wrapText(paragraph.trim(), timesRoman, 11, textWidth);
         for (const line of lines) {
@@ -2689,13 +2730,57 @@ async function generateDOCX(
   <Default Extension="jpg" ContentType="image/jpeg"/>
   <Default Extension="png" ContentType="image/png"/>
   <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
 </Types>`;
   await zipWriter.add("[Content_Types].xml", new zip.TextReader(contentTypes));
+
+  // Add styles.xml for proper heading rendering in Word
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="Title">
+    <w:name w:val="Title"/>
+    <w:pPr><w:jc w:val="center"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="56"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1">
+    <w:name w:val="heading 1"/>
+    <w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="36"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2">
+    <w:name w:val="heading 2"/>
+    <w:pPr><w:keepNext/><w:spacing w:before="200" w:after="80"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="32"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading3">
+    <w:name w:val="heading 3"/>
+    <w:pPr><w:keepNext/><w:spacing w:before="160" w:after="80"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="28"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading4">
+    <w:name w:val="heading 4"/>
+    <w:pPr><w:keepNext/><w:spacing w:before="120" w:after="60"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="26"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading5">
+    <w:name w:val="heading 5"/>
+    <w:pPr><w:keepNext/><w:spacing w:before="120" w:after="60"/></w:pPr>
+    <w:rPr><w:b/><w:sz w:val="24"/></w:rPr>
+  </w:style>
+  <w:style w:type="paragraph" w:styleId="Heading6">
+    <w:name w:val="heading 6"/>
+    <w:pPr><w:keepNext/><w:spacing w:before="100" w:after="40"/></w:pPr>
+    <w:rPr><w:b/><w:i/><w:sz w:val="22"/></w:rPr>
+  </w:style>
+</w:styles>`;
+  await zipWriter.add("word/styles.xml", new zip.TextReader(stylesXml));
 
   const rels = `<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
   <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
 </Relationships>`;
+
+  // Add styles relationship in document.xml.rels - will be merged below
   await zipWriter.add("_rels/.rels", new zip.TextReader(rels));
 
   // Add cover and all panel images to media folder
@@ -2729,8 +2814,10 @@ async function generateDOCX(
     imageRelId++;
   }
 
+  const stylesRelId = imageRelId++;
   const documentRels = `<?xml version="1.0" encoding="UTF-8"?>
 <Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId${stylesRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
   ${imageRels}
 </Relationships>`;
   await zipWriter.add("word/_rels/document.xml.rels", new zip.TextReader(documentRels));
