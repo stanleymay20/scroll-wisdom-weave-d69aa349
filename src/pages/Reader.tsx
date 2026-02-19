@@ -156,6 +156,7 @@ export default function Reader() {
   const ttsCumulativeTimeRef = useRef(0);
   const [ttsEstimatedDuration, setTtsEstimatedDuration] = useState(0);
   const [chunkPlaybackInfo, setChunkPlaybackInfo] = useState<{ chunkIndex: number; chunkWordCounts: number[] } | null>(null);
+  const [ttsPlaybackSpeed, setTtsPlaybackSpeed] = useState(1);
   
   // Auto-scroll is defined after wordCount is available (line ~312)
   
@@ -425,6 +426,7 @@ export default function Reader() {
     wordCount,
     chunkPlaybackInfo,
     ttsWordOffset: ttsPreambleOffset,
+    playbackSpeed: ttsPlaybackSpeed,
   });
 
   // Audio highlighting is now handled directly in useAudioSync via DOM manipulation
@@ -1046,6 +1048,7 @@ export default function Reader() {
               onCumulativeTimeChange={(secs) => { ttsCumulativeTimeRef.current = secs; }}
               onEstimatedDurationChange={setTtsEstimatedDuration}
               onChunkPlaybackInfo={setChunkPlaybackInfo}
+              onPlaybackSpeedChange={setTtsPlaybackSpeed}
                onChapterComplete={async () => {
                 // AUTO-CONTINUE: Navigate to next chapter when audio finishes
                 if (currentChapter < totalChapters) {
