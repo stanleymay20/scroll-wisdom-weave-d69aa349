@@ -11,13 +11,14 @@ import {
   XCircle,
   FileCheck,
   Brain,
+  Scale,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type {
   ComplianceTier,
   ReferenceTransparencyReport,
 } from "@/lib/referenceVerification";
-import { getTierColor, getTierIcon } from "@/lib/referenceVerification";
+import { getTierColor, getTierIcon, getVerdictColor } from "@/lib/referenceVerification";
 
 interface ReferenceCompliancePanelProps {
   report: ReferenceTransparencyReport | null;
@@ -33,6 +34,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
 
   const currentTierIdx = tierOrder.indexOf(report.tier.tier);
   const sr = report.semanticReport;
+  const cr = report.claimReport;
 
   return (
     <div className={cn("rounded-xl border border-border/50 bg-gradient-card overflow-hidden", className)}>
@@ -45,12 +47,17 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
           <div className="text-left">
             <h3 className="font-medium text-foreground">ScrollVerified™ Reference Compliance</h3>
             <p className="text-xs text-muted-foreground">
-              DOI Validated: {report.doiValidatedPct}% · Tier: {report.tier.label}
-              {sr ? ` · Semantic: ${sr.averageScore}/100` : ''}
+              DOI: {report.doiValidatedPct}% · Tier: {report.tier.label}
+              {cr?.analysisComplete ? ` · Claim: ${cr.avgSupportScore}/100` : sr ? ` · Semantic: ${sr.averageScore}/100` : ''}
             </p>
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {cr?.analysisComplete && (
+            <Badge variant="outline" className={cn("text-[10px] border", getVerdictColor(cr.verdictLabel))}>
+              {cr.verdictLabel}
+            </Badge>
+          )}
           <Badge className={cn("text-xs", getTierColor(report.tier.tier))}>
             {getTierIcon(report.tier.tier)} {report.tier.label}
           </Badge>
@@ -79,6 +86,73 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
                 <Progress value={report.doiValidatedPct} className="h-2" />
               </div>
 
+              {/* Claim-Level Justification Section */}
+              {cr && (
+                <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-3">
+                  <div className="flex items-center gap-2">
+                    <Scale className="h-4 w-4 text-scroll-gold" />
+                    <span className="text-sm font-medium">Claim-Level Justification</span>
+                    <Badge variant="outline" className={cn("text-[10px] border ml-auto", getVerdictColor(cr.verdictLabel))}>
+                      {cr.verdictLabel}
+                    </Badge>
+                  </div>
+
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs text-muted-foreground">Avg Claim Support Score</span>
+                    <span className={cn("text-lg font-bold",
+                      cr.avgSupportScore >= 75 ? "text-green-500" :
+                      cr.avgSupportScore >= 60 ? "text-amber-500" : "text-destructive"
+                    )}>
+                      {cr.avgSupportScore}/100
+                    </span>
+                  </div>
+                  <Progress value={cr.avgSupportScore} className="h-2" />
+
+                  {/* Verdict distribution */}
+                  {cr.analyzedClaims > 0 && (
+                    <div className="space-y-1">
+                      <span className="text-[10px] text-muted-foreground">Claim Support Verdicts ({cr.analyzedClaims} analyzed / {cr.totalClaims} total)</span>
+                      <div className="flex h-3 rounded-full overflow-hidden">
+                        {cr.strong > 0 && <div className="bg-green-500" style={{ width: `${(cr.strong / cr.analyzedClaims) * 100}%` }} title={`Strong: ${cr.strong}`} />}
+                        {cr.partial > 0 && <div className="bg-amber-400" style={{ width: `${(cr.partial / cr.analyzedClaims) * 100}%` }} title={`Partial: ${cr.partial}`} />}
+                        {cr.weak > 0 && <div className="bg-orange-400" style={{ width: `${(cr.weak / cr.analyzedClaims) * 100}%` }} title={`Weak: ${cr.weak}`} />}
+                        {cr.contradiction > 0 && <div className="bg-destructive" style={{ width: `${(cr.contradiction / cr.analyzedClaims) * 100}%` }} title={`Contradiction: ${cr.contradiction}`} />}
+                      </div>
+                      <div className="flex gap-3 text-[9px] text-muted-foreground flex-wrap">
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Strong ({cr.strong})</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-amber-400 inline-block" />Partial ({cr.partial})</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-orange-400 inline-block" />Weak ({cr.weak})</span>
+                        <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-destructive inline-block" />Contradiction ({cr.contradiction})</span>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Alerts */}
+                  {cr.contradiction > 0 && (
+                    <div className="flex items-center gap-2 p-2 rounded bg-destructive/10 text-xs text-destructive">
+                      <XCircle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{cr.contradiction} citation contradiction(s) — sources contradict the claims they support</span>
+                    </div>
+                  )}
+                  {cr.unsupportedEmpiricalClaims > 0 && (
+                    <div className="flex items-center gap-2 p-2 rounded bg-destructive/10 text-xs text-destructive">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{cr.unsupportedEmpiricalClaims} empirical claim(s) without adequate justification</span>
+                    </div>
+                  )}
+                  {cr.uncitedClaimsPct > 0 && (
+                    <div className="flex items-center gap-2 p-2 rounded bg-amber-500/10 text-xs text-amber-600 dark:text-amber-400">
+                      <AlertTriangle className="h-3.5 w-3.5 shrink-0" />
+                      <span>{cr.uncitedClaimsPct}% substantive claims without citations</span>
+                    </div>
+                  )}
+
+                  {!cr.analysisComplete && (
+                    <p className="text-[10px] text-muted-foreground italic">Claim analysis incomplete — requires manual review</p>
+                  )}
+                </div>
+              )}
+
               {/* Semantic Integrity Section */}
               {sr && (
                 <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-3">
@@ -104,22 +178,13 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
                   </div>
                   <Progress value={sr.averageScore} className="h-2" />
 
-                  {/* Distribution bar */}
                   <div className="space-y-1">
                     <span className="text-[10px] text-muted-foreground">Citation Support Distribution</span>
                     <div className="flex h-3 rounded-full overflow-hidden">
-                      {sr.strong > 0 && (
-                        <div className="bg-green-500" style={{ width: `${(sr.strong / sr.totalCitations) * 100}%` }} title={`Strong: ${sr.strong}`} />
-                      )}
-                      {sr.moderate > 0 && (
-                        <div className="bg-amber-400" style={{ width: `${(sr.moderate / sr.totalCitations) * 100}%` }} title={`Moderate: ${sr.moderate}`} />
-                      )}
-                      {sr.weak > 0 && (
-                        <div className="bg-orange-400" style={{ width: `${(sr.weak / sr.totalCitations) * 100}%` }} title={`Weak: ${sr.weak}`} />
-                      )}
-                      {sr.ornamental > 0 && (
-                        <div className="bg-destructive" style={{ width: `${(sr.ornamental / sr.totalCitations) * 100}%` }} title={`Ornamental: ${sr.ornamental}`} />
-                      )}
+                      {sr.strong > 0 && <div className="bg-green-500" style={{ width: `${(sr.strong / sr.totalCitations) * 100}%` }} title={`Strong: ${sr.strong}`} />}
+                      {sr.moderate > 0 && <div className="bg-amber-400" style={{ width: `${(sr.moderate / sr.totalCitations) * 100}%` }} title={`Moderate: ${sr.moderate}`} />}
+                      {sr.weak > 0 && <div className="bg-orange-400" style={{ width: `${(sr.weak / sr.totalCitations) * 100}%` }} title={`Weak: ${sr.weak}`} />}
+                      {sr.ornamental > 0 && <div className="bg-destructive" style={{ width: `${(sr.ornamental / sr.totalCitations) * 100}%` }} title={`Ornamental: ${sr.ornamental}`} />}
                     </div>
                     <div className="flex gap-3 text-[9px] text-muted-foreground flex-wrap">
                       <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500 inline-block" />Strong ({sr.strong})</span>
@@ -143,13 +208,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
                 <span className="text-sm font-medium block mb-2">Compliance Tier</span>
                 <div className="flex gap-1">
                   {tierOrder.map((t, i) => (
-                    <div
-                      key={t}
-                      className={cn(
-                        "flex-1 h-2 rounded-full transition-colors",
-                        i <= currentTierIdx ? getTierColor(report.tier.tier) : "bg-muted"
-                      )}
-                    />
+                    <div key={t} className={cn("flex-1 h-2 rounded-full transition-colors", i <= currentTierIdx ? getTierColor(report.tier.tier) : "bg-muted")} />
                   ))}
                 </div>
                 <div className="flex justify-between mt-1">
@@ -200,13 +259,11 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
               </div>
 
               {/* Provenance */}
-              {(report.auditModel || report.promptVersion) && (
-                <p className="text-[10px] text-muted-foreground">
-                  ScrollVerified™ 2026 — Institutional Semantic Compliance
-                  {report.auditModel && ` · Model: ${report.auditModel}`}
-                  {report.promptVersion && ` · Prompt: ${report.promptVersion}`}
-                </p>
-              )}
+              <p className="text-[10px] text-muted-foreground">
+                ScrollVerified™ 2026 — Institutional Conceptual Integrity Certified
+                {report.auditModel && ` · Model: ${report.auditModel}`}
+                {report.promptVersion && ` · Prompt: ${report.promptVersion}`}
+              </p>
             </div>
           </motion.div>
         )}
