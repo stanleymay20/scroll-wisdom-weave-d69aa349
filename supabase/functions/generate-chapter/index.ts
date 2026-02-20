@@ -29,12 +29,15 @@ const getModelForPlan = (plan: string): string => {
 // 0️⃣ ROLE & AUTHORITY (NON-NEGOTIABLE)
 // ===========================================
 
-const SYSTEM_ROLE = `You are ScrollLibrary Core Generator — NOT a casual text generator.
+// ===========================================
+// TYPE-NEUTRAL SYSTEM ROLE — Used by non-bestseller pipelines
+// Bestseller pipeline has its own SYSTEM_ROLE via BESTSELLER_SYSTEM_ROLE
+// ===========================================
+const SYSTEM_ROLE_NEUTRAL = `You are ScrollLibrary Core Generator — a professional publishing system.
 
 You are operating as:
 • A top-tier publishing house
 • A professional editor
-• A bestseller ghostwriter
 • A typesetter and formatter
 • A quality assurance system
 
@@ -43,6 +46,35 @@ Your output must be IMMEDIATELY PUBLISHABLE on:
 • PocketBook
 • Apple Books
 • Academic platforms (when applicable)
+
+QUALITY BAR:
+Your content must compete with the best traditionally published books in its category.
+Would a publisher accept this without major edits? If not, REWRITE.
+
+VOICE CONTRACT:
+• Clear, confident, professional
+• Written TO the reader, not AT the reader
+• NO repetitive filler
+• NO AI-sounding transitions (e.g., "Let's dive in", "In this chapter")
+
+If any requirement is violated, the output is INVALID and must be regenerated until compliant.
+Partial compliance is NOT acceptable.`;
+
+// ===========================================
+// BESTSELLER-SPECIFIC SYSTEM ROLE — Only for bestseller book type
+// ===========================================
+const BESTSELLER_SYSTEM_ROLE = `You are ScrollLibrary Core Generator — Bestseller Mode.
+
+You are operating as:
+• A #1 New York Times–level ghostwriter
+• A professional editor at a major publishing house
+• A reader-psychology specialist
+• A quality assurance system
+
+Your output must be IMMEDIATELY PUBLISHABLE on:
+• Amazon Kindle
+• PocketBook
+• Apple Books
 
 MASTERPIECE MANDATE:
 - Every chapter must be worthy of a bestselling book
@@ -60,7 +92,7 @@ Would a publisher accept this without major edits? If not, REWRITE.
 VOICE CONTRACT:
 • Conversational authority — clear, confident, human
 • Written TO the reader, not AT the reader
-• NO academic dryness (unless explicitly academic mode)
+• NO academic dryness
 • NO over-abstract philosophy
 • NO repetitive filler
 • NO AI-sounding transitions (e.g., "Let's dive in", "In this chapter")
@@ -1951,7 +1983,7 @@ BEGIN:`;
 // ===========================================
 
 function buildWorkbookSystemPrompt(language: string): string {
-  return `${SYSTEM_ROLE}
+  return `${SYSTEM_ROLE_NEUTRAL}
 
 ${MASTER_FORMATTING_CONTRACT}
 
@@ -3194,7 +3226,7 @@ ${summaries}
       !!titleLower.match(/career|business|leadership|management|marketing|strategy|psychology|history|philosophy|sociology|education|law|economics|finance|wealth|entrepreneur|organization|human\s*resource|communication|political|humanities/i)
     );
     
-    if (isAcademicPipeline && (isNonStemAcademic || (!isStemAcademic && !isStemAcademic)) && researchResult && researchResult.references.length > 0) {
+    if (isAcademicPipeline && isNonStemAcademic && researchResult && researchResult.references.length > 0) {
       // NON-STEM ACADEMIC PIPELINE — references, case studies, NO code
       console.log("[GENERATE-CHAPTER] Using NON-STEM ACADEMIC pipeline (references, no code)");
       
@@ -3303,7 +3335,7 @@ REMEMBER: NO CODE BLOCKS. Use tables, frameworks, case studies, and scholarly pr
 
 BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
 
-    } else if (isAcademicPipeline && (isNonStemAcademic || !isStemAcademic)) {
+    } else if (isAcademicPipeline && isNonStemAcademic) {
       // NON-STEM Academic mode but no research results
       console.log("[GENERATE-CHAPTER] Using NON-STEM ACADEMIC pipeline (no sources available)");
       
@@ -3693,7 +3725,7 @@ ${ACADEMIC_CONTRACT}
 ${illustratedInstitutionalPrompt}`;
       } else {
         // BESTSELLER ILLUSTRATED PIPELINE — engaging narrative with visuals  
-        systemPrompt = `${SYSTEM_ROLE}
+        systemPrompt = `${BESTSELLER_SYSTEM_ROLE}
 
 ${MASTER_FORMATTING_CONTRACT}
 
@@ -3871,7 +3903,7 @@ BEGIN WRITING THE FULL ${isIllustratedAcademic ? 'ACADEMIC' : 'BESTSELLER-GRADE'
       // ===========================================
       console.log("[GENERATE-CHAPTER] Using PROFESSIONAL pipeline (frameworks, strategy)");
       
-      systemPrompt = `${SYSTEM_ROLE}
+      systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
 
 ${MASTER_FORMATTING_CONTRACT}
 
@@ -3934,7 +3966,7 @@ BEGIN WRITING THE PROFESSIONAL GUIDE CHAPTER:`;
       // ===========================================
       console.log("[GENERATE-CHAPTER] Using REFERENCE pipeline (structured, lookup-ready)");
       
-      systemPrompt = `${SYSTEM_ROLE}
+      systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
 
 ${MASTER_FORMATTING_CONTRACT}
 
@@ -3997,13 +4029,17 @@ ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts' : ''}
 
 BEGIN WRITING THE REFERENCE/HANDBOOK CHAPTER:`;
 
-    } else {
-      // BESTSELLER PIPELINE - for non-technical books
-      console.log("[GENERATE-CHAPTER] Using BESTSELLER pipeline (narrative, engaging)");
+    } else if (effectiveBookType === 'bestseller' || effectiveBookType === 'text') {
+      // ===========================================
+      // BESTSELLER / TEXT PIPELINE
+      // bestseller = full bestseller mechanics
+      // text = lighter version without aggressive hooks/belief disruption
+      // ===========================================
+      const isBestsellerMode = effectiveBookType === 'bestseller';
+      console.log(`[GENERATE-CHAPTER] Using ${isBestsellerMode ? 'BESTSELLER' : 'STANDARD TEXT'} pipeline`);
       
       // ===========================================
-      // WALL STREET INSTITUTIONAL UPGRADE
-      // Detect business/wealth/entrepreneurship books and inject institutional contract
+      // WALL STREET INSTITUTIONAL UPGRADE (bestseller only)
       // ===========================================
       const BUSINESS_CATEGORIES = [
         'business', 'entrepreneurship', 'finance', 'wealth', 'investing',
@@ -4012,12 +4048,11 @@ BEGIN WRITING THE REFERENCE/HANDBOOK CHAPTER:`;
         'personal development', 'self_help',
       ];
       
-      const isBusinessBook = BUSINESS_CATEGORIES.some(cat => 
+      const isBusinessBook = isBestsellerMode && (BUSINESS_CATEGORIES.some(cat => 
         (category || '').toLowerCase().includes(cat) ||
         (bookTitle || '').toLowerCase().includes(cat)
-      ) || (bookTitle || '').toLowerCase().match(/billionaire|million|wealth|capital|business|entrepreneur|money|invest|startup|founder|ceo|empire/i);
+      ) || (bookTitle || '').toLowerCase().match(/billionaire|million|wealth|capital|business|entrepreneur|money|invest|startup|founder|ceo|empire/i));
       
-      // Import institutional contract if business book
       let institutionalPrompt = '';
       if (isBusinessBook) {
         try {
@@ -4031,7 +4066,6 @@ BEGIN WRITING THE REFERENCE/HANDBOOK CHAPTER:`;
         }
       }
       
-      // Check if this is the Billionaire Roadmap chapter (Ch.21 or roadmap-titled)
       let roadmapPrompt = '';
       const isRoadmapChapter = (chapterTitle || '').toLowerCase().match(/roadmap|positioning|12.month|twelve.month|billionaire.*year/i);
       if (isRoadmapChapter && isBusinessBook) {
@@ -4044,7 +4078,9 @@ BEGIN WRITING THE REFERENCE/HANDBOOK CHAPTER:`;
         }
       }
       
-      systemPrompt = `${SYSTEM_ROLE}
+      if (isBestsellerMode) {
+        // FULL BESTSELLER PIPELINE
+        systemPrompt = `${BESTSELLER_SYSTEM_ROLE}
 
 ${MASTER_FORMATTING_CONTRACT}
 
@@ -4060,8 +4096,40 @@ ${FINAL_DIRECTIVE}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.
 Create comprehensive, bestseller-grade chapters that readers would pay $20+ for.${isBusinessBook ? '\nThis is a BUSINESS/WEALTH book — apply Wall Street institutional rigor while preserving narrative voice.' : ''}`;
+      } else {
+        // STANDARD TEXT PIPELINE — flexible, general-purpose, NO bestseller mechanics forced
+        systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
+
+${MASTER_FORMATTING_CONTRACT}
+
+You are writing a STANDARD TEXT book. This is a flexible, general-purpose format.
+
+GENERATOR IDENTITY: Professional Author
+
+CONTENT RULES:
+- Clear, well-structured writing with logical flow
+- Proper paragraph structure and transitions
+- Appropriate depth for the subject matter
+- Use examples and explanations to clarify concepts
+- Include headings for organization
+
+TONE: Professional, informative, engaging — adapt to the subject matter.
+Match the tone to the category: more formal for serious topics, more accessible for general interest.
+
+FORBIDDEN:
+- AI-sounding transitions ("Let's dive in", "In this chapter we will explore")
+- Filler content or padding
+- Repetitive phrasing
+
+${VALIDATION_CONTRACT}
+
+${FINAL_DIRECTIVE}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
+      }
       
-      chapterPrompt = `${previousChaptersContext}Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+      if (isBestsellerMode) {
+        chapterPrompt = `${previousChaptersContext}Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
 
 LANGUAGE: Generate ALL content in ${languageName}.
 
@@ -4095,6 +4163,67 @@ ${isBusinessBook ? '- Include markdown tables for frameworks and models\n- Inclu
 ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat introductions' : ''}
 
 BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
+      } else {
+        // STANDARD TEXT — no bestseller mechanics forced
+        chapterPrompt = `${previousChaptersContext}Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+STANDARD TEXT STRUCTURE:
+1. INTRODUCTION — Set context for the chapter topic
+2. MAIN CONTENT — Organized into 3-5 logical sections with ## headings
+3. EXAMPLES — Concrete examples and illustrations where relevant
+4. KEY POINTS — Summary of main insights
+5. CONCLUSION — Wrap up and transition
+
+REQUIREMENTS:
+- Approximately ${targetWords} words
+- Use proper Markdown formatting (## headings, **bold**, tables where useful)
+- NO AI-sounding phrases ("Let's dive in", "In this chapter we will explore")
+- Clear, well-structured, informative writing
+- Adapt tone and depth to the subject matter
+${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat introductions' : ''}
+
+BEGIN WRITING THE CHAPTER:`;
+      }
+    } else {
+      // UNKNOWN BOOK TYPE FALLBACK — treat as standard text with warning
+      console.warn(`[GENERATE-CHAPTER] ⚠️ Unknown book type "${effectiveBookType}" — falling back to STANDARD TEXT pipeline`);
+      
+      systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
+
+${MASTER_FORMATTING_CONTRACT}
+
+You are writing a general-purpose book chapter. Adapt your tone and structure to the subject matter.
+
+${VALIDATION_CONTRACT}
+
+${FINAL_DIRECTIVE}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
+
+      chapterPrompt = `${previousChaptersContext}Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+Write approximately ${targetWords} words with clear structure, examples, and proper Markdown formatting.
+${chapterNumber > 1 ? 'CONTINUE from previous chapter concepts.' : ''}
+
+BEGIN:`;
+    }
+
+    // ===========================================
+    // INJECT EDIT INTENT (if regenerating)
+    // ===========================================
+    if (editIntentPrompt) {
+      chapterPrompt = chapterPrompt + editIntentPrompt;
+      console.log(`[GENERATE-CHAPTER] Edit intent injected (${editIntentPrompt.length} chars)`);
     }
 
     // Retry logic for transient gateway errors (502, 503, 504) and rate limits (429)
@@ -4280,7 +4409,7 @@ ${researchResult.references.map((ref, idx) => {
 
     // ILLUSTRATED / CHILDREN'S BOOK - Generate inline illustrations from [FIGURE X] markers
     // Upload images to storage instead of embedding base64 (prevents 5-10MB chapter content)
-    if (bookType === 'illustrated' || bookType === 'children') {
+    if (effectiveBookType === 'illustrated' || effectiveBookType === 'children') {
       console.log("[GENERATE-CHAPTER] Generating inline illustrations from figure markers...");
 
       try {
