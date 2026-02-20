@@ -176,7 +176,7 @@ export function ExportDialog({
 
   const hasCover = !!coverImageUrl;
   const canProceed = hasGeneratedChapters && hasCover && !isComicBlocked && isAuthenticated;
-  const isReady = canProceed && canExport && authorName.trim();
+  const isReady = canProceed && canExport && authorName.trim() && contentValidation.canProceed;
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
