@@ -231,6 +231,11 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     // Pre-process: convert bullet dots (•) to standard markdown bullets
     html = html.replace(/^[\s]*•\s+/gm, '- ');
     
+    // Unescape markdown escape sequences EARLY (before formatting processing)
+    // AI-generated content often uses backslash-escapes for special chars like \* \_ \# etc.
+    // If we unescape after formatting, escaped markers stay as raw text.
+    html = html.replace(/\\([\\`*_{}[\]()#+\-.!~|$>])/g, '$1');
+    
     // Protect structured code block and evidence block placeholders before HTML escaping
     html = html.replace(/<!--STRUCTURED_CODE_BLOCK_(\d+)-->/g, '___STRUCTURED_CODE_BLOCK_$1___');
     html = html.replace(/<!--EVIDENCE_BLOCK_(\d+)-->/g, '___EVIDENCE_BLOCK_$1___');
@@ -244,7 +249,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     // Restore structured code block and evidence block placeholders after escaping
     html = html.replace(/___STRUCTURED_CODE_BLOCK_(\d+)___/g, '<!--STRUCTURED_CODE_BLOCK_$1-->');
     html = html.replace(/___EVIDENCE_BLOCK_(\d+)___/g, '<!--EVIDENCE_BLOCK_$1-->');
-    
+
     // Code blocks (```language ... ```) - render with syntax highlighting support
     html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
       const langLabel = lang ? `<span class="code-lang">${lang}</span>` : '';
@@ -303,16 +308,16 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/^#\s+(.+)$/gm, '<h1 class="md-h1">$1</h1>');
     
     // Bold + Italic (***text*** or ___text___)
-    html = html.replace(/\*\*\*([^*]+)\*\*\*/g, '<strong><em>$1</em></strong>');
+    html = html.replace(/\*\*\*((?:[^*]|\*(?!\*\*))+)\*\*\*/g, '<strong><em>$1</em></strong>');
     
-    // Bold (**text** or __text__)
-    html = html.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    html = html.replace(/__([^_]+)__/g, '<strong>$1</strong>');
+    // Bold (**text** or __text__) — allow single * inside bold (e.g. **text *italic* more**)
+    html = html.replace(/\*\*((?:[^*]|\*(?!\*))+)\*\*/g, '<strong>$1</strong>');
+    html = html.replace(/__((?:[^_]|_(?!_))+)__/g, '<strong>$1</strong>');
     
     // Italic (*text* or _text_)
     html = html.replace(/(?<![*\w])\*([^*\n]+)\*(?![*\w])/g, '<em>$1</em>');
     html = html.replace(/(?<![_\w])_([^_\n]+)_(?![_\w])/g, '<em>$1</em>');
-    
+
     // Underline (<u>text</u> - HTML tag passthrough)
     html = html.replace(/&lt;u&gt;([^<]+)&lt;\/u&gt;/g, '<u class="md-underline">$1</u>');
     
@@ -326,9 +331,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     // Strikethrough (~~text~~)
     html = html.replace(/~~([^~]+)~~/g, '<del>$1</del>');
     
-    // Blockquotes (> text)
-    html = html.replace(/^>\s+(.+)$/gm, '<blockquote class="md-blockquote">$1</blockquote>');
-    
+    // Blockquotes (> text) — match &gt; since > was already HTML-escaped
+    html = html.replace(/^&gt;\s+(.+)$/gm, '<blockquote class="md-blockquote">$1</blockquote>');
+
     // Horizontal rules (---, ***, ___)
     html = html.replace(/^[-*_]{3,}\s*$/gm, '<hr class="md-hr" />');
     
@@ -358,10 +363,10 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       return `<!--BASE64_IMG_${idx}-->`;
     });
     
-    // Unescape markdown escape sequences (e.g. \$ → $, \* → *, \# → #)
-    // AI-generated content often uses backslash-escapes for special chars
+    // Note: Primary unescape step now runs early (before formatting).
+    // This late pass catches any remaining escaped chars inside generated HTML.
     html = html.replace(/\\([\\`*_{}[\]()#+\-.!~|$>])/g, '$1');
-    
+
     // data-sentence-index is assigned post-render via DOM useEffect (not regex)
     return html;
   }, [cleanedText]);
