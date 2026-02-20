@@ -358,6 +358,10 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       return `<!--BASE64_IMG_${idx}-->`;
     });
     
+    // Unescape markdown escape sequences (e.g. \$ → $, \* → *, \# → #)
+    // AI-generated content often uses backslash-escapes for special chars
+    html = html.replace(/\\([\\`*_{}[\]()#+\-.!~|$>])/g, '$1');
+    
     // data-sentence-index is assigned post-render via DOM useEffect (not regex)
     return html;
   }, [cleanedText]);
