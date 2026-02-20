@@ -200,7 +200,14 @@ function preScreenConflicts(claims: any[]): Array<[any, any]> {
       for (const [pA, pB] of CONTRA_PAIRS) {
         if ((pA.test(claims[i].text) && pB.test(claims[j].text)) || (pB.test(claims[i].text) && pA.test(claims[j].text))) {
           const nA = substantiveTerms(claims[i].text), nB = substantiveTerms(claims[j].text);
-          if (nA.filter(n => nB.includes(n)).length >= 2) {
+          // AUDIT FIX: Raise domain-overlap threshold from 2 → 3 substantive shared terms.
+          // Two claims sharing only 2 generic words (e.g., "market", "return") trigger too many
+          // false-positive epistemic conflicts that waste LLM calls and inflate conflict counts.
+          // 3 shared substantive terms ensures the claims are genuinely discussing the same topic.
+          // Additionally, skip pairs where one claim is purely definitional (avoids trivial contradictions).
+          const isDef = (t: string) => /\b(is defined as|refers to|is known as|means that|is a type of)\b/i.test(t);
+          const sharedTermCount = nA.filter(n => nB.includes(n)).length;
+          if (sharedTermCount >= 3 && !isDef(claims[i].text) && !isDef(claims[j].text)) {
             candidates.push([claims[i], claims[j]]);
             break;
           }
