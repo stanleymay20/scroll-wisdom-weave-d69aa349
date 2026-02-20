@@ -3154,29 +3154,252 @@ ${summaries}
     // CONTRACT 3: Book type GOVERNS the generation pipeline.
     // The book_type field is NOT a suggestion - it's a hard rule.
     // 
-    // Academic pipeline triggers:
-    // 1. book_type === 'academic' (ALWAYS - regardless of academicMode flag)
-    // 2. book_type === 'technical' (ALWAYS - code-heavy, literal)
-    // 3. book_type === 'professional' + academic categories
-    // 4. book_type === 'reference' (ALWAYS - structured, no narrative)
-    // 5. academicMode flag is TRUE (explicit user choice)
+    // STEM academic → code-heavy, exercises, mini-projects
+    // NON-STEM academic → references, case studies, NO code
     // ===========================================
     
     const ACADEMIC_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'economics', 'finance', 'governance', 'history', 'philosophy'];
     
+    // STEM categories that SHOULD have code blocks
+    const STEM_CODE_CATEGORIES = ['technology', 'science', 'engineering', 'programming', 'computer_science', 'data_science', 'mathematics', 'statistics'];
+    
+    // NON-STEM categories that should NEVER have code blocks
+    const NON_STEM_CATEGORIES = [
+      'business', 'management', 'leadership', 'career', 'entrepreneurship',
+      'marketing', 'sales', 'strategy', 'human_resources', 'organizational_behavior',
+      'history', 'philosophy', 'psychology', 'sociology', 'education',
+      'political_science', 'humanities', 'arts', 'law', 'governance',
+      'economics', 'finance', 'wealth', 'investing', 'personal_development',
+      'self_help', 'self-help', 'personal development', 'religion', 'spirituality',
+      'health', 'wellness', 'communication', 'writing', 'journalism',
+    ];
+    
     const isAcademicPipeline = 
-      // Book type IS academic or technical - ALWAYS use academic pipeline
       effectiveBookType === 'academic' || 
       effectiveBookType === 'technical' ||
       effectiveBookType === 'reference' ||
-      // Professional book in academic category
       (effectiveBookType === 'professional' && ACADEMIC_CATEGORIES.includes(category?.toLowerCase())) ||
-      // Explicit academic mode flag
       academicMode === true;
     
-    if (isAcademicPipeline && researchResult && researchResult.references.length > 0) {
-      // ACADEMIC/TECHNICAL PIPELINE - NO metaphors, NO storytelling
-      console.log("[GENERATE-CHAPTER] Using ACADEMIC/TECHNICAL pipeline (code-heavy, literal)");
+    // Determine if this academic book should use STEM (code-heavy) or NON-STEM (prose) pipeline
+    const categoryLower = (category || '').toLowerCase();
+    const titleLower = (bookTitle || '').toLowerCase();
+    
+    const isStemAcademic = STEM_CODE_CATEGORIES.some(cat => 
+      categoryLower.includes(cat) || titleLower.includes(cat)
+    ) || !!titleLower.match(/python|javascript|java\b|c\+\+|programming|coding|software|algorithm|data\s*science|machine\s*learning|neural|deep\s*learning|api|database|sql|devops|cloud\s*computing|cyber/i);
+    
+    const isNonStemAcademic = !isStemAcademic && (
+      NON_STEM_CATEGORIES.some(cat => categoryLower.includes(cat)) ||
+      !!titleLower.match(/career|business|leadership|management|marketing|strategy|psychology|history|philosophy|sociology|education|law|economics|finance|wealth|entrepreneur|organization|human\s*resource|communication|political|humanities/i)
+    );
+    
+    if (isAcademicPipeline && (isNonStemAcademic || (!isStemAcademic && !isStemAcademic)) && researchResult && researchResult.references.length > 0) {
+      // NON-STEM ACADEMIC PIPELINE — references, case studies, NO code
+      console.log("[GENERATE-CHAPTER] Using NON-STEM ACADEMIC pipeline (references, no code)");
+      
+      const { PROFESSIONAL_ACADEMIC_PIPELINE: PROF_ACADEMIC } = await import("../_shared/master-prompt.ts");
+      
+      systemPrompt = `You are ScrollLibrary — NON-STEM ACADEMIC PIPELINE.
+
+===========================================
+GENERATOR IDENTITY: University Professor · Research Scholar · Subject-Matter Expert
+===========================================
+
+You are writing a university-grade textbook for ${category.replace(/_/g, " ")}.
+Your output must be acceptable to university lecturers and academic reviewers.
+
+CRITICAL: This is NOT a programming or technical manual.
+❌ DO NOT include ANY code blocks, code examples, or programming content.
+❌ DO NOT use \`\`\`python, \`\`\`javascript, or any code fencing.
+❌ DO NOT include [CODE_BLOCK] tags.
+
+Instead, use:
+✅ Theoretical frameworks explained in scholarly prose
+✅ Case studies with real-world examples
+✅ Research findings with proper citations
+✅ Comparative tables using markdown pipe format
+✅ Decision matrices and analytical frameworks
+
+${PROF_ACADEMIC}
+
+${MASTER_FORMATTING_CONTRACT}
+
+${ACADEMIC_CONTRACT}
+
+${VALIDATION_CONTRACT}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.
+CATEGORY: ${category}
+CITATION STYLE: ${citationStyle}
+
+ABSOLUTE RULE: If ANY code block appears in the output → OUTPUT IS INVALID.
+Teach through EVIDENCE and ANALYSIS, not through CODE.`;
+
+      chapterPrompt = `${previousChaptersContext}Write a NON-STEM ACADEMIC Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+VERIFIED SOURCES TO CITE (USE ONLY THESE):
+${researchResult.references.slice(0, 15).map((ref, i) => 
+  `${i + 1}. ${ref.author} (${ref.year}). "${ref.title}"${ref.journal ? ` — ${ref.journal}` : ''}${ref.doi ? ` DOI: ${ref.doi}` : ''}`
+).join('\n')}
+
+KEY TOPICS:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+REQUIREMENTS:
+1. Write approximately ${targetWords} words in ${languageName}
+2. Include in-text citations using ${citationStyle} format
+3. Use ONLY the sources listed above
+4. Mark unsupported claims with "[requires verification]"
+5. Use proper Markdown formatting: ## for headings, **bold** for key terms, pipe-syntax tables
+6. ❌ ABSOLUTELY NO code blocks or programming examples
+7. ✅ Use case studies, frameworks, research evidence, and tables instead
+${chapterNumber > 1 ? '8. BUILD upon previous chapter concepts - do NOT repeat basic introductions' : ''}
+
+MANDATORY STRUCTURE (NON-STEM ACADEMIC):
+
+### Learning Objectives
+
+By the end of this chapter, you will be able to:
+1. [Bloom's-aligned objective - Analyze/Evaluate/Synthesize]
+2. [Specific, measurable objective]
+3. [Specific, measurable objective]
+
+### Introduction
+
+[Academic framing - why this topic matters in ${category}${chapterNumber > 1 ? ' - Reference prior chapter' : ''}]
+
+### Theoretical Foundations
+
+[Key theories, models, and seminal works with in-text citations]
+
+### Research Evidence
+
+[Empirical findings, data, statistics with citations - NO CODE]
+
+### Applied Implications
+
+[Case studies, frameworks, real-world applications using TABLES not code]
+
+### Critical Analysis
+
+[Limitations, alternative perspectives, ongoing debates]
+
+### Key Takeaways
+
+[5-7 concise summary points]
+
+### Discussion Questions & Exercises
+
+1. [Thought-provoking discussion question]
+2. [Case study analysis exercise]
+3. [Reflection prompt]
+
+### References
+
+[Full ${citationStyle} formatted bibliography - minimum 8 entries]
+
+REMEMBER: NO CODE BLOCKS. Use tables, frameworks, case studies, and scholarly prose.
+
+BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
+
+    } else if (isAcademicPipeline && (isNonStemAcademic || !isStemAcademic)) {
+      // NON-STEM Academic mode but no research results
+      console.log("[GENERATE-CHAPTER] Using NON-STEM ACADEMIC pipeline (no sources available)");
+      
+      const { PROFESSIONAL_ACADEMIC_PIPELINE: PROF_ACADEMIC } = await import("../_shared/master-prompt.ts");
+      
+      systemPrompt = `You are ScrollLibrary — NON-STEM ACADEMIC PIPELINE.
+
+GENERATOR IDENTITY: University Professor · Research Scholar · Subject-Matter Expert
+
+You are writing a university-grade textbook for ${category.replace(/_/g, " ")}.
+Your output must pass institutional quality review.
+
+CRITICAL: This is NOT a programming or technical manual.
+❌ DO NOT include ANY code blocks, code examples, or programming content.
+❌ DO NOT use code fencing of any kind.
+
+Instead, use:
+✅ Theoretical frameworks and models
+✅ Case studies with real-world examples
+✅ Research-backed analysis with citations
+✅ Comparative tables using markdown pipe format
+✅ Discussion questions and reflection exercises
+
+${PROF_ACADEMIC}
+
+${MASTER_FORMATTING_CONTRACT}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.
+
+ABSOLUTE RULE: If ANY code block appears → OUTPUT IS INVALID.`;
+
+      chapterPrompt = `${previousChaptersContext}Write a NON-STEM ACADEMIC Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+NON-STEM ACADEMIC STRUCTURE (MANDATORY):
+
+### Learning Objectives
+
+By the end of this chapter, you will be able to:
+1. [Bloom's-aligned objective]
+2. [Specific objective]
+3. [Specific objective]
+
+### Introduction
+
+[Academic overview${chapterNumber > 1 ? ' - Reference prior chapter' : ''}]
+
+### Theoretical Foundations
+
+[Key theories, models, and foundational concepts with citations]
+
+### Research & Evidence
+
+[Research findings, statistics, empirical data — NOT code]
+
+### Practical Applications
+
+[Case studies, frameworks, decision tools — use TABLES not code]
+
+### Critical Analysis
+
+[Limitations, debates, alternative views]
+
+### Key Takeaways
+
+[Summary points]
+
+### Discussion Questions & Exercises
+
+1. [Discussion question]
+2. [Case study exercise]
+3. [Reflection prompt]
+
+### References
+
+[APA 7th formatted references - include real, verifiable sources]
+[Include seminal works for the discipline]
+[Include recent research alongside foundational works]
+
+REQUIREMENTS:
+- Approximately ${targetWords} words
+- Use proper Markdown: ## for headings, **bold** for key terms, pipe-syntax tables
+- ❌ NO code blocks or programming examples
+- ✅ Academic tone with proper in-text citations
+- ✅ Include References section with 8+ verifiable sources
+${chapterNumber > 1 ? '- BUILD upon previous chapter concepts' : ''}
+
+BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
+
+    } else if (isAcademicPipeline && researchResult && researchResult.references.length > 0) {
+      // STEM ACADEMIC/TECHNICAL PIPELINE - code-heavy, literal
+      console.log("[GENERATE-CHAPTER] Using STEM ACADEMIC/TECHNICAL pipeline (code-heavy, literal)");
       
       systemPrompt = `You are ScrollLibrary — ACADEMIC/TECHNICAL PIPELINE.
 
