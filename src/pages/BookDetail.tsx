@@ -657,7 +657,19 @@ export default function BookDetail() {
           hasGeneratedChapters={hasGeneratedChapters}
           onSave={handleSaveToLibrary}
           onStartReading={() => navigate(`/read/${id}/1`)}
-          onShare={() => {}}
+          onShare={async () => {
+            const bookUrl = `${window.location.origin}/book/${id}`;
+            if (navigator.share) {
+              try {
+                await navigator.share({ title: book.title, text: book.description || book.title, url: bookUrl });
+              } catch (e) { /* user cancelled */ }
+            } else {
+              try {
+                await navigator.clipboard.writeText(bookUrl);
+                toast({ title: "Link copied!" });
+              } catch { toast({ title: "Could not share", variant: "destructive" }); }
+            }
+          }}
         />
       )}
 
