@@ -2196,10 +2196,7 @@ serve(async (req) => {
     // Model routing respects subscription tier — admin bypass is for limits only, not model upgrade
     const editIntent_raw = (requestBody?.editIntent as string | null) || null;
     const isChiefEditorRewrite = editIntent_raw?.startsWith('[CHIEF_EDITOR_REWRITE]') || false;
-    // Chief Editor rewrites ALWAYS use flash (minimum) to ensure complex rewrite instructions are followed
-    const generationModel = isChiefEditorRewrite
-      ? (userPlan === 'prophet_tier' || userPlan === 'premium' ? 'google/gemini-2.5-pro' : 'google/gemini-2.5-flash')
-      : getModelForPlan(userPlan);
+    const generationModel = getModelForPlan(userPlan);
     const maxWordCount = TIER_WORD_LIMITS[userPlan as keyof typeof TIER_WORD_LIMITS] || TIER_WORD_LIMITS.free;
     console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel} | Admin: ${isAdmin}`);
 
