@@ -361,7 +361,7 @@ Respond as JSON:
           Authorization: `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({ model, messages: auditMessages }),
+        body: JSON.stringify({ model, messages: auditMessages, temperature: 0.1 }),
       });
 
       if (resp.ok) {

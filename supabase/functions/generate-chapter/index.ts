@@ -2196,7 +2196,10 @@ serve(async (req) => {
     // Model routing respects subscription tier — admin bypass is for limits only, not model upgrade
     const editIntent_raw = (requestBody?.editIntent as string | null) || null;
     const isChiefEditorRewrite = editIntent_raw?.startsWith('[CHIEF_EDITOR_REWRITE]') || false;
-    const generationModel = getModelForPlan(userPlan);
+    // Chief Editor rewrites ALWAYS use flash (minimum) to ensure complex rewrite instructions are followed
+    const generationModel = isChiefEditorRewrite
+      ? (userPlan === 'prophet_tier' || userPlan === 'premium' ? 'google/gemini-2.5-pro' : 'google/gemini-2.5-flash')
+      : getModelForPlan(userPlan);
     const maxWordCount = TIER_WORD_LIMITS[userPlan as keyof typeof TIER_WORD_LIMITS] || TIER_WORD_LIMITS.free;
     console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel} | Admin: ${isAdmin}`);
 
@@ -2392,35 +2395,46 @@ AUDIT RUBRIC — YOU MUST SCORE 95+ ON ALL:
 - Variety of explanation methods (narrative, examples, analogies, scenarios)
 - Assessment-ready content (quiz questions could test this)
 
-PENALTY AVOIDANCE — ENSURE ALL OF THESE (CRITICAL — these are deterministic checks that WILL cap your score):
-- Word count MUST be 1500+ words (avoids WORD_COUNT_LOW penalty, cap 60)
-- Include 5+ concrete examples using phrases like "for example", "e.g.", "for instance", "such as", "consider", "let's say", "imagine", "suppose" (avoids NO_EXAMPLES penalty, cap 65)
-- Define 5+ key terms explicitly using phrases like "is defined as", "refers to", "means that", "can be described as", "is a", "are called" (avoids NO_DEFINITIONS penalty, cap 70)
-- Use 5+ markdown headings (## or ###) throughout the chapter (avoids NO_STRUCTURE penalty, cap 55)
-- Include 5+ questions (using ?) AND exercises/activities using words like "exercise", "try it", "practice", "quiz", "question", "task", "activity", "challenge" (avoids NO_ENGAGEMENT penalty, cap 70)
+PENALTY AVOIDANCE — THESE ARE HARD-CODED REGEX CHECKS. IF YOU MISS ANY, YOUR SCORE IS CAPPED NO MATTER HOW GOOD THE WRITING IS:
 
-STRUCTURAL REQUIREMENTS FOR 95+ SCORE:
-- Opening hook in first 100 words (story, contradiction, or insight — NOT a definition)
-- 4+ well-organized subsections with ## or ### headings
-- Smooth transitions between sections
+1. WORD COUNT >= 1500 words (penalty cap: 60 if < 800, cap 40 if < 400). AIM FOR 2000+ WORDS.
+
+2. EXAMPLE PHRASES — Include AT LEAST 8 of these EXACT phrases scattered throughout (penalty cap 65 if zero detected):
+   "for example", "e.g.", "for instance", "such as", "consider", "let's say", "imagine", "suppose", "here is", "here's", "the following", "as shown", "in practice", "to illustrate", "step-by-step"
+   
+3. DEFINITION PHRASES — Include AT LEAST 8 of these EXACT phrases (penalty cap 70 if zero detected):
+   "is defined as", "refers to", "means that", "can be described as", "are called", "is a type of", "is the process of", "is known as", "stands for", "represents", "in other words", "put simply", "in simple terms", "the core idea", "think of it as", "essentially", "at its core", "boils down to"
+
+4. MARKDOWN HEADINGS — Use AT LEAST 5 headings with ## or ### (penalty cap 55 if < 2 headings for 500+ words)
+
+5. ENGAGEMENT — Include AT LEAST 5 question marks (?) AND use AT LEAST 5 of these EXACT words/phrases (penalty cap 70 if zero):
+   "exercise", "try it", "practice", "quiz", "question", "task", "activity", "challenge", "try this", "your turn", "hands-on", "experiment", "implement", "reflection", "think about", "what would happen", "what if", "how would you", "can you"
+
+STRUCTURAL REQUIREMENTS (95+ score):
+- Opening hook in first 100 words (story, contradiction, or surprising fact)
+- 5+ well-organized subsections with ## or ### headings
+- Smooth transitions between every section
 - Strong closing that summarizes key takeaways
 
-ACADEMIC REQUIREMENTS FOR 95+ SCORE:
+ACADEMIC REQUIREMENTS (95+ score):
 - Every claim supported with evidence or reasoning
-- Technical terms defined before use
-- Deep coverage, not surface-level summaries
+- Technical terms defined before use using definition phrases above
+- Deep coverage — no surface-level summaries
 - Zero factual errors
 
-PEDAGOGICAL REQUIREMENTS FOR 95+ SCORE:
+PEDAGOGICAL REQUIREMENTS (95+ score):
 - Clear learning objectives stated at the beginning
-- Multiple varied examples (narrative, code, analogies, scenarios)
+- Multiple varied examples using example phrases above (narrative, code, analogies, scenarios)
 - Progressive knowledge building
-- Active learning prompts throughout (questions, reflection, exercises)
+- Active learning prompts using engagement phrases above
 - Clear actionable takeaways at the end
+
+SELF-CHECK BEFORE OUTPUTTING:
+Count your example phrases (need 8+), definition phrases (need 8+), headings (need 5+), question marks (need 5+), engagement words (need 5+). If ANY count is below threshold, ADD MORE before outputting.
 
 REWRITE THE ENTIRE CHAPTER to achieve 95-100/100 on ALL dimensions.
 Preserve the topic and core ideas but dramatically improve structure, depth, examples, definitions, and engagement.
-The output MUST be 1500-3000 words minimum to ensure sufficient depth.
+The output MUST be 2000-3500 words to ensure sufficient depth and pattern coverage.
 
 BEGIN COMPREHENSIVE REWRITE:`;
       } else {
