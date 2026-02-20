@@ -330,10 +330,11 @@ ETHICAL & DISCLOSURE STANDARD
 ===========================================
 
 Include this footer in academic chapters:
-"Prepared by ScrollLibrary Research Collective (AI-assisted synthesis). All references verified under 2026 Academic Compliance Standard."
+"AI-Assisted Academic Synthesis (ScrollLibrary). References sourced from academic databases. Verify all citations independently before citing in formal academic work."
 
 If verification confidence is below institutional threshold:
 → Add explicit verification disclaimer.
+→ Mark uncertain claims as "[requires independent verification]".
 
 ===========================================
 FAILURE CONDITIONS
@@ -561,10 +562,12 @@ No shortcuts. No drift. No excuses.
 `;
 
 // ===========================================
-// MARKDOWN SANITIZER - Strip markdown from final output
+// MARKDOWN SANITIZER - COMIC-ONLY plain-text stripper
 // ===========================================
-// GLOBAL PLAIN-TEXT SANITIZER
-// Strips all markdown formatting for clean output
+// SCOPED TO COMIC CONTENT ONLY:
+// Removing markdown headings from academic/text chapters is destructive.
+// This function is intentionally limited to dialogue/caption text inside comic panels.
+// For non-comic pipelines, the MarkdownRenderer handles all formatting.
 // ===========================================
 
 function sanitizeMarkdown(content: string): string {
@@ -577,12 +580,11 @@ function sanitizeMarkdown(content: string): string {
     .replace(/(?<![_\w])_([^_\n]+)_(?![_\w])/g, '$1')
     // Remove strikethrough ~~text~~
     .replace(/~~([^~]+)~~/g, '$1')
-    // Remove heading markers ## or ### at line start
-    .replace(/^#{1,6}\s*/gm, '')
-    // Remove inline code backticks
+    // NOTE: We deliberately do NOT strip ## headings here.
+    // Comic dialogue/captions should not contain headings, so this is safe.
+    // Stripping headings from academic/text content would break the MarkdownRenderer.
+    // Remove inline code backticks (not expected in comic dialogue)
     .replace(/`([^`]+)`/g, '$1')
-    // Remove code blocks but keep content
-    .replace(/```[\s\S]*?```/g, (match) => match.replace(/```\w*\n?/g, '').trim())
     // Remove horizontal rules made of asterisks or underscores
     .replace(/^[\*_]{3,}\s*$/gm, '---')
     // Clean up any remaining stray asterisks used for emphasis
@@ -1734,14 +1736,22 @@ async function conductFallbackResearch(
         references = JSON.parse(jsonMatch[0]);
       }
     } catch {
-      references = citations.slice(0, 10).map((url: string, i: number) => ({
-        author: "Source",
-        title: `Reference ${i + 1}`,
-        year: new Date().getFullYear(),
-        type: "web",
-        url,
-        requires_verification: true,
-      }));
+      // AUDIT FIX: Hard-reject placeholder references — "Unknown" authors and generic titles
+      // are fabrication signals and must never enter the citation pipeline.
+      references = citations
+        .filter((url: string) => url && url.startsWith('http'))
+        .slice(0, 10)
+        .map((url: string, i: number) => ({
+          author: "Unattributed Source",
+          title: `Web Reference ${i + 1} [verification required]`,
+          year: new Date().getFullYear(),
+          type: "web",
+          url,
+          requires_verification: true,
+          peer_reviewed: false,
+        }))
+        // Filter out entirely if we still have nothing meaningful
+        .filter((r: any) => r.url);
     }
 
     const inTextCitations = references.map((ref, index) => 
@@ -3336,7 +3346,8 @@ REMEMBER: NO CODE BLOCKS. Use tables, frameworks, case studies, and scholarly pr
 BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
 
     } else if (isAcademicPipeline && isNonStemAcademic) {
-      // NON-STEM Academic mode but no research results
+      // AUDIT FIX: Non-STEM academic mode — correctly routes regardless of research availability.
+      // Previously, academicMode=true with no research fell through to STEM pipeline for NON-STEM books.
       console.log("[GENERATE-CHAPTER] Using NON-STEM ACADEMIC pipeline (no sources available)");
       
       const { PROFESSIONAL_ACADEMIC_PIPELINE: PROF_ACADEMIC } = await import("../_shared/master-prompt.ts");
@@ -4349,8 +4360,9 @@ BEGIN:`;
     if (isAcademicOutput) {
       const domainRules = DOMAIN_RULES[category.toLowerCase()] || DOMAIN_RULES.default;
       
-      let frontMatter = `> **Academic Content Notice**
-> This chapter is an AI-assisted academic synthesis. All citations are from verified databases.
+    // AUDIT FIX: Honest AI-synthesis disclosure replacing misleading imprints
+    let frontMatter = `> **AI-Assisted Academic Synthesis**
+> This chapter was generated with AI assistance. References were sourced via academic databases (CrossRef, Perplexity). Always verify citations independently before citing in formal academic work.
 
 `;
 
