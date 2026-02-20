@@ -3863,16 +3863,31 @@ ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat
 BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
     }
 
-    // Retry logic for transient gateway errors (502, 503, 504)
-    const MAX_RETRIES = 3;
+    // Retry logic for transient gateway errors (502, 503, 504) and rate limits (429)
+    // Model fallback chain for 429 rate limits
+    const FALLBACK_MODELS = [
+      generationModel,
+      "google/gemini-2.5-flash",
+      "google/gemini-2.5-flash-lite",
+    ];
+    // Deduplicate: if generationModel is already in the chain, skip it
+    const modelChain = [...new Set(FALLBACK_MODELS)];
+    
+    const MAX_RETRIES = 4;
     let response: Response | null = null;
     let lastErr = "";
+    let currentModelIdx = 0;
+    
     for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+      const activeModel = modelChain[Math.min(currentModelIdx, modelChain.length - 1)];
+      
       if (attempt > 0) {
-        const delay = 2000 * attempt;
-        console.log(`[GENERATE-CHAPTER] Retry attempt ${attempt + 1} after ${delay}ms...`);
+        // Longer backoff for 429 (rate limit), shorter for gateway errors
+        const delay = lastErr.includes("rate_limited") ? 5000 * attempt : 2000 * attempt;
+        console.log(`[GENERATE-CHAPTER] Retry attempt ${attempt + 1} with model ${activeModel} after ${delay}ms...`);
         await new Promise(r => setTimeout(r, delay));
       }
+      
       response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
         method: "POST",
         headers: {
@@ -3880,7 +3895,7 @@ BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: generationModel,
+          model: activeModel,
           messages: [
             { role: "system", content: systemPrompt },
             { role: "user", content: chapterPrompt }
@@ -3889,12 +3904,23 @@ BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
       });
       if (response.ok) break;
       const errText = await response.text();
-      lastErr = errText.slice(0, 200);
-      console.error(`[GENERATE-CHAPTER] AI gateway error (attempt ${attempt + 1}):`, response.status, lastErr);
-      // Only retry on transient errors
-      if (![502, 503, 504].includes(response.status)) {
-        throw new Error(`AI generation failed (${response.status}): ${lastErr}`);
+      lastErr = errText.slice(0, 300);
+      console.error(`[GENERATE-CHAPTER] AI gateway error (attempt ${attempt + 1}, model ${activeModel}):`, response.status, lastErr);
+      
+      if (response.status === 429) {
+        // Rate limited — try falling back to a cheaper/faster model
+        currentModelIdx++;
+        console.log(`[GENERATE-CHAPTER] Rate limited (429), falling back to next model in chain (idx ${currentModelIdx})`);
+        continue;
       }
+      
+      // Retry on transient gateway errors
+      if ([502, 503, 504].includes(response.status)) {
+        continue;
+      }
+      
+      // Non-retryable error — bail immediately
+      throw new Error(`AI generation failed (${response.status}): ${lastErr}`);
     }
 
     if (!response || !response.ok) {
