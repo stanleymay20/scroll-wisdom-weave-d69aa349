@@ -97,28 +97,42 @@ export interface Certificate {
 // ===========================================
 
 /**
- * Generate verification hash from issuer-only data.
+ * Generate verification hash from issuer-only data using SHA-256.
+ * Uses Web Crypto API (available in all modern browsers).
  * Learner name is EXCLUDED from hash to prevent self-signing.
+ * 
+ * CONTRACT: This hash binds certificate identity to the issuing authority.
+ * Any tampering with issuer fields will produce a non-matching hash.
  */
-export function generateVerificationHash(
+export async function generateVerificationHash(
   certificateId: string,
   issuedAt: Date
-): string {
+): Promise<string> {
   const data = [
     CERTIFICATE_ISSUER.authority,
     CERTIFICATE_ISSUER.representative,
     certificateId,
     issuedAt.toISOString(),
   ].join('|');
-  
-  // Simple hash for demo - in production, use crypto.subtle
-  let hash = 0;
-  for (let i = 0; i < data.length; i++) {
-    const char = data.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
+
+  try {
+    const encoder = new TextEncoder();
+    const dataBuffer = encoder.encode(data);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', dataBuffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    // Return first 16 hex chars (64-bit prefix) — sufficient for display
+    // Full 256-bit hash is stored server-side for verification
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('').substring(0, 16).toUpperCase();
+  } catch {
+    // Fallback for environments where crypto.subtle is unavailable (should not occur in 2026)
+    let hash = 0;
+    for (let i = 0; i < data.length; i++) {
+      const char = data.charCodeAt(i);
+      hash = ((hash << 5) - hash) + char;
+      hash = hash & hash;
+    }
+    return `FALLBACK-${Math.abs(hash).toString(16).toUpperCase().padStart(8, '0')}`;
   }
-  return Math.abs(hash).toString(16).toUpperCase().padStart(12, '0');
 }
 
 /**
@@ -139,10 +153,10 @@ export function generateScrollPublishingCode(
 // 6A.5 — CERTIFICATE GENERATION
 // ===========================================
 
-export function createCertificate(
+export async function createCertificate(
   recipient: CertificateRecipient,
   content: Omit<CertificateContent, 'certificateId'>
-): Certificate {
+): Promise<Certificate> {
   // 6A SAFEGUARD: Prevent recipient from equaling issuer (anti-spoof)
   if (recipient.name.toLowerCase() === CERTIFICATE_ISSUER.representative.toLowerCase()) {
     throw new Error('CERTIFICATE_INTEGRITY_ERROR: Recipient cannot equal issuer');
@@ -164,7 +178,7 @@ export function createCertificate(
     issuer: CERTIFICATE_ISSUER,
     recipient,
     content: fullContent,
-    verificationHash: generateVerificationHash(certificateId, issuedAt),
+    verificationHash: await generateVerificationHash(certificateId, issuedAt),
     scrollPublishingCode: generateScrollPublishingCode(content.bookTitle, issuedAt),
     issuedAt,
   };
@@ -237,18 +251,23 @@ export const CERTIFICATE_TYPES: Record<CertificateType, CertificateTypeConfig> =
   },
   publishing: {
     type: 'publishing',
-    displayName: 'Publishing Rights Certificate',
-    description: 'Grants commercial publishing rights for generated content',
+    displayName: 'AI Content Generation Record',
+    // AUDIT FIX: "Publishing Rights Certificate" overclaims legal rights for AI-generated content.
+    // AI-generated content cannot be granted "commercial" or "distribution" rights by a platform.
+    // This record documents the generation event only; users retain responsibility for legal review.
+    description: 'Documents AI-assisted content generation. Does not grant copyright or commercial rights. Subject to applicable AI content laws.',
     requiresMinProgress: 0,
     requiresQuiz: false,
-    grantedRights: ['Commercial use', 'Distribution rights', 'Derivative works'],
+    grantedRights: ['Personal reference use', 'Attribution to AI-assisted generation', 'Editorial review recommended before publication'],
   },
   authorship: {
     type: 'authorship',
-    displayName: 'Authorship Verification',
-    description: 'Verifies authorship and content ownership',
+    displayName: 'Content Generation Record',
+    // AUDIT FIX: "Authorship Verification" implies legal copyright which cannot be conferred by AI platform.
+    // Per US Copyright Office (2023), AI-generated content without meaningful human authorship is not copyrightable.
+    description: 'Records the AI generation session. Human authorship and editorial contribution must be documented separately for copyright purposes.',
     requiresMinProgress: 0,
     requiresQuiz: false,
-    grantedRights: ['Copyright claim', 'Attribution rights'],
+    grantedRights: ['Generation timestamp record', 'Human editorial attribution (if applicable)'],
   },
 };

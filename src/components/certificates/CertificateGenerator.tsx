@@ -133,7 +133,7 @@ export function CertificateGenerator({
         userId,
       };
 
-      const newCertificate = createCertificate(recipient, {
+      const newCertificate = await createCertificate(recipient, {
         bookTitle,
         bookType,
         completionDate: new Date(),

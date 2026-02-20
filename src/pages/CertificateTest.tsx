@@ -4,7 +4,7 @@
  * Route: /certificate-test
  */
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeft, RefreshCw } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
@@ -12,10 +12,9 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { CertificateDisplay } from '@/components/certificates/CertificateDisplay';
 import { CompetencyManifestDisplay } from '@/components/certificates/CompetencyManifestDisplay';
 import { CertificationEmblem } from '@/components/certificates/CertificationEmblem';
-import { createCertificate, CertificateType } from '@/lib/certificateAuthority';
+import { createCertificate, Certificate, CertificateType } from '@/lib/certificateAuthority';
 import { generateCompetencyManifest } from '@/lib/competencyManifest';
 
-// Mock data for test certificate
 const MOCK_RECIPIENT = {
   name: 'Test Learner',
   email: 'test@scrolllibrary.com',
@@ -62,34 +61,44 @@ export default function CertificateTest() {
   const navigate = useNavigate();
   const [certificateType, setCertificateType] = useState<CertificateType>('completion');
   const [refreshKey, setRefreshKey] = useState(0);
+  const [certificate, setCertificate] = useState<Certificate | null>(null);
 
-  // Generate fresh certificate on each refresh
-  const certificate = createCertificate(MOCK_RECIPIENT, MOCK_CONTENT);
+  // Generate certificate async (SHA-256 requires async)
+  useEffect(() => {
+    createCertificate(MOCK_RECIPIENT, MOCK_CONTENT).then(setCertificate);
+  }, [refreshKey]);
 
-  // Generate standalone manifest for testing
-  const standaloneManifest = generateCompetencyManifest({
-    bookId: 'test-book-123',
-    bookTitle: MOCK_CONTENT.bookTitle,
-    bookType: MOCK_CONTENT.bookType,
-    domain: MOCK_MANIFEST_DATA.domain,
-    totalChapters: MOCK_CONTENT.totalChapters,
-    completedChapters: MOCK_CONTENT.chaptersCompleted,
-    learningObjectives: MOCK_MANIFEST_DATA.learningObjectives,
-    skills: MOCK_MANIFEST_DATA.skills,
-    assessmentResults: MOCK_MANIFEST_DATA.assessmentBreakdown.map(ab => ({
-      tier: ab.tier as 1 | 2 | 3 | 4,
-      questionCount: ab.count,
-      correctCount: ab.correct,
-    })),
-    integrityScore: MOCK_MANIFEST_DATA.integrityScore / 100,
-    integritySignals: ['No focus loss detected', 'Consistent timing patterns'],
-    certificateType,
-    certificateId: certificate.id,
-  });
+  const handleRefresh = () => setRefreshKey(k => k + 1);
 
-  const handleRefresh = () => {
-    setRefreshKey(k => k + 1);
-  };
+  const standaloneManifest = certificate
+    ? generateCompetencyManifest({
+        bookId: 'test-book-123',
+        bookTitle: MOCK_CONTENT.bookTitle,
+        bookType: MOCK_CONTENT.bookType,
+        domain: MOCK_MANIFEST_DATA.domain,
+        totalChapters: MOCK_CONTENT.totalChapters,
+        completedChapters: MOCK_CONTENT.chaptersCompleted,
+        learningObjectives: MOCK_MANIFEST_DATA.learningObjectives,
+        skills: MOCK_MANIFEST_DATA.skills,
+        assessmentResults: MOCK_MANIFEST_DATA.assessmentBreakdown.map(ab => ({
+          tier: ab.tier as 1 | 2 | 3 | 4,
+          questionCount: ab.count,
+          correctCount: ab.correct,
+        })),
+        integrityScore: MOCK_MANIFEST_DATA.integrityScore / 100,
+        integritySignals: ['No focus loss detected', 'Consistent timing patterns'],
+        certificateType,
+        certificateId: certificate.id,
+      })
+    : null;
+
+  if (!certificate) {
+    return (
+      <div className="min-h-screen bg-background flex items-center justify-center">
+        <p className="text-muted-foreground">Generating test certificate…</p>
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-background">
@@ -103,9 +112,7 @@ export default function CertificateTest() {
               </Button>
               <div>
                 <h1 className="text-xl font-bold">Certificate Test Page</h1>
-                <p className="text-sm text-muted-foreground">
-                  Verify Emblem & Competency Manifest
-                </p>
+                <p className="text-sm text-muted-foreground">Verify Emblem & Competency Manifest</p>
               </div>
             </div>
             <Button variant="outline" onClick={handleRefresh} className="gap-2">
@@ -117,30 +124,22 @@ export default function CertificateTest() {
       </div>
 
       <div className="container max-w-6xl mx-auto px-4 py-8 space-y-8">
-        {/* Emblem Test Section */}
+        {/* Emblem Test */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              🏛️ Certification Emblem Test
-            </CardTitle>
+            <CardTitle>🏛️ Certification Emblem Test</CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground mb-4">
               The Certification Emblem must appear on all certificates (CONTRACT 8A).
             </p>
             <div className="flex flex-wrap items-end gap-8 p-6 bg-muted/30 rounded-lg">
-              <div className="text-center">
-                <CertificationEmblem size="sm" />
-                <p className="text-xs text-muted-foreground mt-2">Small</p>
-              </div>
-              <div className="text-center">
-                <CertificationEmblem size="md" />
-                <p className="text-xs text-muted-foreground mt-2">Medium</p>
-              </div>
-              <div className="text-center">
-                <CertificationEmblem size="lg" />
-                <p className="text-xs text-muted-foreground mt-2">Large</p>
-              </div>
+              {(['sm', 'md', 'lg'] as const).map(size => (
+                <div key={size} className="text-center">
+                  <CertificationEmblem size={size} />
+                  <p className="text-xs text-muted-foreground mt-2 capitalize">{size}</p>
+                </div>
+              ))}
               <div className="text-center">
                 <CertificationEmblem size="lg" showText />
                 <p className="text-xs text-muted-foreground mt-2">With Text</p>
@@ -149,14 +148,12 @@ export default function CertificateTest() {
           </CardContent>
         </Card>
 
-        {/* Certificate Type Selector */}
+        {/* Type Selector */}
         <Card>
-          <CardHeader>
-            <CardTitle>Certificate Type</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Certificate Type</CardTitle></CardHeader>
           <CardContent>
             <div className="flex flex-wrap gap-2">
-              {(['completion', 'mastery', 'publishing', 'authorship'] as CertificateType[]).map((type) => (
+              {(['completion', 'mastery', 'publishing', 'authorship'] as CertificateType[]).map(type => (
                 <Button
                   key={type}
                   variant={certificateType === type ? 'default' : 'outline'}
@@ -171,7 +168,7 @@ export default function CertificateTest() {
           </CardContent>
         </Card>
 
-        {/* Full Certificate Display */}
+        {/* Full Certificate */}
         <div>
           <h2 className="text-lg font-semibold mb-4">Full Certificate Display</h2>
           <CertificateDisplay
@@ -184,11 +181,9 @@ export default function CertificateTest() {
           />
         </div>
 
-        {/* Compact Certificate Display */}
+        {/* Compact Certificate */}
         <Card>
-          <CardHeader>
-            <CardTitle>Compact Certificate View</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle>Compact Certificate View</CardTitle></CardHeader>
           <CardContent>
             <CertificateDisplay
               key={`compact-${refreshKey}`}
@@ -199,37 +194,37 @@ export default function CertificateTest() {
           </CardContent>
         </Card>
 
-        {/* Standalone Competency Manifest */}
-        <div>
-          <h2 className="text-lg font-semibold mb-4">Full Competency Manifest</h2>
-          <CompetencyManifestDisplay
-            key={`manifest-${refreshKey}`}
-            manifest={standaloneManifest}
-            showExportOption={true}
-          />
-        </div>
-
-        {/* Compact Manifest */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Compact Manifest View</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <CompetencyManifestDisplay
-              key={`manifest-compact-${refreshKey}`}
-              manifest={standaloneManifest}
-              compact={true}
-            />
-          </CardContent>
-        </Card>
+        {/* Competency Manifest */}
+        {standaloneManifest && (
+          <>
+            <div>
+              <h2 className="text-lg font-semibold mb-4">Full Competency Manifest</h2>
+              <CompetencyManifestDisplay
+                key={`manifest-${refreshKey}`}
+                manifest={standaloneManifest}
+                showExportOption={true}
+              />
+            </div>
+            <Card>
+              <CardHeader><CardTitle>Compact Manifest View</CardTitle></CardHeader>
+              <CardContent>
+                <CompetencyManifestDisplay
+                  key={`manifest-compact-${refreshKey}`}
+                  manifest={standaloneManifest}
+                  compact={true}
+                />
+              </CardContent>
+            </Card>
+          </>
+        )}
 
         {/* Verification Info */}
         <Card className="bg-muted/30">
           <CardContent className="pt-6">
-            <div className="text-center text-sm text-muted-foreground">
-              <p className="font-medium mb-2">Test Certificate Data</p>
+            <div className="text-center text-sm text-muted-foreground space-y-1">
+              <p className="font-medium">Test Certificate Data</p>
               <p>Certificate ID: {certificate.id}</p>
-              <p>Verification Hash: {certificate.verificationHash}</p>
+              <p>SHA-256 Hash (truncated): {certificate.verificationHash}</p>
               <p>SPC: {certificate.scrollPublishingCode}</p>
             </div>
           </CardContent>
