@@ -163,16 +163,32 @@ Requirements:
       }
     } catch (parseError) {
       logStep("Could not parse JSON references, using citations");
-      references = citations.map((url: string, i: number) => ({
-        author: "Source",
-        title: `Reference ${i + 1}`,
-        year: new Date().getFullYear(),
-        type: "web",
-        url,
-        requires_verification: true,
-        peer_reviewed: false,
-      }));
+      references = citations
+        .filter((url: string) => url && url.startsWith('http'))
+        .map((url: string, i: number) => ({
+          author: "Unattributed Source",
+          title: `Web Reference ${i + 1} — verification required`,
+          year: new Date().getFullYear(),
+          type: "web",
+          url,
+          requires_verification: true,
+          peer_reviewed: false,
+        }));
     }
+
+    // AUDIT FIX: Hard-reject placeholder/fabricated references before post-processing.
+    // Entries with "Unknown" author or generic "Reference N" titles are fabrication signals.
+    const PLACEHOLDER_AUTHOR = /^(unknown|source|n\/a|anonymous)$/i;
+    const PLACEHOLDER_TITLE = /^(reference\s+\d+|unknown|untitled|n\/a|web reference|article \d+)$/i;
+    references = references.filter((ref: any) => {
+      const author = String(ref.author || '').trim();
+      const title = String(ref.title || '').trim();
+      const isPlaceholder = PLACEHOLDER_AUTHOR.test(author) || PLACEHOLDER_TITLE.test(title);
+      if (isPlaceholder) {
+        logStep("Hard-rejecting placeholder reference", { author: author.slice(0, 40), title: title.slice(0, 40) });
+      }
+      return !isPlaceholder;
+    });
 
     // Post-processing: enforce 2026 standards
     // Remove duplicates by DOI or title
@@ -216,8 +232,9 @@ Requirements:
           post2010Pct: total > 0 ? Math.round((post2010 / total) * 100) : 0,
           post2018Pct: total > 0 ? Math.round((post2018 / total) * 100) : 0,
         },
-        note: "References sourced via Perplexity AI academic search with 2026 compliance standards. Verify DOIs before publication.",
-        standard: "2026 Academic Reference Standard — APA 7th Edition",
+        note: "References sourced via Perplexity AI academic search. Verify all DOIs independently before citing in formal academic work. AI-generated references may contain errors.",
+        standard: "APA 7th Edition — AI-Assisted Reference Search",
+        disclaimer: "This is an AI-assisted output. It does not constitute peer review or institutional endorsement.",
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );

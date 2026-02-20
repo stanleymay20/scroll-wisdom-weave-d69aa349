@@ -9,9 +9,18 @@ async function verifyDOI(doi: string) {
   try { const r = await fetch(`https://doi.org/${doi}`, { method: "HEAD", redirect: "follow", headers: { Accept: "text/html" }, signal: AbortSignal.timeout(8000) }); return { resolved: r.ok || r.status === 302 || r.status === 301 }; } catch { return { resolved: false }; }
 }
 
+// AUDIT FIX: Raised similarity threshold from 0.7 → 0.8 to reduce gameable false-positives.
+// At 0.7, two papers sharing ~70% of title words could be mistakenly "verified".
+// At 0.8, we require stronger lexical overlap before granting verified status.
 async function crossrefValidate(doi: string, title: string, author: string, year: number) {
   try {
-    const r = await fetch(`https://api.crossref.org/works/${encodeURIComponent(doi)}`, { headers: { "User-Agent": "ScrollLibrary/1.0" }, signal: AbortSignal.timeout(10000) });
+    // AUDIT FIX: Hard-reject known placeholder/fabrication patterns before hitting CrossRef
+    const PLACEHOLDER_PATTERNS = [/^reference\s+\d+$/i, /^unknown$/i, /^\[requires?\s+verification\]$/i, /^web reference/i, /^source\s*\d*$/i];
+    if (PLACEHOLDER_PATTERNS.some(p => p.test(title.trim())) || PLACEHOLDER_PATTERNS.some(p => p.test(author.trim()))) {
+      return { matched: false, sim: 0, authorMatch: false, yearMatch: false, status: "fabricated" as const, crWork: undefined };
+    }
+
+    const r = await fetch(`https://api.crossref.org/works/${encodeURIComponent(doi)}`, { headers: { "User-Agent": "ScrollLibrary/1.0 (mailto:research@scrolllibrary.org)" }, signal: AbortSignal.timeout(10000) });
     if (!r.ok) return { matched: false, sim: 0, authorMatch: false, yearMatch: false, status: "unverified" as const, crWork: undefined };
     const w = (await r.json()).message;
     const crTitle = w.title?.[0] || "";
@@ -22,9 +31,10 @@ async function crossrefValidate(doi: string, title: string, author: string, year
     const expLast = author.split(',')[0]?.split(' ').pop()?.toLowerCase() || '';
     const aM = crAuthors.some((a: string) => a.includes(expLast) || expLast.includes(a));
     const crY = w.published?.["date-parts"]?.[0]?.[0] || w["published-print"]?.["date-parts"]?.[0]?.[0];
-    const yM = crY === year, matched = sim >= 0.7 && aM && yM;
+    // AUDIT: Threshold raised from 0.7 to 0.8 — requires stronger lexical title match for "verified" status
+    const yM = crY === year, matched = sim >= 0.8 && aM && yM;
     const abs = typeof w.abstract === 'string' ? w.abstract.replace(/<[^>]*>/g, '').trim() : undefined;
-    return { matched, sim: Math.round(sim * 100), authorMatch: aM, yearMatch: yM, status: (matched ? "verified" : sim >= 0.5 ? "suspicious" : "unverified") as any, crWork: { title: crTitle, abstract: abs, keywords: Array.isArray(w.subject) ? w.subject : undefined, year: crY } };
+    return { matched, sim: Math.round(sim * 100), authorMatch: aM, yearMatch: yM, status: (matched ? "verified" : sim >= 0.55 ? "suspicious" : "unverified") as any, crWork: { title: crTitle, abstract: abs, keywords: Array.isArray(w.subject) ? w.subject : undefined, year: crY } };
   } catch { return { matched: false, sim: 0, authorMatch: false, yearMatch: false, status: "unverified" as const, crWork: undefined }; }
 }
 
