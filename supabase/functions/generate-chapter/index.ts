@@ -3927,24 +3927,56 @@ BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
       throw new Error(`AI generation failed after ${MAX_RETRIES} retries: ${lastErr}`);
     }
 
-    const responseText = await response.text();
-    if (!responseText || responseText.trim().length === 0) {
-      throw new Error("AI returned empty response — please retry");
-    }
+    // Retry up to 2 more times if the AI returns an empty/malformed response
+    let chapterContent = "";
+    const EMPTY_RETRIES = 2;
+    for (let emptyAttempt = 0; emptyAttempt <= EMPTY_RETRIES; emptyAttempt++) {
+      if (emptyAttempt > 0) {
+        console.log(`[GENERATE-CHAPTER] Empty response retry ${emptyAttempt}/${EMPTY_RETRIES}, re-calling AI...`);
+        await new Promise(r => setTimeout(r, 3000 * emptyAttempt));
+        
+        const retryModel = modelChain[Math.min(currentModelIdx, modelChain.length - 1)];
+        response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            Authorization: `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: retryModel,
+            messages: [
+              { role: "system", content: systemPrompt },
+              { role: "user", content: chapterPrompt }
+            ],
+          }),
+        });
+        if (!response.ok) {
+          console.error(`[GENERATE-CHAPTER] Empty-retry AI call failed:`, response.status);
+          continue;
+        }
+      }
 
-    let data: any;
-    try {
-      data = JSON.parse(responseText);
-    } catch (parseErr) {
-      console.error("[GENERATE-CHAPTER] JSON parse failed, body length:", responseText.length, "preview:", responseText.slice(0, 300));
-      throw new Error("AI returned malformed response — please retry");
-    }
+      const responseText = await response!.text();
+      if (!responseText || responseText.trim().length === 0) {
+        console.warn(`[GENERATE-CHAPTER] AI returned empty body (attempt ${emptyAttempt + 1})`);
+        continue;
+      }
 
-    let chapterContent = data.choices?.[0]?.message?.content || "";
+      let data: any;
+      try {
+        data = JSON.parse(responseText);
+      } catch (parseErr) {
+        console.error("[GENERATE-CHAPTER] JSON parse failed, body length:", responseText.length, "preview:", responseText.slice(0, 300));
+        continue;
+      }
+
+      chapterContent = data.choices?.[0]?.message?.content || "";
+      if (chapterContent) break;
+      console.warn(`[GENERATE-CHAPTER] No content in choices (attempt ${emptyAttempt + 1}):`, JSON.stringify(data).slice(0, 500));
+    }
 
     if (!chapterContent) {
-      console.error("[GENERATE-CHAPTER] No content in response:", JSON.stringify(data).slice(0, 500));
-      throw new Error("No content generated — please retry");
+      throw new Error("AI returned empty response after multiple retries — please try again");
     }
 
     let finalContent = chapterContent;
