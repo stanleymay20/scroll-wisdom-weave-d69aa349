@@ -283,7 +283,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       }).filter(r => r).join('');
       
       const captionHtml = caption ? `<caption><strong>${caption}</strong></caption>` : '';
-      return `<table class="md-table">${captionHtml}<thead><tr>${headerCells}</tr></thead><tbody>${rows}</tbody></table>`;
+      return `<div class="md-table-wrapper"><table class="md-table">${captionHtml}<thead><tr>${headerCells}</tr></thead><tbody>${rows}</tbody></table></div>`;
     });
     
     // Images ![alt](url)
