@@ -168,67 +168,6 @@ export function useAudioSync({
     const readingContent = container?.querySelector('.reading-content');
     const target = readingContent || container;
 
-    // === WORD-LEVEL: Chunk-aware precise sync with proportional DOM mapping ===
-    if (audio && info && info.chunkWordCounts.length > 0 && !isNaN(audio.currentTime) && !isNaN(audio.duration) && audio.duration > 0) {
-      const fraction = Math.min(1, audio.currentTime / audio.duration);
-      
-      let ttsWordOffset_chunk = 0;
-      for (let i = 0; i < info.chunkIndex && i < info.chunkWordCounts.length; i++) {
-        ttsWordOffset_chunk += info.chunkWordCounts[i];
-      }
-      
-      const wordsInChunk = info.chunkWordCounts[info.chunkIndex] || 1;
-      const wordInChunk = Math.floor(fraction * wordsInChunk);
-      const ttsGlobalWord = ttsWordOffset_chunk + wordInChunk;
-      
-      // If TTS is still speaking preamble words, don't highlight anything
-      if (ttsGlobalWord < ttsWordOffset) {
-        if (activeWordRef.current !== -1) {
-          activeWordRef.current = -1;
-          if (lastHighlightedWordEl.current) {
-            lastHighlightedWordEl.current.classList.remove('audio-word-active');
-            lastHighlightedWordEl.current = null;
-          }
-          setActiveWordIndex(-1);
-        }
-      } else {
-        const adjustedTTSWord = ttsGlobalWord - ttsWordOffset;
-        // Cache totalTTSWords — only recompute when chunkInfo changes (handled by ref)
-        const totalTTSWords = info.chunkWordCounts.reduce((sum, c) => sum + c, 0);
-        const adjustedTotalTTS = Math.max(1, totalTTSWords - ttsWordOffset);
-        const domCount = domWordCountRef.current;
-        const globalWordIdx = domCount > 0 && adjustedTotalTTS > 0
-          ? Math.min(Math.floor((adjustedTTSWord / adjustedTotalTTS) * domCount), domCount - 1)
-          : -1;
-      
-        if (globalWordIdx !== activeWordRef.current && globalWordIdx >= 0) {
-          // DIRECT DOM: Remove old highlight, add new one (skip React state)
-          if (lastHighlightedWordEl.current) {
-            lastHighlightedWordEl.current.classList.remove('audio-word-active');
-          }
-          if (target) {
-            const wordEl = target.querySelector(`[data-word-index="${globalWordIdx}"]`);
-            if (wordEl) {
-              wordEl.classList.add('audio-word-active');
-              lastHighlightedWordEl.current = wordEl;
-              
-              // Scroll only every ~5 words to avoid constant reflow
-              if (isSyncEnabled && !isUserScrolledAway && (globalWordIdx % 5 === 0 || globalWordIdx === 0)) {
-                programmaticScrollRef.current = true;
-                wordEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                setTimeout(() => { programmaticScrollRef.current = false; }, 600);
-              }
-            }
-          }
-          activeWordRef.current = globalWordIdx;
-          // Debounce React state updates — only update every 3rd word
-          if (globalWordIdx % 3 === 0) {
-            setActiveWordIndex(globalWordIdx);
-          }
-        }
-      }
-    }
-
     // === BLOCK-LEVEL: Use cumulative time for block highlighting ===
     let t: number;
     const cumTime = externalCumulativeRef?.current ?? internalCumulativeRef.current;
