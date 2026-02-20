@@ -2,10 +2,11 @@ import { motion } from "framer-motion";
 import { Check } from "lucide-react";
 
 const signals = [
-  "Structured learning pathways",
+  "Structured chapter-based learning",
+  "Bloom's-taxonomy assessments",
   "Competency tracking & scoring",
-  "Multi-tier assessments",
-  "Verifiable learning records",
+  "SHA-256 signed learning records",
+  "AI-assisted content — human review recommended",
 ];
 
 export function TrustSignals() {

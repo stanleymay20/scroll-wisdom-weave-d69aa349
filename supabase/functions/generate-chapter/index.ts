@@ -1738,20 +1738,12 @@ async function conductFallbackResearch(
     } catch {
       // AUDIT FIX: Hard-reject placeholder references — "Unknown" authors and generic titles
       // are fabrication signals and must never enter the citation pipeline.
-      references = citations
-        .filter((url: string) => url && url.startsWith('http'))
-        .slice(0, 10)
-        .map((url: string, i: number) => ({
-          author: "Unattributed Source",
-          title: `Web Reference ${i + 1} [verification required]`,
-          year: new Date().getFullYear(),
-          type: "web",
-          url,
-          requires_verification: true,
-          peer_reviewed: false,
-        }))
-        // Filter out entirely if we still have nothing meaningful
-        .filter((r: any) => r.url);
+      // AUDIT FIX: Fallback pipeline may return URLs without author/title metadata.
+      // These must NEVER be inserted as "Unattributed Source" — that is a fabrication signal.
+      // Instead return an empty array. The chapter will be generated without references,
+      // and the AI is instructed to mark unsupported claims with "[requires verification]".
+      console.warn("[GENERATE-CHAPTER] Fallback research produced no parseable references — proceeding without citations to avoid fabrication.");
+      references = [];
     }
 
     const inTextCitations = references.map((ref, index) => 
@@ -2508,10 +2500,21 @@ BEGIN REVISION:`;
     // ACADEMIC RESEARCH — runs for ALL academic book types (text, illustrated, etc.)
     // Universities require citations regardless of book format
     // ===========================================
-    const ACADEMIC_RESEARCH_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'economics', 'finance', 'governance', 'history', 'philosophy'];
-    const needsAcademicResearch = academicMode === true || (
+    // ===========================================
+    // ACADEMIC RESEARCH — domain-aware routing
+    // AUDIT FIX: Only trigger STEM deep-research for STEM categories.
+    // Non-STEM academic books (Business, Law, Psychology, etc.) should NOT pull
+    // STEM-biased citations from the same research pipeline. They get citations
+    // via Perplexity fallback with a humanistic search query, or the AI is
+    // instructed to use its training knowledge and mark claims for verification.
+    //
+    // "academicMode=true" alone is NOT sufficient to enter the STEM pipeline —
+    // the category must also be a recognised STEM domain.
+    // ===========================================
+    const STEM_RESEARCH_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'engineering', 'data_science', 'computer_science', 'statistics'];
+    const needsAcademicResearch = (academicMode === true && STEM_RESEARCH_CATEGORIES.includes(category?.toLowerCase())) || (
       (bookType === 'illustrated' || bookType === 'text') && 
-      ACADEMIC_RESEARCH_CATEGORIES.includes(category?.toLowerCase())
+      STEM_RESEARCH_CATEGORIES.includes(category?.toLowerCase())
     );
     
     if (needsAcademicResearch) {
@@ -4354,6 +4357,21 @@ BEGIN:`;
     }
 
     let finalContent = chapterContent;
+
+    // ===========================================
+    // INSTITUTIONAL AI DISCLOSURE — ALL NON-ACADEMIC PIPELINES
+    // Phase 3 audit finding: bestseller/text/professional/reference pipelines
+    // had no AI disclosure, which is a credibility and institutional risk.
+    // ===========================================
+    const NON_ACADEMIC_PIPELINE_TYPES = ['bestseller', 'text', 'professional', 'reference', 'workbook'];
+    const needsGeneralDisclosure = NON_ACADEMIC_PIPELINE_TYPES.includes(effectiveBookType) && !academicMode;
+    if (needsGeneralDisclosure) {
+      // Only append if not already present (idempotent)
+      const hasDisclosure = /AI-assisted|AI-generated|generated with AI/i.test(finalContent);
+      if (!hasDisclosure) {
+        finalContent += `\n\n---\n\n> **AI-Assisted Content Notice:** This chapter was generated with AI assistance (ScrollLibrary). The content is intended for educational and informational purposes. Verify any factual claims, statistics, or professional advice with authoritative sources before relying on them.\n`;
+      }
+    }
 
     // Add academic front matter and references (for ALL academic pipelines: text AND illustrated)
     const isAcademicOutput = (academicMode || needsAcademicResearch) && researchResult && researchResult.references.length > 0;

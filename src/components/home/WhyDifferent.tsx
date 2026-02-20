@@ -2,12 +2,13 @@ import { motion } from "framer-motion";
 import { Check, X } from "lucide-react";
 
 const comparisons = [
-  { feature: "Structured chapter-based reading", generic: false, scroll: true },
-  { feature: "Multi-tier mastery quizzes", generic: false, scroll: true },
-  { feature: "Competency tracking & scoring", generic: false, scroll: true },
-  { feature: "Verifiable learning certificates", generic: false, scroll: true },
-  { feature: "Upload your own textbooks", generic: false, scroll: true },
-  { feature: "Progress persistence across sessions", generic: false, scroll: true },
+  { feature: "Chapter-by-chapter structured reading", generic: false, scroll: true },
+  { feature: "Bloom's-taxonomy quiz assessment", generic: false, scroll: true },
+  { feature: "Competency tracking per chapter", generic: false, scroll: true },
+  { feature: "Cryptographically signed learning records", generic: false, scroll: true },
+  { feature: "Upload & parse your own PDF/EPUB", generic: false, scroll: true },
+  { feature: "Reading progress & streak tracking", generic: false, scroll: true },
+  { feature: "AI-generated academic study guides", generic: false, scroll: true },
 ];
 
 export function WhyDifferent() {
