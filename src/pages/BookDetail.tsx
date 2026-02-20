@@ -1136,7 +1136,131 @@ export default function BookDetail() {
             </div>
           )}
 
-          {/* Chapters */}
+          {/* Mobile-only: Export, Share, Report actions */}
+          {isMobile && (
+            <div className="px-4 mt-4 flex flex-wrap gap-2">
+              <ExportDialog 
+                bookId={book.id} 
+                title={book.title} 
+                hasGeneratedChapters={chapters.some(ch => ch.is_generated)}
+                coverImageUrl={book.cover_image_url}
+                authorName={book.author_ai_agent || undefined}
+                bookType={book.book_type || 'text'}
+                chapterContents={chapters.filter(ch => ch.is_generated).map(ch => ch.content || '')}
+                chapters={chapters.filter(ch => ch.is_generated).map(ch => ({ chapter_number: ch.chapter_number, content: ch.content }))}
+              />
+              <ReportContentDialog 
+                contentType="book" 
+                contentId={book.id} 
+                contentTitle={book.title}
+              />
+            </div>
+          )}
+
+          {/* Mobile-only: Chapter Management for owners */}
+          {isMobile && isOwner && (
+            <div className="px-4 mt-4">
+              <ChapterManagement
+                bookId={book.id}
+                bookTitle={book.title}
+                chapters={chapters}
+                onChaptersChange={setChapters}
+                onBookUpdate={(updates) => {
+                  if (updates.preface !== undefined) {
+                    setBook(prev => prev ? { ...prev, description: updates.preface || null } : null);
+                  }
+                }}
+                preface={book.description}
+              />
+            </div>
+          )}
+
+          {/* Mobile-only: Publish Toggle for owners */}
+          {isMobile && isOwner && (
+            <div className="px-4 mt-4 space-y-4">
+              <div className="flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50">
+                <div className="flex-1">
+                  <Label htmlFor="publish-toggle-mobile" className="text-foreground font-medium">
+                    {t('book.publishToLibrary')}
+                  </Label>
+                  <p className="text-sm text-muted-foreground">
+                    {book.is_published 
+                      ? t('book.publicDesc')
+                      : t('book.privateDesc')}
+                  </p>
+                </div>
+                <Switch
+                  id="publish-toggle-mobile"
+                  checked={book.is_published ?? false}
+                  onCheckedChange={handleTogglePublish}
+                  disabled={isUpdatingPublish}
+                />
+              </div>
+
+              {/* Book Type */}
+              <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
+                <Label className="text-foreground font-medium">{t('book.bookType')}</Label>
+                <p className="text-sm text-muted-foreground mt-1">{t('book.bookTypeDesc')}</p>
+                <RadioGroup
+                  value={(book.book_type || "text") as any}
+                  onValueChange={(v) => handleUpdateBookType(v as any)}
+                  className="grid grid-cols-2 gap-3 mt-3"
+                >
+                  <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50">
+                    <RadioGroupItem value="text" id="bt-text-mobile" />
+                    <Label htmlFor="bt-text-mobile" className="cursor-pointer flex-1">
+                      <span className="text-sm font-medium">{t('book.text')}</span>
+                      <span className="block text-xs text-muted-foreground">{t('book.noImages')}</span>
+                    </Label>
+                  </div>
+                  <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50">
+                    <RadioGroupItem value="illustrated" id="bt-illustrated-mobile" />
+                    <Label htmlFor="bt-illustrated-mobile" className="cursor-pointer flex-1">
+                      <span className="text-sm font-medium">{t('generate.illustrated')}</span>
+                      <span className="block text-xs text-muted-foreground">{t('book.textIllustrations')}</span>
+                    </Label>
+                  </div>
+                </RadioGroup>
+              </div>
+
+              {/* Danger Zone */}
+              <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/20">
+                <Label className="text-destructive font-medium">Danger Zone</Label>
+                <p className="text-sm text-muted-foreground mt-1 mb-3">Irreversible actions for this book.</p>
+                <div className="flex gap-3">
+                  <Button variant="outline" size="sm" onClick={handleArchiveBook} disabled={!book.is_published} className="text-muted-foreground hover:text-foreground flex-1">
+                    <Archive className="h-4 w-4 mr-2" />
+                    Archive
+                  </Button>
+                  <Button variant="outline" size="sm" onClick={() => setDeleteDialogOpen(true)} className="text-destructive border-destructive/50 hover:bg-destructive/10 flex-1">
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Delete
+                  </Button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Mobile-only: Certificate Status */}
+          {isMobile && isSaved && (
+            <div className="px-4 mt-4">
+              <CertificateStatusPanel
+                bookId={book.id}
+                bookTitle={book.title}
+                totalChapters={chapters.length}
+                completedChapters={chapters.filter(ch => ch.is_generated).length}
+                progressPercent={Math.round((chapters.filter(ch => ch.is_generated).length / Math.max(chapters.length, 1)) * 100)}
+              />
+            </div>
+          )}
+
+          {/* Mobile-only: AI Disclaimer */}
+          {isMobile && (
+            <div className="px-4 mt-4">
+              <ContentDisclaimer type="ai" />
+            </div>
+          )}
+
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
