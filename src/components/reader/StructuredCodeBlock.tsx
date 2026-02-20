@@ -310,5 +310,10 @@ export function extractAllStructuredCodeBlocks(text: string): { blocks: Structur
     }
   }
 
+  // Remove orphaned code fences that now only wrap a placeholder
+  cleanedText = cleanedText.replace(/```\w*\s*\n\s*<!--STRUCTURED_CODE_BLOCK_(\d+)-->\s*\n\s*```/g, '<!--STRUCTURED_CODE_BLOCK_$1-->');
+  // Also handle single-line variants
+  cleanedText = cleanedText.replace(/```\w*\s*<!--STRUCTURED_CODE_BLOCK_(\d+)-->\s*```/g, '<!--STRUCTURED_CODE_BLOCK_$1-->');
+
   return { blocks, cleanedText };
 }
