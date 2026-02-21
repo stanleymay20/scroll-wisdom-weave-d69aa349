@@ -57,8 +57,13 @@ export function HeroSection({ onStartDemo }: HeroSectionProps) {
             transition={{ duration: 0.5, delay: 0.1 }}
             className="text-base md:text-lg text-muted-foreground mb-8 leading-relaxed max-w-2xl mx-auto"
           >
-            One question. Real cognitive scoring. No fluff.
+            Structured Bloom-weighted evaluation. Integrity enforced. No shortcuts.
           </motion.p>
+
+          {/* Positioning line */}
+          <p className="text-[11px] text-muted-foreground mb-6 -mt-4">
+            Designed as a cognitive validation layer — not content generation.
+          </p>
 
           {/* Dual CTAs */}
           <motion.div
