@@ -1,8 +1,8 @@
 /**
- * Mastery Progress Hook
+ * Mastery Progress Hook v2.0
  * 
- * Tracks longitudinal learning progress across attempts,
- * aggregates Bloom distribution, and determines certification readiness.
+ * Tracks longitudinal learning progress, enforces anti-gaming,
+ * detects suspicious input, and determines certification readiness.
  */
 
 import { useState, useEffect, useCallback } from 'react';
@@ -17,6 +17,7 @@ import {
   classifyMastery,
   validateAttemptIntegrity,
   ANTI_GAMING,
+  INSTITUTIONAL_MODE,
 } from '@/lib/masteryEngine';
 
 const logger = createLogger('useMasteryProgress');
@@ -24,15 +25,15 @@ const logger = createLogger('useMasteryProgress');
 interface UseMasteryProgressOptions {
   bookId: string;
   userId?: string | null;
+  institutionalMode?: boolean;
 }
 
-export function useMasteryProgress({ bookId, userId }: UseMasteryProgressOptions) {
+export function useMasteryProgress({ bookId, userId, institutionalMode = false }: UseMasteryProgressOptions) {
   const [attempts, setAttempts] = useState<LearningAttempt[]>([]);
   const [assessment, setAssessment] = useState<MasteryAssessment | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Fetch all attempts for this book
   useEffect(() => {
     if (!userId || !bookId) {
       setIsLoading(false);
@@ -50,7 +51,7 @@ export function useMasteryProgress({ bookId, userId }: UseMasteryProgressOptions
 
         if (error) throw error;
 
-        const mapped: LearningAttempt[] = (data || []).map(d => ({
+        const mapped: LearningAttempt[] = (data || []).map((d: any) => ({
           id: d.id,
           userId: d.user_id,
           bookId: d.book_id,
@@ -64,11 +65,15 @@ export function useMasteryProgress({ bookId, userId }: UseMasteryProgressOptions
           remediationTriggered: d.remediation_triggered,
           timeSpentSeconds: d.time_spent_seconds ?? 0,
           questionsAnswered: d.questions_answered ?? 0,
+          suspiciousInputDetected: d.suspicious_input_detected ?? false,
+          codingPassRate: d.coding_pass_rate != null ? Number(d.coding_pass_rate) : null,
+          executionError: d.execution_error ?? null,
+          integrityFlags: d.integrity_flags ?? {},
           createdAt: d.created_at,
         }));
 
         setAttempts(mapped);
-        setAssessment(assessMastery(mapped));
+        setAssessment(assessMastery(mapped, { institutionalMode }));
       } catch (e) {
         logger.error('Failed to fetch learning progress:', e);
       } finally {
@@ -77,9 +82,8 @@ export function useMasteryProgress({ bookId, userId }: UseMasteryProgressOptions
     };
 
     fetchAttempts();
-  }, [userId, bookId]);
+  }, [userId, bookId, institutionalMode]);
 
-  // Record a new learning attempt
   const recordAttempt = useCallback(async (
     chapterId: string,
     bloomLevel: BloomLevel,
@@ -87,26 +91,34 @@ export function useMasteryProgress({ bookId, userId }: UseMasteryProgressOptions
     questionDifficulty: number,
     timeSpentSeconds: number,
     questionsAnswered: number,
+    extra?: {
+      suspiciousInputDetected?: boolean;
+      codingPassRate?: number;
+      executionError?: string;
+      integrityFlags?: Record<string, unknown>;
+    }
   ) => {
     if (!userId || !bookId) return null;
 
-    // Anti-gaming: count today's attempts
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const attemptsToday = attempts.filter(a => 
       a.createdAt && new Date(a.createdAt) >= today
     ).length;
 
-    const validation = validateAttemptIntegrity(timeSpentSeconds, questionsAnswered, attemptsToday);
+    const validation = validateAttemptIntegrity(
+      timeSpentSeconds, questionsAnswered, attemptsToday,
+      { institutionalMode, suspiciousInput: extra?.suspiciousInputDetected }
+    );
+    
     if (!validation.valid) {
-      logger.warn('Attempt blocked by anti-gaming:', { reason: validation.reason });
+      logger.warn('Attempt blocked:', { reason: validation.reason });
       return { blocked: true, reason: validation.reason };
     }
 
     setIsSaving(true);
 
     try {
-      // Get previous attempt for this chapter
       const chapterAttempts = attempts.filter(a => a.chapterId === chapterId);
       const previousScore = chapterAttempts.length > 0 
         ? chapterAttempts[chapterAttempts.length - 1].score 
@@ -117,7 +129,7 @@ export function useMasteryProgress({ bookId, userId }: UseMasteryProgressOptions
       const masteryStatus = classifyMastery(score);
       const remediationTriggered = score < 60;
 
-      const record = {
+      const record: Record<string, unknown> = {
         user_id: userId,
         book_id: bookId,
         chapter_id: chapterId,
@@ -130,6 +142,10 @@ export function useMasteryProgress({ bookId, userId }: UseMasteryProgressOptions
         remediation_triggered: remediationTriggered,
         time_spent_seconds: timeSpentSeconds,
         questions_answered: questionsAnswered,
+        suspicious_input_detected: extra?.suspiciousInputDetected ?? false,
+        coding_pass_rate: extra?.codingPassRate ?? null,
+        execution_error: extra?.executionError ?? null,
+        integrity_flags: extra?.integrityFlags ?? {},
       };
 
       const { data, error } = await supabase
@@ -140,30 +156,23 @@ export function useMasteryProgress({ bookId, userId }: UseMasteryProgressOptions
 
       if (error) throw error;
 
-      // Update local state
       const newAttempt: LearningAttempt = {
         id: data.id,
-        userId,
-        bookId,
-        chapterId,
-        attemptNumber,
-        bloomLevel,
-        score,
-        questionDifficulty,
-        improvementDelta,
-        masteryStatus,
-        remediationTriggered,
-        timeSpentSeconds,
-        questionsAnswered,
+        userId, bookId, chapterId, attemptNumber, bloomLevel, score,
+        questionDifficulty, improvementDelta, masteryStatus, remediationTriggered,
+        timeSpentSeconds, questionsAnswered,
+        suspiciousInputDetected: extra?.suspiciousInputDetected ?? false,
+        codingPassRate: extra?.codingPassRate ?? null,
+        executionError: extra?.executionError ?? null,
+        integrityFlags: extra?.integrityFlags ?? {},
         createdAt: data.created_at,
       };
 
       const updatedAttempts = [...attempts, newAttempt];
       setAttempts(updatedAttempts);
-      setAssessment(assessMastery(updatedAttempts));
+      setAssessment(assessMastery(updatedAttempts, { institutionalMode }));
 
-      // Update competency profile
-      await updateCompetencyProfile(userId, bookId);
+      await updateCompetencyProfile(userId, bookId, updatedAttempts);
 
       return { blocked: false, attempt: newAttempt };
     } catch (e) {
@@ -172,12 +181,10 @@ export function useMasteryProgress({ bookId, userId }: UseMasteryProgressOptions
     } finally {
       setIsSaving(false);
     }
-  }, [userId, bookId, attempts]);
+  }, [userId, bookId, attempts, institutionalMode]);
 
-  // Update aggregated competency profile
-  const updateCompetencyProfile = async (uid: string, bid: string) => {
+  const updateCompetencyProfile = async (uid: string, bid: string, currentAttempts: LearningAttempt[]) => {
     try {
-      // Get book category for domain
       const { data: book } = await supabase
         .from('books')
         .select('category')
@@ -185,30 +192,34 @@ export function useMasteryProgress({ bookId, userId }: UseMasteryProgressOptions
         .single();
 
       const domain = book?.category || 'general';
-      const currentAssessment = assessMastery(attempts);
+      const currentAssessment = assessMastery(currentAttempts, { institutionalMode });
       const dist = currentAssessment.bloomDistribution;
 
       const profileData: Record<string, unknown> = {
-          user_id: uid,
-          domain,
-          remember_score: dist.remember,
-          understand_score: dist.understand,
-          apply_score: dist.apply,
-          analyze_score: dist.analyze,
-          evaluate_score: dist.evaluate,
-          create_score: dist.create,
-          growth_trend: currentAssessment.improvementTrend,
-          total_attempts: currentAssessment.attemptCount,
-          last_updated: new Date().toISOString(),
-        };
+        user_id: uid,
+        domain,
+        remember_score: dist.remember,
+        understand_score: dist.understand,
+        apply_score: dist.apply,
+        analyze_score: dist.analyze,
+        evaluate_score: dist.evaluate,
+        create_score: dist.create,
+        growth_trend: currentAssessment.improvementTrend,
+        total_attempts: currentAssessment.attemptCount,
+        last_updated: new Date().toISOString(),
+      };
 
-        await supabase
-          .from('competency_profile')
-          .upsert(profileData as any, { onConflict: 'user_id,domain' });
+      await supabase
+        .from('competency_profile')
+        .upsert(profileData as any, { onConflict: 'user_id,domain' });
     } catch (e) {
       logger.error('Failed to update competency profile:', e);
     }
   };
+
+  const maxRetakes = institutionalMode 
+    ? INSTITUTIONAL_MODE.MAX_RETAKES_PER_DAY 
+    : ANTI_GAMING.MAX_RETAKES_PER_DAY;
 
   return {
     attempts,
@@ -221,6 +232,6 @@ export function useMasteryProgress({ bookId, userId }: UseMasteryProgressOptions
       today.setHours(0, 0, 0, 0);
       return a.createdAt && new Date(a.createdAt) >= today;
     }).length,
-    maxAttemptsPerDay: ANTI_GAMING.MAX_RETAKES_PER_DAY,
+    maxAttemptsPerDay: maxRetakes,
   };
 }

@@ -878,14 +878,18 @@ export type Database = {
           bloom_level: string
           book_id: string
           chapter_id: string | null
+          coding_pass_rate: number | null
           created_at: string
+          execution_error: string | null
           id: string
           improvement_delta: number | null
+          integrity_flags: Json | null
           mastery_status: string
           question_difficulty: number
           questions_answered: number | null
           remediation_triggered: boolean
           score: number
+          suspicious_input_detected: boolean
           time_spent_seconds: number | null
           user_id: string
         }
@@ -894,14 +898,18 @@ export type Database = {
           bloom_level?: string
           book_id: string
           chapter_id?: string | null
+          coding_pass_rate?: number | null
           created_at?: string
+          execution_error?: string | null
           id?: string
           improvement_delta?: number | null
+          integrity_flags?: Json | null
           mastery_status?: string
           question_difficulty?: number
           questions_answered?: number | null
           remediation_triggered?: boolean
           score?: number
+          suspicious_input_detected?: boolean
           time_spent_seconds?: number | null
           user_id: string
         }
@@ -910,14 +918,18 @@ export type Database = {
           bloom_level?: string
           book_id?: string
           chapter_id?: string | null
+          coding_pass_rate?: number | null
           created_at?: string
+          execution_error?: string | null
           id?: string
           improvement_delta?: number | null
+          integrity_flags?: Json | null
           mastery_status?: string
           question_difficulty?: number
           questions_answered?: number | null
           remediation_triggered?: boolean
           score?: number
+          suspicious_input_detected?: boolean
           time_spent_seconds?: number | null
           user_id?: string
         }
@@ -1040,6 +1052,7 @@ export type Database = {
           font_size: string | null
           full_name: string | null
           id: string
+          institutional_mode: boolean | null
           last_book_date: string | null
           learning_preferences: Json | null
           new_book_alerts: boolean | null
@@ -1072,6 +1085,7 @@ export type Database = {
           font_size?: string | null
           full_name?: string | null
           id?: string
+          institutional_mode?: boolean | null
           last_book_date?: string | null
           learning_preferences?: Json | null
           new_book_alerts?: boolean | null
@@ -1104,6 +1118,7 @@ export type Database = {
           font_size?: string | null
           full_name?: string | null
           id?: string
+          institutional_mode?: boolean | null
           last_book_date?: string | null
           learning_preferences?: Json | null
           new_book_alerts?: boolean | null
