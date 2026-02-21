@@ -49,6 +49,10 @@ const RUBRIC = {
       "Content is up-to-date and relevant",
       "Appropriate complexity for target audience",
       "Key concepts are defined before use",
+      "Thesis tension present (argument, not summary)",
+      "Counterarguments or literature disagreement surfaced",
+      "Evidence strength signaled (meta-analysis vs observational vs theoretical)",
+      "Methodological limitations discussed for cited studies",
     ],
   },
   pedagogical: {
@@ -61,6 +65,8 @@ const RUBRIC = {
       "Key takeaways are identifiable",
       "Variety of explanation methods (narrative, examples, analogies)",
       "Assessment alignment - quiz questions could test this content",
+      "Limitation boundaries and future research directions present",
+      "Field-specific rhetorical conventions followed",
     ],
   },
 };
