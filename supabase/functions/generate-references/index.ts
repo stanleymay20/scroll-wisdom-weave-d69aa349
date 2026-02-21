@@ -168,18 +168,43 @@ Requirements:
       references = [];
     }
 
-    // AUDIT FIX: Hard-reject placeholder/fabricated references before post-processing.
-    // Entries with "Unknown" author or generic "Reference N" titles are fabrication signals.
-    const PLACEHOLDER_AUTHOR = /^(unknown|source|n\/a|anonymous)$/i;
-    const PLACEHOLDER_TITLE = /^(reference\s+\d+|unknown|untitled|n\/a|web reference|article \d+)$/i;
+    // AUDIT FIX v2: Multi-layer fabrication detection.
+    const PLACEHOLDER_AUTHOR = /^(unknown|source|n\/a|anonymous|various|editor|staff|admin|ai|chatgpt|gpt)$/i;
+    const PLACEHOLDER_TITLE = /^(reference\s+\d+|unknown|untitled|n\/a|web reference|article \d+|source \d+|no title|title|sample)$/i;
+    const SUSPICIOUS_PATTERNS = [
+      /et\s+al\.\s*$/i,           // Author is just "et al."
+      /^\d{4}$/,                   // Author is just a year
+      /example\.com/i,             // Fake URL domain
+      /placeholder/i,              // Contains "placeholder"
+    ];
     references = references.filter((ref: any) => {
       const author = String(ref.author || '').trim();
       const title = String(ref.title || '').trim();
-      const isPlaceholder = PLACEHOLDER_AUTHOR.test(author) || PLACEHOLDER_TITLE.test(title);
-      if (isPlaceholder) {
-        logStep("Hard-rejecting placeholder reference", { author: author.slice(0, 40), title: title.slice(0, 40) });
+      const url = String(ref.url || ref.sourceUrl || '').trim();
+      
+      // Hard-reject empty or placeholder entries
+      if (!author || !title || author.length < 3 || title.length < 5) {
+        logStep("Rejecting empty/short reference", { author, title: title.slice(0, 40) });
+        return false;
       }
-      return !isPlaceholder;
+      if (PLACEHOLDER_AUTHOR.test(author) || PLACEHOLDER_TITLE.test(title)) {
+        logStep("Hard-rejecting placeholder reference", { author: author.slice(0, 40), title: title.slice(0, 40) });
+        return false;
+      }
+      // Reject suspicious patterns
+      for (const pattern of SUSPICIOUS_PATTERNS) {
+        if (pattern.test(author) || pattern.test(title) || pattern.test(url)) {
+          logStep("Rejecting suspicious reference", { author: author.slice(0, 40), title: title.slice(0, 40), pattern: pattern.source });
+          return false;
+        }
+      }
+      // Reject if year is clearly invalid
+      const year = Number(ref.year);
+      if (ref.year && (year < 1800 || year > new Date().getFullYear() + 1)) {
+        logStep("Rejecting invalid year", { year, title: title.slice(0, 40) });
+        return false;
+      }
+      return true;
     });
 
     // Post-processing: enforce 2026 standards

@@ -1,18 +1,21 @@
 import { motion } from "framer-motion";
 import { Check, X } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-const comparisons = [
-  { feature: "Chapter-by-chapter structured reading", generic: false, scroll: true },
-  { feature: "6-level Bloom's taxonomy assessments", generic: false, scroll: true },
-  { feature: "Per-chapter competency scoring", generic: false, scroll: true },
-  { feature: "SHA-256 signed learning records", generic: false, scroll: true },
-  { feature: "CrossRef-validated reference pipeline", generic: false, scroll: true },
-  { feature: "Upload & parse your own PDF/EPUB", generic: false, scroll: true },
-  { feature: "Domain-aware AI generation (STEM, humanities, professional)", generic: false, scroll: true },
-  { feature: "Exportable audit artifacts for institutional review", generic: false, scroll: true },
+const featureKeys = [
+  'whyDifferent.f1',
+  'whyDifferent.f2',
+  'whyDifferent.f3',
+  'whyDifferent.f4',
+  'whyDifferent.f5',
+  'whyDifferent.f6',
+  'whyDifferent.f7',
+  'whyDifferent.f8',
 ];
 
 export function WhyDifferent() {
+  const { t } = useLanguage();
+
   return (
     <section className="py-20 bg-background" aria-labelledby="why-different-heading">
       <div className="container mx-auto px-4">
@@ -23,10 +26,10 @@ export function WhyDifferent() {
           className="text-center mb-14"
         >
           <h2 id="why-different-heading" className="text-3xl md:text-4xl font-display font-bold text-foreground mb-4">
-            More than a reading app
+            {t('whyDifferent.title')}
           </h2>
           <p className="text-muted-foreground max-w-2xl mx-auto">
-            ScrollLibrary is built for structured learning and mastery tracking — not just passive reading.
+            {t('whyDifferent.subtitle')}
           </p>
         </motion.div>
 
@@ -39,28 +42,20 @@ export function WhyDifferent() {
           <table className="w-full text-sm" role="table">
             <thead>
               <tr className="border-b border-border">
-                <th className="text-left py-3 px-4 font-medium text-muted-foreground">Feature</th>
-                <th className="text-center py-3 px-4 font-medium text-muted-foreground">Generic Tools</th>
-                <th className="text-center py-3 px-4 font-medium text-primary">ScrollLibrary</th>
+                <th className="text-left py-3 px-4 font-medium text-muted-foreground">{t('whyDifferent.headerFeature')}</th>
+                <th className="text-center py-3 px-4 font-medium text-muted-foreground">{t('whyDifferent.headerGeneric')}</th>
+                <th className="text-center py-3 px-4 font-medium text-primary">{t('whyDifferent.headerScroll')}</th>
               </tr>
             </thead>
             <tbody>
-              {comparisons.map((row) => (
-                <tr key={row.feature} className="border-b border-border/50">
-                  <td className="py-3 px-4 text-foreground">{row.feature}</td>
+              {featureKeys.map((key) => (
+                <tr key={key} className="border-b border-border/50">
+                  <td className="py-3 px-4 text-foreground">{t(key)}</td>
                   <td className="py-3 px-4 text-center">
-                    {row.generic ? (
-                      <Check className="h-4 w-4 text-primary mx-auto" />
-                    ) : (
-                      <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
-                    )}
+                    <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
                   </td>
                   <td className="py-3 px-4 text-center">
-                    {row.scroll ? (
-                      <Check className="h-4 w-4 text-primary mx-auto" />
-                    ) : (
-                      <X className="h-4 w-4 text-muted-foreground/40 mx-auto" />
-                    )}
+                    <Check className="h-4 w-4 text-primary mx-auto" />
                   </td>
                 </tr>
               ))}

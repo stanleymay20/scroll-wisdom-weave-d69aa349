@@ -3,10 +3,12 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Upload, BookOpen, Check, ChevronDown, Search } from "lucide-react";
 import { useNavigate } from "react-router-dom";
+import { useLanguage } from "@/contexts/LanguageContext";
 import heroLibraryBg from "@/assets/hero-library-bg.png";
 
 export function HeroSection() {
   const navigate = useNavigate();
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState("");
 
   const handleSearch = (e: React.FormEvent) => {
@@ -38,10 +40,10 @@ export function HeroSection() {
               transition={{ duration: 0.5 }}
               className="font-display text-4xl md:text-5xl lg:text-[3.25rem] font-bold text-foreground mb-5 leading-tight"
             >
-              Your Personal Academic
+              {t('hero.title1')}
               <br />
-              Library.{" "}
-              <span className="text-primary">Powered by AI.</span>
+              {t('hero.title2')}{" "}
+              <span className="text-primary">{t('hero.titleHighlight')}</span>
             </motion.h1>
 
             <motion.p
@@ -50,12 +52,10 @@ export function HeroSection() {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="text-base text-muted-foreground mb-5 leading-relaxed max-w-lg"
             >
-              Upload textbooks or generate structured study guides.
-              <br />
-              Read. Learn. Test mastery. Track competency.
+              {t('hero.subtitle')}
             </motion.p>
 
-            {/* Search Bar — inspired by UE Future Library */}
+            {/* Search Bar */}
             <motion.form
               onSubmit={handleSearch}
               initial={{ opacity: 0, y: 20 }}
@@ -68,7 +68,7 @@ export function HeroSection() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search your library or explore topics..."
+                placeholder={t('hero.searchPlaceholder')}
                 className="w-full h-12 pl-12 pr-28 rounded-xl border border-border bg-card/90 backdrop-blur-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-primary/40 transition-all"
               />
               <Button
@@ -76,7 +76,7 @@ export function HeroSection() {
                 size="sm"
                 className="absolute right-2 top-1/2 -translate-y-1/2"
               >
-                Search
+                {t('hero.search')}
               </Button>
             </motion.form>
 
@@ -93,7 +93,7 @@ export function HeroSection() {
                 className="gap-2 min-w-[170px]"
               >
                 <Upload className="h-4 w-4" />
-                Upload a Book
+                {t('hero.uploadBook')}
               </Button>
               <Button
                 onClick={() => navigate("/generate")}
@@ -101,7 +101,7 @@ export function HeroSection() {
                 size="lg"
                 className="gap-2 min-w-[200px]"
               >
-                Generate Study Guide
+                {t('hero.generateGuide')}
               </Button>
             </motion.div>
 
@@ -113,9 +113,7 @@ export function HeroSection() {
               className="flex items-center gap-2 text-sm text-muted-foreground"
             >
               <Check className="h-4 w-4 text-primary" strokeWidth={2} />
-              <span>
-                Free to start — no credit card required
-              </span>
+              <span>{t('hero.freeStart')}</span>
             </motion.div>
           </div>
 
@@ -178,7 +176,7 @@ export function HeroSection() {
                 <p className="flex items-center gap-2"><span className="text-primary">◆</span> Explain the key principles and their applications...</p>
               </div>
               <Button onClick={() => navigate("/generate")} size="sm" className="gap-1">
-                Generate Study Guide
+                {t('hero.generateGuide')}
               </Button>
             </div>
           </motion.div>
