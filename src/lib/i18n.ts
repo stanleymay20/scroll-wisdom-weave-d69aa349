@@ -847,6 +847,50 @@ export const translations: Record<Language, Record<string, string>> = {
     'support.messageSent': 'Message sent!',
     'support.responseTime': 'We\'ll get back to you within 24-48 hours.',
     'support.failedToSend': 'Failed to send message. Please try again.',
+
+    // Trust Signals
+    'trust.chaptersStructured': 'Chapter-structured learning paths',
+    'trust.bloomsTaxonomy': "Bloom's-taxonomy assessments at 6 cognitive levels",
+    'trust.competencyTracking': 'Per-chapter competency tracking & scoring',
+    'trust.sha256': 'SHA-256 cryptographic learning records',
+    'trust.crossref': 'CrossRef-validated academic references',
+    'trust.aiAssisted': 'AI-assisted content — independent review recommended',
+
+    // Why Different
+    'whyDifferent.title': 'More than a reading app',
+    'whyDifferent.subtitle': 'ScrollLibrary is built for structured learning and mastery tracking — not just passive reading.',
+    'whyDifferent.headerFeature': 'Feature',
+    'whyDifferent.headerGeneric': 'Generic Tools',
+    'whyDifferent.headerScroll': 'ScrollLibrary',
+    'whyDifferent.f1': 'Chapter-by-chapter structured reading',
+    'whyDifferent.f2': "6-level Bloom's taxonomy assessments",
+    'whyDifferent.f3': 'Per-chapter competency scoring',
+    'whyDifferent.f4': 'SHA-256 signed learning records',
+    'whyDifferent.f5': 'CrossRef-validated reference pipeline',
+    'whyDifferent.f6': 'Upload & parse your own PDF/EPUB',
+    'whyDifferent.f7': 'Domain-aware AI generation (STEM, humanities, professional)',
+    'whyDifferent.f8': 'Exportable audit artifacts for institutional review',
+
+    // How It Works
+    'howItWorks.title': 'How it works',
+    'howItWorks.subtitle': 'Four steps from content to verified competency',
+
+    // Hero
+    'hero.title1': 'Your Personal Academic',
+    'hero.title2': 'Library.',
+    'hero.titleHighlight': 'Powered by AI.',
+    'hero.subtitle': 'Upload textbooks or generate structured study guides. Read. Learn. Test mastery. Track competency.',
+    'hero.searchPlaceholder': 'Search your library or explore topics...',
+    'hero.search': 'Search',
+    'hero.uploadBook': 'Upload a Book',
+    'hero.generateGuide': 'Generate Study Guide',
+    'hero.freeStart': 'Free to start — no credit card required',
+
+    // Final CTA
+    'finalCta.title': 'Start mastering what you read',
+    'finalCta.subtitle': 'ScrollLibrary is an AI-powered academic library engine. It transforms books into structured mastery pathways — helping serious learners prove what they know.',
+    'finalCta.upload': 'Upload a Book',
+    'finalCta.generate': 'Generate a Study Guide',
   },
   
   fr: {

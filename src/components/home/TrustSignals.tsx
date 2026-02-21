@@ -1,23 +1,26 @@
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
 
-const signals = [
-  "Chapter-structured learning paths",
-  "Bloom's-taxonomy assessments at 6 cognitive levels",
-  "Per-chapter competency tracking & scoring",
-  "SHA-256 cryptographic learning records",
-  "CrossRef-validated academic references",
-  "AI-assisted content — independent review recommended",
+const signalKeys = [
+  'trust.chaptersStructured',
+  'trust.bloomsTaxonomy',
+  'trust.competencyTracking',
+  'trust.sha256',
+  'trust.crossref',
+  'trust.aiAssisted',
 ];
 
 export function TrustSignals() {
+  const { t } = useLanguage();
+
   return (
     <section className="py-10 border-y border-border bg-muted/20">
       <div className="container mx-auto px-4">
         <div className="flex flex-wrap justify-center gap-x-8 gap-y-3">
-          {signals.map((signal, index) => (
+          {signalKeys.map((key, index) => (
             <motion.div
-              key={signal}
+              key={key}
               initial={{ opacity: 0 }}
               whileInView={{ opacity: 1 }}
               viewport={{ once: true }}
@@ -25,7 +28,7 @@ export function TrustSignals() {
               className="flex items-center gap-2 text-sm text-foreground"
             >
               <Check className="h-4 w-4 text-primary" strokeWidth={2} />
-              <span>{signal}</span>
+              <span>{t(key)}</span>
             </motion.div>
           ))}
         </div>
