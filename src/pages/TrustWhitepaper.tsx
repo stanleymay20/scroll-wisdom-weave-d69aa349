@@ -6,8 +6,8 @@ import { FileText, Download, ExternalLink, Shield, CheckCircle, AlertTriangle, X
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 
-const WHITEPAPER_VERSION = "1.0";
-const PUBLICATION_DATE = "January 2026";
+const WHITEPAPER_VERSION = "2.0";
+const PUBLICATION_DATE = "February 2026";
 
 export default function TrustWhitepaper() {
   const handlePrint = () => {
@@ -59,7 +59,9 @@ export default function TrustWhitepaper() {
               <a href="#api-trust-contract" className="text-muted-foreground hover:text-foreground">7. API Trust Contract</a>
               <a href="#governance" className="text-muted-foreground hover:text-foreground">8. Governance & Authority</a>
               <a href="#compliance" className="text-muted-foreground hover:text-foreground">9. Compliance Posture</a>
-              <a href="#roadmap" className="text-muted-foreground hover:text-foreground">10. Roadmap</a>
+              <a href="#non-claims" className="text-muted-foreground hover:text-foreground">10. What We Do NOT Claim</a>
+              <a href="#methodology" className="text-muted-foreground hover:text-foreground">11. Generation Methodology</a>
+              <a href="#roadmap" className="text-muted-foreground hover:text-foreground">12. Roadmap</a>
             </nav>
           </CardContent>
         </Card>
@@ -450,10 +452,109 @@ export default function TrustWhitepaper() {
 
           <Separator className="my-8" />
 
+          {/* What ScrollLibrary Does NOT Claim */}
+          <section id="non-claims" className="mb-12">
+            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+              <span className="text-muted-foreground">10.</span> What ScrollLibrary Does NOT Claim
+            </h2>
+            
+            <p className="text-muted-foreground leading-relaxed mb-6">
+              Institutional trust requires explicit boundary-setting. ScrollLibrary makes the following 
+              non-claims to prevent misrepresentation and maintain credibility.
+            </p>
+
+            <div className="space-y-3">
+              <div className="flex items-start gap-3 p-3 rounded-lg border bg-destructive/5 border-destructive/20">
+                <XCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                <p className="text-sm text-muted-foreground">
+                  <strong>NOT an accredited institution.</strong> ScrollLibrary does not grant academic degrees, 
+                  professional certifications, or credentials recognized by any national accreditation body.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-lg border bg-destructive/5 border-destructive/20">
+                <XCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                <p className="text-sm text-muted-foreground">
+                  <strong>NOT peer-reviewed publishing.</strong> AI-generated content is not peer-reviewed. 
+                  References are CrossRef-validated for metadata existence, not for semantic support of specific claims.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-lg border bg-destructive/5 border-destructive/20">
+                <XCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                <p className="text-sm text-muted-foreground">
+                  <strong>NOT a replacement for formal education.</strong> Learning records document structured 
+                  engagement with AI-synthesized material. They complement, not substitute, university coursework.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-lg border bg-destructive/5 border-destructive/20">
+                <XCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                <p className="text-sm text-muted-foreground">
+                  <strong>NOT AI-detection-proof.</strong> While the writing engine applies variability patterns, 
+                  we do not guarantee content will pass AI detection tools. Users must verify independently.
+                </p>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-lg border bg-destructive/5 border-destructive/20">
+                <XCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                <p className="text-sm text-muted-foreground">
+                  <strong>NOT citation-verified for semantic accuracy.</strong> DOI validation confirms source 
+                  existence, not that the cited work supports the specific claim made. Users must verify all 
+                  citations before use in formal academic work.
+                </p>
+              </div>
+            </div>
+          </section>
+
+          <Separator className="my-8" />
+
+          {/* Methodology */}
+          <section id="methodology" className="mb-12">
+            <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
+              <span className="text-muted-foreground">11.</span> Generation Methodology
+            </h2>
+            
+            <h3 className="text-lg font-semibold mt-6 mb-3">11.1 Content Generation Pipeline</h3>
+            <p className="text-muted-foreground leading-relaxed">
+              Academic content is generated through a governed pipeline with the following stages:
+            </p>
+            <ul className="list-decimal pl-6 space-y-2 text-muted-foreground mt-3">
+              <li><strong>Book Type Router:</strong> Immutably assigns generator identity (academic, technical, professional, bestseller)</li>
+              <li><strong>Discipline Detection:</strong> Adjusts vocabulary, evidence hierarchy, and rhetorical conventions to the field</li>
+              <li><strong>Argument Architecture Enforcement:</strong> Requires thesis tension, literature disagreement, counterarguments, and methodological critique</li>
+              <li><strong>Citation Rhythm Variation:</strong> Enforces natural density patterns (dense in empirical sections, sparse in interpretive)</li>
+              <li><strong>AI-Detectability Suppression:</strong> Applies sentence length variation, clause complexity alternation, and formulaic pattern prohibition</li>
+              <li><strong>Reference Integrity Pipeline:</strong> Filters fabricated/placeholder sources before insertion</li>
+              <li><strong>Chief Editor Audit:</strong> Deterministic penalty engine + AI evaluation against textbook benchmarks</li>
+            </ul>
+
+            <h3 className="text-lg font-semibold mt-6 mb-3">11.2 Validation Logic</h3>
+            <p className="text-muted-foreground leading-relaxed">
+              Every generated chapter undergoes a two-phase validation:
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground mt-3">
+              <li><strong>Phase 1 — Deterministic Penalties:</strong> Regex-based checks for word count, heading density, example count, definition presence, and engagement signals. Violations proportionally cap dimension scores.</li>
+              <li><strong>Phase 2 — AI Evaluation:</strong> An independent AI auditor (temperature: 0.1 for reproducibility) scores Structural Integrity (30%), Academic Rigor (35%), and Pedagogical Quality (35%) against a contrastive benchmark of what a well-written textbook chapter looks like.</li>
+            </ul>
+
+            <h3 className="text-lg font-semibold mt-6 mb-3">11.3 Failure Conditions</h3>
+            <p className="text-muted-foreground leading-relaxed">
+              Content is blocked from certification if:
+            </p>
+            <ul className="list-disc pl-6 space-y-2 text-muted-foreground mt-3">
+              <li>Structural score &lt; 75</li>
+              <li>Academic score &lt; 80</li>
+              <li>Pedagogical score &lt; 75</li>
+              <li>Overall weighted score &lt; 78</li>
+              <li>DOI verification failures exceed threshold</li>
+              <li>Suspicious reference rate ≥ 5%</li>
+              <li>Claim-level support score &lt; 60</li>
+            </ul>
+          </section>
+
+          <Separator className="my-8" />
+
           {/* Roadmap */}
           <section id="roadmap" className="mb-12">
             <h2 className="text-2xl font-bold mb-4 flex items-center gap-2">
-              <span className="text-muted-foreground">10.</span> Roadmap (Non-binding)
+              <span className="text-muted-foreground">12.</span> Roadmap (Non-binding)
             </h2>
             
             <p className="text-muted-foreground leading-relaxed mb-6">
@@ -462,6 +563,16 @@ export default function TrustWhitepaper() {
             </p>
 
             <div className="space-y-4">
+              <Card>
+                <CardContent className="p-4">
+                  <div className="font-semibold mb-2">Faculty Pilot Mode</div>
+                  <p className="text-sm text-muted-foreground">
+                    Free access for faculty evaluation with co-branded certificates, data export, 
+                    and semester-based usage reports.
+                  </p>
+                </CardContent>
+              </Card>
+              
               <Card>
                 <CardContent className="p-4">
                   <div className="font-semibold mb-2">Institutional Co-signing</div>
@@ -474,13 +585,23 @@ export default function TrustWhitepaper() {
               
               <Card>
                 <CardContent className="p-4">
-                  <div className="font-semibold mb-2">Federation</div>
+                  <div className="font-semibold mb-2">Federation & Interoperability</div>
                   <p className="text-sm text-muted-foreground">
-                    Interoperability with external credential systems (Open Badges, Verifiable Credentials).
+                    Interoperability with external credential systems (Open Badges, Verifiable Credentials, LTI 1.3).
                   </p>
                 </CardContent>
               </Card>
               
+              <Card>
+                <CardContent className="p-4">
+                  <div className="font-semibold mb-2">Retraction Check Layer</div>
+                  <p className="text-sm text-muted-foreground">
+                    Integration with Retraction Watch database to flag cited sources that have been 
+                    retracted post-publication. Currently a placeholder—retraction status is marked as unknown.
+                  </p>
+                </CardContent>
+              </Card>
+
               <Card>
                 <CardContent className="p-4">
                   <div className="font-semibold mb-2">External Audits</div>
