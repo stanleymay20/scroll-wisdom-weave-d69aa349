@@ -304,10 +304,11 @@ export function CertificateGenerator({
           )}
         </Button>
 
-        {/* Info Note */}
+        {/* Info Note — Institutional Disclaimer */}
         <p className="text-xs text-muted-foreground text-center">
-          Certificates are issued by ScrollLibrary Certification Authority and include 
-          verifiable credentials with unique publishing codes.
+          Learning records are issued by ScrollLibrary and include SHA-256 signed verification hashes.
+          These document engagement and assessed understanding — they are not academic degrees,
+          professional certifications, or institutional endorsements.
         </p>
       </CardContent>
     </Card>

@@ -3,12 +3,13 @@ import { Check, X } from "lucide-react";
 
 const comparisons = [
   { feature: "Chapter-by-chapter structured reading", generic: false, scroll: true },
-  { feature: "Bloom's-taxonomy quiz assessment", generic: false, scroll: true },
-  { feature: "Competency tracking per chapter", generic: false, scroll: true },
-  { feature: "Cryptographically signed learning records", generic: false, scroll: true },
+  { feature: "6-level Bloom's taxonomy assessments", generic: false, scroll: true },
+  { feature: "Per-chapter competency scoring", generic: false, scroll: true },
+  { feature: "SHA-256 signed learning records", generic: false, scroll: true },
+  { feature: "CrossRef-validated reference pipeline", generic: false, scroll: true },
   { feature: "Upload & parse your own PDF/EPUB", generic: false, scroll: true },
-  { feature: "Reading progress & streak tracking", generic: false, scroll: true },
-  { feature: "AI-generated academic study guides", generic: false, scroll: true },
+  { feature: "Domain-aware AI generation (STEM, humanities, professional)", generic: false, scroll: true },
+  { feature: "Exportable audit artifacts for institutional review", generic: false, scroll: true },
 ];
 
 export function WhyDifferent() {

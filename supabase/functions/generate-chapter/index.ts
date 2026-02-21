@@ -1645,19 +1645,31 @@ async function conductDeepResearch(
       return await conductFallbackResearch(topic, category, keyTopics, citationStyle);
     }
 
-    const references: Reference[] = data.sources.map((s: any) => ({
-      author: s.authors?.join(', ') || 'Unknown',
-      title: s.title || 'Unknown',
-      year: s.year || new Date().getFullYear(),
-      type: s.type || 'article',
-      doi: s.doi,
-      url: s.url || (s.doi ? `https://doi.org/${s.doi}` : undefined),
-      journal: s.journal,
-      publisher: s.publisher,
-      verified: s.verified,
-      peerReviewed: s.peerReviewed,
-      database: s.database,
-    }));
+    const references: Reference[] = data.sources
+      .filter((s: any) => {
+        // Hard-reject placeholder/fabricated entries from the deep research pipeline
+        const author = String(s.authors?.join(', ') || s.author || '').trim();
+        const title = String(s.title || '').trim();
+        const isPlaceholder = /^(unknown|source|n\/a|anonymous)$/i.test(author) 
+          || /^(reference\s+\d+|unknown|untitled|n\/a|web reference|article \d+)/i.test(title);
+        if (isPlaceholder) {
+          console.log(`[DEEP-RESEARCH] Hard-rejecting placeholder: "${author}" / "${title.slice(0, 40)}"`);
+        }
+        return !isPlaceholder;
+      })
+      .map((s: any) => ({
+        author: s.authors?.join(', ') || s.author || 'Unverified Author',
+        title: s.title || 'Untitled — requires verification',
+        year: s.year || new Date().getFullYear(),
+        type: s.type || 'article',
+        doi: s.doi,
+        url: s.url || (s.doi ? `https://doi.org/${s.doi}` : undefined),
+        journal: s.journal,
+        publisher: s.publisher,
+        verified: s.verified,
+        peerReviewed: s.peerReviewed,
+        database: s.database,
+      }));
 
     const inTextCitations = references.map((ref, index) => 
       citationStyle === 'IEEE' ? `[${index + 1}]` : formatInTextCitation(ref, citationStyle)
