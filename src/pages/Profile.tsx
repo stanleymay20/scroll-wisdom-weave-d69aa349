@@ -154,7 +154,7 @@ export default function Profile() {
       if (!mounted) return;
       
       if (!user) {
-        navigate("/auth");
+        navigate("/auth", { state: { redirectTo: "/profile" } });
         return;
       }
       setUser(user);

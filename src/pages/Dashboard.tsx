@@ -96,7 +96,7 @@ export default function Dashboard() {
       if (!mounted) return;
       
       if (!user) {
-        navigate("/auth");
+        navigate("/auth", { state: { redirectTo: "/dashboard" } });
         return;
       }
       setUser(user);

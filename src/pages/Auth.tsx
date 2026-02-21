@@ -11,7 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
-import { hasRecoveryTokens, parseHashTokens } from "@/lib/authRecovery";
+import { hasRecoveryTokens, isRecoveryCode, parseHashTokens } from "@/lib/authRecovery";
 import { lovable } from "@/integrations/lovable/index";
 
 type AuthMode = "login" | "signup" | "forgot-password" | "magic-link" | "reset-password";
@@ -50,10 +50,10 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   // Auth state listener — subscribe ONCE, use refs for current values
   useEffect(() => {
     const url = new URL(window.location.href);
-    const code = url.searchParams.get("code");
 
-    // Detect password-recovery session in URL hash (implicit flow) OR ?code= (PKCE flow)
-    isRecoveryRef.current = hasRecoveryTokens(window.location.hash) || Boolean(code);
+    // Detect password-recovery session in URL hash (implicit flow) OR ?code=+type=recovery (PKCE flow)
+    // IMPORTANT: plain ?code= without type/mode hint is a normal OAuth callback, NOT recovery
+    isRecoveryRef.current = hasRecoveryTokens(window.location.hash) || isRecoveryCode(url);
     if (isRecoveryRef.current) {
       setMode("reset-password");
     }
@@ -80,8 +80,9 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
       if (session) return;
 
       // PKCE: exchange ?code= for session
-      if (code) {
-        const { error } = await supabase.auth.exchangeCodeForSession(code);
+      const pkceCode = new URL(window.location.href).searchParams.get("code");
+      if (pkceCode) {
+        const { error } = await supabase.auth.exchangeCodeForSession(pkceCode);
         if (error) console.warn("Recovery code exchange failed:", error.message);
         return;
       }

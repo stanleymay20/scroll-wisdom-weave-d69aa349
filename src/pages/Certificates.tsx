@@ -102,7 +102,7 @@ export default function Certificates() {
               <CardContent className="space-y-4">
                 <LogIn className="h-12 w-12 text-muted-foreground mx-auto" />
                 <p className="text-muted-foreground">Sign in to view your certificates.</p>
-                <Button onClick={() => navigate("/auth")}>Sign In</Button>
+                <Button onClick={() => navigate("/auth", { state: { redirectTo: "/certificates" } })}>Sign In</Button>
               </CardContent>
             </Card>
           ) : certificates.length === 0 ? (
