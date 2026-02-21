@@ -1,4 +1,4 @@
-import { useState, useCallback, forwardRef } from "react";
+import { useState, useCallback, forwardRef, useRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -17,6 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { type BloomLevel } from "@/lib/masteryEngine";
 
 interface QuizQuestion {
   question: string;
@@ -25,6 +26,7 @@ interface QuizQuestion {
   explanation: string;
   tier?: number;
   type?: 'knowledge' | 'reasoning' | 'scenario' | 'integrity';
+  bloomLevel?: BloomLevel;
   pointValue?: number;
   timeLimit?: number;
   context?: string;
@@ -40,6 +42,15 @@ interface QuizModeProps {
   onClose: () => void;
   isMasteryMode?: boolean;
   bookType?: string;
+  /** Called after each answer to record in mastery engine */
+  onRecordAttempt?: (
+    chapterId: string,
+    bloomLevel: BloomLevel,
+    score: number,
+    questionDifficulty: number,
+    timeSpentSeconds: number,
+    questionsAnswered: number,
+  ) => Promise<{ blocked: boolean; reason?: string } | null>;
 }
 
 export function QuizMode({
@@ -52,6 +63,7 @@ export function QuizMode({
   onClose,
   isMasteryMode = false,
   bookType = 'text',
+  onRecordAttempt,
 }: QuizModeProps) {
   const [questions, setQuestions] = useState<QuizQuestion[]>([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -61,6 +73,7 @@ export function QuizMode({
   const [isLoading, setIsLoading] = useState(false);
   const [isComplete, setIsComplete] = useState(false);
   const { toast } = useToast();
+  const quizStartTime = useRef(Date.now());
   const { t } = useLanguage();
 
   const generateQuiz = useCallback(async () => {
@@ -149,10 +162,13 @@ export function QuizMode({
       setShowResult(false);
     } else {
       setIsComplete(true);
-      // Save quiz result
+      // Save quiz result + record mastery attempt
       try {
         const { data: { user } } = await supabase.auth.getUser();
         if (user) {
+          const percentage = Math.round((score / questions.length) * 100);
+          const timeSpent = Math.floor((Date.now() - quizStartTime.current) / 1000);
+
           await supabase.from("study_notes").insert({
             user_id: user.id,
             book_id: bookId,
@@ -162,10 +178,35 @@ export function QuizMode({
               title: `Quiz: ${chapterTitle}`,
               score,
               total: questions.length,
-              percentage: Math.round((score / questions.length) * 100),
+              percentage,
               questions: questions.map((q, i) => ({ question: q.question, correct: i < score })),
             }),
           });
+
+          // Wire into mastery engine
+          if (onRecordAttempt) {
+            // Infer bloom level from question types
+            const bloomLevel: BloomLevel = isMasteryMode ? 'analyze' : 
+              percentage >= 85 ? 'evaluate' :
+              percentage >= 60 ? 'apply' : 'understand';
+            
+            const result = await onRecordAttempt(
+              chapterId,
+              bloomLevel,
+              percentage,
+              isMasteryMode ? 3 : 2,
+              timeSpent,
+              questions.length,
+            );
+
+            if (result?.blocked) {
+              toast({
+                title: 'Attempt Blocked',
+                description: result.reason || 'Anti-gaming check failed',
+                variant: 'destructive',
+              });
+            }
+          }
         }
       } catch (err) {
         console.error("Failed to save quiz result:", err);
