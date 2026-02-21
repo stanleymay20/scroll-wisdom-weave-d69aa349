@@ -301,15 +301,15 @@ export function evaluateCertificateEligibility(
  */
 export function getEligibilityStatusText(result: CertificateEligibilityResult): string {
   if (result.eligible && result.certificateType === 'mastery') {
-    return 'Eligible for Mastery Certificate';
+    return 'Eligible for Mastery-Certified Learning Record';
   }
   if (result.eligible && result.certificateType === 'completion') {
-    return 'Eligible for Completion Certificate';
+    return 'Eligible for AI-Assisted Structured Study Completion Record';
   }
   if (result.blockedByCooldown && result.canRetryAt) {
     return `Retry available ${result.canRetryAt.toLocaleDateString()}`;
   }
-  return 'Not yet eligible for certification';
+  return 'Not yet eligible for learning record issuance';
 }
 
 /**

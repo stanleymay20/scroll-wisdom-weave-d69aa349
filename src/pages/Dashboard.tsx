@@ -11,7 +11,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { 
   BookOpen, Sparkles, Download, Clock, TrendingUp, 
-  Library, Plus, ChevronRight, BarChart3
+  Library, Plus, ChevronRight, BarChart3, Brain
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { apiCache } from "@/lib/cache";
@@ -225,10 +225,14 @@ export default function Dashboard() {
                   <TrendingUp className="h-4 w-4" />
                   Overview
                 </TabsTrigger>
-                <TabsTrigger value="progress" className="gap-2">
-                  <BarChart3 className="h-4 w-4" />
-                  Reading Progress
-                </TabsTrigger>
+                 <TabsTrigger value="progress" className="gap-2">
+                   <BarChart3 className="h-4 w-4" />
+                   Reading Progress
+                 </TabsTrigger>
+                 <TabsTrigger value="mastery" className="gap-2" onClick={() => navigate('/dashboard/mastery')}>
+                   <Brain className="h-4 w-4" />
+                   Mastery
+                 </TabsTrigger>
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
