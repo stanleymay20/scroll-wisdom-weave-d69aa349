@@ -469,9 +469,11 @@ export type Database = {
       competency_certificates: {
         Row: {
           ai_evaluation_summary: string | null
+          attempt_count: number | null
           average_application_score: number | null
           average_competency_score: number | null
           average_reflection_score: number | null
+          bloom_distribution: Json | null
           book_id: string
           book_version_hash: string | null
           certificate_number: string
@@ -479,8 +481,11 @@ export type Database = {
           competency_level: Database["public"]["Enums"]["competency_level"]
           competency_summary: string | null
           created_at: string
+          domain_snapshot: Json | null
           id: string
+          improvement_trend: string | null
           issued_at: string
+          mastery_classification: string | null
           metadata: Json | null
           overall_competency_score: number | null
           revoked_at: string | null
@@ -493,9 +498,11 @@ export type Database = {
         }
         Insert: {
           ai_evaluation_summary?: string | null
+          attempt_count?: number | null
           average_application_score?: number | null
           average_competency_score?: number | null
           average_reflection_score?: number | null
+          bloom_distribution?: Json | null
           book_id: string
           book_version_hash?: string | null
           certificate_number: string
@@ -503,8 +510,11 @@ export type Database = {
           competency_level?: Database["public"]["Enums"]["competency_level"]
           competency_summary?: string | null
           created_at?: string
+          domain_snapshot?: Json | null
           id?: string
+          improvement_trend?: string | null
           issued_at?: string
+          mastery_classification?: string | null
           metadata?: Json | null
           overall_competency_score?: number | null
           revoked_at?: string | null
@@ -517,9 +527,11 @@ export type Database = {
         }
         Update: {
           ai_evaluation_summary?: string | null
+          attempt_count?: number | null
           average_application_score?: number | null
           average_competency_score?: number | null
           average_reflection_score?: number | null
+          bloom_distribution?: Json | null
           book_id?: string
           book_version_hash?: string | null
           certificate_number?: string
@@ -527,8 +539,11 @@ export type Database = {
           competency_level?: Database["public"]["Enums"]["competency_level"]
           competency_summary?: string | null
           created_at?: string
+          domain_snapshot?: Json | null
           id?: string
+          improvement_trend?: string | null
           issued_at?: string
+          mastery_classification?: string | null
           metadata?: Json | null
           overall_competency_score?: number | null
           revoked_at?: string | null
@@ -548,6 +563,54 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      competency_profile: {
+        Row: {
+          analyze_score: number | null
+          apply_score: number | null
+          create_score: number | null
+          created_at: string
+          domain: string
+          evaluate_score: number | null
+          growth_trend: string
+          id: string
+          last_updated: string
+          remember_score: number | null
+          total_attempts: number | null
+          understand_score: number | null
+          user_id: string
+        }
+        Insert: {
+          analyze_score?: number | null
+          apply_score?: number | null
+          create_score?: number | null
+          created_at?: string
+          domain?: string
+          evaluate_score?: number | null
+          growth_trend?: string
+          id?: string
+          last_updated?: string
+          remember_score?: number | null
+          total_attempts?: number | null
+          understand_score?: number | null
+          user_id: string
+        }
+        Update: {
+          analyze_score?: number | null
+          apply_score?: number | null
+          create_score?: number | null
+          created_at?: string
+          domain?: string
+          evaluate_score?: number | null
+          growth_trend?: string
+          id?: string
+          last_updated?: string
+          remember_score?: number | null
+          total_attempts?: number | null
+          understand_score?: number | null
+          user_id?: string
+        }
+        Relationships: []
       }
       competency_progress: {
         Row: {
@@ -802,6 +865,72 @@ export type Database = {
           },
           {
             foreignKeyName: "highlights_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learning_progress: {
+        Row: {
+          attempt_number: number
+          bloom_level: string
+          book_id: string
+          chapter_id: string | null
+          created_at: string
+          id: string
+          improvement_delta: number | null
+          mastery_status: string
+          question_difficulty: number
+          questions_answered: number | null
+          remediation_triggered: boolean
+          score: number
+          time_spent_seconds: number | null
+          user_id: string
+        }
+        Insert: {
+          attempt_number?: number
+          bloom_level?: string
+          book_id: string
+          chapter_id?: string | null
+          created_at?: string
+          id?: string
+          improvement_delta?: number | null
+          mastery_status?: string
+          question_difficulty?: number
+          questions_answered?: number | null
+          remediation_triggered?: boolean
+          score?: number
+          time_spent_seconds?: number | null
+          user_id: string
+        }
+        Update: {
+          attempt_number?: number
+          bloom_level?: string
+          book_id?: string
+          chapter_id?: string | null
+          created_at?: string
+          id?: string
+          improvement_delta?: number | null
+          mastery_status?: string
+          question_difficulty?: number
+          questions_answered?: number | null
+          remediation_triggered?: boolean
+          score?: number
+          time_spent_seconds?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learning_progress_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "learning_progress_chapter_id_fkey"
             columns: ["chapter_id"]
             isOneToOne: false
             referencedRelation: "chapters"

@@ -191,7 +191,7 @@ export function CertificateGenerator({
       <CardHeader>
         <CardTitle className="flex items-center gap-2">
           <Award className="h-5 w-5 text-primary" />
-          Certificate of Achievement
+          Cryptographically Verified Learning Record
         </CardTitle>
         <CardDescription>
           {getEligibilityStatusText(eligibility)}
@@ -306,9 +306,9 @@ export function CertificateGenerator({
 
         {/* Info Note — Institutional Disclaimer */}
         <p className="text-xs text-muted-foreground text-center">
-          Learning records are issued by ScrollLibrary and include SHA-256 signed verification hashes.
-          These document engagement and assessed understanding — they are not academic degrees,
-          professional certifications, or institutional endorsements.
+          This learning record documents demonstrated mastery within ScrollLibrary's structured AI-assisted curriculum.
+          It is cryptographically signed (SHA-256) and verifiable. It does not constitute accredited academic credit,
+          professional certification, or institutional endorsement.
         </p>
       </CardContent>
     </Card>
