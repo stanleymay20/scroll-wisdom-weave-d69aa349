@@ -25,13 +25,13 @@ export function FinalCTA() {
 
           <div className="flex flex-col sm:flex-row items-center justify-center gap-4">
             <Button asChild size="lg" className="gap-2">
-              <Link to="/upload">
+              <Link to="/generate">
                 {t('finalCta.upload')}
                 <ArrowRight className="h-4 w-4" />
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg">
-              <Link to="/generate">
+              <Link to="/docs/mastery-model">
                 {t('finalCta.generate')}
               </Link>
             </Button>
