@@ -166,7 +166,7 @@ export default function BookDetail() {
         title: t('generate.signInRequired'),
         description: t('book.signInToSave'),
       });
-      navigate("/auth");
+      navigate("/auth", { state: { redirectTo: `/book/${id}` } });
       return;
     }
 

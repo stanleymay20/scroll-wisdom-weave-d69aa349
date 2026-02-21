@@ -61,7 +61,7 @@ export default function ModerationDashboard() {
   const checkAccess = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      navigate("/auth");
+      navigate("/auth", { state: { redirectTo: "/moderation" } });
       return;
     }
 

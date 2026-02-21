@@ -126,7 +126,7 @@ export default function Pricing() {
 
   const handleSelectPlan = async (planTierKey: SubscriptionTier) => {
     if (!user) {
-      navigate("/auth");
+      navigate("/auth", { state: { redirectTo: "/pricing" } });
       return;
     }
 

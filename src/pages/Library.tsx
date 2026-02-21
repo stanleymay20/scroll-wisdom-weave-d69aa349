@@ -443,14 +443,14 @@ export default function Library() {
         if (!mounted) return;
         
         if (!session?.user) {
-          navigate("/auth");
+          navigate("/auth", { state: { redirectTo: "/library" } });
           return;
         }
         
         setUser(session.user);
       } catch (error) {
         console.error("Auth error:", error);
-        if (mounted) navigate("/auth");
+        if (mounted) navigate("/auth", { state: { redirectTo: "/library" } });
       }
     };
     
@@ -463,7 +463,7 @@ export default function Library() {
         if (!mounted) return;
         setUser(session?.user ?? null);
         if (!session?.user) {
-          navigate("/auth");
+          navigate("/auth", { state: { redirectTo: "/library" } });
         }
       }
     );

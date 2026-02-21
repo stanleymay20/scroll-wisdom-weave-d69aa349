@@ -118,7 +118,7 @@ export default function Settings() {
   const checkAuth = async () => {
     const { data: { user } } = await supabase.auth.getUser();
     if (!user) {
-      navigate("/auth");
+      navigate("/auth", { state: { redirectTo: "/settings" } });
       return;
     }
     setUser(user);
