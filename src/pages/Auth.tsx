@@ -35,20 +35,26 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   const location = useLocation();
   const redirectTo = (location.state as any)?.redirectTo || "/";
   const isRecoveryRef = useRef(false);
+  const modeRef = useRef(mode);
+  const redirectRef = useRef(redirectTo);
+
+  // Keep refs in sync so the auth listener always sees fresh values
+  useEffect(() => { modeRef.current = mode; }, [mode]);
+  useEffect(() => { redirectRef.current = redirectTo; }, [redirectTo]);
 
   // Clear error when mode changes
   useEffect(() => {
     setAuthError(null);
   }, [mode]);
 
+  // Auth state listener — subscribe ONCE, use refs for current values
   useEffect(() => {
     const url = new URL(window.location.href);
     const code = url.searchParams.get("code");
 
     // Detect password-recovery session in URL hash (implicit flow) OR ?code= (PKCE flow)
-    // and avoid redirecting away during recovery.
     isRecoveryRef.current = hasRecoveryTokens(window.location.hash) || Boolean(code);
-    if (isRecoveryRef.current && mode !== "reset-password") {
+    if (isRecoveryRef.current) {
       setMode("reset-password");
     }
 
@@ -61,16 +67,13 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
 
       if (event === "SIGNED_IN" && session?.user) {
         // If we're in recovery, stay on the reset screen.
-        if (isRecoveryRef.current || mode === "reset-password") return;
+        if (isRecoveryRef.current || modeRef.current === "reset-password") return;
         // Defer navigation to avoid potential deadlocks
-        setTimeout(() => navigate(redirectTo), 0);
+        setTimeout(() => navigate(redirectRef.current), 0);
       }
     });
 
     // If user landed here via recovery link, restore session.
-    // Supports both:
-    //  - URL hash tokens (#access_token=...&refresh_token=...)
-    //  - PKCE auth code (?code=...)
     (async () => {
       if (!isRecoveryRef.current) return;
       const { data: { session } } = await supabase.auth.getSession();
@@ -96,13 +99,14 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
 
     // For normal signed-in visits, redirect home.
     supabase.auth.getSession().then(({ data: { session } }) => {
-      if (session?.user && mode !== "reset-password" && !isRecoveryRef.current) {
-        navigate(redirectTo);
+      if (session?.user && !isRecoveryRef.current && modeRef.current !== "reset-password") {
+        navigate(redirectRef.current);
       }
     });
 
     return () => subscription.unsubscribe();
-  }, [navigate, mode]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navigate]);
 
   const getErrorMessage = (error: any): string => {
     const message = error?.message || String(error);
@@ -495,9 +499,9 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
                   />
                   <Label htmlFor="terms" className="text-xs text-muted-foreground leading-relaxed cursor-pointer">
                     I agree to the{" "}
-                    <a href="/terms-of-service" target="_blank" className="text-primary hover:underline">Terms of Service</a>
+                    <a href="/terms" target="_blank" className="text-primary hover:underline">Terms of Service</a>
                     {" "}and{" "}
-                    <a href="/privacy-policy" target="_blank" className="text-primary hover:underline">Privacy Policy</a>
+                    <a href="/privacy" target="_blank" className="text-primary hover:underline">Privacy Policy</a>
                     <span className="text-destructive ml-0.5">*</span>
                   </Label>
                 </div>
