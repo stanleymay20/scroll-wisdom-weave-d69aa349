@@ -162,18 +162,10 @@ Requirements:
         references = JSON.parse(jsonMatch[0]);
       }
     } catch (parseError) {
-      logStep("Could not parse JSON references, using citations");
-      references = citations
-        .filter((url: string) => url && url.startsWith('http'))
-        .map((url: string, i: number) => ({
-          author: "Unattributed Source",
-          title: `Web Reference ${i + 1} — verification required`,
-          year: new Date().getFullYear(),
-          type: "web",
-          url,
-          requires_verification: true,
-          peer_reviewed: false,
-        }));
+      // AUDIT FIX: Never inject placeholder references — they are fabrication signals.
+      // If JSON parsing fails, return empty array rather than "Unattributed Source" entries.
+      logStep("Could not parse JSON references — returning empty to prevent fabrication");
+      references = [];
     }
 
     // AUDIT FIX: Hard-reject placeholder/fabricated references before post-processing.
