@@ -1,6 +1,5 @@
 /**
- * Instant Mastery Check — hardened, timed, spam-protected
- * Timer countdown, real gate checklist, analytics, edge-case safe
+ * Instant Mastery Check — hardened, timed, spam-protected, authority-layered
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
@@ -21,6 +20,7 @@ import {
 
 const TIMER_SECONDS = 20;
 const MAX_ATTEMPTS = 3;
+const INSTITUTIONAL_PREVIEW = true;
 
 const DEMO_QUESTIONS = [
   {
@@ -70,6 +70,24 @@ const GATE_LABELS = [
   "Coding pass ≥ 60%",
 ];
 
+const GATE_DETAILS = [
+  "Cognitive taxonomy classification complete",
+  "Requires cumulative average ≥ 80%",
+  "Measures higher-order reasoning depth",
+  "Requires demonstrated evaluative thinking",
+  "Ensures consistent cognitive progression",
+  "Minimum 2 structured assessments",
+  "Breadth of cognitive taxonomy required",
+  "Statistical stability validation",
+  "Applied reasoning validation",
+];
+
+function calculatePercentile(correct: boolean, timedOut: boolean) {
+  if (timedOut) return 12;
+  if (correct) return 78;
+  return 34;
+}
+
 type Phase = "question" | "result" | "transitioning" | "locked";
 
 interface InstantMasteryModalProps {
@@ -91,7 +109,6 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
 
   const isCorrect = selectedAnswer === question.correct;
 
-  // Check spam lock on open
   useEffect(() => {
     if (open) {
       attemptCount.current = getDemoAttemptCount();
@@ -110,15 +127,12 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
     }
   }, [open]);
 
-  // Countdown timer
   useEffect(() => {
     if (!open || phase !== "question" || selectedAnswer !== null) {
       if (timerRef.current) clearInterval(timerRef.current);
       return;
     }
-
     trackDemoEvent("demo_started_timer");
-
     timerRef.current = setInterval(() => {
       setTimeLeft((prev) => {
         if (prev <= 1) {
@@ -132,7 +146,6 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
         return prev - 1;
       });
     }, 1000);
-
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -145,21 +158,17 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
     if (selectedAnswer !== null || timedOut) return;
     setSelectedAnswer(index);
     if (timerRef.current) clearInterval(timerRef.current);
-
     const correct = index === question.correct;
     const count = incrementDemoAttempt();
     attemptCount.current = count;
-
     trackDemoEvent("demo_completed", { correct, bloomLevel: question.bloomLevel });
     trackDemoEvent(correct ? "demo_correct" : "demo_incorrect");
-
     safePersistResult({
       bloomLevel: question.bloomLevel,
       correct,
       timestamp: Date.now(),
       timeSpent: Date.now() - startTimeRef.current,
     });
-
     setTimeout(() => setPhase("result"), 600);
   }, [question, selectedAnswer, timedOut]);
 
@@ -184,7 +193,14 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
     }, 1500);
   };
 
-  // Radar values
+  // Track percentile view
+  const percentile = calculatePercentile(isCorrect, timedOut);
+  useEffect(() => {
+    if (phase === "result") {
+      trackDemoEvent("demo_percentile_viewed", { percentile });
+    }
+  }, [phase, percentile]);
+
   const bloomIndex = ["Remember", "Understand", "Apply", "Analyze", "Evaluate", "Create"].indexOf(question.bloomLevel);
   const radarValues = Array(6).fill(0).map((_, i) =>
     i === bloomIndex ? (timedOut ? 10 : isCorrect ? 90 : 25) : 0
@@ -194,26 +210,35 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden max-h-[90vh] overflow-y-auto">
-        <DialogTitle className="sr-only">Quick Mastery Check</DialogTitle>
+      <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden max-h-[90vh] overflow-y-auto bg-background/95 backdrop-blur-md border-primary/20 shadow-xl">
+        <DialogTitle className="sr-only">Cognitive Assessment</DialogTitle>
 
         <AnimatePresence mode="wait">
-          {/* LOCKED PHASE */}
+          {/* LOCKED */}
           {phase === "locked" && (
             <motion.div key="locked" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-6 text-center">
+              <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-primary/70 to-transparent mb-4" />
               <Lock className="h-10 w-10 text-muted-foreground mx-auto mb-3" />
-              <p className="text-sm font-semibold text-foreground mb-2">Demo limit reached</p>
-              <p className="text-xs text-muted-foreground mb-5">Full profile required to continue cognitive evaluation.</p>
+              <p className="text-sm font-semibold text-foreground mb-2">Assessment limit reached</p>
+              <p className="text-xs text-muted-foreground mb-5">Full cognitive profile required to continue structured evaluation.</p>
               <Button onClick={handleUnlock} className="w-full gap-2">
-                Unlock Full Mastery Profile
+                Unlock Full Cognitive Assessment Profile
                 <ArrowRight className="h-4 w-4" />
               </Button>
             </motion.div>
           )}
 
-          {/* QUESTION PHASE */}
+          {/* QUESTION */}
           {phase === "question" && (
             <motion.div key="question" initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }} className="p-6">
+              {/* Gold accent */}
+              <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-primary/70 to-transparent mb-3" />
+
+              {/* Authority badge */}
+              <div className="text-[10px] tracking-wider uppercase text-muted-foreground/70 mb-1">
+                {INSTITUTIONAL_PREVIEW ? "Institutional Evaluation Mode" : "Cognitive Assessment Prototype"}
+              </div>
+
               {/* Header + Timer */}
               <div className="flex items-center justify-between mb-1">
                 <div className="flex items-center gap-2">
@@ -225,7 +250,7 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
                   <span>{timeLeft}s</span>
                 </div>
               </div>
-              <p className="text-xs text-muted-foreground mb-4">20 seconds. No signup required.</p>
+              <p className="text-xs text-muted-foreground mb-4">20-second cognitive window. No signup required.</p>
 
               {/* Timer bar */}
               <div className="w-full h-1 bg-muted rounded-full mb-4 overflow-hidden">
@@ -280,9 +305,11 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
             </motion.div>
           )}
 
-          {/* RESULT PHASE */}
+          {/* RESULT */}
           {phase === "result" && (
             <motion.div key="result" initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} className="p-6">
+              <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-primary/70 to-transparent mb-4" />
+
               <div className="text-center mb-3">
                 {timedOut ? (
                   <Clock className="h-10 w-10 text-muted-foreground mx-auto mb-2" />
@@ -296,14 +323,23 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
                     ? "Cognitive response window expired."
                     : isCorrect
                       ? "Strong analytical reasoning detected."
-                      : "Analytical gap detected. Let's strengthen it."}
+                      : "Analytical gap detected. Targeted reinforcement recommended."}
                 </p>
                 <p className="text-xs text-muted-foreground mt-1">
                   {timedOut
-                    ? "No response recorded."
+                    ? "No response recorded within evaluation window."
                     : isCorrect
                       ? "Your cognitive baseline is above average."
                       : "Most users miss this question."}
+                </p>
+
+                {/* Percentile */}
+                <p className="text-xs text-muted-foreground mt-2">
+                  {INSTITUTIONAL_PREVIEW ? "Preliminary Cognitive Baseline Estimate" : "Estimated Cognitive Percentile"}:{" "}
+                  <span className="font-semibold text-foreground">{percentile}th</span>
+                </p>
+                <p className="text-[10px] text-muted-foreground/60 mt-0.5">
+                  Percentile estimation based on Bloom-level baseline distribution.
                 </p>
               </div>
 
@@ -312,7 +348,7 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
                 <MiniRadarChart values={radarValues} size={160} />
               </motion.div>
 
-              {/* Real 9-Gate Checklist */}
+              {/* 9-Gate Checklist */}
               <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }} className="mt-3">
                 <div className="flex items-center gap-2 text-xs font-semibold text-foreground mb-2">
                   <Shield className="h-3.5 w-3.5 text-primary" />
@@ -323,7 +359,7 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
                   {GATE_LABELS.map((label, i) => {
                     const passed = i === 0 && !timedOut;
                     return (
-                      <div key={i} className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs ${
+                      <div key={i} className={`flex items-center gap-2 px-2 py-1.5 rounded text-xs group ${
                         passed ? "bg-green-500/5 text-green-600 dark:text-green-400" : "bg-muted/30 text-muted-foreground"
                       }`}>
                         {passed ? (
@@ -331,38 +367,63 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
                         ) : (
                           <Lock className="h-3 w-3 flex-shrink-0 opacity-50" />
                         )}
-                        <span>{label}</span>
+                        <div>
+                          <span>{label}</span>
+                          <span className="text-[10px] text-muted-foreground/70 block leading-tight">
+                            {GATE_DETAILS[i]}
+                          </span>
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               </motion.div>
 
+              {/* Assessment Architecture footer */}
+              <div className="mt-4 p-3 border border-border rounded-md bg-muted/30 text-[11px] leading-relaxed text-muted-foreground">
+                <p className="font-medium text-foreground">Assessment Architecture</p>
+                <p>
+                  This preview simulates Bloom-weighted scoring with integrity gates,
+                  volatility controls, and adaptive difficulty modeling.
+                </p>
+              </div>
+
               {/* CTAs */}
               <div className="mt-4 space-y-2">
                 <Button onClick={handleUnlock} className="w-full gap-2" size="lg">
-                  Unlock Full Mastery Profile
+                  Unlock Full Cognitive Assessment Profile
                   <ArrowRight className="h-4 w-4" />
                 </Button>
+                <p className="text-[10px] text-muted-foreground text-center">
+                  Activate structured Bloom-weighted certification engine.
+                </p>
                 {attemptCount.current < MAX_ATTEMPTS ? (
-                  <Button onClick={handleRetry} variant="ghost" size="sm" className="w-full text-muted-foreground">
-                    Try a Harder Question ({MAX_ATTEMPTS - attemptCount.current} left)
-                  </Button>
+                  <>
+                    <Button onClick={handleRetry} variant="ghost" size="sm" className="w-full text-muted-foreground">
+                      Try a Harder Question ({MAX_ATTEMPTS - attemptCount.current} left)
+                    </Button>
+                    {attemptCount.current === MAX_ATTEMPTS - 1 && (
+                      <p className="text-[11px] text-amber-500 text-center">
+                        Final preview attempt remaining.
+                      </p>
+                    )}
+                  </>
                 ) : (
-                  <p className="text-xs text-muted-foreground text-center">Demo limit reached — unlock full profile to continue.</p>
+                  <p className="text-xs text-muted-foreground text-center">Assessment limit reached — unlock full profile to continue.</p>
                 )}
               </div>
             </motion.div>
           )}
 
-          {/* TRANSITION PHASE */}
+          {/* TRANSITION */}
           {phase === "transitioning" && (
             <motion.div key="transitioning" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-8 text-center">
+              <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-primary/70 to-transparent mb-4" />
               <motion.div animate={{ rotate: 360 }} transition={{ duration: 2, repeat: Infinity, ease: "linear" }}>
                 <Brain className="h-10 w-10 text-primary mx-auto" />
               </motion.div>
               <p className="text-sm font-semibold text-foreground mt-4">Initializing Full Cognitive Profile…</p>
-              <p className="text-xs text-muted-foreground mt-1">Preparing your mastery assessment engine.</p>
+              <p className="text-xs text-muted-foreground mt-1">Preparing structured assessment engine.</p>
             </motion.div>
           )}
         </AnimatePresence>

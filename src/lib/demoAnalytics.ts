@@ -14,7 +14,8 @@ export type DemoEvent =
   | "demo_retry"
   | "demo_attempt_limit"
   | "demo_signup_click"
-  | "demo_signup_conversion";
+  | "demo_signup_conversion"
+  | "demo_percentile_viewed";
 
 export function trackDemoEvent(event: DemoEvent, payload?: Record<string, unknown>) {
   const key = `${event}_${JSON.stringify(payload ?? {})}`;
