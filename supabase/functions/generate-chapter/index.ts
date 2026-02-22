@@ -474,25 +474,9 @@ Before finalizing, VERIFY ALL of these:
 [ ] Italic (*text*) used for emphasis where appropriate
 [ ] Lists use proper - or 1. prefix formatting
 [ ] Clean formatting throughout
-[ ] Genre rules fully obeyed
-[ ] Bestseller mechanics present (hook, principle, takeaways)
-[ ] Reader engagement enforced
+[ ] Genre-specific rules fully obeyed
 [ ] Publish-ready layout
-
-FOR COMICS:
-[ ] Dialogue in EVERY panel
-[ ] Visual description for EVERY panel
-[ ] Character consistency maintained
-
-FOR ACADEMIC:
-[ ] In-text citations present
-[ ] References section complete
-[ ] Disclaimers included if required
-
-FOR WORKBOOKS:
-[ ] All 6 sections present
-[ ] Interactive elements dominate
-[ ] Minimal explanation text
+[ ] Content depth matches the declared book type
 
 If ANY check fails → REWRITE ENTIRE OUTPUT
 
@@ -2164,7 +2148,7 @@ serve(async (req) => {
         method: "POST",
         headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
         body: JSON.stringify({
-          model: generationModel,
+          model: "google/gemini-2.5-flash-lite",
           messages: [{
             role: "user",
             content: [
@@ -4120,28 +4104,47 @@ ${NONFICTION_CONTRACT}
 
 ${institutionalPrompt}
 
-${VALIDATION_CONTRACT}
+BESTSELLER QUALITY GATE (MANDATORY SELF-CHECK):
+Before finalizing, verify ALL are true:
+[ ] Opening hook grabs attention in first 100 words
+[ ] 3+ quotable/screenshot-worthy lines per chapter
+[ ] Belief disruption present — challenges conventional wisdom
+[ ] Named principle introduced (sticky, memorable concept)
+[ ] Actionable takeaways provided (3-7 bullet points)
+[ ] Reader feels personally addressed (second-person "you")
+[ ] Every paragraph advances the reader's understanding
+[ ] NO hedging language ("it could be argued", "some experts say")
+
+If ANY check fails → REWRITE.
 
 ${FINAL_DIRECTIVE}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.
 Create comprehensive, bestseller-grade chapters that readers would pay $20+ for.${isBusinessBook ? '\nThis is a BUSINESS/WEALTH book — apply Wall Street institutional rigor while preserving narrative voice.' : ''}`;
       } else {
-        // STANDARD TEXT PIPELINE — flexible, general-purpose, NO bestseller mechanics forced
+        // STANDARD TEXT PIPELINE — flexible, general-purpose, quality-focused
         systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
 
 ${MASTER_FORMATTING_CONTRACT}
 
-You are writing a STANDARD TEXT book. This is a flexible, general-purpose format.
+You are writing a STANDARD TEXT book. This is a flexible, general-purpose format that must still be EXCELLENT.
 
-GENERATOR IDENTITY: Professional Author
+GENERATOR IDENTITY: Professional Author · Subject Expert
 
-CONTENT RULES:
+CONTENT QUALITY RULES:
 - Clear, well-structured writing with logical flow
-- Proper paragraph structure and transitions
-- Appropriate depth for the subject matter
-- Use examples and explanations to clarify concepts
-- Include headings for organization
+- Strong opening for each chapter — create reader interest immediately
+- Proper paragraph structure with smooth transitions
+- Appropriate depth for the subject matter — no shallow surface-level summaries
+- Use concrete examples and explanations to clarify concepts
+- Include headings for clear organization
+- End each chapter with a clear synthesis, not a trailing fade
+
+ENGAGEMENT REQUIREMENTS:
+- At least ONE concrete, memorable example per major concept
+- At least ONE key insight the reader wouldn't have expected
+- Structure that rewards scanning AND deep reading
+- No "dead paragraphs" — every paragraph must advance understanding
 
 TONE: Professional, informative, engaging — adapt to the subject matter.
 Match the tone to the category: more formal for serious topics, more accessible for general interest.
@@ -4150,8 +4153,8 @@ FORBIDDEN:
 - AI-sounding transitions ("Let's dive in", "In this chapter we will explore")
 - Filler content or padding
 - Repetitive phrasing
-
-${VALIDATION_CONTRACT}
+- Shallow summaries that state the obvious
+- Wall-of-text paragraphs (max 4-5 lines)
 
 ${FINAL_DIRECTIVE}
 
@@ -4202,22 +4205,24 @@ LANGUAGE: Generate ALL content in ${languageName}.
 Key topics:
 ${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
 
-STANDARD TEXT STRUCTURE:
-1. INTRODUCTION — Set context for the chapter topic
-2. MAIN CONTENT — Organized into 3-5 logical sections with ## headings
-3. EXAMPLES — Concrete examples and illustrations where relevant
-4. KEY POINTS — Summary of main insights
-5. CONCLUSION — Wrap up and transition
+        STANDARD TEXT STRUCTURE:
+        1. INTRODUCTION — Hook the reader and set clear context (what, why, how)
+        2. MAIN CONTENT — Organized into 3-5 logical sections with descriptive ## headings
+        3. EXAMPLES — Concrete illustrations for abstract concepts (MANDATORY)
+        4. ANALYSIS/APPLICATION — Why this matters and how it applies
+        5. KEY POINTS — Summary of main insights
+        6. CONCLUSION — Synthesize findings and transition
 
-REQUIREMENTS:
-- Approximately ${targetWords} words
-- Use proper Markdown formatting (## headings, **bold**, tables where useful)
-- NO AI-sounding phrases ("Let's dive in", "In this chapter we will explore")
-- Clear, well-structured, informative writing
-- Adapt tone and depth to the subject matter
-${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat introductions' : ''}
+        REQUIREMENTS:
+        - Approximately ${targetWords} words
+        - Use proper Markdown formatting (## headings, **bold**, tables where useful)
+        - NO AI-sounding phrases ("Let's dive in", "In this chapter we will explore")
+        - Clear, well-structured, informative writing
+        - At least ONE concrete example per main section
+        - Adapt tone and depth to the subject matter
+        ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat introductions' : ''}
 
-BEGIN WRITING THE CHAPTER:`;
+        BEGIN WRITING THE STANDARD TEXT CHAPTER:`;
       }
     } else {
       // UNKNOWN BOOK TYPE FALLBACK — treat as standard text with warning

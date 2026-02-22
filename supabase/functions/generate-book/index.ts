@@ -136,15 +136,20 @@ serve(async (req) => {
     } else if (effectiveBookType === "workbook") {
       typeInstr = "WORKBOOK. Each chapter MUST have fill-in prompts, tables, reflection questions, action checkboxes. Max 1800 words.";
     } else if (isAcademicType) {
-      typeInstr = `ACADEMIC TEXTBOOK. Use literal chapter titles, learning objectives, technical tone. NO metaphorical titles.`;
+      // Academic/Technical/Reference/Professional share this rigor
+      const academicLabel = effectiveBookType === "professional" ? "PROFESSIONAL GUIDE" :
+                           effectiveBookType === "reference" ? "REFERENCE HANDBOOK" : "ACADEMIC TEXTBOOK";
+      typeInstr = `${academicLabel}. Use literal descriptive titles, learning objectives, technical tone. NO metaphorical titles (e.g. "Journey", "Wizard"). Use "Chapter X: [Topic]" format.`;
     } else if (bookType === "illustrated") {
       typeInstr = "ILLUSTRATED BOOK. Include [IMAGE: description] placement suggestions.";
+    } else if (bestsellerMode) {
+      typeInstr = "BESTSELLER. Provocative titles, hooks, named principles, transformation promises. Use 'The [Concept]' or 'How to [Action]' style titles.";
     }
 
     const refInstr = (enableReferences || academicMode || isAcademicType)
       ? `Include "references" array per chapter: {"author","title","year","type"}.` : "";
 
-    const bestsellerBoost = (bestsellerMode && !isAcademicType)
+    const bestsellerBoost = (bestsellerMode && !isAcademicType && effectiveBookType !== "comic" && effectiveBookType !== "workbook")
       ? "BESTSELLER MODE: Provocative titles, hooks, named principles, transformation promises." : "";
 
     // Generate outline via AI
