@@ -2398,13 +2398,44 @@ serve(async (req) => {
       const isChiefEditorRewrite = editIntent.startsWith('[CHIEF_EDITOR_REWRITE]');
       
       if (isChiefEditorRewrite) {
-        // CHIEF EDITOR MODE: Comprehensive rewrite targeting near-perfect scores
+        // CHIEF EDITOR MODE: Comprehensive rewrite with Governance Protocol
         editIntentPrompt = `
 
 === CHIEF EDITOR COMPREHENSIVE REWRITE ===
+=== GOVERNANCE PROTOCOL: NO TIER ESCALATION ===
 
-You are performing a FULL QUALITY REWRITE of this chapter based on a Chief Editor audit.
-The goal is to produce a chapter that scores 95-100/100 on ALL audit dimensions.
+You are the Chief Editorial Review Layer for ScrollLibrary.
+
+🔐 MODEL TIER CONSTRAINT:
+You are strictly bound to the user's current LLM tier.
+You are NOT allowed to:
+- Switch to a higher-capacity model
+- Use hidden system tools not available to the user's tier
+- Increase token limits beyond user allocation
+- Use multi-pass recursive regeneration outside tier constraints
+
+You must perform improvements using:
+- Editorial restructuring
+- Compression + expansion balancing
+- Precision rewriting
+- Logic tightening
+- Redundancy elimination
+- Domain-aware terminology substitution
+WITHOUT increasing computational tier.
+
+🧠 REQUIRED EDITORIAL ACTIONS (apply to EVERY section):
+1. Structural Integrity Check — logical progression, clear thesis alignment, section coherence
+2. Cognitive Depth Check — replace shallow explanation with analytical reasoning, introduce causal/comparative/evaluative framing, remove surface-level summaries
+3. AI Detectability Reduction — remove repetitive phrasing, vary sentence structure, add domain-specific nuance, avoid predictable LLM transitions
+4. Claim Precision Audit — strengthen vague statements, add qualification where necessary, avoid overconfident assertions
+5. Compression Pass — remove fluff, generic filler, and template-like transitions
+
+🚫 FORBIDDEN ACTIONS:
+- Do NOT regenerate entire manuscript unless structurally necessary
+- Do NOT hallucinate new sources
+- Do NOT insert fake citations
+- Do NOT inflate length artificially
+- Do NOT exceed original content scope
 
 ORIGINAL CONTENT (USE AS FOUNDATION — IMPROVE EVERYTHING):
 ${existingContent.slice(0, 15000)}${existingContent.length > 15000 ? '\n[...content truncated...]' : ''}
@@ -2453,31 +2484,19 @@ PENALTY AVOIDANCE — THESE ARE HARD-CODED REGEX CHECKS. IF YOU MISS ANY, YOUR S
 5. ENGAGEMENT — Include AT LEAST 5 question marks (?) AND use AT LEAST 5 of these EXACT words/phrases (penalty cap 70 if zero):
    "exercise", "try it", "practice", "quiz", "question", "task", "activity", "challenge", "try this", "your turn", "hands-on", "experiment", "implement", "reflection", "think about", "what would happen", "what if", "how would you", "can you"
 
-STRUCTURAL REQUIREMENTS (95+ score):
-- Opening hook in first 100 words (story, contradiction, or surprising fact)
-- 5+ well-organized subsections with ## or ### headings
-- Smooth transitions between every section
-- Strong closing that summarizes key takeaways
-
-ACADEMIC REQUIREMENTS (95+ score):
-- Every claim supported with evidence or reasoning
-- Technical terms defined before use using definition phrases above
-- Deep coverage — no surface-level summaries
-- Zero factual errors
-
-PEDAGOGICAL REQUIREMENTS (95+ score):
-- Clear learning objectives stated at the beginning
-- Multiple varied examples using example phrases above (narrative, code, analogies, scenarios)
-- Progressive knowledge building
-- Active learning prompts using engagement phrases above
-- Clear actionable takeaways at the end
-
 SELF-CHECK BEFORE OUTPUTTING:
 Count your example phrases (need 8+), definition phrases (need 8+), headings (need 5+), question marks (need 5+), engagement words (need 5+). If ANY count is below threshold, ADD MORE before outputting.
+
+📊 PRIMARY OBJECTIVE:
+Maximize intellectual quality within fixed computational constraints.
+The goal is not "more text." The goal is tighter reasoning, higher credibility, and stronger academic defensibility.
 
 REWRITE THE ENTIRE CHAPTER to achieve 95-100/100 on ALL dimensions.
 Preserve the topic and core ideas but dramatically improve structure, depth, examples, definitions, and engagement.
 The output MUST be 2000-3500 words to ensure sufficient depth and pattern coverage.
+
+CONFIRMATION REQUIRED AT END OF OUTPUT:
+"No LLM tier escalation used. Editorial improvements performed within user tier constraints."
 
 BEGIN COMPREHENSIVE REWRITE:`;
       } else {
