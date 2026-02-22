@@ -14,7 +14,7 @@ const log = (step: string, details?: any) => {
 // AUDIT PROVENANCE — Locked model + prompt version
 // ============================================================
 const AUDIT_MODEL = "google/gemini-2.5-flash";
-const AUDIT_PROMPT_VERSION = "v3.0"; // v3.0: Chief Editor Governance Protocol — no tier escalation, editorial actions, compression pass
+const AUDIT_PROMPT_VERSION = "v4.0"; // v4.0: Chief Editor Constitution — tier-neutral, anti-pattern, compression-aware, no regex farming
 
 // ============================================================
 // CERTIFICATION ELIGIBILITY THRESHOLDS
@@ -28,45 +28,63 @@ const CERT_THRESHOLDS = {
 
 const RUBRIC = {
   structural: {
-    weight: 0.3,
+    weight: 0.25,
     criteria: [
       "Chapter has a clear title that accurately reflects content",
       "Content follows logical progression within the chapter",
-      "Sections are well-organized with appropriate headings",
+      "Sections are well-organized with concept-driven headings",
       "Word count is appropriate (not too sparse or bloated)",
-      "Transitions between sections are smooth",
-      "Opening hook engages the reader",
+      "Transitions between sections are smooth and non-formulaic",
+      "Opening hook engages the reader (first 120 words)",
       "Closing summarizes or transitions effectively",
+      "No circular restatements or redundant paragraphs",
     ],
   },
-  academic: {
-    weight: 0.35,
+  cognitiveDepth: {
+    weight: 0.25,
     criteria: [
-      "Claims are supported with evidence or reasoning",
+      "Reasoning goes beyond surface explanation to layered analysis",
+      "Causal relationships and mechanisms are explained (not just described)",
+      "Claims are justified with reasoning, not merely stated",
+      "Similar concepts are differentiated with precision",
+      "Conceptual density is high — no padding or filler",
+      "Progressive complexity builds throughout the chapter",
+    ],
+  },
+  academicRigor: {
+    weight: 0.20,
+    criteria: [
+      "Key concepts are defined before heavy use",
+      "No vague or ambiguous qualifiers without justification",
       "Technical terminology is used correctly and consistently",
-      "Depth of coverage matches stated objectives",
-      "No factual errors or misleading statements",
-      "Content is up-to-date and relevant",
-      "Appropriate complexity for target audience",
-      "Key concepts are defined before use",
+      "Claims are precise — no broad generalizations",
+      "Internal consistency maintained throughout",
       "Thesis tension present (argument, not summary)",
       "Counterarguments or literature disagreement surfaced",
-      "Evidence strength signaled (meta-analysis vs observational vs theoretical)",
-      "Methodological limitations discussed for cited studies",
+      "Evidence strength signaled where applicable",
     ],
   },
-  pedagogical: {
-    weight: 0.35,
+  pedagogicalIntelligence: {
+    weight: 0.15,
     criteria: [
-      "Clear learning objectives are implied or stated",
-      "Examples and illustrations support understanding",
+      "Examples are conceptually necessary and naturally integrated",
+      "Scenario-based explanation used where helpful",
+      "Reflective prompts appear sparingly and meaningfully",
       "Content builds on prior knowledge progressively",
-      "Active learning prompts (questions, exercises) are present",
-      "Key takeaways are identifiable",
-      "Variety of explanation methods (narrative, examples, analogies)",
-      "Assessment alignment - quiz questions could test this content",
-      "Limitation boundaries and future research directions present",
-      "Field-specific rhetorical conventions followed",
+      "Variety of explanation methods (narrative, scenarios, analogies)",
+      "Assessment alignment — quiz questions could test this content",
+      "No mechanical or checklist-style insertion of pedagogical elements",
+    ],
+  },
+  detectabilityRisk: {
+    weight: 0.15,
+    criteria: [
+      "No predictable LLM transitions (e.g., 'In conclusion', 'Let's dive in')",
+      "Sentence rhythm and paragraph length vary naturally",
+      "No over-symmetric paragraph structures",
+      "No template-like or formulaic definition structures",
+      "Domain-specific nuance present throughout",
+      "Human editorial texture evident",
     ],
   },
 };
@@ -288,63 +306,44 @@ serve(async (req) => {
     // ============================================================
     // STEP 2: AI Evaluation with Contrastive Evidence
     // ============================================================
-    const auditPrompt = `You are the Chief Editorial Review Layer for ScrollLibrary performing a rigorous quality audit.
+    const auditPrompt = `You are the Chief Editorial Governance Layer for ScrollLibrary.
+You operate under the Chief Editor Constitution v4.0.
 
-CHIEF EDITOR GOVERNANCE PROTOCOL (NO TIER ESCALATION)
-=====================================================
+Your mandate is:
+Maximize intellectual quality, academic defensibility, and cognitive depth — without increasing the user's LLM tier or computational allocation.
 
-Your responsibility is to:
-- Apply all structural, academic, and stylistic recommendations.
-- Improve clarity, argument coherence, citation logic, and conceptual precision.
-- Enforce Bloom-level cognitive depth alignment.
-- Remove weak reasoning, generic phrasing, and detectable AI patterns.
+You must NOT:
+- Escalate models
+- Inflate tokens unnecessarily
+- Insert mechanical phrases to satisfy pattern checks
+- Add artificial verbosity
+- Hallucinate citations
+- Add fabricated statistics
+- Add external references not present in source
 
-🔐 MODEL TIER CONSTRAINT:
-You are strictly bound to the user's current LLM tier.
-You are NOT allowed to:
-- Switch to a higher-capacity model.
-- Use hidden system tools not available to the user's tier.
-- Increase token limits beyond user allocation.
-- Use multi-pass recursive regeneration outside tier constraints.
-
-You must perform improvements using:
-- Editorial restructuring
-- Compression + expansion balancing
-- Precision rewriting
-- Logic tightening
-- Redundancy elimination
-- Domain-aware terminology substitution
-WITHOUT increasing computational tier.
-
-🧠 REQUIRED EDITORIAL ACTIONS (for every manuscript section):
-1. Structural Integrity Check: logical progression, clear thesis alignment, section coherence
-2. Cognitive Depth Check: replace shallow explanation with analytical reasoning, introduce causal/comparative/evaluative framing, remove surface-level summaries
-3. AI Detectability Reduction: remove repetitive phrasing, vary sentence structure, add domain-specific nuance, avoid predictable LLM transitions
-4. Claim Precision Audit: strengthen vague statements, add qualification where necessary, avoid overconfident assertions
-5. Compression Pass: remove fluff, generic filler, and template-like transitions
-
-🚫 FORBIDDEN ACTIONS:
-- Do NOT regenerate entire manuscript unless structurally necessary
-- Do NOT hallucinate new sources
-- Do NOT insert fake citations
-- Do NOT inflate length artificially
-- Do NOT exceed original content scope
+All improvements must occur within the user's assigned tier.
 
 BOOK: "${book.title}"
 CATEGORY: ${book.category}
 TYPE: ${book.book_type || "text"}
 TOTAL CHAPTERS: ${chapters?.length || 0} (${generatedChapters.length} generated)
 
-EVALUATION RUBRIC:
+TIER-NEUTRAL EDITORIAL SCORING ENGINE (5 Dimensions):
 
-**STRUCTURAL INTEGRITY (30% weight)**
+**1️⃣ STRUCTURAL INTEGRITY (25% weight)**
 Criteria: ${RUBRIC.structural.criteria.join("; ")}
 
-**ACADEMIC RIGOR (35% weight)**
-Criteria: ${RUBRIC.academic.criteria.join("; ")}
+**2️⃣ COGNITIVE DEPTH (25% weight)**
+Criteria: ${RUBRIC.cognitiveDepth.criteria.join("; ")}
 
-**PEDAGOGICAL QUALITY (35% weight)**
-Criteria: ${RUBRIC.pedagogical.criteria.join("; ")}
+**3️⃣ ACADEMIC RIGOR & PRECISION (20% weight)**
+Criteria: ${RUBRIC.academicRigor.criteria.join("; ")}
+
+**4️⃣ PEDAGOGICAL INTELLIGENCE (15% weight)**
+Criteria: ${RUBRIC.pedagogicalIntelligence.criteria.join("; ")}
+
+**5️⃣ AI DETECTABILITY RISK (15% weight — lower is better)**
+Criteria: ${RUBRIC.detectabilityRisk.criteria.join("; ")}
 
 CHAPTERS TO AUDIT:
 ${chapterSummaries.map((ch: any) => `
@@ -353,50 +352,50 @@ ${ch.content}
 `).join("\n")}
 
 CRITICAL EVALUATION RULES:
-1. Score each dimension 0-100 based on the rubric criteria. Be BRUTALLY honest - do NOT inflate scores.
-2. For EVERY score, you MUST provide a direct quote from the chapter text as evidence justifying that score. No quote = score is invalid.
-3. For each dimension, provide specific findings with chapter numbers AND the supporting quote.
-4. Flag weak sections with severity (critical/major/minor) and specific suggestions.
-5. Provide per-chapter improvement suggestions.
+1. Score each dimension 0-100. Be BRUTALLY honest — do NOT inflate scores.
+2. For EVERY finding, provide a direct quote from the chapter text as evidence. No quote = finding is invalid.
+3. For detectabilityRisk, a HIGH score means HIGH risk (bad). Flag specific pattern violations.
+4. Provide per-chapter cognitive depth classification (Developing / Proficient / Mastery).
+5. The "chapterSuggestions" array MUST contain an entry for EVERY chapter that scores below 80 in any dimension.
+6. No empty arrays allowed if issues exist.
 
-CONTRASTIVE BENCHMARK: Compare each chapter against what a well-written textbook chapter looks like:
-- A good chapter has 1000+ words, 3+ subsections, 2+ examples, defined terminology, and engagement questions.
-- Score relative to this benchmark, not relative to "AI-generated content standards."
-
-MANDATORY: The "chapterSuggestions" array MUST contain an entry for EVERY chapter that scores below 80 in any dimension. Each entry MUST have at least 2 specific, actionable improvements. The "flaggedSections" array MUST contain entries for any section with critical or major issues. Do NOT return empty arrays for these fields unless every chapter scores 80+ across all dimensions.
-
-📊 OUTPUT REQUIREMENTS:
-Return JSON with the structure below. Include in each dimension's findings:
-- Cognitive depth classification per chapter (Developing / Proficient / Mastery)
-- Confirmation: "No LLM tier escalation used. Editorial improvements performed within user tier constraints."
+CONTRASTIVE BENCHMARK: Score against well-written textbook standards, not "AI-generated content standards."
 
 Respond as JSON:
 {
   "structural": {
     "score": <0-100>,
-    "findings": [{"criterion": "...", "assessment": "...", "quote": "<exact text from chapter>", "chapterNumbers": [1,2]}]
+    "findings": [{"issue": "...", "evidenceQuote": "<exact text from chapter>", "chapterNumbers": [1,2]}]
   },
-  "academic": {
+  "cognitiveDepth": {
     "score": <0-100>,
-    "findings": [{"criterion": "...", "assessment": "...", "quote": "<exact text from chapter>", "chapterNumbers": [1,2]}]
+    "findings": [{"issue": "...", "evidenceQuote": "<exact text from chapter>", "chapterNumbers": [1,2]}]
   },
-  "pedagogical": {
+  "academicRigor": {
     "score": <0-100>,
-    "findings": [{"criterion": "...", "assessment": "...", "quote": "<exact text from chapter>", "chapterNumbers": [1,2]}]
+    "findings": [{"issue": "...", "evidenceQuote": "<exact text from chapter>", "chapterNumbers": [1,2]}]
+  },
+  "pedagogicalIntelligence": {
+    "score": <0-100>,
+    "findings": [{"issue": "...", "evidenceQuote": "<exact text from chapter>", "chapterNumbers": [1,2]}]
+  },
+  "detectabilityRisk": {
+    "score": <0-100>,
+    "patternFlags": ["repetitive transitions", "symmetric paragraphs", ...]
   },
   "flaggedSections": [
-    {"chapterNumber": 1, "section": "Introduction", "issue": "...", "severity": "critical|major|minor", "suggestion": "..."}
+    {"chapterNumber": 1, "section": "...", "issue": "...", "severity": "critical|major|minor", "suggestion": "..."}
   ],
   "chapterSuggestions": [
-    {"chapterNumber": 1, "improvements": ["..."], "cognitiveDepthClassification": "Developing|Proficient|Mastery"}
+    {"chapterNumber": 1, "improvements": ["...", "..."], "cognitiveDepthClassification": "Developing|Proficient|Mastery"}
   ],
-  "tierConstraintConfirmation": "No LLM tier escalation used. Editorial improvements performed within user tier constraints."
+  "tierConstraintConfirmation": "No LLM tier escalation used. Editorial improvements performed strictly within user tier constraints."
 }`;
 
     // Retry with model fallback: primary → flash-lite → error
     const FALLBACK_MODELS = [AUDIT_MODEL, "google/gemini-2.5-flash-lite"];
     const auditMessages = [
-      { role: "system", content: "You are the Chief Editorial Review Layer for ScrollLibrary. You operate under the CHIEF EDITOR GOVERNANCE PROTOCOL — no tier escalation, no hallucinated sources, no artificial inflation. Score honestly against textbook benchmarks. Never inflate. Every score MUST have a direct quote from the text as evidence. Maximize intellectual quality within fixed computational constraints. Output valid JSON only." },
+      { role: "system", content: "You are the Chief Editorial Governance Layer for ScrollLibrary operating under Constitution v4.0. No tier escalation. No hallucinated sources. No artificial inflation. No mechanical phrase farming. Score honestly against textbook benchmarks. Maximize intellectual quality within fixed computational constraints. Output valid JSON only." },
       { role: "user", content: auditPrompt },
     ];
 
@@ -508,18 +507,30 @@ Respond as JSON:
     let parseStrategy = 'unknown';
     const parsed = tryParseAuditJSON(rawContent);
 
-    if (parsed && typeof parsed === 'object' && (parsed.structural || parsed.academic || parsed.pedagogical)) {
+    if (parsed && typeof parsed === 'object' && (parsed.structural || parsed.cognitiveDepth || parsed.academicRigor || parsed.academic)) {
       auditResults = parsed;
       parseStrategy = 'json';
-      log("JSON parsed", { structural: parsed.structural?.score, academic: parsed.academic?.score, pedagogical: parsed.pedagogical?.score, suggestions: parsed.chapterSuggestions?.length || 0 });
+      log("JSON parsed", { 
+        structural: parsed.structural?.score, 
+        cognitiveDepth: parsed.cognitiveDepth?.score, 
+        academicRigor: parsed.academicRigor?.score, 
+        pedagogical: parsed.pedagogicalIntelligence?.score,
+        detectability: parsed.detectabilityRisk?.score,
+        suggestions: parsed.chapterSuggestions?.length || 0,
+      });
     } else {
       parseStrategy = 'regex_fallback';
       log("JSON parse failed, using regex fallback", { rawPreview: rawContent.slice(0, 300) });
 
-      // Extract scores via regex
+      // Extract scores via regex — support both v4.0 and legacy field names
       const sScore = rawContent.match(/"structural"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
-      const aScore = rawContent.match(/"academic"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
-      const pScore = rawContent.match(/"pedagogical"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
+      const cdScore = rawContent.match(/"cognitiveDepth"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
+      const arScore = rawContent.match(/"academicRigor"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
+      const piScore = rawContent.match(/"pedagogicalIntelligence"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
+      const drScore = rawContent.match(/"detectabilityRisk"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
+      // Legacy fallback
+      const aScore = arScore || rawContent.match(/"academic"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
+      const pScore = piScore || rawContent.match(/"pedagogical"[\s\S]*?"score"\s*:\s*(\d+)/)?.[1];
 
       // Extract chapterSuggestions via regex
       const suggestionsBlock = rawContent.match(/"chapterSuggestions"\s*:\s*\[([\s\S]*?)\]\s*}/);
@@ -528,7 +539,6 @@ Respond as JSON:
         const chapterMatches = [...suggestionsBlock[1].matchAll(/"chapterNumber"\s*:\s*(\d+)/g)];
         for (const cm of chapterMatches) {
           const chNum = parseInt(cm[1]);
-          // Find improvements array near this chapter
           const startIdx = cm.index || 0;
           const slice = suggestionsBlock[1].substring(startIdx, startIdx + 1000);
           const impMatch = slice.match(/"improvements"\s*:\s*\[([\s\S]*?)\]/);
@@ -542,34 +552,52 @@ Respond as JSON:
       }
 
       auditResults = {
-        structural: { score: sScore ? parseInt(sScore) : 50, findings: [{ criterion: "Partial parse", assessment: "AI response was partially parsed via regex", quote: "N/A", chapterNumbers: [] }] },
-        academic: { score: aScore ? parseInt(aScore) : 50, findings: [{ criterion: "Partial parse", assessment: "AI response was partially parsed via regex", quote: "N/A", chapterNumbers: [] }] },
-        pedagogical: { score: pScore ? parseInt(pScore) : 50, findings: [{ criterion: "Partial parse", assessment: "AI response was partially parsed via regex", quote: "N/A", chapterNumbers: [] }] },
+        structural: { score: sScore ? parseInt(sScore) : 50, findings: [{ issue: "Partial parse", evidenceQuote: "N/A", chapterNumbers: [] }] },
+        cognitiveDepth: { score: cdScore ? parseInt(cdScore) : 50, findings: [{ issue: "Partial parse", evidenceQuote: "N/A", chapterNumbers: [] }] },
+        academicRigor: { score: aScore ? parseInt(aScore) : 50, findings: [{ issue: "Partial parse", evidenceQuote: "N/A", chapterNumbers: [] }] },
+        pedagogicalIntelligence: { score: pScore ? parseInt(pScore) : 50, findings: [{ issue: "Partial parse", evidenceQuote: "N/A", chapterNumbers: [] }] },
+        detectabilityRisk: { score: drScore ? parseInt(drScore) : 50, patternFlags: [] },
         flaggedSections: [],
         chapterSuggestions: extractedSuggestions,
       };
 
-      log("Regex extracted", { s: sScore, a: aScore, p: pScore, suggestions: extractedSuggestions.length });
+      log("Regex extracted", { s: sScore, cd: cdScore, ar: aScore, pi: pScore, dr: drScore, suggestions: extractedSuggestions.length });
     }
 
     // ============================================================
-    // STEP 3: Apply Proportional Penalty Caps
+    // STEP 3: Apply Proportional Penalty Caps & Compute 5-Dimension Scores
     // ============================================================
+    // Extract raw scores from v4.0 5-dimension schema
     const rawStructural = Math.min(100, Math.max(0, auditResults.structural?.score || 0));
-    const rawAcademic = Math.min(100, Math.max(0, auditResults.academic?.score || 0));
-    const rawPedagogical = Math.min(100, Math.max(0, auditResults.pedagogical?.score || 0));
+    const rawCognitiveDepth = Math.min(100, Math.max(0, auditResults.cognitiveDepth?.score || 0));
+    const rawAcademicRigor = Math.min(100, Math.max(0, auditResults.academicRigor?.score || 0));
+    const rawPedagogical = Math.min(100, Math.max(0, auditResults.pedagogicalIntelligence?.score || 0));
+    const rawDetectability = Math.min(100, Math.max(0, auditResults.detectabilityRisk?.score || 0));
 
-    const prePenaltyScores = { structural: rawStructural, academic: rawAcademic, pedagogical: rawPedagogical };
+    const prePenaltyScores = { 
+      structural: rawStructural, 
+      cognitiveDepth: rawCognitiveDepth, 
+      academicRigor: rawAcademicRigor, 
+      pedagogicalIntelligence: rawPedagogical,
+      detectabilityRisk: rawDetectability,
+    };
 
+    // Apply penalty caps (penalties map to structural/academic/pedagogical dimensions)
     const structuralScore = Math.min(rawStructural, penaltyResult.structuralCap);
-    const academicScore = Math.min(rawAcademic, penaltyResult.academicCap);
+    // Academic in DB = weighted blend of cognitiveDepth + academicRigor
+    const rawAcademicBlend = Math.round(rawCognitiveDepth * 0.55 + rawAcademicRigor * 0.45);
+    const academicScore = Math.min(rawAcademicBlend, penaltyResult.academicCap);
     const pedagogicalScore = Math.min(rawPedagogical, penaltyResult.pedagogicalCap);
+    // Detectability penalty: high detectability risk reduces overall score
+    const detectabilityPenalty = rawDetectability > 60 ? Math.round((rawDetectability - 60) * 0.3) : 0;
 
-    const overallScore = Math.round(
+    const overallScore = Math.max(0, Math.round(
       structuralScore * RUBRIC.structural.weight +
-      academicScore * RUBRIC.academic.weight +
-      pedagogicalScore * RUBRIC.pedagogical.weight
-    );
+      rawCognitiveDepth * RUBRIC.cognitiveDepth.weight +
+      academicScore * RUBRIC.academicRigor.weight +
+      pedagogicalScore * RUBRIC.pedagogicalIntelligence.weight +
+      (100 - rawDetectability) * RUBRIC.detectabilityRisk.weight
+    ) - detectabilityPenalty);
 
     // ============================================================
     // STEP 4: Build Certification Blockers (Specific Reasons)
@@ -598,26 +626,30 @@ Respond as JSON:
 
     const certificationEligible = certificationBlockers.length === 0;
 
-    // Extract evidence citations
+    // Extract evidence citations from v4.0 5-dimension findings
     const evidenceCitations = [
       ...(auditResults.structural?.findings || []),
-      ...(auditResults.academic?.findings || []),
-      ...(auditResults.pedagogical?.findings || []),
-    ].filter((f: any) => f.quote && f.quote !== "N/A").map((f: any) => ({
-      criterion: f.criterion,
-      quote: f.quote,
+      ...(auditResults.cognitiveDepth?.findings || []),
+      ...(auditResults.academicRigor?.findings || []),
+      ...(auditResults.pedagogicalIntelligence?.findings || []),
+    ].filter((f: any) => (f.evidenceQuote || f.quote) && (f.evidenceQuote || f.quote) !== "N/A").map((f: any) => ({
+      criterion: f.issue || f.criterion,
+      quote: f.evidenceQuote || f.quote,
       chapters: f.chapterNumbers,
     }));
 
-    // Update audit record
+    // Update audit record — map v4.0 dimensions to DB columns (backward-compatible)
     const { error: updateError } = await supabase.from("book_audits").update({
       structural_score: structuralScore,
       academic_score: academicScore,
       pedagogical_score: pedagogicalScore,
       overall_score: overallScore,
       structural_findings: auditResults.structural?.findings || [],
-      academic_findings: auditResults.academic?.findings || [],
-      pedagogical_findings: auditResults.pedagogical?.findings || [],
+      academic_findings: [
+        ...(auditResults.cognitiveDepth?.findings || []),
+        ...(auditResults.academicRigor?.findings || []),
+      ],
+      pedagogical_findings: auditResults.pedagogicalIntelligence?.findings || [],
       flagged_sections: auditResults.flaggedSections || [],
       chapter_suggestions: auditResults.chapterSuggestions || [],
       penalty_log: penaltyResult.penalties,
@@ -685,7 +717,17 @@ Respond as JSON:
     return new Response(JSON.stringify({
       success: true,
       auditId: auditRecord.id,
-      scores: { structural: structuralScore, academic: academicScore, pedagogical: pedagogicalScore, overall: overallScore },
+      scores: { 
+        structural: structuralScore, 
+        academic: academicScore, 
+        pedagogical: pedagogicalScore, 
+        overall: overallScore,
+        // v4.0 extended scores
+        cognitiveDepth: rawCognitiveDepth,
+        academicRigor: rawAcademicRigor,
+        pedagogicalIntelligence: rawPedagogical,
+        detectabilityRisk: rawDetectability,
+      },
       prePenaltyScores,
       penalties: penaltyResult.penalties,
       certificationEligible,
@@ -693,6 +735,7 @@ Respond as JSON:
       certThresholds: CERT_THRESHOLDS,
       flaggedSections: auditResults.flaggedSections || [],
       chapterSuggestions: auditResults.chapterSuggestions || [],
+      detectabilityRisk: auditResults.detectabilityRisk || { score: 0, patternFlags: [] },
       evidenceCitations: evidenceCitations.length,
       provenance: { model: AUDIT_MODEL, promptVersion: AUDIT_PROMPT_VERSION },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
