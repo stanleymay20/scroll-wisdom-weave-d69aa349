@@ -14,7 +14,7 @@ const log = (step: string, details?: any) => {
 // AUDIT PROVENANCE — Locked model + prompt version
 // ============================================================
 const AUDIT_MODEL = "google/gemini-2.5-flash";
-const AUDIT_PROMPT_VERSION = "v2.2"; // v2.2: Enforce mandatory chapterSuggestions for low-scoring chapters
+const AUDIT_PROMPT_VERSION = "v3.0"; // v3.0: Chief Editor Governance Protocol — no tier escalation, editorial actions, compression pass
 
 // ============================================================
 // CERTIFICATION ELIGIBILITY THRESHOLDS
@@ -288,7 +288,47 @@ serve(async (req) => {
     // ============================================================
     // STEP 2: AI Evaluation with Contrastive Evidence
     // ============================================================
-    const auditPrompt = `You are a Chief Editor performing a rigorous quality audit of an educational book.
+    const auditPrompt = `You are the Chief Editorial Review Layer for ScrollLibrary performing a rigorous quality audit.
+
+CHIEF EDITOR GOVERNANCE PROTOCOL (NO TIER ESCALATION)
+=====================================================
+
+Your responsibility is to:
+- Apply all structural, academic, and stylistic recommendations.
+- Improve clarity, argument coherence, citation logic, and conceptual precision.
+- Enforce Bloom-level cognitive depth alignment.
+- Remove weak reasoning, generic phrasing, and detectable AI patterns.
+
+🔐 MODEL TIER CONSTRAINT:
+You are strictly bound to the user's current LLM tier.
+You are NOT allowed to:
+- Switch to a higher-capacity model.
+- Use hidden system tools not available to the user's tier.
+- Increase token limits beyond user allocation.
+- Use multi-pass recursive regeneration outside tier constraints.
+
+You must perform improvements using:
+- Editorial restructuring
+- Compression + expansion balancing
+- Precision rewriting
+- Logic tightening
+- Redundancy elimination
+- Domain-aware terminology substitution
+WITHOUT increasing computational tier.
+
+🧠 REQUIRED EDITORIAL ACTIONS (for every manuscript section):
+1. Structural Integrity Check: logical progression, clear thesis alignment, section coherence
+2. Cognitive Depth Check: replace shallow explanation with analytical reasoning, introduce causal/comparative/evaluative framing, remove surface-level summaries
+3. AI Detectability Reduction: remove repetitive phrasing, vary sentence structure, add domain-specific nuance, avoid predictable LLM transitions
+4. Claim Precision Audit: strengthen vague statements, add qualification where necessary, avoid overconfident assertions
+5. Compression Pass: remove fluff, generic filler, and template-like transitions
+
+🚫 FORBIDDEN ACTIONS:
+- Do NOT regenerate entire manuscript unless structurally necessary
+- Do NOT hallucinate new sources
+- Do NOT insert fake citations
+- Do NOT inflate length artificially
+- Do NOT exceed original content scope
 
 BOOK: "${book.title}"
 CATEGORY: ${book.category}
@@ -314,7 +354,7 @@ ${ch.content}
 
 CRITICAL EVALUATION RULES:
 1. Score each dimension 0-100 based on the rubric criteria. Be BRUTALLY honest - do NOT inflate scores.
-2. For EVERY score (whether below or above 85), you MUST provide a direct quote from the chapter text as evidence justifying that score. No quote = score is invalid.
+2. For EVERY score, you MUST provide a direct quote from the chapter text as evidence justifying that score. No quote = score is invalid.
 3. For each dimension, provide specific findings with chapter numbers AND the supporting quote.
 4. Flag weak sections with severity (critical/major/minor) and specific suggestions.
 5. Provide per-chapter improvement suggestions.
@@ -324,6 +364,11 @@ CONTRASTIVE BENCHMARK: Compare each chapter against what a well-written textbook
 - Score relative to this benchmark, not relative to "AI-generated content standards."
 
 MANDATORY: The "chapterSuggestions" array MUST contain an entry for EVERY chapter that scores below 80 in any dimension. Each entry MUST have at least 2 specific, actionable improvements. The "flaggedSections" array MUST contain entries for any section with critical or major issues. Do NOT return empty arrays for these fields unless every chapter scores 80+ across all dimensions.
+
+📊 OUTPUT REQUIREMENTS:
+Return JSON with the structure below. Include in each dimension's findings:
+- Cognitive depth classification per chapter (Developing / Proficient / Mastery)
+- Confirmation: "No LLM tier escalation used. Editorial improvements performed within user tier constraints."
 
 Respond as JSON:
 {
@@ -343,14 +388,15 @@ Respond as JSON:
     {"chapterNumber": 1, "section": "Introduction", "issue": "...", "severity": "critical|major|minor", "suggestion": "..."}
   ],
   "chapterSuggestions": [
-    {"chapterNumber": 1, "improvements": ["..."]}
-  ]
+    {"chapterNumber": 1, "improvements": ["..."], "cognitiveDepthClassification": "Developing|Proficient|Mastery"}
+  ],
+  "tierConstraintConfirmation": "No LLM tier escalation used. Editorial improvements performed within user tier constraints."
 }`;
 
     // Retry with model fallback: primary → flash-lite → error
     const FALLBACK_MODELS = [AUDIT_MODEL, "google/gemini-2.5-flash-lite"];
     const auditMessages = [
-      { role: "system", content: "You are a rigorous academic editor. Score honestly against textbook benchmarks. Never inflate. Every score MUST have a direct quote from the text as evidence. Output valid JSON only." },
+      { role: "system", content: "You are the Chief Editorial Review Layer for ScrollLibrary. You operate under the CHIEF EDITOR GOVERNANCE PROTOCOL — no tier escalation, no hallucinated sources, no artificial inflation. Score honestly against textbook benchmarks. Never inflate. Every score MUST have a direct quote from the text as evidence. Maximize intellectual quality within fixed computational constraints. Output valid JSON only." },
       { role: "user", content: auditPrompt },
     ];
 
