@@ -24,6 +24,11 @@ import {
   Undo2,
   History,
   Info,
+  Brain,
+  Eye,
+  FileText,
+  Hash,
+  BarChart3,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReferenceCompliancePanel } from "@/components/certificates/ReferenceCompliancePanel";
@@ -308,10 +313,22 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
 
   if (loading) return null;
 
+  // v4.0 extended scores from pre_penalty_scores
+  const extScores = (audit?.pre_penalty_scores || {}) as Record<string, any>;
+  const cdiData = extScores.cdi as number | undefined;
+  const cdiPerChapter = extScores.cdiPerChapter as Array<{ chapterNumber: number; cdi: number; concepts: number; words: number }> | undefined;
+  const auditArtifact = extScores.auditArtifact as Record<string, any> | undefined;
+  const detectabilityRisk = extScores.detectabilityRisk as number | undefined;
+  const cognitiveDepthScore = extScores.cognitiveDepth as number | undefined;
+  const academicRigorScore = extScores.academicRigor as number | undefined;
+  const pedagogicalIntelligenceScore = extScores.pedagogicalIntelligence as number | undefined;
+
   const dimensions = audit ? [
-    { key: "structural", label: "Structural Integrity", icon: LayoutList, score: audit.structural_score, findings: audit.structural_findings, threshold: CERT_THRESHOLDS.structural },
-    { key: "academic", label: "Academic Rigor", icon: GraduationCap, score: audit.academic_score, findings: audit.academic_findings, threshold: CERT_THRESHOLDS.academic },
-    { key: "pedagogical", label: "Pedagogical Quality", icon: BookOpen, score: audit.pedagogical_score, findings: audit.pedagogical_findings, threshold: CERT_THRESHOLDS.pedagogical },
+    { key: "structural", label: "Structural Integrity", icon: LayoutList, score: audit.structural_score, findings: audit.structural_findings, threshold: CERT_THRESHOLDS.structural, weight: "25%" },
+    { key: "cognitiveDepth", label: "Cognitive Depth", icon: Brain, score: cognitiveDepthScore ?? audit.academic_score, findings: [], threshold: 75, weight: "25%" },
+    { key: "academicRigor", label: "Academic Rigor", icon: GraduationCap, score: academicRigorScore ?? audit.academic_score, findings: audit.academic_findings, threshold: CERT_THRESHOLDS.academic, weight: "20%" },
+    { key: "pedagogical", label: "Pedagogical Intelligence", icon: BookOpen, score: pedagogicalIntelligenceScore ?? audit.pedagogical_score, findings: audit.pedagogical_findings, threshold: CERT_THRESHOLDS.pedagogical, weight: "15%" },
+    { key: "detectability", label: "AI Detectability Risk", icon: Eye, score: detectabilityRisk ?? 0, findings: [], threshold: 60, weight: "15%", inverted: true },
   ] : [];
 
   const penalties = (audit?.penalty_log || []) as any[];
@@ -400,7 +417,7 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
                     </div>
                     <Progress value={audit.overall_score} className="h-2" />
                     <p className="text-xs text-muted-foreground mt-1">
-                      Weighted: Structural 30% · Academic 35% · Pedagogical 35%
+                      Constitution v4.0 · Structural 25% · Cognitive 25% · Academic 20% · Pedagogical 15% · Detectability 15%
                     </p>
                   </div>
 
@@ -448,8 +465,9 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
                   {/* Dimension Scores */}
                   {dimensions.map(dim => {
                     const rawScore = prePenalty[dim.key];
-                    const wasCapped = rawScore !== undefined && rawScore > dim.score;
-                    const meetsThreshold = dim.score >= dim.threshold;
+                    const wasCapped = !('inverted' in dim) && rawScore !== undefined && rawScore > dim.score;
+                    const meetsThreshold = ('inverted' in dim) ? dim.score <= dim.threshold : dim.score >= dim.threshold;
+                    
 
                     return (
                       <div key={dim.key} className="rounded-lg border border-border/50 overflow-hidden">
@@ -460,6 +478,7 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
                           <div className="flex items-center gap-2">
                             <dim.icon className="h-4 w-4 text-muted-foreground" />
                             <span className="text-sm font-medium">{dim.label}</span>
+                            <span className="text-[10px] text-muted-foreground">({(dim as any).weight})</span>
                             {wasCapped && (
                               <Badge variant="outline" className="text-[10px] text-destructive border-destructive/30">
                                 <Gavel className="h-2.5 w-2.5 mr-0.5" />AI {rawScore} → Capped {dim.score}
@@ -472,7 +491,9 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
                             ) : (
                               <XCircle className="h-3.5 w-3.5 text-destructive" />
                             )}
-                            <span className={cn("text-sm font-bold", scoreColor(dim.score))}>{dim.score}/100</span>
+                            <span className={cn("text-sm font-bold", ('inverted' in dim) ? scoreColor(100 - dim.score) : scoreColor(dim.score))}>
+                              {dim.score}/100{('inverted' in dim) ? ' risk' : ''}
+                            </span>
                             {expandedDimension === dim.key ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
                           </div>
                         </button>
@@ -511,7 +532,86 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
                     );
                   })}
 
-                  {/* Deterministic Penalty Log */}
+                  {/* Cognitive Density Index */}
+                  {cdiData !== undefined && (
+                    <div className="p-3 rounded-lg bg-muted/30 border border-border/50">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="flex items-center gap-2">
+                          <BarChart3 className="h-4 w-4 text-primary" />
+                          <span className="text-sm font-medium">Cognitive Density Index (CDI)</span>
+                        </div>
+                        <span className={cn("text-lg font-bold", cdiData >= 3 ? "text-green-500" : cdiData >= 1.5 ? "text-amber-500" : "text-destructive")}>
+                          {cdiData}
+                        </span>
+                      </div>
+                      <p className="text-[10px] text-muted-foreground mb-2">
+                        Concepts per 100 words · Higher = denser reasoning · Target ≥ 2.0
+                      </p>
+                      {cdiPerChapter && cdiPerChapter.length > 0 && (
+                        <div className="space-y-1">
+                          {cdiPerChapter.map((ch) => (
+                            <div key={ch.chapterNumber} className="flex items-center justify-between text-xs">
+                              <span className="text-muted-foreground">Ch. {ch.chapterNumber}</span>
+                              <div className="flex items-center gap-2">
+                                <div className="w-24 h-1.5 bg-muted rounded-full overflow-hidden">
+                                  <div 
+                                    className={cn("h-full rounded-full", ch.cdi >= 3 ? "bg-green-500" : ch.cdi >= 1.5 ? "bg-amber-500" : "bg-destructive")}
+                                    style={{ width: `${Math.min(100, (ch.cdi / 5) * 100)}%` }}
+                                  />
+                                </div>
+                                <span className="font-mono text-muted-foreground w-8 text-right">{ch.cdi}</span>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Institutional Audit Artifact */}
+                  {auditArtifact && (
+                    <div className="p-3 rounded-lg border border-primary/20 bg-primary/5">
+                      <div className="flex items-center gap-2 mb-2">
+                        <FileText className="h-4 w-4 text-primary" />
+                        <span className="text-sm font-medium">Institutional Audit Artifact</span>
+                        <Badge variant="outline" className="text-[10px]">v{auditArtifact.schemaVersion}</Badge>
+                      </div>
+                      <div className="space-y-1 text-[10px] text-muted-foreground font-mono">
+                        <div className="flex justify-between">
+                          <span>Audit ID</span>
+                          <span className="truncate ml-2 max-w-[180px]">{String(auditArtifact.auditId || '').slice(0, 12)}…</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Model</span>
+                          <span>{auditArtifact.model}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Prompt Version</span>
+                          <span>{auditArtifact.promptVersion}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>CDI</span>
+                          <span>{auditArtifact.cdi}</span>
+                        </div>
+                        <div className="flex justify-between items-center">
+                          <span className="flex items-center gap-1"><Hash className="h-2.5 w-2.5" />Integrity Hash</span>
+                          <span className="truncate ml-2 max-w-[140px]">{String(auditArtifact.integrityHash || '').slice(0, 16)}…</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Replicability Key</span>
+                          <span className="truncate ml-2 max-w-[160px]">{auditArtifact.replicabilityKey}</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Generated</span>
+                          <span>{auditArtifact.generatedAt ? new Date(auditArtifact.generatedAt).toLocaleString() : 'N/A'}</span>
+                        </div>
+                      </div>
+                      <p className="text-[9px] text-muted-foreground mt-2 italic leading-tight">
+                        {auditArtifact.disclaimer}
+                      </p>
+                    </div>
+                  )}
+
                   {hasPenalties && (
                     <div className="space-y-2">
                       <button
