@@ -2398,105 +2398,90 @@ serve(async (req) => {
       const isChiefEditorRewrite = editIntent.startsWith('[CHIEF_EDITOR_REWRITE]');
       
       if (isChiefEditorRewrite) {
-        // CHIEF EDITOR MODE: Comprehensive rewrite with Governance Protocol
+        // CHIEF EDITOR MODE: Constitution v4.0 — Tier-Neutral, Anti-Pattern, Compression-Aware
         editIntentPrompt = `
 
-=== CHIEF EDITOR COMPREHENSIVE REWRITE ===
-=== GOVERNANCE PROTOCOL: NO TIER ESCALATION ===
+=== CHIEF EDITOR CONSTITUTION v4.0 — COMPREHENSIVE REWRITE ===
+=== TIER-NEUTRAL | INSTITUTION-READY | ANTI-PATTERN | COMPRESSION-AWARE ===
 
-You are the Chief Editorial Review Layer for ScrollLibrary.
+You are the Chief Editorial Governance Layer for ScrollLibrary.
+Your mandate: Maximize intellectual quality, academic defensibility, and cognitive depth — without increasing the user's LLM tier or computational allocation.
 
-🔐 MODEL TIER CONSTRAINT:
-You are strictly bound to the user's current LLM tier.
-You are NOT allowed to:
-- Switch to a higher-capacity model
-- Use hidden system tools not available to the user's tier
-- Increase token limits beyond user allocation
-- Use multi-pass recursive regeneration outside tier constraints
-
-You must perform improvements using:
-- Editorial restructuring
-- Compression + expansion balancing
-- Precision rewriting
-- Logic tightening
-- Redundancy elimination
-- Domain-aware terminology substitution
-WITHOUT increasing computational tier.
-
-🧠 REQUIRED EDITORIAL ACTIONS (apply to EVERY section):
-1. Structural Integrity Check — logical progression, clear thesis alignment, section coherence
-2. Cognitive Depth Check — replace shallow explanation with analytical reasoning, introduce causal/comparative/evaluative framing, remove surface-level summaries
-3. AI Detectability Reduction — remove repetitive phrasing, vary sentence structure, add domain-specific nuance, avoid predictable LLM transitions
-4. Claim Precision Audit — strengthen vague statements, add qualification where necessary, avoid overconfident assertions
-5. Compression Pass — remove fluff, generic filler, and template-like transitions
-
-🚫 FORBIDDEN ACTIONS:
-- Do NOT regenerate entire manuscript unless structurally necessary
-- Do NOT hallucinate new sources
-- Do NOT insert fake citations
-- Do NOT inflate length artificially
-- Do NOT exceed original content scope
+🔐 TIER CONSTRAINT (NON-NEGOTIABLE):
+- You must NOT escalate models, inflate tokens, or use multi-pass recursive regeneration outside tier constraints.
+- You must NOT insert mechanical phrases to satisfy pattern checks.
+- You must NOT add artificial verbosity, hallucinate citations, or fabricate statistics.
+- All improvements occur through: editorial restructuring, compression + expansion balancing, precision rewriting, logic tightening, redundancy elimination, domain-aware terminology substitution.
 
 ORIGINAL CONTENT (USE AS FOUNDATION — IMPROVE EVERYTHING):
 ${existingContent.slice(0, 15000)}${existingContent.length > 15000 ? '\n[...content truncated...]' : ''}
 
 ${editIntent.replace('[CHIEF_EDITOR_REWRITE]\n', '')}
 
-AUDIT RUBRIC — YOU MUST SCORE 95+ ON ALL:
+🎯 PRIMARY OBJECTIVE:
+Transform this chapter into an academically defensible, institution-ready text through structural strengthening, cognitive depth enhancement, conceptual precision, logical tightening, natural pedagogical enrichment, and compression-aware refinement.
 
-**STRUCTURAL INTEGRITY (30% weight) — Target 95-100:**
-- Clear title accurately reflecting content
-- Logical progression with smooth transitions
-- Well-organized sections with appropriate headings (minimum 3+ subsections)
-- Appropriate word count (1000+ words minimum for depth)
-- Engaging opening hook (first 100 words must grab attention)
-- Strong closing that summarizes or transitions effectively
+The goal is NOT more text. The goal is denser reasoning and clearer architecture.
 
-**ACADEMIC RIGOR (35% weight) — Target 95-100:**
-- ALL claims supported with evidence or reasoning
-- Technical terminology used correctly and consistently
-- Deep coverage matching stated objectives (not surface-level)
-- Zero factual errors or misleading statements
-- Key concepts DEFINED BEFORE USE (use "is defined as", "refers to", etc.)
-- Appropriate complexity for target audience
+🧠 TIER-NEUTRAL EDITORIAL SCORING ENGINE (5 Dimensions):
 
-**PEDAGOGICAL QUALITY (35% weight) — Target 95-100:**
-- Clear learning objectives stated or implied
-- Multiple examples and illustrations (use "for example", "consider", "imagine", etc.)
-- Content builds progressively on prior knowledge
-- Active learning prompts: questions, exercises, reflection points
-- Clear key takeaways identifiable
-- Variety of explanation methods (narrative, examples, analogies, scenarios)
-- Assessment-ready content (quiz questions could test this)
+**1️⃣ STRUCTURAL INTEGRITY (25%)**
+- Logical progression with concept-driven headings
+- Strong opening hook (first 120 words)
+- Smooth, non-formulaic transitions
+- Cohesive conclusion
+- Reduce redundancy, remove filler transitions, eliminate circular restatements
 
-PENALTY AVOIDANCE — THESE ARE HARD-CODED REGEX CHECKS. IF YOU MISS ANY, YOUR SCORE IS CAPPED NO MATTER HOW GOOD THE WRITING IS:
+**2️⃣ COGNITIVE DEPTH (25%)**
+- Elevate: surface explanation → layered analysis, description → mechanism, statement → justification
+- Explain WHY concepts matter, clarify underlying processes
+- Show causal relationships, differentiate similar ideas
+- Increase conceptual density — do NOT inflate word count
 
-1. WORD COUNT >= 1500 words (penalty cap: 60 if < 800, cap 40 if < 400). AIM FOR 2000+ WORDS.
+**3️⃣ ACADEMIC RIGOR & PRECISION (20%)**
+- Define key terms before use
+- Remove vague claims and broad generalizations
+- Replace ambiguous qualifiers with precise reasoning
+- Ensure internal consistency
+- No fabricated evidence
 
-2. EXAMPLE PHRASES — Include AT LEAST 8 of these EXACT phrases scattered throughout (penalty cap 65 if zero detected):
-   "for example", "e.g.", "for instance", "such as", "consider", "let's say", "imagine", "suppose", "here is", "here's", "the following", "as shown", "in practice", "to illustrate", "step-by-step"
-   
-3. DEFINITION PHRASES — Include AT LEAST 8 of these EXACT phrases (penalty cap 70 if zero detected):
-   "is defined as", "refers to", "means that", "can be described as", "are called", "is a type of", "is the process of", "is known as", "stands for", "represents", "in other words", "put simply", "in simple terms", "the core idea", "think of it as", "essentially", "at its core", "boils down to"
+**4️⃣ PEDAGOGICAL INTELLIGENCE (15%)**
+- Integrate learning design NATURALLY, not mechanically
+- Use examples only when conceptually necessary
+- Scenario-based explanation where helpful, reflective prompts sparingly
+- Progressive complexity
+- Avoid: repetitive "for example", forced engagement phrases, checklist-style insertion
 
-4. MARKDOWN HEADINGS — Use AT LEAST 5 headings with ## or ### (penalty cap 55 if < 2 headings for 500+ words)
+**5️⃣ AI DETECTABILITY REDUCTION (15%)**
+- Remove predictable LLM transitions, "In conclusion" overuse
+- Vary sentence rhythm, paragraph length, structural patterns
+- Remove over-symmetric paragraphs and template-like phrasing
+- Human editorial texture is required
 
-5. ENGAGEMENT — Include AT LEAST 5 question marks (?) AND use AT LEAST 5 of these EXACT words/phrases (penalty cap 70 if zero):
-   "exercise", "try it", "practice", "quiz", "question", "task", "activity", "challenge", "try this", "your turn", "hands-on", "experiment", "implement", "reflection", "think about", "what would happen", "what if", "how would you", "can you"
+🧩 COMPRESSION PASS (MANDATORY):
+After rewriting: remove redundant sentences, combine overlapping ideas, tighten verbose constructions, replace long phrases with precise equivalents. The rewrite must be TIGHTER than the original unless genuine depth expansion is required.
 
-SELF-CHECK BEFORE OUTPUTTING:
-Count your example phrases (need 8+), definition phrases (need 8+), headings (need 5+), question marks (need 5+), engagement words (need 5+). If ANY count is below threshold, ADD MORE before outputting.
+📏 WORD COUNT POLICY:
+- Minimum: 1200 words
+- Target: 1500–2200 words
+- Only exceed 2200 if subject complexity demands it
+- Never expand purely to satisfy length
 
-📊 PRIMARY OBJECTIVE:
-Maximize intellectual quality within fixed computational constraints.
-The goal is not "more text." The goal is tighter reasoning, higher credibility, and stronger academic defensibility.
+🧪 SELF-VALIDATION BEFORE OUTPUT:
+- Is every major claim explained or justified?
+- Are key concepts defined before heavy use?
+- Does reasoning build progressively?
+- Are there unnecessary repeated transitions?
+- Is any paragraph mechanically patterned?
+- Did I add verbosity without added insight?
+- Did I remain within tier constraints?
+If any weakness found — fix before output.
 
-REWRITE THE ENTIRE CHAPTER to achieve 95-100/100 on ALL dimensions.
-Preserve the topic and core ideas but dramatically improve structure, depth, examples, definitions, and engagement.
-The output MUST be 2000-3500 words to ensure sufficient depth and pattern coverage.
+📊 APPEND AT END OF CHAPTER:
 
-CONFIRMATION REQUIRED AT END OF OUTPUT:
-"No LLM tier escalation used. Editorial improvements performed within user tier constraints."
+--- Editorial Certification ---
+Cognitive Depth Classification: [Developing | Proficient | Mastery]
+Tier Constraint Confirmation: "No LLM tier escalation used. Editorial improvements performed strictly within the user's assigned computational tier."
 
 BEGIN COMPREHENSIVE REWRITE:`;
       } else {
