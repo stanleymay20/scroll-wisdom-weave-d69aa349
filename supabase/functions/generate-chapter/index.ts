@@ -519,6 +519,76 @@ MUST FEEL:
 === END NONFICTION CONTRACT ===
 `;
 
+// ===========================================
+// BORN-QUALITY CONTRACT v1.0
+// Embeds Chief Editor Constitution v4.0 scoring criteria into generation
+// so content is BORN at 85+ audit scores without post-generation review.
+// Injected into ALL pipelines (academic, bestseller, text, workbook, etc.)
+// ===========================================
+
+const BORN_QUALITY_CONTRACT = `
+=== BORN-QUALITY CONTRACT v1.0 (MANDATORY — ALL PIPELINES) ===
+
+Your output will be scored on 5 dimensions. Optimize for ALL of them during generation.
+Do NOT rely on post-generation editing. Content must be BORN at institutional grade.
+
+1️⃣ STRUCTURAL INTEGRITY (25%)
+   - Open with a strong hook (first 120 words must engage)
+   - Use concept-driven headings (NOT generic "Introduction", "Conclusion")
+   - Transitions must advance the argument, not just connect paragraphs
+   - Eliminate circular restatements and filler transitions
+   - Close each section with a synthesis, not a trailing fade
+
+2️⃣ COGNITIVE DEPTH (25%)
+   - Every claim must explain WHY, not just WHAT
+   - Show causal mechanisms: "X happens because Y, which leads to Z"
+   - Differentiate similar concepts explicitly
+   - Layer analysis: surface → mechanism → implication
+   - Conceptual density > word count — say more with fewer words
+
+3️⃣ ACADEMIC RIGOR & PRECISION (20%)
+   - Define key terms BEFORE using them heavily
+   - Replace vague qualifiers ("many", "often", "significant") with specific reasoning
+   - Ensure internal consistency — no contradictions between sections
+   - Support claims with evidence, frameworks, or logical derivation
+   - No unsupported generalizations
+
+4️⃣ PEDAGOGICAL INTELLIGENCE (15%)
+   - Use examples ONLY when conceptually necessary (not decorative)
+   - Progressive complexity: build from foundations to advanced application
+   - Include reflection prompts that require genuine thinking
+   - Integrate learning design naturally — avoid mechanical insertion
+   - Avoid: repetitive "for example", forced engagement phrases, checklist-style filler
+
+5️⃣ AI DETECTABILITY REDUCTION (15%)
+   - VARY sentence length: mix 8-word punches with 30-word complex constructions
+   - VARY paragraph length: 2 sentences, then 5, then 3 — NO uniform blocks
+   - NEVER start consecutive paragraphs with the same word or structure
+   - PROHIBITED openers: "Furthermore,", "In conclusion,", "It is important to note",
+     "As we have seen,", "Moving forward,", "Let us now turn to",
+     "Having established that,", "This section examines"
+   - Use substantive transitions that advance reasoning, not generic connectors
+   - Break the "topic sentence → support → conclusion" template occasionally
+   - Allow occasional single-sentence paragraphs for emphasis
+
+📏 COMPRESSION MANDATE:
+- Every paragraph must earn its place — if removing it loses nothing, DELETE IT
+- Combine overlapping ideas instead of restating
+- Replace 5-word phrases with 2-word equivalents when possible
+- Density > length. A tight 2500-word chapter beats a padded 4000-word one
+
+🧪 SELF-VALIDATION (BEFORE OUTPUT):
+Ask yourself:
+- Does every major claim have a "because" or evidence behind it?
+- Are key concepts defined before heavy use?
+- Is any paragraph mechanically patterned (same structure repeated)?
+- Did I use any prohibited formulaic transitions?
+- Would removing any paragraph lose genuine content?
+If ANY weakness found — FIX before output.
+
+=== END BORN-QUALITY CONTRACT ===
+`;
+
 const FINAL_DIRECTIVE = `
 === FINAL AUTHORITY CLAUSE ===
 
@@ -1800,6 +1870,8 @@ Your output must be acceptable to:
 • Institutional quality assurance committees
 • Peer-review panels
 
+${BORN_QUALITY_CONTRACT}
+
 ${MASTER_FORMATTING_CONTRACT}
 
 ${ACADEMIC_CONTRACT}
@@ -1915,6 +1987,13 @@ VISUAL STYLE:
 
 LANGUAGE: All dialogue and captions must be in ${language}.
 
+COMIC-SPECIFIC BORN-QUALITY RULES:
+- Every panel must have dialogue that reveals character or advances plot (no empty exchanges)
+- Visual descriptions must be specific enough for an illustrator (camera angle, lighting, character pose)
+- Dialogue must sound natural for the target age — no stilted AI phrasing
+- Vary panel pacing: action panels, quiet moments, reveals, emotional beats
+- Each chapter must have a clear narrative arc with emotional progression
+
 CRITICAL RULES:
 1. Use [PANEL 1], [PANEL 2], etc. markers for each panel
 2. Every panel MUST have character dialogue
@@ -1982,6 +2061,8 @@ BEGIN:`;
 
 function buildWorkbookSystemPrompt(language: string): string {
   return `${SYSTEM_ROLE_NEUTRAL}
+
+${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
 
@@ -3247,6 +3328,8 @@ ${summaries}
       
       systemPrompt = `You are ScrollLibrary — NON-STEM ACADEMIC PIPELINE.
 
+${BORN_QUALITY_CONTRACT}
+
 ===========================================
 GENERATOR IDENTITY: University Professor · Research Scholar · Subject-Matter Expert
 ===========================================
@@ -3357,6 +3440,8 @@ BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
       
       systemPrompt = `You are ScrollLibrary — NON-STEM ACADEMIC PIPELINE.
 
+${BORN_QUALITY_CONTRACT}
+
 GENERATOR IDENTITY: University Professor · Research Scholar · Subject-Matter Expert
 
 You are writing a university-grade textbook for ${category.replace(/_/g, " ")}.
@@ -3448,6 +3533,8 @@ BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
       console.log("[GENERATE-CHAPTER] Using STEM ACADEMIC/TECHNICAL pipeline (code-heavy, literal)");
       
       systemPrompt = `You are ScrollLibrary — ACADEMIC/TECHNICAL PIPELINE.
+
+${BORN_QUALITY_CONTRACT}
 
 ===========================================
 GENERATOR IDENTITY: University Lecturer · Engineer · Research Scholar
@@ -3599,6 +3686,8 @@ BEGIN WRITING THE COMPLETE ACADEMIC/TECHNICAL CHAPTER:`;
       
       systemPrompt = `You are ScrollLibrary — ACADEMIC/TECHNICAL PIPELINE.
 
+${BORN_QUALITY_CONTRACT}
+
 GENERATOR IDENTITY: University Lecturer · Research Scholar · Technical Author
 
 You are writing a university-grade textbook. Your output must pass institutional quality review.
@@ -3727,6 +3816,8 @@ BEGIN WRITING THE ACADEMIC/TECHNICAL CHAPTER:`;
         
         systemPrompt = `You are ScrollLibrary — ACADEMIC ILLUSTRATED PIPELINE.
 
+${BORN_QUALITY_CONTRACT}
+
 GENERATOR IDENTITY: University Lecturer · Research Scholar · Instructional Designer
 
 You are writing a university-grade illustrated textbook. Visuals serve PEDAGOGICAL purposes — they teach, clarify, and anchor complex concepts.
@@ -3740,6 +3831,8 @@ ${illustratedInstitutionalPrompt}`;
       } else {
         // BESTSELLER ILLUSTRATED PIPELINE — engaging narrative with visuals  
         systemPrompt = `${BESTSELLER_SYSTEM_ROLE}
+
+${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
 
@@ -3919,6 +4012,8 @@ BEGIN WRITING THE FULL ${isIllustratedAcademic ? 'ACADEMIC' : 'BESTSELLER-GRADE'
       
       systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
 
+${BORN_QUALITY_CONTRACT}
+
 ${MASTER_FORMATTING_CONTRACT}
 
 You are a business consultant and strategist writing a PROFESSIONAL GUIDE.
@@ -3981,6 +4076,8 @@ BEGIN WRITING THE PROFESSIONAL GUIDE CHAPTER:`;
       console.log("[GENERATE-CHAPTER] Using REFERENCE pipeline (structured, lookup-ready)");
       
       systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
+
+${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
 
@@ -4096,6 +4193,8 @@ BEGIN WRITING THE REFERENCE/HANDBOOK CHAPTER:`;
         // FULL BESTSELLER PIPELINE
         systemPrompt = `${BESTSELLER_SYSTEM_ROLE}
 
+${BORN_QUALITY_CONTRACT}
+
 ${MASTER_FORMATTING_CONTRACT}
 
 ${BESTSELLER_STRUCTURE_CONTRACT}
@@ -4124,6 +4223,8 @@ Create comprehensive, bestseller-grade chapters that readers would pay $20+ for.
       } else {
         // STANDARD TEXT PIPELINE — flexible, general-purpose, quality-focused
         systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
+
+${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
 
@@ -4229,6 +4330,8 @@ ${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. C
       console.warn(`[GENERATE-CHAPTER] ⚠️ Unknown book type "${effectiveBookType}" — falling back to STANDARD TEXT pipeline`);
       
       systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
+
+${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
 
