@@ -19,7 +19,9 @@ import {
   Music,
   Feather,
   ScrollText,
-  Lightbulb
+  Lightbulb,
+  HeartPulse,
+  Users
 } from "lucide-react";
 
 const CATEGORIES = [
@@ -41,6 +43,8 @@ const CATEGORIES = [
   { id: "fiction", labelKey: "categories.fiction", icon: Feather, color: "from-teal-500/20 to-teal-600/20" },
   { id: "non_fiction", labelKey: "categories.non_fiction", icon: ScrollText, color: "from-sky-500/20 to-sky-600/20" },
   { id: "poetry", labelKey: "categories.poetry", icon: Lightbulb, color: "from-fuchsia-500/20 to-fuchsia-600/20" },
+  { id: "psychology", labelKey: "categories.psychology", icon: Users, color: "from-violet-400/20 to-violet-500/20" },
+  { id: "health", labelKey: "categories.health", icon: HeartPulse, color: "from-lime-500/20 to-lime-600/20" },
 ];
 
 export function CategoriesSection() {
