@@ -46,11 +46,11 @@ export function validateContentForExport(
     const codeFenceCount = (content.match(/```/g) || []).length;
     if (codeFenceCount % 2 !== 0) {
       issues.push({
-        level: 'error',
+        level: 'warning',
         code: 'UNCLOSED_CODE_FENCE',
-        message: `Chapter ${chapterNum} has an unclosed code block`,
+        message: `Chapter ${chapterNum} has an unclosed code block (auto-repaired on export)`,
         chapterNumber: chapterNum,
-        details: 'Ensure all ``` code fences are properly closed.',
+        details: 'A closing ``` will be appended automatically during export.',
       });
     }
 
@@ -71,11 +71,11 @@ export function validateContentForExport(
     const brokenImages = content.match(/!\[[^\]]*\]\([^)]*$/gm) || [];
     if (brokenImages.length > 0) {
       issues.push({
-        level: 'error',
+        level: 'warning',
         code: 'BROKEN_IMAGE_SYNTAX',
-        message: `Chapter ${chapterNum} has broken image markdown`,
+        message: `Chapter ${chapterNum} has broken image markdown (auto-repaired on export)`,
         chapterNumber: chapterNum,
-        details: 'Check for missing closing parenthesis in image URLs.',
+        details: 'Missing closing parenthesis in image URLs will be auto-fixed.',
       });
     }
 
@@ -131,11 +131,11 @@ export function validateContentForExport(
       
       if (panelCount > 0 && imageCount < panelCount) {
         issues.push({
-          level: 'error',
+          level: 'warning',
           code: 'COMIC_MISSING_IMAGES',
           message: `Chapter ${chapterNum} has ${panelCount} panels but only ${imageCount} images`,
           chapterNumber: chapterNum,
-          details: 'Comics cannot be exported without images for all panels.',
+          details: 'Some panels may export without images.',
         });
       }
     }
