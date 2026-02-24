@@ -111,6 +111,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'categories.fiction': 'Fiction',
     'categories.non_fiction': 'Non-Fiction',
     'categories.poetry': 'Poetry',
+    'categories.psychology': 'Psychology',
+    'categories.health': 'Health',
     'categories.all': 'All',
     
     // Auth
@@ -943,6 +945,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'categories.fiction': 'Fiction',
     'categories.non_fiction': 'Non-Fiction',
     'categories.poetry': 'Poésie',
+    'categories.psychology': 'Psychologie',
+    'categories.health': 'Santé',
     'categories.all': 'Tous',
     
     // Certification Disclaimer Section
@@ -1608,6 +1612,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'categories.fiction': 'Belletristik',
     'categories.non_fiction': 'Sachbuch',
     'categories.poetry': 'Poesie',
+    'categories.psychology': 'Psychologie',
+    'categories.health': 'Gesundheit',
     'categories.all': 'Alle',
     
     // Certification Disclaimer Section
@@ -2272,6 +2278,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'categories.fiction': 'Ficción',
     'categories.non_fiction': 'No Ficción',
     'categories.poetry': 'Poesía',
+    'categories.psychology': 'Psicología',
+    'categories.health': 'Salud',
     'categories.all': 'Todos',
     
     // Certification Disclaimer Section
@@ -2936,6 +2944,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'categories.fiction': 'الخيال',
     'categories.non_fiction': 'غير الخيالي',
     'categories.poetry': 'الشعر',
+    'categories.psychology': 'علم النفس',
+    'categories.health': 'الصحة',
     'categories.all': 'الكل',
     
     // Certification Disclaimer Section
@@ -3600,6 +3610,8 @@ export const translations: Record<Language, Record<string, string>> = {
     'categories.fiction': 'Hadithi za Kubuni',
     'categories.non_fiction': 'Yasiyo ya Kubuni',
     'categories.poetry': 'Ushairi',
+    'categories.psychology': 'Saikolojia',
+    'categories.health': 'Afya',
     'categories.all': 'Yote',
     
     // Certification Disclaimer Section
