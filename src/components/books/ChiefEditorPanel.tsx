@@ -214,6 +214,16 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
             .map((f: any) => `- [${f.severity}] ${f.section}: ${f.issue} → ${f.suggestion}`),
         ].join("\n");
 
+        // Collect other chapter openings to enforce narrative variation
+        const otherOpenings = chapters
+          .filter(ch => ch.chapter_number !== chapter.chapter_number && ch.content)
+          .map(ch => `Ch.${ch.chapter_number}: "${(ch.content || '').slice(0, 200)}"`)
+          .join('\n');
+
+        const crossChapterContext = otherOpenings 
+          ? `\n\nCROSS-CHAPTER NARRATIVE OPENINGS (DO NOT REPEAT THESE PATTERNS):\n${otherOpenings}\n\nYour opening MUST use a COMPLETELY DIFFERENT narrative angle.`
+          : '';
+
         const { error } = await supabase.functions.invoke("generate-chapter", {
           body: {
             chapterId: chapter.id,
@@ -226,7 +236,8 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
             regenerate: true,
             isRegeneration: true,
             originalContent: chapter.content,
-            editIntent: `[CHIEF_EDITOR_REWRITE]\n${auditContext}`,
+            editIntent: `[CHIEF_EDITOR_REWRITE]\n${auditContext}${crossChapterContext}`,
+            forceModel: "google/gemini-2.5-flash",
           },
         });
 

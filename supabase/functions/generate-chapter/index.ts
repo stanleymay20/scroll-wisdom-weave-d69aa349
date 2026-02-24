@@ -527,7 +527,7 @@ MUST FEEL:
 // ===========================================
 
 const BORN_QUALITY_CONTRACT = `
-=== BORN-QUALITY CONTRACT v1.0 (MANDATORY — ALL PIPELINES) ===
+=== BORN-QUALITY CONTRACT v2.0 (MANDATORY — ALL PIPELINES) ===
 
 Your output will be scored on 5 dimensions. Optimize for ALL of them during generation.
 Do NOT rely on post-generation editing. Content must be BORN at institutional grade.
@@ -538,6 +538,7 @@ Do NOT rely on post-generation editing. Content must be BORN at institutional gr
    - Transitions must advance the argument, not just connect paragraphs
    - Eliminate circular restatements and filler transitions
    - Close each section with a synthesis, not a trailing fade
+   - MANDATORY: Chapter must have a COMPLETE closing paragraph that summarizes key insights and transitions to the next topic. NEVER end mid-sentence or abruptly.
 
 2️⃣ COGNITIVE DEPTH (25%)
    - Every claim must explain WHY, not just WHAT
@@ -545,6 +546,8 @@ Do NOT rely on post-generation editing. Content must be BORN at institutional gr
    - Differentiate similar concepts explicitly
    - Layer analysis: surface → mechanism → implication
    - Conceptual density > word count — say more with fewer words
+   - NAME your concepts: give frameworks memorable labels (e.g., "The Authority Trap", "The Reciprocity Engine")
+   - Include at least 3 distinct causal chains per chapter
 
 3️⃣ ACADEMIC RIGOR & PRECISION (20%)
    - Define key terms BEFORE using them heavily
@@ -552,12 +555,14 @@ Do NOT rely on post-generation editing. Content must be BORN at institutional gr
    - Ensure internal consistency — no contradictions between sections
    - Support claims with evidence, frameworks, or logical derivation
    - No unsupported generalizations
+   - Distinguish between correlation and causation explicitly
 
 4️⃣ PEDAGOGICAL INTELLIGENCE (15%)
    - Use examples ONLY when conceptually necessary (not decorative)
    - Progressive complexity: build from foundations to advanced application
    - Include reflection prompts that require genuine thinking
    - Integrate learning design naturally — avoid mechanical insertion
+   - Include at least ONE scenario/story that illustrates the core mechanism
    - Avoid: repetitive "for example", forced engagement phrases, checklist-style filler
 
 5️⃣ AI DETECTABILITY REDUCTION (15%)
@@ -571,11 +576,26 @@ Do NOT rely on post-generation editing. Content must be BORN at institutional gr
    - Break the "topic sentence → support → conclusion" template occasionally
    - Allow occasional single-sentence paragraphs for emphasis
 
+🔄 CROSS-CHAPTER NARRATIVE VARIATION (CRITICAL):
+- If this book uses a recurring character or scenario across chapters:
+  * Each chapter MUST open with a DIFFERENT narrative angle
+  * Chapter 1: introduce the character in a new situation
+  * Chapter 2+: pick up from the character's INTERNAL state or a NEW observation — NOT a recap of previous events
+  * NEVER re-describe the same sales interaction, meeting, or encounter
+  * VARY the entry point: internal monologue, a new scene, a realization, a question, a contrast
+- The reader has read previous chapters — ASSUME prior knowledge
+
 📏 COMPRESSION MANDATE:
 - Every paragraph must earn its place — if removing it loses nothing, DELETE IT
 - Combine overlapping ideas instead of restating
 - Replace 5-word phrases with 2-word equivalents when possible
 - Density > length. A tight 2500-word chapter beats a padded 4000-word one
+
+🔒 COMPLETENESS MANDATE:
+- NEVER submit a chapter with an incomplete final sentence
+- NEVER end abruptly without a closing synthesis
+- The last paragraph MUST be a complete thought that wraps the chapter's thesis
+- If running low on space, CUT middle content rather than truncating the ending
 
 🧪 SELF-VALIDATION (BEFORE OUTPUT):
 Ask yourself:
@@ -584,6 +604,8 @@ Ask yourself:
 - Is any paragraph mechanically patterned (same structure repeated)?
 - Did I use any prohibited formulaic transitions?
 - Would removing any paragraph lose genuine content?
+- Is the opening narrative DIFFERENT from other chapters in this book?
+- Does the chapter END with a complete, synthesizing paragraph?
 If ANY weakness found — FIX before output.
 
 === END BORN-QUALITY CONTRACT ===
@@ -2285,6 +2307,9 @@ serve(async (req) => {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    const editIntent_raw = (requestBody?.editIntent as string | null) || null;
+    const isChiefEditorRewrite = editIntent_raw?.startsWith('[CHIEF_EDITOR_REWRITE]') || false;
+    const forceModel = (requestBody?.forceModel as string | null) || null;
 
     console.log(`[GENERATE-CHAPTER] User: ${user.id.slice(0, 8)}...`);
 
@@ -2305,11 +2330,11 @@ serve(async (req) => {
 
     const userPlan = profile?.plan || "free";
     // Model routing respects subscription tier — admin bypass is for limits only, not model upgrade
-    const editIntent_raw = (requestBody?.editIntent as string | null) || null;
-    const isChiefEditorRewrite = editIntent_raw?.startsWith('[CHIEF_EDITOR_REWRITE]') || false;
-    const generationModel = getModelForPlan(userPlan);
+    // Chief Editor rewrites use forceModel to ensure quality regardless of tier
+    const baseModel = getModelForPlan(userPlan);
+    const generationModel = (isChiefEditorRewrite && forceModel) ? forceModel : baseModel;
     const maxWordCount = TIER_WORD_LIMITS[userPlan as keyof typeof TIER_WORD_LIMITS] || TIER_WORD_LIMITS.free;
-    console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel} | Admin: ${isAdmin}`);
+    console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel}${forceModel ? ` (forced from ${baseModel})` : ''} | Admin: ${isAdmin}`);
 
     // ===========================================
     // INPUT NORMALIZATION — Defensive layer for multi-path orchestration
@@ -2525,6 +2550,18 @@ The goal is NOT more text. The goal is denser reasoning and clearer architecture
 
 🧩 COMPRESSION PASS (MANDATORY):
 After rewriting: remove redundant sentences, combine overlapping ideas, tighten verbose constructions, replace long phrases with precise equivalents. The rewrite must be TIGHTER than the original unless genuine depth expansion is required.
+
+🔒 COMPLETENESS MANDATE:
+- The chapter MUST end with a complete, synthesizing final paragraph
+- NEVER truncate mid-sentence or end abruptly
+- If running low on space, CUT middle content rather than truncating the ending
+- The last paragraph must wrap the chapter's thesis and create a bridge to the next topic
+
+🔄 NARRATIVE VARIATION:
+- If the book uses a recurring character, each chapter opening MUST use a DIFFERENT narrative entry point
+- NEVER re-describe the same interaction or scene from a previous chapter
+- The reader has already read prior chapters — ASSUME prior knowledge
+- Vary: internal monologue, a new scene, a realization, a question, a contrast
 
 📏 WORD COUNT POLICY:
 - Minimum: 1200 words
