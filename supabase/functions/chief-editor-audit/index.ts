@@ -600,35 +600,89 @@ Respond as JSON:
     ) - detectabilityPenalty);
 
     // ============================================================
-    // STEP 3B: Compute Cognitive Density Index (CDI)
+    // STEP 3B: Compute Cognitive Density Index (CDI) — SEMANTIC (v3.0)
+    // AI-based concept counting replaces regex pattern matching.
+    // Regex CDI was incentivizing artificial phrasing ("is defined as" spam)
+    // and missing genuine conceptual density in narrative content.
     // ============================================================
-    // CDI = (conceptCount / wordCount) * 100, averaged across chapters
-    function computeCDI(chapters: any[]): { perChapter: { chapterNumber: number; cdi: number; concepts: number; words: number }[]; average: number } {
-      // BROADENED: Detects concepts across academic, bestseller, professional, and general content
-      const conceptPatterns = /\b(is defined as|refers to|means that|represents|denotes|the concept of|the principle of|the theory of|the model of|the framework of|the mechanism of|the process of|the distinction between|the relationship between|causal|correlation|hypothesis|paradigm|ontolog|epistem|heuristic|algorithm|theorem|axiom|postulate|corollary|lemma|inference|deduction|induction|abduction|synthesis|analysis|evaluation|taxonomy|typology|methodology|phenomenon|variable|construct|operationaliz|empirical|qualitative|quantitative|longitudinal|cross-sectional|meta-analysis|systematic review|randomized|controlled|validity|reliability|significance|regression|variance|standard deviation|probability|distribution|sampling|population|effect size|confidence interval|null hypothesis|alternative hypothesis|p-value|statistical|cognitive bias|logical fallacy|mental model|feedback loop|compound effect|opportunity cost|trade-off|leverage point|asymmetry|equilibrium|threshold|tipping point|network effect|second-order|first principles|root cause|bottleneck|constraint|paradox|dilemma|spectrum|continuum|archetype|prototype|blueprint|playbook|roadmap|strategy|tactic|principle|rule of thumb|heuristic|signal|noise|pattern|cycle|trigger|anchor|framing|priming|nudge|default|incentive|motivation|intrinsic|extrinsic|autonomy|competence|relatedness|self-efficacy|mindset|resilience|grit|deliberate practice|flow state|peak performance|diminishing returns|marginal|exponential|linear|compounding|scalable|sustainable|systemic|structural|behavioral|psychological|neurological|evolutionary|sociological|economic|strategic|operational|tactical|reciprocity|scarcity|authority|social proof|commitment|consistency|liking|persuasion|influence|compliance|manipulation|negotiation|power dynamic|hierarchy|dominance|submission|rapport|trust|credibility|legitimacy|perception|reality|illusion|bias|blind spot|assumption|belief|value|norm|convention|expectation|conditioning|reinforcement|punishment|reward|stimulus|response|adaptation|habituation|sensitization|desensitization|threshold|tolerance|dependence|withdrawal)\b/gi;
+    async function computeSemanticCDI(
+      chapters: any[], 
+      apiKey: string
+    ): Promise<{ perChapter: { chapterNumber: number; cdi: number; concepts: number; words: number }[]; average: number }> {
       const perChapter: { chapterNumber: number; cdi: number; concepts: number; words: number }[] = [];
+      
+      // Build a combined request for all chapters to minimize API calls
+      const chapterTexts = chapters.map((ch: any) => ({
+        num: ch.chapter_number,
+        words: (ch.content || "").split(/\s+/).filter(Boolean).length,
+        text: (ch.content || "").slice(0, 3000),
+      })).filter(c => c.words >= 50);
 
-      for (const ch of chapters) {
-        const content = ch.content || "";
-        const words = content.split(/\s+/).filter(Boolean).length;
-        if (words < 50) continue;
-        const concepts = (content.match(conceptPatterns) || []).length;
-        // Unique headings as concept markers too
-        const headings = (content.match(/^#{1,4}\s+.+$/gm) || []).length;
-        const totalConcepts = concepts + headings;
-        const cdi = Math.round((totalConcepts / words) * 1000) / 10; // per 100 words
-        perChapter.push({ chapterNumber: ch.chapter_number, cdi, concepts: totalConcepts, words });
+      if (chapterTexts.length === 0) return { perChapter, average: 0 };
+
+      try {
+        const cdiPrompt = `Count DISTINCT named concepts, frameworks, theories, models, and technical terms in each chapter excerpt below.
+
+A "concept" is a named idea that could be a glossary entry: a theory, framework, principle, mechanism, named effect, technical term, or domain-specific construct. Do NOT count generic words (e.g., "strategy", "important") — only count SPECIFIC named concepts (e.g., "loss aversion", "Porter's Five Forces", "cognitive dissonance").
+
+${chapterTexts.map(c => `--- Chapter ${c.num} (${c.words} words) ---\n${c.text}`).join('\n\n')}
+
+Respond as JSON array: [{"chapter": 1, "concepts": 15, "examples": ["loss aversion", "disposition effect", "prospect theory"]}, ...]`;
+
+        const cdiResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: { Authorization: `Bearer ${apiKey}`, "Content-Type": "application/json" },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash-lite",
+            messages: [
+              { role: "system", content: "You are a concept density analyzer. Count only distinct, specific named concepts. Output valid JSON only." },
+              { role: "user", content: cdiPrompt }
+            ],
+            temperature: 0.0,
+          }),
+        });
+
+        if (cdiResp.ok) {
+          const cdiData = await cdiResp.json();
+          const raw = cdiData.choices?.[0]?.message?.content || "";
+          // Parse JSON from response
+          const jsonMatch = raw.match(/\[[\s\S]*\]/);
+          if (jsonMatch) {
+            const parsed = JSON.parse(jsonMatch[0]);
+            for (const item of parsed) {
+              const chText = chapterTexts.find(c => c.num === item.chapter);
+              if (chText) {
+                const cdi = Math.round((item.concepts / chText.words) * 1000) / 10;
+                perChapter.push({ chapterNumber: item.chapter, cdi, concepts: item.concepts, words: chText.words });
+              }
+            }
+          }
+        } else {
+          await cdiResp.text();
+          log("Semantic CDI failed, using fallback");
+        }
+      } catch (e) {
+        log("Semantic CDI error", { error: String(e) });
       }
 
-      const average = perChapter.length > 0 
+      // Fallback: if AI CDI failed for any chapters, use simple heading count
+      for (const ch of chapterTexts) {
+        if (!perChapter.find(p => p.chapterNumber === ch.num)) {
+          const headings = ((chapters.find((c: any) => c.chapter_number === ch.num)?.content || "").match(/^#{1,4}\s+.+$/gm) || []).length;
+          const cdi = Math.round((headings / ch.words) * 1000) / 10;
+          perChapter.push({ chapterNumber: ch.num, cdi, concepts: headings, words: ch.words });
+        }
+      }
+
+      const average = perChapter.length > 0
         ? Math.round((perChapter.reduce((sum, c) => sum + c.cdi, 0) / perChapter.length) * 10) / 10
         : 0;
 
       return { perChapter, average };
     }
 
-    const cdiResult = computeCDI(generatedChapters);
-    log("CDI computed", { average: cdiResult.average, chapters: cdiResult.perChapter.length });
+    const cdiResult = await computeSemanticCDI(generatedChapters, LOVABLE_API_KEY!);
+    log("Semantic CDI computed", { average: cdiResult.average, chapters: cdiResult.perChapter.length });
 
     // ============================================================
     // STEP 3C: Generate Institutional Audit Artifact (SHA-256 signed)
