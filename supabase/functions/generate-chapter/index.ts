@@ -461,42 +461,10 @@ HARD FAILURE: If a chapter reads like an essay or textbook → FAIL
 === END BESTSELLER CONTRACT ===
 `;
 
-const VALIDATION_CONTRACT = `
-=== QUALITY GATES — FINAL CHECK (BEFORE OUTPUT) ===
-
-CRITICAL: Do NOT start the chapter with the chapter number or title as a heading (e.g., "# Chapter 1: Title").
-The reading interface already displays the chapter number and title separately.
-Start DIRECTLY with the content (opening hook, learning objectives, etc.).
-
-Before finalizing, VERIFY ALL of these:
-[ ] Proper markdown headings (## and ###) used for all sections
-[ ] Bold (**text**) used for key terms and concepts
-[ ] Italic (*text*) used for emphasis where appropriate
-[ ] Lists use proper - or 1. prefix formatting
-[ ] Clean formatting throughout
-[ ] Genre-specific rules fully obeyed
-[ ] Publish-ready layout
-[ ] Content depth matches the declared book type
-
-If ANY check fails → REWRITE ENTIRE OUTPUT
-
-=== FAILURE BEHAVIOR ===
-If you cannot meet these requirements:
-• DO NOT partially comply
-• DO NOT "do your best"
-• DO NOT continue silently
-
-Instead:
-• STOP
-• Report the violation
-• Request clarification or refinement
-
-Quality > Speed.
-Publishability > Completion.
-Reader value > Volume.
-
-=== END VALIDATION CONTRACT ===
-`;
+// VALIDATION_CONTRACT removed from generation prompts in v3.0
+// Validation now happens post-generation via Contract 6 and pedagogical checks.
+// Embedding validation checklists in prompts causes "checklist compliance" — shallow surface adherence.
+const VALIDATION_CONTRACT = '';
 
 // ===========================================
 // 4️⃣ GENRE-SPECIFIC HARD RULES
@@ -527,115 +495,34 @@ MUST FEEL:
 // ===========================================
 
 const BORN_QUALITY_CONTRACT = `
-=== BORN-QUALITY CONTRACT v2.0 (MANDATORY — ALL PIPELINES) ===
+=== BORN-QUALITY CONTRACT v3.0 (COMPRESSED — ALL PIPELINES) ===
 
-Your output will be scored on 5 dimensions. Optimize for ALL of them during generation.
-Do NOT rely on post-generation editing. Content must be BORN at institutional grade.
+SCORING DIMENSIONS (optimize for ALL during generation):
+1. STRUCTURAL (25%): Concept-driven headings, strong hook (first 120 words), no circular restatements, complete closing paragraph.
+2. COGNITIVE DEPTH (25%): Explain WHY not just WHAT. Show causal chains: "X because Y → Z". Name your frameworks. ≥3 distinct causal mechanisms per chapter.
+3. RIGOR (20%): Define before use. No vague qualifiers. Internal consistency. Evidence-backed claims.
+4. PEDAGOGY (15%): Examples only when necessary. Progressive complexity. Natural integration — no checklist insertion.
+5. DETECTABILITY (15%): Vary sentence length (8–30 words). Vary paragraph length (2–5 sentences). Never start consecutive paragraphs identically. No formulaic transitions.
 
-1️⃣ STRUCTURAL INTEGRITY (25%)
-   - Open with a strong hook (first 120 words must engage)
-   - Use concept-driven headings (NOT generic "Introduction", "Conclusion")
-   - Transitions must advance the argument, not just connect paragraphs
-   - Eliminate circular restatements and filler transitions
-   - Close each section with a synthesis, not a trailing fade
-   - MANDATORY: Chapter must have a COMPLETE closing paragraph that summarizes key insights and transitions to the next topic. NEVER end mid-sentence or abruptly.
+PROHIBITED TRANSITIONS: "Furthermore," / "In conclusion," / "It is important to note" / "As we have seen," / "Moving forward," / "Let us now turn to" / "Having established that," / "This section examines"
 
-2️⃣ COGNITIVE DEPTH (25%)
-   - Every claim must explain WHY, not just WHAT
-   - Show causal mechanisms: "X happens because Y, which leads to Z"
-   - Differentiate similar concepts explicitly
-   - Layer analysis: surface → mechanism → implication
-   - Conceptual density > word count — say more with fewer words
-   - NAME your concepts: give frameworks memorable labels (e.g., "The Authority Trap", "The Reciprocity Engine")
-   - Include at least 3 distinct causal chains per chapter
+EXEMPLAR (target quality — match this density and variation):
+"""
+Loss aversion operates through a neural mechanism distinct from rational preference ordering. Kahneman and Tversky's 1979 experiments demonstrated that losses carry roughly 2.25x the psychological weight of equivalent gains — a ratio that holds across cultures, income levels, and asset classes. This asymmetry creates a measurable distortion: investors hold losing positions 1.5x longer than winning ones (Odean, 1998), not from ignorance but from a hardwired pain-avoidance circuit rooted in the amygdala.
 
-3️⃣ ACADEMIC RIGOR & PRECISION (20%)
-   - Define key terms BEFORE using them heavily
-   - Replace vague qualifiers ("many", "often", "significant") with specific reasoning
-   - Ensure internal consistency — no contradictions between sections
-   - Support claims with evidence, frameworks, or logical derivation
-   - No unsupported generalizations
-   - Distinguish between correlation and causation explicitly
+The practical consequence? Portfolio construction that ignores loss aversion systematically underperforms. Three mechanisms drive this: anchoring to purchase price rather than current value, the disposition effect that crystalizes gains prematurely, and what behavioral economists call "myopic loss aversion" — checking returns too frequently amplifies perceived volatility by 3x.
+"""
 
-4️⃣ PEDAGOGICAL INTELLIGENCE (15%)
-   - Use examples ONLY when conceptually necessary (not decorative)
-   - Progressive complexity: build from foundations to advanced application
-   - Include reflection prompts that require genuine thinking
-   - Integrate learning design naturally — avoid mechanical insertion
-   - Include at least ONE scenario/story that illustrates the core mechanism
-   - Avoid: repetitive "for example", forced engagement phrases, checklist-style filler
-
-5️⃣ AI DETECTABILITY REDUCTION (15%)
-   - VARY sentence length: mix 8-word punches with 30-word complex constructions
-   - VARY paragraph length: 2 sentences, then 5, then 3 — NO uniform blocks
-   - NEVER start consecutive paragraphs with the same word or structure
-   - PROHIBITED openers: "Furthermore,", "In conclusion,", "It is important to note",
-     "As we have seen,", "Moving forward,", "Let us now turn to",
-     "Having established that,", "This section examines"
-   - Use substantive transitions that advance reasoning, not generic connectors
-   - Break the "topic sentence → support → conclusion" template occasionally
-   - Allow occasional single-sentence paragraphs for emphasis
-
-🔄 CROSS-CHAPTER NARRATIVE VARIATION (CRITICAL):
-- If this book uses a recurring character or scenario across chapters:
-  * Each chapter MUST open with a DIFFERENT narrative angle
-  * Chapter 1: introduce the character in a new situation
-  * Chapter 2+: pick up from the character's INTERNAL state or a NEW observation — NOT a recap of previous events
-  * NEVER re-describe the same sales interaction, meeting, or encounter
-  * VARY the entry point: internal monologue, a new scene, a realization, a question, a contrast
-- The reader has read previous chapters — ASSUME prior knowledge
-
-📏 COMPRESSION MANDATE:
-- Every paragraph must earn its place — if removing it loses nothing, DELETE IT
-- Combine overlapping ideas instead of restating
-- Replace 5-word phrases with 2-word equivalents when possible
-- Density > length. A tight 2500-word chapter beats a padded 4000-word one
-
-🔒 COMPLETENESS MANDATE:
-- NEVER submit a chapter with an incomplete final sentence
-- NEVER end abruptly without a closing synthesis
-- The last paragraph MUST be a complete thought that wraps the chapter's thesis
-- If running low on space, CUT middle content rather than truncating the ending
-
-🧪 SELF-VALIDATION (BEFORE OUTPUT):
-Ask yourself:
-- Does every major claim have a "because" or evidence behind it?
-- Are key concepts defined before heavy use?
-- Is any paragraph mechanically patterned (same structure repeated)?
-- Did I use any prohibited formulaic transitions?
-- Would removing any paragraph lose genuine content?
-- Is the opening narrative DIFFERENT from other chapters in this book?
-- Does the chapter END with a complete, synthesizing paragraph?
-If ANY weakness found — FIX before output.
+COMPRESSION: Every paragraph must earn its place. Density > length.
+COMPLETENESS: Never end mid-sentence. Last paragraph must synthesize and bridge.
+VARIATION: Each chapter opening must use a DIFFERENT narrative entry point.
 
 === END BORN-QUALITY CONTRACT ===
 `;
 
-const FINAL_DIRECTIVE = `
-=== FINAL AUTHORITY CLAUSE ===
-
-ScrollLibrary is a PUBLISHING SYSTEM, not a chat generator.
-
-This contract OVERRIDES:
-• Default AI behavior
-• Speed optimizations
-• Token minimization
-• Convenience shortcuts
-
-Output MUST be:
-• Reader-ready (clean, no artifacts)
-• Print-ready (proper structure)
-• Academic-ready (citations if applicable)
-• Diagnostics-passable
-
-Quality > Speed.
-Publishability > Completion.
-Reader value > Volume.
-
-No shortcuts. No drift. No excuses.
-
-=== END FINAL DIRECTIVE ===
-`;
+// FINAL_DIRECTIVE removed in v3.0 — redundant, causes instruction flattening.
+// Quality mandate is now embedded in BORN_QUALITY_CONTRACT exemplar.
+const FINAL_DIRECTIVE = '';
 
 // ===========================================
 // MARKDOWN SANITIZER - COMIC-ONLY plain-text stripper
@@ -670,6 +557,105 @@ function sanitizeMarkdown(content: string): string {
     // Clean up excessive whitespace
     .replace(/\n{3,}/g, '\n\n')
     .trim();
+}
+
+// ===========================================
+// STRUCTURAL VARIATION ENGINE (Phase 2)
+// Randomized chapter skeletons to prevent structural uniformity
+// ===========================================
+
+const BESTSELLER_SKELETONS = [
+  `STRUCTURE VARIANT A:
+1. Open with a CONTRADICTION or counterintuitive claim
+2. Explain WHY the conventional view fails (with evidence)
+3. Introduce your NAMED FRAMEWORK as the alternative
+4. Ground it with a REAL-WORLD SCENARIO
+5. Deliver 3-5 ACTIONABLE TAKEAWAYS`,
+
+  `STRUCTURE VARIANT B:
+1. Open with a CHARACTER/SCENARIO in the middle of a decision
+2. Reveal the HIDDEN MECHANISM behind their challenge
+3. Introduce the PRINCIPLE that explains the pattern
+4. Show 2-3 APPLICATIONS across different contexts
+5. Close with a REFLECTION PROMPT that forces self-examination`,
+
+  `STRUCTURE VARIANT C:
+1. Open with a PROVOCATIVE STATISTIC or data point
+2. Unpack WHAT DRIVES that number (causal analysis)
+3. Present a FRAMEWORK for thinking about it differently
+4. Apply it to the READER'S situation with concrete steps
+5. End with a DECISION MATRIX (table) for immediate use`,
+
+  `STRUCTURE VARIANT D:
+1. Open with a QUESTION the reader has never considered
+2. Trace the HISTORY/EVOLUTION of the concept (brief)
+3. Reveal the MECHANISM most people miss
+4. Contrast TWO APPROACHES with a comparison table
+5. Close with a SINGLE HIGH-IMPACT ACTION the reader can take today`,
+];
+
+const ACADEMIC_SKELETONS = [
+  `STRUCTURE VARIANT A:
+1. Learning Objectives (3-5 Bloom's-aligned)
+2. Theoretical Context — position within existing literature
+3. Core Analysis — layered explanation with causal mechanisms
+4. Empirical Evidence — data, studies, methodology
+5. Critical Evaluation — limitations and counterarguments
+6. Applied Implications — real-world applications
+7. Exercises (graduated difficulty)`,
+
+  `STRUCTURE VARIANT B:
+1. Learning Objectives (3-5 Bloom's-aligned)
+2. Problem Statement — what question does this chapter answer?
+3. Historical Development — how thinking evolved on this topic
+4. Current Consensus — what we know and how we know it
+5. Competing Perspectives — contrasting scholarly views
+6. Synthesis and Framework — your analytical model
+7. Discussion Questions and Exercises`,
+
+  `STRUCTURE VARIANT C:
+1. Learning Objectives (3-5 Bloom's-aligned)
+2. Case Opening — begin with a real-world puzzle or phenomenon
+3. Conceptual Framework — define and relate key constructs
+4. Evidence Review — systematic analysis of supporting data
+5. Methodological Considerations — how to study this
+6. Implications for Practice and Policy
+7. Key Takeaways and Exercises`,
+];
+
+const TEXT_SKELETONS = [
+  `STRUCTURE:
+1. Engaging opening — hook through curiosity or surprise
+2. Context and background — position the topic
+3. Core exploration — 3-4 organized sections
+4. Concrete examples with specific details
+5. Synthesis — what this means for the reader`,
+
+  `STRUCTURE:
+1. Open with a real scenario or observation
+2. Zoom out — connect to the bigger picture
+3. Deep dive into 2-3 key aspects
+4. Practical application — how to use this knowledge
+5. Key insights summary`,
+
+  `STRUCTURE:
+1. Start with a question worth answering
+2. Explore the answer from multiple angles
+3. Provide evidence and examples
+4. Address common misunderstandings
+5. Conclude with actionable clarity`,
+];
+
+function getRandomSkeleton(bookType: string, chapterNumber: number): string {
+  let skeletons: string[];
+  switch (bookType) {
+    case 'bestseller': skeletons = BESTSELLER_SKELETONS; break;
+    case 'academic': case 'technical': skeletons = ACADEMIC_SKELETONS; break;
+    default: skeletons = TEXT_SKELETONS; break;
+  }
+  // Use chapter number as seed for deterministic but varied selection
+  const idx = (chapterNumber * 7 + 3) % skeletons.length;
+  return skeletons[idx];
 }
 
 // ===========================================
@@ -4307,13 +4293,7 @@ LANGUAGE: Generate ALL content in ${languageName}.
 Key topics:
 ${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
 
-BESTSELLER STRUCTURE (MANDATORY):
-1. OPENING HOOK — Story, contradiction, or emotional moment (first 100 words)
-2. CORE IDEA — One central message, explained clearly
-3. ILLUSTRATION — Real-world story, analogy, or scenario
-4. NAMED PRINCIPLE — Introduce a sticky, memorable concept name
-5. READER ENGAGEMENT — Reflection questions, mental pauses
-6. ACTIONABLE TAKEAWAYS — 3-7 bullet points the reader can apply
+${getRandomSkeleton('bestseller', chapterNumber)}
 ${isBusinessBook ? `
 INSTITUTIONAL REQUIREMENTS (BUSINESS BOOK):
 7. FINANCIAL ENGINEERING — Include at least 1 markdown table with real numbers
@@ -4343,13 +4323,7 @@ LANGUAGE: Generate ALL content in ${languageName}.
 Key topics:
 ${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
 
-        STANDARD TEXT STRUCTURE:
-        1. INTRODUCTION — Hook the reader and set clear context (what, why, how)
-        2. MAIN CONTENT — Organized into 3-5 logical sections with descriptive ## headings
-        3. EXAMPLES — Concrete illustrations for abstract concepts (MANDATORY)
-        4. ANALYSIS/APPLICATION — Why this matters and how it applies
-        5. KEY POINTS — Summary of main insights
-        6. CONCLUSION — Synthesize findings and transition
+        ${getRandomSkeleton('text', chapterNumber)}
 
         REQUIREMENTS:
         - Approximately ${targetWords} words
@@ -4518,6 +4492,70 @@ BEGIN:`;
     }
 
     let finalContent = chapterContent;
+
+    // ===========================================
+    // PHASE 4: LIGHTWEIGHT COMPRESSION SECOND PASS
+    // Flash-lite pass for rhythm variation and compression
+    // Adds ~15-20% cost, +6-10 quality points
+    // Skip for comics, workbooks, children's books (structure-sensitive)
+    // ===========================================
+    const COMPRESSION_EXEMPT_TYPES = ['comic', 'workbook', 'children'];
+    const shouldCompress = !COMPRESSION_EXEMPT_TYPES.includes(effectiveBookType) && !editIntent;
+    
+    if (shouldCompress && finalContent.length > 1500) {
+      try {
+        console.log(`[GENERATE-CHAPTER] Phase 4: Compression pass starting (${finalContent.length} chars)...`);
+        
+        const compressionResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash-lite",
+            messages: [
+              { role: "system", content: `You are an editorial compression engine. Your ONLY job:
+1. Remove redundant sentences that restate what was already said
+2. Vary paragraph lengths — break uniform 3-sentence blocks into 2s and 5s
+3. Replace formulaic transitions ("Furthermore," "In addition," "Moreover,") with substantive connectors or remove them
+4. Vary sentence openings — if 2+ consecutive sentences start with the same word/structure, rewrite one
+5. Ensure the last paragraph is a complete synthesis (never truncated)
+
+DO NOT:
+- Change the meaning, arguments, or examples
+- Add new content
+- Remove examples, data, or evidence
+- Change headings or section structure
+- Add commentary or meta-text
+
+Return ONLY the improved chapter text. No preamble.` },
+              { role: "user", content: finalContent.slice(0, 25000) }
+            ],
+            temperature: 0.2,
+          }),
+        });
+
+        if (compressionResp.ok) {
+          const compData = await compressionResp.json();
+          const compressed = compData.choices?.[0]?.message?.content || "";
+          // Only use if compression didn't destroy the content (>60% of original)
+          if (compressed.length > finalContent.length * 0.6 && compressed.length > 1000) {
+            finalContent = compressed;
+            console.log(`[GENERATE-CHAPTER] Compression pass complete: ${chapterContent.length} → ${finalContent.length} chars (${Math.round((1 - finalContent.length / chapterContent.length) * 100)}% reduction)`);
+          } else {
+            console.log(`[GENERATE-CHAPTER] Compression result rejected (too short: ${compressed.length} vs ${finalContent.length})`);
+          }
+        } else {
+          const errStatus = compressionResp.status;
+          await compressionResp.text();
+          console.log(`[GENERATE-CHAPTER] Compression pass skipped (status ${errStatus})`);
+        }
+      } catch (compErr) {
+        console.error("[GENERATE-CHAPTER] Compression pass error:", compErr);
+        // Non-fatal — continue with original content
+      }
+    }
 
     // ===========================================
     // INSTITUTIONAL AI DISCLOSURE — ALL NON-ACADEMIC PIPELINES
