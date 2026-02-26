@@ -86,3 +86,6 @@ verify_jwt = false
 
 [functions.chief-editor-audit]
 verify_jwt = false
+
+[functions.mastery-assessment]
+verify_jwt = false
