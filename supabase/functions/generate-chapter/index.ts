@@ -4405,6 +4405,100 @@ BEGIN:`;
     let finalContent = chapterContent;
 
     // ===========================================
+    // PHASE 3.5: INTELLECTUAL STRESS-TEST PASS
+    // Strengthens reasoning depth, eliminates intellectual weakness,
+    // increases conceptual rigor — while preserving voice and structure.
+    // Must run BEFORE compression. Skip for comics/workbooks/children.
+    // ===========================================
+    const STRESS_TEST_EXEMPT_TYPES = ['comic', 'workbook', 'children'];
+    const shouldStressTest = !STRESS_TEST_EXEMPT_TYPES.includes(effectiveBookType) && !editIntent && finalContent.length > 1500;
+
+    if (shouldStressTest) {
+      try {
+        console.log(`[GENERATE-CHAPTER] Phase 3.5: Intellectual Stress-Test starting (${finalContent.length} chars)...`);
+
+        const stressTestResp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({
+            model: "google/gemini-2.5-flash",
+            messages: [
+              { role: "system", content: `You are an Intellectual Stress-Testing Editor.
+
+Your role is NOT to rewrite stylistically.
+Your role is to strengthen reasoning depth, eliminate intellectual weakness,
+and increase conceptual rigor — while preserving the author's voice and structure.
+
+You operate like a peer reviewer and senior editor combined.` },
+              { role: "user", content: `Below is a full book chapter.
+
+Your task is to STRESS-TEST and STRENGTHEN it using the following framework:
+
+1. Identify the weakest argument, explanation, or thin section.
+   - Strengthen it with deeper reasoning.
+   - Add mechanism-level explanation (WHY and HOW, not just WHAT).
+
+2. Add one of the following where appropriate:
+   - A counter-argument or alternative interpretation
+   - A boundary condition (when this idea fails or weakens)
+   - A limitation or unresolved question
+
+3. Upgrade vague conceptual language into named constructs where justified.
+   (Only when real — do NOT invent fake theories.)
+
+4. Increase conceptual density through:
+   - Contrast
+   - Causality
+   - Specific examples
+   - Applied implications
+
+5. Improve intellectual tension.
+   Ideas should feel tested, not asserted.
+
+STRICT RULES:
+- Do NOT change the structure.
+- Do NOT add fluff.
+- Do NOT add headings.
+- Do NOT add meta commentary.
+- Do NOT make it longer by more than 15%.
+- Preserve tone according to the book type.
+- Never end abruptly — the final paragraph must synthesize clearly.
+
+Return ONLY the improved chapter text.
+
+---
+
+${finalContent.slice(0, 30000)}` }
+            ],
+            temperature: 0.4,
+          }),
+        });
+
+        if (stressTestResp.ok) {
+          const stData = await stressTestResp.json();
+          const stressedContent = stData.choices?.[0]?.message?.content || "";
+          // Accept if result is reasonable length (>70% of original, <120% of original)
+          if (stressedContent.length > finalContent.length * 0.7 && stressedContent.length < finalContent.length * 1.25 && stressedContent.length > 1000) {
+            console.log(`[GENERATE-CHAPTER] Stress-test pass complete: ${finalContent.length} → ${stressedContent.length} chars`);
+            finalContent = stressedContent;
+          } else {
+            console.log(`[GENERATE-CHAPTER] Stress-test result rejected (length: ${stressedContent.length} vs original: ${finalContent.length})`);
+          }
+        } else {
+          const errStatus = stressTestResp.status;
+          await stressTestResp.text();
+          console.log(`[GENERATE-CHAPTER] Stress-test pass skipped (status ${errStatus})`);
+        }
+      } catch (stErr) {
+        console.error("[GENERATE-CHAPTER] Stress-test pass error:", stErr);
+        // Non-fatal — continue with original content
+      }
+    }
+
+    // ===========================================
     // PHASE 4: LIGHTWEIGHT COMPRESSION SECOND PASS
     // Flash-lite pass for rhythm variation and compression
     // Adds ~15-20% cost, +6-10 quality points
