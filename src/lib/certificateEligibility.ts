@@ -63,6 +63,10 @@ export interface BookProgress {
   lastMasteryAttempt: Date | null;
   bookHash?: string; // Hash at certification time
   currentBookHash?: string; // Live hash for validation
+  /** Mastery depth score from Mastery Engine v2 (0-100) */
+  masteryDepthScore?: number;
+  /** Whether at least one Evaluate/Create question was assessed */
+  hasEvaluateOrCreateAssessment?: boolean;
 }
 
 // ============================================================
@@ -151,6 +155,8 @@ const MASTERY_THRESHOLDS = {
   MIN_INTEGRITY: 0.9,
   /** Cooldown period after failed mastery attempt (ms) */
   COOLDOWN_MS: 24 * 60 * 60 * 1000, // 24 hours
+  /** Minimum mastery depth score from Mastery Engine v2 */
+  MIN_MASTERY_DEPTH: 75,
 } as const;
 
 /**
@@ -212,6 +218,18 @@ function checkMasteryEligibility(progress: BookProgress): {
   if (!progress.masteryRequirementsMet) {
     eligible = false;
     reasons.push('Complete all mastery requirements');
+  }
+
+  // Mastery Engine v2: Mastery Depth Score gate
+  if (progress.masteryDepthScore !== undefined && progress.masteryDepthScore < MASTERY_THRESHOLDS.MIN_MASTERY_DEPTH) {
+    eligible = false;
+    reasons.push(`Mastery depth score ${progress.masteryDepthScore}% is below ${MASTERY_THRESHOLDS.MIN_MASTERY_DEPTH}% threshold`);
+  }
+
+  // Mastery Engine v2: Evaluate/Create assessment gate
+  if (progress.hasEvaluateOrCreateAssessment === false) {
+    eligible = false;
+    reasons.push('At least 1 Evaluate or Create-level assessment required per chapter');
   }
 
   return { eligible, reasons, blockedByCooldown, canRetryAt };
