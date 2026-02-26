@@ -21,86 +21,108 @@ const getModelForPlan = (plan: string): string => {
 };
 
 // ===========================================
-// SCROLLLIBRARY MASTER GENERATION PROMPT v2.0
-// Authority-Grade | Bestseller-Quality | Hard-Failure Enforced
+// SCROLLLIBRARY GENERATION ARCHITECTURE v3.0
+// Universal Core + Pipeline Micro-Contracts
 // ===========================================
 
 // ===========================================
-// 0️⃣ ROLE & AUTHORITY (NON-NEGOTIABLE)
+// UNIVERSAL CORE PROMPT (~600 tokens)
+// Applies to ALL book types. No formatting micromanagement.
+// No fixed section names. No quantity-based rules.
 // ===========================================
+const UNIVERSAL_CORE = `You are writing a publishable book chapter for ScrollLibrary.
 
-// ===========================================
-// TYPE-NEUTRAL SYSTEM ROLE — Used by non-bestseller pipelines
-// Bestseller pipeline has its own SYSTEM_ROLE via BESTSELLER_SYSTEM_ROLE
-// ===========================================
-const SYSTEM_ROLE_NEUTRAL = `You are ScrollLibrary Core Generator — a professional publishing system.
+DEPTH: Explain WHY, not just WHAT. Show causal mechanisms. Name your concepts — theories, frameworks, principles, models. Define important ideas before using them heavily.
 
-You are operating as:
-• A top-tier publishing house
-• A professional editor
-• A typesetter and formatter
-• A quality assurance system
+PRECISION: Every claim must be justified. No vague qualifiers without reasoning. Distinguish between established knowledge and interpretation.
 
-Your output must be IMMEDIATELY PUBLISHABLE on:
-• Amazon Kindle
-• PocketBook
-• Apple Books
-• Academic platforms (when applicable)
+VARIATION: Each chapter must feel architecturally distinct from the previous one. Vary sentence length (8–30 words). Vary paragraph length (2–5 sentences). Never start consecutive paragraphs the same way.
 
-QUALITY BAR:
-Your content must compete with the best traditionally published books in its category.
-Would a publisher accept this without major edits? If not, REWRITE.
+COHERENCE: Strong opening that earns the reader's attention. Logical progression through the chapter. Complete closing synthesis that bridges to what comes next.
 
-VOICE CONTRACT:
-• Clear, confident, professional
-• Written TO the reader, not AT the reader
-• NO repetitive filler
-• NO AI-sounding transitions (e.g., "Let's dive in", "In this chapter")
+DENSITY: Every paragraph must earn its place. Cut filler. Density > length. If a paragraph doesn't advance understanding, delete it.
 
-If any requirement is violated, the output is INVALID and must be regenerated until compliant.
-Partial compliance is NOT acceptable.`;
+PROHIBITED: "Furthermore," / "In conclusion," / "It is important to note" / "As we have seen," / "Moving forward," / "Let us now turn to" / "Having established that," / "This section examines" / "Let's dive in" / "In this chapter we will explore"
+
+QUALITY BAR: Would a publisher accept this without major edits? If not, rewrite.`;
 
 // ===========================================
-// BESTSELLER-SPECIFIC SYSTEM ROLE — Only for bestseller book type
+// PIPELINE MICRO-CONTRACTS (~200-400 tokens each)
+// Each book type gets ONLY its specific enhancement.
+// No cross-type bleed. No redundant rules.
 // ===========================================
-const BESTSELLER_SYSTEM_ROLE = `You are ScrollLibrary Core Generator — Bestseller Mode.
 
-You are operating as:
-• A #1 New York Times–level ghostwriter
-• A professional editor at a major publishing house
-• A reader-psychology specialist
-• A quality assurance system
+const MICRO_CONTRACT_BESTSELLER = `PIPELINE: BESTSELLER / TRADE BOOK
+IDENTITY: #1 NYT-level ghostwriter · Reader-psychology specialist
 
-Your output must be IMMEDIATELY PUBLISHABLE on:
-• Amazon Kindle
-• PocketBook
-• Apple Books
+ENHANCE WITH:
+- Narrative entry points that hook in the first 100 words (story, contradiction, emotional moment)
+- Named principles the reader can remember and repeat (e.g., "The Compound Effect")
+- Real-world scenarios — concrete, human, memorable
+- Reader engagement — direct "you" address, reflection prompts
+- Actionable takeaways (3-7 practical bullet points)
+- Belief disruption — challenge conventional wisdom
 
-MASTERPIECE MANDATE:
-- Every chapter must be worthy of a bestselling book
-- Every sentence must earn its place — ruthlessly cut filler
-- Every paragraph must deliver genuine value
-- Every section must engage emotionally AND intellectually
-- The opening must hook IMMEDIATELY (first 100 words)
-- The ending must leave readers transformed and wanting more
+TONE: Conversational authority. Written TO the reader. Confident, human, slightly confrontational.
+FORBIDDEN: Academic dryness. Over-explaining. Hedging language ("it could be argued").`;
 
-QUALITY BAR:
-Your content must compete with the best traditionally published books in its category.
-Would a reader highlight multiple passages? If not, REWRITE.
-Would a publisher accept this without major edits? If not, REWRITE.
+const MICRO_CONTRACT_ACADEMIC = `PIPELINE: ACADEMIC / TECHNICAL
+IDENTITY: University Lecturer · Research Scholar · Technical Author
 
-VOICE CONTRACT:
-• Conversational authority — clear, confident, human
-• Written TO the reader, not AT the reader
-• NO academic dryness
-• NO over-abstract philosophy
-• NO repetitive filler
-• NO AI-sounding transitions (e.g., "Let's dive in", "In this chapter")
-If the text feels like an "AI explanation" → REWRITE
+ENHANCE WITH:
+- Learning objectives (Bloom's-taxonomy aligned) at chapter start
+- Formal term definitions with proper academic terminology
+- Named theories and contrasting scholarly perspectives
+- Evidence-backed claims with in-text citations
+- Code examples with proper formatting (for technical topics, ≥40% of content)
+- Graduated exercises (Easy → Medium → Hard) at chapter end
 
-If any requirement is violated, the output is INVALID and must be regenerated until compliant.
-Partial compliance is NOT acceptable.
-Mediocre content is NOT acceptable.`;
+TONE: Rigorous, instructional, evidence-based. NO metaphors. NO storytelling. NO motivational content.
+FORBIDDEN: Hero's journey framing. Emotional appeals. Marketing language.`;
+
+const MICRO_CONTRACT_PROFESSIONAL = `PIPELINE: PROFESSIONAL / BUSINESS GUIDE
+IDENTITY: Consultant · Strategist · Decision Architect
+
+ENHANCE WITH:
+- Strategic frameworks (Porter's 5 Forces, SWOT, BCG Matrix, etc.)
+- Actionable recommendations with measurable outcomes
+- Decision matrices and comparison tables
+- Risk trade-offs and mitigation strategies
+- Executive summary format for quick scanning
+
+TONE: Professional, authoritative, practical. Like a McKinsey consultant presenting to C-suite.
+FORBIDDEN: Academic dryness. Motivational fluff. Vague advice without specifics.`;
+
+const MICRO_CONTRACT_REFERENCE = `PIPELINE: REFERENCE / HANDBOOK
+IDENTITY: Subject Matter Expert · Information Architect
+
+ENHANCE WITH:
+- Structured information architecture with clear categorization
+- Quick-lookup format with consistent headings
+- Cross-references to related topics
+- Summary tables for quick reference
+- Self-contained entries optimized for scanning
+
+TONE: Precise, neutral, encyclopedic. Optimize for FINDABILITY.
+FORBIDDEN: Narrative flow. Personal opinions. Lengthy introductions.`;
+
+const MICRO_CONTRACT_TEXT = `PIPELINE: STANDARD TEXT
+IDENTITY: Professional Author · Subject Expert
+
+ENHANCE WITH:
+- Clear, well-structured writing adapted to subject matter
+- Concrete, memorable examples for each major concept
+- Key insights the reader wouldn't expect
+- Structure that rewards both scanning and deep reading
+
+TONE: Professional, informative, engaging. Adapt formality to subject matter.
+FORBIDDEN: Shallow summaries. Filler content. Wall-of-text paragraphs.`;
+
+// Legacy compatibility aliases
+const SYSTEM_ROLE_NEUTRAL = UNIVERSAL_CORE;
+
+// BESTSELLER_SYSTEM_ROLE replaced by UNIVERSAL_CORE + MICRO_CONTRACT_BESTSELLER
+const BESTSELLER_SYSTEM_ROLE = UNIVERSAL_CORE + '\n\n' + MICRO_CONTRACT_BESTSELLER;
 
 const MASTER_FORMATTING_CONTRACT = `
 === FORMATTING & RENDERING CONTRACT (HARD) ===
@@ -494,30 +516,21 @@ MUST FEEL:
 // Injected into ALL pipelines (academic, bestseller, text, workbook, etc.)
 // ===========================================
 
+// BORN_QUALITY_CONTRACT v4.0 — Merged into UNIVERSAL_CORE.
+// Kept as reference variable for any remaining imports, but content is now
+// part of UNIVERSAL_CORE to prevent instruction duplication/flattening.
 const BORN_QUALITY_CONTRACT = `
-=== BORN-QUALITY CONTRACT v3.0 (COMPRESSED — ALL PIPELINES) ===
+CONCEPT BUDGET (MANDATORY):
+This chapter must introduce and clearly explain 8–15 distinct NAMED concepts appropriate to the subject.
+Named concepts include: theories, laws, principles, frameworks, mathematical constructs, models, named effects, technical terms.
+Do NOT just describe phenomena — NAME the constructs. Example: say "Heisenberg's Uncertainty Principle" not "the idea that you can't measure both position and momentum."
 
-SCORING DIMENSIONS (optimize for ALL during generation):
-1. STRUCTURAL (25%): Concept-driven headings, strong hook (first 120 words), no circular restatements, complete closing paragraph.
-2. COGNITIVE DEPTH (25%): Explain WHY not just WHAT. Show causal chains: "X because Y → Z". Name your frameworks. ≥3 distinct causal mechanisms per chapter.
-3. RIGOR (20%): Define before use. No vague qualifiers. Internal consistency. Evidence-backed claims.
-4. PEDAGOGY (15%): Examples only when necessary. Progressive complexity. Natural integration — no checklist insertion.
-5. DETECTABILITY (15%): Vary sentence length (8–30 words). Vary paragraph length (2–5 sentences). Never start consecutive paragraphs identically. No formulaic transitions.
-
-PROHIBITED TRANSITIONS: "Furthermore," / "In conclusion," / "It is important to note" / "As we have seen," / "Moving forward," / "Let us now turn to" / "Having established that," / "This section examines"
-
-EXEMPLAR (target quality — match this density and variation):
+EXEMPLAR (match this density and variation):
 """
 Loss aversion operates through a neural mechanism distinct from rational preference ordering. Kahneman and Tversky's 1979 experiments demonstrated that losses carry roughly 2.25x the psychological weight of equivalent gains — a ratio that holds across cultures, income levels, and asset classes. This asymmetry creates a measurable distortion: investors hold losing positions 1.5x longer than winning ones (Odean, 1998), not from ignorance but from a hardwired pain-avoidance circuit rooted in the amygdala.
 
 The practical consequence? Portfolio construction that ignores loss aversion systematically underperforms. Three mechanisms drive this: anchoring to purchase price rather than current value, the disposition effect that crystalizes gains prematurely, and what behavioral economists call "myopic loss aversion" — checking returns too frequently amplifies perceived volatility by 3x.
 """
-
-COMPRESSION: Every paragraph must earn its place. Density > length.
-COMPLETENESS: Never end mid-sentence. Last paragraph must synthesize and bridge.
-VARIATION: Each chapter opening must use a DIFFERENT narrative entry point.
-
-=== END BORN-QUALITY CONTRACT ===
 `;
 
 // FINAL_DIRECTIVE removed in v3.0 — redundant, causes instruction flattening.
@@ -4033,35 +4046,13 @@ BEGIN WRITING THE FULL ${isIllustratedAcademic ? 'ACADEMIC' : 'BESTSELLER-GRADE'
       // ===========================================
       console.log("[GENERATE-CHAPTER] Using PROFESSIONAL pipeline (frameworks, strategy)");
       
-      systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
+      systemPrompt = `${UNIVERSAL_CORE}
+
+${MICRO_CONTRACT_PROFESSIONAL}
 
 ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
-
-You are a business consultant and strategist writing a PROFESSIONAL GUIDE.
-
-GENERATOR IDENTITY: Consultant · Strategist · Decision Architect
-
-MANDATORY ELEMENTS:
-- Strategic frameworks (Porter's 5 Forces, SWOT, BCG Matrix, etc.)
-- Actionable recommendations with measurable outcomes
-- Decision matrices and checklists in proper markdown tables
-- Industry context with real examples
-- Executive summaries for quick reference
-
-TONE: Professional, authoritative, practical — NO academic dryness, NO motivational fluff.
-Write like a McKinsey or BCG consultant presenting to a C-suite audience.
-
-FORBIDDEN:
-- Excessive academic-style citations
-- Personal anecdotes (excessive)
-- Informal or casual language
-- Vague advice without specifics
-
-${VALIDATION_CONTRACT}
-
-${FINAL_DIRECTIVE}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
@@ -4098,42 +4089,13 @@ BEGIN WRITING THE PROFESSIONAL GUIDE CHAPTER:`;
       // ===========================================
       console.log("[GENERATE-CHAPTER] Using REFERENCE pipeline (structured, lookup-ready)");
       
-      systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
+      systemPrompt = `${UNIVERSAL_CORE}
+
+${MICRO_CONTRACT_REFERENCE}
 
 ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
-
-You are a subject matter expert creating REFERENCE MATERIAL / HANDBOOK content.
-
-GENERATOR IDENTITY: Subject Matter Expert · Technical Editor · Information Architect
-
-MANDATORY ELEMENTS:
-- Structured information architecture with clear categorization
-- Quick-lookup format with consistent headings
-- Alphabetical or logical ordering within sections
-- Cross-references to related topics
-- Summary tables for quick reference
-- Definitions clearly separated from explanations
-
-TONE: Precise, neutral, encyclopedic — optimize for FINDABILITY and ACCURACY.
-
-FORMATTING RULES:
-- Use ## and ### headings extensively for scanability
-- Use definition lists or bold terms followed by explanation
-- Use markdown tables for comparative data
-- Use bullet lists for properties/characteristics
-- Keep paragraphs short (2-3 sentences max)
-
-FORBIDDEN:
-- Narrative flow or storytelling
-- Personal opinions or subjective assessments
-- Motivational language
-- Lengthy introductions
-
-${VALIDATION_CONTRACT}
-
-${FINAL_DIRECTIVE}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
@@ -4213,74 +4175,27 @@ BEGIN WRITING THE REFERENCE/HANDBOOK CHAPTER:`;
       }
       
       if (isBestsellerMode) {
-        // FULL BESTSELLER PIPELINE
-        systemPrompt = `${BESTSELLER_SYSTEM_ROLE}
+        // FULL BESTSELLER PIPELINE — Universal Core + Micro-Contract (no stacking)
+        systemPrompt = `${UNIVERSAL_CORE}
+
+${MICRO_CONTRACT_BESTSELLER}
 
 ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
-
-${BESTSELLER_STRUCTURE_CONTRACT}
-
-${NONFICTION_CONTRACT}
 
 ${institutionalPrompt}
 
-BESTSELLER QUALITY GATE (MANDATORY SELF-CHECK):
-Before finalizing, verify ALL are true:
-[ ] Opening hook grabs attention in first 100 words
-[ ] 3+ quotable/screenshot-worthy lines per chapter
-[ ] Belief disruption present — challenges conventional wisdom
-[ ] Named principle introduced (sticky, memorable concept)
-[ ] Actionable takeaways provided (3-7 bullet points)
-[ ] Reader feels personally addressed (second-person "you")
-[ ] Every paragraph advances the reader's understanding
-[ ] NO hedging language ("it could be argued", "some experts say")
-
-If ANY check fails → REWRITE.
-
-${FINAL_DIRECTIVE}
-
-LANGUAGE: Write EXCLUSIVELY in ${languageName}.
-Create comprehensive, bestseller-grade chapters that readers would pay $20+ for.${isBusinessBook ? '\nThis is a BUSINESS/WEALTH book — apply Wall Street institutional rigor while preserving narrative voice.' : ''}`;
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
       } else {
-        // STANDARD TEXT PIPELINE — flexible, general-purpose, quality-focused
-        systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
+        // STANDARD TEXT PIPELINE — Universal Core + Micro-Contract
+        systemPrompt = `${UNIVERSAL_CORE}
+
+${MICRO_CONTRACT_TEXT}
 
 ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
-
-You are writing a STANDARD TEXT book. This is a flexible, general-purpose format that must still be EXCELLENT.
-
-GENERATOR IDENTITY: Professional Author · Subject Expert
-
-CONTENT QUALITY RULES:
-- Clear, well-structured writing with logical flow
-- Strong opening for each chapter — create reader interest immediately
-- Proper paragraph structure with smooth transitions
-- Appropriate depth for the subject matter — no shallow surface-level summaries
-- Use concrete examples and explanations to clarify concepts
-- Include headings for clear organization
-- End each chapter with a clear synthesis, not a trailing fade
-
-ENGAGEMENT REQUIREMENTS:
-- At least ONE concrete, memorable example per major concept
-- At least ONE key insight the reader wouldn't have expected
-- Structure that rewards scanning AND deep reading
-- No "dead paragraphs" — every paragraph must advance understanding
-
-TONE: Professional, informative, engaging — adapt to the subject matter.
-Match the tone to the category: more formal for serious topics, more accessible for general interest.
-
-FORBIDDEN:
-- AI-sounding transitions ("Let's dive in", "In this chapter we will explore")
-- Filler content or padding
-- Repetitive phrasing
-- Shallow summaries that state the obvious
-- Wall-of-text paragraphs (max 4-5 lines)
-
-${FINAL_DIRECTIVE}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
       }
@@ -4325,32 +4240,28 @@ ${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. C
 
         ${getRandomSkeleton('text', chapterNumber)}
 
-        REQUIREMENTS:
-        - Approximately ${targetWords} words
-        - Use proper Markdown formatting (## headings, **bold**, tables where useful)
-        - NO AI-sounding phrases ("Let's dive in", "In this chapter we will explore")
-        - Clear, well-structured, informative writing
-        - At least ONE concrete example per main section
-        - Adapt tone and depth to the subject matter
-        ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat introductions' : ''}
+CONCEPT BUDGET: Introduce and clearly explain 8-15 distinct NAMED concepts relevant to "${chapterTitle}". Name theories, principles, frameworks, and models explicitly.
 
-        BEGIN WRITING THE STANDARD TEXT CHAPTER:`;
+REQUIREMENTS:
+- Approximately ${targetWords} words
+- Use proper Markdown formatting (## headings, **bold**, tables where useful)
+- Clear, well-structured, informative writing
+- Adapt tone and depth to the subject matter
+${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat introductions' : ''}
+
+BEGIN WRITING THE CHAPTER:`;
       }
     } else {
       // UNKNOWN BOOK TYPE FALLBACK — treat as standard text with warning
       console.warn(`[GENERATE-CHAPTER] ⚠️ Unknown book type "${effectiveBookType}" — falling back to STANDARD TEXT pipeline`);
       
-      systemPrompt = `${SYSTEM_ROLE_NEUTRAL}
+      systemPrompt = `${UNIVERSAL_CORE}
+
+${MICRO_CONTRACT_TEXT}
 
 ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
-
-You are writing a general-purpose book chapter. Adapt your tone and structure to the subject matter.
-
-${VALIDATION_CONTRACT}
-
-${FINAL_DIRECTIVE}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
@@ -4515,19 +4426,19 @@ BEGIN:`;
           body: JSON.stringify({
             model: "google/gemini-2.5-flash-lite",
             messages: [
-              { role: "system", content: `You are an editorial compression engine. Your ONLY job:
-1. Remove redundant sentences that restate what was already said
-2. Vary paragraph lengths — break uniform 3-sentence blocks into 2s and 5s
+              { role: "system", content: `You are an editorial refinement engine. Your ONLY job:
+1. Remove sentences that restate what was already said (redundancy)
+2. Break uniform paragraph blocks — if 3+ consecutive paragraphs have similar length, vary them
 3. Replace formulaic transitions ("Furthermore," "In addition," "Moreover,") with substantive connectors or remove them
-4. Vary sentence openings — if 2+ consecutive sentences start with the same word/structure, rewrite one
-5. Ensure the last paragraph is a complete synthesis (never truncated)
+4. If 2+ consecutive sentences start identically, rewrite one
+5. Preserve occasional imperfections — slight asymmetry reads as human
 
 DO NOT:
-- Change the meaning, arguments, or examples
-- Add new content
-- Remove examples, data, or evidence
+- Change meaning, arguments, or examples
+- Add new content or remove evidence
 - Change headings or section structure
-- Add commentary or meta-text
+- Over-polish — leave some natural roughness
+- Smooth every transition — some abruptness is human
 
 Return ONLY the improved chapter text. No preamble.` },
               { role: "user", content: finalContent.slice(0, 25000) }
