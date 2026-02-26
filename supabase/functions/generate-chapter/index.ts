@@ -4434,12 +4434,16 @@ and increase conceptual rigor — while preserving the author's voice and struct
 
 You operate like a peer reviewer and senior editor combined.` },
               { role: "user", content: `Below is a full book chapter.
+Book Type: ${effectiveBookType}
+Preserve the stylistic conventions of this type.
 
 Your task is to STRESS-TEST and STRENGTHEN it using the following framework:
 
-1. Identify the weakest argument, explanation, or thin section.
+1. Identify the SINGLE weakest argument, explanation, or thin section.
    - Strengthen it with deeper reasoning.
    - Add mechanism-level explanation (WHY and HOW, not just WHAT).
+   - Prioritize strengthening this single weakest section.
+   - Do NOT attempt to uniformly elevate all sections.
 
 2. Add one of the following where appropriate:
    - A counter-argument or alternative interpretation
@@ -4464,7 +4468,7 @@ STRICT RULES:
 - Do NOT add headings.
 - Do NOT add meta commentary.
 - Do NOT make it longer by more than 15%.
-- Preserve tone according to the book type.
+- Preserve tone according to the book type: "${effectiveBookType}".
 - Never end abruptly — the final paragraph must synthesize clearly.
 
 Return ONLY the improved chapter text.
@@ -4480,8 +4484,8 @@ ${finalContent.slice(0, 30000)}` }
         if (stressTestResp.ok) {
           const stData = await stressTestResp.json();
           const stressedContent = stData.choices?.[0]?.message?.content || "";
-          // Accept if result is reasonable length (>70% of original, <120% of original)
-          if (stressedContent.length > finalContent.length * 0.7 && stressedContent.length < finalContent.length * 1.25 && stressedContent.length > 1000) {
+          // Accept if result is reasonable length (>70% of original, <115% — 15% ceiling forces precision)
+          if (stressedContent.length > finalContent.length * 0.7 && stressedContent.length < finalContent.length * 1.15 && stressedContent.length > 1000) {
             console.log(`[GENERATE-CHAPTER] Stress-test pass complete: ${finalContent.length} → ${stressedContent.length} chars`);
             finalContent = stressedContent;
           } else {
