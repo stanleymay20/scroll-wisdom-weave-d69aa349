@@ -53,18 +53,31 @@ QUALITY BAR: Would a publisher accept this without major edits? If not, rewrite.
 // ===========================================
 
 const MICRO_CONTRACT_BESTSELLER = `PIPELINE: BESTSELLER / TRADE BOOK
-IDENTITY: #1 NYT-level ghostwriter · Reader-psychology specialist
+IDENTITY: #1 NYT-level ghostwriter · Reader-psychology specialist · Belief Disruptor
 
 ENHANCE WITH:
-- Narrative entry points that hook in the first 100 words (story, contradiction, emotional moment)
-- Named principles the reader can remember and repeat (e.g., "The Compound Effect")
-- Real-world scenarios — concrete, human, memorable
-- Reader engagement — direct "you" address, reflection prompts
-- Actionable takeaways (3-7 practical bullet points)
-- Belief disruption — challenge conventional wisdom
+- Narrative entry points that hook in the first 100 words (story, contradiction, emotional moment, provocative statistic)
+- Named principles the reader can remember and repeat (e.g., "The Compound Effect", "The 10x Rule") — at least 1 per chapter
+- Real-world scenarios — concrete, human, memorable with specific names, dates, dollar amounts, outcomes
+- Reader engagement — direct "you" address, reflection prompts, mental pauses that force self-examination
+- Actionable takeaways (3-7 practical bullet points with measurable actions, not vague advice)
+- Belief disruption — challenge conventional wisdom with evidence, present the counterintuitive truth
+- Emotional architecture — tension → insight → relief → action cycle within each chapter
+- Authority anchoring — reference named experts, studies, or data points (with approximate citations)
 
-TONE: Conversational authority. Written TO the reader. Confident, human, slightly confrontational.
-FORBIDDEN: Academic dryness. Over-explaining. Hedging language ("it could be argued").`;
+CONCEPT BUDGET (MANDATORY):
+This chapter must introduce and clearly explain 6-10 distinct NAMED concepts.
+Named concepts include: principles, effects, laws, frameworks, mental models.
+Give ideas sticky, memorable names. Example: say "Loss Aversion Bias" not "people don't like losing things."
+
+ILLUSTRATION SUPPORT:
+Include 2-3 [FIGURE X: description] markers for:
+- Key concept visualizations or framework diagrams
+- Before/after comparisons or transformation arcs
+- Data charts or statistical evidence graphics
+
+TONE: Conversational authority. Written TO the reader. Confident, human, slightly confrontational. Like talking to a brilliant friend who challenges your assumptions.
+FORBIDDEN: Academic dryness. Over-explaining. Hedging language ("it could be argued"). Generic advice. AI-sounding transitions.`;
 
 const MICRO_CONTRACT_ACADEMIC = `PIPELINE: ACADEMIC / TECHNICAL
 IDENTITY: University Lecturer · Research Scholar · Technical Author
@@ -84,39 +97,80 @@ const MICRO_CONTRACT_PROFESSIONAL = `PIPELINE: PROFESSIONAL / BUSINESS GUIDE
 IDENTITY: Consultant · Strategist · Decision Architect
 
 ENHANCE WITH:
-- Strategic frameworks (Porter's 5 Forces, SWOT, BCG Matrix, etc.)
-- Actionable recommendations with measurable outcomes
-- Decision matrices and comparison tables
-- Risk trade-offs and mitigation strategies
-- Executive summary format for quick scanning
+- Strategic frameworks (Porter's 5 Forces, SWOT, BCG Matrix, Blue Ocean, PESTLE, Ansoff Matrix, McKinsey 7S) — at least 1 per chapter, applied with a comparison table
+- Decision matrices with weighted scoring criteria (markdown tables MANDATORY)
+- Risk trade-off analysis: probability × impact table with mitigation strategies
+- Quantitative evidence: specific numbers, percentages, dollar amounts, case studies with measurable outcomes
+- Executive summary (2-3 sentences) at chapter start for C-suite scanning
+- Implementation roadmap with phased milestones, ownership, and KPIs
+- Competitive benchmarking: at least 1 industry comparison with named companies
+- Actionable recommendations: 5-7 measurable next steps with deadlines and success metrics
 
-TONE: Professional, authoritative, practical. Like a McKinsey consultant presenting to C-suite.
-FORBIDDEN: Academic dryness. Motivational fluff. Vague advice without specifics.`;
+CONCEPT BUDGET (MANDATORY):
+This chapter must introduce and clearly explain 8-12 distinct NAMED strategic concepts.
+Named concepts include: frameworks, models, matrices, methodologies, principles, laws, effects.
+Example: say "Porter's Value Chain Analysis" not "analyzing how companies create value."
+
+ILLUSTRATION SUPPORT:
+Include 2-3 [FIGURE X: description] markers for:
+- Process diagrams or strategic frameworks
+- Decision trees or implementation roadmaps
+- Competitive positioning maps or market matrices
+
+TONE: Professional, authoritative, practical. Like a McKinsey consultant presenting to C-suite. Data-driven, precise, actionable.
+FORBIDDEN: Academic dryness. Motivational fluff. Vague advice without specifics. Generic recommendations without measurable outcomes.`;
 
 const MICRO_CONTRACT_REFERENCE = `PIPELINE: REFERENCE / HANDBOOK
-IDENTITY: Subject Matter Expert · Information Architect
+IDENTITY: Subject Matter Expert · Information Architect · Technical Editor
 
 ENHANCE WITH:
-- Structured information architecture with clear categorization
-- Quick-lookup format with consistent headings
-- Cross-references to related topics
-- Summary tables for quick reference
-- Self-contained entries optimized for scanning
+- Structured information architecture with consistent taxonomic categorization
+- Quick-lookup format: bold term → precise definition → usage context → cross-reference
+- Comparison tables (markdown) for every set of related concepts (minimum 2 tables per chapter)
+- Decision guides: flowchart-style "When to use X vs Y" with clear criteria
+- Troubleshooting sections: Problem → Root Cause → Solution format with numbered steps
+- Cheat sheets and quick-reference cards as summary tables
+- Cross-references to related chapters/topics (explicit links)
+- Version/compatibility notes where applicable (software, standards, regulations)
 
-TONE: Precise, neutral, encyclopedic. Optimize for FINDABILITY.
-FORBIDDEN: Narrative flow. Personal opinions. Lengthy introductions.`;
+CONCEPT BUDGET (MANDATORY):
+This chapter must define and catalog 12-20 distinct entries or concepts.
+Every entry must be self-contained and findable via scanning.
+Format: **Term** — Definition. Context. Example. Related: [cross-refs].
+
+ILLUSTRATION SUPPORT:
+Include 2-3 [FIGURE X: description] markers for:
+- Architecture diagrams or system overviews
+- Comparison charts or taxonomy trees
+- Process flowcharts or decision trees
+
+TONE: Precise, neutral, encyclopedic. Optimize for FINDABILITY and SCANNING.
+FORBIDDEN: Narrative flow. Personal opinions. Lengthy introductions. Ambiguous language.`;
 
 const MICRO_CONTRACT_TEXT = `PIPELINE: STANDARD TEXT
-IDENTITY: Professional Author · Subject Expert
+IDENTITY: Professional Author · Subject Expert · Clear Thinker
 
 ENHANCE WITH:
-- Clear, well-structured writing adapted to subject matter
-- Concrete, memorable examples for each major concept
-- Key insights the reader wouldn't expect
-- Structure that rewards both scanning and deep reading
+- Clear, well-structured writing adapted to subject matter with distinct section architecture
+- Concrete, memorable examples for EVERY major concept — specific names, numbers, dates, places
+- Key insights the reader wouldn't expect: at least 1 counterintuitive finding per chapter
+- Named constructs: give ideas memorable names the reader can reference (e.g., "The Pareto Principle")
+- Synthesis paragraphs that connect ideas across sections (not just summaries)
+- Structure that rewards both scanning and deep reading: bold key terms, clear headings, bullet takeaways
 
-TONE: Professional, informative, engaging. Adapt formality to subject matter.
-FORBIDDEN: Shallow summaries. Filler content. Wall-of-text paragraphs.`;
+CONCEPT BUDGET (MANDATORY):
+This chapter must introduce and clearly explain 8-12 distinct NAMED concepts appropriate to the subject.
+Named concepts include: principles, frameworks, effects, models, laws, methodologies.
+Do NOT just describe phenomena — NAME the constructs.
+
+ILLUSTRATION SUPPORT:
+Include 2-3 [FIGURE X: description] markers for:
+- Key concept visualizations or diagrams
+- Comparative charts or process flows
+- Infographic-style summaries of complex ideas
+
+TONE: Professional, informative, engaging. Adapt formality to subject matter. Confident but not arrogant.
+FORBIDDEN: Shallow summaries. Filler content. Wall-of-text paragraphs. Generic platitudes. AI-sounding transitions.`;
 
 // Legacy compatibility aliases
 const SYSTEM_ROLE_NEUTRAL = UNIVERSAL_CORE;
@@ -4138,24 +4192,33 @@ LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
 LANGUAGE: Generate ALL content in ${languageName}.
 
+${getRandomSkeleton('professional', chapterNumber)}
+
 Key topics:
 ${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
 
 PROFESSIONAL GUIDE STRUCTURE (MANDATORY):
-1. EXECUTIVE SUMMARY — Key takeaway in 2-3 sentences
-2. STRATEGIC CONTEXT — Why this matters, market forces at play
-3. FRAMEWORK APPLICATION — Apply at least 1 strategic framework with a markdown table
-4. IMPLEMENTATION ROADMAP — Step-by-step with clear milestones
-5. DECISION MATRIX — When to use what approach (markdown table)
-6. RISK ASSESSMENT — What can go wrong, mitigation strategies
-7. ACTION ITEMS — 5-7 specific, measurable next steps with checkboxes
+1. EXECUTIVE SUMMARY — Key takeaway in 2-3 sentences (C-suite ready)
+2. STRATEGIC CONTEXT — Market forces, industry data, competitive landscape with specific numbers
+3. FRAMEWORK APPLICATION — Apply at least 1 named strategic framework (Porter, SWOT, BCG, PESTLE, McKinsey 7S, Blue Ocean) with a markdown comparison table
+4. COMPETITIVE BENCHMARKING — Compare at least 2 named companies or approaches with data
+5. IMPLEMENTATION ROADMAP — Phased milestones with ownership, timelines, and resource requirements
+6. DECISION MATRIX — When to use what approach (weighted scoring markdown table)
+7. RISK ASSESSMENT — Probability × Impact table with mitigation strategies
+8. ACTION ITEMS — 5-7 specific, measurable next steps with KPIs and deadlines
+
+ILLUSTRATION PLACEMENT (MANDATORY):
+Insert 2-3 [FIGURE X: description] markers for strategic diagrams, frameworks, or decision trees.
+Example: [FIGURE 1: A strategic positioning matrix comparing four market quadrants with competitor logos]
 
 REQUIREMENTS:
 - Approximately ${targetWords} words
 - Use proper Markdown formatting (## headings, **bold**, pipe-syntax tables)
-- Include at least 2 framework tables
-- Every recommendation must be specific and measurable
-- Include real industry examples with specific numbers
+- Include at least 3 framework/comparison tables with real data points
+- Every recommendation must be specific and measurable (include KPIs, percentages, timelines)
+- Include real industry examples with specific numbers and named companies
+- Include 2-3 [FIGURE X: description] markers for visual frameworks
+- Concept Budget: introduce and name 8-12 strategic concepts
 ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts - do NOT repeat introductions' : ''}
 
 BEGIN WRITING THE PROFESSIONAL GUIDE CHAPTER:`;
@@ -4181,24 +4244,37 @@ LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
 LANGUAGE: Generate ALL content in ${languageName}.
 
+${getRandomSkeleton('reference', chapterNumber)}
+
 Key topics:
 ${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
 
 REFERENCE STRUCTURE (MANDATORY):
-1. OVERVIEW — 2-3 sentence scope statement
-2. KEY DEFINITIONS — Bold term + clear definition for each concept
-3. DETAILED ENTRIES — Structured, encyclopedic coverage of each topic
-4. COMPARISON TABLE — Markdown table comparing key approaches/options
-5. QUICK REFERENCE CARD — Summary table of essential information
-6. CROSS-REFERENCES — Links to related chapters/topics
-7. GLOSSARY — Key terms with brief definitions
+1. OVERVIEW — 2-3 sentence scope statement with coverage boundaries
+2. KEY DEFINITIONS — **Bold term** → precise definition → usage context for each concept (minimum 8 entries)
+3. DETAILED ENTRIES — Structured, encyclopedic coverage organized by theme or alphabet
+4. COMPARISON TABLE — Markdown table comparing key approaches/options with clear criteria columns
+5. DECISION GUIDE — When to use X vs Y with specific conditions and trade-offs
+6. TROUBLESHOOTING — Problem → Root Cause → Solution format (minimum 3 entries)
+7. QUICK REFERENCE CARD — Summary table of essential information (cheat sheet)
+8. CROSS-REFERENCES — Explicit links to related chapters/topics
+9. GLOSSARY — Key terms with brief definitions
+
+ILLUSTRATION PLACEMENT (MANDATORY):
+Insert 2-3 [FIGURE X: description] markers for:
+- Architecture diagrams, taxonomy trees, or system overviews
+- Process flowcharts or decision trees
+- Comparison charts or visual quick-reference guides
+Example: [FIGURE 1: A taxonomy tree showing the classification of machine learning algorithms by type]
 
 REQUIREMENTS:
 - Approximately ${targetWords} words
 - Use proper Markdown formatting (## headings, **bold**, pipe-syntax tables)
-- Include at least 2 reference tables
-- Optimize for scanning and quick lookup
+- Include at least 3 reference/comparison tables
+- Optimize for scanning and quick lookup — use consistent formatting
 - Every entry must be self-contained and findable
+- Include 2-3 [FIGURE X: description] markers
+- Concept Budget: define and catalog 12-20 distinct entries or concepts
 ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts' : ''}
 
 BEGIN WRITING THE REFERENCE/HANDBOOK CHAPTER:`;
@@ -4313,18 +4389,24 @@ BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
 
 LANGUAGE: Generate ALL content in ${languageName}.
 
+${getRandomSkeleton('text', chapterNumber)}
+
 Key topics:
 ${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
 
-        ${getRandomSkeleton('text', chapterNumber)}
+CONCEPT BUDGET: Introduce and clearly explain 8-15 distinct NAMED concepts relevant to "${chapterTitle}". Name theories, principles, frameworks, and models explicitly. Do NOT just describe phenomena — NAME the constructs.
 
-CONCEPT BUDGET: Introduce and clearly explain 8-15 distinct NAMED concepts relevant to "${chapterTitle}". Name theories, principles, frameworks, and models explicitly.
+ILLUSTRATION PLACEMENT:
+Insert 2-3 [FIGURE X: description] markers at key moments for visual reinforcement.
+Example: [FIGURE 1: An infographic showing the relationship between the three core principles discussed in this chapter]
 
 REQUIREMENTS:
 - Approximately ${targetWords} words
 - Use proper Markdown formatting (## headings, **bold**, tables where useful)
-- Clear, well-structured, informative writing
+- Clear, well-structured, informative writing with specific examples (names, numbers, dates)
 - Adapt tone and depth to the subject matter
+- Include 2-3 [FIGURE X: description] markers for key concept visuals
+- Every major claim needs a concrete example with specifics
 ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat introductions' : ''}
 
 BEGIN WRITING THE CHAPTER:`;
@@ -4510,7 +4592,27 @@ Your role is NOT to rewrite stylistically.
 Your role is to strengthen reasoning depth, eliminate intellectual weakness,
 and increase conceptual rigor — while preserving the author's voice and structure.
 
-You operate like a peer reviewer and senior editor combined.` },
+You operate like a peer reviewer and senior editor combined.
+
+TYPE-SPECIFIC STRESS-TEST RULES:
+${effectiveBookType === 'professional' ? `- Ensure every recommendation has measurable outcomes (KPIs, percentages, timelines)
+- Verify strategic frameworks are APPLIED to the topic, not just named
+- Add competitive benchmarks or industry data points where claims are generic
+- Strengthen decision matrices with weighted criteria` :
+effectiveBookType === 'reference' ? `- Ensure every entry is self-contained and findable via scanning
+- Add missing cross-references between related concepts
+- Verify comparison tables have clear differentiation criteria
+- Strengthen troubleshooting sections with specific root causes` :
+effectiveBookType === 'bestseller' ? `- Ensure the opening hook creates genuine cognitive dissonance or emotional pull
+- Verify named principles are sticky and memorable (would a reader quote them?)
+- Add specific numbers, names, or case studies where claims are generic
+- Strengthen belief disruption with evidence, not just assertion` :
+effectiveBookType === 'text' ? `- Ensure examples are specific (names, dates, numbers) not generic
+- Add at least 1 counterintuitive insight or unexpected finding
+- Strengthen synthesis paragraphs to connect ideas across sections
+- Verify named constructs are clearly defined before heavy use` :
+`- Strengthen the weakest argument with mechanism-level reasoning
+- Add evidence or specificity where claims are generic`}` },
               { role: "user", content: `Below is a full book chapter.
 Book Type: ${effectiveBookType}
 Preserve the stylistic conventions of this type.
@@ -4534,11 +4636,16 @@ Your task is to STRESS-TEST and STRENGTHEN it using the following framework:
 4. Increase conceptual density through:
    - Contrast
    - Causality
-   - Specific examples
-   - Applied implications
+   - Specific examples with real numbers, names, and dates
+   - Applied implications with measurable outcomes
 
 5. Improve intellectual tension.
    Ideas should feel tested, not asserted.
+
+6. Verify concept budget compliance:
+   - The chapter should contain 8-15 distinct NAMED concepts
+   - If fewer than 8, identify where additional named constructs can be introduced naturally
+   - Named constructs = theories, laws, principles, frameworks, effects, models
 
 STRICT RULES:
 - Do NOT change the structure.
@@ -4548,6 +4655,7 @@ STRICT RULES:
 - Do NOT make it longer by more than 15%.
 - Preserve tone according to the book type: "${effectiveBookType}".
 - Never end abruptly — the final paragraph must synthesize clearly.
+- Preserve all [FIGURE X: ...] markers exactly as they appear.
 
 Return ONLY the improved chapter text.
 
@@ -4602,17 +4710,25 @@ ${finalContent.slice(0, 30000)}` }
           body: JSON.stringify({
             model: "google/gemini-2.5-flash-lite",
             messages: [
-              { role: "system", content: `You are an editorial refinement engine. Your ONLY job:
+              { role: "system", content: `You are an editorial refinement engine for "${effectiveBookType}" content. Your ONLY job:
 1. Remove sentences that restate what was already said (redundancy)
 2. Break uniform paragraph blocks — if 3+ consecutive paragraphs have similar length, vary them
 3. Replace formulaic transitions ("Furthermore," "In addition," "Moreover,") with substantive connectors or remove them
 4. If 2+ consecutive sentences start identically, rewrite one
 5. Preserve occasional imperfections — slight asymmetry reads as human
+6. Verify [FIGURE X: ...] markers are preserved exactly as-is
+
+TYPE-SPECIFIC REFINEMENT:
+${effectiveBookType === 'professional' ? '- Ensure executive summary is crisp (under 3 sentences)\n- Verify tables have clear headers and aligned columns\n- Tighten action items to be measurable and specific' :
+effectiveBookType === 'reference' ? '- Ensure entries are self-contained and scannable\n- Verify bold terms are consistently formatted\n- Tighten definitions to be precise and unambiguous' :
+effectiveBookType === 'bestseller' ? '- Ensure opening hook lands in first 50 words\n- Verify named principles are memorable and quotable\n- Tighten actionable takeaways to be specific' :
+'- Ensure examples are specific not generic\n- Tighten synthesis paragraphs for clarity'}
 
 DO NOT:
 - Change meaning, arguments, or examples
 - Add new content or remove evidence
 - Change headings or section structure
+- Remove or modify [FIGURE X: ...] markers
 - Over-polish — leave some natural roughness
 - Smooth every transition — some abruptness is human
 
@@ -4723,9 +4839,11 @@ ${researchResult.references.map((ref, idx) => {
       }
     }
 
-    // ILLUSTRATED / CHILDREN'S BOOK - Generate inline illustrations from [FIGURE X] markers
+    // UNIVERSAL ILLUSTRATION PIPELINE — Generate inline illustrations from [FIGURE X] markers
+    // Applies to ALL book types that include [FIGURE] markers in their micro-contracts
     // Upload images to storage instead of embedding base64 (prevents 5-10MB chapter content)
-    if (effectiveBookType === 'illustrated' || effectiveBookType === 'children') {
+    const ILLUSTRATION_ENABLED_TYPES = ['illustrated', 'children', 'professional', 'reference', 'bestseller', 'text'];
+    if (ILLUSTRATION_ENABLED_TYPES.includes(effectiveBookType) && /\[FIGURE\s*\d+/i.test(finalContent)) {
       console.log("[GENERATE-CHAPTER] Generating inline illustrations from figure markers...");
 
       try {

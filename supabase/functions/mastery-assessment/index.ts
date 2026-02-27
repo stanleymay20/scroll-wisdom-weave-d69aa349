@@ -10,19 +10,43 @@ const log = (step: string, details?: any) => {
 };
 
 // ============================================================
-// LAYER 1 — CONCEPT EXTRACTION
+// LAYER 1 — CONCEPT EXTRACTION (TYPE-AWARE)
 // ============================================================
 
-const CONCEPT_EXTRACTION_PROMPT = `You are a Concept Extraction Engine.
+const buildConceptExtractionPrompt = (bookType: string) => {
+  const isProfessional = bookType === 'professional' || bookType === 'business';
+  const isReference = bookType === 'reference';
+  const isAcademic = bookType === 'academic' || bookType === 'technical';
+
+  let specificInstruction = '';
+  if (isProfessional) {
+    specificInstruction = `
+- Identify strategic frameworks (Porter, SWOT, etc.)
+- Identify actionable decision criteria
+- Identify measurable KPIs mentioned`;
+  } else if (isReference) {
+    specificInstruction = `
+- Identify exact definitions of key terms
+- Identify classification taxonomies
+- Identify distinct categories or types`;
+  } else if (isAcademic) {
+    specificInstruction = `
+- Identify formal theories and models
+- Identify empirical findings/evidence
+- Identify methodological constraints`;
+  }
+
+  return `You are a Concept Extraction Engine.
 
 From the chapter below:
 
 1. List 10–20 DISTINCT named constructs (theories, models, laws, effects, mechanisms, frameworks, principles).
 2. Identify the 3 most intellectually dense mechanisms (explain WHY they are dense).
 3. Identify 2 boundary conditions where a major idea weakens or fails.
-4. Identify 2 assumptions the chapter relies on but does not explicitly defend.
+4. Identify 2 assumptions the chapter relies on but does not explicitly defend.${specificInstruction}
 
 Return structured JSON only.`;
+};
 
 // ============================================================
 // LAYER 2 — BLOOM ENFORCEMENT CONTRACTS
@@ -31,8 +55,8 @@ Return structured JSON only.`;
 const BLOOM_ENFORCEMENT: Record<string, string> = {
   evaluate: `The question MUST use one of these structures:
 - Trade-off reasoning between two valid approaches
-- Design decision under constraint
-- Boundary condition failure analysis
+- Design decision under constraint (choosing A vs B with specific limitations)
+- Boundary condition failure analysis (When does this fail?)
 - Counterfactual reasoning ("What if X were different?")
 - Mechanism breakdown (WHY does this work, not just WHAT)
 - Assumption challenge (What must be true for this to hold?)
@@ -41,7 +65,7 @@ NO EXCEPTIONS. Surface recall or definition questions are REJECTED.`,
   analyze: `The question MUST require:
 - Decomposition of a system into parts
 - Identification of cause-effect relationships
-- Comparison of mechanisms or frameworks
+- Comparison of mechanisms or frameworks (A vs B)
 - Pattern recognition across concepts
 NOT just "which of the following" recall.`,
 
@@ -49,18 +73,20 @@ NOT just "which of the following" recall.`,
 - A real scenario with specific parameters
 - A parameter shift that changes the outcome
 - Context variation from the chapter's examples
+- Troubleshooting a specific failure case
 NOT a restatement of the chapter content.`,
 
   create: `The question MUST require:
 - Synthesizing a new framework from chapter concepts
-- Designing an alternative solution
+- Designing an alternative solution to a problem
 - Extending a theory to a novel domain
+- Proposing a mitigation strategy for a risk
 NOT selecting from pre-made options.`,
 
   understand: `The question MUST test:
 - Explanation in the learner's own words
 - Paraphrasing of mechanisms
-- Distinguishing between similar concepts
+- Distinguishing between similar concepts (Concept A vs Concept B)
 NOT verbatim recall.`,
 
   remember: `The question tests factual recall of named constructs.
@@ -79,6 +105,9 @@ function buildQuestionPrompt(
 ): string {
   const enforcement = BLOOM_ENFORCEMENT[bloomLevel] || BLOOM_ENFORCEMENT.analyze;
   
+  // Select relevant concepts for this question type
+  const relevantConcepts = concepts?.namedConstructs?.slice(0, 15) || [];
+  
   return `You are the ScrollLibrary Mastery Engine v2.
 
 You must generate ONE question aligned strictly to Bloom Level: ${bloomLevel.toUpperCase()}.
@@ -87,7 +116,7 @@ BLOOM ENFORCEMENT:
 ${enforcement}
 
 EXTRACTED CONCEPTS (use at least 2):
-${JSON.stringify(concepts?.namedConstructs?.slice(0, 10) || [], null, 2)}
+${JSON.stringify(relevantConcepts, null, 2)}
 
 DENSE MECHANISMS:
 ${JSON.stringify(concepts?.denseMechanisms || [], null, 2)}
@@ -109,14 +138,17 @@ Rules:
 If multiple choice:
 - Distractors must be plausible.
 - Each distractor must reflect a common misconception.
-- Avoid trivial elimination.`;
+- Avoid trivial elimination.
+
+Return JSON format with "question", "options", "correctIndex", "reasoningExplanation", "bloomJustification", "conceptsUsed", "questionType".`;
 }
 
 // ============================================================
-// LAYER 4 — QUESTION STRESS-TEST
+// LAYER 4 — QUESTION STRESS-TEST (TYPE-AWARE)
 // ============================================================
 
-const QUESTION_STRESS_TEST_PROMPT = `You are a Question Quality Validator.
+const buildStressTestPrompt = (bookType: string) => {
+  return `You are a Question Quality Validator.
 
 Evaluate this assessment question against these criteria:
 1. Does it require mechanism-level reasoning? (not just recall)
@@ -126,6 +158,12 @@ Evaluate this assessment question against these criteria:
 5. Are distractors plausible and based on common misconceptions?
 6. Does it incorporate named constructs from the domain?
 
+TYPE-SPECIFIC CHECKS ("${bookType}"):
+${bookType === 'professional' ? '- Does it test actionable decision-making or framework application?' : 
+  bookType === 'reference' ? '- Does it test precise distinction between similar concepts?' :
+  bookType === 'academic' ? '- Does it test theoretical understanding or empirical evidence?' :
+  '- Does it test deep understanding of the core mechanism?'}
+
 If ANY of criteria 1-2 are NO, or if criteria 3-4 are YES, mark as FAIL.
 
 Return JSON:
@@ -134,6 +172,7 @@ Return JSON:
   "failReasons": ["..."],
   "strengthScore": 1-10
 }`;
+};
 
 // ============================================================
 // MAIN HANDLER
@@ -164,7 +203,7 @@ serve(async (req) => {
       });
     }
 
-    const contentSlice = chapterContent.slice(0, 10000);
+    const contentSlice = chapterContent.slice(0, 15000); // Increased context window
     log("Starting mastery assessment", { bloomLevel, questionCount, bookType, contentLen: contentSlice.length });
 
     // ──────────────────────────────────────────────
@@ -179,9 +218,9 @@ serve(async (req) => {
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash-lite",
+        model: "google/gemini-2.5-flash-lite", // Fast model for extraction
         messages: [
-          { role: "system", content: CONCEPT_EXTRACTION_PROMPT },
+          { role: "system", content: buildConceptExtractionPrompt(bookType) },
           { role: "user", content: contentSlice },
         ],
         tools: [{
@@ -289,15 +328,11 @@ serve(async (req) => {
     const bloomDistribution = buildBloomDistribution(questionCount, bloomLevel);
     log("Bloom distribution", bloomDistribution);
 
-    const questionPrompts = bloomDistribution.map((bl: string) =>
-      buildQuestionPrompt(bl, concepts, bookType, chapterTitle)
-    );
-
-    // Generate all questions in a single batch call
+    // Generate all questions in a single batch call to save tokens/time
     const batchPrompt = `Generate exactly ${questionCount} mastery assessment questions for the chapter "${chapterTitle}" from "${bookTitle}".
 
 CHAPTER CONTENT:
-${contentSlice.slice(0, 6000)}
+${contentSlice.slice(0, 8000)}
 
 EXTRACTED CONCEPTS:
 ${JSON.stringify(concepts, null, 2)}
@@ -323,7 +358,7 @@ UNIVERSAL RULES:
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-flash", // Smarter model for generation
         messages: [
           { role: "system", content: "You are the ScrollLibrary Mastery Engine v2. Generate intellectually rigorous assessment questions." },
           { role: "user", content: batchPrompt },
@@ -411,9 +446,9 @@ UNIVERSAL RULES:
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
+          model: "google/gemini-2.5-flash-lite", // Fast model for validation
           messages: [
-            { role: "system", content: QUESTION_STRESS_TEST_PROMPT },
+            { role: "system", content: buildStressTestPrompt(bookType) },
             { role: "user", content: `Evaluate these ${questions.length} questions:\n${JSON.stringify(questions.map((q: any, i: number) => ({
               index: i,
               bloomLevel: q.bloomLevel,
@@ -509,7 +544,7 @@ UNIVERSAL RULES:
       stressTestFailReasons: q.stressTestFailReasons || [],
     }));
 
-    // Compute mastery depth score
+    // Compute mastery depth score (scaled 0-100)
     const depthScores = questions.map((q: any) => q.strengthScore || 5);
     const masteryDepthScore = depthScores.length > 0
       ? Math.round((depthScores.reduce((a: number, b: number) => a + b, 0) / depthScores.length) * 10)

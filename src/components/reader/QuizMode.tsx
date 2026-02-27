@@ -463,6 +463,18 @@ export function QuizMode({
                       <p className="text-sm text-muted-foreground leading-relaxed">
                         {currentQuestion.reasoningExplanation}
                       </p>
+                      {currentQuestion.conceptsUsed && currentQuestion.conceptsUsed.length > 0 && (
+                        <div className="mt-3 pt-3 border-t border-border/50">
+                          <p className="text-xs text-muted-foreground mb-1.5 font-medium">Key Concepts Applied:</p>
+                          <div className="flex flex-wrap gap-1">
+                            {currentQuestion.conceptsUsed.map((concept, i) => (
+                              <Badge key={i} variant="outline" className="text-[10px] h-5 bg-background/50">
+                                {concept}
+                              </Badge>
+                            ))}
+                          </div>
+                        </div>
+                      )}
                     </div>
 
                     {/* Bloom Justification */}
