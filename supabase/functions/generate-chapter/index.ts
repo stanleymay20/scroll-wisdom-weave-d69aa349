@@ -659,11 +659,89 @@ const TEXT_SKELETONS = [
 5. Conclude with actionable clarity`,
 ];
 
+const PROFESSIONAL_SKELETONS = [
+  `STRUCTURE VARIANT A:
+1. EXECUTIVE SUMMARY — One-paragraph strategic insight
+2. MARKET CONTEXT — Forces shaping this domain (data-driven)
+3. FRAMEWORK APPLICATION — Apply a named strategic model with comparison table
+4. IMPLEMENTATION ROADMAP — Phased milestones with ownership and timelines
+5. RISK MATRIX — What kills this, probability × impact table
+6. EXECUTIVE ACTION ITEMS — 5 measurable next steps with KPIs`,
+
+  `STRUCTURE VARIANT B:
+1. STRATEGIC CHALLENGE — Frame the decision leaders face
+2. COMPETITIVE ANALYSIS — Where the industry stands (data + trends)
+3. DECISION FRAMEWORK — Present a structured evaluation tool
+4. CASE APPLICATION — Apply framework to a real-world scenario
+5. TRADE-OFF ANALYSIS — What you gain vs. what you sacrifice (table)
+6. RECOMMENDED ACTIONS — Prioritized by impact and feasibility`,
+
+  `STRUCTURE VARIANT C:
+1. INDUSTRY SIGNAL — Start with a trend or inflection point (specific data)
+2. ROOT CAUSE ANALYSIS — Why this matters more than it appears
+3. STRATEGIC OPTIONS — 3 approaches compared in a decision matrix
+4. IMPLEMENTATION BLUEPRINT — Step-by-step with resource requirements
+5. MEASUREMENT FRAMEWORK — How to track success (KPIs table)
+6. LEADERSHIP BRIEF — Key decisions for C-suite`,
+];
+
+const REFERENCE_SKELETONS = [
+  `STRUCTURE VARIANT A:
+1. SCOPE STATEMENT — What this section covers (2-3 sentences)
+2. KEY DEFINITIONS — Bold term + precise definition for each concept
+3. DETAILED ENTRIES — Structured, alphabetical or logical coverage
+4. COMPARISON TABLE — Side-by-side analysis of approaches/options
+5. DECISION GUIDE — When to use which approach
+6. QUICK REFERENCE CARD — Summary table of essential information`,
+
+  `STRUCTURE VARIANT B:
+1. OVERVIEW — Domain context and relevance
+2. TAXONOMY — Classification system for the topic area
+3. CORE ENTRIES — Self-contained reference entries with cross-links
+4. COMMON PATTERNS — Frequently encountered scenarios with solutions
+5. TROUBLESHOOTING — Problem → Cause → Solution format
+6. GLOSSARY — Alphabetical key terms with brief definitions`,
+
+  `STRUCTURE VARIANT C:
+1. INTRODUCTION — Scope and how to use this reference
+2. FOUNDATIONAL CONCEPTS — Prerequisites and building blocks
+3. DETAILED REFERENCE — Comprehensive entries organized by theme
+4. BEST PRACTICES — Do's and don'ts with rationale
+5. CHEAT SHEET — One-page summary table
+6. CROSS-REFERENCE INDEX — Links to related chapters/topics`,
+];
+
+const CHILDREN_SKELETONS = [
+  `STRUCTURE:
+1. MEET THE CHARACTER — Introduce hero and setting with warmth
+2. THE PROBLEM — Something unexpected happens
+3. THE JOURNEY — Character tries to solve it (2-3 attempts)
+4. THE SOLUTION — Character succeeds through a lesson learned
+5. THE WARM CLOSE — Comforting ending, feeling safe`,
+
+  `STRUCTURE:
+1. A CURIOUS QUESTION — Character wonders about something
+2. THE ADVENTURE BEGINS — Going to find the answer
+3. FRIENDS ALONG THE WAY — Meeting helpers and obstacles
+4. THE DISCOVERY — Learning something wonderful
+5. SHARING THE LESSON — Character tells others what they learned`,
+
+  `STRUCTURE:
+1. AN ORDINARY DAY — Familiar setting, relatable routine
+2. SOMETHING CHANGES — A surprise disrupts the routine
+3. FEELINGS AND CHOICES — Character faces emotions and decides
+4. TRYING AND GROWING — Character grows through effort
+5. A NEW NORMAL — Things are better because of the journey`,
+];
+
 function getRandomSkeleton(bookType: string, chapterNumber: number): string {
   let skeletons: string[];
   switch (bookType) {
     case 'bestseller': skeletons = BESTSELLER_SKELETONS; break;
     case 'academic': case 'technical': skeletons = ACADEMIC_SKELETONS; break;
+    case 'professional': skeletons = PROFESSIONAL_SKELETONS; break;
+    case 'reference': skeletons = REFERENCE_SKELETONS; break;
+    case 'children': skeletons = CHILDREN_SKELETONS; break;
     default: skeletons = TEXT_SKELETONS; break;
   }
   // Use chapter number as seed for deterministic but varied selection
