@@ -135,9 +135,8 @@ function computeProportionalPenalties(chapters: any[], totalChapters: number, bo
     // Broadened: formal + bestseller-style definitions (narrative explanations, analogies, conceptual framing)
     const definitionPatterns = /\b(is defined as|refers to|means that|can be described as|are called|is a type of|is the process of|is known as|stands for|abbreviated as|represents|denotes|specifies|implements|we define|definition of|def\s+\w+|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|type\s+\w+\s*=|interface\s+\w+|enum\s+\w+|this is the|this means|in other words|put simply|in simple terms|the core idea|the key insight|the fundamental|the distinction between|the difference between|what this means|think of it as|think of\s|this refers|this concept|this principle|essentially|at its core|boils down to|in essence|the premise|the notion)\b/gi;
     const definitionCount = (content.match(definitionPatterns) || []).length;
-    // Bestseller content uses narrative definitions extensively — require higher threshold only for academic
-    const defThreshold = (bookType === "bestseller" || bookType === "comic") ? 0 : 0;
-    if (definitionCount <= defThreshold) {
+    // Only penalize if truly zero definitions — threshold 0 means count must be 0 to trigger
+    if (definitionCount === 0) {
       violationCounts["NO_DEFINITIONS"] = (violationCounts["NO_DEFINITIONS"] || 0) + 1;
       penalties.push({ dimension: "academic", rule: "NO_DEFINITIONS", cap: 0, evidence: `Ch.${chNum}: No key concept definitions`, chapterNumber: chNum });
     }
@@ -300,7 +299,7 @@ serve(async (req) => {
       number: ch.chapter_number,
       title: ch.title,
       wordCount: ch.word_count || 0,
-      content: (ch.content || "").slice(0, 4000),
+      content: (ch.content || "").slice(0, 8000),
     }));
 
     // ============================================================
@@ -588,8 +587,8 @@ Respond as JSON:
     const rawAcademicBlend = Math.round(rawCognitiveDepth * 0.55 + rawAcademicRigor * 0.45);
     const academicScore = Math.min(rawAcademicBlend, penaltyResult.academicCap);
     const pedagogicalScore = Math.min(rawPedagogical, penaltyResult.pedagogicalCap);
-    // Detectability penalty: high detectability risk reduces overall score
-    const detectabilityPenalty = rawDetectability > 60 ? Math.round((rawDetectability - 60) * 0.3) : 0;
+    // Detectability: the weighted dimension already accounts for risk.
+    // No additional penalty subtraction — that was double-counting.
 
     const overallScore = Math.max(0, Math.round(
       structuralScore * RUBRIC.structural.weight +
@@ -597,7 +596,7 @@ Respond as JSON:
       academicScore * RUBRIC.academicRigor.weight +
       pedagogicalScore * RUBRIC.pedagogicalIntelligence.weight +
       (100 - rawDetectability) * RUBRIC.detectabilityRisk.weight
-    ) - detectabilityPenalty);
+    ));
 
     // ============================================================
     // STEP 3B: Compute Cognitive Density Index (CDI) — SEMANTIC (v3.0)
