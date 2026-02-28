@@ -605,7 +605,7 @@ function sanitizeForExport(text: string): string {
   return text.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
 }
 
-async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
+async function fetchImageBytes(url: string, timeoutMs = 8000): Promise<Uint8Array | null> {
   try {
     // Handle base64 data URIs
     if (url.startsWith("data:image")) {
@@ -624,13 +624,16 @@ async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
       return bytes;
     }
     
-    // Handle remote URLs (storage URLs, etc.)
+    // Handle remote URLs with timeout
     console.log(`[EXPORT] Fetching remote image: ${url.slice(0, 100)}...`);
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
+    
     const response = await fetch(url, {
-      headers: {
-        'Accept': 'image/*',
-      },
+      headers: { 'Accept': 'image/*' },
+      signal: controller.signal,
     });
+    clearTimeout(timeout);
     
     if (!response.ok) {
       console.error(`[EXPORT] Failed to fetch image: ${response.status} ${response.statusText}`);
@@ -638,10 +641,19 @@ async function fetchImageBytes(url: string): Promise<Uint8Array | null> {
     }
     
     const arrayBuffer = await response.arrayBuffer();
+    // Cap image size at 2MB to prevent CPU timeout during PDF embedding
+    if (arrayBuffer.byteLength > 2 * 1024 * 1024) {
+      console.log(`[EXPORT] Image too large (${(arrayBuffer.byteLength / 1024 / 1024).toFixed(1)}MB), skipping to save CPU`);
+      return null;
+    }
     console.log(`[EXPORT] Fetched remote image: ${arrayBuffer.byteLength} bytes`);
     return new Uint8Array(arrayBuffer);
   } catch (error) {
-    console.error("[EXPORT] Error fetching image:", error);
+    if (error instanceof DOMException && error.name === 'AbortError') {
+      console.error("[EXPORT] Image fetch timed out");
+    } else {
+      console.error("[EXPORT] Error fetching image:", error);
+    }
     return null;
   }
 }
@@ -1313,12 +1325,13 @@ async function generatePDF(
     // Process content with code block, image, table, and HEADING handling
     const { paragraphs, codeBlocks, structuredBlocks, images, customTables, tables: mdTables, headings } = processMarkdownContent(chapter.content || "");
     
-    // Pre-fetch all images for this chapter (for comics)
+    // Pre-fetch images for this chapter — cap at 3 per chapter to avoid CPU timeout
     const fetchedImages: Map<number, { bytes: Uint8Array; type: 'png' | 'jpg' }> = new Map();
-    for (let i = 0; i < images.length; i++) {
-      const imgData = images[i];
+    const imagesToFetch = images.slice(0, 3);
+    for (let i = 0; i < imagesToFetch.length; i++) {
+      const imgData = imagesToFetch[i];
       if (imgData.url) {
-        console.log(`[EXPORT] Fetching image ${i + 1}/${images.length}: ${imgData.alt}`);
+        console.log(`[EXPORT] Fetching image ${i + 1}/${imagesToFetch.length}: ${(imgData.alt || '').slice(0, 80)}`);
         const imageBytes = await fetchImageBytes(imgData.url);
         if (imageBytes) {
           // Detect image type

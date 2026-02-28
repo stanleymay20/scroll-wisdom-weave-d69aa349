@@ -163,14 +163,8 @@ This chapter must introduce and clearly explain 8-12 distinct NAMED concepts app
 Named concepts include: principles, frameworks, effects, models, laws, methodologies.
 Do NOT just describe phenomena — NAME the constructs.
 
-ILLUSTRATION SUPPORT:
-Include 2-3 [FIGURE X: description] markers for:
-- Key concept visualizations or diagrams
-- Comparative charts or process flows
-- Infographic-style summaries of complex ideas
-
 TONE: Professional, informative, engaging. Adapt formality to subject matter. Confident but not arrogant.
-FORBIDDEN: Shallow summaries. Filler content. Wall-of-text paragraphs. Generic platitudes. AI-sounding transitions.`;
+FORBIDDEN: Shallow summaries. Filler content. Wall-of-text paragraphs. Generic platitudes. AI-sounding transitions. Do NOT include [FIGURE] markers or illustration placeholders — this is a text-only pipeline.`;
 
 // Legacy compatibility aliases
 const SYSTEM_ROLE_NEUTRAL = UNIVERSAL_CORE;
@@ -4842,7 +4836,7 @@ ${researchResult.references.map((ref, idx) => {
     // UNIVERSAL ILLUSTRATION PIPELINE — Generate inline illustrations from [FIGURE X] markers
     // Applies to ALL book types that include [FIGURE] markers in their micro-contracts
     // Upload images to storage instead of embedding base64 (prevents 5-10MB chapter content)
-    const ILLUSTRATION_ENABLED_TYPES = ['illustrated', 'children', 'professional', 'reference', 'bestseller', 'text'];
+    const ILLUSTRATION_ENABLED_TYPES = ['illustrated', 'children', 'professional', 'reference', 'bestseller'];
     if (ILLUSTRATION_ENABLED_TYPES.includes(effectiveBookType) && /\[FIGURE\s*\d+/i.test(finalContent)) {
       console.log("[GENERATE-CHAPTER] Generating inline illustrations from figure markers...");
 
