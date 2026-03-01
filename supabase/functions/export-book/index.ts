@@ -2118,8 +2118,8 @@ async function generateEPUB(
       return placeholder;
     });
     
-    // Extract and process images
-    const imageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
+    // Extract and process images — cap at 5 per chapter to avoid CPU timeout
+    const imageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)].slice(0, 5);
     const imageMap: Map<string, string> = new Map();
     
     for (const match of imageMatches) {
@@ -2569,7 +2569,8 @@ async function generateDOCX(
   
   for (const chapter of chapters) {
     const content = chapter.content || "";
-    const imageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
+    // Cap images at 5 per chapter to avoid CPU timeout in edge function
+    const imageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)].slice(0, 5);
     const imageRefs: { index: number; alt: string }[] = [];
     
     for (const match of imageMatches) {

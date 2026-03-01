@@ -614,7 +614,7 @@ Respond as JSON:
       const chapterTexts = chapters.map((ch: any) => ({
         num: ch.chapter_number,
         words: (ch.content || "").split(/\s+/).filter(Boolean).length,
-        text: (ch.content || "").slice(0, 3000),
+        text: (ch.content || "").slice(0, 6000),
       })).filter(c => c.words >= 50);
 
       if (chapterTexts.length === 0) return { perChapter, average: 0 };
@@ -651,7 +651,7 @@ Respond as JSON array: [{"chapter": 1, "concepts": 15, "examples": ["loss aversi
             for (const item of parsed) {
               const chText = chapterTexts.find(c => c.num === item.chapter);
               if (chText) {
-                const cdi = Math.round((item.concepts / chText.words) * 1000) / 10;
+                const cdi = Math.round((item.concepts / chText.words) * 1000 * 10) / 10;
                 perChapter.push({ chapterNumber: item.chapter, cdi, concepts: item.concepts, words: chText.words });
               }
             }
@@ -668,7 +668,7 @@ Respond as JSON array: [{"chapter": 1, "concepts": 15, "examples": ["loss aversi
       for (const ch of chapterTexts) {
         if (!perChapter.find(p => p.chapterNumber === ch.num)) {
           const headings = ((chapters.find((c: any) => c.chapter_number === ch.num)?.content || "").match(/^#{1,4}\s+.+$/gm) || []).length;
-          const cdi = Math.round((headings / ch.words) * 1000) / 10;
+          const cdi = Math.round((headings / ch.words) * 1000 * 10) / 10;
           perChapter.push({ chapterNumber: ch.num, cdi, concepts: headings, words: ch.words });
         }
       }

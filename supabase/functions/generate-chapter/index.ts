@@ -4963,6 +4963,14 @@ ${researchResult.references.map((ref, idx) => {
       }
     }
 
+    // TEXT-ONLY PIPELINE SAFETY: Strip any [FIGURE] markers that the AI may have
+    // emitted despite the micro-contract forbidding them. This prevents text books
+    // from containing raw placeholder markers.
+    if (effectiveBookType === 'text') {
+      finalContent = finalContent.replace(/\[FIGURE\s*\d+\s*:[^\]]*\]/gi, '');
+      console.log("[GENERATE-CHAPTER] Text pipeline: stripped any residual [FIGURE] markers");
+    }
+
     // Preserve markdown formatting — MarkdownRenderer handles rendering
     // Only clean up excessive whitespace
     finalContent = finalContent.replace(/\n{4,}/g, '\n\n\n').trim();
