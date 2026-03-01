@@ -8,10 +8,17 @@
 import { useState, useCallback, useRef, useEffect } from "react";
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import { 
   Save, X, Bold, Italic, Underline, 
   List, ListOrdered, Heading1, Heading2,
-  Loader2, Edit3
+  Loader2, Edit3, ImagePlus, Link, Upload
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
@@ -34,7 +41,12 @@ export function DirectTextEditor({
   const { toast } = useToast();
   const [localContent, setLocalContent] = useState(content);
   const [isSaving, setIsSaving] = useState(false);
+  const [imagePopoverOpen, setImagePopoverOpen] = useState(false);
+  const [imageUrl, setImageUrl] = useState("");
+  const [imageAlt, setImageAlt] = useState("");
+  const [isUploading, setIsUploading] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   // Keep a ref in sync with state to avoid stale closures in formatting
   const contentRef = useRef(content);
 
@@ -120,6 +132,67 @@ export function DirectTextEditor({
       });
     });
   }, [isLinePrefix]);
+
+  // Insert image markdown at cursor
+  const insertImageMarkdown = useCallback((url: string, alt: string) => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const currentContent = textarea.value;
+    const markdown = `\n![${alt || 'image'}](${url})\n`;
+    const newContent = currentContent.substring(0, start) + markdown + currentContent.substring(start);
+    setLocalContent(newContent);
+    contentRef.current = newContent;
+    setImagePopoverOpen(false);
+    setImageUrl("");
+    setImageAlt("");
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        const newPos = start + markdown.length;
+        textareaRef.current.focus();
+        textareaRef.current.setSelectionRange(newPos, newPos);
+      }
+    });
+  }, []);
+
+  // Insert image by URL
+  const handleInsertByUrl = useCallback(() => {
+    if (!imageUrl.trim()) return;
+    insertImageMarkdown(imageUrl.trim(), imageAlt.trim());
+  }, [imageUrl, imageAlt, insertImageMarkdown]);
+
+  // Upload image file to storage
+  const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    if (!file.type.startsWith('image/')) {
+      toast({ title: "Invalid file", description: "Please select an image file.", variant: "destructive" });
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      toast({ title: "File too large", description: "Maximum size is 5MB.", variant: "destructive" });
+      return;
+    }
+
+    setIsUploading(true);
+    try {
+      const ext = file.name.split('.').pop() || 'png';
+      const path = `chapters/${chapterId}/${Date.now()}.${ext}`;
+      const { error: uploadError } = await supabase.storage.from('book-images').upload(path, file);
+      if (uploadError) throw uploadError;
+
+      const { data: { publicUrl } } = supabase.storage.from('book-images').getPublicUrl(path);
+      insertImageMarkdown(publicUrl, imageAlt.trim() || file.name);
+      toast({ title: "Image uploaded", description: "Image inserted into your chapter." });
+    } catch (error) {
+      console.error("Upload error:", error);
+      toast({ title: "Upload failed", description: "Could not upload image. Try again.", variant: "destructive" });
+    } finally {
+      setIsUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }, [chapterId, imageAlt, insertImageMarkdown, toast]);
 
   const handleSave = useCallback(async () => {
     if (!isOwner) {
@@ -211,7 +284,7 @@ export function DirectTextEditor({
             </Button>
           </div>
           {hasChanges && (
-            <span className="text-xs text-amber-500 font-medium">Unsaved</span>
+            <span className="text-xs text-destructive font-medium">Unsaved</span>
           )}
         </div>
         {/* Formatting toolbar */}
@@ -239,6 +312,66 @@ export function DirectTextEditor({
           <Button variant="ghost" size="sm" onClick={() => insertFormatting('1. ', '')} title="Numbered List" className="h-8 w-8 p-0 shrink-0">
             <ListOrdered className="h-4 w-4" />
           </Button>
+          <div className="w-px h-6 bg-border mx-1 shrink-0" />
+          {/* Image Insert */}
+          <Popover open={imagePopoverOpen} onOpenChange={setImagePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" title="Insert Image" className="h-8 w-8 p-0 shrink-0">
+                <ImagePlus className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-80 space-y-3" align="start">
+              <p className="text-sm font-medium">Insert Image</p>
+              <div className="space-y-2">
+                <Label htmlFor="img-alt" className="text-xs">Alt text (optional)</Label>
+                <Input
+                  id="img-alt"
+                  value={imageAlt}
+                  onChange={(e) => setImageAlt(e.target.value)}
+                  placeholder="Describe the image"
+                  className="h-8 text-sm"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="img-url" className="text-xs">Image URL</Label>
+                <div className="flex gap-2">
+                  <Input
+                    id="img-url"
+                    value={imageUrl}
+                    onChange={(e) => setImageUrl(e.target.value)}
+                    placeholder="https://..."
+                    className="h-8 text-sm"
+                    onKeyDown={(e) => { if (e.key === 'Enter') handleInsertByUrl(); }}
+                  />
+                  <Button size="sm" className="h-8 shrink-0" onClick={handleInsertByUrl} disabled={!imageUrl.trim()}>
+                    <Link className="h-3 w-3 mr-1" />
+                    Insert
+                  </Button>
+                </div>
+              </div>
+              <div className="relative">
+                <div className="absolute inset-0 flex items-center"><span className="w-full border-t border-border" /></div>
+                <div className="relative flex justify-center text-xs"><span className="bg-popover px-2 text-muted-foreground">or</span></div>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full gap-2"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={isUploading}
+              >
+                {isUploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Upload className="h-4 w-4" />}
+                {isUploading ? "Uploading..." : "Upload from device"}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileUpload}
+              />
+            </PopoverContent>
+          </Popover>
         </div>
       </div>
 
