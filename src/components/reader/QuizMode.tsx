@@ -1,4 +1,4 @@
-import { useState, useCallback, forwardRef, useRef } from "react";
+import { useState, useCallback, forwardRef, useRef, useEffect } from "react";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -23,6 +23,8 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { type BloomLevel } from "@/lib/masteryEngine";
+import { computeAdaptiveRecommendation, getDifficultyLabel, type PerformanceSnapshot } from "@/lib/adaptiveDifficulty";
+import { scoreToQuality } from "@/lib/spacedRepetition";
 
 interface MasteryQuestion {
   bloomLevel: BloomLevel;
@@ -100,9 +102,39 @@ export function QuizMode({
   const [isComplete, setIsComplete] = useState(false);
   const [masteryDepthScore, setMasteryDepthScore] = useState(0);
   const [stressTestSummary, setStressTestSummary] = useState<any>(null);
+  const [adaptiveDifficulty, setAdaptiveDifficulty] = useState(3);
+  const [wrongAnswers, setWrongAnswers] = useState<MasteryQuestion[]>([]);
   const { toast } = useToast();
   const quizStartTime = useRef(Date.now());
   const { t } = useLanguage();
+
+  // Fetch adaptive difficulty on mount
+  useEffect(() => {
+    if (!isOpen) return;
+    const fetchAdaptive = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) return;
+        const { data } = await supabase
+          .from('learning_progress')
+          .select('score, bloom_level, question_difficulty, time_spent_seconds, questions_answered, created_at')
+          .eq('user_id', user.id)
+          .eq('book_id', bookId)
+          .order('created_at', { ascending: true })
+          .limit(20);
+        if (data && data.length > 0) {
+          const snapshots: PerformanceSnapshot[] = data.map((d: any) => ({
+            score: Number(d.score), bloomLevel: d.bloom_level, difficulty: d.question_difficulty || 3,
+            timeSpentSeconds: d.time_spent_seconds || 0, questionsAnswered: d.questions_answered || 0,
+            createdAt: d.created_at,
+          }));
+          const rec = computeAdaptiveRecommendation(snapshots, snapshots[snapshots.length - 1].difficulty);
+          setAdaptiveDifficulty(rec.recommendedDifficulty);
+        }
+      } catch { /* silent */ }
+    };
+    fetchAdaptive();
+  }, [isOpen, bookId]);
 
   const generateQuiz = useCallback(async () => {
     setIsLoading(true);
@@ -112,6 +144,7 @@ export function QuizMode({
     setIsComplete(false);
     setSelectedAnswer(null);
     setShowResult(false);
+    setWrongAnswers([]);
     quizStartTime.current = Date.now();
 
     try {
@@ -123,6 +156,7 @@ export function QuizMode({
           bookType,
           bloomLevel: isMasteryMode ? "evaluate" : "analyze",
           questionCount: isMasteryMode ? 7 : 5,
+          difficulty: adaptiveDifficulty,
         },
       });
 
@@ -155,7 +189,7 @@ export function QuizMode({
     } finally {
       setIsLoading(false);
     }
-  }, [chapterContent, chapterTitle, bookTitle, isMasteryMode, bookType, toast, t]);
+  }, [chapterContent, chapterTitle, bookTitle, isMasteryMode, bookType, toast, t, adaptiveDifficulty]);
 
   const handleSelectAnswer = (index: number) => {
     if (showResult) return;
@@ -166,7 +200,12 @@ export function QuizMode({
     if (selectedAnswer === null) return;
     const currentQuestion = questions[currentIndex];
     const isCorrect = selectedAnswer === currentQuestion.correctIndex;
-    if (isCorrect) setScore(prev => prev + 1);
+    if (isCorrect) {
+      setScore(prev => prev + 1);
+    } else {
+      // Track wrong answers for SRS card creation
+      setWrongAnswers(prev => [...prev, currentQuestion]);
+    }
     setShowResult(true);
   };
 
@@ -190,10 +229,7 @@ export function QuizMode({
             note_type: "quiz_result",
             content: JSON.stringify({
               title: `Mastery Assessment: ${chapterTitle}`,
-              score,
-              total: questions.length,
-              percentage,
-              masteryDepthScore,
+              score, total: questions.length, percentage, masteryDepthScore,
               bloomDistribution: questions.reduce((acc, q) => {
                 acc[q.bloomLevel] = (acc[q.bloomLevel] || 0) + 1;
                 return acc;
@@ -208,16 +244,25 @@ export function QuizMode({
 
             const result = await onRecordAttempt(
               chapterId, bloomLevel, percentage,
-              isMasteryMode ? 4 : 3, timeSpent, questions.length,
+              adaptiveDifficulty, timeSpent, questions.length,
             );
 
             if (result?.blocked) {
-              toast({
-                title: 'Attempt Blocked',
-                description: result.reason || 'Anti-gaming check failed',
-                variant: 'destructive',
-              });
+              toast({ title: 'Attempt Blocked', description: result.reason || 'Anti-gaming check failed', variant: 'destructive' });
             }
+          }
+
+          // Auto-create SRS cards from wrong answers
+          if (wrongAnswers.length > 0) {
+            const srsRecords = wrongAnswers.map(q => ({
+              user_id: user.id,
+              book_id: bookId,
+              chapter_id: chapterId,
+              question: q.question,
+              answer: q.options[q.correctIndex] + (q.reasoningExplanation ? ` — ${q.reasoningExplanation}` : ''),
+              bloom_level: q.bloomLevel,
+            }));
+            await supabase.from('spaced_repetition_cards').insert(srsRecords as any);
           }
         }
       } catch (err) {
@@ -316,16 +361,18 @@ export function QuizMode({
                 </div>
 
                 {/* Mastery Depth + Stress-Test Summary */}
-                <div className="grid grid-cols-2 gap-3 max-w-sm mx-auto text-left">
+                <div className="grid grid-cols-3 gap-3 max-w-md mx-auto text-left">
                   <div className="p-3 rounded-lg bg-muted/50">
                     <p className="text-xs text-muted-foreground">Mastery Depth</p>
                     <p className="text-lg font-bold">{masteryDepthScore}%</p>
                   </div>
                   <div className="p-3 rounded-lg bg-muted/50">
-                    <p className="text-xs text-muted-foreground">Stress-Test Pass</p>
-                    <p className="text-lg font-bold">
-                      {stressTestSummary?.passed || 0}/{stressTestSummary?.total || questions.length}
-                    </p>
+                    <p className="text-xs text-muted-foreground">Difficulty</p>
+                    <p className="text-lg font-bold">{getDifficultyLabel(adaptiveDifficulty)}</p>
+                  </div>
+                  <div className="p-3 rounded-lg bg-muted/50">
+                    <p className="text-xs text-muted-foreground">SRS Cards Added</p>
+                    <p className="text-lg font-bold">{wrongAnswers.length}</p>
                   </div>
                 </div>
 

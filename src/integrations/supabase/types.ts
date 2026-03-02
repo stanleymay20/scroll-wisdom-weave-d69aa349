@@ -1448,6 +1448,81 @@ export type Database = {
           },
         ]
       }
+      spaced_repetition_cards: {
+        Row: {
+          answer: string
+          bloom_level: string
+          book_id: string
+          chapter_id: string | null
+          correct_reviews: number
+          created_at: string
+          ease_factor: number
+          id: string
+          interval_days: number
+          last_reviewed_at: string | null
+          next_review_at: string
+          question: string
+          repetitions: number
+          streak: number
+          total_reviews: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          answer: string
+          bloom_level?: string
+          book_id: string
+          chapter_id?: string | null
+          correct_reviews?: number
+          created_at?: string
+          ease_factor?: number
+          id?: string
+          interval_days?: number
+          last_reviewed_at?: string | null
+          next_review_at?: string
+          question: string
+          repetitions?: number
+          streak?: number
+          total_reviews?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          answer?: string
+          bloom_level?: string
+          book_id?: string
+          chapter_id?: string | null
+          correct_reviews?: number
+          created_at?: string
+          ease_factor?: number
+          id?: string
+          interval_days?: number
+          last_reviewed_at?: string | null
+          next_review_at?: string
+          question?: string
+          repetitions?: number
+          streak?: number
+          total_reviews?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "spaced_repetition_cards_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "spaced_repetition_cards_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       study_notes: {
         Row: {
           book_id: string | null
