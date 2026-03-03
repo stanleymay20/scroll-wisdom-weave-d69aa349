@@ -4,6 +4,7 @@
  */
 
 import { useState, useCallback } from "react";
+import DOMPurify from "dompurify";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
@@ -202,7 +203,7 @@ export function CodingQuizQuestion({
           <pre className="p-4 overflow-x-auto bg-muted/30">
             <code 
               className="text-sm font-mono"
-              dangerouslySetInnerHTML={{ __html: highlightedCode }}
+              dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlightedCode) }}
             />
           </pre>
         </div>
