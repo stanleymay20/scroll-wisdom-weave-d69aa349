@@ -117,16 +117,16 @@
     </div>
     <script type="module" src="/src/main.tsx"></script>
     <script>
-      // Remove pre-splash once React mounts
-      window.addEventListener('DOMContentLoaded', function() {
-        setTimeout(function() {
-          var splash = document.getElementById('pre-splash');
-          if (splash) {
-            splash.style.opacity = '0';
-            setTimeout(function() { splash.remove(); }, 400);
-          }
-        }, 100);
-      });
+      // Remove pre-splash once React mounts (not on DOMContentLoaded which fires too early)
+      window.__removeSplash = function() {
+        var splash = document.getElementById('pre-splash');
+        if (splash) {
+          splash.style.opacity = '0';
+          setTimeout(function() { splash.remove(); }, 400);
+        }
+      };
+      // Fallback: remove after 8s if React never mounts (prevents permanent blank screen)
+      setTimeout(function() { window.__removeSplash && window.__removeSplash(); }, 8000);
     </script>
   </body>
 </html>

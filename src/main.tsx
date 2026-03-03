@@ -10,3 +10,8 @@ initGlobalErrorHandlers();
 // This ensures proper React lifecycle management for update notifications
 
 createRoot(document.getElementById("root")!).render(<App />);
+
+// Remove pre-hydration splash once React has mounted
+requestAnimationFrame(() => {
+  (window as any).__removeSplash?.();
+});
