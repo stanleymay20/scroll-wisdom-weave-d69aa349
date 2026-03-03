@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Copy, Check, ChevronDown, ChevronUp, AlertTriangle, Terminal, BookOpen, Lightbulb } from "lucide-react";
 import hljs from 'highlight.js/lib/core';
+import DOMPurify from "dompurify";
 
 // Import common languages
 import javascript from 'highlight.js/lib/languages/javascript';
@@ -159,7 +160,7 @@ export function StructuredCodeBlock({ data, className = "" }: StructuredCodeBloc
         <pre className="p-4 overflow-x-auto bg-[hsl(220,15%,13%)]">
           <code 
             className={`hljs language-${data.language || 'text'} text-sm font-mono leading-relaxed`}
-            dangerouslySetInnerHTML={{ __html: highlightedCode }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(highlightedCode) }}
           />
         </pre>
       </div>

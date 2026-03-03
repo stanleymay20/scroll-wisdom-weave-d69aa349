@@ -1,5 +1,6 @@
 import { useMemo, useEffect, useRef } from "react";
 import hljs from 'highlight.js/lib/core';
+import DOMPurify from "dompurify";
 import { StructuredCodeBlock, extractAllStructuredCodeBlocks, StructuredCodeBlockData } from "./StructuredCodeBlock";
 import { ComputationalEvidencePanel } from "./ComputationalEvidencePanel";
 import { parseEvidenceBlocks, type ParsedEvidenceBlock } from "@/lib/computationalEvidence";
@@ -515,7 +516,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
         <div 
           ref={containerRef}
           className={`markdown-content max-w-none ${className}`}
-          dangerouslySetInnerHTML={{ __html: renderedContent }}
+          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderedContent) }}
         />
       );
     }
@@ -530,7 +531,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           <div 
             key={`html-${i}`}
             className="markdown-content max-w-none"
-            dangerouslySetInnerHTML={{ __html: htmlPart }}
+            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlPart) }}
           />
         );
       }
