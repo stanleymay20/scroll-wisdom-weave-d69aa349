@@ -338,12 +338,36 @@ function processMarkdownContent(text: string): {
   const stripped = processedText
     .replace(/`[^`]+`/g, (match) => match.slice(1, -1))
     .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // Regular links (not images)
-    .replace(/^\s*[-*]\s+/gm, "• ")
-    .replace(/^\s*(\d+)\.\s+/gm, "$1. ")  // Preserve ordered list numbers
+    .replace(/^\s*[-*]\s+/gm, "\u2022 ")     // Unify bullet markers to bullet char
+    .replace(/^\s*(\d+)\.\s+/gm, "$1. ")     // Preserve ordered list numbers
     .replace(/\n{3,}/g, "\n\n")
     .trim();
   
-  const paragraphs = stripped.split(/\n\n+/).filter(p => p.trim());
+  // Split paragraphs: double newline = new paragraph, BUT also split on single
+  // newlines when lines start with bullet/number markers so list items stay separate
+  const rawBlocks = stripped.split(/\n\n+/).filter(p => p.trim());
+  const paragraphs: string[] = [];
+  for (const block of rawBlocks) {
+    // If block contains bullet or numbered list items separated by single newlines, split them
+    const lines = block.split('\n');
+    if (lines.length > 1 && lines.some(l => /^(\u2022|\d+\.\s)/.test(l.trim()))) {
+      // Split list items into separate paragraphs
+      let currentGroup = '';
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (/^(\u2022|\d+\.\s)/.test(trimmed)) {
+          if (currentGroup.trim()) paragraphs.push(currentGroup.trim());
+          currentGroup = trimmed;
+        } else {
+          // Continuation of previous item
+          currentGroup += ' ' + trimmed;
+        }
+      }
+      if (currentGroup.trim()) paragraphs.push(currentGroup.trim());
+    } else {
+      paragraphs.push(block);
+    }
+  }
   
   // Update heading indices to match paragraph positions
   paragraphs.forEach((p, idx) => {
@@ -1168,7 +1192,11 @@ async function generatePDF(
   y -= 50;
   
   for (const chapter of chapters) {
-    page.drawText(sanitizeForPDF(`Chapter ${chapter.chapter_number}: ${chapter.title}`), {
+    // Avoid "Chapter X: Chapter X: Title" duplication — check if title already has prefix
+    const titleText = /^chapter\s+\d+/i.test(chapter.title)
+      ? chapter.title
+      : `Chapter ${chapter.chapter_number}: ${chapter.title}`;
+    page.drawText(sanitizeForPDF(titleText), {
       x: margin,
       y,
       size: 12,
@@ -1367,24 +1395,31 @@ async function generatePDF(
           // Render code block with monospace font
           y -= 10;
           
-          // Draw background
           const codeLines = block.code.split('\n');
-          const codeHeight = codeLines.length * 12 + 20;
           
-          if (y - codeHeight < margin + 30) {
+          // If code fits on current page, draw background rectangle + code
+          // Otherwise render line-by-line with page breaks
+          const codeHeight = codeLines.length * 12 + 30;
+          const fitsOnPage = (y - codeHeight) >= (margin + 30);
+          
+          if (fitsOnPage) {
+            // Draw background rectangle
+            page.drawRectangle({
+              x: margin - 5,
+              y: y - codeHeight + 10,
+              width: textWidth + 10,
+              height: codeHeight,
+              color: rgb(0.95, 0.95, 0.95),
+            });
+          }
+          
+          if (!fitsOnPage && y < margin + 60) {
             page = pdfDoc.addPage([pageWidth, pageHeight]);
             pageNumber++;
+            pageNumberRef.current = pageNumber;
             addPageNumber(page, pageNumber);
             y = pageHeight - margin - 30;
           }
-          
-          page.drawRectangle({
-            x: margin - 5,
-            y: y - codeHeight + 10,
-            width: textWidth + 10,
-            height: codeHeight,
-            color: rgb(0.95, 0.95, 0.95),
-          });
           
           // Language label
           page.drawText(block.lang.toUpperCase(), {
@@ -1396,9 +1431,28 @@ async function generatePDF(
           });
           y -= 15;
           
-          // Code content
+          // Code content — render line by line with page break support
           for (const codeLine of codeLines) {
-            page.drawText(sanitizeForPDF(codeLine.slice(0, 80)), { // Truncate long lines
+            if (y < margin + 30) {
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              pageNumberRef.current = pageNumber;
+              addPageNumber(page, pageNumber);
+              y = pageHeight - margin - 30;
+            }
+            
+            // Draw line background for non-rectangle mode
+            if (!fitsOnPage) {
+              page.drawRectangle({
+                x: margin - 5,
+                y: y - 3,
+                width: textWidth + 10,
+                height: 14,
+                color: rgb(0.95, 0.95, 0.95),
+              });
+            }
+            
+            page.drawText(sanitizeForPDF(codeLine.slice(0, 85)), {
               x: margin,
               y,
               size: 9,
@@ -1466,24 +1520,32 @@ async function generatePDF(
             y -= 18;
           }
           
-          // Code background
-          const codeHeight = codeLines.length * 12 + 15;
-          page.drawRectangle({
-            x: margin - 5,
-            y: y - codeHeight,
-            width: textWidth + 10,
-            height: codeHeight,
-            color: rgb(0.12, 0.12, 0.15),
-          });
-          
-          y -= 10;
+          // Code content — render line by line with page break support
+          y -= 5;
           for (const codeLine of codeLines) {
-            page.drawText(sanitizeForPDF(codeLine.slice(0, 80)), {
+            if (y < margin + 30) {
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              pageNumberRef.current = pageNumber;
+              addPageNumber(page, pageNumber);
+              y = pageHeight - margin - 30;
+            }
+            
+            // Per-line dark background
+            page.drawRectangle({
+              x: margin - 5,
+              y: y - 3,
+              width: textWidth + 10,
+              height: 14,
+              color: rgb(0.12, 0.12, 0.15),
+            });
+            
+            page.drawText(sanitizeForPDF(codeLine.slice(0, 85)), {
               x: margin,
               y,
               size: 9,
               font: courier,
-              color: rgb(0.9, 0.9, 0.9), // Light text on dark background
+              color: rgb(0.9, 0.9, 0.9),
             });
             y -= 12;
           }
@@ -1491,30 +1553,38 @@ async function generatePDF(
           
           // Output section
           if (block.output) {
-            page.drawRectangle({
-              x: margin - 5,
-              y: y - (block.output.split('\n').length * 12 + 20),
-              width: textWidth + 10,
-              height: block.output.split('\n').length * 12 + 20,
-              color: rgb(0.08, 0.10, 0.08),
-            });
+            if (y < margin + 40) {
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              pageNumberRef.current = pageNumber;
+              addPageNumber(page, pageNumber);
+              y = pageHeight - margin - 30;
+            }
             
             page.drawText("OUTPUT:", {
               x: margin,
-              y: y - 12,
+              y,
               size: 8,
               font: helvetica,
               color: rgb(0.4, 0.8, 0.4),
             });
-            y -= 18;
+            y -= 15;
             
             for (const outLine of block.output.split('\n')) {
-              page.drawText(sanitizeForPDF(outLine.slice(0, 80)), {
-                x: margin,
-                y,
-                size: 9,
-                font: courier,
-                color: rgb(0.4, 0.9, 0.4), // Green output text
+              if (y < margin + 30) {
+                page = pdfDoc.addPage([pageWidth, pageHeight]);
+                pageNumber++;
+                pageNumberRef.current = pageNumber;
+                addPageNumber(page, pageNumber);
+                y = pageHeight - margin - 30;
+              }
+              page.drawRectangle({
+                x: margin - 5, y: y - 3, width: textWidth + 10, height: 14,
+                color: rgb(0.08, 0.10, 0.08),
+              });
+              page.drawText(sanitizeForPDF(outLine.slice(0, 85)), {
+                x: margin, y, size: 9, font: courier,
+                color: rgb(0.4, 0.9, 0.4),
               });
               y -= 12;
             }
@@ -1525,11 +1595,15 @@ async function generatePDF(
           if (block.explanation) {
             const explLines = wrapText(`Explanation: ${block.explanation}`, timesRoman, 9, textWidth);
             for (const line of explLines) {
+              if (y < margin + 30) {
+                page = pdfDoc.addPage([pageWidth, pageHeight]);
+                pageNumber++;
+                pageNumberRef.current = pageNumber;
+                addPageNumber(page, pageNumber);
+                y = pageHeight - margin - 30;
+              }
               page.drawText(line, {
-                x: margin,
-                y,
-                size: 9,
-                font: timesRoman,
+                x: margin, y, size: 9, font: timesRoman,
                 color: rgb(0.3, 0.3, 0.3),
               });
               y -= 12;
@@ -1759,6 +1833,12 @@ async function generatePDF(
         }
       }
       
+      // Detect bullet or numbered list items
+      const isBullet = /^\u2022\s/.test(paragraph.trim());
+      const isNumbered = /^\d+\.\s/.test(paragraph.trim());
+      const indent = (isBullet || isNumbered) ? 15 : 0;
+      const effectiveWidth = textWidth - indent;
+      
       // Check if paragraph has bold/italic markers
       const hasFormatting = /\*/.test(paragraph);
       
@@ -1772,10 +1852,10 @@ async function generatePDF(
           y = pageHeight - margin - 30;
         }
         pageNumberRef.current = pageNumber;
-        y = drawStyledParagraph(page, paragraph.trim(), margin, y, textWidth, 11, bodyFonts, rgb(0.1, 0.1, 0.1), pdfDoc, pageWidth, pageHeight, margin, addPageNumber, pageNumberRef);
+        y = drawStyledParagraph(page, paragraph.trim(), margin + indent, y, effectiveWidth, 11, bodyFonts, rgb(0.1, 0.1, 0.1), pdfDoc, pageWidth, pageHeight, margin, addPageNumber, pageNumberRef);
         pageNumber = pageNumberRef.current;
       } else {
-        const lines = wrapText(paragraph.trim(), timesRoman, 11, textWidth);
+        const lines = wrapText(paragraph.trim(), timesRoman, 11, effectiveWidth);
         for (const line of lines) {
           if (y < margin + 30) {
             page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -1786,7 +1866,7 @@ async function generatePDF(
           }
           
           page.drawText(line, {
-            x: margin,
+            x: margin + indent,
             y,
             size: 11,
             font: timesRoman,
@@ -1795,7 +1875,8 @@ async function generatePDF(
           y -= 16;
         }
       }
-      y -= 8;
+      // Less spacing after list items, more after paragraphs
+      y -= (isBullet || isNumbered) ? 3 : 8;
     }
   }
 
