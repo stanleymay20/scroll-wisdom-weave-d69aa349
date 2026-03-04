@@ -224,7 +224,6 @@ function processMarkdownContent(text: string): {
   
   // First, parse old custom TABLE: format (legacy support)
   const { tables: customTables, cleanedText: textAfterCustomTables } = parseCustomTableFormat(text);
-  console.log(`[EXPORT] Found ${customTables.length} legacy custom tables`);
   
   // Extract STRUCTURED code blocks [CODE_BLOCK]...[/CODE_BLOCK] (ChatGPT-level format)
   let processedText = textAfterCustomTables.replace(/\[CODE_BLOCK\]([\s\S]*?)\[\/CODE_BLOCK\]/g, (_, blockContent) => {
@@ -235,7 +234,6 @@ function processMarkdownContent(text: string): {
     }
     return '';
   });
-  console.log(`[EXPORT] Found ${structuredBlocks.length} structured code blocks`);
   
   // Extract regular fenced code blocks with triple backticks
   processedText = processedText.replace(/```(\w+)?\n([\s\S]*?)```/g, (_, lang, code) => {
@@ -303,7 +301,6 @@ function processMarkdownContent(text: string): {
     return match;
   });
   
-  console.log(`[EXPORT] Found ${tables.length} markdown tables, ${codeBlocks.length} code blocks`);
   
   // EXTRACT HEADINGS - preserve them as structured data with placeholders
   // This must happen BEFORE stripping other markdown
@@ -336,7 +333,6 @@ function processMarkdownContent(text: string): {
     return `[HEADING_${headings.length - 1}_LEVEL_${level}]`;
   });
   
-  console.log(`[EXPORT] Found ${headings.length} headings`);
   
   // Strip markdown EXCEPT bold/italic (preserve ** and * for styled rendering)
   const stripped = processedText
@@ -360,7 +356,6 @@ function processMarkdownContent(text: string): {
     }
   });
   
-  console.log(`[EXPORT] processMarkdownContent found ${images.length} images, ${codeBlocks.length} code blocks, ${structuredBlocks.length} structured blocks, ${tables.length} md tables, ${headings.length} headings`);
   
   return { paragraphs, codeBlocks, structuredBlocks, tables, customTables, images, headings };
 }
@@ -490,109 +485,44 @@ function markdownToDocxRuns(text: string): string {
 }
 
 /**
- * Sanitize text for PDF WinAnsi encoding
+ * Sanitize text for PDF WinAnsi encoding — SINGLE-PASS character map
  * Replaces Unicode characters that cannot be encoded in WinAnsi
  * CRITICAL: Must be called on ALL text before drawText() in PDF generation
  */
+const _pdfCharMap: Record<string, string> = {
+  '\u2192': '->', '\u2190': '<-', '\u2194': '<->', '\u21D2': '=>', '\u21D0': '<=', '\u21D4': '<=>', '\u2191': '^', '\u2193': 'v',
+  '\u2018': "'", '\u2019': "'", '\u201A': "'", '\u02BC': "'", '\u02B9': "'", '\u02BB': "'", '\u0060': "'", '\u00B4': "'",
+  '\u201C': '"', '\u201D': '"', '\u201E': '"', '\u201F': '"', '\u2033': '"',
+  '\u2032': "'", '\u2035': "'", '\u02CA': "'", '\u02CB': "'",
+  '\u2070': '0', '\u00B9': '1', '\u00B2': '2', '\u00B3': '3', '\u2074': '4', '\u2075': '5', '\u2076': '6', '\u2077': '7', '\u2078': '8', '\u2079': '9',
+  '\u207A': '+', '\u207B': '-', '\u207C': '=', '\u207D': '(', '\u207E': ')', '\u207F': 'n',
+  '\u2080': '0', '\u2081': '1', '\u2082': '2', '\u2083': '3', '\u2084': '4', '\u2085': '5', '\u2086': '6', '\u2087': '7', '\u2088': '8', '\u2089': '9',
+  '\u208A': '+', '\u208B': '-', '\u208C': '=', '\u208D': '(', '\u208E': ')',
+  '\u00D7': 'x', '\u00F7': '/', '\u2212': '-', '\u2013': '-', '\u2014': '-', '\u2026': '...', '\u2022': '-',
+  '\u25E6': 'o', '\u25AA': '-', '\u25B8': '>', '\u25B9': '>', '\u25C2': '<', '\u25C3': '<',
+  '\u2248': '~', '\u2260': '!=', '\u2264': '<=', '\u2265': '>=',
+  '\u221E': 'infinity', '\u03C0': 'pi', '\u03B1': 'alpha', '\u03B2': 'beta', '\u03B3': 'gamma', '\u03B4': 'delta',
+  '\u03B5': 'epsilon', '\u03B8': 'theta', '\u03BB': 'lambda', '\u03BC': 'mu', '\u03C3': 'sigma', '\u03C6': 'phi',
+  '\u03C9': 'omega', '\u03A9': 'Omega', '\u2211': 'sum', '\u220F': 'product', '\u221A': 'sqrt',
+  '\u222B': 'integral', '\u2202': 'd', '\u2206': 'delta', '\u2207': 'nabla',
+  '\u2122': '(TM)', '\u2120': '(SM)', '\u2117': '(P)',
+};
+
 function sanitizeForPDF(text: string): string {
   if (!text) return "";
-  return text
-    // Arrows (these were causing the error!)
-    .replace(/→/g, "->")
-    .replace(/←/g, "<-")
-    .replace(/↔/g, "<->")
-    .replace(/⇒/g, "=>")
-    .replace(/⇐/g, "<=")
-    .replace(/⇔/g, "<=>")
-    .replace(/↑/g, "^")
-    .replace(/↓/g, "v")
-    // ALL apostrophe & quote variants (CRITICAL - these were being silently dropped!)
-    .replace(/[\u2018\u2019\u201A\u02BC\u02B9\u02BB\u0060\u00B4]/g, "'")  // All single-quote-like chars
-    .replace(/[\u201C\u201D\u201E\u201F\u2033]/g, '"')  // All double-quote-like chars
-    .replace(/\u2032/g, "'")   // Prime → apostrophe
-    .replace(/\u2035/g, "'")   // Reversed prime
-    .replace(/\u02CA/g, "'")   // Modifier letter acute accent
-    .replace(/\u02CB/g, "'")   // Modifier letter grave accent
-    // Superscript numbers and symbols
-    .replace(/⁰/g, "0")
-    .replace(/¹/g, "1")
-    .replace(/²/g, "2")
-    .replace(/³/g, "3")
-    .replace(/⁴/g, "4")
-    .replace(/⁵/g, "5")
-    .replace(/⁶/g, "6")
-    .replace(/⁷/g, "7")
-    .replace(/⁸/g, "8")
-    .replace(/⁹/g, "9")
-    .replace(/⁺/g, "+")
-    .replace(/⁻/g, "-")
-    .replace(/⁼/g, "=")
-    .replace(/⁽/g, "(")
-    .replace(/⁾/g, ")")
-    .replace(/ⁿ/g, "n")
-    // Subscript numbers
-    .replace(/₀/g, "0")
-    .replace(/₁/g, "1")
-    .replace(/₂/g, "2")
-    .replace(/₃/g, "3")
-    .replace(/₄/g, "4")
-    .replace(/₅/g, "5")
-    .replace(/₆/g, "6")
-    .replace(/₇/g, "7")
-    .replace(/₈/g, "8")
-    .replace(/₉/g, "9")
-    .replace(/₊/g, "+")
-    .replace(/₋/g, "-")
-    .replace(/₌/g, "=")
-    .replace(/₍/g, "(")
-    .replace(/₎/g, ")")
-    // Common math symbols
-    .replace(/×/g, "x")
-    .replace(/÷/g, "/")
-    .replace(/−/g, "-")  // Minus sign (U+2212)
-    .replace(/–/g, "-")  // En dash
-    .replace(/—/g, "-")  // Em dash
-    .replace(/…/g, "...")
-    .replace(/•/g, "-")  // Bullet
-    .replace(/◦/g, "o")  // White bullet
-    .replace(/▪/g, "-")  // Black small square
-    .replace(/▸/g, ">")  // Right-pointing triangle
-    .replace(/▹/g, ">")  // White right-pointing triangle
-    .replace(/◂/g, "<")  // Left-pointing triangle
-    .replace(/◃/g, "<")  // White left-pointing triangle
-    .replace(/≈/g, "~")
-    .replace(/≠/g, "!=")
-    .replace(/≤/g, "<=")
-    .replace(/≥/g, ">=")
-    .replace(/∞/g, "infinity")
-    .replace(/π/g, "pi")
-    .replace(/α/g, "alpha")
-    .replace(/β/g, "beta")
-    .replace(/γ/g, "gamma")
-    .replace(/δ/g, "delta")
-    .replace(/ε/g, "epsilon")
-    .replace(/θ/g, "theta")
-    .replace(/λ/g, "lambda")
-    .replace(/μ/g, "mu")
-    .replace(/σ/g, "sigma")
-    .replace(/φ/g, "phi")
-    .replace(/ω/g, "omega")
-    .replace(/Ω/g, "Omega")
-    .replace(/∑/g, "sum")
-    .replace(/∏/g, "product")
-    .replace(/√/g, "sqrt")
-    .replace(/∫/g, "integral")
-    .replace(/∂/g, "d")
-    .replace(/∆/g, "delta")
-    .replace(/∇/g, "nabla")
-    // Trademark/legal symbols that ARE in Latin-1
-    .replace(/™/g, "(TM)")
-    .replace(/℠/g, "(SM)")
-    .replace(/℗/g, "(P)")
-    // German/international chars that ARE supported in WinAnsi
-    // Keep: ä ö ü ß Ä Ö Ü é è ê ë © ® ° ½ ¼ ¾ etc. (these are in Latin-1)
-    // Fallback: remove any remaining non-WinAnsi characters (keep basic ASCII + Latin-1)
-    .replace(/[^\x00-\xFF]/g, "");
+  let result = '';
+  for (let i = 0; i < text.length; i++) {
+    const ch = text[i];
+    const code = ch.charCodeAt(0);
+    const mapped = _pdfCharMap[ch];
+    if (mapped !== undefined) {
+      result += mapped;
+    } else if (code <= 0xFF) {
+      result += ch; // Latin-1 range — safe for WinAnsi
+    }
+    // else: non-Latin-1 char not in map — drop silently
+  }
+  return result;
 }
 
 /**
@@ -609,10 +539,8 @@ async function fetchImageBytes(url: string, timeoutMs = 8000): Promise<Uint8Arra
   try {
     // Handle base64 data URIs
     if (url.startsWith("data:image")) {
-      console.log("[EXPORT] Decoding base64 image data...");
       const base64Data = url.split(",")[1];
       if (!base64Data) {
-        console.error("[EXPORT] Invalid base64 data URI");
         return null;
       }
       const binaryString = atob(base64Data);
@@ -620,12 +548,10 @@ async function fetchImageBytes(url: string, timeoutMs = 8000): Promise<Uint8Arra
       for (let i = 0; i < binaryString.length; i++) {
         bytes[i] = binaryString.charCodeAt(i);
       }
-      console.log(`[EXPORT] Decoded base64 image: ${bytes.length} bytes`);
       return bytes;
     }
     
     // Handle remote URLs with timeout
-    console.log(`[EXPORT] Fetching remote image: ${url.slice(0, 100)}...`);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     
@@ -643,10 +569,8 @@ async function fetchImageBytes(url: string, timeoutMs = 8000): Promise<Uint8Arra
     const arrayBuffer = await response.arrayBuffer();
     // Cap image size at 2MB to prevent CPU timeout during PDF embedding
     if (arrayBuffer.byteLength > 2 * 1024 * 1024) {
-      console.log(`[EXPORT] Image too large (${(arrayBuffer.byteLength / 1024 / 1024).toFixed(1)}MB), skipping to save CPU`);
       return null;
     }
-    console.log(`[EXPORT] Fetched remote image: ${arrayBuffer.byteLength} bytes`);
     return new Uint8Array(arrayBuffer);
   } catch (error) {
     if (error instanceof DOMException && error.name === 'AbortError') {
@@ -813,7 +737,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[EXPORT] Authenticated user: ${user.id.slice(0, 8)}...`);
+    console.log(`[EXPORT] User: ${user.id.slice(0, 8)}, format: ${format}`);
 
     // Check if user is admin
     const { data: userRoles } = await supabase
@@ -846,12 +770,10 @@ serve(async (req) => {
     // Support both param names (client sends isAcademicMode, legacy sends academicMode)
     const resolvedAcademicMode = isAcademicMode || academicMode || false;
 
-    console.log(`[EXPORT] Trial active: ${trialActive}, User plan: ${userPlan}, Admin: ${isAdmin}, Requested format: ${format}`);
-    console.log(`[EXPORT] Academic mode: ${resolvedAcademicMode}, Citation style: ${citationStyle}`);
-
+    console.log(`[EXPORT] Plan: ${userPlan}, format: ${format}, chapters: ${chapters?.length || 0}`);
     // Check format permissions (skip during trial or admin)
     if (!trialActive && !isAdmin && !allowedFormats.includes(format)) {
-      console.log(`[EXPORT] Format ${format} not allowed for ${userPlan} plan`);
+      
       return new Response(JSON.stringify({ 
         error: `${format.toUpperCase()} export requires ${format === 'docx' ? 'Premium' : 'Student'} plan or higher.` 
       }), {
@@ -860,7 +782,7 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[EXPORT] Exporting book ${bookId.slice(0, 8)}... as ${format}`);
+    
 
     // Fetch book and verify ownership
     const { data: book, error: bookError } = await supabase
@@ -899,7 +821,7 @@ serve(async (req) => {
         const openCount = (chapter.content.match(/\[CODE_BLOCK\]/g) || []).length;
         const closeCount = (chapter.content.match(/\[\/CODE_BLOCK\]/g) || []).length;
         if (openCount !== closeCount) {
-          console.log(`[EXPORT] Repairing mismatched CODE_BLOCK tags in chapter ${chapter.chapter_number} (${openCount} open, ${closeCount} close)`);
+          
           if (openCount > closeCount) {
             for (let i = 0; i < openCount - closeCount; i++) {
               chapter.content += '\n[/CODE_BLOCK]';
@@ -918,7 +840,7 @@ serve(async (req) => {
         // Repair unclosed backtick fences (``` without matching close)
         const fenceCount = (chapter.content.match(/```/g) || []).length;
         if (fenceCount % 2 !== 0) {
-          console.log(`[EXPORT] Repairing unclosed code fence in chapter ${chapter.chapter_number} (${fenceCount} fences)`);
+          
           chapter.content += '\n```';
         }
       }
@@ -939,12 +861,12 @@ serve(async (req) => {
     if (isAcademicExport) {
       const hasRefs = hasAcademicReferences(chapters);
       if (!hasRefs) {
-        console.log("[EXPORT] Warning: Academic export requested but no references found");
+        
       }
     }
 
     // Fetch cover image
-    console.log(`[EXPORT] Fetching cover image...`);
+    
     const coverImageBytes = await fetchImageBytes(book.cover_image_url);
     
     const finalAuthorName = authorName || book.author_ai_agent || "Unknown Author";
@@ -967,7 +889,7 @@ serve(async (req) => {
       }
     }
 
-    console.log(`[EXPORT] Found ${chapters.length} chapters, ${bibliography.length} unique references, generating ${format}`);
+    
 
     let content: string;
     let contentType: string;
@@ -1006,7 +928,7 @@ serve(async (req) => {
         throw new Error(`Unsupported format: ${format}`);
     }
 
-    console.log(`[EXPORT] Export complete: ${format}, Academic: ${isAcademicExport}, References: ${bibliography.length}`);
+    
 
     return new Response(
       JSON.stringify({ success: true, content, contentType, filename, isBase64 }),
@@ -1098,7 +1020,7 @@ async function generatePDF(
         try {
           image = await pdfDoc.embedJpg(coverImageBytes);
         } catch {
-          console.log("[EXPORT] Could not embed cover image, using text-only cover");
+          
         }
       }
       
@@ -1309,21 +1231,8 @@ async function generatePDF(
     // Process content with code block, image, table, and HEADING handling
     const { paragraphs, codeBlocks, structuredBlocks, images, customTables, tables: mdTables, headings } = processMarkdownContent(chapter.content || "");
     
-    // Pre-fetch images for this chapter — cap at 3 per chapter to avoid CPU timeout
+    // SKIP image fetching/embedding in PDF to avoid CPU timeout — use text placeholders instead
     const fetchedImages: Map<number, { bytes: Uint8Array; type: 'png' | 'jpg' }> = new Map();
-    const imagesToFetch = images.slice(0, 3);
-    for (let i = 0; i < imagesToFetch.length; i++) {
-      const imgData = imagesToFetch[i];
-      if (imgData.url) {
-        console.log(`[EXPORT] Fetching image ${i + 1}/${imagesToFetch.length}: ${(imgData.alt || '').slice(0, 80)}`);
-        const imageBytes = await fetchImageBytes(imgData.url);
-        if (imageBytes) {
-          // Detect image type
-          const isPng = imageBytes[0] === 0x89 && imageBytes[1] === 0x50;
-          fetchedImages.set(i, { bytes: imageBytes, type: isPng ? 'png' : 'jpg' });
-        }
-      }
-    }
     
     for (let paraIdx = 0; paraIdx < paragraphs.length; paraIdx++) {
       const paragraph = paragraphs[paraIdx];
@@ -2110,7 +2019,7 @@ async function generateEPUB(
     for (const match of imageMatches) {
       const [fullMatch, alt, url] = match;
       
-      console.log(`[EXPORT] Fetching EPUB image: ${alt || 'panel'}`);
+      
       const imageBytes = await fetchImageBytes(url);
       if (imageBytes) {
         const kind = detectImageKind(imageBytes);
@@ -2560,7 +2469,7 @@ async function generateDOCX(
     
     for (const match of imageMatches) {
       const [, alt, url] = match;
-      console.log(`[EXPORT] Fetching DOCX image: ${alt || 'panel'}`);
+      
       const imageBytes = await fetchImageBytes(url);
       if (imageBytes) {
         imageCounter++;
@@ -2794,7 +2703,7 @@ async function generateDOCX(
     imageRels += `<Relationship Id="rId${imageRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/cover.${coverExt}"/>`;
     imageRelId++;
   } else if (coverImageBytes && !canEmbedDocxCover) {
-    console.log(`[EXPORT] DOCX cover image type not supported (${coverKind}); using text-only cover page`);
+    
   }
   
   // Add all chapter images
@@ -2803,7 +2712,7 @@ async function generateDOCX(
     const kind = detectImageKind(img.bytes);
     const canEmbed = kind === 'png' || kind === 'jpeg';
     if (!canEmbed) {
-      console.log(`[EXPORT] DOCX image ${img.id} type not supported (${kind}); skipping embed`);
+      
       continue;
     }
     const ext = imageKindToExt(kind);
