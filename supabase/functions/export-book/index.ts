@@ -768,7 +768,7 @@ serve(async (req) => {
     // Support both param names (client sends isAcademicMode, legacy sends academicMode)
     const resolvedAcademicMode = isAcademicMode || academicMode || false;
 
-    console.log(`[EXPORT] Plan: ${userPlan}, format: ${format}, chapters: ${chapters?.length || 0}`);
+    console.log(`[EXPORT] Plan: ${userPlan}, format: ${format}`);
     // Check format permissions (skip during trial or admin)
     if (!trialActive && !isAdmin && !allowedFormats.includes(format)) {
       
