@@ -16,7 +16,7 @@ export const isLaunchModeActive = (): boolean => true;
 export const LAUNCH_MODE_CONFIG = {
   freeBookLimit: 1, // 1 book per month for free tier
   freeMaxWordCount: 4000,
-  freeExportFormats: [] as const,
+  freeExportFormats: ['pdf'] as const, // Free tier gets PDF only
   showBanner: false,
 };
 

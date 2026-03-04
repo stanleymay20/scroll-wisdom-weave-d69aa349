@@ -892,9 +892,10 @@ serve(async (req) => {
     if (chaptersError) throw new Error("Failed to fetch chapters");
     if (!chapters || chapters.length === 0) throw new Error("No generated chapters found");
 
-    // Auto-repair mismatched [CODE_BLOCK] tags before export
+    // Auto-repair mismatched [CODE_BLOCK] tags and unclosed backtick fences before export
     for (const chapter of chapters) {
       if (chapter.content) {
+        // Repair [CODE_BLOCK] tags
         const openCount = (chapter.content.match(/\[CODE_BLOCK\]/g) || []).length;
         const closeCount = (chapter.content.match(/\[\/CODE_BLOCK\]/g) || []).length;
         if (openCount !== closeCount) {
@@ -912,6 +913,13 @@ serve(async (req) => {
               excess--;
             }
           }
+        }
+
+        // Repair unclosed backtick fences (``` without matching close)
+        const fenceCount = (chapter.content.match(/```/g) || []).length;
+        if (fenceCount % 2 !== 0) {
+          console.log(`[EXPORT] Repairing unclosed code fence in chapter ${chapter.chapter_number} (${fenceCount} fences)`);
+          chapter.content += '\n```';
         }
       }
     }
@@ -1170,7 +1178,7 @@ async function generatePDF(
     });
   }
   
-  page.drawText(`Published by Scroll Nations Publishing`, {
+  page.drawText(`Created with ScrollLibrary - AI-Assisted Content`, {
     x: margin,
     y: margin + 50,
     size: 10,
@@ -1184,7 +1192,7 @@ async function generatePDF(
   y = margin + 200;
   
   const copyrightText = [
-    `© ${year} ${author}. All rights reserved.`,
+    `Copyright ${year} ${author}. All rights reserved.`,
     "",
     isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`,
     isISBN ? "" : "(Internal identifier - not an ISBN)",
@@ -1192,7 +1200,7 @@ async function generatePDF(
     "This work was created with AI assistance under the full authorship",
     "and ownership of the author. The author retains all commercial rights.",
     "",
-    `Published by Scroll Nations Publishing`,
+    `Created with ScrollLibrary`,
   ];
   
   // Add academic disclaimer if needed
@@ -1220,33 +1228,9 @@ async function generatePDF(
     y -= 16;
   }
 
-  // Dedication Page
+  // Blank page separator (no hardcoded dedication - user may add their own)
   page = pdfDoc.addPage([pageWidth, pageHeight]);
   pageNumber++;
-  y = pageHeight / 2 + 40;
-  
-  const dedicationText = "To all who dare to lead with integrity and purpose.";
-  
-  page.drawText("DEDICATION", {
-    x: pageWidth / 2 - timesRomanBold.widthOfTextAtSize("DEDICATION", 14) / 2,
-    y: y + 40,
-    size: 14,
-    font: timesRomanBold,
-    color: rgb(0.3, 0.3, 0.3),
-  });
-  
-  const dedLines = wrapText(dedicationText, timesRoman, 14, textWidth - 80);
-  for (const line of dedLines) {
-    const lineW = timesRoman.widthOfTextAtSize(line, 14);
-    page.drawText(line, {
-      x: pageWidth / 2 - lineW / 2,
-      y,
-      size: 14,
-      font: timesRoman,
-      color: rgb(0.3, 0.3, 0.3),
-    });
-    y -= 22;
-  }
 
   // Table of Contents
   page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -1889,6 +1873,7 @@ async function generatePDF(
           if (y < margin + 30) {
             page = pdfDoc.addPage([pageWidth, pageHeight]);
             pageNumber++;
+            pageNumberRef.current = pageNumber;
             addPageNumber(page, pageNumber);
             y = pageHeight - margin - 30;
           }
@@ -2360,7 +2345,7 @@ ${htmlContent}
     <dc:title>${escapeXml(book.title)}</dc:title>
     <dc:creator>${escapeXml(author)}</dc:creator>
     <dc:language>${book.language || 'en'}</dc:language>
-    <dc:publisher>Scroll Nations Publishing</dc:publisher>
+    <dc:publisher>ScrollLibrary</dc:publisher>
     <dc:date>${year}</dc:date>
     <meta property="dcterms:modified">${new Date().toISOString().split('.')[0]}Z</meta>
     ${hasCover ? '<meta name="cover" content="cover-image"/>' : ''}
@@ -2469,7 +2454,7 @@ ${isAcademic ? `<p><em>[Academic Content - ${citationStyle} Citations]</em></p>`
 <hr/>
 <p>© ${year} ${escapeXml(author)}. All rights reserved.</p>
 <p>${isISBN ? `ISBN: ${identifier}` : `SPC: ${identifier}`}</p>
-<p>Published by Scroll Nations Publishing</p>`;
+<p>Created with ScrollLibrary - AI-Assisted Content</p>`;
 
   if (isAcademic) {
     titleContent += `
@@ -2488,11 +2473,11 @@ All references in this document are retrieved from verifiable academic databases
   const dedicationXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
-<head><title>Dedication</title><link rel="stylesheet" href="style.css"/></head>
+<head><title>About This Book</title><link rel="stylesheet" href="style.css"/></head>
 <body>
 <div style="text-align: center; margin-top: 40%; font-style: italic;">
-<h2>Dedication</h2>
-<p>To all who dare to lead with integrity and purpose.</p>
+<p>This book was created with AI assistance via ScrollLibrary.</p>
+<p>The author retains full ownership and commercial rights.</p>
 </div>
 </body>
 </html>`;
@@ -2895,7 +2880,7 @@ async function generateDOCX(
 <w:p><w:r><w:t></w:t></w:r></w:p>
 <w:p><w:r><w:t>© ${year} ${escapeXml(author)}. All rights reserved.</w:t></w:r></w:p>
 <w:p><w:r><w:t>${isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`}</w:t></w:r></w:p>
-<w:p><w:r><w:t>Published by Scroll Nations Publishing</w:t></w:r></w:p>`;
+<w:p><w:r><w:t>Created with ScrollLibrary - AI-Assisted Content</w:t></w:r></w:p>`;
 
   // Academic notice
   if (isAcademic) {
@@ -2913,9 +2898,10 @@ async function generateDOCX(
   documentContent += `
 <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
 <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
-<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="28"/></w:rPr><w:t>Dedication</w:t></w:r></w:p>
 <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
-<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>To all who dare to lead with integrity and purpose.</w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>This book was created with AI assistance via ScrollLibrary.</w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>The author retains full ownership and commercial rights.</w:t></w:r></w:p>
 <w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
 
   // Chapters with embedded images and tables
