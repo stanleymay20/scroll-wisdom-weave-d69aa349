@@ -737,8 +737,6 @@ serve(async (req) => {
       });
     }
 
-    console.log(`[EXPORT] User: ${user.id.slice(0, 8)}, format: ${format}`);
-
     // Check if user is admin
     const { data: userRoles } = await supabase
       .from("user_roles")
