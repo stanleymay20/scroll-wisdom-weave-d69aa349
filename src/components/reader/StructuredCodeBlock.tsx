@@ -269,8 +269,20 @@ export function parseStructuredCodeBlock(text: string): StructuredCodeBlockData 
     return match?.[1]?.trim();
   };
 
-  const codeMatch = content.match(/code:\s*\n```\w*\n([\s\S]*?)```/);
-  const code = codeMatch?.[1]?.trim() || extractMultilineField('code') || '';
+  // Extract code: prefer the full multiline field (captures everything between code: and next field)
+  // then strip any fenced code block markers (```lang / ```) that may appear inside
+  let code = '';
+  const rawCodeField = extractMultilineField('code');
+  if (rawCodeField) {
+    code = rawCodeField
+      .replace(/^```\w*\n?/gm, '')  // opening fences
+      .replace(/^```\s*$/gm, '')     // closing fences
+      .trim();
+  }
+  if (!code) {
+    const codeMatch = content.match(/code:\s*\n```\w*\n([\s\S]*?)```/);
+    code = codeMatch?.[1]?.trim() || '';
+  }
 
   const outputMatch = content.match(/output:\s*\n([\s\S]*?)(?=^(?:explanation|common_mistake):|$)/mi);
   const output = outputMatch?.[1]?.trim();
