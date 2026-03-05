@@ -195,6 +195,15 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     
     let html = cleanedText;
 
+    // CRITICAL: Protect fenced code blocks BEFORE any newline normalization.
+    // The newline-doubling regex below would insert \n\n between code lines,
+    // breaking code blocks apart into separate paragraphs.
+    const protectedCodeBlocks: { lang: string; code: string }[] = [];
+    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+      protectedCodeBlocks.push({ lang: lang || '', code: code });
+      return `___FENCED_CODE_${protectedCodeBlocks.length - 1}___`;
+    });
+
     // Pre-process: Ensure paragraphs are separated by double newlines.
     // AI-generated content often uses single newlines between paragraphs,
     // causing the entire chapter to render as ONE block (breaks audio sync).
@@ -251,12 +260,15 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/___STRUCTURED_CODE_BLOCK_(\d+)___/g, '<!--STRUCTURED_CODE_BLOCK_$1-->');
     html = html.replace(/___EVIDENCE_BLOCK_(\d+)___/g, '<!--EVIDENCE_BLOCK_$1-->');
 
-    // Code blocks (```language ... ```) - render with syntax highlighting support
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
+    // Restore protected fenced code blocks — render with syntax highlighting
+    html = html.replace(/___FENCED_CODE_(\d+)___/g, (_, idxStr) => {
+      const idx = parseInt(idxStr);
+      const block = protectedCodeBlocks[idx];
+      if (!block) return '';
+      const { lang, code } = block;
       const langLabel = lang ? `<span class="code-lang">${lang}</span>` : '';
       const copyBtn = `<button class="code-copy" data-code="${encodeURIComponent(code.trim())}">Copy</button>`;
       
-      // Apply syntax highlighting if language is supported
       let highlightedCode = code.trim();
       if (lang && hljs.getLanguage(lang.toLowerCase())) {
         try {
