@@ -196,13 +196,41 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     let html = cleanedText;
 
     // CRITICAL: Protect fenced code blocks BEFORE any newline normalization.
-    // The newline-doubling regex below would insert \n\n between code lines,
-    // breaking code blocks apart into separate paragraphs.
+    // Uses line-by-line parsing instead of regex to handle all fence patterns reliably.
     const protectedCodeBlocks: { lang: string; code: string }[] = [];
-    html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_, lang, code) => {
-      protectedCodeBlocks.push({ lang: lang || '', code: code });
-      return `___FENCED_CODE_${protectedCodeBlocks.length - 1}___`;
-    });
+    {
+      const lines = html.split('\n');
+      const result: string[] = [];
+      let inCodeBlock = false;
+      let codeLang = '';
+      let codeLines: string[] = [];
+
+      for (const line of lines) {
+        const trimmed = line.trim();
+        if (!inCodeBlock && /^```(\w*)$/.test(trimmed)) {
+          inCodeBlock = true;
+          codeLang = trimmed.replace(/^```/, '');
+          codeLines = [];
+        } else if (inCodeBlock && trimmed === '```') {
+          protectedCodeBlocks.push({ lang: codeLang, code: codeLines.join('\n') });
+          result.push(`___FENCED_CODE_${protectedCodeBlocks.length - 1}___`);
+          inCodeBlock = false;
+        } else if (inCodeBlock) {
+          codeLines.push(line);
+        } else {
+          result.push(line);
+        }
+      }
+      // If unclosed fence, flush remaining lines as code block
+      if (inCodeBlock && codeLines.length > 0) {
+        protectedCodeBlocks.push({ lang: codeLang, code: codeLines.join('\n') });
+        result.push(`___FENCED_CODE_${protectedCodeBlocks.length - 1}___`);
+      }
+      html = result.join('\n');
+      if (protectedCodeBlocks.length > 0) {
+        console.log(`[MarkdownRenderer] Protected ${protectedCodeBlocks.length} fenced code blocks (lines: ${protectedCodeBlocks.map(b => b.code.split('\n').length).join(', ')})`);
+      }
+    }
 
     // Pre-process: Ensure paragraphs are separated by double newlines.
     // AI-generated content often uses single newlines between paragraphs,
