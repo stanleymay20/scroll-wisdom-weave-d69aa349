@@ -227,9 +227,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
         result.push(`___FENCED_CODE_${protectedCodeBlocks.length - 1}___`);
       }
       html = result.join('\n');
-      if (protectedCodeBlocks.length > 0) {
-        console.log(`[MarkdownRenderer] Protected ${protectedCodeBlocks.length} fenced code blocks (lines: ${protectedCodeBlocks.map(b => b.code.split('\n').length).join(', ')})`);
-      }
+    }
     }
 
     // Pre-process: Ensure paragraphs are separated by double newlines.
