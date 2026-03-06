@@ -370,6 +370,31 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/\n\n+/g, '</div><div class="md-p">');
     html = `<div class="md-p">${html}</div>`;
     
+    // NOW restore protected fenced code blocks — AFTER paragraph splitting
+    // so that \n\n inside code doesn't get broken into separate <div>s.
+    html = html.replace(/___FENCED_CODE_(\d+)___/g, (_, idxStr) => {
+      const idx = parseInt(idxStr);
+      const block = protectedCodeBlocks[idx];
+      if (!block) return '';
+      const { lang, code } = block;
+      const langLabel = lang ? `<span class="code-lang">${lang}</span>` : '';
+      const copyBtn = `<button class="code-copy" data-code="${encodeURIComponent(code.trim())}">Copy</button>`;
+      
+      let highlightedCode = code.trim();
+      if (lang && hljs.getLanguage(lang.toLowerCase())) {
+        try {
+          highlightedCode = hljs.highlight(code.trim(), { 
+            language: lang.toLowerCase(),
+            ignoreIllegals: true 
+          }).value;
+        } catch {
+          // Fallback to plain text
+        }
+      }
+      
+      return `<div class="code-block">${langLabel}${copyBtn}<pre><code class="hljs language-${lang || 'text'}">${highlightedCode}</code></pre></div>`;
+    });
+
     // Clean up empty blocks
     html = html.replace(/<div class="md-p">\s*<\/div>/g, '');
     
