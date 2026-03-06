@@ -57,6 +57,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useLibraryLimits } from "@/hooks/useLibraryLimits";
 import { useLibraryData } from "@/hooks/useLibraryData";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
