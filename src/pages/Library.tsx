@@ -434,18 +434,12 @@ export default function Library() {
     searchQuery: searchQuery
   });
 
-  // Redirect to auth if not logged in
+  // Redirect to auth if not logged in (wait for subscription context to resolve)
   useEffect(() => {
-    if (user === null) {
-      // Wait briefly for subscription context to resolve
-      const timer = setTimeout(() => {
-        if (!user) {
-          navigate("/auth", { state: { redirectTo: "/library" } });
-        }
-      }, 500);
-      return () => clearTimeout(timer);
+    if (!subLoading && !user) {
+      navigate("/auth", { state: { redirectTo: "/library" } });
     }
-  }, [user, navigate]);
+  }, [user, subLoading, navigate]);
 
   // Extract unique categories from library items
   const categories = useMemo(() => {
