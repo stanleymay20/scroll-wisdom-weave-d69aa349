@@ -434,46 +434,18 @@ export default function Library() {
     searchQuery: searchQuery
   });
 
-  // Auth check - deferred to not block skeleton
+  // Redirect to auth if not logged in
   useEffect(() => {
-    let mounted = true;
-    
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!mounted) return;
-        
-        if (!session?.user) {
-          navigate("/auth", { state: { redirectTo: "/library" } });
-          return;
-        }
-        
-        setUser(session.user);
-      } catch (error) {
-        console.error("Auth error:", error);
-        if (mounted) navigate("/auth", { state: { redirectTo: "/library" } });
-      }
-    };
-    
-    // Defer auth check to not block skeleton render
-    setTimeout(checkAuth, 0);
-
-    // Auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (!mounted) return;
-        setUser(session?.user ?? null);
-        if (!session?.user) {
+    if (user === null) {
+      // Wait briefly for subscription context to resolve
+      const timer = setTimeout(() => {
+        if (!user) {
           navigate("/auth", { state: { redirectTo: "/library" } });
         }
-      }
-    );
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, [navigate]);
+      }, 500);
+      return () => clearTimeout(timer);
+    }
+  }, [user, navigate]);
 
   // Extract unique categories from library items
   const categories = useMemo(() => {
