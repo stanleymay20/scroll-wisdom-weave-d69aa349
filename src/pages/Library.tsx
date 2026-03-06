@@ -404,7 +404,7 @@ function MobileLibraryContent({
 export default function Library() {
   const { t } = useLanguage();
   const isMobile = useIsMobile();
-  const [user, setUser] = useState<any>(null);
+  const { user } = useSubscription();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "reading" | "completed">("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
