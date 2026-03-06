@@ -57,6 +57,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useLibraryLimits } from "@/hooks/useLibraryLimits";
 import { useLibraryData } from "@/hooks/useLibraryData";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
@@ -404,7 +405,7 @@ function MobileLibraryContent({
 export default function Library() {
   const { t } = useLanguage();
   const isMobile = useIsMobile();
-  const [user, setUser] = useState<any>(null);
+  const { user, isLoading: subLoading } = useSubscription();
   const [searchQuery, setSearchQuery] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "reading" | "completed">("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
@@ -433,46 +434,12 @@ export default function Library() {
     searchQuery: searchQuery
   });
 
-  // Auth check - deferred to not block skeleton
+  // Redirect to auth if not logged in (wait for subscription context to resolve)
   useEffect(() => {
-    let mounted = true;
-    
-    const checkAuth = async () => {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!mounted) return;
-        
-        if (!session?.user) {
-          navigate("/auth", { state: { redirectTo: "/library" } });
-          return;
-        }
-        
-        setUser(session.user);
-      } catch (error) {
-        console.error("Auth error:", error);
-        if (mounted) navigate("/auth", { state: { redirectTo: "/library" } });
-      }
-    };
-    
-    // Defer auth check to not block skeleton render
-    setTimeout(checkAuth, 0);
-
-    // Auth state listener
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (!mounted) return;
-        setUser(session?.user ?? null);
-        if (!session?.user) {
-          navigate("/auth", { state: { redirectTo: "/library" } });
-        }
-      }
-    );
-
-    return () => {
-      mounted = false;
-      subscription.unsubscribe();
-    };
-  }, [navigate]);
+    if (!subLoading && !user) {
+      navigate("/auth", { state: { redirectTo: "/library" } });
+    }
+  }, [user, subLoading, navigate]);
 
   // Extract unique categories from library items
   const categories = useMemo(() => {
