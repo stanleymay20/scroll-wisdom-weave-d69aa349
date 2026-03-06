@@ -228,7 +228,6 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       }
       html = result.join('\n');
     }
-    }
 
     // Pre-process: Ensure paragraphs are separated by double newlines.
     // AI-generated content often uses single newlines between paragraphs,
