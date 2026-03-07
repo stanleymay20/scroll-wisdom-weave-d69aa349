@@ -105,22 +105,38 @@ function computeProportionalPenalties(chapters: any[], totalChapters: number, bo
   // Track violations per dimension per rule
   const violationCounts: Record<string, number> = {};
 
+  // Book-type-aware penalty exemptions:
+  // - Bestseller/text: exempt from NO_DEFINITIONS (narrative style), NO_ENGAGEMENT relaxed
+  // - Comic/children: exempt from most penalties (visual content)
+  // - Workbook: exempt from word count minimums (interactive, short by design)
+  // - Reference: exempt from NO_ENGAGEMENT (lookup format, not interactive)
+  const isNarrativeType = ['bestseller', 'text', 'illustrated'].includes(bookType || '');
+  const isVisualType = ['comic', 'children'].includes(bookType || '');
+  const isWorkbook = bookType === 'workbook';
+  const isReference = bookType === 'reference';
+
+  // Skip ALL penalties for visual types — they have their own validation
+  if (isVisualType) {
+    return { structuralCap: 100, academicCap: 100, pedagogicalCap: 100, penalties: [] };
+  }
+
   for (const ch of chapters) {
     const content = ch.content || "";
     const wordCount = ch.word_count || content.split(/\s+/).filter(Boolean).length;
     const chNum = ch.chapter_number;
 
-    // STRUCTURAL: Word count checks
-    if (wordCount < 400) {
-      violationCounts["WORD_COUNT_CRITICAL"] = (violationCounts["WORD_COUNT_CRITICAL"] || 0) + 1;
-      penalties.push({ dimension: "structural", rule: "WORD_COUNT_CRITICAL", cap: 0, evidence: `Ch.${chNum}: ${wordCount} words (critically low, <400)`, chapterNumber: chNum });
-    } else if (wordCount < 800) {
-      violationCounts["WORD_COUNT_LOW"] = (violationCounts["WORD_COUNT_LOW"] || 0) + 1;
-      penalties.push({ dimension: "structural", rule: "WORD_COUNT_LOW", cap: 0, evidence: `Ch.${chNum}: ${wordCount} words (<800)`, chapterNumber: chNum });
+    // STRUCTURAL: Word count checks (exempt workbooks — they're short by design)
+    if (!isWorkbook) {
+      if (wordCount < 400) {
+        violationCounts["WORD_COUNT_CRITICAL"] = (violationCounts["WORD_COUNT_CRITICAL"] || 0) + 1;
+        penalties.push({ dimension: "structural", rule: "WORD_COUNT_CRITICAL", cap: 0, evidence: `Ch.${chNum}: ${wordCount} words (critically low, <400)`, chapterNumber: chNum });
+      } else if (wordCount < 800) {
+        violationCounts["WORD_COUNT_LOW"] = (violationCounts["WORD_COUNT_LOW"] || 0) + 1;
+        penalties.push({ dimension: "structural", rule: "WORD_COUNT_LOW", cap: 0, evidence: `Ch.${chNum}: ${wordCount} words (<800)`, chapterNumber: chNum });
+      }
     }
 
     // PEDAGOGICAL: No examples
-    // Broadened: code blocks, inline code, numbered lists, and comparison phrases also count as examples
     const examplePatterns = /\b(for example|e\.g\.|for instance|such as|consider|let's say|imagine|suppose|here is|here's|the following|as shown|as illustrated|in practice|in this case|to illustrate|let us|let's look|take a look|notice how|observe that|demonstrated|walkthrough|step[\s-]by[\s-]step)\b/gi;
     const codeBlockCount = (content.match(/```[\s\S]*?```/g) || []).length;
     const inlineCodeCount = (content.match(/`[^`]+`/g) || []).length;
@@ -131,14 +147,14 @@ function computeProportionalPenalties(chapters: any[], totalChapters: number, bo
       penalties.push({ dimension: "pedagogical", rule: "NO_EXAMPLES", cap: 0, evidence: `Ch.${chNum}: No examples, code blocks, or illustrative phrases`, chapterNumber: chNum });
     }
 
-    // ACADEMIC: No definitions
-    // Broadened: formal + bestseller-style definitions (narrative explanations, analogies, conceptual framing)
-    const definitionPatterns = /\b(is defined as|refers to|means that|can be described as|are called|is a type of|is the process of|is known as|stands for|abbreviated as|represents|denotes|specifies|implements|we define|definition of|def\s+\w+|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|type\s+\w+\s*=|interface\s+\w+|enum\s+\w+|this is the|this means|in other words|put simply|in simple terms|the core idea|the key insight|the fundamental|the distinction between|the difference between|what this means|think of it as|think of\s|this refers|this concept|this principle|essentially|at its core|boils down to|in essence|the premise|the notion)\b/gi;
-    const definitionCount = (content.match(definitionPatterns) || []).length;
-    // Only penalize if truly zero definitions — threshold 0 means count must be 0 to trigger
-    if (definitionCount === 0) {
-      violationCounts["NO_DEFINITIONS"] = (violationCounts["NO_DEFINITIONS"] || 0) + 1;
-      penalties.push({ dimension: "academic", rule: "NO_DEFINITIONS", cap: 0, evidence: `Ch.${chNum}: No key concept definitions`, chapterNumber: chNum });
+    // ACADEMIC: No definitions — SKIP for bestseller/text (narrative styles use different framing)
+    if (!isNarrativeType) {
+      const definitionPatterns = /\b(is defined as|refers to|means that|can be described as|are called|is a type of|is the process of|is known as|stands for|abbreviated as|represents|denotes|specifies|implements|we define|definition of|def\s+\w+|class\s+\w+|const\s+\w+\s*=|let\s+\w+\s*=|type\s+\w+\s*=|interface\s+\w+|enum\s+\w+|this is the|this means|in other words|put simply|in simple terms|the core idea|the key insight|the fundamental|the distinction between|the difference between|what this means|think of it as|think of\s|this refers|this concept|this principle|essentially|at its core|boils down to|in essence|the premise|the notion)\b/gi;
+      const definitionCount = (content.match(definitionPatterns) || []).length;
+      if (definitionCount === 0) {
+        violationCounts["NO_DEFINITIONS"] = (violationCounts["NO_DEFINITIONS"] || 0) + 1;
+        penalties.push({ dimension: "academic", rule: "NO_DEFINITIONS", cap: 0, evidence: `Ch.${chNum}: No key concept definitions`, chapterNumber: chNum });
+      }
     }
 
     // STRUCTURAL: No headings
@@ -148,14 +164,15 @@ function computeProportionalPenalties(chapters: any[], totalChapters: number, bo
       penalties.push({ dimension: "structural", rule: "NO_STRUCTURE", cap: 0, evidence: `Ch.${chNum}: Only ${headingCount} headings for ${wordCount} words`, chapterNumber: chNum });
     }
 
-    // PEDAGOGICAL: No questions or exercises
-    // Broadened: code comments with TODO/NOTE, numbered steps, and reflection prompts also count
-    const questionCount = (content.match(/\?/g) || []).length;
-    const exercisePatterns = /\b(exercise|try it|practice|quiz|question|task|activity|challenge|try this|your turn|hands[\s-]on|experiment|implement|modify the|build a|create a|write a|extend the|homework|lab|worksheet|reflection|think about|what would happen|what if|how would you|can you)\b/gi;
-    const exerciseCount = (content.match(exercisePatterns) || []).length;
-    if (questionCount === 0 && exerciseCount === 0) {
-      violationCounts["NO_ENGAGEMENT"] = (violationCounts["NO_ENGAGEMENT"] || 0) + 1;
-      penalties.push({ dimension: "pedagogical", rule: "NO_ENGAGEMENT", cap: 0, evidence: `Ch.${chNum}: No questions or exercises`, chapterNumber: chNum });
+    // PEDAGOGICAL: No questions or exercises — SKIP for reference (lookup format)
+    if (!isReference) {
+      const questionCount = (content.match(/\?/g) || []).length;
+      const exercisePatterns = /\b(exercise|try it|practice|quiz|question|task|activity|challenge|try this|your turn|hands[\s-]on|experiment|implement|modify the|build a|create a|write a|extend the|homework|lab|worksheet|reflection|think about|what would happen|what if|how would you|can you)\b/gi;
+      const exerciseCount = (content.match(exercisePatterns) || []).length;
+      if (questionCount === 0 && exerciseCount === 0) {
+        violationCounts["NO_ENGAGEMENT"] = (violationCounts["NO_ENGAGEMENT"] || 0) + 1;
+        penalties.push({ dimension: "pedagogical", rule: "NO_ENGAGEMENT", cap: 0, evidence: `Ch.${chNum}: No questions or exercises`, chapterNumber: chNum });
+      }
     }
   }
 

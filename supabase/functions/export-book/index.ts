@@ -834,7 +834,10 @@ serve(async (req) => {
       });
     }
 
-    if (!book.cover_image_url) throw new Error("Export requires a cover image");
+    // Cover image is optional — export will skip cover page if not available
+    if (!book.cover_image_url) {
+      console.log("[EXPORT] No cover image — skipping cover page");
+    }
 
     // Fetch chapters with references
     const { data: chapters, error: chaptersError } = await supabase

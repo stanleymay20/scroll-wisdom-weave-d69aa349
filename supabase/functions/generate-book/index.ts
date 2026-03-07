@@ -84,12 +84,18 @@ serve(async (req) => {
     const isAdmin = !!adminRole;
     if (isAdmin) console.log("[GENERATE-BOOK] ADMIN - bypassing limits");
 
-    // Profile & limits
-    const { data: profile } = await supabase
-      .from("profiles").select("plan, daily_book_count, last_book_date")
+    // Get subscription plan from subscriptions table (source of truth)
+    const { data: subscription } = await supabase
+      .from("subscriptions").select("tier, status")
       .eq("user_id", user.id).maybeSingle();
 
-    const userPlan = (profile?.plan || "free") as keyof typeof TIER_LIMITS;
+    // Only use tier if subscription is active
+    const userPlan = ((subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free") as keyof typeof TIER_LIMITS;
+
+    // Profile for daily limits tracking only
+    const { data: profile } = await supabase
+      .from("profiles").select("daily_book_count, last_book_date")
+      .eq("user_id", user.id).maybeSingle();
 
     // Model routing respects subscription tier — admin bypass is for limits only
     const effectivePlan: keyof typeof TIER_LIMITS = isAdmin ? "prophet_tier" : userPlan;
