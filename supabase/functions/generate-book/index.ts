@@ -135,21 +135,27 @@ serve(async (req) => {
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
-    // Build book type instructions
+    // Build book type instructions — pipeline-aware outline generation
     let typeInstr = "Focus on engaging narrative and transformation.";
     if (effectiveBookType === "comic") {
-      typeInstr = "COMIC/CHILDREN'S BOOK. Each chapter is a visual scene with minimal text. Focus on visual descriptions.";
+      typeInstr = "COMIC/GRAPHIC NOVEL. Each chapter is a visual scene with panel-based dialogue. Focus on visual storytelling and character arcs.";
+    } else if (effectiveBookType === "children") {
+      typeInstr = "CHILDREN'S BOOK. Simple, age-appropriate language. Short chapter titles. Each chapter is a self-contained story beat with a lesson or emotional moment. NO complex vocabulary.";
     } else if (effectiveBookType === "workbook") {
-      typeInstr = "WORKBOOK. Each chapter MUST have fill-in prompts, tables, reflection questions, action checkboxes. Max 1800 words.";
-    } else if (isAcademicType) {
-      // Academic/Technical/Reference/Professional share this rigor
-      const academicLabel = effectiveBookType === "professional" ? "PROFESSIONAL GUIDE" :
-                           effectiveBookType === "reference" ? "REFERENCE HANDBOOK" : "ACADEMIC TEXTBOOK";
+      typeInstr = "WORKBOOK. Each chapter MUST have fill-in prompts, tables, reflection questions, action checkboxes. Max 1800 words. Titles should be action-oriented.";
+    } else if (effectiveBookType === "professional") {
+      typeInstr = "PROFESSIONAL GUIDE. Use strategic, framework-driven titles. Each chapter covers a distinct business concept with actionable frameworks. Titles like 'Strategic [Topic]: [Specific Focus]'.";
+    } else if (effectiveBookType === "reference") {
+      typeInstr = "REFERENCE HANDBOOK. Use encyclopedic, lookup-ready titles. Each chapter covers a distinct domain area. Titles like '[Topic]: Definitions, Methods, and Best Practices'.";
+    } else if (effectiveBookType === "technical" || effectiveBookType === "academic") {
+      const academicLabel = effectiveBookType === "technical" ? "TECHNICAL GUIDE" : "ACADEMIC TEXTBOOK";
       typeInstr = `${academicLabel}. Use literal descriptive titles, learning objectives, technical tone. NO metaphorical titles (e.g. "Journey", "Wizard"). Use "Chapter X: [Topic]" format.`;
+    } else if (effectiveBookType === "text") {
+      typeInstr = "STANDARD TEXT. Clear, informative chapter titles. Adapt structure to the subject matter. No forced bestseller hooks unless naturally appropriate.";
+    } else if (effectiveBookType === "bestseller" || bestsellerMode) {
+      typeInstr = "BESTSELLER. Provocative titles, hooks, named principles, transformation promises. Use 'The [Concept]' or 'How to [Action]' style titles.";
     } else if (bookType === "illustrated") {
       typeInstr = "ILLUSTRATED BOOK. Include [IMAGE: description] placement suggestions.";
-    } else if (bestsellerMode) {
-      typeInstr = "BESTSELLER. Provocative titles, hooks, named principles, transformation promises. Use 'The [Concept]' or 'How to [Action]' style titles.";
     }
 
     const refInstr = (enableReferences || academicMode || isAcademicType)
