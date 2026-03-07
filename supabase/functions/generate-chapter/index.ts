@@ -2446,14 +2446,15 @@ serve(async (req) => {
     
     const isAdmin = userRoles?.some(r => r.role === 'admin') || false;
 
-    // Get subscription plan
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("plan")
+    // Get subscription plan from subscriptions table (source of truth)
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select("tier, status")
       .eq("user_id", user.id)
-      .single();
+      .maybeSingle();
 
-    const userPlan = profile?.plan || "free";
+    // Only use tier if subscription is active, otherwise fall back to free
+    const userPlan = (subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free";
     // Model routing respects subscription tier — admin bypass is for limits only, not model upgrade
     // Chief Editor rewrites use forceModel to ensure quality regardless of tier
     const baseModel = getModelForPlan(userPlan);
