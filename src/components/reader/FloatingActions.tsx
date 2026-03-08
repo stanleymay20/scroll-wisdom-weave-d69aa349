@@ -189,8 +189,23 @@ export function FloatingActions({
                     <BookOpen className="h-5 w-5 text-primary" />
                   </Button>
                 )}
+
+                {/* Chapter Video Generator */}
+                {FEATURES.enableChapterVideo && (
+                  <Button
+                    onClick={() => {
+                      onVideoClick();
+                      setIsExpanded(false);
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 rounded-xl hover:bg-primary/10"
+                    title="Generate Video"
+                  >
+                    <Video className="h-5 w-5 text-primary" />
+                  </Button>
+                )}
               </div>
-            </motion.div>
           </>
         )}
       </AnimatePresence>
