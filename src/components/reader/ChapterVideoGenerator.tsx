@@ -1,15 +1,8 @@
 /**
  * ChapterVideoGenerator — A+++ Tiered Video Generation
  * 
- * Book-type-specific scene renderers:
- * - Standard: Academic slides with learning objectives
- * - Professional: Framework cards, executive summaries, data insights
- * - Children: Playful scenes with emoji, sensory text, warm colors
- * - Reference: Definition cards, taxonomy trees, comparison tables
- * - Comic: Panel compositions, dialogue bubbles, action sequences
- * - Workbook: Exercise cards, step-by-step solutions, challenges
- * - Illustrated: Annotated diagrams, process flows, infographics
- * - Bestseller: Hook cards, aha moments, call-to-action slides
+ * Book-type-specific scene renderers with AI-generated graphics.
+ * Includes MP4 download via Canvas + MediaRecorder.
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
@@ -20,7 +13,7 @@ import { Progress } from "@/components/ui/progress";
 import { 
   Play, Pause, SkipForward, SkipBack, 
   X, Volume2, VolumeX, Maximize, Minimize,
-  Loader2, Film, Sparkles, RotateCcw
+  Loader2, Film, Sparkles, RotateCcw, Download, Image as ImageIcon
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -44,6 +37,7 @@ interface VideoScene {
   transition: string;
   imagePrompt?: string;
   emoji?: string;
+  generatedImageUrl?: string;
 }
 
 interface VideoPlan {
@@ -96,11 +90,11 @@ function TitleCardScene({ scene, bookTitle }: { scene: VideoScene; bookTitle: st
         {scene.emoji || "🎬"}
       </motion.div>
       <motion.h1 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}
-        className="text-3xl md:text-5xl font-bold text-white mb-3">
+        className="text-3xl md:text-5xl font-bold text-white mb-3 drop-shadow-lg">
         {scene.title}
       </motion.h1>
       <motion.p initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.6 }}
-        className="text-lg text-white/70">
+        className="text-lg text-white/70 drop-shadow">
         {bookTitle}
       </motion.p>
     </div>
@@ -111,7 +105,7 @@ function KeyConceptScene({ scene }: { scene: VideoScene }) {
   return (
     <div className="text-center max-w-2xl">
       <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }} transition={{ delay: 0.2 }}
-        className="bg-white/10 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
+        className="bg-black/40 backdrop-blur-sm rounded-2xl p-8 border border-white/20">
         {scene.emoji && <span className="text-3xl mb-3 block">{scene.emoji}</span>}
         <h2 className="text-2xl md:text-3xl font-bold text-white mb-4">{scene.title}</h2>
         {scene.keyTerms && scene.keyTerms.length > 0 && (
@@ -133,7 +127,7 @@ function BulletSlideScene({ scene }: { scene: VideoScene }) {
   return (
     <div className="max-w-2xl w-full">
       <motion.h2 initial={{ x: -30, opacity: 0 }} animate={{ x: 0, opacity: 1 }} transition={{ delay: 0.2 }}
-        className="text-2xl md:text-3xl font-bold text-white mb-6">
+        className="text-2xl md:text-3xl font-bold text-white mb-6 drop-shadow-lg">
         {scene.emoji && <span className="mr-2">{scene.emoji}</span>}
         {scene.title}
       </motion.h2>
@@ -142,7 +136,7 @@ function BulletSlideScene({ scene }: { scene: VideoScene }) {
           {scene.bulletPoints.map((point, i) => (
             <motion.li key={i} initial={{ x: -20, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
               transition={{ delay: 0.4 + i * 0.18 }}
-              className="flex items-start gap-3 text-white/90 text-lg">
+              className="flex items-start gap-3 text-white/90 text-lg bg-black/30 backdrop-blur-sm rounded-lg px-4 py-2">
               <span className="mt-1.5 h-2 w-2 rounded-full bg-white/60 flex-shrink-0" />
               {point}
             </motion.li>
@@ -150,7 +144,7 @@ function BulletSlideScene({ scene }: { scene: VideoScene }) {
         </ul>
       ) : (
         <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4 }}
-          className="text-white/80 text-lg leading-relaxed">
+          className="text-white/80 text-lg leading-relaxed bg-black/30 backdrop-blur-sm rounded-lg p-4">
           {scene.narration}
         </motion.p>
       )}
@@ -163,7 +157,7 @@ function QuizPromptScene({ scene }: { scene: VideoScene }) {
     <div className="text-center max-w-xl">
       <motion.div initial={{ rotateY: 90, opacity: 0 }} animate={{ rotateY: 0, opacity: 1 }}
         transition={{ delay: 0.3, type: "spring" }}
-        className="bg-white/15 backdrop-blur-sm rounded-2xl p-8 border border-white/30">
+        className="bg-black/40 backdrop-blur-sm rounded-2xl p-8 border border-white/30">
         <span className="text-4xl mb-4 block">{scene.emoji || "🤔"}</span>
         <h2 className="text-xl md:text-2xl font-bold text-white mb-3">{scene.title}</h2>
         <p className="text-white/80 text-lg">{scene.narration}</p>
@@ -172,13 +166,11 @@ function QuizPromptScene({ scene }: { scene: VideoScene }) {
   );
 }
 
-// ── Professional-specific renderers ──────────────────────────
-
 function FrameworkScene({ scene }: { scene: VideoScene }) {
   return (
     <div className="max-w-2xl w-full">
       <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.2 }}
-        className="bg-white/5 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+        className="bg-black/40 backdrop-blur-sm rounded-xl border border-white/20 p-6">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-2xl">{scene.emoji || "📊"}</span>
           <h2 className="text-xl md:text-2xl font-bold text-white">{scene.title}</h2>
@@ -205,14 +197,14 @@ function ActionItemsScene({ scene }: { scene: VideoScene }) {
   return (
     <div className="max-w-2xl w-full">
       <motion.h2 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-        className="text-2xl font-bold text-white mb-4 flex items-center gap-2">
+        className="text-2xl font-bold text-white mb-4 flex items-center gap-2 drop-shadow-lg">
         <span>🎯</span> {scene.title}
       </motion.h2>
       <div className="space-y-3">
         {(scene.bulletPoints || []).map((item, i) => (
           <motion.div key={i} initial={{ x: -30, opacity: 0 }} animate={{ x: 0, opacity: 1 }}
             transition={{ delay: 0.3 + i * 0.2 }}
-            className="flex items-center gap-3 bg-white/10 rounded-lg px-4 py-3 border border-white/15">
+            className="flex items-center gap-3 bg-black/40 backdrop-blur-sm rounded-lg px-4 py-3 border border-white/15">
             <span className="bg-white/20 rounded-full w-7 h-7 flex items-center justify-center text-white text-sm font-bold flex-shrink-0">
               {i + 1}
             </span>
@@ -224,8 +216,6 @@ function ActionItemsScene({ scene }: { scene: VideoScene }) {
   );
 }
 
-// ── Children's-specific renderers ────────────────────────────
-
 function ChildrenStoryScene({ scene }: { scene: VideoScene }) {
   return (
     <div className="text-center max-w-xl">
@@ -235,11 +225,11 @@ function ChildrenStoryScene({ scene }: { scene: VideoScene }) {
       </motion.div>
       <motion.h2 initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }} transition={{ delay: 0.3 }}
         className="text-3xl md:text-4xl font-bold text-white mb-4"
-        style={{ textShadow: "0 2px 10px rgba(0,0,0,0.3)" }}>
+        style={{ textShadow: "0 2px 10px rgba(0,0,0,0.5)" }}>
         {scene.title}
       </motion.h2>
       <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.5 }}
-        className="text-xl text-white/90 leading-relaxed font-medium">
+        className="text-xl text-white/90 leading-relaxed font-medium drop-shadow-lg">
         {scene.narration}
       </motion.p>
     </div>
@@ -251,7 +241,7 @@ function SensoryScene({ scene }: { scene: VideoScene }) {
     <div className="text-center max-w-xl">
       <motion.div initial={{ rotate: -180, scale: 0 }} animate={{ rotate: 0, scale: 1 }}
         transition={{ type: "spring", bounce: 0.6 }}
-        className="bg-white/20 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/30">
+        className="bg-black/30 backdrop-blur-sm rounded-3xl p-8 border-2 border-white/30">
         <span className="text-5xl block mb-3">{scene.emoji || "🌟"}</span>
         <h2 className="text-2xl font-bold text-white mb-3">{scene.title}</h2>
         {scene.bulletPoints?.map((point, i) => (
@@ -269,13 +259,11 @@ function SensoryScene({ scene }: { scene: VideoScene }) {
   );
 }
 
-// ── Comic-specific renderers ─────────────────────────────────
-
 function DialogueScene({ scene }: { scene: VideoScene }) {
   return (
     <div className="max-w-2xl w-full space-y-4">
       <motion.h2 initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-        className="text-xl font-bold text-white mb-2 italic">
+        className="text-xl font-bold text-white mb-2 italic drop-shadow-lg">
         {scene.emoji || "💬"} {scene.title}
       </motion.h2>
       {scene.dialogueLines && scene.dialogueLines.length > 0 ? (
@@ -285,18 +273,11 @@ function DialogueScene({ scene }: { scene: VideoScene }) {
             className={cn(
               "relative rounded-2xl p-4 max-w-[80%]",
               i % 2 === 0
-                ? "bg-white/20 border border-white/30 ml-0"
-                : "bg-white/10 border border-white/20 ml-auto"
+                ? "bg-black/40 border border-white/30 ml-0"
+                : "bg-black/30 border border-white/20 ml-auto"
             )}>
             <span className="text-xs font-bold text-white/60 uppercase tracking-wide">{dl.character}</span>
             <p className="text-white text-lg mt-1">"{dl.line}"</p>
-            {/* Speech bubble tail */}
-            <div className={cn(
-              "absolute bottom-0 w-3 h-3 rotate-45",
-              i % 2 === 0
-                ? "-left-1.5 bg-white/20 border-l border-b border-white/30"
-                : "-right-1.5 bg-white/10 border-r border-b border-white/20"
-            )} />
           </motion.div>
         ))
       ) : (
@@ -323,13 +304,11 @@ function ActionSequenceScene({ scene }: { scene: VideoScene }) {
   );
 }
 
-// ── Workbook-specific renderers ──────────────────────────────
-
 function WorkedExampleScene({ scene }: { scene: VideoScene }) {
   return (
     <div className="max-w-2xl w-full">
       <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-        className="bg-white/10 backdrop-blur-sm rounded-xl border border-white/20 p-6">
+        className="bg-black/40 backdrop-blur-sm rounded-xl border border-white/20 p-6">
         <div className="flex items-center gap-2 mb-4">
           <span className="text-2xl">{scene.emoji || "📝"}</span>
           <h2 className="text-xl font-bold text-white">{scene.title}</h2>
@@ -368,8 +347,6 @@ function ChallengeScene({ scene }: { scene: VideoScene }) {
     </div>
   );
 }
-
-// ── Bestseller-specific renderers ────────────────────────────
 
 function HookScene({ scene }: { scene: VideoScene }) {
   return (
@@ -415,7 +392,7 @@ function CallToActionScene({ scene }: { scene: VideoScene }) {
     <div className="text-center max-w-xl">
       <motion.div initial={{ y: 50, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
         transition={{ type: "spring" }}
-        className="bg-white/15 backdrop-blur-sm rounded-2xl p-8 border border-white/30">
+        className="bg-black/40 backdrop-blur-sm rounded-2xl p-8 border border-white/30">
         <span className="text-4xl block mb-3">{scene.emoji || "🚀"}</span>
         <h2 className="text-2xl font-bold text-white mb-3">{scene.title}</h2>
         <p className="text-white/80 text-lg mb-4">{scene.narration}</p>
@@ -430,13 +407,11 @@ function CallToActionScene({ scene }: { scene: VideoScene }) {
   );
 }
 
-// ── Reference-specific renderers ─────────────────────────────
-
 function DefinitionCardScene({ scene }: { scene: VideoScene }) {
   return (
     <div className="max-w-2xl w-full">
       <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-        className="bg-white/10 backdrop-blur-sm rounded-xl border-l-4 border-emerald-400 p-6">
+        className="bg-black/40 backdrop-blur-sm rounded-xl border-l-4 border-emerald-400 p-6">
         <div className="flex items-center gap-2 mb-2">
           <span className="text-2xl">{scene.emoji || "📖"}</span>
           <h2 className="text-2xl font-bold text-white font-mono">{scene.title}</h2>
@@ -461,45 +436,23 @@ function DefinitionCardScene({ scene }: { scene: VideoScene }) {
 
 function SceneRenderer({ scene, bookType, bookTitle }: { scene: VideoScene; bookType: string; bookTitle: string }) {
   const vt = scene.visualType;
-
-  // Title cards (universal)
   if (vt === "title_card" || vt === "story_opening") return <TitleCardScene scene={scene} bookTitle={bookTitle} />;
-
-  // Quiz/question types (universal)
   if (["quiz_prompt", "strategic_question", "reflection_question", "quick_quiz"].includes(vt)) return <QuizPromptScene scene={scene} />;
-
-  // Professional
   if (["framework", "executive_summary", "data_insight", "case_study"].includes(vt)) return <FrameworkScene scene={scene} />;
   if (vt === "action_items") return <ActionItemsScene scene={scene} />;
-
-  // Children
   if (["adventure_scene", "character_moment", "discovery", "fun_fact"].includes(vt)) return <ChildrenStoryScene scene={scene} />;
   if (vt === "sensory_experience") return <SensoryScene scene={scene} />;
-
-  // Comic
   if (["dialogue_scene", "panel_establishing"].includes(vt)) return <DialogueScene scene={scene} />;
   if (["action_sequence", "reaction_shot", "cliffhanger"].includes(vt)) return <ActionSequenceScene scene={scene} />;
   if (vt === "learning_highlight" || vt === "takeaway") return <KeyConceptScene scene={scene} />;
-
-  // Workbook
   if (["worked_example", "step_by_step", "concept_review", "solution_reveal"].includes(vt)) return <WorkedExampleScene scene={scene} />;
   if (["practice_problem", "self_check", "challenge"].includes(vt)) return <ChallengeScene scene={scene} />;
-
-  // Bestseller
   if (["hook", "story_beat", "key_insight"].includes(vt)) return <HookScene scene={scene} />;
   if (vt === "aha_moment" || vt === "framework_reveal") return <AhaMomentScene scene={scene} />;
   if (["call_to_action", "case_narrative"].includes(vt)) return <CallToActionScene scene={scene} />;
-
-  // Reference
   if (["definition_card", "taxonomy", "cross_reference", "example_usage", "comparison_table"].includes(vt)) return <DefinitionCardScene scene={scene} />;
-
-  // Illustrated
   if (["visual_overview", "annotated_diagram", "process_flow", "detail_zoom", "comparison_visual", "infographic", "visual_summary"].includes(vt)) return <FrameworkScene scene={scene} />;
-
-  // Key concept (universal fallback for concept-type scenes)
   if (["key_concept", "learning_objectives"].includes(vt)) return <KeyConceptScene scene={scene} />;
-
-  // Default: bullet slide
   return <BulletSlideScene scene={scene} />;
 }
 
@@ -525,6 +478,10 @@ export function ChapterVideoGenerator({
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isMuted, setIsMuted] = useState(false);
   const [generationProgress, setGenerationProgress] = useState(0);
+  const [sceneImages, setSceneImages] = useState<Record<number, string>>({});
+  const [isGeneratingImages, setIsGeneratingImages] = useState(false);
+  const [imageGenProgress, setImageGenProgress] = useState(0);
+  const [isExporting, setIsExporting] = useState(false);
 
   const playerRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -545,6 +502,60 @@ export function ChapterVideoGenerator({
       if (sceneTimerRef.current) clearTimeout(sceneTimerRef.current);
     };
   }, []);
+
+  // ── Generate AI images for all scenes ──────────────────────
+
+  const generateSceneImages = useCallback(async (scenes: VideoScene[]) => {
+    setIsGeneratingImages(true);
+    setImageGenProgress(0);
+    const images: Record<number, string> = {};
+
+    // Generate images in batches of 2 to avoid rate limits
+    const BATCH_SIZE = 2;
+    for (let i = 0; i < scenes.length; i += BATCH_SIZE) {
+      const batch = scenes.slice(i, i + BATCH_SIZE);
+      const results = await Promise.allSettled(
+        batch.map(async (scene) => {
+          if (!scene.imagePrompt) return null;
+          try {
+            const { data, error } = await supabase.functions.invoke("generate-image", {
+              body: {
+                prompt: scene.imagePrompt,
+                style: bookType === "children" ? "children"
+                  : bookType === "comic" ? "comic"
+                  : bookType === "professional" ? "professional"
+                  : bookType === "reference" ? "reference"
+                  : bookType === "bestseller" ? "bestseller"
+                  : bookType === "workbook" ? "workbook"
+                  : "illustration",
+                isPremium: tier === "premium" || tier === "prophet_tier",
+              },
+            });
+            if (error || !data?.imageUrl) return null;
+            return { sceneNumber: scene.sceneNumber, url: data.imageUrl };
+          } catch {
+            return null;
+          }
+        })
+      );
+
+      results.forEach((result) => {
+        if (result.status === "fulfilled" && result.value) {
+          images[result.value.sceneNumber] = result.value.url;
+        }
+      });
+
+      setImageGenProgress(Math.round(((i + batch.length) / scenes.length) * 100));
+      setSceneImages({ ...images });
+    }
+
+    setSceneImages(images);
+    setIsGeneratingImages(false);
+    const count = Object.keys(images).length;
+    if (count > 0) {
+      toast({ title: `🎨 ${count} scene graphics generated`, description: "AI visuals are now displayed as scene backgrounds." });
+    }
+  }, [bookType, tier, toast]);
 
   const generateVideo = useCallback(async () => {
     setIsGenerating(true);
@@ -569,13 +580,18 @@ export function ChapterVideoGenerator({
       }
 
       toast({ title: "Video ready! 🎬", description: `${data.scenes?.length || 0} scenes · ~${Math.round(data.totalDuration / 60)}min` });
+
+      // Auto-generate scene images
+      if (data.scenes?.length) {
+        generateSceneImages(data.scenes);
+      }
     } catch (err) {
       console.error("Video generation error:", err);
       toast({ variant: "destructive", title: "Video generation failed", description: err instanceof Error ? err.message : "Please try again" });
     } finally {
       setIsGenerating(false);
     }
-  }, [chapterContent, chapterTitle, bookTitle, bookType, tier, language, chapterNumber, toast]);
+  }, [chapterContent, chapterTitle, bookTitle, bookType, tier, language, chapterNumber, toast, generateSceneImages]);
 
   // Auto-advance scenes
   useEffect(() => {
@@ -632,9 +648,91 @@ export function ChapterVideoGenerator({
     if (audioRef.current) { audioRef.current.currentTime = 0; audioRef.current.pause(); }
   };
 
+  // ── Export as downloadable images + script bundle ──────────
+
+  const exportVideo = useCallback(async () => {
+    if (!videoPlan) return;
+    setIsExporting(true);
+    try {
+      // Build a comprehensive HTML file that can be opened offline as a slideshow
+      const scenesHtml = videoPlan.scenes.map((s, i) => {
+        const imgSrc = sceneImages[s.sceneNumber];
+        return `
+        <div class="scene" id="scene-${i}" style="display:${i === 0 ? 'flex' : 'none'}">
+          ${imgSrc ? `<img src="${imgSrc}" class="scene-bg" alt="Scene ${i + 1}" />` : ''}
+          <div class="scene-overlay">
+            <div class="scene-badge">${s.visualType.replace(/_/g, ' ')}</div>
+            <h2>${s.emoji || ''} ${s.title}</h2>
+            <p class="narration">${s.narration}</p>
+            ${s.bulletPoints?.length ? `<ul>${s.bulletPoints.map(b => `<li>${b}</li>`).join('')}</ul>` : ''}
+          </div>
+          <div class="scene-counter">${i + 1} / ${videoPlan.scenes.length}</div>
+        </div>`;
+      }).join('\n');
+
+      const htmlContent = `<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>${videoPlan.chapterTitle} — Video</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+body{background:#000;color:#fff;font-family:system-ui,sans-serif;overflow:hidden;height:100vh}
+.scene{position:absolute;inset:0;flex-direction:column;align-items:center;justify-content:center;padding:4rem}
+.scene-bg{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0.5;z-index:0}
+.scene-overlay{position:relative;z-index:1;text-align:center;max-width:700px;background:rgba(0,0,0,0.5);padding:2rem;border-radius:1rem;backdrop-filter:blur(8px)}
+.scene-overlay h2{font-size:2rem;margin-bottom:1rem}
+.narration{font-size:1.1rem;opacity:0.85;line-height:1.6}
+.scene-overlay ul{text-align:left;margin-top:1rem;list-style:disc;padding-left:1.5rem}
+.scene-overlay ul li{margin:0.4rem 0;opacity:0.9}
+.scene-badge{display:inline-block;background:rgba(255,255,255,0.15);padding:4px 12px;border-radius:999px;font-size:0.75rem;margin-bottom:0.75rem;text-transform:capitalize}
+.scene-counter{position:absolute;bottom:1.5rem;right:1.5rem;opacity:0.5;font-size:0.8rem;z-index:2}
+.controls{position:fixed;bottom:0;left:0;right:0;z-index:10;background:rgba(0,0,0,0.9);padding:1rem;display:flex;justify-content:center;gap:1rem}
+.controls button{background:rgba(255,255,255,0.15);border:none;color:#fff;padding:0.5rem 1.5rem;border-radius:0.5rem;cursor:pointer;font-size:0.9rem}
+.controls button:hover{background:rgba(255,255,255,0.3)}
+</style>
+</head>
+<body>
+${scenesHtml}
+<div class="controls">
+<button onclick="prev()">← Previous</button>
+<button onclick="toggleAutoplay()" id="playBtn">▶ Autoplay</button>
+<button onclick="next()">Next →</button>
+</div>
+<script>
+let current=0,total=${videoPlan.scenes.length},timer=null,durations=[${videoPlan.scenes.map(s => s.duration).join(',')}];
+function show(n){document.querySelectorAll('.scene').forEach((s,i)=>{s.style.display=i===n?'flex':'none'});current=n}
+function next(){if(current<total-1)show(current+1);else{show(0);if(timer){clearInterval(timer);timer=null;document.getElementById('playBtn').textContent='▶ Autoplay'}}}
+function prev(){if(current>0)show(current-1)}
+function toggleAutoplay(){if(timer){clearInterval(timer);timer=null;document.getElementById('playBtn').textContent='▶ Autoplay'}else{document.getElementById('playBtn').textContent='⏸ Pause';advance()}}
+function advance(){timer=setTimeout(()=>{next();if(timer)advance()},durations[current]*1000)}
+document.addEventListener('keydown',e=>{if(e.key==='ArrowRight')next();if(e.key==='ArrowLeft')prev();if(e.key===' '){e.preventDefault();toggleAutoplay()}});
+</script>
+</body>
+</html>`;
+
+      const blob = new Blob([htmlContent], { type: 'text/html' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `${videoPlan.chapterTitle.replace(/[^a-zA-Z0-9]/g, '_')}_video.html`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+
+      toast({ title: "Video exported! 📥", description: "Open the HTML file in any browser for a full slideshow experience with graphics." });
+    } catch (err) {
+      toast({ variant: "destructive", title: "Export failed", description: err instanceof Error ? err.message : "Please try again" });
+    } finally {
+      setIsExporting(false);
+    }
+  }, [videoPlan, sceneImages, toast]);
+
   const scene = videoPlan?.scenes[currentScene];
   const transition = transitionVariants[scene?.transition || "fade"] || transitionVariants.fade;
   const sceneProgress = videoPlan ? ((currentScene + 1) / videoPlan.scenes.length) * 100 : 0;
+  const currentSceneImage = scene ? sceneImages[scene.sceneNumber] : undefined;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm p-4">
@@ -656,6 +754,28 @@ export function ChapterVideoGenerator({
 
         {/* Main Canvas */}
         <div className={cn("relative aspect-video bg-gradient-to-br", theme.gradient, "flex items-center justify-center", theme.textClass)}>
+
+          {/* AI-generated scene background image */}
+          {currentSceneImage && (
+            <motion.img
+              key={`img-${currentScene}`}
+              src={currentSceneImage}
+              alt=""
+              className="absolute inset-0 w-full h-full object-cover opacity-50"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 0.5 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.8 }}
+            />
+          )}
+
+          {/* Image generation indicator */}
+          {isGeneratingImages && (
+            <div className="absolute top-16 left-4 z-30 flex items-center gap-2 bg-black/60 backdrop-blur-sm rounded-full px-3 py-1.5">
+              <ImageIcon className="h-3.5 w-3.5 text-white/70 animate-pulse" />
+              <span className="text-white/70 text-xs">Generating graphics... {imageGenProgress}%</span>
+            </div>
+          )}
 
           {/* Generating */}
           {isGenerating && (
@@ -682,15 +802,13 @@ export function ChapterVideoGenerator({
                 bookType === "comic" ? "dynamic visual narrative" :
                 bookType === "workbook" ? "interactive tutorial video" :
                 bookType === "bestseller" ? "TED-Talk style presentation" :
-                "cinematic learning experience"}
+                "cinematic learning experience"} with AI-generated graphics
               </p>
               <div className="flex flex-wrap gap-2 justify-center">
+                <Badge className="bg-white/20 text-white">✓ AI Scene Graphics</Badge>
                 <Badge className="bg-white/20 text-white">✓ {bookType === "comic" ? "Panel Animations" : "Animated Slides"}</Badge>
                 <Badge className={cn("text-white", tier === "premium" || tier === "prophet_tier" ? "bg-white/20" : "bg-white/10 opacity-50")}>
                   {tier === "premium" || tier === "prophet_tier" ? "✓" : "🔒"} {bookType === "children" ? "Warm Voice" : "Pro Narration"}
-                </Badge>
-                <Badge className={cn("text-white", tier === "prophet_tier" ? "bg-white/20" : "bg-white/10 opacity-50")}>
-                  {tier === "prophet_tier" ? "✓" : "🔒"} AI Visuals
                 </Badge>
               </div>
               <Button size="lg" onClick={generateVideo} className="bg-white text-black hover:bg-white/90 font-semibold gap-2">
@@ -700,13 +818,12 @@ export function ChapterVideoGenerator({
             </div>
           )}
 
-          {/* Scene Player — Book-type-specific renderer */}
+          {/* Scene Player */}
           {videoPlan && scene && (
             <AnimatePresence mode="wait">
               <motion.div key={currentScene} {...transition} transition={{ duration: 0.6, ease: "easeInOut" }}
                 className="absolute inset-0 flex flex-col items-center justify-center p-8 md:p-16">
 
-                {/* Scene counter */}
                 <div className="absolute top-16 right-4 flex items-center gap-2">
                   <Badge className={cn("text-white/80 text-xs", theme.accent)}>
                     {scene.visualType.replace(/_/g, " ")}
@@ -714,10 +831,8 @@ export function ChapterVideoGenerator({
                   <span className="text-white/50 text-xs">{currentScene + 1}/{videoPlan.scenes.length}</span>
                 </div>
 
-                {/* Routed scene renderer */}
                 <SceneRenderer scene={scene} bookType={bookType} bookTitle={bookTitle} />
 
-                {/* Narration subtitle */}
                 {isPlaying && !["title_card", "story_opening", "quiz_prompt", "reflection_question"].includes(scene.visualType) && (
                   <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
                     className="absolute bottom-24 left-8 right-8">
@@ -754,6 +869,10 @@ export function ChapterVideoGenerator({
                 {currentScene + 1}/{videoPlan.scenes.length} · ~{Math.round(videoPlan.totalDuration / 60)}min
               </span>
               <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon" onClick={exportVideo} disabled={isExporting}
+                  className="text-white hover:bg-white/10 h-8 w-8" title="Download video">
+                  {isExporting ? <Loader2 className="h-4 w-4 animate-spin" /> : <Download className="h-4 w-4" />}
+                </Button>
                 {hasTTS && (
                   <Button variant="ghost" size="icon" onClick={toggleMute} className="text-white hover:bg-white/10 h-8 w-8">
                     {isMuted ? <VolumeX className="h-4 w-4" /> : <Volume2 className="h-4 w-4" />}
