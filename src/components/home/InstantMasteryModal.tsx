@@ -3,7 +3,7 @@
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -213,7 +213,7 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
       <DialogContent className="sm:max-w-md p-0 gap-0 overflow-hidden max-h-[90vh] overflow-y-auto bg-background/95 backdrop-blur-md border-primary/20 shadow-xl">
         <DialogTitle className="sr-only">Cognitive Assessment</DialogTitle>
 
-        <AnimatePresence mode="wait">
+        <div>
           {/* LOCKED */}
           {phase === "locked" && (
             <motion.div key="locked" initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="p-6 text-center">
@@ -426,7 +426,7 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
               <p className="text-xs text-muted-foreground mt-1">Preparing structured assessment engine.</p>
             </motion.div>
           )}
-        </AnimatePresence>
+        </div>
       </DialogContent>
     </Dialog>
   );

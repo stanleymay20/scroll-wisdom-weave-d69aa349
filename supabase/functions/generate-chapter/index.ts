@@ -780,6 +780,20 @@ const CHILDREN_SKELETONS = [
 3. FEELINGS AND CHOICES — Character faces emotions and decides
 4. TRYING AND GROWING — Character grows through effort
 5. A NEW NORMAL — Things are better because of the journey`,
+
+  `STRUCTURE:
+1. A SPECIAL PLACE — Character loves a particular setting
+2. A NEW FRIEND — An unexpected companion appears
+3. LEARNING TOGETHER — Both teach each other something
+4. A CHALLENGE — Their bond is tested by a difficulty
+5. STRONGER TOGETHER — They overcome it through teamwork and kindness`,
+
+  `STRUCTURE:
+1. SOMETHING IS MISSING — Character notices something isn't right
+2. ASKING FOR HELP — Character seeks guidance from a wise figure
+3. THE WRONG WAY — First attempt fails, but lesson is learned
+4. THE RIGHT WAY — Character tries again with new understanding
+5. CELEBRATION — Community celebrates the character's growth`,
 ];
 
 function getRandomSkeleton(bookType: string, chapterNumber: number): string {
@@ -4442,7 +4456,7 @@ ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat
 
 BEGIN WRITING THE FULL BESTSELLER-GRADE CHAPTER:`;
       } else {
-        // STANDARD TEXT — no bestseller mechanics forced
+        // STANDARD TEXT — no bestseller mechanics forced, NO illustration markers
         chapterPrompt = `${previousChaptersContext}Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
 
 LANGUAGE: Generate ALL content in ${languageName}.
@@ -4454,17 +4468,14 @@ ${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. C
 
 CONCEPT BUDGET: Introduce and clearly explain 8-15 distinct NAMED concepts relevant to "${chapterTitle}". Name theories, principles, frameworks, and models explicitly. Do NOT just describe phenomena — NAME the constructs.
 
-ILLUSTRATION PLACEMENT:
-Insert 2-3 [FIGURE X: description] markers at key moments for visual reinforcement.
-Example: [FIGURE 1: An infographic showing the relationship between the three core principles discussed in this chapter]
-
 REQUIREMENTS:
 - Approximately ${targetWords} words
 - Use proper Markdown formatting (## headings, **bold**, tables where useful)
 - Clear, well-structured, informative writing with specific examples (names, numbers, dates)
 - Adapt tone and depth to the subject matter
-- Include 2-3 [FIGURE X: description] markers for key concept visuals
 - Every major claim needs a concrete example with specifics
+- ❌ Do NOT include [FIGURE] markers or illustration placeholders — this is text-only content
+- ❌ Do NOT include image references or visual suggestions
 ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts - do NOT repeat introductions' : ''}
 
 BEGIN WRITING THE CHAPTER:`;
