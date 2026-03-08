@@ -600,7 +600,7 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
       </DialogContent>
     </Dialog>
   );
-}
+});
 
 // Compact button for sidebar/floating actions
 export function LearningDeckButton({
