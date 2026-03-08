@@ -144,7 +144,6 @@ export default function Generate() {
   
   // Fiction writing state
   const [fictionConfig, setFictionConfig] = useState<FictionConfig>(DEFAULT_FICTION_CONFIG);
-  const [bestsellerMode, setBestsellerMode] = useState(true); // Default ON for paid tiers
   
   // Author & Imprint state
   const [authorMode, setAuthorMode] = useState<AuthorMode>("ai");
