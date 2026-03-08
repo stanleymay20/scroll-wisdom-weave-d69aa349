@@ -38,6 +38,7 @@ import { ComicLearningObjectives, ComicLearningConfig } from "@/components/gener
 import { CharacterPortraitPreview } from "@/components/generate/CharacterPortraitPreview";
 import { BestsellerModeToggle } from "@/components/generate/BestsellerModeToggle";
 import { AuthorImprint, AuthorMode } from "@/components/generate/AuthorImprint";
+import { FictionWritingTools, FictionConfig, DEFAULT_FICTION_CONFIG } from "@/components/generate/FictionWritingTools";
 import { usePagePerformance } from "@/lib/performance";
 import { useGracefulDegradation } from "@/hooks/useNetworkAction";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -139,7 +140,10 @@ export default function Generate() {
   
   const [contentMode, setContentMode] = useState<ContentMode>("creative");
   const [citationStyle, setCitationStyle] = useState<CitationStyle>("APA");
-  const [bestsellerMode, setBestsellerMode] = useState(true); // Default ON for paid tiers
+  const [bestsellerMode, setBestsellerMode] = useState(true);
+  
+  // Fiction writing state
+  const [fictionConfig, setFictionConfig] = useState<FictionConfig>(DEFAULT_FICTION_CONFIG);
   
   // Author & Imprint state
   const [authorMode, setAuthorMode] = useState<AuthorMode>("ai");
@@ -183,7 +187,8 @@ export default function Generate() {
       case "workbook":
         return "workbook";
       case "children":
-        return "illustrated"; // Children's books are visual-first
+        return "illustrated";
+      case "fiction":
       case "academic":
       case "professional":
       case "reference":
@@ -327,6 +332,8 @@ export default function Generate() {
           comicSubTypeConfig: extendedBookType === "comic" ? comicSubTypeConfig : null,
           characterSheetConfig: extendedBookType === "comic" ? characterSheetConfig : null,
           comicLearningConfig: extendedBookType === "comic" && comicSubTypeConfig?.hasLearningObjectives ? comicLearningConfig : null,
+          // Fiction-specific fields
+          fictionConfig: extendedBookType === "fiction" ? fictionConfig : null,
         },
       });
 
@@ -636,6 +643,15 @@ export default function Generate() {
                     />
                   )}
                 </div>
+              )}
+
+              {/* Fiction Writing Tools - shows when fiction selected */}
+              {extendedBookType === "fiction" && (
+                <FictionWritingTools
+                  value={fictionConfig}
+                  onChange={setFictionConfig}
+                  disabled={isGenerating}
+                />
               )}
 
               {/* Word Count & Language - hide word count for comics/workbooks */}

@@ -3,7 +3,7 @@ import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import { 
   BookOpen, BookImage, Image as ImageIcon, 
   GraduationCap, Briefcase, FileEdit, BookText, FileSpreadsheet,
-  Code, Baby, Sparkles, BookMarked
+  Code, Baby, Sparkles, BookMarked, Drama
 } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,7 @@ export type ExtendedBookType =
   | "children"      // Children's Book
   | "technical"     // Technical / Hands-On Guide
   | "reference"     // Reference / Handbook
+  | "fiction"       // Fiction / Novel
   | "text";         // Standard Text (legacy)
 
 interface BookTypeSelectorProps {
@@ -97,6 +98,14 @@ const ALL_BOOK_TYPES: BookTypeOption[] = [
     hint: "Short sentences, high image ratio",
     badge: "Visual",
     featureFlag: FEATURES.enableIllustrated,
+  },
+  {
+    value: "fiction",
+    label: "Fiction / Novel",
+    description: "Narrative fiction with characters & plot",
+    icon: Drama,
+    hint: "Characters, dialogue, scene-based storytelling",
+    badge: "New",
   },
   {
     value: "reference",
