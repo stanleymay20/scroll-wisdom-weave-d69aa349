@@ -24,6 +24,7 @@ export { PreviouslyInBookCard } from './PreviouslyInBookCard';
 export { ReadingSessionTimer } from './ReadingSessionTimer';
 export { SentenceHighlighter } from './SentenceHighlighter';
 export { CompetencyLearningPanel } from './CompetencyLearningPanel';
+export { AdaptiveLearningPath } from './AdaptiveLearningPath';
 export type { ReadingTheme } from './ReaderSettingsPanel';
 
 // Lazy-loaded panels for performance optimization
