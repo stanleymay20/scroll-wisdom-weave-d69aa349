@@ -144,11 +144,18 @@ export function ChapterVideoGenerator({
       setPhase("imaging");
       setProgressLabel(`Generating ${scenePlan.length} cinematic keyframes...`);
 
-      // Phase 2: Generate images in batches
+      // Phase 2 + 3: Generate images AND narration IN PARALLEL
+      setPhase("imaging");
       const BATCH_SIZE = 2;
       const updatedScenes = [...scenePlan];
+
+      // Start narration generation immediately (runs concurrently)
+      setProgressLabel(`Generating visuals & narration in parallel...`);
+      const narrationPromise = narration.generateNarration(scenePlan);
+
+      // Generate images in batches while narration runs
       for (let i = 0; i < scenePlan.length; i += BATCH_SIZE) {
-        setProgressLabel(`Rendering scene ${i + 1}–${Math.min(i + BATCH_SIZE, scenePlan.length)} of ${scenePlan.length}...`);
+        setProgressLabel(`Rendering visuals ${i + 1}–${Math.min(i + BATCH_SIZE, scenePlan.length)} + narration...`);
         const { data: imgData, error: imgError } = await supabase.functions.invoke("generate-cinematic-video", {
           body: {
             chapterContent, chapterTitle, bookTitle, bookType, tier,
@@ -164,17 +171,22 @@ export function ChapterVideoGenerator({
           setScenes([...updatedScenes]);
         }
         if (imgData?.rateLimited) {
-          setProgressLabel("Rate limited — waiting 5s...");
-          await new Promise(r => setTimeout(r, 5000));
+          await new Promise(r => setTimeout(r, 3000));
         }
         setProgress(Math.min(70, 25 + Math.round(((i + BATCH_SIZE) / scenePlan.length) * 45)));
       }
 
-      // Phase 3: Generate narration audio
+      // Wait for narration to finish (likely already done since it ran in parallel)
       setPhase("narrating");
-      setProgress(75);
-      setProgressLabel("Generating voice narration...");
-      const scenesWithAudio = await narration.generateNarration(updatedScenes);
+      setProgress(80);
+      setProgressLabel("Finalizing narration...");
+      const scenesWithNarration = await narrationPromise;
+
+      // Merge image URLs into narrated scenes
+      const scenesWithAudio = scenesWithNarration.map((s, i) => ({
+        ...s,
+        imageUrl: updatedScenes[i]?.imageUrl || s.imageUrl,
+      }));
       setScenes(scenesWithAudio);
 
       setProgress(100);

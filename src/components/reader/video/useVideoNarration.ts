@@ -1,6 +1,6 @@
 /**
  * Hook to generate and manage TTS narration audio for video scenes.
- * Uses the existing text-to-speech edge function.
+ * Uses parallel batching for speed.
  */
 import { useState, useRef, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,6 +12,8 @@ interface NarrationState {
   audioElements: Map<number, HTMLAudioElement>;
   error: string | null;
 }
+
+const TTS_BATCH_SIZE = 3; // Generate 3 scenes' audio in parallel
 
 export function useVideoNarration() {
   const [state, setState] = useState<NarrationState>({
@@ -25,57 +27,79 @@ export function useVideoNarration() {
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const abortRef = useRef(false);
 
-  // Generate narration audio for all scenes
+  // Generate a single scene's narration
+  const generateSingleNarration = useCallback(async (scene: CinematicScene): Promise<{
+    sceneNumber: number;
+    audioUrl?: string;
+    audioDuration?: number;
+    audio?: HTMLAudioElement;
+  } | null> => {
+    if (!scene.narration?.trim()) return null;
+
+    try {
+      const { data, error } = await supabase.functions.invoke("text-to-speech", {
+        body: { text: scene.narration, voice: "onyx" },
+      });
+
+      if (error || !data?.audioContent) {
+        console.warn(`[VideoNarration] Scene ${scene.sceneNumber} TTS failed:`, error);
+        return null;
+      }
+
+      const audioBlob = base64ToBlob(data.audioContent, "audio/mpeg");
+      const audioUrl = URL.createObjectURL(audioBlob);
+      const audio = new Audio(audioUrl);
+
+      await new Promise<void>((resolve) => {
+        audio.addEventListener("loadedmetadata", () => resolve(), { once: true });
+        audio.addEventListener("error", () => resolve(), { once: true });
+        audio.load();
+      });
+
+      const audioDuration = audio.duration && isFinite(audio.duration) ? audio.duration : 0;
+      return { sceneNumber: scene.sceneNumber, audioUrl, audioDuration, audio };
+    } catch (err) {
+      console.warn(`[VideoNarration] Scene ${scene.sceneNumber} error:`, err);
+      return null;
+    }
+  }, []);
+
+  // Generate narration audio for all scenes in parallel batches
   const generateNarration = useCallback(async (scenes: CinematicScene[]): Promise<CinematicScene[]> => {
     abortRef.current = false;
     setState(s => ({ ...s, isGenerating: true, progress: 0, error: null }));
 
     const updatedScenes = [...scenes];
     const total = scenes.length;
+    let completed = 0;
 
-    for (let i = 0; i < total; i++) {
+    // Process in parallel batches
+    for (let i = 0; i < total; i += TTS_BATCH_SIZE) {
       if (abortRef.current) break;
-      const scene = scenes[i];
-      if (!scene.narration?.trim()) continue;
+      
+      const batch = scenes.slice(i, i + TTS_BATCH_SIZE);
+      const results = await Promise.allSettled(batch.map(s => generateSingleNarration(s)));
 
-      try {
-        const { data, error } = await supabase.functions.invoke("text-to-speech", {
-          body: { text: scene.narration, voice: "onyx" },
-        });
-
-        if (error || !data?.audioContent) {
-          console.warn(`[VideoNarration] Scene ${scene.sceneNumber} TTS failed:`, error);
-          continue;
+      results.forEach((result) => {
+        if (result.status === "fulfilled" && result.value) {
+          const { sceneNumber, audioUrl, audioDuration, audio } = result.value;
+          const idx = updatedScenes.findIndex(s => s.sceneNumber === sceneNumber);
+          if (idx >= 0 && audioUrl) {
+            updatedScenes[idx] = {
+              ...updatedScenes[idx],
+              audioUrl,
+              duration: audioDuration && audioDuration > 0
+                ? Math.max(updatedScenes[idx].duration, Math.ceil(audioDuration) + 1)
+                : updatedScenes[idx].duration,
+              audioDuration,
+            };
+          }
+          if (audio) audioMapRef.current.set(sceneNumber, audio);
         }
+      });
 
-        // Create audio element from base64
-        const audioBlob = base64ToBlob(data.audioContent, "audio/mpeg");
-        const audioUrl = URL.createObjectURL(audioBlob);
-        const audio = new Audio(audioUrl);
-
-        // Wait for metadata to get duration
-        await new Promise<void>((resolve) => {
-          audio.addEventListener("loadedmetadata", () => resolve(), { once: true });
-          audio.addEventListener("error", () => resolve(), { once: true });
-          audio.load();
-        });
-
-        const audioDuration = audio.duration && isFinite(audio.duration) ? audio.duration : 0;
-
-        updatedScenes[i] = {
-          ...updatedScenes[i],
-          audioUrl,
-          // Use audio duration if longer than planned scene duration
-          duration: audioDuration > 0 ? Math.max(updatedScenes[i].duration, Math.ceil(audioDuration) + 1) : updatedScenes[i].duration,
-          audioDuration,
-        };
-
-        audioMapRef.current.set(scene.sceneNumber, audio);
-      } catch (err) {
-        console.warn(`[VideoNarration] Scene ${scene.sceneNumber} error:`, err);
-      }
-
-      setState(s => ({ ...s, progress: Math.round(((i + 1) / total) * 100) }));
+      completed += batch.length;
+      setState(s => ({ ...s, progress: Math.round((completed / total) * 100) }));
     }
 
     setState(s => ({
@@ -86,16 +110,13 @@ export function useVideoNarration() {
     }));
 
     return updatedScenes;
-  }, []);
+  }, [generateSingleNarration]);
 
-  // Play audio for a specific scene
   const playSceneAudio = useCallback((sceneNumber: number) => {
-    // Stop current
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
       currentAudioRef.current.currentTime = 0;
     }
-
     const audio = audioMapRef.current.get(sceneNumber);
     if (audio) {
       audio.currentTime = 0;
@@ -104,21 +125,14 @@ export function useVideoNarration() {
     }
   }, []);
 
-  // Pause current audio
   const pauseAudio = useCallback(() => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.pause();
-    }
+    currentAudioRef.current?.pause();
   }, []);
 
-  // Resume current audio
   const resumeAudio = useCallback(() => {
-    if (currentAudioRef.current) {
-      currentAudioRef.current.play().catch(() => {});
-    }
+    currentAudioRef.current?.play().catch(() => {});
   }, []);
 
-  // Stop all audio
   const stopAllAudio = useCallback(() => {
     if (currentAudioRef.current) {
       currentAudioRef.current.pause();
@@ -127,14 +141,10 @@ export function useVideoNarration() {
     }
   }, []);
 
-  // Set volume (0-1)
   const setVolume = useCallback((volume: number) => {
-    audioMapRef.current.forEach(audio => {
-      audio.volume = volume;
-    });
+    audioMapRef.current.forEach(audio => { audio.volume = volume; });
   }, []);
 
-  // Cleanup
   useEffect(() => {
     return () => {
       abortRef.current = true;
