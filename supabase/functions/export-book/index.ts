@@ -22,13 +22,38 @@ function isTrialActive(): boolean {
 // Format restrictions by tier (bypassed during trial)
 const TIER_FORMATS = {
   free: ["pdf"],
-  student: ["pdf", "epub", "docx"],
-  premium: ["pdf", "epub", "docx"],
-  prophet_tier: ["pdf", "epub", "docx"],
+  student: ["pdf", "epub", "docx", "kdp-pdf"],
+  premium: ["pdf", "epub", "docx", "kdp-pdf"],
+  prophet_tier: ["pdf", "epub", "docx", "kdp-pdf"],
 };
 
 // All formats available during trial
-const ALL_FORMATS = ["pdf", "epub", "docx"];
+const ALL_FORMATS = ["pdf", "epub", "docx", "kdp-pdf"];
+
+// KDP Trim Size specifications (in points, 72pt = 1 inch)
+const KDP_TRIM_SIZES: Record<string, { width: number; height: number; name: string }> = {
+  '5x8':    { width: 360, height: 576, name: '5" × 8"' },
+  '5.25x8': { width: 378, height: 576, name: '5.25" × 8"' },
+  '5.5x8.5': { width: 396, height: 612, name: '5.5" × 8.5"' },
+  '6x9':    { width: 432, height: 648, name: '6" × 9"' },
+  '7x10':   { width: 504, height: 720, name: '7" × 10"' },
+  '8.5x11': { width: 612, height: 792, name: '8.5" × 11"' },
+};
+
+// KDP margin requirements (minimum in points) based on page count
+function getKDPMargins(pageCount: number, isBleed: boolean): { inside: number; outside: number; top: number; bottom: number } {
+  // KDP minimum inside (gutter) margin based on page count
+  let inside = 54; // 0.75" for <= 150 pages
+  if (pageCount > 150 && pageCount <= 300) inside = 61; // 0.847"
+  else if (pageCount > 300 && pageCount <= 500) inside = 68; // 0.944"
+  else if (pageCount > 500) inside = 76; // 1.059"
+  
+  const outside = isBleed ? 27 : 18; // 0.375" bleed / 0.25" no-bleed
+  const top = isBleed ? 27 : 18;
+  const bottom = isBleed ? 27 : 18;
+  
+  return { inside, outside, top, bottom };
+}
 
 // Generate Scroll Publishing Code (SPC)
 function generateSPC(bookId: string): string {
