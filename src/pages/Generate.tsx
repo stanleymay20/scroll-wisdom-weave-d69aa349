@@ -332,6 +332,8 @@ export default function Generate() {
           comicSubTypeConfig: extendedBookType === "comic" ? comicSubTypeConfig : null,
           characterSheetConfig: extendedBookType === "comic" ? characterSheetConfig : null,
           comicLearningConfig: extendedBookType === "comic" && comicSubTypeConfig?.hasLearningObjectives ? comicLearningConfig : null,
+          // Fiction-specific fields
+          fictionConfig: extendedBookType === "fiction" ? fictionConfig : null,
         },
       });
 
