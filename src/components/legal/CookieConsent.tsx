@@ -1,5 +1,5 @@
 import { useState, useEffect, memo } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Cookie, Settings, X } from "lucide-react";
 import { Link } from "react-router-dom";
