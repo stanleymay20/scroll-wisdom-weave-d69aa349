@@ -55,6 +55,7 @@ export function FloatingActions({
   onQAClick,
   onPlaygroundClick,
   onComicModeClick,
+  onVideoClick,
 }: FloatingActionsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
