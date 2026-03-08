@@ -69,6 +69,7 @@ import { cn } from "@/lib/utils";
 import { useQuizGating } from "@/hooks/useQuizGating";
 import { useCompetencyProgress } from "@/hooks/useCompetencyProgress";
 import { CompetencyLearningPanel } from "@/components/reader/CompetencyLearningPanel";
+import { AdaptiveLearningPath } from "@/components/reader/AdaptiveLearningPath";
 
 interface BookData {
   id: string;
@@ -1248,9 +1249,23 @@ export default function Reader() {
               )}
             </TextHighlighter>
 
+            {/* Adaptive Learning Path — personalized difficulty */}
+            {guidedModeActive && bookId && (
+              <div className="mt-6 mb-4">
+                <AdaptiveLearningPath
+                  userId={userId}
+                  bookId={bookId}
+                  chapterId={chapter?.id}
+                  onStartQuiz={(difficulty) => {
+                    setShowQuiz(true);
+                  }}
+                />
+              </div>
+            )}
+
             {/* Competency Learning Panel — Kolb's 4-Phase Cycle */}
             {guidedModeActive && chapter?.content && (
-              <div className="mt-8 mb-12">
+              <div className="mt-4 mb-12">
                 <CompetencyLearningPanel
                   progress={competency.progress}
                   chapterContent={chapter.content}
