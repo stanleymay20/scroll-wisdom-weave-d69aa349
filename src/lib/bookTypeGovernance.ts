@@ -342,6 +342,46 @@ export const BOOK_TYPE_CONTRACTS: Record<BookType, BookTypeContract> = {
     ],
   },
   
+  fiction: {
+    type: 'fiction',
+    displayName: 'Fiction / Novel',
+    description: 'Narrative fiction with characters, plot arcs, and world-building',
+    mandatory: [
+      'Clear narrative arc',
+      'Developed characters with motivations',
+      'Consistent point of view',
+      'Scene-based chapter structure',
+      'Show-don\'t-tell prose',
+      'Dialogue that reveals character',
+    ],
+    forbidden: [
+      'Academic citations',
+      'Section numbering',
+      'Bullet-point lists',
+      'Instructional language',
+      'Hedging / qualifiers',
+    ],
+    chapterStructure: [
+      'Scene Opening (setting + tension)',
+      'Character Action / Dialogue',
+      'Conflict Escalation',
+      'Scene Turning Point',
+      'Chapter Hook / Cliffhanger',
+    ],
+    wordLimits: { min: 2000, max: 6000 },
+    requiresCitations: false,
+    requiresImages: false,
+    requiresCode: false,
+    requiresInteractivity: false,
+    validationChecks: [
+      'has_dialogue',
+      'has_scene_breaks',
+      'consistent_pov',
+      'show_dont_tell',
+      'no_instructional_language',
+    ],
+  },
+
   text: {
     type: 'text',
     displayName: 'Standard Text',
