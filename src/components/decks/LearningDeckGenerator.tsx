@@ -6,7 +6,7 @@
  * Subscription-tier aware: Premium subscribers get enhanced features.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, forwardRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Presentation,
@@ -86,7 +86,7 @@ interface LearningDeckGeneratorProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function LearningDeckGenerator({
+export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGeneratorProps>(function LearningDeckGenerator({
   bookId,
   bookTitle,
   bookVersion = '1.0',
@@ -98,7 +98,7 @@ export function LearningDeckGenerator({
   variant = 'button',
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
-}: LearningDeckGeneratorProps) {
+}, ref) {
   const { t } = useLanguage();
   const { toast } = useToast();
   
@@ -600,7 +600,7 @@ export function LearningDeckGenerator({
       </DialogContent>
     </Dialog>
   );
-}
+});
 
 // Compact button for sidebar/floating actions
 export function LearningDeckButton({
