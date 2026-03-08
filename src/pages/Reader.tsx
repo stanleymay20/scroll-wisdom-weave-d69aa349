@@ -70,6 +70,8 @@ import { useQuizGating } from "@/hooks/useQuizGating";
 import { useCompetencyProgress } from "@/hooks/useCompetencyProgress";
 import { CompetencyLearningPanel } from "@/components/reader/CompetencyLearningPanel";
 import { AdaptiveLearningPath } from "@/components/reader/AdaptiveLearningPath";
+import { PresenceAvatars } from "@/components/reader/PresenceAvatars";
+import { useEditorPresence } from "@/hooks/useCollaboration";
 
 interface BookData {
   id: string;
