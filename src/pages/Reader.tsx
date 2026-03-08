@@ -1332,6 +1332,10 @@ export default function Reader() {
           onFlashcardsClick={() => {
             setShowFlashcardDialog(true);
           }}
+          onVideoClick={() => {
+            closeTopPanels();
+            setShowChapterVideo(true);
+          }}
         />
       )}
 
