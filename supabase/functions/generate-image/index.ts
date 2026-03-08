@@ -163,6 +163,14 @@ serve(async (req) => {
 
     logStep("Image generated successfully");
 
+    // Track usage (fire-and-forget)
+    supabase.from("ai_usage_tracking").insert({
+      user_id: user.id,
+      feature: "image_gen",
+      credits_used: 1,
+      model_used: model,
+    }).then(() => {});
+
     return new Response(
       JSON.stringify({
         success: true,
