@@ -58,6 +58,32 @@ serve(async (req) => {
     const userPlan = (subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free";
     const isPremiumPlan = userPlan === "premium" || userPlan === "prophet_tier";
 
+    // Check AI image quota (Free: 0, Student: 20, Premium: 100, Institutional: unlimited)
+    const imageQuotas: Record<string, number> = { free: 0, student: 20, premium: 100, prophet_tier: -1 };
+    const quota = imageQuotas[userPlan] ?? 0;
+
+    if (quota === 0) {
+      return new Response(JSON.stringify({ error: "AI image generation requires a paid plan" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (quota > 0) {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+      const { count } = await supabase
+        .from("ai_usage_tracking")
+        .select("id", { count: "exact", head: true })
+        .eq("user_id", user.id)
+        .eq("feature", "image_gen")
+        .eq("month", currentMonth);
+
+      if ((count ?? 0) >= quota) {
+        return new Response(JSON.stringify({ error: `Monthly AI image limit reached (${quota}). Upgrade for more.` }), {
+          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     const { 
       prompt, 
       style = "illustration",
