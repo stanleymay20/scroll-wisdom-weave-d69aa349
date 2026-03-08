@@ -2,28 +2,15 @@
  * Hook to generate and manage TTS narration audio for video scenes.
  * Exposes per-scene generation for progressive pipeline.
  */
-import { useState, useRef, useCallback, useEffect } from "react";
+import { useRef, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import type { CinematicScene } from "./types";
 
-interface NarrationState {
-  isGenerating: boolean;
-  progress: number;
-  audioElements: Map<number, HTMLAudioElement>;
-  error: string | null;
-}
-
 export function useVideoNarration() {
-  const [state, setState] = useState<NarrationState>({
-    isGenerating: false,
-    progress: 0,
-    audioElements: new Map(),
-    error: null,
-  });
-
   const audioMapRef = useRef<Map<number, HTMLAudioElement>>(new Map());
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const abortRef = useRef(false);
+  const volumeRef = useRef(0.8);
 
   // Generate a single scene's narration — exposed for progressive pipeline
   const generateSingleNarration = useCallback(async (scene: CinematicScene): Promise<{
@@ -62,48 +49,11 @@ export function useVideoNarration() {
     }
   }, []);
 
-  // Register a pre-generated audio element
+  // Register a pre-generated audio element (applies current volume)
   const registerAudio = useCallback((sceneNumber: number, audio: HTMLAudioElement) => {
+    audio.volume = volumeRef.current;
     audioMapRef.current.set(sceneNumber, audio);
-    setState(s => ({ ...s, audioElements: new Map(audioMapRef.current) }));
   }, []);
-
-  // Batch generate (kept for backward compat but progressive pipeline preferred)
-  const generateNarration = useCallback(async (scenes: CinematicScene[]): Promise<CinematicScene[]> => {
-    abortRef.current = false;
-    setState(s => ({ ...s, isGenerating: true, progress: 0, error: null }));
-    const updatedScenes = [...scenes];
-    const total = scenes.length;
-    let completed = 0;
-    const BATCH = 3;
-
-    for (let i = 0; i < total; i += BATCH) {
-      if (abortRef.current) break;
-      const batch = scenes.slice(i, i + BATCH);
-      const results = await Promise.allSettled(batch.map(s => generateSingleNarration(s)));
-      results.forEach((result) => {
-        if (result.status === "fulfilled" && result.value) {
-          const { sceneNumber, audioUrl, audioDuration, audio } = result.value;
-          const idx = updatedScenes.findIndex(s => s.sceneNumber === sceneNumber);
-          if (idx >= 0 && audioUrl) {
-            updatedScenes[idx] = {
-              ...updatedScenes[idx], audioUrl,
-              duration: audioDuration && audioDuration > 0
-                ? Math.max(updatedScenes[idx].duration, Math.ceil(audioDuration) + 1)
-                : updatedScenes[idx].duration,
-              audioDuration,
-            };
-          }
-          if (audio) audioMapRef.current.set(sceneNumber, audio);
-        }
-      });
-      completed += batch.length;
-      setState(s => ({ ...s, progress: Math.round((completed / total) * 100) }));
-    }
-
-    setState(s => ({ ...s, isGenerating: false, progress: 100, audioElements: new Map(audioMapRef.current) }));
-    return updatedScenes;
-  }, [generateSingleNarration]);
 
   const playSceneAudio = useCallback((sceneNumber: number) => {
     if (currentAudioRef.current) {
@@ -113,13 +63,17 @@ export function useVideoNarration() {
     const audio = audioMapRef.current.get(sceneNumber);
     if (audio) {
       audio.currentTime = 0;
+      audio.volume = volumeRef.current;
       audio.play().catch(() => {});
       currentAudioRef.current = audio;
     }
   }, []);
 
   const pauseAudio = useCallback(() => { currentAudioRef.current?.pause(); }, []);
-  const resumeAudio = useCallback(() => { currentAudioRef.current?.play().catch(() => {}); }, []);
+  
+  const resumeAudio = useCallback(() => { 
+    currentAudioRef.current?.play().catch(() => {}); 
+  }, []);
 
   const stopAllAudio = useCallback(() => {
     if (currentAudioRef.current) {
@@ -130,7 +84,11 @@ export function useVideoNarration() {
   }, []);
 
   const setVolume = useCallback((volume: number) => {
+    volumeRef.current = volume;
     audioMapRef.current.forEach(audio => { audio.volume = volume; });
+    if (currentAudioRef.current) {
+      currentAudioRef.current.volume = volume;
+    }
   }, []);
 
   useEffect(() => {
@@ -145,8 +103,6 @@ export function useVideoNarration() {
   }, []);
 
   return {
-    ...state,
-    generateNarration,
     generateSingleNarration,
     registerAudio,
     playSceneAudio,

@@ -21,7 +21,7 @@ import { getCameraMoveStyle, transitionVariants, wrapText } from "./video/camera
 import { VideoPlayerControls } from "./video/VideoPlayerControls";
 import { useVideoNarration } from "./video/useVideoNarration";
 
-const AUTO_PLAY_THRESHOLD = 2; // Start playing after this many scenes are ready
+const AUTO_PLAY_THRESHOLD = 2;
 
 export function ChapterVideoGenerator({
   bookId, bookTitle, bookType, chapterTitle, chapterContent, chapterNumber, language, onClose,
@@ -53,13 +53,7 @@ export function ChapterVideoGenerator({
   const cameraRafRef = useRef<number | null>(null);
   const sceneStartRef = useRef<number>(0);
   const hideControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const scenesRef = useRef<CinematicScene[]>([]);
-  const imageBlobUrlsRef = useRef<string[]>([]); // Track blob URLs for cleanup
-  const volumeRef = useRef(0.8); // Current volume for new audio elements
-
-  // Keep refs in sync
-  useEffect(() => { scenesRef.current = scenes; }, [scenes]);
-  useEffect(() => { volumeRef.current = isMuted ? 0 : volume; }, [volume, isMuted]);
+  const imageBlobUrlsRef = useRef<string[]>([]);
 
   const theme = BOOK_TYPE_THEMES[bookType] || BOOK_TYPE_THEMES.standard;
   const scene = scenes[currentScene];
@@ -72,20 +66,69 @@ export function ChapterVideoGenerator({
   const isReady = phase === "ready" || phase === "playing";
   const isStreamingReady = readyCount >= AUTO_PLAY_THRESHOLD || phase === "ready" || phase === "playing";
 
-  // Cleanup — revoke ALL blob URLs (images + audio handled by narration hook)
+  // Cleanup
   useEffect(() => {
     return () => {
       if (sceneTimerRef.current) clearTimeout(sceneTimerRef.current);
       if (cameraRafRef.current) cancelAnimationFrame(cameraRafRef.current);
       if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
       narration.stopAllAudio();
-      // Revoke image blob URLs
       imageBlobUrlsRef.current.forEach(url => {
         try { URL.revokeObjectURL(url); } catch {}
       });
       imageBlobUrlsRef.current = [];
     };
   }, []);
+
+  // ── Keyboard shortcuts ─────────────────────────────────────
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Only handle when player is active (not idle)
+      if (phase === "idle" && !isGenerating) return;
+      // Don't capture if user is typing in an input
+      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
+
+      switch (e.key) {
+        case " ":
+        case "k":
+          e.preventDefault();
+          if (scenes.length > 0 && readyCount > 0) togglePlay();
+          break;
+        case "ArrowRight":
+          e.preventDefault();
+          nextScene();
+          break;
+        case "ArrowLeft":
+          e.preventDefault();
+          prevScene();
+          break;
+        case "f":
+          e.preventDefault();
+          toggleFullscreen();
+          break;
+        case "m":
+          e.preventDefault();
+          toggleMute();
+          break;
+        case "Escape":
+          e.preventDefault();
+          if (isFullscreen) toggleFullscreen();
+          else onClose();
+          break;
+        case "ArrowUp":
+          e.preventDefault();
+          handleVolumeChange(Math.min(1, volume + 0.1));
+          break;
+        case "ArrowDown":
+          e.preventDefault();
+          handleVolumeChange(Math.max(0, volume - 0.1));
+          break;
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [phase, isGenerating, scenes.length, readyCount, isPlaying, isFullscreen, volume]);
 
   // Auto-play when enough scenes are buffered
   useEffect(() => {
@@ -99,7 +142,7 @@ export function ChapterVideoGenerator({
     }
   }, [isStreamingReady, autoPlayTriggered, scenes.length]);
 
-  // Buffering detection: if playback reaches unbuffered scene
+  // Buffering detection
   useEffect(() => {
     if (isPlaying && currentScene >= readyCount && phase !== "ready") {
       setIsBuffering(true);
@@ -174,7 +217,6 @@ export function ChapterVideoGenerator({
     setProgressLabel("AI writing cinematic script...");
 
     try {
-      // Phase 1: Get scene plan
       const { data: planData, error: planError } = await supabase.functions.invoke("generate-cinematic-video", {
         body: { chapterContent, chapterTitle, bookTitle, bookType, tier, language: language || "en", chapterNumber },
       });
@@ -187,7 +229,6 @@ export function ChapterVideoGenerator({
       setPhase("imaging");
       setProgressLabel(`Generating ${scenePlan.length} scenes progressively...`);
 
-      // Phase 2: Progressive generation — process each scene's image + audio
       const BATCH_SIZE = 2;
       let ready = 0;
       const updatedScenes = [...scenePlan];
@@ -196,7 +237,6 @@ export function ChapterVideoGenerator({
         const batchScenes = scenePlan.slice(i, i + BATCH_SIZE);
         setProgressLabel(`Scene ${i + 1}–${Math.min(i + BATCH_SIZE, scenePlan.length)} of ${scenePlan.length}...`);
 
-        // Generate images + TTS for this batch IN PARALLEL
         const [imgResult, ...ttsResults] = await Promise.allSettled([
           supabase.functions.invoke("generate-cinematic-video", {
             body: {
@@ -209,17 +249,14 @@ export function ChapterVideoGenerator({
         ]);
 
         // Apply image results
-        let batchImagesOk = false;
         if (imgResult.status === "fulfilled" && imgResult.value?.data?.images) {
           Object.entries(imgResult.value.data.images).forEach(([num, url]) => {
             const idx = updatedScenes.findIndex(s => s.sceneNumber === Number(num));
             if (idx >= 0) {
               updatedScenes[idx] = { ...updatedScenes[idx], imageUrl: url as string };
-              // Track blob URLs for cleanup (only if blob:)
               if (typeof url === "string" && url.startsWith("blob:")) {
                 imageBlobUrlsRef.current.push(url);
               }
-              batchImagesOk = true;
             }
           });
           if (imgResult.value?.data?.rateLimited) {
@@ -228,7 +265,6 @@ export function ChapterVideoGenerator({
         }
 
         // Apply TTS results
-        let batchAudioOk = false;
         ttsResults.forEach((r) => {
           if (r.status === "fulfilled" && r.value) {
             const { sceneNumber, audioUrl, audioDuration, audio } = r.value;
@@ -242,13 +278,8 @@ export function ChapterVideoGenerator({
                   : updatedScenes[idx].duration,
                 audioDuration,
               };
-              batchAudioOk = true;
             }
-            if (audio) {
-              // Apply current volume to newly registered audio
-              audio.volume = volumeRef.current;
-              narration.registerAudio(sceneNumber, audio);
-            }
+            if (audio) narration.registerAudio(sceneNumber, audio);
           }
         });
 
@@ -259,17 +290,16 @@ export function ChapterVideoGenerator({
           const sc = updatedScenes[sceneIdx];
           return !!(sc.imageUrl || sc.audioUrl);
         }).length;
-        ready += actualReady || batchScenes.length; // Fallback to batch length if all fail to avoid getting stuck
+        ready += actualReady || batchScenes.length;
         
         setScenes([...updatedScenes]);
         setReadyCount(ready);
         setProgress(15 + Math.round((ready / scenePlan.length) * 80));
       }
 
-      // All done
       setProgress(100);
       setPhase("ready");
-      setReadyCount(updatedScenes.length); // Ensure all scenes marked ready
+      setReadyCount(updatedScenes.length);
       setIsGenerating(false);
       const imgCount = updatedScenes.filter(s => s.imageUrl).length;
       const audioCount = updatedScenes.filter(s => s.audioUrl).length;
@@ -286,61 +316,63 @@ export function ChapterVideoGenerator({
   }, [chapterContent, chapterTitle, bookTitle, bookType, tier, language, chapterNumber, toast, hasCinematicAccess, narration]);
 
   // ── Controls ───────────────────────────────────────────────
-  const togglePlay = () => {
+  const togglePlay = useCallback(() => {
     if (scenes.length === 0 || readyCount === 0) return;
     if (isPlaying) {
       narration.pauseAudio();
     } else {
+      // Resume audio from where it left off instead of restarting
+      narration.resumeAudio();
       if (phase !== "playing" && phase !== "ready") setPhase("playing");
     }
     setIsPlaying(prev => !prev);
-    setCameraProgress(0);
     resetControlsTimer();
-  };
+  }, [scenes.length, readyCount, isPlaying, phase, narration, resetControlsTimer]);
 
-  const nextScene = () => {
+  const nextScene = useCallback(() => {
     if (currentScene < Math.min(scenes.length - 1, readyCount - 1)) {
       narration.stopAllAudio();
       setCurrentScene(prev => prev + 1);
       setCameraProgress(0);
     }
-  };
+  }, [currentScene, scenes.length, readyCount, narration]);
 
-  const prevScene = () => {
+  const prevScene = useCallback(() => {
     if (currentScene > 0) {
       narration.stopAllAudio();
       setCurrentScene(prev => prev - 1);
       setCameraProgress(0);
     }
-  };
+  }, [currentScene, narration]);
 
-  const seekToScene = (index: number) => {
+  const seekToScene = useCallback((index: number) => {
     if (index >= readyCount && phase !== "ready") return;
     narration.stopAllAudio();
     setCurrentScene(index);
     setCameraProgress(0);
-  };
+  }, [readyCount, phase, narration]);
 
-  const resetVideo = () => {
+  const resetVideo = useCallback(() => {
     narration.stopAllAudio();
     setCurrentScene(0);
     setIsPlaying(false);
     setCameraProgress(0);
     setControlsVisible(true);
-  };
+  }, [narration]);
 
-  const toggleFullscreen = () => {
+  const toggleFullscreen = useCallback(() => {
     if (!playerRef.current) return;
     if (!isFullscreen) playerRef.current.requestFullscreen?.().catch(() => {});
     else document.exitFullscreen?.().catch(() => {});
     setIsFullscreen(prev => !prev);
-  };
+  }, [isFullscreen]);
 
-  const handleVolumeChange = (v: number) => {
+  const handleVolumeChange = useCallback((v: number) => {
     setVolume(v);
     if (v > 0 && isMuted) setIsMuted(false);
-  };
-  const toggleMute = () => setIsMuted(prev => !prev);
+  }, [isMuted]);
+  
+  const toggleMute = useCallback(() => setIsMuted(prev => !prev), []);
 
   // ── MP4 Export with audio ─────────────────────────────────
   const exportAsMP4 = useCallback(async () => {
@@ -358,11 +390,9 @@ export function ChapterVideoGenerator({
         ? "video/webm;codecs=vp9" : "video/webm";
       const videoStream = canvas.captureStream(30);
 
-      // Create audio context and connect scene audio sources
       const audioCtx = new AudioContext();
       const destination = audioCtx.createMediaStreamDestination();
       
-      // Merge video + audio tracks into a single stream
       const combinedStream = new MediaStream([
         ...videoStream.getVideoTracks(),
         ...destination.stream.getAudioTracks(),
@@ -372,7 +402,7 @@ export function ChapterVideoGenerator({
       const chunks: Blob[] = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 
-      // Preload all images
+      // Preload all images with CORS fallback
       const loadedImages: Record<number, HTMLImageElement> = {};
       await Promise.all(scenes.map(async (s) => {
         if (!s.imageUrl) return;
@@ -380,12 +410,18 @@ export function ChapterVideoGenerator({
           const img = new Image();
           img.crossOrigin = "anonymous";
           img.onload = () => { loadedImages[s.sceneNumber] = img; resolve(); };
-          img.onerror = () => resolve();
+          img.onerror = () => {
+            // Retry without CORS for data URIs or same-origin images
+            const img2 = new Image();
+            img2.onload = () => { loadedImages[s.sceneNumber] = img2; resolve(); };
+            img2.onerror = () => resolve(); // Skip if both fail
+            img2.src = s.imageUrl!;
+          };
           img.src = s.imageUrl!;
         });
       }));
 
-      // Preload all audio as AudioBuffers for Web Audio API playback
+      // Preload all audio as AudioBuffers
       const audioBuffers: Record<number, AudioBuffer> = {};
       await Promise.all(scenes.map(async (s) => {
         if (!s.audioUrl) return;
@@ -407,7 +443,6 @@ export function ChapterVideoGenerator({
         const totalFrames = Math.round(s.duration * fps);
         const img = loadedImages[s.sceneNumber];
 
-        // Play audio for this scene through the AudioContext destination
         const audioBuf = audioBuffers[s.sceneNumber];
         let audioSource: AudioBufferSourceNode | null = null;
         if (audioBuf) {
@@ -450,7 +485,6 @@ export function ChapterVideoGenerator({
           if (s.textOverlay) { ctx.font = "36px system-ui, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillText(s.textOverlay, 960, 540, 1500); }
           ctx.font = "italic 28px system-ui, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.6)";
           const narrationLines = wrapText(ctx, s.narration, 1400);
-          // Limit to 4 lines max to prevent overflow
           const displayLines = narrationLines.slice(0, 4);
           displayLines.forEach((line, li) => { ctx.fillText(line, 960, 820 + li * 36, 1500); });
           ctx.font = "20px system-ui, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.textAlign = "right";
@@ -459,11 +493,9 @@ export function ChapterVideoGenerator({
           await new Promise(r => setTimeout(r, 1000 / fps));
         }
 
-        // Stop audio source for this scene
         if (audioSource) {
           try { audioSource.stop(); } catch {}
         }
-
         setExportProgress(Math.round(((si + 1) / scenes.length) * 100));
       }
       recorder.stop();
@@ -617,7 +649,7 @@ export function ChapterVideoGenerator({
                         {scene.textOverlay}
                       </motion.p>
                     )}
-                    {/* Subtitle bar — Netflix/YouTube style with overflow protection */}
+                    {/* Subtitle bar */}
                     <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
                       transition={{ delay: 0.7, duration: 0.5 }} className="absolute bottom-24 left-4 right-4 md:left-12 md:right-12">
                       <p className="text-white text-sm md:text-lg text-center leading-relaxed px-6 py-3 rounded-md max-w-4xl mx-auto line-clamp-3 overflow-hidden"
