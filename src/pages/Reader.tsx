@@ -54,6 +54,7 @@ import { CodePlayground } from "@/components/reader/CodePlayground";
 
 import { PreviouslyInBookCard, ReadingSessionTimer, DirectTextEditor } from "@/components/reader";
 import { ReaderToolsSheet } from "@/components/reader/ReaderToolsSheet";
+import { ChapterVideoGenerator } from "@/components/reader/ChapterVideoGenerator";
 import { FlashcardGenerator } from "@/components/decks/FlashcardGenerator";
 import { LearningDeckGenerator } from "@/components/decks/LearningDeckGenerator";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
