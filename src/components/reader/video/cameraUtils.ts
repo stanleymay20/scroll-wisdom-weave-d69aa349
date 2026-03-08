@@ -24,11 +24,17 @@ export function getCameraMoveStyle(move: string, progress: number): React.CSSPro
   }
 }
 
+// All transition variants including those from generate-chapter-video edge function
 export const transitionVariants: Record<string, object> = {
   fade:       { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } },
   crossfade:  { initial: { opacity: 0 }, animate: { opacity: 1 }, exit: { opacity: 0 } },
   wipe_left:  { initial: { x: "100%", opacity: 0 }, animate: { x: 0, opacity: 1 }, exit: { x: "-100%", opacity: 0 } },
   zoom_in:    { initial: { scale: 0.8, opacity: 0 }, animate: { scale: 1, opacity: 1 }, exit: { scale: 1.1, opacity: 0 } },
+  // Added: transitions emitted by generate-chapter-video
+  slide_left: { initial: { x: "100%", opacity: 0 }, animate: { x: 0, opacity: 1 }, exit: { x: "-100%", opacity: 0 } },
+  slide_up:   { initial: { y: "100%", opacity: 0 }, animate: { y: 0, opacity: 1 }, exit: { y: "-100%", opacity: 0 } },
+  dissolve:   { initial: { opacity: 0, scale: 1.02 }, animate: { opacity: 1, scale: 1 }, exit: { opacity: 0, scale: 0.98 } },
+  zoom:       { initial: { scale: 0.7, opacity: 0 }, animate: { scale: 1, opacity: 1 }, exit: { scale: 1.2, opacity: 0 } },
 };
 
 export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: number): string[] {
@@ -45,5 +51,5 @@ export function wrapText(ctx: CanvasRenderingContext2D, text: string, maxWidth: 
     }
   }
   if (currentLine) lines.push(currentLine);
-  return lines.slice(0, 3);
+  return lines.slice(0, 4);
 }
