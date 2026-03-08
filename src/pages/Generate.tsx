@@ -643,6 +643,15 @@ export default function Generate() {
                 </div>
               )}
 
+              {/* Fiction Writing Tools - shows when fiction selected */}
+              {extendedBookType === "fiction" && (
+                <FictionWritingTools
+                  value={fictionConfig}
+                  onChange={setFictionConfig}
+                  disabled={isGenerating}
+                />
+              )}
+
               {/* Word Count & Language - hide word count for comics/workbooks */}
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {extendedBookType !== "comic" && extendedBookType !== "workbook" && (
