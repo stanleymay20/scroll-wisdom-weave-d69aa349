@@ -61,12 +61,13 @@ export function FloatingActions({
 
   // Count available actions for badge
   const actionCount = [
-    FEATURES.enableVoiceConversation, // Voice AI
-    isQuizUnlocked, // Quiz
-    true, // Q&A always available
+    FEATURES.enableVoiceConversation,
+    isQuizUnlocked,
+    true,
     hasCodeContent && FEATURES.enableCodePlayground,
     FEATURES.enableLearningDecks,
     hasComicContent && FEATURES.enableComicMode,
+    FEATURES.enableChapterVideo,
   ].filter(Boolean).length;
 
   return (
