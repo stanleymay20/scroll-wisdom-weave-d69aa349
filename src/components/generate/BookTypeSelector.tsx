@@ -100,6 +100,14 @@ const ALL_BOOK_TYPES: BookTypeOption[] = [
     featureFlag: FEATURES.enableIllustrated,
   },
   {
+    value: "fiction",
+    label: "Fiction / Novel",
+    description: "Narrative fiction with characters & plot",
+    icon: Drama,
+    hint: "Characters, dialogue, scene-based storytelling",
+    badge: "New",
+  },
+  {
     value: "reference",
     label: "Reference / Handbook",
     description: "Quick reference materials",

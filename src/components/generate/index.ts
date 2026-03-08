@@ -17,3 +17,5 @@ export type { ComicCharacter, CharacterSheetConfig } from './ComicCharacterSheet
 export { ComicLearningObjectives } from './ComicLearningObjectives';
 export type { ComicLearningConfig, LearningObjective, LearningMoment } from './ComicLearningObjectives';
 export { CharacterPortraitPreview } from './CharacterPortraitPreview';
+export { FictionWritingTools, DEFAULT_FICTION_CONFIG } from './FictionWritingTools';
+export type { FictionConfig, FictionGenre, NarrativePOV, FictionCharacter } from './FictionWritingTools';
