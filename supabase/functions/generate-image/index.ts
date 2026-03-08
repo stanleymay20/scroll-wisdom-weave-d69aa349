@@ -76,13 +76,17 @@ serve(async (req) => {
 
     // Style-specific prompt enhancements
     const stylePrompts: Record<string, string> = {
-      illustration: "Digital illustration style, vibrant colors, clean lines, professional artwork.",
-      comic: "Comic book art style, bold outlines, dynamic composition, panel-ready illustration.",
-      children: "Children's book illustration style, soft colors, friendly characters, whimsical and engaging.",
-      realistic: "Photorealistic style, detailed, high quality, professional photography aesthetic.",
+      illustration: "Modern editorial illustration, sophisticated color theory, dynamic composition with layered depth, rich textures, dramatic directional lighting, museum-quality artwork.",
+      comic: "Publication-quality comic book art, bold ink lines, dynamic foreshortening, cel-shading with halftone shadows, expressive characters, dramatic panel-ready composition.",
+      children: "Children's picture book illustration, soft watercolor with digital refinement, warm pastels, rounded organic shapes, expressive characters with large eyes, Caldecott Medal quality.",
+      realistic: "Photorealistic rendering, cinematic lighting with volumetric atmosphere, shallow depth of field, professional photography aesthetic, 8K detail.",
+      professional: "Clean infographic design, modern flat style with subtle gradients, corporate color palette (navy, teal, amber), grid-based layout, McKinsey presentation quality.",
+      reference: "Precise technical illustration, clean vector aesthetics, structured labeling, flowchart nodes, taxonomy branches, engineering manual standard.",
+      bestseller: "Bold concept visualization, strong central metaphor, dramatic chiaroscuro lighting, high-impact palette with gold accents, TED Talk slide quality.",
+      workbook: "Clean instructional design, step-by-step visual clarity, numbered annotations, friendly approachable aesthetics, textbook-grade quality.",
     };
 
-    const enhancedPrompt = `${prompt}. ${stylePrompts[style] || stylePrompts.illustration}`;
+    const enhancedPrompt = `${prompt}. ${stylePrompts[style] || stylePrompts.illustration} IMPORTANT: Do NOT render any text, words, or letters in the image.`;
 
     // Use Gemini 3 Pro Image for all tiers (only supported image model)
     const model = "google/gemini-3-pro-image-preview";
