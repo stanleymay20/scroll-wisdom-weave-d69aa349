@@ -86,7 +86,7 @@ interface LearningDeckGeneratorProps {
   onOpenChange?: (open: boolean) => void;
 }
 
-export function LearningDeckGenerator({
+export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGeneratorProps>(function LearningDeckGenerator({
   bookId,
   bookTitle,
   bookVersion = '1.0',
@@ -98,7 +98,7 @@ export function LearningDeckGenerator({
   variant = 'button',
   open: controlledOpen,
   onOpenChange: controlledOnOpenChange,
-}: LearningDeckGeneratorProps) {
+}, ref) {
   const { t } = useLanguage();
   const { toast } = useToast();
   
