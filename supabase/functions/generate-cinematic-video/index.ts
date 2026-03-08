@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -61,6 +62,36 @@ serve(async (req) => {
   }
 
   try {
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL") ?? "";
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
+    const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Authenticate user
+    const authHeader = req.headers.get("Authorization");
+    let userId: string | null = null;
+    let userTier = "free";
+
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.replace("Bearer ", "");
+      const { data: { user } } = await supabaseAdmin.auth.getUser(token);
+      if (user) {
+        userId = user.id;
+        const { data: sub } = await supabaseAdmin
+          .from("subscriptions")
+          .select("tier, status")
+          .eq("user_id", user.id)
+          .maybeSingle();
+        userTier = (sub?.status === "active" && sub?.tier) ? sub.tier : "free";
+      }
+    }
+
+    // Gate: Only Premium and Institutional can use cinematic video
+    if (userTier !== "premium" && userTier !== "prophet_tier") {
+      return new Response(JSON.stringify({ error: "Cinematic video requires Premium or Institutional plan" }), {
+        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const { chapterContent, chapterTitle, bookTitle, bookType, tier, language, chapterNumber, scenePlan } = await req.json();
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
@@ -68,6 +99,16 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "AI service not configured" }), {
         status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
+    }
+
+    // Log usage (fire-and-forget)
+    if (userId) {
+      supabaseAdmin.from("ai_usage_tracking").insert({
+        user_id: userId,
+        feature: "cinematic_video",
+        credits_used: scenePlan ? 3 : 1, // Image gen costs more
+        model_used: "gemini-2.5-flash",
+      }).then(() => {});
     }
 
     const resolvedType = bookType || "standard";
