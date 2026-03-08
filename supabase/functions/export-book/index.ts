@@ -22,13 +22,38 @@ function isTrialActive(): boolean {
 // Format restrictions by tier (bypassed during trial)
 const TIER_FORMATS = {
   free: ["pdf"],
-  student: ["pdf", "epub", "docx"],
-  premium: ["pdf", "epub", "docx"],
-  prophet_tier: ["pdf", "epub", "docx"],
+  student: ["pdf", "epub", "docx", "kdp-pdf"],
+  premium: ["pdf", "epub", "docx", "kdp-pdf"],
+  prophet_tier: ["pdf", "epub", "docx", "kdp-pdf"],
 };
 
 // All formats available during trial
-const ALL_FORMATS = ["pdf", "epub", "docx"];
+const ALL_FORMATS = ["pdf", "epub", "docx", "kdp-pdf"];
+
+// KDP Trim Size specifications (in points, 72pt = 1 inch)
+const KDP_TRIM_SIZES: Record<string, { width: number; height: number; name: string }> = {
+  '5x8':    { width: 360, height: 576, name: '5" × 8"' },
+  '5.25x8': { width: 378, height: 576, name: '5.25" × 8"' },
+  '5.5x8.5': { width: 396, height: 612, name: '5.5" × 8.5"' },
+  '6x9':    { width: 432, height: 648, name: '6" × 9"' },
+  '7x10':   { width: 504, height: 720, name: '7" × 10"' },
+  '8.5x11': { width: 612, height: 792, name: '8.5" × 11"' },
+};
+
+// KDP margin requirements (minimum in points) based on page count
+function getKDPMargins(pageCount: number, isBleed: boolean): { inside: number; outside: number; top: number; bottom: number } {
+  // KDP minimum inside (gutter) margin based on page count
+  let inside = 54; // 0.75" for <= 150 pages
+  if (pageCount > 150 && pageCount <= 300) inside = 61; // 0.847"
+  else if (pageCount > 300 && pageCount <= 500) inside = 68; // 0.944"
+  else if (pageCount > 500) inside = 76; // 1.059"
+  
+  const outside = isBleed ? 27 : 18; // 0.375" bleed / 0.25" no-bleed
+  const top = isBleed ? 27 : 18;
+  const bottom = isBleed ? 27 : 18;
+  
+  return { inside, outside, top, bottom };
+}
 
 // Generate Scroll Publishing Code (SPC)
 function generateSPC(bookId: string): string {
@@ -798,7 +823,7 @@ serve(async (req) => {
       ? ALL_FORMATS 
       : (TIER_FORMATS[userPlan as keyof typeof TIER_FORMATS] || TIER_FORMATS.free);
 
-    const { bookId, format, authorName, isbn, isAcademicMode, academicMode, citationStyle } = await req.json();
+    const { bookId, format, authorName, isbn, isAcademicMode, academicMode, citationStyle, kdpTrimSize, kdpBleed } = await req.json();
     
     // Support both param names (client sends isAcademicMode, legacy sends academicMode)
     const resolvedAcademicMode = isAcademicMode || academicMode || false;
@@ -939,6 +964,17 @@ serve(async (req) => {
         content = uint8ArrayToBase64(pdfBytes);
         contentType = "application/pdf";
         filename = `${sanitizeFilename(book.title)}.pdf`;
+        isBase64 = true;
+        break;
+      }
+
+      case "kdp-pdf": {
+        const trimSize = KDP_TRIM_SIZES[kdpTrimSize || '6x9'] || KDP_TRIM_SIZES['6x9'];
+        const useBleed = kdpBleed === true;
+        const pdfBytes = await generateKDPPDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, trimSize, useBleed);
+        content = uint8ArrayToBase64(pdfBytes);
+        contentType = "application/pdf";
+        filename = `${sanitizeFilename(book.title)}_KDP.pdf`;
         isBase64 = true;
         break;
       }
@@ -2025,6 +2061,332 @@ function escapeXml(text: string): string {
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;')
     .replace(/'/g, '&#39;');
+}
+
+// ===== KDP-COMPLIANT PDF Generation =====
+// Amazon KDP requires specific trim sizes, margins, and formatting
+async function generateKDPPDF(
+  book: any,
+  chapters: any[],
+  author: string,
+  identifier: string,
+  isISBN: boolean,
+  year: number,
+  coverImageBytes: Uint8Array | null,
+  isAcademic: boolean,
+  citationStyle: string,
+  bibliography: string[],
+  trimSize: { width: number; height: number; name: string },
+  useBleed: boolean,
+): Promise<Uint8Array> {
+  const pdfDoc = await PDFDocument.create();
+  const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+  const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+  const timesRomanItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const courier = await pdfDoc.embedFont(StandardFonts.Courier);
+
+  const pageWidth = trimSize.width;
+  const pageHeight = trimSize.height;
+
+  // Estimate page count for gutter margin calculation
+  const totalWords = chapters.reduce((sum: number, ch: any) => sum + (ch.content?.split(/\s+/).length || 0), 0);
+  const estimatedPages = Math.max(24, Math.ceil(totalWords / 250) + 10);
+  const margins = getKDPMargins(estimatedPages, useBleed);
+
+  const textWidth = pageWidth - margins.inside - margins.outside;
+  const textTop = pageHeight - margins.top - 20;
+  const textBottom = margins.bottom + 15;
+
+  let pageNumber = 0;
+  let currentChapterTitle = "";
+
+  const addRunningHeader = (page: any, num: number, isRecto: boolean) => {
+    if (num <= 4) return;
+    const displayNum = num - 4;
+    const numStr = String(displayNum);
+    const numW = helvetica.widthOfTextAtSize(numStr, 9);
+    const numX = isRecto ? pageWidth - margins.outside - numW : margins.outside;
+    page.drawText(numStr, {
+      x: numX, y: margins.bottom, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4),
+    });
+    if (currentChapterTitle) {
+      const headerText = isRecto
+        ? (currentChapterTitle.length > 40 ? currentChapterTitle.slice(0, 37) + '...' : currentChapterTitle)
+        : author;
+      const headerW = helvetica.widthOfTextAtSize(sanitizeForPDF(headerText), 8);
+      const headerX = isRecto ? pageWidth - margins.outside - headerW : margins.outside;
+      page.drawText(sanitizeForPDF(headerText), {
+        x: headerX, y: pageHeight - margins.top - 5, size: 8, font: helvetica, color: rgb(0.5, 0.5, 0.5),
+      });
+    }
+  };
+
+  // Helper to get left margin based on page side
+  const getLeftMargin = (pNum: number) => pNum % 2 === 1 ? margins.inside : margins.outside;
+
+  // ---- Half Title Page ----
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumber++;
+  const titleW = timesRomanBold.widthOfTextAtSize(sanitizeForPDF(book.title), 18);
+  page.drawText(sanitizeForPDF(book.title), {
+    x: (pageWidth - Math.min(titleW, textWidth)) / 2,
+    y: pageHeight * 0.6,
+    size: 18, font: timesRomanBold, color: rgb(0, 0, 0),
+  });
+
+  // ---- Title Page ----
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumber++;
+  let y = pageHeight * 0.65;
+  const fullTitleW = timesRomanBold.widthOfTextAtSize(sanitizeForPDF(book.title), 22);
+  page.drawText(sanitizeForPDF(book.title), {
+    x: (pageWidth - Math.min(fullTitleW, textWidth)) / 2,
+    y, size: 22, font: timesRomanBold, color: rgb(0, 0, 0),
+  });
+  y -= 36;
+  const byW = timesRomanItalic.widthOfTextAtSize(sanitizeForPDF(author), 13);
+  page.drawText(sanitizeForPDF(author), {
+    x: (pageWidth - byW) / 2, y, size: 13, font: timesRomanItalic, color: rgb(0.2, 0.2, 0.2),
+  });
+
+  // ---- Copyright Page ----
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumber++;
+  y = pageHeight * 0.45;
+  const copyrightLines = [
+    `Copyright \u00A9 ${year} ${author}`,
+    'All rights reserved.',
+    '',
+    isISBN ? `ISBN: ${identifier}` : `Reference: ${identifier}`,
+    '',
+    `Trim Size: ${trimSize.name}`,
+    '',
+    'This book was created with AI assistance via ScrollLibrary.',
+    'The author retains full ownership and commercial rights.',
+    '',
+    'No part of this publication may be reproduced, distributed,',
+    'or transmitted in any form without prior written permission.',
+  ];
+  for (const line of copyrightLines) {
+    page.drawText(sanitizeForPDF(line), {
+      x: getLeftMargin(pageNumber), y, size: 9, font: timesRoman, color: rgb(0.3, 0.3, 0.3),
+    });
+    y -= 13;
+  }
+
+  // ---- Table of Contents ----
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumber++;
+  y = textTop - 30;
+  const tocTitleW2 = timesRomanBold.widthOfTextAtSize('Contents', 16);
+  page.drawText('Contents', {
+    x: (pageWidth - tocTitleW2) / 2, y: textTop, size: 16, font: timesRomanBold, color: rgb(0, 0, 0),
+  });
+  y -= 25;
+  for (const chapter of chapters) {
+    const chTitle = `${chapter.chapter_number}. ${chapter.title}`;
+    const displayTitle = chTitle.length > 50 ? chTitle.slice(0, 47) + '...' : chTitle;
+    page.drawText(sanitizeForPDF(displayTitle), {
+      x: getLeftMargin(pageNumber), y, size: 10.5, font: timesRoman, color: rgb(0, 0, 0),
+    });
+    y -= 16;
+    if (y < textBottom + 20) {
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      pageNumber++;
+      y = textTop - 20;
+    }
+  }
+
+  // ---- Chapter Content ----
+  const bodySize = 11;
+  const lineHeight = bodySize * 1.4;
+
+  for (const chapter of chapters) {
+    // Each chapter starts on a recto (odd) page — KDP convention
+    if (pageNumber % 2 === 0) {
+      pdfDoc.addPage([pageWidth, pageHeight]); // blank verso
+      pageNumber++;
+    }
+    page = pdfDoc.addPage([pageWidth, pageHeight]);
+    pageNumber++;
+    currentChapterTitle = chapter.title;
+    let leftMargin = getLeftMargin(pageNumber);
+
+    // Chapter opening: drop the title down from top
+    y = textTop - 50;
+    const chNumText = `Chapter ${chapter.chapter_number}`;
+    const chNumW = helvetica.widthOfTextAtSize(chNumText, 10);
+    page.drawText(chNumText, {
+      x: (pageWidth - chNumW) / 2, y: textTop - 20, size: 10, font: helvetica, color: rgb(0.5, 0.5, 0.5),
+    });
+    const chNameText = sanitizeForPDF(chapter.title.length > 45 ? chapter.title.slice(0, 42) + '...' : chapter.title);
+    const chNameW = timesRomanBold.widthOfTextAtSize(chNameText, 15);
+    page.drawText(chNameText, {
+      x: (pageWidth - Math.min(chNameW, textWidth)) / 2, y, size: 15, font: timesRomanBold, color: rgb(0, 0, 0),
+    });
+    y -= 30;
+
+    // Decorative rule
+    page.drawLine({
+      start: { x: pageWidth * 0.35, y }, end: { x: pageWidth * 0.65, y },
+      thickness: 0.5, color: rgb(0.75, 0.75, 0.75),
+    });
+    y -= 18;
+
+    if (!chapter.content) continue;
+
+    const processed = processMarkdownContent(chapter.content);
+    for (const para of processed.paragraphs) {
+      const trimmed = para.trim();
+      if (!trimmed) { y -= lineHeight * 0.4; continue; }
+
+      // Heading
+      const headingMatch = trimmed.match(/\[HEADING_(\d+)_LEVEL_(\d+)\]/);
+      if (headingMatch) {
+        const hIdx = parseInt(headingMatch[1]);
+        const heading = processed.headings[hIdx];
+        if (heading) {
+          y -= lineHeight * 0.6;
+          const hSize = heading.level <= 2 ? 13 : 11.5;
+          if (y < textBottom + 25) {
+            addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            leftMargin = getLeftMargin(pageNumber);
+            y = textTop - 15;
+          }
+          page.drawText(sanitizeForPDF(heading.text), {
+            x: leftMargin, y, size: hSize, font: timesRomanBold, color: rgb(0, 0, 0),
+          });
+          y -= hSize * 1.6;
+        }
+        continue;
+      }
+
+      // Code block
+      const codeMatch = trimmed.match(/\[CODE_BLOCK_(\d+)\]/);
+      if (codeMatch) {
+        const block = processed.codeBlocks[parseInt(codeMatch[1])];
+        if (block) {
+          y -= 4;
+          for (const codeLine of block.code.split('\n').slice(0, 25)) {
+            if (y < textBottom + 12) {
+              addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              leftMargin = getLeftMargin(pageNumber);
+              y = textTop - 15;
+            }
+            page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.96, 0.96, 0.96) });
+            page.drawText(sanitizeForPDF(codeLine.slice(0, 70)), {
+              x: leftMargin, y, size: 8, font: courier, color: rgb(0.15, 0.15, 0.15),
+            });
+            y -= lineHeight * 0.85;
+          }
+          y -= 6;
+        }
+        continue;
+      }
+
+      // Regular paragraph with word-wrap
+      const isBullet = /^[-\u2022]\s/.test(trimmed);
+      const isNumbered = /^\d+[.)]\s/.test(trimmed);
+      const indent = (isBullet || isNumbered) ? 14 : 0;
+      const prefix = isBullet ? '\u2022 ' : isNumbered ? (trimmed.match(/^\d+[.)]\s/)?.[0] || '') : '';
+      const bodyText = trimmed.replace(/^[-\u2022]\s|^\d+[.)]\s/, '');
+      const words = bodyText.split(/\s+/);
+      let line = prefix;
+
+      for (const word of words) {
+        const testLine = line + (line && !prefix ? ' ' : line === prefix ? '' : ' ') + word;
+        const testW = timesRoman.widthOfTextAtSize(sanitizeForPDF(testLine), bodySize);
+        if (testW > textWidth - indent && line !== prefix) {
+          if (y < textBottom + 12) {
+            addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            leftMargin = getLeftMargin(pageNumber);
+            y = textTop - 15;
+          }
+          page.drawText(sanitizeForPDF(line), {
+            x: leftMargin + indent, y, size: bodySize, font: timesRoman, color: rgb(0, 0, 0),
+          });
+          y -= lineHeight;
+          line = word;
+        } else {
+          line = testLine;
+        }
+      }
+      if (line) {
+        if (y < textBottom + 12) {
+          addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+          page = pdfDoc.addPage([pageWidth, pageHeight]);
+          pageNumber++;
+          leftMargin = getLeftMargin(pageNumber);
+          y = textTop - 15;
+        }
+        page.drawText(sanitizeForPDF(line), {
+          x: leftMargin + indent, y, size: bodySize, font: timesRoman, color: rgb(0, 0, 0),
+        });
+        y -= lineHeight;
+      }
+      y -= lineHeight * 0.25;
+    }
+    addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+  }
+
+  // ---- Bibliography ----
+  if (bibliography.length > 0) {
+    page = pdfDoc.addPage([pageWidth, pageHeight]);
+    pageNumber++;
+    y = textTop - 30;
+    page.drawText(isAcademic ? 'References' : 'Bibliography', {
+      x: getLeftMargin(pageNumber), y: textTop, size: 15, font: timesRomanBold, color: rgb(0, 0, 0),
+    });
+    y -= 25;
+    for (const ref of bibliography) {
+      const refLines = kdpWrapText(sanitizeForPDF(ref), timesRoman, 9, textWidth - 18);
+      for (let i = 0; i < refLines.length; i++) {
+        if (y < textBottom + 12) {
+          page = pdfDoc.addPage([pageWidth, pageHeight]);
+          pageNumber++;
+          y = textTop - 15;
+        }
+        page.drawText(refLines[i], {
+          x: getLeftMargin(pageNumber) + (i === 0 ? 0 : 18), y, size: 9, font: timesRoman, color: rgb(0, 0, 0),
+        });
+        y -= 12;
+      }
+      y -= 3;
+    }
+  }
+
+  // Set PDF metadata
+  pdfDoc.setTitle(book.title);
+  pdfDoc.setAuthor(author);
+  pdfDoc.setSubject(`KDP-ready | Trim: ${trimSize.name}`);
+  pdfDoc.setCreator('ScrollLibrary');
+  pdfDoc.setProducer('ScrollLibrary KDP Export');
+
+  return pdfDoc.save();
+}
+
+function kdpWrapText(text: string, font: any, size: number, maxWidth: number): string[] {
+  const words = text.split(/\s+/);
+  const lines: string[] = [];
+  let line = '';
+  for (const word of words) {
+    const test = line + (line ? ' ' : '') + word;
+    if (font.widthOfTextAtSize(test, size) > maxWidth && line) {
+      lines.push(line);
+      line = word;
+    } else {
+      line = test;
+    }
+  }
+  if (line) lines.push(line);
+  return lines.length > 0 ? lines : [''];
 }
 
 // ===== EPUB Generation with Cover, Images, and References =====

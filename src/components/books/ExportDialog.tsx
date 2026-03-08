@@ -22,6 +22,7 @@ import {
   Image as ImageIcon,
   GraduationCap,
   XCircle,
+  Store,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +30,9 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { validateComicContent, ComicValidationResult } from "@/lib/systemDiagnostics";
 import { validateContentForExport, ExportValidationResult } from "@/lib/exportValidation";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Badge } from "@/components/ui/badge";
 
 interface ExportDialogProps {
   bookId: string;
@@ -43,7 +47,16 @@ interface ExportDialogProps {
   chapters?: { chapter_number: number; content: string | null }[];
 }
 
-type ExportFormat = "pdf" | "epub" | "docx";
+type ExportFormat = "pdf" | "epub" | "docx" | "kdp-pdf";
+
+const KDP_TRIM_SIZES = [
+  { value: '5x8', label: '5" × 8"', desc: 'Small paperback' },
+  { value: '5.25x8', label: '5.25" × 8"', desc: 'Compact' },
+  { value: '5.5x8.5', label: '5.5" × 8.5"', desc: 'Standard trade' },
+  { value: '6x9', label: '6" × 9"', desc: 'Most popular' },
+  { value: '7x10', label: '7" × 10"', desc: 'Textbook' },
+  { value: '8.5x11', label: '8.5" × 11"', desc: 'Full size' },
+];
 
 export function ExportDialog({ 
   bookId, 
@@ -62,6 +75,8 @@ export function ExportDialog({
   const [isbn, setIsbn] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [isAuthenticated, setIsAuthenticated] = useState(false);
+  const [kdpTrimSize, setKdpTrimSize] = useState('6x9');
+  const [kdpBleed, setKdpBleed] = useState(false);
   const { toast } = useToast();
   const { t } = useLanguage();
   
@@ -88,7 +103,9 @@ export function ExportDialog({
     if (!hasGeneratedChapters || chapters.length === 0) {
       return { valid: true, issues: [], canProceed: true };
     }
-    return validateContentForExport(chapters, bookType, selectedFormat);
+    // For KDP, validate as PDF
+    const validateFormat = selectedFormat === 'kdp-pdf' ? 'pdf' : selectedFormat;
+    return validateContentForExport(chapters, bookType, validateFormat as "pdf" | "epub" | "docx");
   }, [chapters, bookType, selectedFormat, hasGeneratedChapters]);
   
   useEffect(() => {
@@ -130,9 +147,22 @@ export function ExportDialog({
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("No active session. Please sign in again.");
 
-      const response = await supabase.functions.invoke("export-book", {
-        body: { bookId, format, authorName: authorName.trim(), isbn: isbn.trim() || undefined, isAcademicMode, citationStyle },
-      });
+      const body: Record<string, unknown> = {
+        bookId,
+        format,
+        authorName: authorName.trim(),
+        isbn: isbn.trim() || undefined,
+        isAcademicMode,
+        citationStyle,
+      };
+
+      // Add KDP-specific params
+      if (format === 'kdp-pdf') {
+        body.kdpTrimSize = kdpTrimSize;
+        body.kdpBleed = kdpBleed;
+      }
+
+      const response = await supabase.functions.invoke("export-book", { body });
 
       if (response.error) throw new Error(response.error.message);
       if (response.data?.error) throw new Error(response.data.error);
@@ -168,8 +198,9 @@ export function ExportDialog({
     }
   };
 
-  const formats: { format: ExportFormat; label: string; icon: typeof FileText; description: string }[] = [
+  const formats: { format: ExportFormat; label: string; icon: typeof FileText; description: string; badge?: string }[] = [
     { format: "pdf", label: t('export.pdf'), icon: FileText, description: t('export.pdfDesc') },
+    { format: "kdp-pdf", label: "KDP PDF", icon: Store, description: "Amazon KDP-ready interior", badge: "NEW" },
     { format: "epub", label: t('export.epub'), icon: BookOpen, description: t('export.epubDesc') },
     { format: "docx", label: t('export.docx'), icon: File, description: t('export.docxDesc') },
   ];
@@ -186,7 +217,7 @@ export function ExportDialog({
           {t('common.download')}
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-md gap-5">
+      <DialogContent className="sm:max-w-md gap-5 max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="text-lg">{t('export.title')}</DialogTitle>
           <DialogDescription className="text-sm truncate">
@@ -254,9 +285,10 @@ export function ExportDialog({
         <div className="space-y-2">
           <Label className="text-xs font-medium">{t('export.format')}</Label>
           <div className="grid gap-1.5">
-            {formats.map(({ format, label, icon: Icon, description }) => {
+            {formats.map(({ format, label, icon: Icon, description, badge }) => {
+              const validateFmt = format === 'kdp-pdf' ? 'pdf' : format;
               const formatValidation = chapters.length > 0 
-                ? validateContentForExport(chapters, bookType, format)
+                ? validateContentForExport(chapters, bookType, validateFmt as "pdf" | "epub" | "docx")
                 : { valid: true, issues: [], canProceed: true };
               const formatHasErrors = !formatValidation.canProceed;
               
@@ -272,7 +304,7 @@ export function ExportDialog({
                     } else {
                       toast({
                         title: "Export Blocked",
-                        description: `Fix ${formatValidation.issues.filter(i => i.level === 'error').length} error(s) before exporting as ${format.toUpperCase()}.`,
+                        description: `Fix ${formatValidation.issues.filter(i => i.level === 'error').length} error(s) before exporting as ${label}.`,
                         variant: "destructive",
                       });
                     }
@@ -286,6 +318,11 @@ export function ExportDialog({
                   )}
                   <div className="flex-1 min-w-0">
                     <span className="text-sm font-medium">{label}</span>
+                    {badge && (
+                      <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0">
+                        {badge}
+                      </Badge>
+                    )}
                     <span className="text-xs text-muted-foreground ml-2">{description}</span>
                   </div>
                   {formatHasErrors && <XCircle className="h-3.5 w-3.5 text-destructive ml-1" />}
@@ -294,6 +331,39 @@ export function ExportDialog({
             })}
           </div>
         </div>
+
+        {/* KDP Settings — only shown when KDP format is about to be used */}
+        {selectedFormat === 'kdp-pdf' && (
+          <div className="space-y-3 p-3 rounded-lg bg-muted/30 border border-border/40">
+            <div className="flex items-center gap-2">
+              <Store className="h-4 w-4 text-primary" />
+              <span className="text-xs font-semibold">KDP Settings</span>
+            </div>
+            <div className="space-y-1.5">
+              <Label className="text-xs text-muted-foreground">Trim Size</Label>
+              <Select value={kdpTrimSize} onValueChange={setKdpTrimSize}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {KDP_TRIM_SIZES.map(size => (
+                    <SelectItem key={size.value} value={size.value}>
+                      <span className="font-medium">{size.label}</span>
+                      <span className="text-muted-foreground ml-1.5">— {size.desc}</span>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="flex items-center justify-between">
+              <div>
+                <Label className="text-xs text-muted-foreground">Bleed margins</Label>
+                <p className="text-[10px] text-muted-foreground/70">For books with edge-to-edge images</p>
+              </div>
+              <Switch checked={kdpBleed} onCheckedChange={setKdpBleed} />
+            </div>
+          </div>
+        )}
 
         {/* Validation errors */}
         {!contentValidation.canProceed && contentValidation.issues.filter(i => i.level === 'error').length > 0 && (
