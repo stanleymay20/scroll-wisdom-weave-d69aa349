@@ -154,13 +154,15 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
 
       // Prefer Stripe tier when available, otherwise fall back to profile plan
-      if (subData?.subscribed && subData?.product_id) {
-        const detectedTier = getTierFromProductId(subData.product_id);
+      if (subData?.subscribed) {
+        // Stripe product_id takes priority, then local tier field
+        const detectedTier = subData.product_id
+          ? getTierFromProductId(subData.product_id)
+          : (subData.tier as SubscriptionTier) || 'free';
         setTier(detectedTier);
         setSubscriptionEnd(subData.subscription_end);
 
         // Update profile plan to keep things consistent (fire and forget)
-        // Ensure tier is valid for database enum
         const validPlans: SubscriptionTier[] = ['free', 'premium', 'prophet_tier', 'student'];
         const planToSave = validPlans.includes(detectedTier) ? detectedTier : 'premium';
 
@@ -170,8 +172,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           .or(`user_id.eq.${session.user.id},id.eq.${session.user.id}`)
           .then(() => {});
       } else {
-        // Stripe says no active subscription — trust Stripe as source of truth
-        // The check-subscription function also syncs this to the profile
+        // No active subscription anywhere
         setTier('free');
         setSubscriptionEnd(null);
       }
