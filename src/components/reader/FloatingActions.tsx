@@ -36,6 +36,7 @@ interface FloatingActionsProps {
   onQAClick: () => void;
   onPlaygroundClick: () => void;
   onComicModeClick: () => void;
+  onVideoClick: () => void;
 }
 
 export function FloatingActions({
