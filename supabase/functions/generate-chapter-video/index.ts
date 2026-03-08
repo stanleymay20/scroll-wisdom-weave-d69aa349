@@ -217,27 +217,28 @@ ${videoContract}
 ${skeletonInstruction}
 
 RULES:
-- Create 7-12 scenes depending on content length
-- Each scene: 8-20 seconds of narration
-- Total video: 2-5 minutes
-- Narration must be natural, conversational, and engaging
+- Create 8-12 scenes for a comprehensive 3-5 minute video
+- Each scene: 12-25 seconds of narration
+- Total video: 3-5 minutes
+- Narration must be vivid, conversational, and cinematic — paint pictures with words
 - ONLY use visualType values from this list: ${visualTypes.join(", ")}
 - Vary transitions for visual rhythm (don't repeat same transition consecutively)
 - Output language: ${targetLang}
-- Each scene MUST include an imagePrompt with detailed visual description
+- Each scene MUST include an imagePrompt with ultra-detailed visual description (50+ words)
+- Build dramatic pacing: hook → build → climax → resolve
 
 SCENE SCHEMA:
 {
   "sceneNumber": number,
-  "title": "short engaging title",
-  "narration": "what the narrator says (2-4 sentences, natural speech)",
+  "title": "compelling punchy title (3-6 words)",
+  "narration": "what the narrator says (3-5 sentences, vivid TED-Talk energy)",
   "visualType": "one of the allowed types above",
   "bulletPoints": ["optional", "bullet", "points"],
   "keyTerms": ["highlighted", "terms"],
   "dialogueLines": [{"character": "Name", "line": "What they say"}],
-  "duration": seconds,
+  "duration": 12-25 seconds,
   "transition": "fade" | "slide_left" | "slide_up" | "zoom" | "dissolve",
-  "imagePrompt": "detailed visual description for AI image generation",
+  "imagePrompt": "ultra-detailed cinematic visual (50+ words): specify camera angle, lighting setup, color palette, mood, foreground/background layers, depth of field. NO text in image.",
   "emoji": "single relevant emoji for this scene"
 }`;
 
@@ -308,7 +309,7 @@ Return ONLY the JSON array.`;
       bulletPoints: Array.isArray(scene.bulletPoints) ? scene.bulletPoints : [],
       keyTerms: Array.isArray(scene.keyTerms) ? scene.keyTerms : [],
       dialogueLines: Array.isArray(scene.dialogueLines) ? scene.dialogueLines : [],
-      duration: Math.max(5, Math.min(30, scene.duration || 12)),
+      duration: Math.max(10, Math.min(25, scene.duration || 15)),
       transition: scene.transition || ["fade", "slide_left", "slide_up", "zoom", "dissolve"][i % 5],
       imagePrompt: scene.imagePrompt || "",
       emoji: scene.emoji || "",
