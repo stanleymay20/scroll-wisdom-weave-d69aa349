@@ -206,6 +206,7 @@ export function FloatingActions({
                   </Button>
                 )}
               </div>
+            </motion.div>
           </>
         )}
       </AnimatePresence>
