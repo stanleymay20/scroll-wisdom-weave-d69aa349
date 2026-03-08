@@ -6,7 +6,7 @@
  * Subscription-tier aware: Premium subscribers get enhanced features.
  */
 
-import { useState, useCallback } from 'react';
+import { useState, useCallback, forwardRef } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   Presentation,
