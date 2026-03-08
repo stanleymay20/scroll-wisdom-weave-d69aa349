@@ -791,17 +791,44 @@ Return JSON:
 
     const maxOptions = isChildren ? 3 : 4;
 
+    // Fisher-Yates shuffle for answer randomization
+    function shuffleWithTracking(options: string[], correctIdx: number): { options: string[]; correctIndex: number } {
+      const indexed = options.map((opt, i) => ({ text: opt, wasCorrect: i === correctIdx }));
+      for (let i = indexed.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indexed[i], indexed[j]] = [indexed[j], indexed[i]];
+      }
+      return {
+        options: indexed.map(o => o.text),
+        correctIndex: indexed.findIndex(o => o.wasCorrect),
+      };
+    }
+
+    // Track position distribution to detect and fix clustering
+    const positionCounts: Record<number, number> = {};
+
     questions = questions.map((q: any, idx: number) => {
       const bl = q.bloomLevel || bloomDistribution[idx] || "analyze";
       const timeMult = profile.scoringModifiers.timeLimitMultiplier;
 
+      let options = Array.isArray(q.options) && q.options.length >= maxOptions
+        ? q.options.slice(0, maxOptions)
+        : isChildren ? ["A", "B", "C"] : ["A", "B", "C", "D"];
+      let correctIndex = typeof q.correctIndex === "number" && q.correctIndex >= 0 && q.correctIndex < maxOptions ? q.correctIndex : 0;
+
+      // ALWAYS shuffle options server-side to eliminate AI position bias
+      const shuffled = shuffleWithTracking(options, correctIndex);
+      options = shuffled.options;
+      correctIndex = shuffled.correctIndex;
+
+      // Track position distribution
+      positionCounts[correctIndex] = (positionCounts[correctIndex] || 0) + 1;
+
       return {
         bloomLevel: bl,
         question: q.question || `Question ${idx + 1}`,
-        options: Array.isArray(q.options) && q.options.length >= maxOptions
-          ? q.options.slice(0, maxOptions)
-          : isChildren ? ["A", "B", "C"] : ["A", "B", "C", "D"],
-        correctIndex: typeof q.correctIndex === "number" && q.correctIndex >= 0 && q.correctIndex < maxOptions ? q.correctIndex : 0,
+        options,
+        correctIndex,
         reasoningExplanation: q.reasoningExplanation || q.explanation || "Correct based on chapter content.",
         bloomJustification: q.bloomJustification || `This question targets the ${bl} level of Bloom's taxonomy.`,
         conceptsUsed: Array.isArray(q.conceptsUsed) ? q.conceptsUsed : [],
@@ -814,6 +841,8 @@ Return JSON:
         stressTestFailReasons: q.stressTestFailReasons || [],
       };
     });
+
+    log("Answer position distribution", positionCounts);
 
     // Compute mastery depth score (scaled 0-100)
     const depthScores = questions.map((q: any) => q.strengthScore || 5);
