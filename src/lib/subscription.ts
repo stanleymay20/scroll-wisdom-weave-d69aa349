@@ -12,13 +12,15 @@ export const SUBSCRIPTION_TIERS = {
       maxBooksPerMonth: 1,
       maxWordCount: 4000,
       exportFormats: ['pdf_low'],
-      ttsMinutes: 10, // 10 min free TTS
+      ttsMinutes: 5, // 5 min free TTS (cost control)
       interactiveVoiceMinutes: 5,
       aiCovers: false,
       commercialRights: false,
       batchGeneration: false,
       prioritySupport: false,
       elevenLabsTTS: false,
+      aiImageQuota: 0, // No AI image gen for free tier
+      cinematicVideo: false,
     }
   },
   student: {
@@ -32,12 +34,14 @@ export const SUBSCRIPTION_TIERS = {
       maxWordCount: 4000,
       exportFormats: ['pdf', 'epub', 'docx'],
       ttsMinutes: 30,
-      interactiveVoiceMinutes: 30, // 30 min voice interaction
+      interactiveVoiceMinutes: 30,
       aiCovers: true,
       commercialRights: false,
       batchGeneration: false,
       prioritySupport: false,
       elevenLabsTTS: false,
+      aiImageQuota: 20, // 20 AI images/month
+      cinematicVideo: false, // Slideshow only
     }
   },
   premium: {
@@ -51,12 +55,14 @@ export const SUBSCRIPTION_TIERS = {
       maxWordCount: 6000,
       exportFormats: ['pdf', 'epub', 'docx', 'mobi'],
       ttsMinutes: 60,
-      interactiveVoiceMinutes: 120, // 2 hours voice interaction
+      interactiveVoiceMinutes: 120,
       aiCovers: true,
       commercialRights: true,
       batchGeneration: false,
       prioritySupport: true,
       elevenLabsTTS: false,
+      aiImageQuota: 100, // 100 AI images/month
+      cinematicVideo: true, // Full cinematic video
     }
   },
   prophet_tier: {
@@ -69,8 +75,8 @@ export const SUBSCRIPTION_TIERS = {
       maxBooksPerMonth: -1,
       maxWordCount: 6000,
       exportFormats: ['pdf', 'epub', 'docx', 'mobi', 'kpf'],
-      ttsMinutes: -1, // unlimited with ElevenLabs
-      interactiveVoiceMinutes: -1, // unlimited voice interaction
+      ttsMinutes: -1,
+      interactiveVoiceMinutes: -1,
       aiCovers: true,
       commercialRights: true,
       batchGeneration: true,
@@ -78,6 +84,8 @@ export const SUBSCRIPTION_TIERS = {
       prophetMode: true,
       aiResearchAssistant: true,
       elevenLabsTTS: true,
+      aiImageQuota: -1, // Unlimited
+      cinematicVideo: true, // Full cinematic video
     }
   }
 } as const;
@@ -123,6 +131,21 @@ export function hasElevenLabsTTS(tier: SubscriptionTier): boolean {
 
 export function canBatchGenerate(tier: SubscriptionTier): boolean {
   return SUBSCRIPTION_TIERS[tier].features.batchGeneration;
+}
+
+export function canUseCinematicVideo(tier: SubscriptionTier): boolean {
+  return 'cinematicVideo' in SUBSCRIPTION_TIERS[tier].features &&
+         SUBSCRIPTION_TIERS[tier].features.cinematicVideo === true;
+}
+
+export function getAiImageQuota(tier: SubscriptionTier): number {
+  return 'aiImageQuota' in SUBSCRIPTION_TIERS[tier].features
+    ? (SUBSCRIPTION_TIERS[tier].features as any).aiImageQuota
+    : 0;
+}
+
+export function getInteractiveVoiceMinutes(tier: SubscriptionTier): number {
+  return SUBSCRIPTION_TIERS[tier].features.interactiveVoiceMinutes;
 }
 
 // Word count options based on tier
