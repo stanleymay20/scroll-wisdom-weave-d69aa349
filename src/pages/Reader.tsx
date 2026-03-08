@@ -54,6 +54,7 @@ import { CodePlayground } from "@/components/reader/CodePlayground";
 
 import { PreviouslyInBookCard, ReadingSessionTimer, DirectTextEditor } from "@/components/reader";
 import { ReaderToolsSheet } from "@/components/reader/ReaderToolsSheet";
+import { ChapterVideoGenerator } from "@/components/reader/ChapterVideoGenerator";
 import { FlashcardGenerator } from "@/components/decks/FlashcardGenerator";
 import { LearningDeckGenerator } from "@/components/decks/LearningDeckGenerator";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
@@ -193,6 +194,7 @@ export default function Reader() {
   const [showQuiz, setShowQuiz] = useState(false);
   const [showVoiceConversation, setShowVoiceConversation] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
+  const [showChapterVideo, setShowChapterVideo] = useState(false);
   
   const [showDirectEditor, setShowDirectEditor] = useState(false);
   const [highlightedText, setHighlightedText] = useState("");
@@ -1330,6 +1332,10 @@ export default function Reader() {
           onFlashcardsClick={() => {
             setShowFlashcardDialog(true);
           }}
+          onVideoClick={() => {
+            closeTopPanels();
+            setShowChapterVideo(true);
+          }}
         />
       )}
 
@@ -1389,6 +1395,20 @@ export default function Reader() {
           initialCode={extractCodeFromChapter(chapter.content)}
           initialLanguage={detectLanguageFromChapter(chapter.content)}
           title={`Code Playground - ${chapter.title}`}
+        />
+      )}
+
+      {/* Chapter Video Generator */}
+      {showChapterVideo && chapter?.content && book && (
+        <ChapterVideoGenerator
+          bookId={bookId || ""}
+          bookTitle={book.title}
+          bookType={(book as any).book_type || "standard"}
+          chapterTitle={chapter.title}
+          chapterContent={chapter.content}
+          chapterNumber={currentChapter}
+          language={book.language || "en"}
+          onClose={() => setShowChapterVideo(false)}
         />
       )}
 

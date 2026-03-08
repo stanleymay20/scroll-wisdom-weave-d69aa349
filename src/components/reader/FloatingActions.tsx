@@ -14,6 +14,7 @@ import {
   Code2, 
   BookOpen, 
   Presentation,
+  Video,
   X
 } from "lucide-react";
 import { FEATURES } from "@/lib/config";
@@ -35,6 +36,7 @@ interface FloatingActionsProps {
   onQAClick: () => void;
   onPlaygroundClick: () => void;
   onComicModeClick: () => void;
+  onVideoClick: () => void;
 }
 
 export function FloatingActions({
@@ -53,17 +55,19 @@ export function FloatingActions({
   onQAClick,
   onPlaygroundClick,
   onComicModeClick,
+  onVideoClick,
 }: FloatingActionsProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Count available actions for badge
   const actionCount = [
-    FEATURES.enableVoiceConversation, // Voice AI
-    isQuizUnlocked, // Quiz
-    true, // Q&A always available
+    FEATURES.enableVoiceConversation,
+    isQuizUnlocked,
+    true,
     hasCodeContent && FEATURES.enableCodePlayground,
     FEATURES.enableLearningDecks,
     hasComicContent && FEATURES.enableComicMode,
+    FEATURES.enableChapterVideo,
   ].filter(Boolean).length;
 
   return (
@@ -183,6 +187,22 @@ export function FloatingActions({
                     title="Comic Mode"
                   >
                     <BookOpen className="h-5 w-5 text-primary" />
+                  </Button>
+                )}
+
+                {/* Chapter Video Generator */}
+                {FEATURES.enableChapterVideo && (
+                  <Button
+                    onClick={() => {
+                      onVideoClick();
+                      setIsExpanded(false);
+                    }}
+                    variant="ghost"
+                    size="icon"
+                    className="h-10 w-10 rounded-xl hover:bg-primary/10"
+                    title="Generate Video"
+                  >
+                    <Video className="h-5 w-5 text-primary" />
                   </Button>
                 )}
               </div>

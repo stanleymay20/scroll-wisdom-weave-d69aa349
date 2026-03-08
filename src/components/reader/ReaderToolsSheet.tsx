@@ -25,6 +25,7 @@ import {
   Edit3,
   Layers,
   Sparkles,
+  Video,
   X,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
@@ -55,6 +56,7 @@ interface ReaderToolsSheetProps {
   onEditClick: () => void;
   onLearningDeckClick: () => void;
   onFlashcardsClick: () => void;
+  onVideoClick?: () => void;
 }
 
 export function ReaderToolsSheet({
@@ -71,6 +73,7 @@ export function ReaderToolsSheet({
   onEditClick,
   onLearningDeckClick,
   onFlashcardsClick,
+  onVideoClick,
 }: ReaderToolsSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -132,6 +135,14 @@ export function ReaderToolsSheet({
       icon: <Edit3 className="h-5 w-5" />,
       onClick: onEditClick,
       hidden: !isBookOwner,
+    },
+    {
+      id: "video",
+      label: "Chapter Video",
+      icon: <Video className="h-5 w-5" />,
+      onClick: onVideoClick || (() => {}),
+      hidden: !FEATURES.enableChapterVideo,
+      variant: "accent",
     },
   ];
 
