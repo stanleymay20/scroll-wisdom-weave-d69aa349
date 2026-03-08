@@ -4921,10 +4921,67 @@ ${researchResult.references.map((ref, idx) => {
         console.log(`[GENERATE-CHAPTER] Found ${figures.length} figure markers to illustrate`);
 
         if (figures.length > 0) {
-          const isChildrens = effectiveBookType === 'children';
-          const styleHint = isChildrens 
-            ? 'Children\'s book illustration style, soft warm colors, friendly characters, rounded shapes, whimsical and inviting, picture book quality.'
-            : 'Professional book illustration, educational, clear composition, warm color palette, suitable for print publication.';
+          // ===========================================
+          // BOOK-TYPE-SPECIFIC ART DIRECTION
+          // Each book type gets a tailored visual identity
+          // ===========================================
+          const BOOK_TYPE_ART_DIRECTION: Record<string, string> = {
+            children: `CHILDREN'S PICTURE BOOK — PUBLICATION QUALITY:
+Art style: Soft watercolor with digital refinement, rounded organic shapes, warm inviting palette.
+Characters: Expressive faces with large eyes, gentle proportions, age-appropriate (4-8 year old protagonists).
+Composition: Clear focal point, simple uncluttered backgrounds with subtle texture, rule of thirds.
+Color palette: Warm pastels (peach, soft yellow, sky blue, mint) with one saturated accent color per scene.
+Mood: Safe, magical, wonder-filled. Soft rim lighting, dappled sunlight, cozy atmosphere.
+Quality: Caldecott Medal standard. Print-ready 300dpi aesthetic. No harsh edges or scary elements.`,
+
+            illustrated: `ILLUSTRATED BOOK — EDITORIAL QUALITY:
+Art style: Modern editorial illustration with sophisticated color theory, balanced between realism and stylization.
+Composition: Dynamic layouts with intentional negative space, golden ratio framing, layered depth (foreground/midground/background).
+Color palette: Rich, saturated palette with complementary accents. Muted earth tones for grounding, vivid highlights for emphasis.
+Lighting: Dramatic directional lighting with volumetric atmosphere, rim highlights, subsurface scattering on organic elements.
+Detail: Texture-rich surfaces (fabric weave, wood grain, metal patina). Environmental storytelling through background details.
+Quality: Museum-quality illustration. Every element serves the narrative. Cinematic composition with intentional camera angles.`,
+
+            professional: `PROFESSIONAL/BUSINESS BOOK — INFOGRAPHIC QUALITY:
+Art style: Clean, modern infographic design. Flat design with subtle gradients and isometric elements.
+Composition: Grid-based layout with clear visual hierarchy. Data-first design with labeled axes and legends.
+Color palette: Corporate-grade palette — navy (#1B2A4A), teal (#0D9488), warm amber (#F59E0B), slate gray (#64748B). White backgrounds.
+Elements: Crisp geometric shapes, precise alignment, professional iconography, annotated callouts.
+Charts/Diagrams: Publication-ready with proper axis labels, data points, trend lines, and clear legends.
+Quality: McKinsey/Harvard Business Review standard. Boardroom-presentable. Zero decorative clutter.`,
+
+            reference: `REFERENCE/HANDBOOK — TECHNICAL DIAGRAM QUALITY:
+Art style: Precise technical illustration with clean vector aesthetics. Blueprint-inspired with modern refinement.
+Composition: Structured grid layout, systematic labeling, numbered callouts, clear flow direction arrows.
+Color palette: High-contrast with purpose — blue (#2563EB) for primary elements, red (#DC2626) for warnings/critical, green (#16A34A) for success/positive, neutral gray (#6B7280) for secondary.
+Elements: Flowchart nodes with rounded rectangles, decision diamonds, process arrows, taxonomy branches with clear hierarchy.
+Annotation: Every element labeled. Cross-reference numbers. Scale indicators where relevant.
+Quality: Engineering manual standard. ISO-compliant visual language. Optimized for print clarity at any size.`,
+
+            bestseller: `BESTSELLER/TRADE BOOK — CONCEPT VISUALIZATION:
+Art style: Bold, memorable concept art that makes abstract ideas tangible. Modern illustration with metaphorical depth.
+Composition: Strong central metaphor with supporting visual elements. Cinematic framing with dramatic perspective.
+Color palette: High-impact palette — deep navy backgrounds with gold/amber highlights, or clean white with bold accent colors. Maximum 3 colors per image.
+Elements: Visual metaphors (icebergs for hidden depth, compasses for direction, bridges for connection), transformation arcs, before/after contrasts.
+Lighting: Dramatic chiaroscuro for emphasis. Spotlight effects on key concepts. Atmospheric depth with subtle fog/glow.
+Quality: TED Talk slide quality. Instantly shareable. The image alone should communicate the core idea.`,
+
+            comic: `COMIC BOOK — PUBLICATION QUALITY:
+Art style: Dynamic comic art with bold ink lines, dramatic foreshortening, speed lines for action.
+Composition: Panel-ready framing with gutters in mind. Dutch angles for tension, worm-eye for power, bird-eye for scope.
+Color palette: Saturated comic palette with cel-shading, halftone dots for shadows, rim lighting on characters.
+Characters: Expressive with exaggerated emotion, dynamic poses, consistent character design across panels.
+Quality: Marvel/DC publication standard. Print-ready with proper bleed areas.`,
+
+            workbook: `WORKBOOK/EDUCATIONAL — INSTRUCTIONAL DIAGRAM:
+Art style: Clean instructional design with friendly, approachable aesthetics. Step-by-step visual clarity.
+Composition: Sequential layout with numbered steps, clear start/end points, progress indicators.
+Color palette: Encouraging and accessible — soft blue (#3B82F6), warm orange (#F97316), green (#22C55E) for correct/complete, light backgrounds.
+Elements: Annotated examples, fill-in areas indicated, comparison side-by-sides, progress trackers.
+Quality: Textbook-grade. Optimized for both screen and print. Accessible to diverse learning styles.`,
+          };
+
+          const styleHint = BOOK_TYPE_ART_DIRECTION[effectiveBookType] || BOOK_TYPE_ART_DIRECTION.illustrated;
 
           // Create a service-role Supabase client for storage uploads
           const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
@@ -4937,7 +4994,7 @@ ${researchResult.references.map((ref, idx) => {
           // Generate ALL images in parallel to save time
           const imageResults = await Promise.allSettled(
             figuresToGenerate.map(async (fig) => {
-              const imagePrompt = `${fig.description}. ${styleHint} Category: ${category}. No text or words in the image.`;
+              const imagePrompt = `${fig.description}.\n\n${styleHint}\n\nSubject: ${category.replace(/_/g, ' ')}. IMPORTANT: Do NOT render any text, words, or letters in the image.`;
               console.log(`[GENERATE-CHAPTER] Generating Figure ${fig.num}: ${fig.description.slice(0, 80)}...`);
               
               const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
