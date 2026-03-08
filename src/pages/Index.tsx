@@ -15,6 +15,7 @@ import { usePagePerformance } from "@/lib/performance";
 import { Skeleton } from "@/components/ui/skeleton";
 
 // Lazy-load below-fold sections to dramatically reduce initial bundle
+const ContentComparison = lazy(() => import("@/components/home/ContentComparison").then(m => ({ default: m.ContentComparison })));
 const CategoryCards = lazy(() => import("@/components/home/CategoryCards").then(m => ({ default: m.CategoryCards })));
 const ForYouSection = lazy(() => import("@/components/home/ForYouSection").then(m => ({ default: m.ForYouSection })));
 const GetInspiredSection = lazy(() => import("@/components/home/GetInspiredSection").then(m => ({ default: m.GetInspiredSection })));
@@ -103,6 +104,9 @@ const Index = () => {
         <TrustSignals />
         
         {/* Below-fold: lazy loaded for performance */}
+        <Suspense fallback={<SectionSkeleton />}>
+          <ContentComparison />
+        </Suspense>
         <Suspense fallback={<SectionSkeleton />}>
           <CategoryCards />
         </Suspense>
