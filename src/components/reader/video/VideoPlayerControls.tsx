@@ -25,12 +25,13 @@ interface VideoPlayerControlsProps {
   isFullscreen: boolean;
   volume: number;
   isMuted: boolean;
-  sceneProgress: number; // 0-1 progress within current scene
-  totalElapsed: number; // seconds elapsed total
-  totalDuration: number; // total seconds
+  sceneProgress: number;
+  totalElapsed: number;
+  totalDuration: number;
   isExporting: boolean;
   exportProgress: number;
   visible: boolean;
+  bufferedCount?: number;
   onTogglePlay: () => void;
   onNextScene: () => void;
   onPrevScene: () => void;
