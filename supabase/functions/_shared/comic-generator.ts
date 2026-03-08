@@ -351,7 +351,7 @@ export function buildImagePrompt(
   category: string
 ): string {
   const characterDesc = panel.visual.characters
-    .map(c => `${c.name} (${c.expression} expression, ${c.pose})`)
+    .map(c => `${c.name} (${c.expression} expression, ${c.pose}${c.wearing ? `, wearing ${c.wearing}` : ''})`)
     .join(', ');
 
   const dialogueText = panel.dialogue
@@ -361,16 +361,30 @@ export function buildImagePrompt(
 
   const captionText = panel.caption ? panel.caption.trim() : '';
 
-  return `${styleGuide.artStyle}. ${panel.visual.scene}. ` +
-    `Camera angle: ${panel.visual.cameraAngle}. ` +
-    `Mood: ${panel.visual.mood}. ` +
-    `${characterDesc ? `Characters: ${characterDesc}. ` : ''}` +
-    `${styleGuide.colorPalette}. ` +
-    `Category: ${category.replace(/_/g, ' ')}. ` +
-    `Professional comic book illustration. ` +
-    `Include the following text IN the image using speech bubbles and/or caption boxes (legible, high-contrast; no extra words): ` +
-    `${dialogueText ? `Dialogue: ${dialogueText}. ` : ''}` +
-    `${captionText ? `Caption: ${captionText}. ` : ''}`;
+  return `PROFESSIONAL COMIC PANEL — PUBLICATION QUALITY:
+
+ART DIRECTION:
+${styleGuide.artStyle}.
+Color: ${styleGuide.colorPalette}.
+Line: ${styleGuide.lineWeight}.
+Shading: ${styleGuide.shadingStyle}.
+${characterDesc ? `Characters: ${characterDesc}.` : ''}
+Category: ${category.replace(/_/g, ' ')}.
+
+SCENE: ${panel.visual.scene}
+Camera: ${panel.visual.cameraAngle} shot. Mood: ${panel.visual.mood}. Action: ${panel.visual.action}.
+Background: ${panel.visual.background}.
+
+RENDERING: Three-layer depth (foreground/midground/background), cinematic lighting with cast shadows, emotionally readable expressions, environmental storytelling details, professional variable-weight linework.
+
+${(dialogueText || captionText) ? `IN-ART TYPOGRAPHY — Render ALL text inside the artwork:
+${dialogueText ? `SPEECH BUBBLES: ${dialogueText}
+- Each speaker gets a separate bubble with tail pointing at speaker
+- Clean white fill, black outline, bold centered legible text
+- Shouted = jagged bubble, whispered = dashed bubble` : ''}
+${captionText ? `CAPTION BOX: "${captionText}"
+- Rectangular box anchored to panel edge with subtle tint` : ''}
+RULES: Correct spelling only, no extra words, max 30 words per bubble, top-left to bottom-right reading order.` : 'No text in image — pure visual panel.'}`;
 }
 
 // ============================================
