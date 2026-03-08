@@ -22,7 +22,7 @@ function isTrialActive(): boolean {
 // Format restrictions by tier (bypassed during trial)
 const TIER_FORMATS = {
   free: ["pdf"],
-  student: ["pdf", "epub"],
+  student: ["pdf", "epub", "docx"],
   premium: ["pdf", "epub", "docx"],
   prophet_tier: ["pdf", "epub", "docx"],
 };
@@ -901,9 +901,10 @@ serve(async (req) => {
       }
     }
 
-    // Fetch cover image
-    
-    const coverImageBytes = await fetchImageBytes(book.cover_image_url);
+    // Fetch cover image (only if URL exists)
+    const coverImageBytes = book.cover_image_url 
+      ? await fetchImageBytes(book.cover_image_url) 
+      : null;
     
     const finalAuthorName = authorName || book.author_ai_agent || "Unknown Author";
     const publishingIdentifier = isbn && isValidISBN(isbn) ? isbn : generateSPC(bookId);
