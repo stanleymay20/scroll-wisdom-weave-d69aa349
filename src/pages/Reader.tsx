@@ -1398,6 +1398,20 @@ export default function Reader() {
         />
       )}
 
+      {/* Chapter Video Generator */}
+      {showChapterVideo && chapter?.content && book && (
+        <ChapterVideoGenerator
+          bookId={bookId || ""}
+          bookTitle={book.title}
+          bookType={(book as any).book_type || "standard"}
+          chapterTitle={chapter.title}
+          chapterContent={chapter.content}
+          chapterNumber={currentChapter}
+          language={book.language || "en"}
+          onClose={() => setShowChapterVideo(false)}
+        />
+      )}
+
       {/* Direct Text Editor for book owners */}
       {showDirectEditor && chapter?.content && (
         <DirectTextEditor
