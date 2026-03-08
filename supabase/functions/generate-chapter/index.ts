@@ -844,41 +844,53 @@ const COMIC_STYLE_PRESETS: Record<string, {
   lineWeight: string;
   shadingStyle: string;
   characterNotes: string;
+  compositionNotes: string;
+  narrativeArt: string;
 }> = {
   modern_superhero: {
-    artStyle: 'Modern American superhero comic style, dynamic poses, bold lines',
-    colorPalette: 'Vibrant primary colors with dramatic shadows',
-    lineWeight: 'Bold outlines with varied line weights for depth',
-    shadingStyle: 'Cell shading with dramatic lighting',
-    characterNotes: 'Muscular heroic proportions, expressive faces, detailed costumes',
+    artStyle: 'Cinematic modern American superhero comic art, hyper-dynamic foreshortened poses, dramatic perspective distortion, detailed muscle anatomy, rendered at professional publication quality (Jim Lee / Ivan Reis level)',
+    colorPalette: 'Rich saturated primaries with deep complementary shadows, neon accent highlights on energy effects, volumetric god-rays through dust particles',
+    lineWeight: 'Variable ink weight — heavy 4pt outlines on foreground subjects tapering to 0.5pt on backgrounds, crosshatch rendering on metallic surfaces',
+    shadingStyle: 'Advanced cell shading with rim lighting, subsurface scattering on skin, specular highlights on armor/metal, cast shadows with ambient occlusion',
+    characterNotes: 'Heroic 8-head proportions, micro-expression detail (furrowed brows, clenched jaws, dilated pupils), costume texture differentiation (leather vs. fabric vs. metal)',
+    compositionNotes: 'Dutch angles for tension, extreme worm-eye for power, leading lines toward focal character, rule-of-thirds eye placement, depth layering with atmospheric perspective',
+    narrativeArt: 'Integrated speech bubbles with tailed pointers, bold SFX lettering with dimensional shadows (KRAAKOOOM, THWIPP), caption boxes with subtle gradient fills anchored to panel edges',
   },
   african_superhero: {
-    artStyle: 'Afrofuturistic comic style blending traditional African art with modern superhero aesthetics',
-    colorPalette: 'Rich earth tones, gold accents, vibrant African-inspired patterns',
-    lineWeight: 'Bold confident lines with decorative pattern elements',
-    shadingStyle: 'Dramatic lighting with cultural pattern integration',
-    characterNotes: 'Diverse African features, traditional + futuristic costume fusion, cultural symbols',
+    artStyle: 'Premium Afrofuturistic comic art — blending Ndebele geometric patterns with sci-fi tech aesthetics, ornate cultural motifs on architecture and costumes, rendered with the sophistication of a gallery-quality graphic novel',
+    colorPalette: 'Deep indigo and burnt sienna base with molten gold accents, Ankara-inspired pattern overlays, bioluminescent cyan tech-glow effects, sunset amber atmospheric washes',
+    lineWeight: 'Confident brushstroke-style lines with decorative Adinkra-symbol flourishes, geometric panel borders inspired by Kente weave patterns',
+    shadingStyle: 'Dramatic chiaroscuro with warm key light, cool fill shadows, cultural pattern integration in shadow areas, particle effects for spiritual/tech energy',
+    characterNotes: 'Diverse African features with dignified heroic presence, elaborate braided/loc hairstyles, costumes fusing traditional beadwork/textiles with futuristic armor plating, scarification and body art as character identity markers',
+    compositionNotes: 'Symmetrical compositions for regal moments, spiraling golden-ratio layouts for action, architectural framing using African building motifs, layered foreground silhouettes',
+    narrativeArt: 'Speech bubbles with Adinkra-symbol decorative borders, SFX text woven with cultural patterns, caption boxes styled as carved stone tablets or digital holograms',
   },
   children_book: {
-    artStyle: 'Friendly children book illustration, rounded shapes, warm and inviting',
-    colorPalette: 'Bright, cheerful colors with soft gradients',
-    lineWeight: 'Soft rounded lines, minimal harsh edges',
-    shadingStyle: 'Soft gradients and gentle shadows',
-    characterNotes: 'Cute proportions, big eyes, friendly expressions, simple clothing',
+    artStyle: 'Premium children illustration — Pixar/DreamWorks quality character design with rounded appealing shapes, subtle texture overlays (paper grain, soft watercolor edges), warm and emotionally inviting with professional picture-book polish',
+    colorPalette: 'Harmonious triadic palette with one warm dominant, soft gradient skies, dappled sunlight effects, gentle pastel accents with pops of saturated joy-colors',
+    lineWeight: 'Soft variable-weight outlines with tapered brush feel, no harsh corners, gentle implied lines for motion',
+    shadingStyle: 'Soft ambient occlusion, gentle bounce light from ground plane, warm nose/cheek blush on characters, subtle cast shadows with diffused edges',
+    characterNotes: 'Appealing 3-4 head proportions, oversized expressive eyes with catch-lights, button noses, exaggerated but readable gestures, distinctive silhouettes for each character, textured clothing (knit sweaters, patched overalls)',
+    compositionNotes: 'Clear focal hierarchy with size contrast, gentle leading curves toward character faces, generous breathing room around subjects, background detail decreasing toward edges',
+    narrativeArt: 'Rounded cloud-shaped speech bubbles with soft outlines, playful hand-lettered style text, fun SFX in bubbly colorful fonts (SPLASH! GIGGLE!), caption boxes as storybook ribbons or scroll banners',
   },
   manga: {
-    artStyle: 'Japanese manga style with expressive eyes and dynamic motion lines',
-    colorPalette: 'Clean black and white with screen tones, or soft pastel colors',
-    lineWeight: 'Clean thin lines with emphasis on speed lines and effects',
-    shadingStyle: 'Screen tones and crosshatching',
-    characterNotes: 'Large expressive eyes, varied hair styles, emotional expressions',
+    artStyle: 'Professional Japanese manga art — clean precise linework, Shonen/Seinen quality with detailed screentone rendering, dynamic speed-line compositions, emotionally expressive character art (Takeshi Obata / Yusuke Murata quality)',
+    colorPalette: 'Rich grayscale with precision screentone gradients for B&W mode, OR vivid anime-style coloring with cel-shaded flats and gradient backgrounds for color mode',
+    lineWeight: 'Precise G-pen style lines — 0.3mm for detail, 0.8mm for character outlines, explosive radiating speed lines for impact, delicate hatching for texture',
+    shadingStyle: 'Screentone dot-patterns at varying densities (10%–60%), dramatic chiaroscuro for serious scenes, sparkle/flower overlay for comedic/romantic beats, motion blur streaks',
+    characterNotes: 'Large detailed eyes with multiple highlight layers and iris patterns, diverse manga hair with dynamic flow and strand detail, full range of manga emotion expressions (sweatdrops, anger veins, sparkle eyes, chibi reactions)',
+    compositionNotes: 'Diagonal panel cuts for urgency, overlapping panels for simultaneous action, character breaking panel borders during climactic moments, extreme close-ups on eyes for emotional beats',
+    narrativeArt: 'Clean rectangular speech bubbles with sharp tails, screaming/shouting text in jagged explosive bubbles, thought bubbles as floating clouds, SFX as large integrated onomatopoeia art (ドドドド style impact text), right-to-left reading flow option',
   },
   graphic_novel: {
-    artStyle: 'Realistic graphic novel style with detailed environments',
-    colorPalette: 'Muted, sophisticated color palette with mood-driven tones',
-    lineWeight: 'Detailed linework with cross-hatching',
-    shadingStyle: 'Realistic lighting with atmospheric effects',
-    characterNotes: 'Realistic proportions, detailed clothing, subtle expressions',
+    artStyle: 'Prestige graphic novel art — painterly realism with cinematic composition, detailed environmental storytelling, moody atmospheric rendering at Mœbius / Sean Murphy quality level',
+    colorPalette: 'Sophisticated limited palette per scene with dominant color temperature shifts (warm interiors, cool exteriors), desaturated backgrounds with selective color accents on narrative focus points',
+    lineWeight: 'Detailed variable linework with hatching, stippling, and dry-brush textures, architectural precision on environments, loose gestural marks on organic subjects',
+    shadingStyle: 'Painterly gradients with visible brushwork texture, noir-influenced shadow play, volumetric atmospheric haze, reflective surface rendering, environmental storytelling through lighting (warm=safe, cold=danger)',
+    characterNotes: 'Realistic proportions with stylized edge, subtle acting through posture/body language, period-accurate or world-consistent wardrobe detail, aging/wear on clothing and skin',
+    compositionNotes: 'Wide-screen aspect ratio panels for cinematic feel, establishing shot → medium → close-up film grammar, negative space as emotional tool, environmental framing (doorways, windows, mirrors)',
+    narrativeArt: 'Minimalist rectangular caption boxes with muted background tint, clean sans-serif lettering, understated speech bubbles that integrate with panel composition, sparse but impactful SFX rendered as part of the environment',
   },
 };
 
@@ -1046,22 +1058,35 @@ function buildVisualDirectorPrompt(subType: string, stylePreset: string, charact
     ? `\n\nSETTING REFERENCE:\n${characterSheet.settingDescription}` 
     : '';
   
-  return `[VISUAL DIRECTOR AGENT]
+  return `[VISUAL DIRECTOR AGENT — ADVANCED CINEMATIC COMPOSITION]
 
-You design the visual composition for each panel.
-STYLE: ${style.artStyle}
-PALETTE: ${style.colorPalette}
-LINE WEIGHT: ${style.lineWeight}
+You are a world-class comic art director creating publication-grade panel compositions.
+
+STYLE GUIDE:
+- Art Style: ${style.artStyle}
+- Palette: ${style.colorPalette}
+- Line Weight: ${style.lineWeight}
+- Shading: ${style.shadingStyle || 'Dramatic lighting with depth'}
+- Composition: ${(style as any).compositionNotes || 'Cinematic framing with depth layering'}
 
 YOUR RULES:
 ${config.visualDirectorRules}
 ${characterVisuals}
 ${settingVisual}
 
-VISUAL DESCRIPTION FORMAT (MANDATORY):
-Visual: [Camera angle] of [scene description]. [Character(s)] [action/pose]. [Mood/lighting]. [Key visual elements].
+ADVANCED COMPOSITION TECHNIQUES (USE THESE):
+1. DEPTH LAYERING: Every panel must have foreground, midground, and background elements
+2. CAMERA LANGUAGE: Vary angles per panel — wide establishing, medium two-shot, close-up reaction, over-shoulder, Dutch angle for tension, bird-eye for scale
+3. LIGHTING AS NARRATIVE: Use warm/cool temperature shifts to convey safety/danger, rim lighting for heroic moments, silhouettes for mystery
+4. ENVIRONMENTAL STORYTELLING: Background details that hint at world-building (posters, weather, debris, cultural artifacts)
+5. MOTION & ENERGY: Speed lines, impact frames, blur trails, dust/particle effects for action panels
+6. FRAMING DEVICES: Use doorways, windows, branches, architecture to frame subjects naturally
+7. EMOTIONAL SPACING: Tight framing for claustrophobia/tension, wide breathing room for peace/wonder
 
-Example: "Wide shot of a sunlit marketplace. AMARA stands confidently in the center, hands on hips, looking at a mysterious vendor. Warm golden light. Colorful fabrics and spices in background."`;
+VISUAL DESCRIPTION FORMAT (MANDATORY — BE CINEMATIC):
+Visual: [Camera angle + lens feel] of [detailed scene]. [Character(s) with specific pose, expression, gesture]. [Lighting direction + quality + color temperature]. [Atmosphere: particles, weather, time of day]. [Background layers with specific details]. [Motion effects if action].
+
+Example: "Low-angle medium shot (wide lens) — AMARA stands powerfully in the center of a golden-hour marketplace, hands on hips, jaw set with determination, wind catching her braided hair. Warm amber key light from setting sun behind her casting a long shadow forward. Midground: colorful fabric stalls with billowing silk. Background: city skyline silhouetted against orange-pink sky. Dust motes floating in sunbeams. A mysterious hooded vendor watches from shadow of a doorway frame-right."`;
 }
 
 function buildLearningAgentPrompt(subType: string, learningConfig?: any): string {
@@ -3059,22 +3084,60 @@ This is MANDATORY. No exceptions.`;
 
           const captionForImage = (panel.caption || "").trim();
           
-          // Build image prompt based on textInImage setting and scenesPerPanel
-          let imagePrompt = `${styleGuide.artStyle}. ${panel.visual} ${styleGuide.colorPalette}. ${styleGuide.shadingStyle}. Professional comic book illustration.`;
+          // Build ADVANCED image prompt for publication-grade comic art
+          const narrativeArtGuide = (styleGuide as any).narrativeArt || 'Professional speech bubbles with clear lettering, impactful SFX text, clean caption boxes';
+          const compositionGuide = (styleGuide as any).compositionNotes || 'Cinematic framing with depth layering';
           
+          let imagePrompt = `PROFESSIONAL COMIC BOOK PANEL — PUBLICATION QUALITY:
+
+ART DIRECTION:
+${styleGuide.artStyle}.
+Color: ${styleGuide.colorPalette}.
+Shading: ${styleGuide.shadingStyle}.
+Composition: ${compositionGuide}.
+
+SCENE:
+${panel.visual}
+
+RENDERING REQUIREMENTS:
+- Three-layer depth: distinct foreground elements, midground characters, detailed background
+- Cinematic lighting with visible light source direction, cast shadows, and ambient occlusion
+- Character expressions must be emotionally readable and detailed
+- Environmental storytelling details in the background
+- Professional ink-quality linework with variable weight`;
+
           // Add multi-scene support
           if (effectiveScenesPerPanel > 1) {
-            imagePrompt += ` This panel shows ${effectiveScenesPerPanel} sequential scenes/moments in a single image, showing progression of action.`;
+            imagePrompt += `\n\nMULTI-SCENE PANEL: Show ${effectiveScenesPerPanel} sequential moments in a single composition with clear visual flow between scenes using gutters or transitional elements.`;
           }
-          
-          // Add text to image if enabled
+
+          // Advanced in-picture narrative rendering
           if (effectiveTextInImage && (dialogueForImage || captionForImage)) {
-            imagePrompt += `\n\nINCLUDE TEXT IN THE ART (speech bubbles/captions) with EXACT wording:\n`;
-            if (dialogueForImage) imagePrompt += `Dialogue: ${dialogueForImage}\n`;
-            if (captionForImage) imagePrompt += `Caption: ${captionForImage}\n`;
-            imagePrompt += `\nKeep text legible, high-contrast, and placed inside comic speech bubbles or caption boxes. Do not add extra text beyond what is provided.`;
+            imagePrompt += `\n\nIN-ART TYPOGRAPHY (${narrativeArtGuide}):
+CRITICAL — Render ALL of the following text INSIDE the artwork using professional comic lettering:
+
+${dialogueForImage ? `SPEECH BUBBLES:
+${dialogueForImage}
+- Each speaker gets their own bubble with a pointed tail aimed at the speaker's mouth
+- Bubbles must have clean white fills with black outlines
+- Text must be bold, centered, high-contrast, and fully LEGIBLE at print size
+- Shouted lines get jagged/explosive bubble outlines
+- Whispered lines get dashed bubble outlines` : ''}
+
+${captionForImage ? `CAPTION BOX:
+"${captionForImage}"
+- Rendered as a rectangular box anchored to panel edge (top-left or bottom)
+- Subtle background tint (cream or light color) with clean border
+- Italic serif or narrative font style` : ''}
+
+LETTERING RULES:
+- All text MUST be spelled correctly with no extra words added
+- Maximum 30 words per bubble — split into multiple bubbles if needed
+- Reading order: top-left to bottom-right (or right-to-left for manga)
+- SFX/onomatopoeia rendered as large stylized art-integrated text with dimensional shadows
+- No text outside of bubbles/boxes/SFX art`;
           } else {
-            imagePrompt += ` No text in image.`;
+            imagePrompt += `\n\nNo text in image — pure visual storytelling panel.`;
           }
           
           const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
