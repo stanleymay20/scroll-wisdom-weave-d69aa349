@@ -124,7 +124,7 @@ serve(async (req) => {
 
 OUTPUT: Return ONLY a valid JSON array. No markdown.
 
-Create 6-10 scenes. Each scene will become a cinematic shot with an AI-generated background image + animated text overlay + camera movement.
+Create 5-7 scenes (keep it concise for fast generation). Each scene will become a cinematic shot with an AI-generated background image + animated text overlay + camera movement.
 
 SCENE SCHEMA:
 {
