@@ -99,7 +99,38 @@ serve(async (req) => {
         : 'free';
       supabaseClient.from("profiles").update({ plan: tier }).eq("user_id", userId).then(() => {});
     } else {
-      logStep("No active subscription found");
+      logStep("No active Stripe subscription, checking local subscriptions table");
+      
+      // Fall back to subscriptions table (supports manual/admin grants)
+      const { data: localSub } = await supabaseClient
+        .from('subscriptions')
+        .select('tier, status, current_period_end')
+        .eq('user_id', userId)
+        .eq('status', 'active')
+        .maybeSingle();
+
+      if (localSub && localSub.tier && localSub.tier !== 'free') {
+        const endDate = localSub.current_period_end;
+        const isValid = !endDate || new Date(endDate) > new Date();
+        
+        if (isValid) {
+          logStep("Found active local subscription", { tier: localSub.tier });
+          // Sync to profile
+          supabaseClient.from("profiles").update({ plan: localSub.tier }).eq("user_id", userId).then(() => {});
+          
+          return new Response(JSON.stringify({
+            subscribed: true,
+            product_id: null,
+            subscription_end: endDate,
+            tier: localSub.tier,
+          }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+            status: 200,
+          });
+        }
+      }
+
+      logStep("No active subscription found anywhere");
       // CRITICAL: Sync downgrade to profile so edge functions see correct plan
       supabaseClient.from("profiles").update({ plan: 'free' }).eq("user_id", userId).then(() => {
         logStep("Profile synced to free tier");
