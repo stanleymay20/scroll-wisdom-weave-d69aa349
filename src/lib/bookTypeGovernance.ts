@@ -18,6 +18,7 @@ export type BookType =
   | 'children'      // Children's Book
   | 'technical'     // Technical / Hands-On Guide
   | 'reference'     // Reference / Handbook
+  | 'fiction'       // Fiction / Novel
   | 'text';         // Standard Text (legacy)
 
 // ===========================================
