@@ -5,7 +5,7 @@
  * No blocking calls allowed in this component.
  */
 
-import { memo, forwardRef, useState } from "react";
+import { memo, useState } from "react";
 import { Upload, BookOpen, Library as LibraryIcon, Settings, Plus, Compass } from "lucide-react";
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import { cn } from "@/lib/utils";
@@ -32,7 +32,7 @@ const BOOK_TYPES = [
  * Pure UI component - NO data fetching, NO auth checks
  * This is critical for Contract 4A compliance
  */
-const MobileBottomNavComponent = forwardRef<HTMLElement, object>((_props, ref) => {
+function MobileBottomNavInner() {
   const location = useLocation();
   const navigate = useNavigate();
   const pathname = location.pathname;
@@ -98,7 +98,6 @@ const MobileBottomNavComponent = forwardRef<HTMLElement, object>((_props, ref) =
 
       {/* Bottom Navigation */}
       <nav 
-        ref={ref}
         className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border/30 md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
       >
@@ -163,8 +162,6 @@ const MobileBottomNavComponent = forwardRef<HTMLElement, object>((_props, ref) =
       </nav>
     </>
   );
-});
+}
 
-MobileBottomNavComponent.displayName = 'MobileBottomNav';
-
-export const MobileBottomNav = memo(MobileBottomNavComponent);
+export const MobileBottomNav = memo(MobileBottomNavInner);
