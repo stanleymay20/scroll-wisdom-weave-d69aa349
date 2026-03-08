@@ -525,32 +525,37 @@ export function ChapterVideoGenerator({
                   ) : (
                     <div className={cn("absolute inset-0 bg-gradient-to-br", theme.gradient)} />
                   )}
-                  <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-black/40" />
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-transparent to-black/30" />
+                  <div className="absolute inset-0 bg-gradient-to-r from-black/20 via-transparent to-black/20" />
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-8 md:p-16 z-10">
                     <Badge className="absolute top-14 right-4 bg-black/40 backdrop-blur-sm text-white/60 text-[10px] border-white/10">
                       {scene.visualType.replace(/_/g, " ")}
                     </Badge>
                     {scene.emoji && (
-                      <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
-                        transition={{ delay: 0.2, type: "spring" }} className="text-5xl mb-4">
+                      <motion.div initial={{ scale: 0, rotate: -10 }} animate={{ scale: 1, rotate: 0 }}
+                        transition={{ delay: 0.2, type: "spring", stiffness: 200 }} className="text-6xl md:text-7xl mb-6 drop-shadow-2xl">
                         {scene.emoji}
                       </motion.div>
                     )}
-                    <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.3 }}
-                      className="text-3xl md:text-5xl font-bold text-white text-center mb-4 drop-shadow-lg max-w-3xl leading-tight">
+                    <motion.h2 initial={{ y: 30, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+                      transition={{ delay: 0.3, duration: 0.8, ease: "easeOut" }}
+                      className="text-4xl md:text-6xl font-extrabold text-white text-center mb-4 max-w-4xl leading-[1.1] tracking-tight"
+                      style={{ textShadow: "0 4px 20px rgba(0,0,0,0.8), 0 0 60px rgba(0,0,0,0.4)" }}>
                       {scene.title}
                     </motion.h2>
                     {scene.textOverlay && scene.textOverlay !== scene.title && (
-                      <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-                        transition={{ delay: 0.5 }}
-                        className="text-xl text-white/85 text-center mb-6 max-w-2xl drop-shadow-md">
+                      <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}
+                        transition={{ delay: 0.6, duration: 0.6 }}
+                        className="text-lg md:text-2xl text-white/90 text-center mb-8 max-w-2xl font-medium"
+                        style={{ textShadow: "0 2px 12px rgba(0,0,0,0.7)" }}>
                         {scene.textOverlay}
                       </motion.p>
                     )}
+                    {/* Subtitle bar — Netflix/YouTube style */}
                     <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
-                      transition={{ delay: 0.6 }} className="absolute bottom-20 left-6 right-6">
-                      <p className="text-white/80 text-base md:text-lg text-center bg-black/60 rounded-lg px-6 py-3 backdrop-blur-sm line-clamp-3 max-w-3xl mx-auto">
+                      transition={{ delay: 0.7, duration: 0.5 }} className="absolute bottom-24 left-4 right-4 md:left-12 md:right-12">
+                      <p className="text-white text-sm md:text-lg text-center leading-relaxed px-6 py-3 rounded-md max-w-4xl mx-auto"
+                        style={{ background: "rgba(0,0,0,0.75)", textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>
                         {scene.narration}
                       </p>
                     </motion.div>
