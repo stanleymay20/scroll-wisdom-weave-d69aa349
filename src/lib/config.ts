@@ -46,4 +46,5 @@ export const FEATURES = {
   enableDeepResearch: !PMF_MODE,
   enableSkillRadar: !PMF_MODE,
   enableComicMode: !PMF_MODE,
+  enableChapterVideo: !PMF_MODE,
 };
