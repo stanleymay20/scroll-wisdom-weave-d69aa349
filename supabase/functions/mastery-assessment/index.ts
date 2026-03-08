@@ -571,6 +571,14 @@ QUESTION ${i + 1} — Bloom Level: ${bl.toUpperCase()}
 ${BLOOM_ENFORCEMENT[bl] || BLOOM_ENFORCEMENT.analyze}
 `).join('\n')}
 
+ANTI-PREDICTABILITY CONTRACT (CRITICAL — HARD ENFORCEMENT):
+1. RANDOMIZE correctIndex: Distribute correct answers EVENLY across positions 0-${optionCount - 1}. Do NOT cluster at position 0. For ${questionCount} questions, no single position should hold more than ${Math.ceil(questionCount / optionCount)} correct answers.
+2. EQUAL-LENGTH OPTIONS: All ${optionCount} options MUST be similar in length (within 20% word count). The correct answer must NOT be longer, more detailed, or more specific than distractors.
+3. PLAUSIBLE DISTRACTORS: Every wrong option must represent a real misconception, a related-but-incorrect concept, or reasoning from flawed-but-reasonable logic. NO obviously absurd options.
+4. STYLE CONSISTENCY: If one option uses technical language, ALL must. If one describes a scenario, ALL must. No mixing formal/casual within one question's options.
+5. NO HEDGING BIAS: Do NOT make the correct answer the only one with words like "may", "sometimes", "it depends". Either ALL options hedge or NONE do.
+6. NO GIVEAWAYS: No "all of the above", "none of the above", or joke answers.
+
 UNIVERSAL RULES:
 - Every question must reference at least ${isChildren ? '1' : '2'} named constructs from the extracted list.
 - ${isChildren ? 'Use simple, encouraging language appropriate for ages 6-12.' : 'Every question must introduce a trade-off, boundary case, constraint, or counterfactual.'}
