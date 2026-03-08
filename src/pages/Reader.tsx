@@ -70,6 +70,8 @@ import { useQuizGating } from "@/hooks/useQuizGating";
 import { useCompetencyProgress } from "@/hooks/useCompetencyProgress";
 import { CompetencyLearningPanel } from "@/components/reader/CompetencyLearningPanel";
 import { AdaptiveLearningPath } from "@/components/reader/AdaptiveLearningPath";
+import { PresenceAvatars } from "@/components/reader/PresenceAvatars";
+import { useEditorPresence } from "@/hooks/useCollaboration";
 
 interface BookData {
   id: string;
@@ -141,6 +143,11 @@ export default function Reader() {
     userId,
   });
   
+  // Collaborative editing presence
+  const { editorsOnChapter } = useEditorPresence(
+    bookId, chapter?.id, userId, undefined, undefined
+  );
+
   // Reading session tracking with weekly goals
   const {
     formattedTime,
@@ -743,6 +750,13 @@ export default function Reader() {
               compact
             />
           </div>
+
+          {/* Collaborative presence */}
+          {editorsOnChapter.length > 0 && (
+            <div className="hidden sm:flex items-center">
+              <PresenceAvatars editors={editorsOnChapter} />
+            </div>
+          )}
           
           <div className="flex items-center gap-1 sm:gap-2">
             <Button 

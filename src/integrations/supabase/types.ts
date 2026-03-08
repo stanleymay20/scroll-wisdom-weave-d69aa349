@@ -301,6 +301,50 @@ export type Database = {
           },
         ]
       }
+      book_collaborators: {
+        Row: {
+          accepted_at: string | null
+          book_id: string
+          created_at: string
+          id: string
+          invited_by: string
+          invited_email: string | null
+          role: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          book_id: string
+          created_at?: string
+          id?: string
+          invited_by: string
+          invited_email?: string | null
+          role?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          book_id?: string
+          created_at?: string
+          id?: string
+          invited_by?: string
+          invited_email?: string | null
+          role?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_collaborators_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookmarks: {
         Row: {
           book_id: string
@@ -414,6 +458,57 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      chapter_edit_sessions: {
+        Row: {
+          book_id: string
+          chapter_id: string
+          id: string
+          is_active: boolean
+          last_heartbeat: string
+          started_at: string
+          user_avatar: string | null
+          user_id: string
+          user_name: string | null
+        }
+        Insert: {
+          book_id: string
+          chapter_id: string
+          id?: string
+          is_active?: boolean
+          last_heartbeat?: string
+          started_at?: string
+          user_avatar?: string | null
+          user_id: string
+          user_name?: string | null
+        }
+        Update: {
+          book_id?: string
+          chapter_id?: string
+          id?: string
+          is_active?: boolean
+          last_heartbeat?: string
+          started_at?: string
+          user_avatar?: string | null
+          user_id?: string
+          user_name?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chapter_edit_sessions_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "chapter_edit_sessions_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chapters: {
         Row: {
