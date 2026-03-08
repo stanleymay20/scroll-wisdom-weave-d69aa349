@@ -84,10 +84,8 @@ serve(async (req) => {
 
     const enhancedPrompt = `${prompt}. ${stylePrompts[style] || stylePrompts.illustration}`;
 
-    // Use Gemini 2.5 Flash Image for standard, Gemini 3 Pro Image for premium
-    const model = effectiveIsPremium 
-      ? "google/gemini-3-pro-image-preview" 
-      : "google/gemini-2.5-flash-image-preview";
+    // Use Gemini 3 Pro Image for all tiers (only supported image model)
+    const model = "google/gemini-3-pro-image-preview";
 
     logStep("Using model", { model });
 

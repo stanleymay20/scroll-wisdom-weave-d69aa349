@@ -3039,7 +3039,7 @@ This is MANDATORY. No exceptions.`;
         console.log(`[GENERATE-CHAPTER] Found ${panels.length} panels via regex fallback`);
       }
 
-      const styleGuide = COMIC_STYLE_PRESETS[comicStyle] || COMIC_STYLE_PRESETS.children_book;
+      const styleGuide = COMIC_STYLE_PRESETS[effectiveComicStyle] || COMIC_STYLE_PRESETS.children_book;
 
       // Generate images with style consistency and upload to storage
       const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -4858,7 +4858,7 @@ ${researchResult.references.map((ref, idx) => {
         console.log(`[GENERATE-CHAPTER] Found ${figures.length} figure markers to illustrate`);
 
         if (figures.length > 0) {
-          const isChildrens = bookType === 'children';
+          const isChildrens = effectiveBookType === 'children';
           const styleHint = isChildrens 
             ? 'Children\'s book illustration style, soft warm colors, friendly characters, rounded shapes, whimsical and inviting, picture book quality.'
             : 'Professional book illustration, educational, clear composition, warm color palette, suitable for print publication.';
