@@ -48,14 +48,14 @@ serve(async (req) => {
 
     logStep("Authenticated user", { userId: user.id.slice(0, 8) + "..." });
 
-    // Get user's subscription plan
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("plan")
-      .eq("id", user.id)
-      .single();
+    // Get user's subscription plan from subscriptions table (source of truth)
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select("tier, status")
+      .eq("user_id", user.id)
+      .maybeSingle();
 
-    const userPlan = profile?.plan || "free";
+    const userPlan = (subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free";
     const isPremiumPlan = userPlan === "premium" || userPlan === "prophet_tier";
 
     const { 

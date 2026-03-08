@@ -28,7 +28,7 @@ export type ExportFormat = typeof EXPORT_FORMATS[number];
 // PMF MODE: Feature flags
 // Only Generate → Read → Quiz → Certificate
 // ===========================================
-export const PMF_MODE = true; // Set to false to re-enable all features
+export const PMF_MODE = false; // All features enabled
 
 export const FEATURES = {
   enableTTS: true,
