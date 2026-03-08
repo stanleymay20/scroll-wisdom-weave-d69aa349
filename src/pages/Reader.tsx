@@ -193,6 +193,7 @@ export default function Reader() {
   const [showQuiz, setShowQuiz] = useState(false);
   const [showVoiceConversation, setShowVoiceConversation] = useState(false);
   const [showPlayground, setShowPlayground] = useState(false);
+  const [showChapterVideo, setShowChapterVideo] = useState(false);
   
   const [showDirectEditor, setShowDirectEditor] = useState(false);
   const [highlightedText, setHighlightedText] = useState("");
