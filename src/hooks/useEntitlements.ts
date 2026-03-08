@@ -231,10 +231,10 @@ export function useEntitlements(): Entitlements {
   // FREE TIER - limited access (1 book/month to validate PMF)
   return {
     canPublish: false,
-    canExport: false,
-    canDownload: false,
+    canExport: true, // Free users can export PDF (server enforces format restrictions)
+    canDownload: true, // Free users can download PDF exports
     canGenerateBooks: true, // Free users can generate 1 book/month
-    canUseAllFormats: false,
+    canUseAllFormats: false, // Only PDF for free tier
     canExportAllFormats: false,
     hasCommercialRights: false,
     bypassAllLimits: false,

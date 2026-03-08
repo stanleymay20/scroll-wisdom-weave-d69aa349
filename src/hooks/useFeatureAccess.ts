@@ -119,18 +119,31 @@ export function useFeatureAccess() {
         };
 
       case 'exportPdf':
+        // PDF is available to ALL users (free tier included)
+        return { hasAccess: true };
+
       case 'exportEpub':
       case 'exportDocx':
-      case 'exportMobi':
-      case 'exportKpf':
-        // All paid users can export all formats
+        // EPUB/DOCX require Student tier or higher
         if (entitlements.isPaid) {
           return { hasAccess: true };
         }
         return { 
           hasAccess: false, 
-          reason: 'Export requires a paid subscription',
+          reason: `${feature === 'exportDocx' ? 'DOCX' : 'EPUB'} export requires Student plan or higher`,
           upgradeRequired: 'student'
+        };
+
+      case 'exportMobi':
+      case 'exportKpf':
+        // MOBI/KPF require Prophet tier
+        if (entitlements.isProphet) {
+          return { hasAccess: true };
+        }
+        return { 
+          hasAccess: false, 
+          reason: `${feature === 'exportMobi' ? 'MOBI' : 'KPF'} export requires Institutional plan`,
+          upgradeRequired: 'prophet_tier'
         };
 
       default:
