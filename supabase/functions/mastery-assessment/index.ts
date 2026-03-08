@@ -571,6 +571,14 @@ QUESTION ${i + 1} — Bloom Level: ${bl.toUpperCase()}
 ${BLOOM_ENFORCEMENT[bl] || BLOOM_ENFORCEMENT.analyze}
 `).join('\n')}
 
+ANTI-PREDICTABILITY CONTRACT (CRITICAL — HARD ENFORCEMENT):
+1. RANDOMIZE correctIndex: Distribute correct answers EVENLY across positions 0-${optionCount - 1}. Do NOT cluster at position 0. For ${questionCount} questions, no single position should hold more than ${Math.ceil(questionCount / optionCount)} correct answers.
+2. EQUAL-LENGTH OPTIONS: All ${optionCount} options MUST be similar in length (within 20% word count). The correct answer must NOT be longer, more detailed, or more specific than distractors.
+3. PLAUSIBLE DISTRACTORS: Every wrong option must represent a real misconception, a related-but-incorrect concept, or reasoning from flawed-but-reasonable logic. NO obviously absurd options.
+4. STYLE CONSISTENCY: If one option uses technical language, ALL must. If one describes a scenario, ALL must. No mixing formal/casual within one question's options.
+5. NO HEDGING BIAS: Do NOT make the correct answer the only one with words like "may", "sometimes", "it depends". Either ALL options hedge or NONE do.
+6. NO GIVEAWAYS: No "all of the above", "none of the above", or joke answers.
+
 UNIVERSAL RULES:
 - Every question must reference at least ${isChildren ? '1' : '2'} named constructs from the extracted list.
 - ${isChildren ? 'Use simple, encouraging language appropriate for ages 6-12.' : 'Every question must introduce a trade-off, boundary case, constraint, or counterfactual.'}
@@ -783,17 +791,44 @@ Return JSON:
 
     const maxOptions = isChildren ? 3 : 4;
 
+    // Fisher-Yates shuffle for answer randomization
+    function shuffleWithTracking(options: string[], correctIdx: number): { options: string[]; correctIndex: number } {
+      const indexed = options.map((opt, i) => ({ text: opt, wasCorrect: i === correctIdx }));
+      for (let i = indexed.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [indexed[i], indexed[j]] = [indexed[j], indexed[i]];
+      }
+      return {
+        options: indexed.map(o => o.text),
+        correctIndex: indexed.findIndex(o => o.wasCorrect),
+      };
+    }
+
+    // Track position distribution to detect and fix clustering
+    const positionCounts: Record<number, number> = {};
+
     questions = questions.map((q: any, idx: number) => {
       const bl = q.bloomLevel || bloomDistribution[idx] || "analyze";
       const timeMult = profile.scoringModifiers.timeLimitMultiplier;
 
+      let options = Array.isArray(q.options) && q.options.length >= maxOptions
+        ? q.options.slice(0, maxOptions)
+        : isChildren ? ["A", "B", "C"] : ["A", "B", "C", "D"];
+      let correctIndex = typeof q.correctIndex === "number" && q.correctIndex >= 0 && q.correctIndex < maxOptions ? q.correctIndex : 0;
+
+      // ALWAYS shuffle options server-side to eliminate AI position bias
+      const shuffled = shuffleWithTracking(options, correctIndex);
+      options = shuffled.options;
+      correctIndex = shuffled.correctIndex;
+
+      // Track position distribution
+      positionCounts[correctIndex] = (positionCounts[correctIndex] || 0) + 1;
+
       return {
         bloomLevel: bl,
         question: q.question || `Question ${idx + 1}`,
-        options: Array.isArray(q.options) && q.options.length >= maxOptions
-          ? q.options.slice(0, maxOptions)
-          : isChildren ? ["A", "B", "C"] : ["A", "B", "C", "D"],
-        correctIndex: typeof q.correctIndex === "number" && q.correctIndex >= 0 && q.correctIndex < maxOptions ? q.correctIndex : 0,
+        options,
+        correctIndex,
         reasoningExplanation: q.reasoningExplanation || q.explanation || "Correct based on chapter content.",
         bloomJustification: q.bloomJustification || `This question targets the ${bl} level of Bloom's taxonomy.`,
         conceptsUsed: Array.isArray(q.conceptsUsed) ? q.conceptsUsed : [],
@@ -806,6 +841,8 @@ Return JSON:
         stressTestFailReasons: q.stressTestFailReasons || [],
       };
     });
+
+    log("Answer position distribution", positionCounts);
 
     // Compute mastery depth score (scaled 0-100)
     const depthScores = questions.map((q: any) => q.strengthScore || 5);
