@@ -44,14 +44,14 @@ const CAMERA_MOVES = [
 
 function getBookTypeImageStyle(bookType: string): string {
   const styles: Record<string, string> = {
-    standard: "Modern editorial illustration, sophisticated color theory, dramatic directional lighting, museum-quality artwork, cinematic 16:9 composition",
-    professional: "Clean corporate infographic design, modern flat style with subtle gradients, navy/teal/amber palette, grid-based layout, McKinsey presentation quality",
-    children: "Children's picture book illustration, soft watercolor with digital refinement, warm pastels, rounded organic shapes, Caldecott Medal quality, magical atmosphere",
-    reference: "Precise technical illustration, clean vector aesthetics, structured labeling, taxonomy branches, engineering manual standard, blue-white palette",
-    comic: "Publication-quality comic book art, bold ink lines, dynamic foreshortening, cel-shading with halftone shadows, dramatic panel composition",
-    workbook: "Clean instructional design illustration, step-by-step visual clarity, numbered annotations, friendly aesthetics, educational textbook quality",
-    illustrated: "Detailed scientific illustration, cross-section views, annotated diagrams, nature documentary quality, high detail rendering",
-    bestseller: "Bold concept visualization, strong central metaphor, dramatic chiaroscuro lighting, high-impact palette with gold accents, cinematic quality",
+    standard: "Ultra-high-quality editorial illustration, cinematic depth of field, volumetric lighting with god rays, rich saturated colors, photorealistic textures with painterly edges, 8K detail, dramatic golden-hour lighting, museum-quality fine art, widescreen 16:9 cinematic composition",
+    professional: "Sleek premium corporate visualization, isometric 3D data landscapes, glass-morphism surfaces with subtle refraction, navy-midnight-teal-gold palette, Bloomberg terminal aesthetics meets Apple keynote polish, volumetric ambient occlusion, 8K render quality",
+    children: "Award-winning children's book illustration, Pixar-quality character rendering, luminous watercolor washes with digital precision, warm golden light streaming through scenes, tactile textures you can feel, Caldecott Medal masterpiece, magical particle effects, rich atmospheric depth",
+    reference: "Precision scientific visualization, crystalline 3D molecular structures, blueprint-grade technical accuracy, holographic data overlays, deep navy-to-white gradient backgrounds, Nature journal publication quality, razor-sharp vector aesthetics",
+    comic: "Marvel Studios concept art quality, dynamic three-point perspective, dramatic rim lighting with neon accents, cel-shading with volumetric shadows, action-packed panel composition, ink splatter textures, graphic novel masterpiece",
+    workbook: "Premium educational design illustration, clean isometric step-by-step visuals, warm encouraging color palette, annotated with elegant callouts, Kurzgesagt animation style, friendly yet sophisticated",
+    illustrated: "National Geographic photography meets scientific illustration, extreme macro detail, cross-section cutaway renders, David Attenborough documentary quality, annotated with elegant labels, luminous backlit compositions",
+    bestseller: "TED Talk stage quality, powerful conceptual metaphor visualization, dramatic chiaroscuro with cinematic lens flare, rich gold and deep navy palette, aspirational atmosphere, large-scale environmental storytelling, IMAX documentary quality",
   };
   return styles[bookType] || styles.standard;
 }
@@ -120,29 +120,34 @@ serve(async (req) => {
         ? "google/gemini-2.5-flash"
         : "google/gemini-2.5-flash-lite";
 
-      const systemPrompt = `You are a cinematic educational video director. Create a scene-by-scene plan for a ${resolvedType} chapter video.
+      const systemPrompt = `You are a world-class cinematic documentary director creating a visually stunning educational video. Think David Attenborough meets Kurzgesagt meets TED Talk.
 
-OUTPUT: Return ONLY a valid JSON array. No markdown.
+OUTPUT: Return ONLY a valid JSON array. No markdown, no explanation.
 
-Create 5-7 scenes (keep it concise for fast generation). Each scene will become a cinematic shot with an AI-generated background image + animated text overlay + camera movement.
+Create 8-12 scenes for a comprehensive, immersive video (target 3-5 minutes total). Each scene becomes a full-screen cinematic shot with AI-generated artwork, animated text, and professional camera movement.
 
 SCENE SCHEMA:
 {
   "sceneNumber": number,
-  "title": "short title",
-  "narration": "what narrator says (2-3 sentences, natural speech)",
+  "title": "compelling, punchy title (3-6 words)",
+  "narration": "what the narrator says (3-5 sentences, vivid, conversational, TED-Talk energy — paint pictures with words, use rhetorical questions, build tension)",
   "visualType": "one of: ${visualTypes.join(", ")}",
-  "imagePrompt": "DETAILED cinematic visual description. Be specific about: subject, composition, lighting, mood, color palette. This becomes the scene's full-screen background.",
-  "textOverlay": "1-2 lines of key text shown on screen",
+  "imagePrompt": "ULTRA-DETAILED cinematic visual description (50+ words). Specify: exact subject/scene composition, camera angle (low angle, aerial, macro close-up, over-the-shoulder), lighting setup (golden hour, volumetric god rays, neon rim light, dramatic chiaroscuro), color palette (specific colors), mood/atmosphere (mysterious, triumphant, serene), foreground/midground/background layers, depth of field, texture details. NO text/words/letters in image.",
+  "textOverlay": "1 powerful key takeaway line shown on screen",
   "cameraMove": "one of: slow_zoom_in, slow_zoom_out, pan_left, pan_right, pan_up, ken_burns_tl_to_br, ken_burns_br_to_tl, static_with_pulse",
-  "duration": 6-15 (seconds),
+  "duration": 12-25 (seconds — longer for complex concepts, shorter for transitions),
   "transition": "fade | crossfade | wipe_left | zoom_in",
   "emoji": "single emoji"
 }
 
-Rules:
-- imagePrompt must be highly descriptive (30+ words), cinematic, no text/words in image
-- Vary camera moves for visual rhythm
+CINEMATIC RULES:
+- imagePrompt MUST be 50+ words with specific visual details — these generate the actual artwork
+- Use dramatic pacing: hook → build → climax → resolve
+- Vary camera moves (never repeat same move consecutively)
+- Scene 1: Always a dramatic establishing shot (wide angle, epic scale)
+- Final scene: Powerful closing with call-to-reflection
+- Narration should be vivid and engaging, not dry or academic
+- Each scene tells a mini-story within the larger narrative
 - Language: ${language || "en"}`;
 
       const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -186,7 +191,7 @@ Rules:
         imagePrompt: s.imagePrompt || `Cinematic ${resolvedType} scene for: ${s.title || chapterTitle}`,
         textOverlay: s.textOverlay || s.title || "",
         cameraMove: CAMERA_MOVES.includes(s.cameraMove) ? s.cameraMove : CAMERA_MOVES[i % CAMERA_MOVES.length],
-        duration: Math.max(5, Math.min(15, s.duration || 8)),
+        duration: Math.max(10, Math.min(25, s.duration || 15)),
         transition: s.transition || ["fade", "crossfade", "wipe_left", "zoom_in"][i % 4],
         emoji: s.emoji || "",
       }));
