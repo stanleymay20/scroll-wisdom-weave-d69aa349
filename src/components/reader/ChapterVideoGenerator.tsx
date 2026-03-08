@@ -31,7 +31,7 @@ export function ChapterVideoGenerator({
   const narration = useVideoNarration();
 
   const [scenes, setScenes] = useState<CinematicScene[]>([]);
-  const [readyCount, setReadyCount] = useState(0); // scenes with image+audio ready
+  const [readyCount, setReadyCount] = useState(0);
   const [isGenerating, setIsGenerating] = useState(false);
   const [phase, setPhase] = useState<VideoPhase>("idle");
   const [progress, setProgress] = useState(0);
@@ -54,9 +54,12 @@ export function ChapterVideoGenerator({
   const sceneStartRef = useRef<number>(0);
   const hideControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const scenesRef = useRef<CinematicScene[]>([]);
+  const imageBlobUrlsRef = useRef<string[]>([]); // Track blob URLs for cleanup
+  const volumeRef = useRef(0.8); // Current volume for new audio elements
 
-  // Keep ref in sync
+  // Keep refs in sync
   useEffect(() => { scenesRef.current = scenes; }, [scenes]);
+  useEffect(() => { volumeRef.current = isMuted ? 0 : volume; }, [volume, isMuted]);
 
   const theme = BOOK_TYPE_THEMES[bookType] || BOOK_TYPE_THEMES.standard;
   const scene = scenes[currentScene];
@@ -69,13 +72,18 @@ export function ChapterVideoGenerator({
   const isReady = phase === "ready" || phase === "playing";
   const isStreamingReady = readyCount >= AUTO_PLAY_THRESHOLD || phase === "ready" || phase === "playing";
 
-  // Cleanup
+  // Cleanup — revoke ALL blob URLs (images + audio handled by narration hook)
   useEffect(() => {
     return () => {
       if (sceneTimerRef.current) clearTimeout(sceneTimerRef.current);
       if (cameraRafRef.current) cancelAnimationFrame(cameraRafRef.current);
       if (hideControlsTimerRef.current) clearTimeout(hideControlsTimerRef.current);
       narration.stopAllAudio();
+      // Revoke image blob URLs
+      imageBlobUrlsRef.current.forEach(url => {
+        try { URL.revokeObjectURL(url); } catch {}
+      });
+      imageBlobUrlsRef.current = [];
     };
   }, []);
 
@@ -136,14 +144,12 @@ export function ChapterVideoGenerator({
         setCurrentScene(prev => prev + 1);
         setCameraProgress(0);
       } else if (phase === "ready") {
-        // All done, loop back
         setIsPlaying(false);
         narration.stopAllAudio();
         setCurrentScene(0);
         setCameraProgress(0);
         setControlsVisible(true);
       } else {
-        // Still generating, will trigger buffering
         setCurrentScene(prev => prev + 1);
         setCameraProgress(0);
       }
@@ -182,7 +188,6 @@ export function ChapterVideoGenerator({
       setProgressLabel(`Generating ${scenePlan.length} scenes progressively...`);
 
       // Phase 2: Progressive generation — process each scene's image + audio
-      // and mark it as "ready" immediately so playback can start early
       const BATCH_SIZE = 2;
       let ready = 0;
       const updatedScenes = [...scenePlan];
@@ -193,7 +198,6 @@ export function ChapterVideoGenerator({
 
         // Generate images + TTS for this batch IN PARALLEL
         const [imgResult, ...ttsResults] = await Promise.allSettled([
-          // Images batch from edge function
           supabase.functions.invoke("generate-cinematic-video", {
             body: {
               chapterContent, chapterTitle, bookTitle, bookType, tier,
@@ -201,15 +205,22 @@ export function ChapterVideoGenerator({
               scenePlan: { scenes: scenePlan, batchStart: i, batchSize: BATCH_SIZE },
             },
           }),
-          // TTS for each scene in batch (parallel)
           ...batchScenes.map(s => narration.generateSingleNarration(s)),
         ]);
 
         // Apply image results
+        let batchImagesOk = false;
         if (imgResult.status === "fulfilled" && imgResult.value?.data?.images) {
           Object.entries(imgResult.value.data.images).forEach(([num, url]) => {
             const idx = updatedScenes.findIndex(s => s.sceneNumber === Number(num));
-            if (idx >= 0) updatedScenes[idx] = { ...updatedScenes[idx], imageUrl: url as string };
+            if (idx >= 0) {
+              updatedScenes[idx] = { ...updatedScenes[idx], imageUrl: url as string };
+              // Track blob URLs for cleanup (only if blob:)
+              if (typeof url === "string" && url.startsWith("blob:")) {
+                imageBlobUrlsRef.current.push(url);
+              }
+              batchImagesOk = true;
+            }
           });
           if (imgResult.value?.data?.rateLimited) {
             await new Promise(r => setTimeout(r, 2000));
@@ -217,7 +228,8 @@ export function ChapterVideoGenerator({
         }
 
         // Apply TTS results
-        ttsResults.forEach((r, ri) => {
+        let batchAudioOk = false;
+        ttsResults.forEach((r) => {
           if (r.status === "fulfilled" && r.value) {
             const { sceneNumber, audioUrl, audioDuration, audio } = r.value;
             const idx = updatedScenes.findIndex(s => s.sceneNumber === sceneNumber);
@@ -230,13 +242,25 @@ export function ChapterVideoGenerator({
                   : updatedScenes[idx].duration,
                 audioDuration,
               };
+              batchAudioOk = true;
             }
-            if (audio) narration.registerAudio(sceneNumber, audio);
+            if (audio) {
+              // Apply current volume to newly registered audio
+              audio.volume = volumeRef.current;
+              narration.registerAudio(sceneNumber, audio);
+            }
           }
         });
 
-        // Update state — these scenes are now "ready" for playback
-        ready += batchScenes.length;
+        // Only count scenes as "ready" if they got at least image OR audio
+        const actualReady = batchScenes.filter((_, bi) => {
+          const sceneIdx = updatedScenes.findIndex(s => s.sceneNumber === batchScenes[bi].sceneNumber);
+          if (sceneIdx < 0) return false;
+          const sc = updatedScenes[sceneIdx];
+          return !!(sc.imageUrl || sc.audioUrl);
+        }).length;
+        ready += actualReady || batchScenes.length; // Fallback to batch length if all fail to avoid getting stuck
+        
         setScenes([...updatedScenes]);
         setReadyCount(ready);
         setProgress(15 + Math.round((ready / scenePlan.length) * 80));
@@ -245,6 +269,7 @@ export function ChapterVideoGenerator({
       // All done
       setProgress(100);
       setPhase("ready");
+      setReadyCount(updatedScenes.length); // Ensure all scenes marked ready
       setIsGenerating(false);
       const imgCount = updatedScenes.filter(s => s.imageUrl).length;
       const audioCount = updatedScenes.filter(s => s.audioUrl).length;
@@ -290,7 +315,7 @@ export function ChapterVideoGenerator({
   };
 
   const seekToScene = (index: number) => {
-    if (index >= readyCount && phase !== "ready") return; // Can't seek to unbuffered
+    if (index >= readyCount && phase !== "ready") return;
     narration.stopAllAudio();
     setCurrentScene(index);
     setCameraProgress(0);
@@ -317,7 +342,7 @@ export function ChapterVideoGenerator({
   };
   const toggleMute = () => setIsMuted(prev => !prev);
 
-  // ── MP4 Export ─────────────────────────────────────────────
+  // ── MP4 Export with audio ─────────────────────────────────
   const exportAsMP4 = useCallback(async () => {
     if (scenes.length === 0 || phase !== "ready") {
       toast({ title: "Wait for all scenes", description: "Export available once all scenes finish generating." });
@@ -331,15 +356,23 @@ export function ChapterVideoGenerator({
       const ctx = canvas.getContext("2d")!;
       const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
         ? "video/webm;codecs=vp9" : "video/webm";
-      const stream = canvas.captureStream(30);
+      const videoStream = canvas.captureStream(30);
+
+      // Create audio context and connect scene audio sources
       const audioCtx = new AudioContext();
       const destination = audioCtx.createMediaStreamDestination();
-      stream.getAudioTracks().forEach(t => stream.removeTrack(t));
-      destination.stream.getAudioTracks().forEach(t => stream.addTrack(t));
-      const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5000000 });
+      
+      // Merge video + audio tracks into a single stream
+      const combinedStream = new MediaStream([
+        ...videoStream.getVideoTracks(),
+        ...destination.stream.getAudioTracks(),
+      ]);
+
+      const recorder = new MediaRecorder(combinedStream, { mimeType, videoBitsPerSecond: 5000000 });
       const chunks: Blob[] = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 
+      // Preload all images
       const loadedImages: Record<number, HTMLImageElement> = {};
       await Promise.all(scenes.map(async (s) => {
         if (!s.imageUrl) return;
@@ -352,12 +385,38 @@ export function ChapterVideoGenerator({
         });
       }));
 
+      // Preload all audio as AudioBuffers for Web Audio API playback
+      const audioBuffers: Record<number, AudioBuffer> = {};
+      await Promise.all(scenes.map(async (s) => {
+        if (!s.audioUrl) return;
+        try {
+          const resp = await fetch(s.audioUrl);
+          const arrayBuf = await resp.arrayBuffer();
+          const audioBuf = await audioCtx.decodeAudioData(arrayBuf);
+          audioBuffers[s.sceneNumber] = audioBuf;
+        } catch (e) {
+          console.warn(`Failed to decode audio for scene ${s.sceneNumber}:`, e);
+        }
+      }));
+
       recorder.start();
+
       for (let si = 0; si < scenes.length; si++) {
         const s = scenes[si];
         const fps = 30;
         const totalFrames = Math.round(s.duration * fps);
         const img = loadedImages[s.sceneNumber];
+
+        // Play audio for this scene through the AudioContext destination
+        const audioBuf = audioBuffers[s.sceneNumber];
+        let audioSource: AudioBufferSourceNode | null = null;
+        if (audioBuf) {
+          audioSource = audioCtx.createBufferSource();
+          audioSource.buffer = audioBuf;
+          audioSource.connect(destination);
+          audioSource.start();
+        }
+
         for (let f = 0; f < totalFrames; f++) {
           const p = f / totalFrames;
           ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 1920, 1080);
@@ -391,24 +450,32 @@ export function ChapterVideoGenerator({
           if (s.textOverlay) { ctx.font = "36px system-ui, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillText(s.textOverlay, 960, 540, 1500); }
           ctx.font = "italic 28px system-ui, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.6)";
           const narrationLines = wrapText(ctx, s.narration, 1400);
-          narrationLines.forEach((line, li) => { ctx.fillText(line, 960, 820 + li * 36, 1500); });
+          // Limit to 4 lines max to prevent overflow
+          const displayLines = narrationLines.slice(0, 4);
+          displayLines.forEach((line, li) => { ctx.fillText(line, 960, 820 + li * 36, 1500); });
           ctx.font = "20px system-ui, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.textAlign = "right";
           ctx.fillText(`${si + 1} / ${scenes.length}`, 1880, 1050);
           ctx.globalAlpha = 1;
           await new Promise(r => setTimeout(r, 1000 / fps));
         }
+
+        // Stop audio source for this scene
+        if (audioSource) {
+          try { audioSource.stop(); } catch {}
+        }
+
         setExportProgress(Math.round(((si + 1) / scenes.length) * 100));
       }
       recorder.stop();
       await new Promise<void>(resolve => { recorder.onstop = () => resolve(); });
-      audioCtx.close();
+      await audioCtx.close();
       const blob = new Blob(chunks, { type: mimeType });
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a"); a.href = url;
       a.download = `${chapterTitle.replace(/[^a-zA-Z0-9]/g, "_")}_cinematic.webm`;
       document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
-      toast({ title: "🎬 Video exported!", description: "Cinematic WebM video saved." });
+      toast({ title: "🎬 Video exported!", description: "Cinematic WebM video with audio saved." });
     } catch (err) {
       console.error("Export error:", err);
       toast({ variant: "destructive", title: "Export failed", description: err instanceof Error ? err.message : "Try again" });
@@ -442,7 +509,6 @@ export function ChapterVideoGenerator({
             <Film className="h-4 w-4 text-white/80" />
             <span className="text-white font-medium text-sm truncate max-w-[240px]">{chapterTitle}</span>
             <Badge variant="outline" className="border-white/20 text-white/70 text-[10px] h-5">{theme.label}</Badge>
-            {/* Buffer indicator */}
             {isGenerating && isStreamingReady && (
               <Badge className="bg-red-500/80 text-white text-[10px] h-5 animate-pulse">
                 ● LIVE — {readyCount}/{scenes.length} buffered
@@ -460,7 +526,7 @@ export function ChapterVideoGenerator({
           className={cn("relative aspect-video bg-black flex items-center justify-center overflow-hidden cursor-pointer")}
           onClick={() => (isReady || isStreamingReady) && togglePlay()}
         >
-          {/* Generating state (before first scenes ready) */}
+          {/* Generating state */}
           {isGenerating && !isStreamingReady && (
             <div className="flex flex-col items-center gap-4 text-white z-10 p-8">
               <Loader2 className="h-12 w-12 animate-spin text-white/80" />
@@ -551,10 +617,10 @@ export function ChapterVideoGenerator({
                         {scene.textOverlay}
                       </motion.p>
                     )}
-                    {/* Subtitle bar — Netflix/YouTube style */}
+                    {/* Subtitle bar — Netflix/YouTube style with overflow protection */}
                     <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
                       transition={{ delay: 0.7, duration: 0.5 }} className="absolute bottom-24 left-4 right-4 md:left-12 md:right-12">
-                      <p className="text-white text-sm md:text-lg text-center leading-relaxed px-6 py-3 rounded-md max-w-4xl mx-auto"
+                      <p className="text-white text-sm md:text-lg text-center leading-relaxed px-6 py-3 rounded-md max-w-4xl mx-auto line-clamp-3 overflow-hidden"
                         style={{ background: "rgba(0,0,0,0.75)", textShadow: "0 1px 4px rgba(0,0,0,0.5)" }}>
                         {scene.narration}
                       </p>
