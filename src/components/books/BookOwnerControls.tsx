@@ -40,7 +40,7 @@ interface BookOwnerControlsProps {
   onArchive: () => void;
   onDelete: () => void;
   onDeleteDialogChange: (open: boolean) => void;
-  onChaptersChange: (fn: (prev: ChapterData[]) => ChapterData[]) => void;
+  onChaptersChange: (chapters: ChapterData[]) => void;
   onBookUpdate: (updates: { preface?: string }) => void;
 }
 
