@@ -25,12 +25,13 @@ interface VideoPlayerControlsProps {
   isFullscreen: boolean;
   volume: number;
   isMuted: boolean;
-  sceneProgress: number; // 0-1 progress within current scene
-  totalElapsed: number; // seconds elapsed total
-  totalDuration: number; // total seconds
+  sceneProgress: number;
+  totalElapsed: number;
+  totalDuration: number;
   isExporting: boolean;
   exportProgress: number;
   visible: boolean;
+  bufferedCount?: number;
   onTogglePlay: () => void;
   onNextScene: () => void;
   onPrevScene: () => void;
@@ -61,6 +62,7 @@ export function VideoPlayerControls({
   isExporting,
   exportProgress,
   visible,
+  bufferedCount,
   onTogglePlay,
   onNextScene,
   onPrevScene,
@@ -114,9 +116,16 @@ export function VideoPlayerControls({
           }}
           onMouseLeave={() => setHoveredScene(null)}
         >
-          {/* Buffered/loaded indicator */}
+          {/* Buffered indicator (light gray) */}
+          {bufferedCount !== undefined && (
+            <div
+              className="absolute inset-y-0 left-0 bg-white/30 rounded-full"
+              style={{ width: `${(bufferedCount / Math.max(1, scenes.length)) * 100}%` }}
+            />
+          )}
+          {/* Loaded scene indicator */}
           <div
-            className="absolute inset-y-0 left-0 bg-white/30 rounded-full"
+            className="absolute inset-y-0 left-0 bg-white/20 rounded-full"
             style={{ width: `${((currentScene + 1) / Math.max(1, scenes.length)) * 100}%` }}
           />
           {/* Progress fill */}

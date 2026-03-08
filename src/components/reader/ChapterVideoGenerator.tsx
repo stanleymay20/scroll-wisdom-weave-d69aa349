@@ -1,6 +1,6 @@
 /**
  * ChapterVideoGenerator — YouTube-quality cinematic video player
- * with TTS narration, Ken Burns camera effects, and MP4 export.
+ * with progressive streaming playback (plays while still generating).
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
@@ -21,6 +21,8 @@ import { getCameraMoveStyle, transitionVariants, wrapText } from "./video/camera
 import { VideoPlayerControls } from "./video/VideoPlayerControls";
 import { useVideoNarration } from "./video/useVideoNarration";
 
+const AUTO_PLAY_THRESHOLD = 2; // Start playing after this many scenes are ready
+
 export function ChapterVideoGenerator({
   bookId, bookTitle, bookType, chapterTitle, chapterContent, chapterNumber, language, onClose,
 }: ChapterVideoGeneratorProps) {
@@ -29,12 +31,14 @@ export function ChapterVideoGenerator({
   const narration = useVideoNarration();
 
   const [scenes, setScenes] = useState<CinematicScene[]>([]);
+  const [readyCount, setReadyCount] = useState(0); // scenes with image+audio ready
   const [isGenerating, setIsGenerating] = useState(false);
   const [phase, setPhase] = useState<VideoPhase>("idle");
   const [progress, setProgress] = useState(0);
   const [progressLabel, setProgressLabel] = useState("");
   const [currentScene, setCurrentScene] = useState(0);
   const [isPlaying, setIsPlaying] = useState(false);
+  const [isBuffering, setIsBuffering] = useState(false);
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
   const [exportProgress, setExportProgress] = useState(0);
@@ -42,23 +46,30 @@ export function ChapterVideoGenerator({
   const [volume, setVolume] = useState(0.8);
   const [isMuted, setIsMuted] = useState(false);
   const [controlsVisible, setControlsVisible] = useState(true);
+  const [autoPlayTriggered, setAutoPlayTriggered] = useState(false);
 
   const playerRef = useRef<HTMLDivElement>(null);
   const sceneTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cameraRafRef = useRef<number | null>(null);
   const sceneStartRef = useRef<number>(0);
   const hideControlsTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const scenesRef = useRef<CinematicScene[]>([]);
+
+  // Keep ref in sync
+  useEffect(() => { scenesRef.current = scenes; }, [scenes]);
 
   const theme = BOOK_TYPE_THEMES[bookType] || BOOK_TYPE_THEMES.standard;
   const scene = scenes[currentScene];
   const hasCinematicAccess = canUseCinematicVideo(tier);
 
-  // Total duration calculation
   const totalDuration = scenes.reduce((s, sc) => s + sc.duration, 0);
   const elapsedBefore = scenes.slice(0, currentScene).reduce((s, sc) => s + sc.duration, 0);
   const totalElapsed = elapsedBefore + (scene ? scene.duration * cameraProgress : 0);
 
-  // Cleanup on unmount
+  const isReady = phase === "ready" || phase === "playing";
+  const isStreamingReady = readyCount >= AUTO_PLAY_THRESHOLD || phase === "ready" || phase === "playing";
+
+  // Cleanup
   useEffect(() => {
     return () => {
       if (sceneTimerRef.current) clearTimeout(sceneTimerRef.current);
@@ -67,6 +78,30 @@ export function ChapterVideoGenerator({
       narration.stopAllAudio();
     };
   }, []);
+
+  // Auto-play when enough scenes are buffered
+  useEffect(() => {
+    if (isStreamingReady && !autoPlayTriggered && scenes.length > 0 && !isPlaying) {
+      setAutoPlayTriggered(true);
+      setPhase("playing");
+      setIsPlaying(true);
+      setCurrentScene(0);
+      setCameraProgress(0);
+      toast({ title: "▶️ Starting playback", description: `${readyCount} scenes buffered, rest loading in background...` });
+    }
+  }, [isStreamingReady, autoPlayTriggered, scenes.length]);
+
+  // Buffering detection: if playback reaches unbuffered scene
+  useEffect(() => {
+    if (isPlaying && currentScene >= readyCount && phase !== "ready") {
+      setIsBuffering(true);
+      setIsPlaying(false);
+      narration.pauseAudio();
+    } else if (isBuffering && currentScene < readyCount) {
+      setIsBuffering(false);
+      setIsPlaying(true);
+    }
+  }, [currentScene, readyCount, isPlaying, isBuffering, phase]);
 
   // Auto-hide controls
   const resetControlsTimer = useCallback(() => {
@@ -94,125 +129,144 @@ export function ChapterVideoGenerator({
   // Auto-advance scenes + play narration
   useEffect(() => {
     if (!isPlaying || !scene) return;
-
-    // Play narration for this scene
     narration.playSceneAudio(scene.sceneNumber);
 
     sceneTimerRef.current = setTimeout(() => {
       if (currentScene < scenes.length - 1) {
         setCurrentScene(prev => prev + 1);
         setCameraProgress(0);
-      } else {
+      } else if (phase === "ready") {
+        // All done, loop back
         setIsPlaying(false);
         narration.stopAllAudio();
         setCurrentScene(0);
         setCameraProgress(0);
         setControlsVisible(true);
+      } else {
+        // Still generating, will trigger buffering
+        setCurrentScene(prev => prev + 1);
+        setCameraProgress(0);
       }
     }, scene.duration * 1000);
 
     return () => { if (sceneTimerRef.current) clearTimeout(sceneTimerRef.current); };
-  }, [isPlaying, currentScene, scene, scenes.length]);
+  }, [isPlaying, currentScene, scene, scenes.length, phase]);
 
   // Volume sync
-  useEffect(() => {
-    narration.setVolume(isMuted ? 0 : volume);
-  }, [volume, isMuted]);
+  useEffect(() => { narration.setVolume(isMuted ? 0 : volume); }, [volume, isMuted]);
 
-  // ── Generate video + narration ─────────────────────────────
+  // ── Progressive generation pipeline ────────────────────────
   const generateVideo = useCallback(async () => {
     if (!hasCinematicAccess) {
       toast({ variant: "destructive", title: "Premium feature", description: "Cinematic video requires Premium or Institutional plan." });
       return;
     }
     setIsGenerating(true);
+    setAutoPlayTriggered(false);
     setPhase("scripting");
-    setProgress(10);
-    setProgressLabel("AI is writing the cinematic script...");
+    setProgress(5);
+    setProgressLabel("AI writing cinematic script...");
 
     try {
-      // Phase 1: Scene plan
+      // Phase 1: Get scene plan
       const { data: planData, error: planError } = await supabase.functions.invoke("generate-cinematic-video", {
         body: { chapterContent, chapterTitle, bookTitle, bookType, tier, language: language || "en", chapterNumber },
       });
       if (planError) throw new Error(planError.message);
       if (planData?.error) throw new Error(planData.error);
 
-      let scenePlan = planData.scenes as CinematicScene[];
+      const scenePlan = planData.scenes as CinematicScene[];
       setScenes(scenePlan);
-      setProgress(25);
+      setProgress(15);
       setPhase("imaging");
-      setProgressLabel(`Generating ${scenePlan.length} cinematic keyframes...`);
+      setProgressLabel(`Generating ${scenePlan.length} scenes progressively...`);
 
-      // Phase 2 + 3: Generate images AND narration IN PARALLEL
-      setPhase("imaging");
+      // Phase 2: Progressive generation — process each scene's image + audio
+      // and mark it as "ready" immediately so playback can start early
       const BATCH_SIZE = 2;
+      let ready = 0;
       const updatedScenes = [...scenePlan];
 
-      // Start narration generation immediately (runs concurrently)
-      setProgressLabel(`Generating visuals & narration in parallel...`);
-      const narrationPromise = narration.generateNarration(scenePlan);
-
-      // Generate images in batches while narration runs
       for (let i = 0; i < scenePlan.length; i += BATCH_SIZE) {
-        setProgressLabel(`Rendering visuals ${i + 1}–${Math.min(i + BATCH_SIZE, scenePlan.length)} + narration...`);
-        const { data: imgData, error: imgError } = await supabase.functions.invoke("generate-cinematic-video", {
-          body: {
-            chapterContent, chapterTitle, bookTitle, bookType, tier,
-            language: language || "en", chapterNumber,
-            scenePlan: { scenes: scenePlan, batchStart: i, batchSize: BATCH_SIZE },
-          },
-        });
-        if (!imgError && imgData?.images) {
-          Object.entries(imgData.images).forEach(([num, url]) => {
+        const batchScenes = scenePlan.slice(i, i + BATCH_SIZE);
+        setProgressLabel(`Scene ${i + 1}–${Math.min(i + BATCH_SIZE, scenePlan.length)} of ${scenePlan.length}...`);
+
+        // Generate images + TTS for this batch IN PARALLEL
+        const [imgResult, ...ttsResults] = await Promise.allSettled([
+          // Images batch from edge function
+          supabase.functions.invoke("generate-cinematic-video", {
+            body: {
+              chapterContent, chapterTitle, bookTitle, bookType, tier,
+              language: language || "en", chapterNumber,
+              scenePlan: { scenes: scenePlan, batchStart: i, batchSize: BATCH_SIZE },
+            },
+          }),
+          // TTS for each scene in batch (parallel)
+          ...batchScenes.map(s => narration.generateSingleNarration(s)),
+        ]);
+
+        // Apply image results
+        if (imgResult.status === "fulfilled" && imgResult.value?.data?.images) {
+          Object.entries(imgResult.value.data.images).forEach(([num, url]) => {
             const idx = updatedScenes.findIndex(s => s.sceneNumber === Number(num));
             if (idx >= 0) updatedScenes[idx] = { ...updatedScenes[idx], imageUrl: url as string };
           });
-          setScenes([...updatedScenes]);
+          if (imgResult.value?.data?.rateLimited) {
+            await new Promise(r => setTimeout(r, 2000));
+          }
         }
-        if (imgData?.rateLimited) {
-          await new Promise(r => setTimeout(r, 3000));
-        }
-        setProgress(Math.min(70, 25 + Math.round(((i + BATCH_SIZE) / scenePlan.length) * 45)));
+
+        // Apply TTS results
+        ttsResults.forEach((r, ri) => {
+          if (r.status === "fulfilled" && r.value) {
+            const { sceneNumber, audioUrl, audioDuration, audio } = r.value;
+            const idx = updatedScenes.findIndex(s => s.sceneNumber === sceneNumber);
+            if (idx >= 0 && audioUrl) {
+              updatedScenes[idx] = {
+                ...updatedScenes[idx],
+                audioUrl,
+                duration: audioDuration && audioDuration > 0
+                  ? Math.max(updatedScenes[idx].duration, Math.ceil(audioDuration) + 1)
+                  : updatedScenes[idx].duration,
+                audioDuration,
+              };
+            }
+            if (audio) narration.registerAudio(sceneNumber, audio);
+          }
+        });
+
+        // Update state — these scenes are now "ready" for playback
+        ready += batchScenes.length;
+        setScenes([...updatedScenes]);
+        setReadyCount(ready);
+        setProgress(15 + Math.round((ready / scenePlan.length) * 80));
       }
 
-      // Wait for narration to finish (likely already done since it ran in parallel)
-      setPhase("narrating");
-      setProgress(80);
-      setProgressLabel("Finalizing narration...");
-      const scenesWithNarration = await narrationPromise;
-
-      // Merge image URLs into narrated scenes
-      const scenesWithAudio = scenesWithNarration.map((s, i) => ({
-        ...s,
-        imageUrl: updatedScenes[i]?.imageUrl || s.imageUrl,
-      }));
-      setScenes(scenesWithAudio);
-
+      // All done
       setProgress(100);
       setPhase("ready");
-      const imgCount = scenesWithAudio.filter(s => s.imageUrl).length;
-      const audioCount = scenesWithAudio.filter(s => s.audioUrl).length;
+      setIsGenerating(false);
+      const imgCount = updatedScenes.filter(s => s.imageUrl).length;
+      const audioCount = updatedScenes.filter(s => s.audioUrl).length;
       toast({
-        title: "🎬 Cinematic video ready!",
-        description: `${scenesWithAudio.length} scenes · ${imgCount} AI visuals · ${audioCount} narrated`,
+        title: "🎬 All scenes ready!",
+        description: `${updatedScenes.length} scenes · ${imgCount} visuals · ${audioCount} narrated`,
       });
     } catch (err) {
       console.error("Video generation error:", err);
       toast({ variant: "destructive", title: "Video generation failed", description: err instanceof Error ? err.message : "Please try again" });
       setPhase("idle");
-    } finally {
       setIsGenerating(false);
     }
   }, [chapterContent, chapterTitle, bookTitle, bookType, tier, language, chapterNumber, toast, hasCinematicAccess, narration]);
 
   // ── Controls ───────────────────────────────────────────────
   const togglePlay = () => {
-    if (scenes.length === 0) return;
+    if (scenes.length === 0 || readyCount === 0) return;
     if (isPlaying) {
       narration.pauseAudio();
     } else {
-      if (phase !== "playing") setPhase("playing");
+      if (phase !== "playing" && phase !== "ready") setPhase("playing");
     }
     setIsPlaying(prev => !prev);
     setCameraProgress(0);
@@ -220,7 +274,7 @@ export function ChapterVideoGenerator({
   };
 
   const nextScene = () => {
-    if (currentScene < scenes.length - 1) {
+    if (currentScene < Math.min(scenes.length - 1, readyCount - 1)) {
       narration.stopAllAudio();
       setCurrentScene(prev => prev + 1);
       setCameraProgress(0);
@@ -236,12 +290,10 @@ export function ChapterVideoGenerator({
   };
 
   const seekToScene = (index: number) => {
+    if (index >= readyCount && phase !== "ready") return; // Can't seek to unbuffered
     narration.stopAllAudio();
     setCurrentScene(index);
     setCameraProgress(0);
-    if (isPlaying) {
-      // Will auto-play narration via effect
-    }
   };
 
   const resetVideo = () => {
@@ -263,34 +315,31 @@ export function ChapterVideoGenerator({
     setVolume(v);
     if (v > 0 && isMuted) setIsMuted(false);
   };
-
   const toggleMute = () => setIsMuted(prev => !prev);
 
   // ── MP4 Export ─────────────────────────────────────────────
   const exportAsMP4 = useCallback(async () => {
-    if (scenes.length === 0) return;
+    if (scenes.length === 0 || phase !== "ready") {
+      toast({ title: "Wait for all scenes", description: "Export available once all scenes finish generating." });
+      return;
+    }
     setIsExporting(true);
     setExportProgress(0);
     try {
       const canvas = document.createElement("canvas");
-      canvas.width = 1920;
-      canvas.height = 1080;
+      canvas.width = 1920; canvas.height = 1080;
       const ctx = canvas.getContext("2d")!;
       const mimeType = MediaRecorder.isTypeSupported("video/webm;codecs=vp9")
         ? "video/webm;codecs=vp9" : "video/webm";
       const stream = canvas.captureStream(30);
-
-      // Add audio tracks from narration if available
       const audioCtx = new AudioContext();
       const destination = audioCtx.createMediaStreamDestination();
       stream.getAudioTracks().forEach(t => stream.removeTrack(t));
       destination.stream.getAudioTracks().forEach(t => stream.addTrack(t));
-
       const recorder = new MediaRecorder(stream, { mimeType, videoBitsPerSecond: 5000000 });
       const chunks: Blob[] = [];
       recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data); };
 
-      // Preload images
       const loadedImages: Record<number, HTMLImageElement> = {};
       await Promise.all(scenes.map(async (s) => {
         if (!s.imageUrl) return;
@@ -304,18 +353,14 @@ export function ChapterVideoGenerator({
       }));
 
       recorder.start();
-
       for (let si = 0; si < scenes.length; si++) {
         const s = scenes[si];
         const fps = 30;
         const totalFrames = Math.round(s.duration * fps);
         const img = loadedImages[s.sceneNumber];
-
         for (let f = 0; f < totalFrames; f++) {
           const p = f / totalFrames;
-          ctx.fillStyle = "#000";
-          ctx.fillRect(0, 0, 1920, 1080);
-
+          ctx.fillStyle = "#000"; ctx.fillRect(0, 0, 1920, 1080);
           if (img) {
             ctx.save();
             const move = s.cameraMove;
@@ -325,77 +370,43 @@ export function ChapterVideoGenerator({
               : move === "ken_burns_tl_to_br" ? p * 58 : move === "ken_burns_br_to_tl" ? -p * 58 : 0;
             const ty = move === "pan_up" ? -p * 54
               : move === "ken_burns_tl_to_br" ? p * 32 : move === "ken_burns_br_to_tl" ? -p * 32 : 0;
-
-            ctx.translate(960 + tx, 540 + ty);
-            ctx.scale(scale, scale);
-            ctx.translate(-960, -540);
-
-            const imgAspect = img.width / img.height;
-            const canvasAspect = 1920 / 1080;
+            ctx.translate(960 + tx, 540 + ty); ctx.scale(scale, scale); ctx.translate(-960, -540);
+            const imgAspect = img.width / img.height; const canvasAspect = 1920 / 1080;
             let dw: number, dh: number, dx: number, dy: number;
-            if (imgAspect > canvasAspect) {
-              dh = 1080; dw = 1080 * imgAspect; dx = (1920 - dw) / 2; dy = 0;
-            } else {
-              dw = 1920; dh = 1920 / imgAspect; dx = 0; dy = (1080 - dh) / 2;
-            }
-            ctx.drawImage(img, dx, dy, dw, dh);
-            ctx.restore();
-            ctx.fillStyle = "rgba(0,0,0,0.35)";
-            ctx.fillRect(0, 0, 1920, 1080);
+            if (imgAspect > canvasAspect) { dh = 1080; dw = 1080 * imgAspect; dx = (1920 - dw) / 2; dy = 0; }
+            else { dw = 1920; dh = 1920 / imgAspect; dx = 0; dy = (1080 - dh) / 2; }
+            ctx.drawImage(img, dx, dy, dw, dh); ctx.restore();
+            ctx.fillStyle = "rgba(0,0,0,0.35)"; ctx.fillRect(0, 0, 1920, 1080);
           } else {
             const grad = ctx.createLinearGradient(0, 0, 1920, 1080);
-            grad.addColorStop(0, "#1e3a5f");
-            grad.addColorStop(1, "#0d1b2a");
-            ctx.fillStyle = grad;
-            ctx.fillRect(0, 0, 1920, 1080);
+            grad.addColorStop(0, "#1e3a5f"); grad.addColorStop(1, "#0d1b2a");
+            ctx.fillStyle = grad; ctx.fillRect(0, 0, 1920, 1080);
           }
-
           const textAlpha = Math.min(1, f / (fps * 0.8));
           ctx.globalAlpha = textAlpha;
-          if (s.emoji) {
-            ctx.font = "72px sans-serif";
-            ctx.textAlign = "center";
-            ctx.fillStyle = "#fff";
-            ctx.fillText(s.emoji, 960, 380);
-          }
-          ctx.font = "bold 56px system-ui, sans-serif";
-          ctx.textAlign = "center";
-          ctx.fillStyle = "#ffffff";
-          ctx.shadowColor = "rgba(0,0,0,0.7)";
-          ctx.shadowBlur = 12;
-          ctx.fillText(s.title, 960, 470, 1600);
-          ctx.shadowBlur = 0;
-          if (s.textOverlay) {
-            ctx.font = "36px system-ui, sans-serif";
-            ctx.fillStyle = "rgba(255,255,255,0.85)";
-            ctx.fillText(s.textOverlay, 960, 540, 1500);
-          }
-          ctx.font = "italic 28px system-ui, sans-serif";
-          ctx.fillStyle = "rgba(255,255,255,0.6)";
+          if (s.emoji) { ctx.font = "72px sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#fff"; ctx.fillText(s.emoji, 960, 380); }
+          ctx.font = "bold 56px system-ui, sans-serif"; ctx.textAlign = "center"; ctx.fillStyle = "#ffffff";
+          ctx.shadowColor = "rgba(0,0,0,0.7)"; ctx.shadowBlur = 12;
+          ctx.fillText(s.title, 960, 470, 1600); ctx.shadowBlur = 0;
+          if (s.textOverlay) { ctx.font = "36px system-ui, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.85)"; ctx.fillText(s.textOverlay, 960, 540, 1500); }
+          ctx.font = "italic 28px system-ui, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.6)";
           const narrationLines = wrapText(ctx, s.narration, 1400);
           narrationLines.forEach((line, li) => { ctx.fillText(line, 960, 820 + li * 36, 1500); });
-          ctx.font = "20px system-ui, sans-serif";
-          ctx.fillStyle = "rgba(255,255,255,0.4)";
-          ctx.textAlign = "right";
+          ctx.font = "20px system-ui, sans-serif"; ctx.fillStyle = "rgba(255,255,255,0.4)"; ctx.textAlign = "right";
           ctx.fillText(`${si + 1} / ${scenes.length}`, 1880, 1050);
           ctx.globalAlpha = 1;
           await new Promise(r => setTimeout(r, 1000 / fps));
         }
         setExportProgress(Math.round(((si + 1) / scenes.length) * 100));
       }
-
       recorder.stop();
       await new Promise<void>(resolve => { recorder.onstop = () => resolve(); });
       audioCtx.close();
-
       const blob = new Blob(chunks, { type: mimeType });
       const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
+      const a = document.createElement("a"); a.href = url;
       a.download = `${chapterTitle.replace(/[^a-zA-Z0-9]/g, "_")}_cinematic.webm`;
-      document.body.appendChild(a);
-      a.click();
-      document.body.removeChild(a);
+      document.body.appendChild(a); a.click(); document.body.removeChild(a);
       URL.revokeObjectURL(url);
       toast({ title: "🎬 Video exported!", description: "Cinematic WebM video saved." });
     } catch (err) {
@@ -404,9 +415,7 @@ export function ChapterVideoGenerator({
     } finally {
       setIsExporting(false);
     }
-  }, [scenes, chapterTitle, toast]);
-
-  const isReady = phase === "ready" || phase === "playing";
+  }, [scenes, chapterTitle, toast, phase]);
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/90 backdrop-blur-sm"
@@ -423,16 +432,22 @@ export function ChapterVideoGenerator({
         onMouseMove={resetControlsTimer}
         onMouseLeave={() => isPlaying && setControlsVisible(false)}
       >
-        {/* Top bar — always visible during generation, hover-visible during playback */}
+        {/* Top bar */}
         <div className={cn(
           "absolute top-0 left-0 right-0 z-20 flex items-center justify-between p-3 transition-opacity duration-300",
           "bg-gradient-to-b from-black/70 to-transparent",
-          isReady && !controlsVisible && "opacity-0"
+          (isReady || isStreamingReady) && !controlsVisible && "opacity-0"
         )}>
           <div className="flex items-center gap-2">
             <Film className="h-4 w-4 text-white/80" />
             <span className="text-white font-medium text-sm truncate max-w-[240px]">{chapterTitle}</span>
             <Badge variant="outline" className="border-white/20 text-white/70 text-[10px] h-5">{theme.label}</Badge>
+            {/* Buffer indicator */}
+            {isGenerating && isStreamingReady && (
+              <Badge className="bg-red-500/80 text-white text-[10px] h-5 animate-pulse">
+                ● LIVE — {readyCount}/{scenes.length} buffered
+              </Badge>
+            )}
           </div>
           <Button variant="ghost" size="sm" onClick={onClose}
             className="text-white/70 hover:text-white hover:bg-white/10 h-7 w-7 p-0 rounded-full">
@@ -443,22 +458,29 @@ export function ChapterVideoGenerator({
         {/* Main viewport */}
         <div
           className={cn("relative aspect-video bg-black flex items-center justify-center overflow-hidden cursor-pointer")}
-          onClick={() => isReady && togglePlay()}
+          onClick={() => (isReady || isStreamingReady) && togglePlay()}
         >
-          {/* Generating state */}
-          {isGenerating && (
+          {/* Generating state (before first scenes ready) */}
+          {isGenerating && !isStreamingReady && (
             <div className="flex flex-col items-center gap-4 text-white z-10 p-8">
               <Loader2 className="h-12 w-12 animate-spin text-white/80" />
               <p className="text-lg font-medium">
-                {phase === "scripting" ? "Writing cinematic script..." :
-                 phase === "imaging" ? "Generating AI keyframes..." :
-                 phase === "narrating" ? "Generating voice narration..." : "Processing..."}
+                {phase === "scripting" ? "Writing cinematic script..." : "Generating first scenes..."}
               </p>
               <Progress value={progress} className="w-80 h-1.5" />
               <p className="text-sm text-white/50">{progressLabel}</p>
-              {phase === "narrating" && (
-                <p className="text-xs text-white/40">Narration: {narration.progress}% complete</p>
-              )}
+              <p className="text-xs text-white/30">Playback starts automatically once {AUTO_PLAY_THRESHOLD} scenes are ready</p>
+            </div>
+          )}
+
+          {/* Buffering overlay */}
+          {isBuffering && (
+            <div className="absolute inset-0 flex items-center justify-center z-30 bg-black/50">
+              <div className="flex flex-col items-center gap-3">
+                <Loader2 className="h-10 w-10 animate-spin text-white" />
+                <p className="text-white font-medium">Buffering scene {currentScene + 1}...</p>
+                <p className="text-white/50 text-sm">{readyCount}/{scenes.length} scenes ready</p>
+              </div>
             </div>
           )}
 
@@ -472,7 +494,7 @@ export function ChapterVideoGenerator({
                 AI visuals, Ken Burns camera effects, and voice narration
               </p>
               <div className="flex flex-wrap gap-2 justify-center">
-                <Badge className="bg-white/10 text-white/80 border-white/10">AI Cinematic Keyframes</Badge>
+                <Badge className="bg-white/10 text-white/80 border-white/10">⚡ Instant Playback</Badge>
                 <Badge className="bg-white/10 text-white/80 border-white/10">Voice Narration</Badge>
                 <Badge className="bg-white/10 text-white/80 border-white/10">Ken Burns Camera FX</Badge>
                 <Badge className="bg-white/10 text-white/80 border-white/10">MP4 Export</Badge>
@@ -486,7 +508,7 @@ export function ChapterVideoGenerator({
           )}
 
           {/* Scene Player */}
-          {isReady && scene && (
+          {(isReady || isStreamingReady) && scene && (
             <>
               <AnimatePresence mode="wait">
                 <motion.div
@@ -495,7 +517,6 @@ export function ChapterVideoGenerator({
                   transition={{ duration: 0.8, ease: "easeInOut" }}
                   className="absolute inset-0"
                 >
-                  {/* AI image with camera move */}
                   {scene.imageUrl ? (
                     <div className="absolute inset-0 will-change-transform"
                       style={getCameraMoveStyle(scene.cameraMove, isPlaying ? cameraProgress : 0)}>
@@ -504,29 +525,22 @@ export function ChapterVideoGenerator({
                   ) : (
                     <div className={cn("absolute inset-0 bg-gradient-to-br", theme.gradient)} />
                   )}
-
-                  {/* Darken for readability */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/60 via-black/20 to-black/40" />
-
-                  {/* Content overlay */}
                   <div className="absolute inset-0 flex flex-col items-center justify-center p-8 md:p-16 z-10">
                     <Badge className="absolute top-14 right-4 bg-black/40 backdrop-blur-sm text-white/60 text-[10px] border-white/10">
                       {scene.visualType.replace(/_/g, " ")}
                     </Badge>
-
                     {scene.emoji && (
                       <motion.div initial={{ scale: 0 }} animate={{ scale: 1 }}
                         transition={{ delay: 0.2, type: "spring" }} className="text-5xl mb-4">
                         {scene.emoji}
                       </motion.div>
                     )}
-
                     <motion.h2 initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
                       transition={{ delay: 0.3 }}
                       className="text-3xl md:text-5xl font-bold text-white text-center mb-4 drop-shadow-lg max-w-3xl leading-tight">
                       {scene.title}
                     </motion.h2>
-
                     {scene.textOverlay && scene.textOverlay !== scene.title && (
                       <motion.p initial={{ opacity: 0 }} animate={{ opacity: 1 }}
                         transition={{ delay: 0.5 }}
@@ -534,8 +548,6 @@ export function ChapterVideoGenerator({
                         {scene.textOverlay}
                       </motion.p>
                     )}
-
-                    {/* Narration text — shown as subtitles at bottom */}
                     <motion.div initial={{ y: 20, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
                       transition={{ delay: 0.6 }} className="absolute bottom-20 left-6 right-6">
                       <p className="text-white/80 text-base md:text-lg text-center bg-black/60 rounded-lg px-6 py-3 backdrop-blur-sm line-clamp-3 max-w-3xl mx-auto">
@@ -547,7 +559,7 @@ export function ChapterVideoGenerator({
               </AnimatePresence>
 
               {/* Center play button when paused */}
-              {!isPlaying && (
+              {!isPlaying && !isBuffering && (
                 <motion.div initial={{ scale: 0.8, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
                   className="absolute inset-0 flex items-center justify-center z-20 pointer-events-none">
                   <div className="w-16 h-16 rounded-full bg-white/20 backdrop-blur-sm flex items-center justify-center">
@@ -560,7 +572,7 @@ export function ChapterVideoGenerator({
         </div>
 
         {/* YouTube-style controls */}
-        {isReady && (
+        {(isReady || isStreamingReady) && (
           <VideoPlayerControls
             scenes={scenes}
             currentScene={currentScene}
@@ -574,6 +586,7 @@ export function ChapterVideoGenerator({
             isExporting={isExporting}
             exportProgress={exportProgress}
             visible={controlsVisible || !isPlaying}
+            bufferedCount={readyCount}
             onTogglePlay={togglePlay}
             onNextScene={nextScene}
             onPrevScene={prevScene}

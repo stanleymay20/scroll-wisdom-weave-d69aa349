@@ -1,6 +1,6 @@
 /**
  * Hook to generate and manage TTS narration audio for video scenes.
- * Uses parallel batching for speed.
+ * Exposes per-scene generation for progressive pipeline.
  */
 import { useState, useRef, useCallback, useEffect } from "react";
 import { supabase } from "@/integrations/supabase/client";
@@ -12,8 +12,6 @@ interface NarrationState {
   audioElements: Map<number, HTMLAudioElement>;
   error: string | null;
 }
-
-const TTS_BATCH_SIZE = 3; // Generate 3 scenes' audio in parallel
 
 export function useVideoNarration() {
   const [state, setState] = useState<NarrationState>({
@@ -27,7 +25,7 @@ export function useVideoNarration() {
   const currentAudioRef = useRef<HTMLAudioElement | null>(null);
   const abortRef = useRef(false);
 
-  // Generate a single scene's narration
+  // Generate a single scene's narration — exposed for progressive pipeline
   const generateSingleNarration = useCallback(async (scene: CinematicScene): Promise<{
     sceneNumber: number;
     audioUrl?: string;
@@ -64,30 +62,32 @@ export function useVideoNarration() {
     }
   }, []);
 
-  // Generate narration audio for all scenes in parallel batches
+  // Register a pre-generated audio element
+  const registerAudio = useCallback((sceneNumber: number, audio: HTMLAudioElement) => {
+    audioMapRef.current.set(sceneNumber, audio);
+    setState(s => ({ ...s, audioElements: new Map(audioMapRef.current) }));
+  }, []);
+
+  // Batch generate (kept for backward compat but progressive pipeline preferred)
   const generateNarration = useCallback(async (scenes: CinematicScene[]): Promise<CinematicScene[]> => {
     abortRef.current = false;
     setState(s => ({ ...s, isGenerating: true, progress: 0, error: null }));
-
     const updatedScenes = [...scenes];
     const total = scenes.length;
     let completed = 0;
+    const BATCH = 3;
 
-    // Process in parallel batches
-    for (let i = 0; i < total; i += TTS_BATCH_SIZE) {
+    for (let i = 0; i < total; i += BATCH) {
       if (abortRef.current) break;
-      
-      const batch = scenes.slice(i, i + TTS_BATCH_SIZE);
+      const batch = scenes.slice(i, i + BATCH);
       const results = await Promise.allSettled(batch.map(s => generateSingleNarration(s)));
-
       results.forEach((result) => {
         if (result.status === "fulfilled" && result.value) {
           const { sceneNumber, audioUrl, audioDuration, audio } = result.value;
           const idx = updatedScenes.findIndex(s => s.sceneNumber === sceneNumber);
           if (idx >= 0 && audioUrl) {
             updatedScenes[idx] = {
-              ...updatedScenes[idx],
-              audioUrl,
+              ...updatedScenes[idx], audioUrl,
               duration: audioDuration && audioDuration > 0
                 ? Math.max(updatedScenes[idx].duration, Math.ceil(audioDuration) + 1)
                 : updatedScenes[idx].duration,
@@ -97,18 +97,11 @@ export function useVideoNarration() {
           if (audio) audioMapRef.current.set(sceneNumber, audio);
         }
       });
-
       completed += batch.length;
       setState(s => ({ ...s, progress: Math.round((completed / total) * 100) }));
     }
 
-    setState(s => ({
-      ...s,
-      isGenerating: false,
-      progress: 100,
-      audioElements: new Map(audioMapRef.current),
-    }));
-
+    setState(s => ({ ...s, isGenerating: false, progress: 100, audioElements: new Map(audioMapRef.current) }));
     return updatedScenes;
   }, [generateSingleNarration]);
 
@@ -125,13 +118,8 @@ export function useVideoNarration() {
     }
   }, []);
 
-  const pauseAudio = useCallback(() => {
-    currentAudioRef.current?.pause();
-  }, []);
-
-  const resumeAudio = useCallback(() => {
-    currentAudioRef.current?.play().catch(() => {});
-  }, []);
+  const pauseAudio = useCallback(() => { currentAudioRef.current?.pause(); }, []);
+  const resumeAudio = useCallback(() => { currentAudioRef.current?.play().catch(() => {}); }, []);
 
   const stopAllAudio = useCallback(() => {
     if (currentAudioRef.current) {
@@ -159,6 +147,8 @@ export function useVideoNarration() {
   return {
     ...state,
     generateNarration,
+    generateSingleNarration,
+    registerAudio,
     playSceneAudio,
     pauseAudio,
     resumeAudio,
