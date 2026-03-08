@@ -20,6 +20,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { canUseCinematicVideo } from "@/lib/subscription";
 import { cn } from "@/lib/utils";
 
 // ── Types ────────────────────────────────────────────────────
@@ -135,6 +136,7 @@ export function ChapterVideoGenerator({
   const theme = BOOK_TYPE_THEMES[bookType] || BOOK_TYPE_THEMES.standard;
   const tierLabel = tier === "prophet_tier" ? "Institutional" : tier === "premium" ? "Premium" : tier === "student" ? "Student" : "Free";
   const scene = scenes[currentScene];
+  const hasCinematicAccess = canUseCinematicVideo(tier);
 
   // Cleanup on unmount
   useEffect(() => {
@@ -185,6 +187,15 @@ export function ChapterVideoGenerator({
   // ── Phase 1: Generate scene plan ───────────────────────────
 
   const generateVideo = useCallback(async () => {
+    if (!hasCinematicAccess) {
+      toast({
+        variant: "destructive",
+        title: "Premium feature",
+        description: "Cinematic video generation requires Premium or Institutional plan. Free/Student tiers get animated slideshows.",
+      });
+      return;
+    }
+
     setIsGenerating(true);
     setPhase("scripting");
     setProgress(10);
