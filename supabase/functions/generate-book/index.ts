@@ -154,8 +154,8 @@ serve(async (req) => {
       typeInstr = "STANDARD TEXT. Clear, informative chapter titles. Adapt structure to the subject matter. No forced bestseller hooks unless naturally appropriate.";
     } else if (effectiveBookType === "bestseller" || bestsellerMode) {
       typeInstr = "BESTSELLER. Provocative titles, hooks, named principles, transformation promises. Use 'The [Concept]' or 'How to [Action]' style titles.";
-    } else if (bookType === "illustrated") {
-      typeInstr = "ILLUSTRATED BOOK. Include [IMAGE: description] placement suggestions.";
+    } else if (effectiveBookType === "illustrated" || bookType === "illustrated") {
+      typeInstr = "ILLUSTRATED BOOK. Include [FIGURE X: description] placement suggestions. Create visual opportunities.";
     }
 
     const refInstr = (enableReferences || academicMode || isAcademicType)
