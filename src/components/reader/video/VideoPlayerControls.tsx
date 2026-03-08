@@ -116,9 +116,16 @@ export function VideoPlayerControls({
           }}
           onMouseLeave={() => setHoveredScene(null)}
         >
-          {/* Buffered/loaded indicator */}
+          {/* Buffered indicator (light gray) */}
+          {bufferedCount !== undefined && (
+            <div
+              className="absolute inset-y-0 left-0 bg-white/30 rounded-full"
+              style={{ width: `${(bufferedCount / Math.max(1, scenes.length)) * 100}%` }}
+            />
+          )}
+          {/* Loaded scene indicator */}
           <div
-            className="absolute inset-y-0 left-0 bg-white/30 rounded-full"
+            className="absolute inset-y-0 left-0 bg-white/20 rounded-full"
             style={{ width: `${((currentScene + 1) / Math.max(1, scenes.length)) * 100}%` }}
           />
           {/* Progress fill */}
