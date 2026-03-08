@@ -823,7 +823,7 @@ serve(async (req) => {
       ? ALL_FORMATS 
       : (TIER_FORMATS[userPlan as keyof typeof TIER_FORMATS] || TIER_FORMATS.free);
 
-    const { bookId, format, authorName, isbn, isAcademicMode, academicMode, citationStyle } = await req.json();
+    const { bookId, format, authorName, isbn, isAcademicMode, academicMode, citationStyle, kdpTrimSize, kdpBleed } = await req.json();
     
     // Support both param names (client sends isAcademicMode, legacy sends academicMode)
     const resolvedAcademicMode = isAcademicMode || academicMode || false;
@@ -964,6 +964,17 @@ serve(async (req) => {
         content = uint8ArrayToBase64(pdfBytes);
         contentType = "application/pdf";
         filename = `${sanitizeFilename(book.title)}.pdf`;
+        isBase64 = true;
+        break;
+      }
+
+      case "kdp-pdf": {
+        const trimSize = KDP_TRIM_SIZES[kdpTrimSize || '6x9'] || KDP_TRIM_SIZES['6x9'];
+        const useBleed = kdpBleed === true;
+        const pdfBytes = await generateKDPPDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, trimSize, useBleed);
+        content = uint8ArrayToBase64(pdfBytes);
+        contentType = "application/pdf";
+        filename = `${sanitizeFilename(book.title)}_KDP.pdf`;
         isBase64 = true;
         break;
       }
