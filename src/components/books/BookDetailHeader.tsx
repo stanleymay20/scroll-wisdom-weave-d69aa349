@@ -5,7 +5,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { ShareDialog, ExportDialog } from "@/components/books";
 import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { CodeQualityBadge } from "@/components/books/CodeQualityBadge";
+import { CollaborationPanel } from "@/components/books/CollaborationPanel";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { supabase } from "@/integrations/supabase/client";
 
 interface BookData {
   id: string;
@@ -164,6 +166,7 @@ export function BookDetailHeader({
             chapters={chapters.filter(ch => ch.is_generated).map(ch => ({ chapter_number: ch.chapter_number, content: ch.content }))}
           />
           <ShareDialog title={book.title} bookId={book.id} description={book.description || undefined} />
+          <CollaborationPanel bookId={book.id} userId={book.user_id} />
           <ReportContentDialog contentType="book" contentId={book.id} contentTitle={book.title} />
         </div>
       </div>
