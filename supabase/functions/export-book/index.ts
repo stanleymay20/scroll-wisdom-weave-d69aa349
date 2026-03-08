@@ -806,9 +806,9 @@ serve(async (req) => {
     console.log(`[EXPORT] Plan: ${userPlan}, format: ${format}`);
     // Check format permissions (skip during trial or admin)
     if (!trialActive && !isAdmin && !allowedFormats.includes(format)) {
-      
+      const requiredPlan = format === 'docx' ? 'Student' : 'Premium';
       return new Response(JSON.stringify({ 
-        error: `${format.toUpperCase()} export requires ${format === 'docx' ? 'Premium' : 'Student'} plan or higher.` 
+        error: `${format.toUpperCase()} export requires ${requiredPlan} plan or higher.` 
       }), {
         status: 403,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
