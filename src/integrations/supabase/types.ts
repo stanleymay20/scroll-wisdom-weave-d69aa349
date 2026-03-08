@@ -14,6 +14,39 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_usage_tracking: {
+        Row: {
+          created_at: string
+          credits_used: number
+          feature: string
+          id: string
+          metadata: Json | null
+          model_used: string | null
+          month: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          credits_used?: number
+          feature: string
+          id?: string
+          metadata?: Json | null
+          model_used?: string | null
+          month?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          credits_used?: number
+          feature?: string
+          id?: string
+          metadata?: Json | null
+          model_used?: string | null
+          month?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       assessment_integrity_logs: {
         Row: {
           book_id: string | null
