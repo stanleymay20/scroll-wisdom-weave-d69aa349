@@ -762,6 +762,14 @@ export default function Generate() {
                 disabled={isGenerating}
               />
 
+              {/* Writing Style Cloning */}
+              <div className="bg-card border border-border rounded-xl p-5">
+                <StyleClonePanel
+                  styleProfile={styleProfile}
+                  onStyleProfileChange={setStyleProfile}
+                />
+              </div>
+
               {/* Bestseller Mode Toggle - Premium Feature */}
               <BestsellerModeToggle
                 enabled={bestsellerMode}
