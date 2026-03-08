@@ -93,7 +93,8 @@ serve(async (req) => {
 
       // Sync plan to profile (fire-and-forget)
       const tier = productId === 'prod_TaQU3ILEUpbXOT' ? 'premium'
-        : productId === 'prod_TaQWA7MSUntiMy' ? 'prophet_tier'
+        : productId === 'prod_U0fmlf14TPlMKj' ? 'prophet_tier'
+        : productId === 'prod_TaQWA7MSUntiMy' ? 'prophet_tier' // legacy prophet product
         : productId === 'prod_TaQSrotoUkTuPC' ? 'student'
         : 'free';
       supabaseClient.from("profiles").update({ plan: tier }).eq("user_id", userId).then(() => {});
