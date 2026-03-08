@@ -1711,6 +1711,17 @@ export type Database = {
         }
         Returns: boolean
       }
+      insert_integrity_log: {
+        Args: {
+          _book_id?: string
+          _chapter_id?: string
+          _details?: Json
+          _integrity_score?: number
+          _user_id: string
+          _violation_type?: string
+        }
+        Returns: string
+      }
     }
     Enums: {
       app_role: "admin" | "moderator" | "user"
