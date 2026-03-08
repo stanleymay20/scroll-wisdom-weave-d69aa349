@@ -39,6 +39,7 @@ import { CharacterPortraitPreview } from "@/components/generate/CharacterPortrai
 import { BestsellerModeToggle } from "@/components/generate/BestsellerModeToggle";
 import { AuthorImprint, AuthorMode } from "@/components/generate/AuthorImprint";
 import { FictionWritingTools, FictionConfig, DEFAULT_FICTION_CONFIG } from "@/components/generate/FictionWritingTools";
+import { StyleClonePanel, StyleProfile } from "@/components/generate/StyleClonePanel";
 import { usePagePerformance } from "@/lib/performance";
 import { useGracefulDegradation } from "@/hooks/useNetworkAction";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -144,6 +145,9 @@ export default function Generate() {
   
   // Fiction writing state
   const [fictionConfig, setFictionConfig] = useState<FictionConfig>(DEFAULT_FICTION_CONFIG);
+  
+  // Style cloning state
+  const [styleProfile, setStyleProfile] = useState<StyleProfile | null>(null);
   
   // Author & Imprint state
   const [authorMode, setAuthorMode] = useState<AuthorMode>("ai");
@@ -334,6 +338,14 @@ export default function Generate() {
           comicLearningConfig: extendedBookType === "comic" && comicSubTypeConfig?.hasLearningObjectives ? comicLearningConfig : null,
           // Fiction-specific fields
           fictionConfig: extendedBookType === "fiction" ? fictionConfig : null,
+          // Style cloning
+          styleProfile: styleProfile ? {
+            tone: styleProfile.tone,
+            complexity: styleProfile.complexity,
+            formality: styleProfile.formality,
+            vocabulary: styleProfile.vocabulary,
+            samplePrompt: styleProfile.samplePrompt,
+          } : null,
         },
       });
 
