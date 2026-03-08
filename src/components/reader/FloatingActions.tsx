@@ -14,6 +14,7 @@ import {
   Code2, 
   BookOpen, 
   Presentation,
+  Video,
   X
 } from "lucide-react";
 import { FEATURES } from "@/lib/config";
