@@ -62,6 +62,7 @@ export function VideoPlayerControls({
   isExporting,
   exportProgress,
   visible,
+  bufferedCount,
   onTogglePlay,
   onNextScene,
   onPrevScene,
