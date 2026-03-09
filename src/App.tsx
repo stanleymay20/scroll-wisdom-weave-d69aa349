@@ -130,12 +130,12 @@ const App = () => (
                   <Route path="/about" element={<About />} />
                   <Route path="/contact" element={<Contact />} />
                   <Route path="/help" element={<Help />} />
-                  <Route path="/dashboard" element={<Dashboard />} />
+                  <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<TermsOfService />} />
                   <Route path="/moderation" element={<ModerationDashboard />} />
                   <Route path="/pricing" element={<Pricing />} />
-                  <Route path="/admin" element={<AdminPanel />} />
+                  <Route path="/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} />
                   <Route path="/install" element={<Install />} />
                   <Route path="/pwa-test" element={<PWATest />} />
                   <Route path="/diagnostics" element={<Diagnostics />} />
@@ -147,8 +147,8 @@ const App = () => (
                   <Route path="/docs/verification" element={<VerificationDocs />} />
                   <Route path="/docs/how-certification-works" element={<HowCertificationWorks />} />
                   <Route path="/docs/trust-whitepaper" element={<TrustWhitepaper />} />
-                  <Route path="/account/delete" element={<AccountDelete />} />
-                  <Route path="/delete-account" element={<AccountDelete />} />
+                  <Route path="/account/delete" element={<ProtectedRoute><AccountDelete /></ProtectedRoute>} />
+                  <Route path="/delete-account" element={<ProtectedRoute><AccountDelete /></ProtectedRoute>} />
                   <Route path="/certificate-test" element={<CertificateTest />} />
                   <Route path="/certificates" element={<Certificates />} />
                   <Route path="/launch-checklist" element={<LaunchChecklist />} />
@@ -157,8 +157,8 @@ const App = () => (
                   <Route path="/admin-recovery" element={<AdminRecovery />} />
                   <Route path="/pmf" element={<PMFDashboard />} />
                   <Route path="/audit-dashboard" element={<AuditDashboard />} />
-                  <Route path="/upload" element={<UploadPage />} />
-                  <Route path="/dashboard/mastery" element={<MasteryDashboard />} />
+                  <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
+                  <Route path="/dashboard/mastery" element={<ProtectedRoute><MasteryDashboard /></ProtectedRoute>} />
                   <Route path="/docs/mastery-model" element={<MasteryModel />} />
                   
                   {/* 404 - eager loaded */}
