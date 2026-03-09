@@ -16,6 +16,7 @@ import { notifyError } from "@/lib/errorNotifier";
 import { SkeletonPage } from "@/components/ui/page-shell";
 import { InlineSplash } from "@/components/brand";
 import { initContract5 } from "@/lib/contract5";
+import { ProtectedRoute } from "@/components/ProtectedRoute";
 
 // Eager load critical pages
 import Index from "./pages/Index";
@@ -121,11 +122,11 @@ const App = () => (
                   
                   {/* Feature routes - lazy loaded */}
                   <Route path="/explore" element={<Explore />} />
-                  <Route path="/generate" element={<Generate />} />
-                  <Route path="/library" element={<Library />} />
-                  <Route path="/profile" element={<Profile />} />
-                  <Route path="/settings" element={<Settings />} />
-                  <Route path="/support" element={<Support />} />
+                  <Route path="/generate" element={<ProtectedRoute><Generate /></ProtectedRoute>} />
+                  <Route path="/library" element={<ProtectedRoute><Library /></ProtectedRoute>} />
+                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                  <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                  <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
                   <Route path="/about" element={<About />} />
                   <Route path="/contact" element={<Contact />} />
                   <Route path="/help" element={<Help />} />
