@@ -139,7 +139,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   };
 
   const normalizeEmail = (value: string) => value.trim().toLowerCase();
-  const normalizePassword = (value: string) => value.trim();
+  const normalizePassword = (value: string) => value;
 
   const handleSendMagicLink = async (targetEmail?: string) => {
     const safeEmail = normalizeEmail(targetEmail ?? email);
@@ -387,11 +387,9 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
                   setIsLoading(true);
                   setAuthError(null);
                   try {
-                    console.log("[Auth] Starting Google OAuth, redirect_uri:", window.location.origin);
                     const result = await lovable.auth.signInWithOAuth("google", {
                       redirect_uri: window.location.origin,
                     });
-                    console.log("[Auth] Google OAuth result:", JSON.stringify(result, null, 2));
                     if (result?.error) {
                       console.error("[Auth] Google OAuth error:", result.error);
                       setAuthError(getErrorMessage(result.error));
