@@ -72,11 +72,11 @@ export const SUBSCRIPTION_TIERS = {
     monthlyPrice: 79,
     features: {
       canGenerateBooks: true,
-      maxBooksPerMonth: -1,
+      maxBooksPerMonth: 100,      // Capped for economic sustainability
       maxWordCount: 6000,
       exportFormats: ['pdf', 'epub', 'docx', 'mobi', 'kpf'],
-      ttsMinutes: -1,
-      interactiveVoiceMinutes: -1,
+      ttsMinutes: 300,            // 5 hours/month cap
+      interactiveVoiceMinutes: 300,
       aiCovers: true,
       commercialRights: true,
       batchGeneration: true,
@@ -84,8 +84,8 @@ export const SUBSCRIPTION_TIERS = {
       prophetMode: true,
       aiResearchAssistant: true,
       elevenLabsTTS: true,
-      aiImageQuota: -1, // Unlimited
-      cinematicVideo: true, // Full cinematic video
+      aiImageQuota: 500,          // 500 images/month cap
+      cinematicVideo: true,       // Full cinematic video (50 videos/month server-side)
     }
   }
 } as const;

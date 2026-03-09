@@ -6,12 +6,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-/** TTS monthly limits by plan tier (in minutes) */
+/** TTS monthly limits by plan tier (in minutes) — aligned with subscription.ts */
 const TIER_TTS_LIMITS: Record<string, number> = {
-  free: 10,
-  student: 60,
-  premium: 300,
-  prophet_tier: 1000,
+  free: 5,
+  student: 30,
+  premium: 60,
+  prophet_tier: 300, // Capped for economic sustainability (was unlimited)
 };
 
 const OPENAI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as const;
