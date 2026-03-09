@@ -134,12 +134,12 @@ const App = () => (
                   <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                   <Route path="/privacy" element={<PrivacyPolicy />} />
                   <Route path="/terms" element={<TermsOfService />} />
-                  <Route path="/moderation" element={<ModerationDashboard />} />
+                  <Route path="/moderation" element={<AdminRoute><ModerationDashboard /></AdminRoute>} />
                   <Route path="/pricing" element={<Pricing />} />
-                  <Route path="/admin" element={<ProtectedRoute><AdminPanel /></ProtectedRoute>} />
+                  <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
                   <Route path="/install" element={<Install />} />
                   <Route path="/pwa-test" element={<PWATest />} />
-                  <Route path="/diagnostics" element={<Diagnostics />} />
+                  <Route path="/diagnostics" element={<AdminRoute><Diagnostics /></AdminRoute>} />
                   <Route path="/book/:id" element={<BookDetail />} />
                   <Route path="/book/:bookId/certificate" element={<CertificateStatus />} />
                   <Route path="/read/:bookId/:chapterId" element={<Reader />} />
@@ -152,12 +152,12 @@ const App = () => (
                   <Route path="/delete-account" element={<ProtectedRoute><AccountDelete /></ProtectedRoute>} />
                   <Route path="/certificate-test" element={<CertificateTest />} />
                   <Route path="/certificates" element={<Certificates />} />
-                  <Route path="/launch-checklist" element={<LaunchChecklist />} />
+                  <Route path="/launch-checklist" element={<AdminRoute><LaunchChecklist /></AdminRoute>} />
                   <Route path="/docs/institutional-readiness" element={<InstitutionalReadiness />} />
-                  <Route path="/health-check" element={<HealthCheck />} />
-                  <Route path="/admin-recovery" element={<AdminRecovery />} />
-                  <Route path="/pmf" element={<PMFDashboard />} />
-                  <Route path="/audit-dashboard" element={<AuditDashboard />} />
+                  <Route path="/health-check" element={<AdminRoute><HealthCheck /></AdminRoute>} />
+                  <Route path="/admin-recovery" element={<ProtectedRoute><AdminRecovery /></ProtectedRoute>} />
+                  <Route path="/pmf" element={<AdminRoute><PMFDashboard /></AdminRoute>} />
+                  <Route path="/audit-dashboard" element={<AdminRoute><AuditDashboard /></AdminRoute>} />
                   <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
                   <Route path="/dashboard/mastery" element={<ProtectedRoute><MasteryDashboard /></ProtectedRoute>} />
                   <Route path="/docs/mastery-model" element={<MasteryModel />} />
