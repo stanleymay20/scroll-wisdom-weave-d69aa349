@@ -99,10 +99,18 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
     })();
 
     // For normal signed-in visits, redirect home.
-    supabase.auth.getSession().then(({ data: { session } }) => {
+    supabase.auth.getSession().then(({ data: { session }, error }) => {
+      if (error) {
+        // Stale session – clear it silently so the login form shows
+        supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        return;
+      }
       if (session?.user && !isRecoveryRef.current && modeRef.current !== "reset-password") {
         navigate(redirectRef.current);
       }
+    }).catch(() => {
+      // Network error – clear stale tokens
+      supabase.auth.signOut({ scope: 'local' }).catch(() => {});
     });
 
     return () => subscription.unsubscribe();
