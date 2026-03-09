@@ -8,9 +8,9 @@ const corsHeaders = {
 
 const TIER_LIMITS = {
   free: { booksPerDay: 1, maxChapters: 5, booksPerMonth: 1 },
-  student: { booksPerDay: 5, maxChapters: 30, booksPerMonth: 30 },
-  premium: { booksPerDay: 15, maxChapters: 50, booksPerMonth: -1 },
-  prophet_tier: { booksPerDay: 100, maxChapters: 100, booksPerMonth: -1 },
+  student: { booksPerDay: 3, maxChapters: 30, booksPerMonth: 10 },   // Aligned with subscription.ts
+  premium: { booksPerDay: 10, maxChapters: 50, booksPerMonth: 30 },  // Aligned with subscription.ts
+  prophet_tier: { booksPerDay: 20, maxChapters: 100, booksPerMonth: 100 }, // Capped for sustainability
 } as const;
 
 // Trial period ended — all limits now enforced based on subscription tier
