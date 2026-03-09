@@ -230,9 +230,56 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [user, ttsMinutesUsed]);
 
   useEffect(() => {
-    // Set up auth state listener
+    // Proactively validate the stored session on mount.
+    // If the refresh token is stale/invalid, clear it immediately to stop
+    // the Supabase client from retrying endlessly with "Failed to fetch".
+    let mounted = true;
+    (async () => {
+      try {
+        const { data: { session }, error } = await supabase.auth.getSession();
+        if (error || !session) {
+          // No valid session – wipe any stale tokens from localStorage
+          if (error) {
+            console.warn('Session validation failed, clearing stale auth state:', error.message);
+            await supabase.auth.signOut({ scope: 'local' });
+          }
+          if (mounted) {
+            setUser(null);
+            setTier('free');
+            setSubscriptionEnd(null);
+            setIsLoading(false);
+          }
+        } else if (mounted) {
+          setUser(session.user);
+          checkSubscription(true);
+        }
+      } catch {
+        // Network error during initial validation – clear state to stop retries
+        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        if (mounted) {
+          setUser(null);
+          setTier('free');
+          setSubscriptionEnd(null);
+          setIsLoading(false);
+        }
+      }
+    })();
+
+    // Set up auth state listener for subsequent changes
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
+        if (!mounted) return;
+
+        // If token refresh produced no session, the refresh token is dead – clean up
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          supabase.auth.signOut({ scope: 'local' });
+          setUser(null);
+          setTier('free');
+          setSubscriptionEnd(null);
+          setIsLoading(false);
+          return;
+        }
+
         // Only update if user actually changed to prevent cascading re-renders
         setUser(prev => {
           if (prev?.id === session?.user?.id) return prev;
@@ -249,19 +296,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
     );
 
-    // Initial check deferred — onAuthStateChange above already calls checkSubscription
-    // when a session exists, so only schedule a fallback for the no-session case.
-    const initialTimer = setTimeout(() => {
-      if (!user) checkSubscription(true);
-    }, 200);
-
     // Periodic check every 5 minutes
     const interval = setInterval(() => checkSubscription(false), 300000);
 
     return () => {
+      mounted = false;
       subscription.unsubscribe();
       clearInterval(interval);
-      clearTimeout(initialTimer);
     };
   }, [checkSubscription]);
 
