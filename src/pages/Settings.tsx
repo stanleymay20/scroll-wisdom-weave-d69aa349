@@ -264,7 +264,7 @@ export default function Settings() {
                       <div className="flex justify-between">
                         <Label>{t('settings.ttsUsage')}</Label>
                         <span className="text-sm text-muted-foreground">
-                          {ttsMinutesUsed} / {ttsLimit === -1 ? '∞' : ttsLimit} min
+                          {ttsMinutesUsed} / {ttsLimit} min
                         </span>
                       </div>
                       {ttsLimit > 0 && (
