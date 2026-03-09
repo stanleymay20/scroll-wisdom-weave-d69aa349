@@ -8,50 +8,44 @@ const corsHeaders = {
 };
 
 /**
- * Cinematic Video Generation — A+++ Quality
+ * Cinematic Video Generation — Photorealistic A+++ Quality
  * 
- * Generates AI scene images + cinematic camera instructions for
- * browser-side Canvas MediaRecorder MP4 rendering.
+ * Generates ultra-high-quality photorealistic AI scene images + cinematic 
+ * camera instructions for browser-side Canvas MediaRecorder rendering.
  * 
  * Pipeline:
- * 1. AI scriptwriter creates scene plan with imagePrompts + camera moves
- * 2. AI image model generates 1024x1024 keyframes per scene
- * 3. Returns scene plan + base64 images for client-side video assembly
+ * 1. AI director creates detailed scene plan with photorealistic imagePrompts
+ * 2. gemini-3-pro-image-preview generates 1024x1024 photorealistic keyframes
+ * 3. Returns scene plan + base64 images for client-side cinematic assembly
  */
 
 const VISUAL_TYPES_BY_BOOK: Record<string, string[]> = {
-  standard: ["title_card", "learning_objectives", "key_concept", "text_slide", "diagram_description", "summary", "quiz_prompt"],
-  professional: ["title_card", "executive_summary", "framework", "data_insight", "case_study", "action_items", "strategic_question"],
-  children: ["story_opening", "adventure_scene", "character_moment", "discovery", "sensory_experience", "fun_fact", "reflection_question"],
-  reference: ["title_card", "definition_card", "taxonomy", "cross_reference", "example_usage", "comparison_table", "quick_quiz"],
-  comic: ["panel_establishing", "dialogue_scene", "action_sequence", "reaction_shot", "learning_highlight", "cliffhanger", "takeaway"],
-  workbook: ["concept_review", "worked_example", "practice_problem", "step_by_step", "solution_reveal", "self_check", "challenge"],
-  illustrated: ["visual_overview", "annotated_diagram", "process_flow", "detail_zoom", "comparison_visual", "infographic", "visual_summary"],
-  bestseller: ["hook", "story_beat", "key_insight", "case_narrative", "aha_moment", "framework_reveal", "call_to_action"],
+  standard: ["establishing_wide", "macro_detail", "conceptual_metaphor", "data_landscape", "human_element", "abstract_beauty", "closing_vista"],
+  professional: ["boardroom_aerial", "data_cathedral", "strategic_landscape", "executive_portrait", "innovation_lab", "market_forces", "future_vision"],
+  children: ["magical_gateway", "adventure_panorama", "character_close_up", "wonder_discovery", "nature_macro", "dream_sequence", "starlit_finale"],
+  reference: ["scientific_macro", "crystalline_structure", "taxonomy_garden", "cross_section", "laboratory_scene", "microscopic_world", "cosmic_scale"],
+  comic: ["hero_establishing", "dynamic_action", "emotional_close_up", "dramatic_reveal", "battle_panorama", "quiet_moment", "epic_finale"],
+  workbook: ["workshop_scene", "tool_arrangement", "step_progression", "hands_on_detail", "blueprint_overlay", "achievement_moment", "mastery_vista"],
+  illustrated: ["natural_wonder", "anatomical_detail", "ecosystem_panorama", "species_portrait", "geological_formation", "underwater_world", "aerial_survey"],
+  bestseller: ["ted_stage_moment", "metaphor_landscape", "human_story", "breakthrough_instant", "panoramic_insight", "intimate_revelation", "standing_ovation"],
 };
 
-// Camera movement instructions for client-side Ken Burns effect
 const CAMERA_MOVES = [
-  "slow_zoom_in",
-  "slow_zoom_out",
-  "pan_left",
-  "pan_right",
-  "pan_up",
-  "ken_burns_tl_to_br",
-  "ken_burns_br_to_tl",
-  "static_with_pulse",
+  "slow_zoom_in", "slow_zoom_out", "pan_left", "pan_right", "pan_up",
+  "ken_burns_tl_to_br", "ken_burns_br_to_tl", "static_with_pulse",
+  "dolly_forward", "orbital_slow", "rack_focus", "crane_up",
 ] as const;
 
 function getBookTypeImageStyle(bookType: string): string {
   const styles: Record<string, string> = {
-    standard: "Ultra-high-quality editorial illustration, cinematic depth of field, volumetric lighting with god rays, rich saturated colors, photorealistic textures with painterly edges, 8K detail, dramatic golden-hour lighting, museum-quality fine art, widescreen 16:9 cinematic composition",
-    professional: "Sleek premium corporate visualization, isometric 3D data landscapes, glass-morphism surfaces with subtle refraction, navy-midnight-teal-gold palette, Bloomberg terminal aesthetics meets Apple keynote polish, volumetric ambient occlusion, 8K render quality",
-    children: "Award-winning children's book illustration, Pixar-quality character rendering, luminous watercolor washes with digital precision, warm golden light streaming through scenes, tactile textures you can feel, Caldecott Medal masterpiece, magical particle effects, rich atmospheric depth",
-    reference: "Precision scientific visualization, crystalline 3D molecular structures, blueprint-grade technical accuracy, holographic data overlays, deep navy-to-white gradient backgrounds, Nature journal publication quality, razor-sharp vector aesthetics",
-    comic: "Marvel Studios concept art quality, dynamic three-point perspective, dramatic rim lighting with neon accents, cel-shading with volumetric shadows, action-packed panel composition, ink splatter textures, graphic novel masterpiece",
-    workbook: "Premium educational design illustration, clean isometric step-by-step visuals, warm encouraging color palette, annotated with elegant callouts, Kurzgesagt animation style, friendly yet sophisticated",
-    illustrated: "National Geographic photography meets scientific illustration, extreme macro detail, cross-section cutaway renders, David Attenborough documentary quality, annotated with elegant labels, luminous backlit compositions",
-    bestseller: "TED Talk stage quality, powerful conceptual metaphor visualization, dramatic chiaroscuro with cinematic lens flare, rich gold and deep navy palette, aspirational atmosphere, large-scale environmental storytelling, IMAX documentary quality",
+    standard: "Shot on ARRI ALEXA 65 with Cooke S7/i Full Frame Plus lenses. Photorealistic cinematic quality, anamorphic lens flare, volumetric god rays piercing through atmosphere, film grain texture, shallow depth of field f/1.4, color graded in DaVinci Resolve with teal-orange cinematic LUT, 8K resolution, HDR dynamic range, production design by Roger Deakins lighting philosophy",
+    professional: "Shot on RED V-RAPTOR 8K VV. Ultra-premium corporate cinematography, clean architectural lines, glass surfaces with caustic light refractions, Fincher-style precision framing, navy-charcoal-gold color science, Bloomberg terminal aesthetics elevated to IMAX quality, volumetric ambient occlusion, ray-traced reflections, Ridley Scott visual authority",
+    children: "Shot on Panavision Millennium DXL2. Pixar-level photorealistic rendering with magical realism, luminous subsurface scattering on skin, Disney Imagineering production design, warm golden hour backlight with lens flare, Miyazaki-inspired atmospheric depth, tactile fabric and material textures at macro detail, magical particle systems catching light, chromatic aberration at edges",
+    reference: "Shot on Phantom Flex4K at 1000fps. Ultra-precise scientific cinematography, crystalline molecular structures with accurate refraction indices, electron microscope detail enhanced with artistic lighting, deep navy-to-white gradient atmospheres, Nature/Science journal cover quality, razor-sharp focus stacking, schlieren photography aesthetics, Nobel Prize lecture visual authority",
+    comic: "Shot on Sony VENICE 2. Marvel Studios VFX-level photorealism with graphic novel composition, dramatic three-point chiaroscuro lighting, atmospheric volumetric fog with colored light shafts, dynamic Dutch angle framing, rain-slicked surfaces with neon reflections, particle debris frozen in motion, Zack Snyder visual intensity meets Denis Villeneuve atmosphere",
+    workbook: "Shot on Canon EOS C500 Mark II. Warm inviting workshop cinematography, soft diffused northern light through windows, clean organized workspace with beautiful tools and materials, Wes Anderson symmetrical composition, educational diagram overlays with elegant typography, soft bokeh backgrounds, warm amber-teal color palette",
+    illustrated: "Shot on Hasselblad H6D-400c MS. National Geographic expedition photography meets BBC Planet Earth cinematography, extreme 400-megapixel macro detail, cross-section anatomical precision with artistic backlighting, David Attenborough documentary grandeur, luminous rim lighting on subjects, tilt-shift miniature effect for scale, underwater housing crystal clarity",
+    bestseller: "Shot on ARRI ALEXA Mini LF. TED Main Stage cinematography meets Oscar-winning documentary, powerful conceptual metaphor visualization in photorealistic environments, dramatic Rembrandt lighting with single key source, rich gold and deep navy palette, large-scale environmental storytelling in IMAX 15/70mm quality, intimate portrait moments with creamy bokeh",
   };
   return styles[bookType] || styles.standard;
 }
@@ -66,7 +60,6 @@ serve(async (req) => {
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY") ?? "";
     const supabaseAdmin = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Authenticate user
     const authHeader = req.headers.get("Authorization");
     let userId: string | null = null;
     let userTier = "free";
@@ -85,7 +78,6 @@ serve(async (req) => {
       }
     }
 
-    // Gate: Only Premium and Institutional can use cinematic video
     if (userTier !== "premium" && userTier !== "prophet_tier") {
       return new Response(JSON.stringify({ error: "Cinematic video requires Premium or Institutional plan" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -101,53 +93,62 @@ serve(async (req) => {
       });
     }
 
-    // Log usage (fire-and-forget)
     if (userId) {
       supabaseAdmin.from("ai_usage_tracking").insert({
         user_id: userId,
         feature: "cinematic_video",
-        credits_used: scenePlan ? 3 : 1, // Image gen costs more
-        model_used: "gemini-2.5-flash",
+        credits_used: scenePlan ? 5 : 1,
+        model_used: scenePlan ? "gemini-3-pro-image-preview" : "gemini-2.5-flash",
       }).then(() => {});
     }
 
     const resolvedType = bookType || "standard";
 
-    // ── Phase 1: If no scene plan provided, generate one ────
+    // ── Phase 1: Generate photorealistic cinematic script ────
     if (!scenePlan) {
       const visualTypes = VISUAL_TYPES_BY_BOOK[resolvedType] || VISUAL_TYPES_BY_BOOK.standard;
-      const model = tier === "prophet_tier" || tier === "premium"
-        ? "google/gemini-2.5-flash"
-        : "google/gemini-2.5-flash-lite";
+      const model = "google/gemini-2.5-flash";
 
-      const systemPrompt = `You are a world-class cinematic documentary director creating a visually stunning educational video. Think David Attenborough meets Kurzgesagt meets TED Talk.
+      const systemPrompt = `You are an Academy Award-winning cinematographer and documentary director. You combine the visual mastery of Roger Deakins, the storytelling of David Attenborough, and the conceptual brilliance of a TED Talk.
 
-OUTPUT: Return ONLY a valid JSON array. No markdown, no explanation.
+Your task: Create a PHOTOREALISTIC cinematic video script. Every scene will be rendered as a stunning, photorealistic AI-generated image with cinematic camera movement.
 
-Create 8-12 scenes for a comprehensive, immersive video (target 3-5 minutes total). Each scene becomes a full-screen cinematic shot with AI-generated artwork, animated text, and professional camera movement.
+OUTPUT: Return ONLY a valid JSON array. No markdown, no explanation, no code fences.
+
+Create 5-7 scenes for an immersive, cinematic educational video (target 2-4 minutes). Each scene becomes a full-screen photorealistic shot with professional camera work.
 
 SCENE SCHEMA:
 {
   "sceneNumber": number,
-  "title": "compelling, punchy title (3-6 words)",
-  "narration": "what the narrator says (3-5 sentences, vivid, conversational, TED-Talk energy — paint pictures with words, use rhetorical questions, build tension)",
+  "title": "evocative cinematic title (3-5 words)",
+  "narration": "what the narrator says (3-5 sentences — vivid, sensory, emotionally resonant. Use concrete imagery, rhetorical questions, dramatic pauses. Make the viewer FEEL the concept)",
   "visualType": "one of: ${visualTypes.join(", ")}",
-  "imagePrompt": "ULTRA-DETAILED cinematic visual description (50+ words). Specify: exact subject/scene composition, camera angle (low angle, aerial, macro close-up, over-the-shoulder), lighting setup (golden hour, volumetric god rays, neon rim light, dramatic chiaroscuro), color palette (specific colors), mood/atmosphere (mysterious, triumphant, serene), foreground/midground/background layers, depth of field, texture details. NO text/words/letters in image.",
-  "textOverlay": "1 powerful key takeaway line shown on screen",
-  "cameraMove": "one of: slow_zoom_in, slow_zoom_out, pan_left, pan_right, pan_up, ken_burns_tl_to_br, ken_burns_br_to_tl, static_with_pulse",
-  "duration": 12-25 (seconds — longer for complex concepts, shorter for transitions),
-  "transition": "fade | crossfade | wipe_left | zoom_in",
-  "emoji": "single emoji"
+  "imagePrompt": "PHOTOREALISTIC SCENE DESCRIPTION (80-120 words). You are directing a real camera crew. Specify EXACTLY:
+    - SUBJECT: What is in frame (specific objects, people, environments with precise details)
+    - COMPOSITION: Rule of thirds placement, foreground/midground/background layers, leading lines
+    - CAMERA: Lens (24mm wide, 85mm portrait, 100mm macro), angle (low hero angle, bird's eye, eye level), distance
+    - LIGHTING: Time of day, light direction, quality (harsh/soft), color temperature, practical lights in scene
+    - ATMOSPHERE: Weather, particles in air (dust motes, fog, rain), depth haze
+    - TEXTURE: Material surfaces (brushed steel, aged wood, wet concrete, silk fabric)
+    - COLOR: Dominant and accent colors, shadows color, highlights warmth
+    - MOOD: Emotional tone conveyed through all visual elements
+    ABSOLUTELY NO text, words, letters, numbers, watermarks, or UI elements in the image",
+  "textOverlay": "1 powerful insight (shown as elegant subtitle)",
+  "cameraMove": "one of: slow_zoom_in, slow_zoom_out, pan_left, pan_right, pan_up, ken_burns_tl_to_br, ken_burns_br_to_tl, static_with_pulse, dolly_forward, orbital_slow, rack_focus, crane_up",
+  "duration": 15-25 (seconds — dramatic pacing),
+  "transition": "fade | crossfade | dissolve | zoom",
+  "emoji": "single emoji capturing the scene's emotion"
 }
 
-CINEMATIC RULES:
-- imagePrompt MUST be 50+ words with specific visual details — these generate the actual artwork
-- Use dramatic pacing: hook → build → climax → resolve
-- Vary camera moves (never repeat same move consecutively)
-- Scene 1: Always a dramatic establishing shot (wide angle, epic scale)
-- Final scene: Powerful closing with call-to-reflection
-- Narration should be vivid and engaging, not dry or academic
-- Each scene tells a mini-story within the larger narrative
+DIRECTING RULES:
+- Every imagePrompt MUST be 80-120 words of specific photographic direction
+- Think in REAL PHOTOGRAPHY — describe what a camera would actually capture
+- Scene 1: Epic establishing shot (wide lens, dramatic scale, environmental storytelling)
+- Use visual metaphors — abstract concepts rendered as tangible, photographable scenes
+- Vary shot scales: wide → medium → close-up → macro → wide (cinematic rhythm)
+- Vary camera moves: never repeat consecutively, match energy to content
+- Final scene: Powerful emotional closing (intimate or epic, depending on content)
+- Color continuity: maintain a cohesive color palette across all scenes
 - Language: ${language || "en"}`;
 
       const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
@@ -160,9 +161,9 @@ CINEMATIC RULES:
           model,
           messages: [
             { role: "system", content: systemPrompt },
-            { role: "user", content: `Create cinematic video for:\nBOOK: "${bookTitle}"\nCHAPTER: "${chapterTitle}" (Ch ${chapterNumber || 1})\n\nCONTENT:\n${(chapterContent || "").substring(0, 8000)}\n\nReturn ONLY JSON array.` },
+            { role: "user", content: `Create a photorealistic cinematic video for:\nBOOK: "${bookTitle}"\nCHAPTER ${chapterNumber || 1}: "${chapterTitle}"\n\nSOURCE CONTENT:\n${(chapterContent || "").substring(0, 10000)}\n\nReturn ONLY the JSON array of scenes.` },
           ],
-          temperature: 0.7,
+          temperature: 0.75,
         }),
       });
 
@@ -182,17 +183,17 @@ CINEMATIC RULES:
         throw new Error("Failed to parse video script");
       }
 
-      // Validate scenes
+      const validCameraMoves = new Set(CAMERA_MOVES);
       scenes = scenes.map((s: any, i: number) => ({
         sceneNumber: i + 1,
         title: s.title || `Scene ${i + 1}`,
         narration: s.narration || "",
-        visualType: s.visualType || visualTypes[0],
-        imagePrompt: s.imagePrompt || `Cinematic ${resolvedType} scene for: ${s.title || chapterTitle}`,
+        visualType: s.visualType || visualTypes[i % visualTypes.length],
+        imagePrompt: s.imagePrompt || `Photorealistic cinematic scene: ${s.title || chapterTitle}. Shot on ARRI ALEXA, dramatic lighting, 8K detail.`,
         textOverlay: s.textOverlay || s.title || "",
-        cameraMove: CAMERA_MOVES.includes(s.cameraMove) ? s.cameraMove : CAMERA_MOVES[i % CAMERA_MOVES.length],
-        duration: Math.max(10, Math.min(25, s.duration || 15)),
-        transition: s.transition || ["fade", "crossfade", "wipe_left", "zoom_in"][i % 4],
+        cameraMove: validCameraMoves.has(s.cameraMove) ? s.cameraMove : CAMERA_MOVES[i % CAMERA_MOVES.length],
+        duration: Math.max(12, Math.min(25, s.duration || 18)),
+        transition: s.transition || ["fade", "crossfade", "dissolve", "zoom"][i % 4],
         emoji: s.emoji || "",
       }));
 
@@ -201,14 +202,23 @@ CINEMATIC RULES:
       });
     }
 
-    // ── Phase 2: Generate images for a batch of scenes ────
+    // ── Phase 2: Generate photorealistic images for scene batch ────
     const { scenes, batchStart = 0, batchSize = 2 } = scenePlan;
     const batch = (scenes as any[]).slice(batchStart, batchStart + batchSize);
     const imageStyle = getBookTypeImageStyle(resolvedType);
 
     const imageResults = await Promise.allSettled(
       batch.map(async (scene: any) => {
-        const prompt = `${scene.imagePrompt}. ${imageStyle}. IMPORTANT: Do NOT render any text, words, or letters in the image. Cinematic 16:9 composition.`;
+        const prompt = `Create a photorealistic cinematic image. ${scene.imagePrompt}
+
+Technical specifications: ${imageStyle}
+
+CRITICAL RULES:
+- Photorealistic quality — this must look like a real photograph or cinematic film frame
+- NO text, words, letters, numbers, watermarks, logos, or UI elements anywhere in the image
+- 16:9 widescreen cinematic composition
+- Rich detail in every pixel — textures, reflections, atmospheric effects
+- Professional color grading with cinematic depth`;
 
         const response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
           method: "POST",

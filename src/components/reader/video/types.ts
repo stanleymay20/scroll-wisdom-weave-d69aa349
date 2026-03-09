@@ -41,4 +41,5 @@ export const BOOK_TYPE_THEMES: Record<string, { gradient: string; icon: string; 
 export const CAMERA_MOVES = [
   "slow_zoom_in", "slow_zoom_out", "pan_left", "pan_right",
   "pan_up", "ken_burns_tl_to_br", "ken_burns_br_to_tl", "static_with_pulse",
+  "dolly_forward", "orbital_slow", "rack_focus", "crane_up",
 ] as const;
