@@ -17,6 +17,7 @@ import { SkeletonPage } from "@/components/ui/page-shell";
 import { InlineSplash } from "@/components/brand";
 import { initContract5 } from "@/lib/contract5";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
+import { AdminRoute } from "@/components/AdminRoute";
 
 // Eager load critical pages
 import Index from "./pages/Index";
