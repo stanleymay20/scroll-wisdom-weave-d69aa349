@@ -35,7 +35,7 @@ class AutoDiagnosticsManager {
   };
   
   private listeners: Set<(state: DiagnosticsState) => void> = new Set();
-  private retryQueue: Map<string, NodeJS.Timeout> = new Map();
+  private retryQueue: Map<string, ReturnType<typeof setTimeout>> = new Map();
 
   subscribe(listener: (state: DiagnosticsState) => void): () => void {
     this.listeners.add(listener);
