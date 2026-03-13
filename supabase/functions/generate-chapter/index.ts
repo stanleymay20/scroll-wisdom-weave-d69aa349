@@ -4903,15 +4903,26 @@ ${researchResult.references.map((ref, idx) => {
       }
     }
 
-    // UNIVERSAL ILLUSTRATION PIPELINE — Generate inline illustrations from [FIGURE X] markers
-    // Applies to ALL book types that include [FIGURE] markers in their micro-contracts
-    // Upload images to storage instead of embedding base64 (prevents 5-10MB chapter content)
+    // VISUAL INTELLIGENCE PIPELINE — Extract, validate, and render Figure Specs
+    // Uses the Visual Intelligence Engine for structured figure analysis
+    const density = VISUAL_DENSITY[effectiveBookType] || VISUAL_DENSITY.text;
     const ILLUSTRATION_ENABLED_TYPES = ['illustrated', 'children', 'professional', 'reference', 'bestseller', 'academic', 'technical', 'fiction', 'comic', 'workbook'];
-    if (ILLUSTRATION_ENABLED_TYPES.includes(effectiveBookType) && /\[FIGURE\s*\d+/i.test(finalContent)) {
-      console.log("[GENERATE-CHAPTER] Generating inline illustrations from figure markers...");
+    if (ILLUSTRATION_ENABLED_TYPES.includes(effectiveBookType) && density.maxFigures > 0 && /\[FIGURE\s*\d+/i.test(finalContent)) {
+      console.log("[VISUAL-INTELLIGENCE] Extracting and validating figure specs...");
 
       try {
-        // Extract [FIGURE X: description] markers from generated content
+        // Stage 1: Extract structured Figure Specs from generated content
+        const rawSpecs = extractFigureSpecs(finalContent, effectiveBookType, chapterNumber);
+        console.log(`[VISUAL-INTELLIGENCE] Extracted ${rawSpecs.length} figure specs`);
+
+        // Stage 2: Validate — reject decorative/filler figures
+        const { valid: validSpecs, rejected } = validateFigureSpecs(rawSpecs);
+        if (rejected.length > 0) {
+          console.log(`[VISUAL-INTELLIGENCE] Rejected ${rejected.length} figures: ${rejected.map(r => r.reason).join('; ')}`);
+        }
+        console.log(`[VISUAL-INTELLIGENCE] ${validSpecs.length} figures approved for rendering`);
+
+        // Stage 3: Extract raw figure markers for image generation (backward compatible)
         const figureRegex = /\[FIGURE\s*(\d+)\s*:\s*([\s\S]*?)\]/gi;
         const figures: { num: number; description: string; fullMatch: string }[] = [];
         
@@ -4924,7 +4935,7 @@ ${researchResult.references.map((ref, idx) => {
           });
         }
         
-        console.log(`[GENERATE-CHAPTER] Found ${figures.length} figure markers to illustrate`);
+        console.log(`[VISUAL-INTELLIGENCE] ${figures.length} figure markers ready for rendering`);
 
         if (figures.length > 0) {
           // ===========================================
