@@ -5245,6 +5245,11 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
         score: pedagogicalValidation.score,
         missingSections: pedagogicalValidation.missingSections,
       },
+      visualIntelligence: {
+        version: '2.0',
+        bookType: effectiveBookType,
+        maxFigures: (VISUAL_DENSITY[effectiveBookType] || VISUAL_DENSITY.text).maxFigures,
+      },
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     
   } catch (error) {
