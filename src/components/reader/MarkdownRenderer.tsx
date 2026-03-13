@@ -72,6 +72,17 @@ hljs.registerLanguage('ex', elixir);
 hljs.registerLanguage('haskell', haskell);
 hljs.registerLanguage('hs', haskell);
 
+// Client-side render mode resolver (mirrors backend visual-intelligence.ts logic)
+function resolveRenderModeClient(visualType: string): RenderMode {
+  const mermaidTypes = ['flowchart', 'taxonomy_tree', 'lifecycle_model', 'architecture_diagram', 'concept_map'];
+  const chartTypes = ['matrix', 'chart'];
+  const tableTypes = ['comparison_visual', 'step_by_step'];
+  if (mermaidTypes.includes(visualType)) return 'mermaid';
+  if (chartTypes.includes(visualType)) return 'chart_component';
+  if (tableTypes.includes(visualType)) return 'table_component';
+  return 'ai_image';
+}
+
 interface MarkdownRendererProps {
   content: string;
   className?: string;
