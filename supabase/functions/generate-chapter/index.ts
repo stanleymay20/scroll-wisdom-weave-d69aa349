@@ -4268,9 +4268,7 @@ PROFESSIONAL GUIDE STRUCTURE (MANDATORY):
 7. RISK ASSESSMENT — Probability × Impact table with mitigation strategies
 8. ACTION ITEMS — 5-7 specific, measurable next steps with KPIs and deadlines
 
-ILLUSTRATION PLACEMENT (MANDATORY):
-Insert 2-3 [FIGURE X: description] markers for strategic diagrams, frameworks, or decision trees.
-Example: [FIGURE 1: A strategic positioning matrix comparing four market quadrants with competitor logos]
+(Visual Intelligence Engine handles figure placement — follow its rules from the system prompt.)
 
 REQUIREMENTS:
 - Approximately ${targetWords} words
