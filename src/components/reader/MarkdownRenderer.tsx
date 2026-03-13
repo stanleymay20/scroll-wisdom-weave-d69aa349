@@ -604,13 +604,13 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
 
   // Render with structured code blocks and base64 images injected
   const renderWithStructuredBlocks = () => {
-    // Split by structured code blocks, base64 image placeholders, and evidence blocks
-    const combinedRegex = /<!--STRUCTURED_CODE_BLOCK_(\d+)-->|<!--BASE64_IMG_(\d+)-->|<!--EVIDENCE_BLOCK_(\d+)-->/;
+    // Split by structured code blocks, base64 image placeholders, evidence blocks, and figure markers
+    const combinedRegex = /<!--STRUCTURED_CODE_BLOCK_(\d+)-->|<!--BASE64_IMG_(\d+)-->|<!--EVIDENCE_BLOCK_(\d+)-->|<!--FIGURE_MARKER_(\d+)-->/;
     const parts = renderedContent.split(combinedRegex);
     const elements: React.ReactNode[] = [];
     
     // If no placeholders at all, render directly
-    if (structuredBlocks.length === 0 && extractedImages.length === 0 && evidenceBlocks.length === 0) {
+    if (structuredBlocks.length === 0 && extractedImages.length === 0 && evidenceBlocks.length === 0 && figureMarkers.length === 0) {
       return (
         <div 
           ref={containerRef}
@@ -620,9 +620,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       );
     }
 
-    // parts array: [html, codeBlockIdx|undefined, imgIdx|undefined, evidenceIdx|undefined, html, ...]
-    // Every 4 entries: html, codeBlockIdx, imgIdx, evidenceIdx
-    for (let i = 0; i < parts.length; i += 4) {
+    // parts array: [html, codeBlockIdx|undefined, imgIdx|undefined, evidenceIdx|undefined, figureIdx|undefined, html, ...]
+    // Every 5 entries: html, codeBlockIdx, imgIdx, evidenceIdx, figureIdx
+    for (let i = 0; i < parts.length; i += 5) {
       // Regular HTML content
       const htmlPart = parts[i];
       if (htmlPart && htmlPart.trim()) {
@@ -678,6 +678,25 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
               key={`evidence-${evidenceIndex}`}
               block={evidenceBlocks[evidenceIndex]}
               index={evidenceIndex}
+            />
+          );
+        }
+      }
+
+      // Figure marker placeholder → render through FigureRenderer
+      if (i + 4 < parts.length && parts[i + 4] !== undefined) {
+        const figureIndex = parseInt(parts[i + 4], 10);
+        if (figureMarkers[figureIndex]) {
+          const fig = figureMarkers[figureIndex];
+          elements.push(
+            <FigureRenderer
+              key={`figure-${fig.figureNumber}`}
+              figureNumber={fig.figureNumber}
+              caption={fig.caption}
+              description={fig.description}
+              renderMode={fig.renderMode}
+              visualType={fig.type}
+              className="my-6"
             />
           );
         }
