@@ -44,6 +44,7 @@ export { FlashcardDeck } from '@/components/decks/FlashcardDeck';
 export { FlashcardGenerator } from '@/components/decks/FlashcardGenerator';
 export { LearningDeckGenerator } from '@/components/decks/LearningDeckGenerator';
 export { useSavedDecks } from '@/hooks/useSavedDecks';
+export type { CodingQuestion } from '@/components/reader/CodingQuizQuestion';
 
 // ─── Reading Analytics ───────────────────────────────────
 export { ReadingSessionTimer } from '@/components/reader/ReadingSessionTimer';
