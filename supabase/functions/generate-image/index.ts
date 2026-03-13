@@ -91,7 +91,15 @@ serve(async (req) => {
       isPremium = false,
       chapterTitle,
       category,
+      // Visual Intelligence Figure Spec fields (optional)
+      figureSpec,
     } = await req.json();
+
+    // If a structured Figure Spec is provided, use it for enhanced context
+    const effectivePrompt = figureSpec?.imagePrompt || prompt;
+    const effectiveBookType = figureSpec?.bookType || bookType;
+    const effectiveCategory = category;
+    const effectiveChapterTitle = figureSpec?.section || chapterTitle;
 
     // Use premium model only if user has premium plan
     const effectiveIsPremium = isPremium && isPremiumPlan;
