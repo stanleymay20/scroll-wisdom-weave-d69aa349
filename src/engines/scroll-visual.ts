@@ -8,7 +8,13 @@
  */
 
 // ─── Figure Rendering ────────────────────────────────────
-export { FigureRenderer } from '@/components/reader/FigureRenderer';
+export { FigureRenderer, RenderModeBadge } from '@/components/reader/FigureRenderer';
+export type { RenderMode, FigureRendererProps } from '@/components/reader/FigureRenderer';
+
+// ─── Visual Renderer Library ─────────────────────────────
+export { MermaidDiagram, descriptionToMermaid } from '@/components/reader/visuals/MermaidDiagram';
+export { DataChart } from '@/components/reader/visuals/DataChart';
+export { ComparisonTable } from '@/components/reader/visuals/ComparisonTable';
 
 // ─── Illustrated Content Components (Contract 9) ─────────
 export {
