@@ -4394,6 +4394,8 @@ ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
 
+${buildVisualIntelligencePrompt('bestseller', chapterNumber, targetWords)}
+
 ${institutionalPrompt}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
