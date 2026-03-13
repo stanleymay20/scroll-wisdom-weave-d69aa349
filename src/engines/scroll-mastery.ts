@@ -40,7 +40,7 @@ export { useMasteryProgress } from '@/hooks/useMasteryProgress';
 export { useQuizGating } from '@/hooks/useQuizGating';
 
 // ─── Flashcards & Learning Decks ─────────────────────────
-export { FlashcardDeck } from '@/components/decks/FlashcardDeck';
+export type { FlashcardDeck } from '@/components/decks/FlashcardDeck';
 export { FlashcardGenerator } from '@/components/decks/FlashcardGenerator';
 export { LearningDeckGenerator } from '@/components/decks/LearningDeckGenerator';
 export { useSavedDecks } from '@/hooks/useSavedDecks';
