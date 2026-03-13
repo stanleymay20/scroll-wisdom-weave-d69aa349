@@ -279,6 +279,14 @@ Quality: Clean and readable. Only generate if the image adds educational value.`
         success: true,
         imageUrl,
         model,
+        ...(figureSpec && {
+          figureSpec: {
+            visualType: figureSpec.visualType,
+            placement: figureSpec.placement,
+            caption: figureSpec.caption,
+            purpose: figureSpec.purpose,
+          },
+        }),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
