@@ -3801,6 +3801,8 @@ ${MASTER_FORMATTING_CONTRACT}
 
 ${ACADEMIC_CONTRACT}
 
+${buildVisualIntelligencePrompt('technical', chapterNumber, targetWords)}
+
 ${VALIDATION_CONTRACT}
 
 ===========================================
