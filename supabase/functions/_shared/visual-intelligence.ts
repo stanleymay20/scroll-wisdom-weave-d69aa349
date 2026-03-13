@@ -11,6 +11,7 @@
 // ===========================================
 
 export interface FigureSpec {
+  figureNumber: number; // v2.1: Explicit figure identity — never derived from array index
   chapter: number;
   section: string;
   bookType: string;
@@ -432,6 +433,7 @@ export function extractFigureSpecs(
     const renderMode = resolveRenderMode(visualType, bookType);
 
     const spec: FigureSpec = {
+      figureNumber: marker.num, // v2.1: Use actual parsed figure number, not array index
       chapter: chapterNumber,
       section: extractSectionTitle(content, content.indexOf(marker.fullMatch)),
       bookType,
@@ -572,6 +574,6 @@ export function generateMermaidHint(spec: FigureSpec): string | null {
 export function summarizeFigureSpecs(specs: FigureSpec[]): string {
   if (specs.length === 0) return 'No figures';
   return specs.map(s =>
-    `Fig${s.chapter}.${specs.indexOf(s) + 1}: ${s.visualType} (score:${s.cognitiveScore}, render:${s.renderMode}, placement:${s.placement})`
+    `Fig${s.chapter}.${s.figureNumber}: ${s.visualType} (score:${s.cognitiveScore}, render:${s.renderMode}, placement:${s.placement})`
   ).join(' | ');
 }

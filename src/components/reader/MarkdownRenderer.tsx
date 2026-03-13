@@ -3,6 +3,7 @@ import hljs from 'highlight.js/lib/core';
 import DOMPurify from "dompurify";
 import { StructuredCodeBlock, extractAllStructuredCodeBlocks, StructuredCodeBlockData } from "./StructuredCodeBlock";
 import { ComputationalEvidencePanel } from "./ComputationalEvidencePanel";
+import { FigureRenderer, type RenderMode } from "./FigureRenderer";
 import { parseEvidenceBlocks, type ParsedEvidenceBlock } from "@/lib/computationalEvidence";
 
 // Import common languages for syntax highlighting
@@ -70,6 +71,17 @@ hljs.registerLanguage('elixir', elixir);
 hljs.registerLanguage('ex', elixir);
 hljs.registerLanguage('haskell', haskell);
 hljs.registerLanguage('hs', haskell);
+
+// Client-side render mode resolver (mirrors backend visual-intelligence.ts logic)
+function resolveRenderModeClient(visualType: string): RenderMode {
+  const mermaidTypes = ['flowchart', 'taxonomy_tree', 'lifecycle_model', 'architecture_diagram', 'concept_map'];
+  const chartTypes = ['matrix', 'chart'];
+  const tableTypes = ['comparison_visual', 'step_by_step'];
+  if (mermaidTypes.includes(visualType)) return 'mermaid';
+  if (chartTypes.includes(visualType)) return 'chart_component';
+  if (tableTypes.includes(visualType)) return 'table_component';
+  return 'ai_image';
+}
 
 interface MarkdownRendererProps {
   content: string;
@@ -185,10 +197,56 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     return { blocks: result.blocks, cleanedAfterEvidence: result.cleanedText };
   }, [processedContent]);
 
-  const { blocks: structuredBlocks, cleanedText } = useMemo(() => {
-    if (!cleanedAfterEvidence) return { blocks: [], cleanedText: "" };
-    return extractAllStructuredCodeBlocks(cleanedAfterEvidence);
+  // Extract [FIGURE] markers for FigureRenderer integration
+  interface ParsedFigureMarker {
+    figureNumber: number;
+    type: string;
+    caption: string;
+    description: string;
+    renderMode: RenderMode;
+  }
+
+  const { figureMarkers, cleanedAfterFigures } = useMemo(() => {
+    if (!cleanedAfterEvidence) return { figureMarkers: [] as ParsedFigureMarker[], cleanedAfterFigures: "" };
+    
+    const markers: ParsedFigureMarker[] = [];
+    let text = cleanedAfterEvidence;
+
+    // v2.0 Structured: [FIGURE X\nTYPE: ...\nCAPTION: ...\nDESCRIPTION: ...\n]
+    const structuredRegex = /\[FIGURE\s*(\d+)\s*\n\s*TYPE:\s*([^\n]+)\n\s*CAPTION:\s*([^\n]+)\n\s*DESCRIPTION:\s*([\s\S]*?)\]/gi;
+    text = text.replace(structuredRegex, (match, num, type, caption, desc) => {
+      const figNum = parseInt(num);
+      const visualType = type.trim().toLowerCase();
+      markers.push({
+        figureNumber: figNum,
+        type: visualType,
+        caption: caption.trim(),
+        description: desc.trim(),
+        renderMode: resolveRenderModeClient(visualType),
+      });
+      return `<!--FIGURE_MARKER_${markers.length - 1}-->`;
+    });
+
+    // Legacy: [FIGURE X: description]
+    text = text.replace(/\[FIGURE\s*(\d+)\s*:\s*([\s\S]*?)\]/gi, (match, num, desc) => {
+      const figNum = parseInt(num);
+      markers.push({
+        figureNumber: figNum,
+        type: 'labeled_illustration',
+        caption: desc.trim().split('.')[0] || `Figure ${figNum}`,
+        description: desc.trim(),
+        renderMode: 'ai_image',
+      });
+      return `<!--FIGURE_MARKER_${markers.length - 1}-->`;
+    });
+
+    return { figureMarkers: markers, cleanedAfterFigures: text };
   }, [cleanedAfterEvidence]);
+
+  const { blocks: structuredBlocks, cleanedText } = useMemo(() => {
+    if (!cleanedAfterFigures) return { blocks: [], cleanedText: "" };
+    return extractAllStructuredCodeBlocks(cleanedAfterFigures);
+  }, [cleanedAfterFigures]);
 
   const renderedContent = useMemo(() => {
     if (!cleanedText) return "";
@@ -546,13 +604,13 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
 
   // Render with structured code blocks and base64 images injected
   const renderWithStructuredBlocks = () => {
-    // Split by structured code blocks, base64 image placeholders, and evidence blocks
-    const combinedRegex = /<!--STRUCTURED_CODE_BLOCK_(\d+)-->|<!--BASE64_IMG_(\d+)-->|<!--EVIDENCE_BLOCK_(\d+)-->/;
+    // Split by structured code blocks, base64 image placeholders, evidence blocks, and figure markers
+    const combinedRegex = /<!--STRUCTURED_CODE_BLOCK_(\d+)-->|<!--BASE64_IMG_(\d+)-->|<!--EVIDENCE_BLOCK_(\d+)-->|<!--FIGURE_MARKER_(\d+)-->/;
     const parts = renderedContent.split(combinedRegex);
     const elements: React.ReactNode[] = [];
     
     // If no placeholders at all, render directly
-    if (structuredBlocks.length === 0 && extractedImages.length === 0 && evidenceBlocks.length === 0) {
+    if (structuredBlocks.length === 0 && extractedImages.length === 0 && evidenceBlocks.length === 0 && figureMarkers.length === 0) {
       return (
         <div 
           ref={containerRef}
@@ -562,9 +620,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       );
     }
 
-    // parts array: [html, codeBlockIdx|undefined, imgIdx|undefined, evidenceIdx|undefined, html, ...]
-    // Every 4 entries: html, codeBlockIdx, imgIdx, evidenceIdx
-    for (let i = 0; i < parts.length; i += 4) {
+    // parts array: [html, codeBlockIdx|undefined, imgIdx|undefined, evidenceIdx|undefined, figureIdx|undefined, html, ...]
+    // Every 5 entries: html, codeBlockIdx, imgIdx, evidenceIdx, figureIdx
+    for (let i = 0; i < parts.length; i += 5) {
       // Regular HTML content
       const htmlPart = parts[i];
       if (htmlPart && htmlPart.trim()) {
@@ -620,6 +678,25 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
               key={`evidence-${evidenceIndex}`}
               block={evidenceBlocks[evidenceIndex]}
               index={evidenceIndex}
+            />
+          );
+        }
+      }
+
+      // Figure marker placeholder → render through FigureRenderer
+      if (i + 4 < parts.length && parts[i + 4] !== undefined) {
+        const figureIndex = parseInt(parts[i + 4], 10);
+        if (figureMarkers[figureIndex]) {
+          const fig = figureMarkers[figureIndex];
+          elements.push(
+            <FigureRenderer
+              key={`figure-${fig.figureNumber}`}
+              figureNumber={fig.figureNumber}
+              caption={fig.caption}
+              description={fig.description}
+              renderMode={fig.renderMode}
+              visualType={fig.type}
+              className="my-6"
             />
           );
         }

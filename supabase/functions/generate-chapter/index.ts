@@ -4921,26 +4921,30 @@ ${researchResult.references.map((ref, idx) => {
         if (rejected.length > 0) {
           console.log(`[VISUAL-INTELLIGENCE] Rejected ${rejected.length} figures:`);
           for (const r of rejected) {
-            console.log(`  ❌ Fig ${r.spec.chapter}: ${r.reason} (CV score: ${r.cognitiveScore})`);
+            console.log(`  ❌ Fig ${r.spec.figureNumber}: ${r.reason} (CV score: ${r.cognitiveScore})`);
           }
         }
         console.log(`[VISUAL-INTELLIGENCE] ${validSpecs.length} figures approved (all CV ≥ 2)`);
 
-        // Stage 3: Parse raw markers for image generation using v2.0 parser
+        // Stage 3: Build approved figure set using explicit figureNumber identity
+        const approvedNums = new Set(validSpecs.map(s => s.figureNumber));
         const rawMarkers = parseRawFigureMarkers(finalContent);
-        // Filter to only approved figures (by number matching)
-        const approvedNums = new Set(validSpecs.map(s => validSpecs.indexOf(s) + 1));
-        const figures = rawMarkers.map(m => ({
-          num: m.num,
-          description: m.description,
-          fullMatch: m.fullMatch,
-          renderMode: validSpecs.find((_, i) => i + 1 === m.num)?.renderMode || 'ai_image',
-        }));
+        const figures = rawMarkers
+          .filter(m => approvedNums.has(m.num))
+          .map(m => ({
+            num: m.num,
+            description: m.description,
+            fullMatch: m.fullMatch,
+            renderMode: validSpecs.find(s => s.figureNumber === m.num)?.renderMode || 'ai_image',
+          }));
         
-        // Remove rejected figure markers from content
+        // Remove rejected figure markers from content by exact fullMatch
         for (const r of rejected) {
-          const markerRegex = new RegExp(`\\[FIGURE\\s*${rejected.indexOf(r) + validSpecs.length + 1}[^\\]]*\\]`, 'gi');
-          finalContent = finalContent.replace(markerRegex, '');
+          // Use the exact raw marker text stored during parsing for safe removal
+          const rawMarker = rawMarkers.find(m => m.num === r.spec.figureNumber);
+          if (rawMarker) {
+            finalContent = finalContent.replace(rawMarker.fullMatch, '');
+          }
         }
         
         console.log(`[VISUAL-INTELLIGENCE] ${figures.length} figure markers ready for rendering`);
