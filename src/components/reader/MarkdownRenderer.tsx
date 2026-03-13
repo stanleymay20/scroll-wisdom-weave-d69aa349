@@ -3,6 +3,7 @@ import hljs from 'highlight.js/lib/core';
 import DOMPurify from "dompurify";
 import { StructuredCodeBlock, extractAllStructuredCodeBlocks, StructuredCodeBlockData } from "./StructuredCodeBlock";
 import { ComputationalEvidencePanel } from "./ComputationalEvidencePanel";
+import { FigureRenderer, type RenderMode } from "./FigureRenderer";
 import { parseEvidenceBlocks, type ParsedEvidenceBlock } from "@/lib/computationalEvidence";
 
 // Import common languages for syntax highlighting
