@@ -26,7 +26,7 @@ export function useAutoHideFloatingActions(options: UseAutoHideOptions = {}) {
   const [isVisible, setIsVisible] = useState(initialVisible);
   const lastScrollY = useRef(0);
   const scrollDirection = useRef<'up' | 'down'>('down');
-  const pauseTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const pauseTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isScrolling = useRef(false);
 
   const handleScroll = useCallback(() => {

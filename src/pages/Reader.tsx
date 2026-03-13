@@ -227,7 +227,7 @@ export default function Reader() {
 
   const { toast } = useToast();
   const lastSavedProgress = useRef<number>(-1); // -1 = not yet initialized from DB
-  const saveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const dbProgressLoaded = useRef(false);
 
   // Initialize lastSavedProgress from database on mount (prevents overwriting higher values)

@@ -54,7 +54,7 @@ export function markInteractive(pageName: string): void {
     console.warn(
       `⚠️ PERFORMANCE VIOLATION: ${pageName} took ${tti.toFixed(0)}ms to become interactive (threshold: ${TTI_THRESHOLD_MS}ms)`
     );
-  } else if (process.env.NODE_ENV === 'development') {
+  } else if (import.meta.env.DEV) {
     console.debug(`✅ ${pageName} TTI: ${tti.toFixed(0)}ms`);
   }
 }

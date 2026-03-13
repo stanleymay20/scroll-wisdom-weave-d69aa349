@@ -290,7 +290,7 @@ export default function Generate() {
     ];
 
     // Start progress simulation
-    const progressTimers: NodeJS.Timeout[] = [];
+    const progressTimers: ReturnType<typeof setTimeout>[] = [];
     progressStages.forEach((stage, index) => {
       const timer = setTimeout(() => {
         setGenerationProgress((prev) => [...prev, stage.message]);
