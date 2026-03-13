@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs, VISUAL_DENSITY } from "../_shared/visual-intelligence.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -70,13 +71,8 @@ This chapter must introduce and clearly explain 6-10 distinct NAMED concepts.
 Named concepts include: principles, effects, laws, frameworks, mental models.
 Give ideas sticky, memorable names. Example: say "Loss Aversion Bias" not "people don't like losing things."
 
-ILLUSTRATION SUPPORT:
-Include 2-3 [FIGURE X: description] markers for:
-- Key concept visualizations or framework diagrams
-- Before/after comparisons or transformation arcs
-- Data charts or statistical evidence graphics
-
 TONE: Conversational authority. Written TO the reader. Confident, human, slightly confrontational. Like talking to a brilliant friend who challenges your assumptions.
+(Figure placement governed by Visual Intelligence Engine — do not hardcode figure counts here.)
 FORBIDDEN: Academic dryness. Over-explaining. Hedging language ("it could be argued"). Generic advice. AI-sounding transitions.`;
 
 const MICRO_CONTRACT_ACADEMIC = `PIPELINE: ACADEMIC / TECHNICAL
@@ -90,13 +86,8 @@ ENHANCE WITH:
 - Code examples with proper formatting (for technical topics, ≥40% of content)
 - Graduated exercises (Easy → Medium → Hard) at chapter end
 
-ILLUSTRATION SUPPORT:
-Include 1-2 [FIGURE X: description] markers for:
-- Academic diagrams, conceptual frameworks, or taxonomy trees
-- Process flow diagrams or architecture overviews
-- Labeled charts or comparison matrices
-
 TONE: Rigorous, instructional, evidence-based. NO metaphors. NO storytelling. NO motivational content.
+(Figure placement governed by Visual Intelligence Engine — do not hardcode figure counts here.)
 FORBIDDEN: Hero's journey framing. Emotional appeals. Marketing language.`;
 
 const MICRO_CONTRACT_PROFESSIONAL = `PIPELINE: PROFESSIONAL / BUSINESS GUIDE
@@ -117,13 +108,8 @@ This chapter must introduce and clearly explain 8-12 distinct NAMED strategic co
 Named concepts include: frameworks, models, matrices, methodologies, principles, laws, effects.
 Example: say "Porter's Value Chain Analysis" not "analyzing how companies create value."
 
-ILLUSTRATION SUPPORT:
-Include 2-3 [FIGURE X: description] markers for:
-- Process diagrams or strategic frameworks
-- Decision trees or implementation roadmaps
-- Competitive positioning maps or market matrices
-
 TONE: Professional, authoritative, practical. Like a McKinsey consultant presenting to C-suite. Data-driven, precise, actionable.
+(Figure placement governed by Visual Intelligence Engine — do not hardcode figure counts here.)
 FORBIDDEN: Academic dryness. Motivational fluff. Vague advice without specifics. Generic recommendations without measurable outcomes.`;
 
 const MICRO_CONTRACT_REFERENCE = `PIPELINE: REFERENCE / HANDBOOK
@@ -144,13 +130,8 @@ This chapter must define and catalog 12-20 distinct entries or concepts.
 Every entry must be self-contained and findable via scanning.
 Format: **Term** — Definition. Context. Example. Related: [cross-refs].
 
-ILLUSTRATION SUPPORT:
-Include 2-3 [FIGURE X: description] markers for:
-- Architecture diagrams or system overviews
-- Comparison charts or taxonomy trees
-- Process flowcharts or decision trees
-
 TONE: Precise, neutral, encyclopedic. Optimize for FINDABILITY and SCANNING.
+(Figure placement governed by Visual Intelligence Engine — do not hardcode figure counts here.)
 FORBIDDEN: Narrative flow. Personal opinions. Lengthy introductions. Ambiguous language.`;
 
 const MICRO_CONTRACT_TEXT = `PIPELINE: STANDARD TEXT
@@ -2068,6 +2049,8 @@ ${MASTER_FORMATTING_CONTRACT}
 
 ${ACADEMIC_CONTRACT}
 
+${buildVisualIntelligencePrompt('academic', chapterNumber, targetWords)}
+
 ${VALIDATION_CONTRACT}
 
 ${FINAL_DIRECTIVE}
@@ -3601,6 +3584,8 @@ ${MASTER_FORMATTING_CONTRACT}
 
 ${ACADEMIC_CONTRACT}
 
+${buildVisualIntelligencePrompt('academic', chapterNumber, targetWords)}
+
 ${VALIDATION_CONTRACT}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.
@@ -3815,6 +3800,8 @@ REQUIRED:
 ${MASTER_FORMATTING_CONTRACT}
 
 ${ACADEMIC_CONTRACT}
+
+${buildVisualIntelligencePrompt('technical', chapterNumber, targetWords)}
 
 ${VALIDATION_CONTRACT}
 
@@ -4073,6 +4060,8 @@ ${MASTER_FORMATTING_CONTRACT}
 
 ${ACADEMIC_CONTRACT}
 
+${buildVisualIntelligencePrompt('academic', chapterNumber, targetWords)}
+
 ${illustratedInstitutionalPrompt}`;
       } else {
         // BESTSELLER ILLUSTRATED PIPELINE — engaging narrative with visuals  
@@ -4264,6 +4253,8 @@ ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
 
+${buildVisualIntelligencePrompt('professional', chapterNumber, targetWords)}
+
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
       chapterPrompt = `${previousChaptersContext}Write a PROFESSIONAL GUIDE Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
@@ -4285,9 +4276,7 @@ PROFESSIONAL GUIDE STRUCTURE (MANDATORY):
 7. RISK ASSESSMENT — Probability × Impact table with mitigation strategies
 8. ACTION ITEMS — 5-7 specific, measurable next steps with KPIs and deadlines
 
-ILLUSTRATION PLACEMENT (MANDATORY):
-Insert 2-3 [FIGURE X: description] markers for strategic diagrams, frameworks, or decision trees.
-Example: [FIGURE 1: A strategic positioning matrix comparing four market quadrants with competitor logos]
+(Visual Intelligence Engine handles figure placement — follow its rules from the system prompt.)
 
 REQUIREMENTS:
 - Approximately ${targetWords} words
@@ -4295,7 +4284,7 @@ REQUIREMENTS:
 - Include at least 3 framework/comparison tables with real data points
 - Every recommendation must be specific and measurable (include KPIs, percentages, timelines)
 - Include real industry examples with specific numbers and named companies
-- Include 2-3 [FIGURE X: description] markers for visual frameworks
+- Follow Visual Intelligence Engine rules for [FIGURE X] placement
 - Concept Budget: introduce and name 8-12 strategic concepts
 ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts - do NOT repeat introductions' : ''}
 
@@ -4315,6 +4304,8 @@ ${MICRO_CONTRACT_REFERENCE}
 ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
+
+${buildVisualIntelligencePrompt('reference', chapterNumber, targetWords)}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
@@ -4338,12 +4329,7 @@ REFERENCE STRUCTURE (MANDATORY):
 8. CROSS-REFERENCES — Explicit links to related chapters/topics
 9. GLOSSARY — Key terms with brief definitions
 
-ILLUSTRATION PLACEMENT (MANDATORY):
-Insert 2-3 [FIGURE X: description] markers for:
-- Architecture diagrams, taxonomy trees, or system overviews
-- Process flowcharts or decision trees
-- Comparison charts or visual quick-reference guides
-Example: [FIGURE 1: A taxonomy tree showing the classification of machine learning algorithms by type]
+(Visual Intelligence Engine handles figure placement — follow its rules from the system prompt.)
 
 REQUIREMENTS:
 - Approximately ${targetWords} words
@@ -4351,7 +4337,7 @@ REQUIREMENTS:
 - Include at least 3 reference/comparison tables
 - Optimize for scanning and quick lookup — use consistent formatting
 - Every entry must be self-contained and findable
-- Include 2-3 [FIGURE X: description] markers
+- Follow Visual Intelligence Engine rules for [FIGURE X] placement
 - Concept Budget: define and catalog 12-20 distinct entries or concepts
 ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts' : ''}
 
@@ -4416,6 +4402,8 @@ ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
 
+${buildVisualIntelligencePrompt('bestseller', chapterNumber, targetWords)}
+
 ${institutionalPrompt}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
@@ -4429,8 +4417,9 @@ ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
 
+${buildVisualIntelligencePrompt('text', chapterNumber, targetWords)}
+
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
-      }
       
       if (isBestsellerMode) {
         chapterPrompt = `${previousChaptersContext}Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
@@ -4914,15 +4903,26 @@ ${researchResult.references.map((ref, idx) => {
       }
     }
 
-    // UNIVERSAL ILLUSTRATION PIPELINE — Generate inline illustrations from [FIGURE X] markers
-    // Applies to ALL book types that include [FIGURE] markers in their micro-contracts
-    // Upload images to storage instead of embedding base64 (prevents 5-10MB chapter content)
+    // VISUAL INTELLIGENCE PIPELINE — Extract, validate, and render Figure Specs
+    // Uses the Visual Intelligence Engine for structured figure analysis
+    const density = VISUAL_DENSITY[effectiveBookType] || VISUAL_DENSITY.text;
     const ILLUSTRATION_ENABLED_TYPES = ['illustrated', 'children', 'professional', 'reference', 'bestseller', 'academic', 'technical', 'fiction', 'comic', 'workbook'];
-    if (ILLUSTRATION_ENABLED_TYPES.includes(effectiveBookType) && /\[FIGURE\s*\d+/i.test(finalContent)) {
-      console.log("[GENERATE-CHAPTER] Generating inline illustrations from figure markers...");
+    if (ILLUSTRATION_ENABLED_TYPES.includes(effectiveBookType) && density.maxFigures > 0 && /\[FIGURE\s*\d+/i.test(finalContent)) {
+      console.log("[VISUAL-INTELLIGENCE] Extracting and validating figure specs...");
 
       try {
-        // Extract [FIGURE X: description] markers from generated content
+        // Stage 1: Extract structured Figure Specs from generated content
+        const rawSpecs = extractFigureSpecs(finalContent, effectiveBookType, chapterNumber);
+        console.log(`[VISUAL-INTELLIGENCE] Extracted ${rawSpecs.length} figure specs`);
+
+        // Stage 2: Validate — reject decorative/filler figures
+        const { valid: validSpecs, rejected } = validateFigureSpecs(rawSpecs);
+        if (rejected.length > 0) {
+          console.log(`[VISUAL-INTELLIGENCE] Rejected ${rejected.length} figures: ${rejected.map(r => r.reason).join('; ')}`);
+        }
+        console.log(`[VISUAL-INTELLIGENCE] ${validSpecs.length} figures approved for rendering`);
+
+        // Stage 3: Extract raw figure markers for image generation (backward compatible)
         const figureRegex = /\[FIGURE\s*(\d+)\s*:\s*([\s\S]*?)\]/gi;
         const figures: { num: number; description: string; fullMatch: string }[] = [];
         
@@ -4935,7 +4935,7 @@ ${researchResult.references.map((ref, idx) => {
           });
         }
         
-        console.log(`[GENERATE-CHAPTER] Found ${figures.length} figure markers to illustrate`);
+        console.log(`[VISUAL-INTELLIGENCE] ${figures.length} figure markers ready for rendering`);
 
         if (figures.length > 0) {
           // ===========================================

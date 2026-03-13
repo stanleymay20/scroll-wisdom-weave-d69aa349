@@ -91,12 +91,27 @@ serve(async (req) => {
       isPremium = false,
       chapterTitle,
       category,
+      // Visual Intelligence Figure Spec fields (optional)
+      figureSpec,
     } = await req.json();
+
+    // If a structured Figure Spec is provided, use it for enhanced context
+    const effectivePrompt = figureSpec?.imagePrompt || prompt;
+    const effectiveBookType = figureSpec?.bookType || bookType;
+    const effectiveCategory = category;
+    const effectiveChapterTitle = figureSpec?.section || chapterTitle;
 
     // Use premium model only if user has premium plan
     const effectiveIsPremium = isPremium && isPremiumPlan;
 
-    logStep("Generating image", { prompt: prompt.slice(0, 100), style, bookType, plan: userPlan });
+    logStep("Generating image", { 
+      prompt: effectivePrompt.slice(0, 100), 
+      style, 
+      bookType: effectiveBookType, 
+      plan: userPlan,
+      hasFigureSpec: !!figureSpec,
+      visualType: figureSpec?.visualType,
+    });
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
@@ -192,13 +207,15 @@ Quality: Clean and readable. Only generate if the image adds educational value.`
     };
 
     // Resolve art direction: bookType takes priority, then style param, then default
-    const artDirection = (bookType && BOOK_TYPE_ART_DIRECTION[bookType])
-      ? BOOK_TYPE_ART_DIRECTION[bookType]
+    const artDirection = (effectiveBookType && BOOK_TYPE_ART_DIRECTION[effectiveBookType])
+      ? BOOK_TYPE_ART_DIRECTION[effectiveBookType]
       : LEGACY_STYLE_PROMPTS[style] || BOOK_TYPE_ART_DIRECTION[style] || BOOK_TYPE_ART_DIRECTION.text;
 
-    const contextHint = category ? `Subject: ${category.replace(/_/g, ' ')}.` : '';
-    const chapterHint = chapterTitle ? `Chapter context: ${chapterTitle}.` : '';
-    const enhancedPrompt = `${prompt}.\n\n${artDirection}\n\n${contextHint} ${chapterHint} IMPORTANT: Do NOT render any text, words, or letters in the image.`;
+    const contextHint = effectiveCategory ? `Subject: ${effectiveCategory.replace(/_/g, ' ')}.` : '';
+    const chapterHint = effectiveChapterTitle ? `Chapter context: ${effectiveChapterTitle}.` : '';
+    const purposeHint = figureSpec?.purpose ? `Purpose: ${figureSpec.purpose}.` : '';
+    const captionHint = figureSpec?.caption ? `Caption: ${figureSpec.caption}.` : '';
+    const enhancedPrompt = `${effectivePrompt}.\n\n${artDirection}\n\n${contextHint} ${chapterHint} ${purposeHint} ${captionHint} IMPORTANT: Do NOT render any text, words, or letters in the image.`;
 
     // Use Gemini 3 Pro Image for all tiers (only supported image model)
     const model = "google/gemini-3-pro-image-preview";
@@ -262,6 +279,14 @@ Quality: Clean and readable. Only generate if the image adds educational value.`
         success: true,
         imageUrl,
         model,
+        ...(figureSpec && {
+          figureSpec: {
+            visualType: figureSpec.visualType,
+            placement: figureSpec.placement,
+            caption: figureSpec.caption,
+            purpose: figureSpec.purpose,
+          },
+        }),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
