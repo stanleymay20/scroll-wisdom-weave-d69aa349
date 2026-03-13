@@ -231,14 +231,13 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     // Proactively validate the stored session on mount.
-    // If the refresh token is stale/invalid, clear it immediately to stop
-    // the Supabase client from retrying endlessly with "Failed to fetch".
+    // Uses getUser() to SERVER-VALIDATE the JWT signature, catching tokens
+    // that look valid locally but were invalidated by infrastructure changes.
     let mounted = true;
     (async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error || !session) {
-          // No valid session – wipe any stale tokens from localStorage
           if (error) {
             console.warn('Session validation failed, clearing stale auth state:', error.message);
             await supabase.auth.signOut({ scope: 'local' });
@@ -249,7 +248,26 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
             setSubscriptionEnd(null);
             setIsLoading(false);
           }
-        } else if (mounted) {
+          return;
+        }
+
+        // SERVER-SIDE validation: getUser() sends the JWT to the auth server.
+        // If the token signature is invalid (e.g., after infra restart), this
+        // returns an error while getSession() would succeed from local cache.
+        const { error: userError } = await supabase.auth.getUser();
+        if (userError) {
+          console.warn('JWT server validation failed, clearing invalid session:', userError.message);
+          await supabase.auth.signOut({ scope: 'local' });
+          if (mounted) {
+            setUser(null);
+            setTier('free');
+            setSubscriptionEnd(null);
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        if (mounted) {
           setUser(session.user);
           checkSubscription(true);
         }
