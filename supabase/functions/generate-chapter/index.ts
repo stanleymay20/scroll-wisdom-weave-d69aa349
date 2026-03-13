@@ -4060,6 +4060,8 @@ ${MASTER_FORMATTING_CONTRACT}
 
 ${ACADEMIC_CONTRACT}
 
+${buildVisualIntelligencePrompt('academic', chapterNumber, targetWords)}
+
 ${illustratedInstitutionalPrompt}`;
       } else {
         // BESTSELLER ILLUSTRATED PIPELINE — engaging narrative with visuals  
