@@ -1,18 +1,26 @@
 /**
  * ScrollLibrary Engine Registry
  * ==============================
- * Central manifest of all 6 engines, their capabilities,
+ * Central manifest of all engines, their capabilities,
  * current status, and identified gaps.
+ *
+ * Processing pipeline: Content → Visual → Integrity → Mastery → Publish
+ * Governance layer:    Institution (supervisory, runs around pipeline)
  */
 
-import type { EngineManifest } from './types';
+import type { EngineManifest, EngineLayer } from './types';
 
 export const ENGINE_REGISTRY: Record<string, EngineManifest> = {
+
+  // ═══════════════════════════════════════════════
+  // PROCESSING ENGINES (execute in pipeline order)
+  // ═══════════════════════════════════════════════
 
   ScrollContent: {
     name: 'ScrollContent',
     version: '3.0.0',
     status: 'active',
+    layer: 'processing',
     description: 'Book-type-aware content generation with multi-pass intellectual pipeline',
     capabilities: [
       'Book-type-aware generation (10 types)',
@@ -40,6 +48,7 @@ export const ENGINE_REGISTRY: Record<string, EngineManifest> = {
     name: 'ScrollVisual',
     version: '2.0.0',
     status: 'active',
+    layer: 'processing',
     description: 'Visual Intelligence System with cognitive value scoring and book-type rendering',
     capabilities: [
       'Three-stage pipeline (Detect → Classify → Render)',
@@ -64,10 +73,40 @@ export const ENGINE_REGISTRY: Record<string, EngineManifest> = {
     dependencies: ['ScrollContent'],
   },
 
+  ScrollIntegrity: {
+    name: 'ScrollIntegrity',
+    version: '1.5.0',
+    status: 'active',
+    layer: 'processing',
+    description: 'Academic trust, citation verification, and AI authorship governance',
+    capabilities: [
+      'Assessment integrity scoring (0-100%)',
+      'Anti-cheating detection (typing patterns, tab switching, paste detection)',
+      'Citation verification (DOI similarity ≥ 0.8)',
+      'Epistemic coherence auditing',
+      'SHA-256 cryptographic audit trail',
+      'Content ownership tracking (AI vs user-authored)',
+      'AI disclosure in exports',
+      'Integrity logs via SECURITY DEFINER function',
+      'Reference compliance panel',
+      'Book provenance tracking (Contract 12)',
+    ],
+    gaps: [
+      'Source traceability panel (claim → source mapping)',
+      'Derivative-risk detector (similarity to training data)',
+      'AI disclosure watermark in exported documents',
+      'Plagiarism similarity scoring against external corpus',
+      'Institutional audit export (CSV/JSON for compliance)',
+      'FERPA/GDPR compliance certification',
+    ],
+    dependencies: ['ScrollContent', 'ScrollMastery'],
+  },
+
   ScrollMastery: {
     name: 'ScrollMastery',
     version: '2.0.0',
     status: 'active',
+    layer: 'processing',
     description: 'Competency verification with Bloom enforcement, SRS, and adaptive difficulty',
     capabilities: [
       'Semantic concept extraction (10-20 constructs/chapter)',
@@ -94,38 +133,11 @@ export const ENGINE_REGISTRY: Record<string, EngineManifest> = {
     dependencies: ['ScrollContent'],
   },
 
-  ScrollIntegrity: {
-    name: 'ScrollIntegrity',
-    version: '1.5.0',
-    status: 'active',
-    description: 'Academic trust, citation verification, and AI authorship governance',
-    capabilities: [
-      'Assessment integrity scoring (0-100%)',
-      'Anti-cheating detection (typing patterns, tab switching, paste detection)',
-      'Citation verification (DOI similarity ≥ 0.8)',
-      'Epistemic coherence auditing',
-      'SHA-256 cryptographic audit trail',
-      'Content ownership tracking (AI vs user-authored)',
-      'AI disclosure in exports',
-      'Integrity logs via SECURITY DEFINER function',
-      'Reference compliance panel',
-      'Book provenance tracking (Contract 12)',
-    ],
-    gaps: [
-      'Source traceability panel (claim → source mapping)',
-      'Derivative-risk detector (similarity to training data)',
-      'AI disclosure watermark in exported documents',
-      'Plagiarism similarity scoring against external corpus',
-      'Institutional audit export (CSV/JSON for compliance)',
-      'FERPA/GDPR compliance certification',
-    ],
-    dependencies: ['ScrollContent', 'ScrollMastery'],
-  },
-
   ScrollPublish: {
     name: 'ScrollPublish',
     version: '1.5.0',
     status: 'active',
+    layer: 'processing',
     description: 'Professional export, typesetting, and publishing-ready artifact generation',
     capabilities: [
       'PDF export with professional typesetting',
@@ -152,10 +164,15 @@ export const ENGINE_REGISTRY: Record<string, EngineManifest> = {
     dependencies: ['ScrollContent', 'ScrollVisual', 'ScrollIntegrity'],
   },
 
+  // ═══════════════════════════════════════════════
+  // GOVERNANCE LAYER (supervisory, not in pipeline)
+  // ═══════════════════════════════════════════════
+
   ScrollInstitution: {
     name: 'ScrollInstitution',
     version: '0.5.0',
     status: 'beta',
+    layer: 'governance',
     description: 'Institutional governance, roles, and organizational learning infrastructure',
     capabilities: [
       'Role-based access (admin, moderator, user)',
@@ -184,17 +201,20 @@ export const ENGINE_REGISTRY: Record<string, EngineManifest> = {
 
 };
 
-/** Get all engines in pipeline execution order */
-export function getPipelineOrder(): EngineManifest[] {
-  const order: (keyof typeof ENGINE_REGISTRY)[] = [
-    'ScrollContent',
-    'ScrollVisual',
-    'ScrollIntegrity',
-    'ScrollMastery',
-    'ScrollPublish',
-    'ScrollInstitution',
-  ];
+/** Get processing engines in pipeline execution order */
+export function getProcessingPipeline(): EngineManifest[] {
+  const order = ['ScrollContent', 'ScrollVisual', 'ScrollIntegrity', 'ScrollMastery', 'ScrollPublish'];
   return order.map(name => ENGINE_REGISTRY[name]);
+}
+
+/** Get governance layer engines */
+export function getGovernanceEngines(): EngineManifest[] {
+  return Object.values(ENGINE_REGISTRY).filter(e => e.layer === 'governance');
+}
+
+/** @deprecated Use getProcessingPipeline() instead */
+export function getPipelineOrder(): EngineManifest[] {
+  return [...getProcessingPipeline(), ...getGovernanceEngines()];
 }
 
 /** Get engines by status */
@@ -202,11 +222,20 @@ export function getEnginesByStatus(status: EngineManifest['status']): EngineMani
   return Object.values(ENGINE_REGISTRY).filter(e => e.status === status);
 }
 
+/** Get engines by layer */
+export function getEnginesByLayer(layer: EngineLayer): EngineManifest[] {
+  return Object.values(ENGINE_REGISTRY).filter(e => e.layer === layer);
+}
+
 /** Get total capability and gap counts */
 export function getSystemHealth() {
   const engines = Object.values(ENGINE_REGISTRY);
+  const processing = engines.filter(e => e.layer === 'processing');
+  const governance = engines.filter(e => e.layer === 'governance');
   return {
     totalEngines: engines.length,
+    processingEngines: processing.length,
+    governanceEngines: governance.length,
     activeEngines: engines.filter(e => e.status === 'active').length,
     totalCapabilities: engines.reduce((sum, e) => sum + e.capabilities.length, 0),
     totalGaps: engines.reduce((sum, e) => sum + e.gaps.length, 0),
