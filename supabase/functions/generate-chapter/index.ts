@@ -4321,12 +4321,7 @@ REFERENCE STRUCTURE (MANDATORY):
 8. CROSS-REFERENCES — Explicit links to related chapters/topics
 9. GLOSSARY — Key terms with brief definitions
 
-ILLUSTRATION PLACEMENT (MANDATORY):
-Insert 2-3 [FIGURE X: description] markers for:
-- Architecture diagrams, taxonomy trees, or system overviews
-- Process flowcharts or decision trees
-- Comparison charts or visual quick-reference guides
-Example: [FIGURE 1: A taxonomy tree showing the classification of machine learning algorithms by type]
+(Visual Intelligence Engine handles figure placement — follow its rules from the system prompt.)
 
 REQUIREMENTS:
 - Approximately ${targetWords} words
@@ -4334,7 +4329,7 @@ REQUIREMENTS:
 - Include at least 3 reference/comparison tables
 - Optimize for scanning and quick lookup — use consistent formatting
 - Every entry must be self-contained and findable
-- Include 2-3 [FIGURE X: description] markers
+- Follow Visual Intelligence Engine rules for [FIGURE X] placement
 - Concept Budget: define and catalog 12-20 distinct entries or concepts
 ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts' : ''}
 
