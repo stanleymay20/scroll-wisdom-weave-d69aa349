@@ -433,6 +433,7 @@ export function extractFigureSpecs(
     const renderMode = resolveRenderMode(visualType, bookType);
 
     const spec: FigureSpec = {
+      figureNumber: marker.num, // v2.1: Use actual parsed figure number, not array index
       chapter: chapterNumber,
       section: extractSectionTitle(content, content.indexOf(marker.fullMatch)),
       bookType,
