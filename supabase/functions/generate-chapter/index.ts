@@ -4245,6 +4245,8 @@ ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
 
+${buildVisualIntelligencePrompt('professional', chapterNumber, targetWords)}
+
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
       chapterPrompt = `${previousChaptersContext}Write a PROFESSIONAL GUIDE Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
