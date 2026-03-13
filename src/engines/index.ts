@@ -3,6 +3,7 @@
  * ================================
  * 6-Engine Architecture
  *
+ * Processing Pipeline:
  *   Topic / Source Material
  *           ↓
  *   ScrollContent    — Generate structured learning content
@@ -14,32 +15,57 @@
  *   ScrollMastery    — Prove learning happened
  *           ↓
  *   ScrollPublish    — Package into publishable artifacts
- *           ↓
- *   ScrollInstitution — Govern for organizational adoption
+ *
+ * Governance Layer:
+ *   ScrollInstitution — Supervisory controls around the pipeline
  */
 
-// Core types
+// ─── Core Types ──────────────────────────────────────────
 export type {
   EngineName,
+  ProcessingEngineName,
+  GovernanceEngineName,
   EngineStatus,
+  EngineLayer,
   EngineManifest,
   BookContext,
   ChapterContext,
   EngineResult,
+  EngineModule,
   PipelineStage,
+  GovernanceCheck,
   PipelineEvent,
   PipelinePlan,
+  PipelineRunResult,
 } from './types';
 
-// Engine registry
+export { STAGE_ENGINE_MAP } from './types';
+
+// ─── Engine Registry ─────────────────────────────────────
 export {
   ENGINE_REGISTRY,
+  getProcessingPipeline,
+  getGovernanceEngines,
   getPipelineOrder,
   getEnginesByStatus,
+  getEnginesByLayer,
   getSystemHealth,
 } from './registry';
 
-// Engine modules (re-export organized feature maps)
+// ─── Pipeline Runner ─────────────────────────────────────
+export { PipelineRunner, pipelineRunner } from './pipeline-runner';
+
+// ─── Executable Engine Modules ───────────────────────────
+export {
+  ScrollContentEngine,
+  ScrollVisualEngine,
+  ScrollIntegrityEngine,
+  ScrollMasteryEngine,
+  ScrollPublishEngine,
+  ScrollInstitutionEngine,
+} from './modules';
+
+// ─── Feature Maps (re-exports for component access) ─────
 export * as ScrollContent from './scroll-content';
 export * as ScrollVisual from './scroll-visual';
 export * as ScrollMastery from './scroll-mastery';
