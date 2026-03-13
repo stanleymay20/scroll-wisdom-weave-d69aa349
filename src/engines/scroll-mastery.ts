@@ -28,11 +28,6 @@ export {
   createTypingTracker,
 } from '@/lib/assessmentIntegrity';
 
-// ─── Mastery Engine Core ─────────────────────────────────
-export { masteryEngine } from '@/lib/masteryEngine';
-export { multiTierAssessment } from '@/lib/multiTierAssessment';
-export { assessmentRigorContract } from '@/lib/assessmentRigorContract';
-
 // ─── Spaced Repetition ───────────────────────────────────
 export { useSpacedRepetition } from '@/hooks/useSpacedRepetition';
 
@@ -70,6 +65,14 @@ export {
   validateCertificateIntegrity,
 } from '@/lib/certificateAuthority';
 
-export { certificateEligibility } from '@/lib/certificateEligibility';
-export { competencyCertification } from '@/lib/competencyCertification';
-export { competencyManifest } from '@/lib/competencyManifest';
+export type {
+  CertificateEligibilityResult,
+} from '@/lib/certificateEligibility';
+
+export type {
+  CompetencyCertificate,
+} from '@/lib/competencyCertification';
+
+export type {
+  CompetencyManifest,
+} from '@/lib/competencyManifest';

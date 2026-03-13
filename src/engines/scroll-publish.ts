@@ -11,7 +11,6 @@
 export { ExportDialog } from '@/components/books/ExportDialog';
 export { EXPORT_FORMATS } from '@/lib/config';
 export type { ExportFormat } from '@/lib/config';
-export { exportValidation } from '@/lib/exportValidation';
 
 // ─── Book Presentation ──────────────────────────────────
 export { BookCard } from '@/components/books/BookCard';
@@ -32,7 +31,6 @@ export { ChapterVideoGenerator } from '@/components/reader/ChapterVideoGenerator
 
 // ─── Learning Deck Export ────────────────────────────────
 export { SlideViewer } from '@/components/decks/SlideViewer';
-export { exportLearningDeck } from '@/lib/exportLearningDeck';
 
 // ─── Reader Experience ───────────────────────────────────
 export { ReaderSettingsPanel } from '@/components/reader/ReaderSettingsPanel';

@@ -19,15 +19,11 @@ export { CollaborationPanel } from '@/components/books/CollaborationPanel';
 export { PresenceAvatars } from '@/components/reader/PresenceAvatars';
 export { useCollaboration } from '@/hooks/useCollaboration';
 
-// ─── Moderation ──────────────────────────────────────────
-// ModerationDashboard page handles content review queue
-
 // ─── Subscription & Entitlements ─────────────────────────
 export { RequiresPlan } from '@/components/subscription/RequiresPlan';
 export { LaunchBanner } from '@/components/subscription/LaunchBanner';
 export { TrialBanner } from '@/components/subscription/TrialBanner';
-export { subscription } from '@/lib/subscription';
-export { libraryLimits } from '@/lib/libraryLimits';
+export { LIBRARY_LIMITS } from '@/lib/libraryLimits';
 export { useLibraryLimits } from '@/hooks/useLibraryLimits';
 
 // ─── Diagnostics & Health ────────────────────────────────

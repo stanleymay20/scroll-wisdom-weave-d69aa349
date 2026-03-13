@@ -7,10 +7,6 @@
  * Owns: Figure detection, classification, rendering, covers
  */
 
-// ─── Visual Intelligence (Backend Shared) ────────────────
-// Note: Core visual-intelligence.ts lives in supabase/functions/_shared/
-// and is used by generate-chapter and generate-image edge functions.
-
 // ─── Figure Rendering ────────────────────────────────────
 export { FigureRenderer } from '@/components/reader/FigureRenderer';
 
@@ -39,9 +35,7 @@ export {
 export { CoverUpload } from '@/components/books/CoverUpload';
 
 // ─── Visual Contracts ────────────────────────────────────
-export { illustratedContentContract } from '@/lib/illustratedContentContract';
-export { visualStyleConsistency } from '@/lib/visualStyleConsistency';
-export { visualReferenceAssessment } from '@/lib/visualReferenceAssessment';
+export { validateStyleConsistency } from '@/lib/visualStyleConsistency';
 
 // ─── Instructional Visuals ───────────────────────────────
 export { InstructionalVisual } from '@/components/decks/InstructionalVisual';

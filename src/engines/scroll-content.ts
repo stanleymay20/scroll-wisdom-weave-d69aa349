@@ -8,7 +8,6 @@
 
 // ─── Configuration ───────────────────────────────────────
 export { FEATURES, LAUNCH_MODE_CONFIG } from '@/lib/config';
-export { bookTypeGovernance } from '@/lib/bookTypeGovernance';
 
 // ─── Generation UI Components ────────────────────────────
 export {
@@ -34,7 +33,7 @@ export {
 } from '@/components/reader';
 
 // ─── Chapter Management ─────────────────────────────────
-export { ChapterList, ChapterManagement } from '@/components/books';
+export { ChapterManagement } from '@/components/books/ChapterManagement';
 
 // ─── Academic Mode ───────────────────────────────────────
 export { ContentModeSelector } from '@/components/academic/ContentModeSelector';
@@ -42,8 +41,4 @@ export { AcademicModeIndicator } from '@/components/academic/AcademicModeIndicat
 export { AcademicDisclaimer } from '@/components/academic/AcademicDisclaimer';
 
 // ─── Content Determinism & Validation ────────────────────
-export { contentDeterminism } from '@/lib/contentDeterminism';
-export { validateContract3 } from '@/lib/contract3Validation';
-
-// ─── API Layer ───────────────────────────────────────────
-export { api } from '@/lib/api';
+export { ContentDeterminism } from '@/lib/contentDeterminism';
