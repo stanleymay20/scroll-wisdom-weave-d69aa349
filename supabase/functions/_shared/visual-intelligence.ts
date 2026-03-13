@@ -574,6 +574,6 @@ export function generateMermaidHint(spec: FigureSpec): string | null {
 export function summarizeFigureSpecs(specs: FigureSpec[]): string {
   if (specs.length === 0) return 'No figures';
   return specs.map(s =>
-    `Fig${s.chapter}.${specs.indexOf(s) + 1}: ${s.visualType} (score:${s.cognitiveScore}, render:${s.renderMode}, placement:${s.placement})`
+    `Fig${s.chapter}.${s.figureNumber}: ${s.visualType} (score:${s.cognitiveScore}, render:${s.renderMode}, placement:${s.placement})`
   ).join(' | ');
 }
