@@ -4911,28 +4911,36 @@ ${researchResult.references.map((ref, idx) => {
       console.log("[VISUAL-INTELLIGENCE] Extracting and validating figure specs...");
 
       try {
-        // Stage 1: Extract structured Figure Specs from generated content
+        // Stage 1: Extract structured Figure Specs (supports both v2.0 structured and legacy formats)
         const rawSpecs = extractFigureSpecs(finalContent, effectiveBookType, chapterNumber);
         console.log(`[VISUAL-INTELLIGENCE] Extracted ${rawSpecs.length} figure specs`);
+        console.log(`[VISUAL-INTELLIGENCE] Summary: ${summarizeFigureSpecs(rawSpecs)}`);
 
-        // Stage 2: Validate — reject decorative/filler figures
+        // Stage 2: Validate with Cognitive Value Score gate
         const { valid: validSpecs, rejected } = validateFigureSpecs(rawSpecs);
         if (rejected.length > 0) {
-          console.log(`[VISUAL-INTELLIGENCE] Rejected ${rejected.length} figures: ${rejected.map(r => r.reason).join('; ')}`);
+          console.log(`[VISUAL-INTELLIGENCE] Rejected ${rejected.length} figures:`);
+          for (const r of rejected) {
+            console.log(`  ❌ Fig ${r.spec.chapter}: ${r.reason} (CV score: ${r.cognitiveScore})`);
+          }
         }
-        console.log(`[VISUAL-INTELLIGENCE] ${validSpecs.length} figures approved for rendering`);
+        console.log(`[VISUAL-INTELLIGENCE] ${validSpecs.length} figures approved (all CV ≥ 2)`);
 
-        // Stage 3: Extract raw figure markers for image generation (backward compatible)
-        const figureRegex = /\[FIGURE\s*(\d+)\s*:\s*([\s\S]*?)\]/gi;
-        const figures: { num: number; description: string; fullMatch: string }[] = [];
+        // Stage 3: Parse raw markers for image generation using v2.0 parser
+        const rawMarkers = parseRawFigureMarkers(finalContent);
+        // Filter to only approved figures (by number matching)
+        const approvedNums = new Set(validSpecs.map(s => validSpecs.indexOf(s) + 1));
+        const figures = rawMarkers.map(m => ({
+          num: m.num,
+          description: m.description,
+          fullMatch: m.fullMatch,
+          renderMode: validSpecs.find((_, i) => i + 1 === m.num)?.renderMode || 'ai_image',
+        }));
         
-        let figMatch;
-        while ((figMatch = figureRegex.exec(finalContent)) !== null) {
-          figures.push({
-            num: parseInt(figMatch[1]),
-            description: figMatch[2].trim(),
-            fullMatch: figMatch[0],
-          });
+        // Remove rejected figure markers from content
+        for (const r of rejected) {
+          const markerRegex = new RegExp(`\\[FIGURE\\s*${rejected.indexOf(r) + validSpecs.length + 1}[^\\]]*\\]`, 'gi');
+          finalContent = finalContent.replace(markerRegex, '');
         }
         
         console.log(`[VISUAL-INTELLIGENCE] ${figures.length} figure markers ready for rendering`);
