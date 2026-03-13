@@ -91,13 +91,8 @@ ENHANCE WITH:
 - Code examples with proper formatting (for technical topics, ≥40% of content)
 - Graduated exercises (Easy → Medium → Hard) at chapter end
 
-ILLUSTRATION SUPPORT:
-Include 1-2 [FIGURE X: description] markers for:
-- Academic diagrams, conceptual frameworks, or taxonomy trees
-- Process flow diagrams or architecture overviews
-- Labeled charts or comparison matrices
-
 TONE: Rigorous, instructional, evidence-based. NO metaphors. NO storytelling. NO motivational content.
+(Figure placement governed by Visual Intelligence Engine — do not hardcode figure counts here.)
 FORBIDDEN: Hero's journey framing. Emotional appeals. Marketing language.`;
 
 const MICRO_CONTRACT_PROFESSIONAL = `PIPELINE: PROFESSIONAL / BUSINESS GUIDE
