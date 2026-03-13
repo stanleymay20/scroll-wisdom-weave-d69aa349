@@ -4911,7 +4911,7 @@ ${researchResult.references.map((ref, idx) => {
     // UNIVERSAL ILLUSTRATION PIPELINE — Generate inline illustrations from [FIGURE X] markers
     // Applies to ALL book types that include [FIGURE] markers in their micro-contracts
     // Upload images to storage instead of embedding base64 (prevents 5-10MB chapter content)
-    const ILLUSTRATION_ENABLED_TYPES = ['illustrated', 'children', 'professional', 'reference', 'bestseller'];
+    const ILLUSTRATION_ENABLED_TYPES = ['illustrated', 'children', 'professional', 'reference', 'bestseller', 'academic', 'technical', 'fiction', 'comic', 'workbook'];
     if (ILLUSTRATION_ENABLED_TYPES.includes(effectiveBookType) && /\[FIGURE\s*\d+/i.test(finalContent)) {
       console.log("[GENERATE-CHAPTER] Generating inline illustrations from figure markers...");
 
