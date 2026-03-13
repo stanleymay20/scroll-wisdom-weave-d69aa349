@@ -11,6 +11,7 @@
 // ===========================================
 
 export interface FigureSpec {
+  figureNumber: number; // v2.1: Explicit figure identity — never derived from array index
   chapter: number;
   section: string;
   bookType: string;
