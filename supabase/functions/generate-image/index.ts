@@ -104,7 +104,14 @@ serve(async (req) => {
     // Use premium model only if user has premium plan
     const effectiveIsPremium = isPremium && isPremiumPlan;
 
-    logStep("Generating image", { prompt: prompt.slice(0, 100), style, bookType, plan: userPlan });
+    logStep("Generating image", { 
+      prompt: effectivePrompt.slice(0, 100), 
+      style, 
+      bookType: effectiveBookType, 
+      plan: userPlan,
+      hasFigureSpec: !!figureSpec,
+      visualType: figureSpec?.visualType,
+    });
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
