@@ -4937,6 +4937,22 @@ ${researchResult.references.map((ref, idx) => {
           // Each book type gets a tailored visual identity
           // ===========================================
           const BOOK_TYPE_ART_DIRECTION: Record<string, string> = {
+            academic: `ACADEMIC TEXTBOOK — SCHOLARLY DIAGRAM QUALITY:
+Art style: Clean academic diagrams, labeled charts, conceptual frameworks. Minimal color, vector style.
+Composition: Clear visual hierarchy with labeled components, proper axes, annotated callouts.
+Elements: Process diagrams, taxonomy trees, risk matrices, architecture diagrams, conceptual frameworks.
+Color palette: Minimal — navy (#1E3A5F), slate (#475569), white backgrounds. Accent color for emphasis only.
+Quality: University textbook figure standard. Every element labeled. Optimized for print and screen clarity.
+Avoid: Decorative artwork, cartoon graphics, narrative scenes.`,
+
+            technical: `TECHNICAL GUIDE — SYSTEM ARCHITECTURE QUALITY:
+Art style: System architecture diagrams, flowcharts, technical process visuals with labeled modules.
+Composition: Structured layout with clear flow direction, numbered steps, connection lines between components.
+Elements: Software architecture boxes, pipeline diagrams, network topology, API flow diagrams, database schemas.
+Color palette: Professional tech — dark blue (#1E40AF), cyan (#06B6D4), gray (#6B7280), white backgrounds.
+Annotation: Every module labeled. Data flow arrows. Version indicators where relevant.
+Quality: Engineering documentation standard. Clear at any zoom level.`,
+
             children: `CHILDREN'S PICTURE BOOK — PUBLICATION QUALITY:
 Art style: Soft watercolor with digital refinement, rounded organic shapes, warm inviting palette.
 Characters: Expressive faces with large eyes, gentle proportions, age-appropriate (4-8 year old protagonists).
@@ -4947,47 +4963,55 @@ Quality: Caldecott Medal standard. Print-ready 300dpi aesthetic. No harsh edges 
 
             illustrated: `ILLUSTRATED BOOK — EDITORIAL QUALITY:
 Art style: Modern editorial illustration with sophisticated color theory, balanced between realism and stylization.
-Composition: Dynamic layouts with intentional negative space, golden ratio framing, layered depth (foreground/midground/background).
-Color palette: Rich, saturated palette with complementary accents. Muted earth tones for grounding, vivid highlights for emphasis.
-Lighting: Dramatic directional lighting with volumetric atmosphere, rim highlights, subsurface scattering on organic elements.
-Detail: Texture-rich surfaces (fabric weave, wood grain, metal patina). Environmental storytelling through background details.
-Quality: Museum-quality illustration. Every element serves the narrative. Cinematic composition with intentional camera angles.`,
+Composition: Dynamic layouts with intentional negative space, golden ratio framing, layered depth.
+Color palette: Rich, saturated with complementary accents. Muted earth tones for grounding, vivid highlights for emphasis.
+Lighting: Dramatic directional lighting with volumetric atmosphere, rim highlights, subsurface scattering.
+Detail: Texture-rich surfaces. Environmental storytelling through background details.
+Quality: Museum-quality illustration. Every element serves the narrative.`,
 
             professional: `PROFESSIONAL/BUSINESS BOOK — INFOGRAPHIC QUALITY:
 Art style: Clean, modern infographic design. Flat design with subtle gradients and isometric elements.
 Composition: Grid-based layout with clear visual hierarchy. Data-first design with labeled axes and legends.
-Color palette: Corporate-grade palette — navy (#1B2A4A), teal (#0D9488), warm amber (#F59E0B), slate gray (#64748B). White backgrounds.
-Elements: Crisp geometric shapes, precise alignment, professional iconography, annotated callouts.
+Color palette: Corporate-grade — navy (#1B2A4A), teal (#0D9488), warm amber (#F59E0B), slate gray (#64748B). White backgrounds.
+Elements: Strategic frameworks, 2x2 matrices, decision trees, implementation roadmaps, competitive positioning maps.
 Charts/Diagrams: Publication-ready with proper axis labels, data points, trend lines, and clear legends.
 Quality: McKinsey/Harvard Business Review standard. Boardroom-presentable. Zero decorative clutter.`,
 
             reference: `REFERENCE/HANDBOOK — TECHNICAL DIAGRAM QUALITY:
 Art style: Precise technical illustration with clean vector aesthetics. Blueprint-inspired with modern refinement.
 Composition: Structured grid layout, systematic labeling, numbered callouts, clear flow direction arrows.
-Color palette: High-contrast with purpose — blue (#2563EB) for primary elements, red (#DC2626) for warnings/critical, green (#16A34A) for success/positive, neutral gray (#6B7280) for secondary.
-Elements: Flowchart nodes with rounded rectangles, decision diamonds, process arrows, taxonomy branches with clear hierarchy.
+Color palette: High-contrast — blue (#2563EB) for primary, red (#DC2626) for warnings, green (#16A34A) for success, gray (#6B7280) for secondary.
+Elements: Classification trees, comparison charts, taxonomy diagrams, decision flowcharts, summary visuals.
 Annotation: Every element labeled. Cross-reference numbers. Scale indicators where relevant.
 Quality: Engineering manual standard. ISO-compliant visual language. Optimized for print clarity at any size.`,
 
             bestseller: `BESTSELLER/TRADE BOOK — CONCEPT VISUALIZATION:
 Art style: Bold, memorable concept art that makes abstract ideas tangible. Modern illustration with metaphorical depth.
 Composition: Strong central metaphor with supporting visual elements. Cinematic framing with dramatic perspective.
-Color palette: High-impact palette — deep navy backgrounds with gold/amber highlights, or clean white with bold accent colors. Maximum 3 colors per image.
+Color palette: High-impact — deep navy backgrounds with gold/amber highlights, or clean white with bold accent colors. Maximum 3 colors per image.
 Elements: Visual metaphors (icebergs for hidden depth, compasses for direction, bridges for connection), transformation arcs, before/after contrasts.
-Lighting: Dramatic chiaroscuro for emphasis. Spotlight effects on key concepts. Atmospheric depth with subtle fog/glow.
+Lighting: Dramatic chiaroscuro for emphasis. Spotlight effects on key concepts. Atmospheric depth with subtle glow.
 Quality: TED Talk slide quality. Instantly shareable. The image alone should communicate the core idea.`,
 
             comic: `COMIC BOOK — PUBLICATION QUALITY:
 Art style: Dynamic comic art with bold ink lines, dramatic foreshortening, speed lines for action.
 Composition: Panel-ready framing with gutters in mind. Dutch angles for tension, worm-eye for power, bird-eye for scope.
 Color palette: Saturated comic palette with cel-shading, halftone dots for shadows, rim lighting on characters.
-Characters: Expressive with exaggerated emotion, dynamic poses, consistent character design across panels.
+Characters: Expressive with exaggerated emotion, dynamic poses, consistent character design.
 Quality: Marvel/DC publication standard. Print-ready with proper bleed areas.`,
+
+            fiction: `FICTION/NOVEL — CINEMATIC SCENE ILLUSTRATION:
+Art style: Cinematic scene illustrations with rich atmosphere and mood. Character environments with emotional depth.
+Composition: Wide establishing shots for settings, medium shots for character moments, dramatic lighting for tension.
+Color palette: Mood-driven — warm golden tones for comfort, cool blues for mystery, deep shadows for tension.
+Elements: Setting visuals, character silhouettes, atmospheric scenes, symbolic imagery.
+Lighting: Cinematic with volumetric atmosphere, god rays, dusk/dawn palettes, firelight warmth.
+Quality: Novel cover art standard. Evocative and atmospheric.`,
 
             workbook: `WORKBOOK/EDUCATIONAL — INSTRUCTIONAL DIAGRAM:
 Art style: Clean instructional design with friendly, approachable aesthetics. Step-by-step visual clarity.
 Composition: Sequential layout with numbered steps, clear start/end points, progress indicators.
-Color palette: Encouraging and accessible — soft blue (#3B82F6), warm orange (#F97316), green (#22C55E) for correct/complete, light backgrounds.
+Color palette: Encouraging — soft blue (#3B82F6), warm orange (#F97316), green (#22C55E), light backgrounds.
 Elements: Annotated examples, fill-in areas indicated, comparison side-by-sides, progress trackers.
 Quality: Textbook-grade. Optimized for both screen and print. Accessible to diverse learning styles.`,
           };
