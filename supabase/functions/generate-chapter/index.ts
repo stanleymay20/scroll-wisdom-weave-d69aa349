@@ -3584,6 +3584,8 @@ ${MASTER_FORMATTING_CONTRACT}
 
 ${ACADEMIC_CONTRACT}
 
+${buildVisualIntelligencePrompt('academic', chapterNumber, targetWords)}
+
 ${VALIDATION_CONTRACT}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.
