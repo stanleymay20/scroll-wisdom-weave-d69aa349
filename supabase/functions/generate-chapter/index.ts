@@ -108,13 +108,8 @@ This chapter must introduce and clearly explain 8-12 distinct NAMED strategic co
 Named concepts include: frameworks, models, matrices, methodologies, principles, laws, effects.
 Example: say "Porter's Value Chain Analysis" not "analyzing how companies create value."
 
-ILLUSTRATION SUPPORT:
-Include 2-3 [FIGURE X: description] markers for:
-- Process diagrams or strategic frameworks
-- Decision trees or implementation roadmaps
-- Competitive positioning maps or market matrices
-
 TONE: Professional, authoritative, practical. Like a McKinsey consultant presenting to C-suite. Data-driven, precise, actionable.
+(Figure placement governed by Visual Intelligence Engine — do not hardcode figure counts here.)
 FORBIDDEN: Academic dryness. Motivational fluff. Vague advice without specifics. Generic recommendations without measurable outcomes.`;
 
 const MICRO_CONTRACT_REFERENCE = `PIPELINE: REFERENCE / HANDBOOK
