@@ -71,13 +71,8 @@ This chapter must introduce and clearly explain 6-10 distinct NAMED concepts.
 Named concepts include: principles, effects, laws, frameworks, mental models.
 Give ideas sticky, memorable names. Example: say "Loss Aversion Bias" not "people don't like losing things."
 
-ILLUSTRATION SUPPORT:
-Include 2-3 [FIGURE X: description] markers for:
-- Key concept visualizations or framework diagrams
-- Before/after comparisons or transformation arcs
-- Data charts or statistical evidence graphics
-
 TONE: Conversational authority. Written TO the reader. Confident, human, slightly confrontational. Like talking to a brilliant friend who challenges your assumptions.
+(Figure placement governed by Visual Intelligence Engine — do not hardcode figure counts here.)
 FORBIDDEN: Academic dryness. Over-explaining. Hedging language ("it could be argued"). Generic advice. AI-sounding transitions.`;
 
 const MICRO_CONTRACT_ACADEMIC = `PIPELINE: ACADEMIC / TECHNICAL
