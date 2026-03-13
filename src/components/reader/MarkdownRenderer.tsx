@@ -186,10 +186,56 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     return { blocks: result.blocks, cleanedAfterEvidence: result.cleanedText };
   }, [processedContent]);
 
-  const { blocks: structuredBlocks, cleanedText } = useMemo(() => {
-    if (!cleanedAfterEvidence) return { blocks: [], cleanedText: "" };
-    return extractAllStructuredCodeBlocks(cleanedAfterEvidence);
+  // Extract [FIGURE] markers for FigureRenderer integration
+  interface ParsedFigureMarker {
+    figureNumber: number;
+    type: string;
+    caption: string;
+    description: string;
+    renderMode: RenderMode;
+  }
+
+  const { figureMarkers, cleanedAfterFigures } = useMemo(() => {
+    if (!cleanedAfterEvidence) return { figureMarkers: [] as ParsedFigureMarker[], cleanedAfterFigures: "" };
+    
+    const markers: ParsedFigureMarker[] = [];
+    let text = cleanedAfterEvidence;
+
+    // v2.0 Structured: [FIGURE X\nTYPE: ...\nCAPTION: ...\nDESCRIPTION: ...\n]
+    const structuredRegex = /\[FIGURE\s*(\d+)\s*\n\s*TYPE:\s*([^\n]+)\n\s*CAPTION:\s*([^\n]+)\n\s*DESCRIPTION:\s*([\s\S]*?)\]/gi;
+    text = text.replace(structuredRegex, (match, num, type, caption, desc) => {
+      const figNum = parseInt(num);
+      const visualType = type.trim().toLowerCase();
+      markers.push({
+        figureNumber: figNum,
+        type: visualType,
+        caption: caption.trim(),
+        description: desc.trim(),
+        renderMode: resolveRenderModeClient(visualType),
+      });
+      return `<!--FIGURE_MARKER_${markers.length - 1}-->`;
+    });
+
+    // Legacy: [FIGURE X: description]
+    text = text.replace(/\[FIGURE\s*(\d+)\s*:\s*([\s\S]*?)\]/gi, (match, num, desc) => {
+      const figNum = parseInt(num);
+      markers.push({
+        figureNumber: figNum,
+        type: 'labeled_illustration',
+        caption: desc.trim().split('.')[0] || `Figure ${figNum}`,
+        description: desc.trim(),
+        renderMode: 'ai_image',
+      });
+      return `<!--FIGURE_MARKER_${markers.length - 1}-->`;
+    });
+
+    return { figureMarkers: markers, cleanedAfterFigures: text };
   }, [cleanedAfterEvidence]);
+
+  const { blocks: structuredBlocks, cleanedText } = useMemo(() => {
+    if (!cleanedAfterFigures) return { blocks: [], cleanedText: "" };
+    return extractAllStructuredCodeBlocks(cleanedAfterFigures);
+  }, [cleanedAfterFigures]);
 
   const renderedContent = useMemo(() => {
     if (!cleanedText) return "";
