@@ -1,6 +1,9 @@
 // ===========================================
-// SCROLLLIBRARY VISUAL INTELLIGENCE ENGINE v1.0
+// SCROLLLIBRARY VISUAL INTELLIGENCE ENGINE v2.0
 // Three-Stage Pipeline: Detect → Classify → Render
+// + Cognitive Value Scoring
+// + Structured Figure Format
+// + Renderer Type Mapping
 // ===========================================
 
 // ===========================================
@@ -18,7 +21,26 @@ export interface FigureSpec {
   style: string;
   caption: string;
   imagePrompt: string;
+  // v2.0 additions
+  cognitiveScore: number;
+  renderMode: RenderMode;
+  structuredFields?: StructuredFigureFields;
 }
+
+export interface StructuredFigureFields {
+  type: VisualType;
+  caption: string;
+  description: string;
+  data?: string; // optional structured data for diagram renderers
+}
+
+export type RenderMode =
+  | 'ai_image'          // Generate via AI image model
+  | 'mermaid'           // Render as Mermaid diagram
+  | 'chart_component'   // Render as React chart (Recharts)
+  | 'table_component'   // Render as structured table
+  | 'svg_diagram'       // Render as custom SVG
+  | 'placeholder';      // Fallback text placeholder
 
 export type VisualType =
   | 'matrix'
@@ -50,8 +72,8 @@ export type FigurePlacement =
 // ===========================================
 
 export const VISUAL_DENSITY: Record<string, {
-  wordsPerFigure: [number, number]; // [min, max] words between figures
-  maxFigures: number;               // hard cap per chapter
+  wordsPerFigure: [number, number];
+  maxFigures: number;
   description: string;
 }> = {
   academic:     { wordsPerFigure: [800, 1200],  maxFigures: 2, description: 'diagrams only when conceptually useful' },
@@ -67,31 +89,129 @@ export const VISUAL_DENSITY: Record<string, {
 };
 
 // ===========================================
-// VISUAL NEED TRIGGERS
-// Section content patterns that warrant a visual
+// COGNITIVE VALUE SCORING ENGINE v1.0
+// Scores each figure on educational merit
 // ===========================================
 
-const VISUAL_TRIGGERS = [
-  'process explanation',
-  'hierarchy',
-  'taxonomy',
-  'comparison',
-  'risk',
-  'decision logic',
-  'system architecture',
-  'spatial relationship',
-  'narrative scene',
-  'storytelling moment',
-  'workflow',
-  'lifecycle',
-  'framework',
-  'matrix',
-  'classification',
-  'step-by-step',
-  'cause and effect',
-  'before and after',
-  'trade-off analysis',
-];
+interface CognitiveScoreResult {
+  score: number;
+  factors: { factor: string; points: number }[];
+}
+
+function computeCognitiveScore(description: string, visualType: VisualType, bookType: string): CognitiveScoreResult {
+  const d = description.toLowerCase();
+  const factors: { factor: string; points: number }[] = [];
+
+  // +3 Simplifies complexity (shows structure of a complex topic)
+  if (/simplif|break\s*down|overview|structure|organiz|hierarch|decompos/i.test(d)) {
+    factors.push({ factor: 'simplifies_complexity', points: 3 });
+  }
+
+  // +3 Shows relationships between concepts
+  if (/relationship|connect|link|depend|interact|influence|correlat|cause.*effect|flow.*between/i.test(d)) {
+    factors.push({ factor: 'shows_relationships', points: 3 });
+  }
+
+  // +2 Supports memory retention (named framework, memorable visual)
+  if (/framework|model|principle|matrix|map|mnemonic|acronym|visual.*metaphor/i.test(d)) {
+    factors.push({ factor: 'supports_retention', points: 2 });
+  }
+
+  // +2 Enables comparison/contrast
+  if (/compar|contrast|versus|vs\b|side.by.side|differ|advantage|disadvantage|trade.off/i.test(d)) {
+    factors.push({ factor: 'enables_comparison', points: 2 });
+  }
+
+  // +2 Demonstrates a process or sequence
+  if (/process|step|sequence|workflow|pipeline|lifecycle|phase|stage|procedure/i.test(d)) {
+    factors.push({ factor: 'demonstrates_process', points: 2 });
+  }
+
+  // +1 Contains specific data/quantitative elements
+  if (/data|statistic|percent|number|metric|score|axis|scale|measure/i.test(d)) {
+    factors.push({ factor: 'contains_data', points: 1 });
+  }
+
+  // +1 Has labeled components (indicates precision)
+  if (/label|annotated|callout|legend|caption|axis|component/i.test(d)) {
+    factors.push({ factor: 'has_labels', points: 1 });
+  }
+
+  // -3 Decorative (no educational substance)
+  if (/decorat|abstract.*art|gradient.*background|generic.*icon|stock|filler|beautif/i.test(d)) {
+    factors.push({ factor: 'decorative_penalty', points: -3 });
+  }
+
+  // -2 Vague description (lacks specificity)
+  if (description.length < 30 && !/diagram|chart|matrix|tree|flow/i.test(d)) {
+    factors.push({ factor: 'vague_description', points: -2 });
+  }
+
+  // -1 Redundant with text (just illustrating what was already said clearly)
+  if (/illustration.*of.*the.*text|visual.*representation.*of.*above/i.test(d)) {
+    factors.push({ factor: 'redundant_with_text', points: -1 });
+  }
+
+  // Book-type bonuses
+  if (bookType === 'children' || bookType === 'comic') {
+    // Narrative visuals are inherently valuable for visual-first formats
+    if (/scene|character|story|adventure|emotion|action/i.test(d)) {
+      factors.push({ factor: 'narrative_value_bonus', points: 2 });
+    }
+  }
+
+  if (bookType === 'fiction') {
+    if (/atmosphere|mood|setting|cinematic|dramatic/i.test(d)) {
+      factors.push({ factor: 'atmospheric_value_bonus', points: 2 });
+    }
+  }
+
+  const score = factors.reduce((sum, f) => sum + f.points, 0);
+  return { score, factors };
+}
+
+// Minimum cognitive score required for a figure to pass validation
+const MIN_COGNITIVE_SCORE = 2;
+
+// ===========================================
+// RENDER MODE MAPPING
+// Maps visual types to optimal rendering technology
+// ===========================================
+
+const RENDER_MODE_MAP: Record<VisualType, RenderMode> = {
+  flowchart:            'mermaid',
+  taxonomy_tree:        'mermaid',
+  lifecycle_model:      'mermaid',
+  architecture_diagram: 'mermaid',
+  concept_map:          'mermaid',
+  matrix:               'chart_component',
+  chart:                'chart_component',
+  comparison_visual:    'table_component',
+  step_by_step:         'table_component',
+  framework_diagram:    'ai_image',
+  workbook_template:    'ai_image',
+  comic_panel:          'ai_image',
+  children_illustration:'ai_image',
+  cinematic_scene:      'ai_image',
+  labeled_illustration: 'ai_image',
+  none:                 'placeholder',
+};
+
+// For certain book types, override render mode to always use AI images
+// (e.g., children's books should never show Mermaid diagrams)
+const BOOK_TYPE_RENDER_OVERRIDES: Record<string, RenderMode> = {
+  children: 'ai_image',
+  comic: 'ai_image',
+  fiction: 'ai_image',
+};
+
+export function resolveRenderMode(visualType: VisualType, bookType: string): RenderMode {
+  // Book-type override takes priority
+  if (BOOK_TYPE_RENDER_OVERRIDES[bookType]) {
+    return BOOK_TYPE_RENDER_OVERRIDES[bookType];
+  }
+  return RENDER_MODE_MAP[visualType] || 'ai_image';
+}
 
 // ===========================================
 // BOOK-TYPE → VISUAL STYLE MAPPING
@@ -111,8 +231,8 @@ export const VISUAL_STYLE_MAP: Record<string, string> = {
 };
 
 // ===========================================
-// VISUAL INTELLIGENCE MASTER PROMPT
-// Injected into generation to produce structured Figure Specs
+// VISUAL INTELLIGENCE MASTER PROMPT v2.0
+// Now includes structured figure format instructions
 // ===========================================
 
 export function buildVisualIntelligencePrompt(
@@ -122,12 +242,10 @@ export function buildVisualIntelligencePrompt(
 ): string {
   const density = VISUAL_DENSITY[bookType] || VISUAL_DENSITY.text;
   
-  // Text-only pipeline — no figures
   if (density.maxFigures === 0) {
     return `ILLUSTRATION POLICY: This is a TEXT-ONLY pipeline. Do NOT include any [FIGURE] markers, image placeholders, or illustration references.`;
   }
 
-  // Calculate recommended figure count based on word count and density
   const avgWordsPerFig = (density.wordsPerFigure[0] + density.wordsPerFigure[1]) / 2;
   const recommendedFigures = Math.min(
     Math.max(1, Math.round(wordCount / avgWordsPerFig)),
@@ -137,10 +255,10 @@ export function buildVisualIntelligencePrompt(
   const style = VISUAL_STYLE_MAP[bookType] || 'explanatory concept visual';
 
   return `
-=== VISUAL INTELLIGENCE ENGINE (MANDATORY) ===
+=== VISUAL INTELLIGENCE ENGINE v2.0 (MANDATORY) ===
 
-You are also the ScrollLibrary Visual Intelligence Engine for this chapter.
-Your job is to decide WHETHER a section needs an image, WHAT kind, and WHERE to place it.
+You are the ScrollLibrary Visual Intelligence Engine for this chapter.
+Decide WHETHER a section needs a visual, WHAT kind, and WHERE to place it.
 
 VISUAL DENSITY RULE for ${bookType.toUpperCase()}:
 - Place 1 figure every ${density.wordsPerFigure[0]}–${density.wordsPerFigure[1]} words
@@ -150,63 +268,142 @@ VISUAL DENSITY RULE for ${bookType.toUpperCase()}:
 - Purpose: ${density.description}
 
 STAGE A — VISUAL NEED DETECTION:
-Only insert a [FIGURE] marker if the section contains one of:
+Only insert a [FIGURE] if the section contains:
 - Process explanation or workflow
 - Hierarchy, taxonomy, or classification
 - Comparison of 2+ concepts
 - Risk/decision logic or trade-off analysis
 - System architecture or spatial relationship
-- Narrative scene or storytelling moment (fiction/children/comic)
 - Framework, matrix, or model application
 - Step-by-step procedure or lifecycle
-- Before/after transformation
+- Cause-and-effect or before/after transformation
+- Narrative scene or storytelling moment (fiction/children/comic only)
 
-If NONE of these triggers exist in the section: DO NOT generate a figure.
-Decorative images with no learning function are FORBIDDEN.
+If NONE exist: DO NOT generate a figure.
 
-STAGE B — VISUAL TYPE CLASSIFICATION:
-When a figure IS needed, classify it as one of:
-- matrix | chart | taxonomy_tree | flowchart
-- architecture_diagram | framework_diagram | concept_map
-- step_by_step | comparison_visual | lifecycle_model
-- workbook_template | comic_panel | children_illustration
-- cinematic_scene | labeled_illustration
+STAGE B — COGNITIVE VALUE CHECK:
+Every figure must score ≥ 2 on cognitive value:
++3 = Simplifies complexity (shows structure)
++3 = Shows relationships between concepts
++2 = Supports memory retention (named framework)
++2 = Enables comparison/contrast
++2 = Demonstrates a process or sequence
++1 = Contains specific data points
++1 = Has labeled components
+-3 = Decorative (no educational substance)
+-2 = Vague description
+-1 = Redundant with surrounding text
 
-STAGE C — PLACEMENT RULES:
-Place visuals:
+If score < 2: DO NOT include the figure.
+
+STAGE C — STRUCTURED FIGURE FORMAT:
+Use this EXACT format for each figure:
+
+[FIGURE X
+TYPE: <visual_type>
+CAPTION: <publication-ready caption>
+DESCRIPTION: <30-50 word detailed description for the renderer>
+]
+
+Supported TYPE values:
+matrix | chart | taxonomy_tree | flowchart | architecture_diagram
+framework_diagram | concept_map | step_by_step | comparison_visual
+lifecycle_model | labeled_illustration | comic_panel | children_illustration
+cinematic_scene | workbook_template
+
+Example for Professional Guide:
+[FIGURE 1
+TYPE: matrix
+CAPTION: Risk Prioritization Matrix for Operational Threats
+DESCRIPTION: A clean consulting-style 3x3 risk matrix with probability on Y-axis and impact on X-axis, labeled cells showing threat categories from low to critical, minimal professional palette
+]
+
+Example for Academic Textbook:
+[FIGURE 1
+TYPE: architecture_diagram
+CAPTION: Three-Stage Model of Memory Processing
+DESCRIPTION: A labeled conceptual framework showing encoding, storage, and retrieval stages with directional arrows indicating information flow, feedback loops, and decay pathways
+]
+
+LEGACY FALLBACK: Simple [FIGURE X: description] format is also accepted but the structured format is preferred.
+
+PLACEMENT RULES:
 ✅ After dense conceptual sections (reinforcement)
 ✅ Before complex explanations (priming)
 ✅ Between two difficult blocks (cognitive break)
 ✅ At section transitions (bridge)
+❌ No back-to-back visuals
+❌ No decorative gradients or filler
 
-DO NOT:
-❌ Place images at every section
-❌ Place back-to-back visuals
-❌ Use decorative gradients or filler
+FINAL CHECK:
+- Each figure scored ≥ 2 on cognitive value?
+- Figures spaced throughout (not clustered)?
+- Descriptions 30-50 words with specific elements?
+- Figure count ≤ ${density.maxFigures}?
 
-FIGURE MARKER FORMAT (MANDATORY):
-[FIGURE X: <30-50 word description specifying visual type, key elements, layout, and purpose>]
-
-Example for Professional Guide:
-[FIGURE 1: A clean consulting-style 3x3 risk matrix with probability on the Y-axis and impact on the X-axis, labeled cells showing threat categories, minimal professional palette]
-
-Example for Academic Textbook:
-[FIGURE 1: A labeled conceptual framework diagram showing the three-stage model of memory encoding, storage, and retrieval, with arrows indicating information flow and feedback loops]
-
-FINAL CHECK before output:
-- Did each figure earn its place by meeting a visual trigger? If not, remove it.
-- Are figures spaced throughout the chapter (not clustered)?
-- Does each description contain enough detail (30-50 words) for accurate image generation?
-- Is the figure count within the ${density.maxFigures}-figure cap?
-
-=== END VISUAL INTELLIGENCE ENGINE ===
+=== END VISUAL INTELLIGENCE ENGINE v2.0 ===
 `;
 }
 
 // ===========================================
-// POST-GENERATION FIGURE SPEC EXTRACTOR
-// Parses [FIGURE X: description] markers from generated content
-// and produces structured FigureSpec objects
+// STRUCTURED FIGURE PARSER v2.0
+// Supports both structured and legacy formats
+// ===========================================
+
+interface RawFigureMarker {
+  num: number;
+  fullMatch: string;
+  // Structured fields (v2.0)
+  type?: string;
+  caption?: string;
+  description: string;
+}
+
+export function parseRawFigureMarkers(content: string): RawFigureMarker[] {
+  const markers: RawFigureMarker[] = [];
+
+  // v2.0 Structured format: [FIGURE X\nTYPE: ...\nCAPTION: ...\nDESCRIPTION: ...\n]
+  const structuredRegex = /\[FIGURE\s*(\d+)\s*\n\s*TYPE:\s*([^\n]+)\n\s*CAPTION:\s*([^\n]+)\n\s*DESCRIPTION:\s*([\s\S]*?)\]/gi;
+  let match;
+  const processedIndices = new Set<number>();
+
+  while ((match = structuredRegex.exec(content)) !== null) {
+    processedIndices.add(match.index);
+    markers.push({
+      num: parseInt(match[1]),
+      fullMatch: match[0],
+      type: match[2].trim().toLowerCase(),
+      caption: match[3].trim(),
+      description: match[4].trim(),
+    });
+  }
+
+  // Legacy format: [FIGURE X: description]
+  const legacyRegex = /\[FIGURE\s*(\d+)\s*:\s*([\s\S]*?)\]/gi;
+  while ((match = legacyRegex.exec(content)) !== null) {
+    // Skip if already parsed as structured
+    if (processedIndices.has(match.index)) continue;
+    // Also skip if this overlaps with a structured match
+    let overlaps = false;
+    for (const idx of processedIndices) {
+      if (match.index >= idx && match.index < idx + 100) { overlaps = true; break; }
+    }
+    if (overlaps) continue;
+
+    markers.push({
+      num: parseInt(match[1]),
+      fullMatch: match[0],
+      description: match[2].trim(),
+    });
+  }
+
+  // Sort by figure number
+  markers.sort((a, b) => a.num - b.num);
+  return markers;
+}
+
+// ===========================================
+// FIGURE SPEC EXTRACTOR v2.0
 // ===========================================
 
 export function extractFigureSpecs(
@@ -214,34 +411,47 @@ export function extractFigureSpecs(
   bookType: string,
   chapterNumber: number,
 ): FigureSpec[] {
-  const figureRegex = /\[FIGURE\s*(\d+)\s*:\s*([\s\S]*?)\]/gi;
-  const specs: FigureSpec[] = [];
+  const rawMarkers = parseRawFigureMarkers(content);
   const density = VISUAL_DENSITY[bookType] || VISUAL_DENSITY.text;
+  const specs: FigureSpec[] = [];
 
-  let match;
-  while ((match = figureRegex.exec(content)) !== null) {
-    const figNum = parseInt(match[1]);
-    const description = match[2].trim();
+  for (const marker of rawMarkers) {
+    // Use structured type if available, otherwise classify from description
+    const visualType = marker.type
+      ? (marker.type as VisualType)
+      : classifyVisualType(marker.description);
 
-    // Classify visual type from description keywords
-    const visualType = classifyVisualType(description);
     const style = VISUAL_STYLE_MAP[bookType] || 'explanatory concept visual';
+    const placement = determinePlacement(content, content.indexOf(marker.fullMatch));
+    const caption = marker.caption || `Figure ${marker.num}: ${marker.description.split('.')[0]}`;
 
-    // Determine placement from surrounding context
-    const placement = determinePlacement(content, match.index);
+    // Compute cognitive value score
+    const { score: cognitiveScore, factors } = computeCognitiveScore(marker.description, visualType, bookType);
 
-    specs.push({
+    // Resolve render mode
+    const renderMode = resolveRenderMode(visualType, bookType);
+
+    const spec: FigureSpec = {
       chapter: chapterNumber,
-      section: extractSectionTitle(content, match.index),
+      section: extractSectionTitle(content, content.indexOf(marker.fullMatch)),
       bookType,
       visualNeeded: true,
       visualType,
-      purpose: description.split('.')[0] || `Figure ${figNum}`,
+      purpose: marker.description.split('.')[0] || `Figure ${marker.num}`,
       placement,
       style,
-      caption: `Figure ${figNum}: ${description.split('.')[0]}`,
-      imagePrompt: description,
-    });
+      caption,
+      imagePrompt: marker.description,
+      cognitiveScore,
+      renderMode,
+      structuredFields: marker.type ? {
+        type: visualType,
+        caption,
+        description: marker.description,
+      } : undefined,
+    };
+
+    specs.push(spec);
   }
 
   // Enforce density cap
@@ -269,24 +479,21 @@ function classifyVisualType(description: string): VisualType {
   if (/scene|cinematic|atmosphere|setting/.test(d)) return 'cinematic_scene';
   if (/lifecycle|cycle|phase|stage/.test(d)) return 'lifecycle_model';
   if (/label|annotated|diagram/.test(d)) return 'labeled_illustration';
-  return 'framework_diagram'; // safe default
+  return 'framework_diagram';
 }
 
 function determinePlacement(content: string, figureIndex: number): FigurePlacement {
-  // Look at content before and after the figure marker
+  if (figureIndex < 0) return 'inline';
   const before = content.slice(Math.max(0, figureIndex - 200), figureIndex);
-  const after = content.slice(figureIndex, figureIndex + 200);
+  const after = content.slice(figureIndex, Math.min(content.length, figureIndex + 200));
 
-  // If preceded by a heading, it's before_section
   if (/##[^#\n]+\n\s*$/.test(before)) return 'before_section';
-  // If followed by a heading, it's after_section
   if (/^\s*\n##/.test(after.slice(after.indexOf(']') + 1))) return 'after_section';
-  // Default to inline
   return 'inline';
 }
 
 function extractSectionTitle(content: string, figureIndex: number): string {
-  // Find the nearest ## heading before the figure
+  if (figureIndex < 0) return 'Introduction';
   const before = content.slice(0, figureIndex);
   const headingMatch = before.match(/##\s+([^\n]+)/g);
   if (headingMatch && headingMatch.length > 0) {
@@ -297,34 +504,37 @@ function extractSectionTitle(content: string, figureIndex: number): string {
 }
 
 // ===========================================
-// VALIDATE FIGURE SPECS
-// Ensures all specs meet quality criteria
+// VALIDATE FIGURE SPECS v2.0
+// Now includes Cognitive Value Score gate
 // ===========================================
 
 export function validateFigureSpecs(specs: FigureSpec[]): {
   valid: FigureSpec[];
-  rejected: { spec: FigureSpec; reason: string }[];
+  rejected: { spec: FigureSpec; reason: string; cognitiveScore: number }[];
 } {
   const valid: FigureSpec[] = [];
-  const rejected: { spec: FigureSpec; reason: string }[] = [];
+  const rejected: { spec: FigureSpec; reason: string; cognitiveScore: number }[] = [];
 
   for (const spec of specs) {
-    // Reject if description is too short (likely filler)
-    if (spec.imagePrompt.length < 20) {
-      rejected.push({ spec, reason: 'Description too short — likely decorative filler' });
-      continue;
-    }
-
     // Reject text-only book types
     if (spec.bookType === 'text') {
-      rejected.push({ spec, reason: 'Text-only pipeline — no figures allowed' });
+      rejected.push({ spec, reason: 'Text-only pipeline — no figures allowed', cognitiveScore: spec.cognitiveScore });
       continue;
     }
 
-    // Reject if no educational/narrative purpose can be inferred
-    const hasSubstance = /diagram|chart|framework|matrix|process|compare|scene|illustrat|panel|template|model|tree|flow|architecture/i.test(spec.imagePrompt);
-    if (!hasSubstance) {
-      rejected.push({ spec, reason: 'No pedagogical or narrative purpose detected' });
+    // Reject if description is too short (likely filler)
+    if (spec.imagePrompt.length < 20) {
+      rejected.push({ spec, reason: 'Description too short — likely decorative filler', cognitiveScore: spec.cognitiveScore });
+      continue;
+    }
+
+    // Cognitive Value Score gate
+    if (spec.cognitiveScore < MIN_COGNITIVE_SCORE) {
+      rejected.push({
+        spec,
+        reason: `Cognitive value too low (${spec.cognitiveScore} < ${MIN_COGNITIVE_SCORE}) — insufficient educational merit`,
+        cognitiveScore: spec.cognitiveScore,
+      });
       continue;
     }
 
@@ -332,4 +542,36 @@ export function validateFigureSpecs(specs: FigureSpec[]): {
   }
 
   return { valid, rejected };
+}
+
+// ===========================================
+// MERMAID DIAGRAM GENERATOR
+// Generates Mermaid syntax for diagram-eligible figures
+// ===========================================
+
+export function generateMermaidHint(spec: FigureSpec): string | null {
+  if (spec.renderMode !== 'mermaid') return null;
+
+  // Return a hint that the frontend can use to request Mermaid generation
+  // The actual Mermaid code should be generated by AI based on the description
+  const typeHints: Record<string, string> = {
+    flowchart: 'graph TD',
+    taxonomy_tree: 'graph TD',
+    lifecycle_model: 'graph LR',
+    architecture_diagram: 'graph TB',
+    concept_map: 'mindmap',
+  };
+
+  return typeHints[spec.visualType] || 'graph TD';
+}
+
+// ===========================================
+// FIGURE SPEC SUMMARY (for logging)
+// ===========================================
+
+export function summarizeFigureSpecs(specs: FigureSpec[]): string {
+  if (specs.length === 0) return 'No figures';
+  return specs.map(s =>
+    `Fig${s.chapter}.${specs.indexOf(s) + 1}: ${s.visualType} (score:${s.cognitiveScore}, render:${s.renderMode}, placement:${s.placement})`
+  ).join(' | ');
 }
