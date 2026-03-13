@@ -4297,6 +4297,8 @@ ${BORN_QUALITY_CONTRACT}
 
 ${MASTER_FORMATTING_CONTRACT}
 
+${buildVisualIntelligencePrompt('reference', chapterNumber, targetWords)}
+
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
       chapterPrompt = `${previousChaptersContext}Write a REFERENCE/HANDBOOK Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
