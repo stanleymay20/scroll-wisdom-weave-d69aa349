@@ -130,13 +130,8 @@ This chapter must define and catalog 12-20 distinct entries or concepts.
 Every entry must be self-contained and findable via scanning.
 Format: **Term** — Definition. Context. Example. Related: [cross-refs].
 
-ILLUSTRATION SUPPORT:
-Include 2-3 [FIGURE X: description] markers for:
-- Architecture diagrams or system overviews
-- Comparison charts or taxonomy trees
-- Process flowcharts or decision trees
-
 TONE: Precise, neutral, encyclopedic. Optimize for FINDABILITY and SCANNING.
+(Figure placement governed by Visual Intelligence Engine — do not hardcode figure counts here.)
 FORBIDDEN: Narrative flow. Personal opinions. Lengthy introductions. Ambiguous language.`;
 
 const MICRO_CONTRACT_TEXT = `PIPELINE: STANDARD TEXT
