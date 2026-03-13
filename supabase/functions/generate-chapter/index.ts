@@ -4276,7 +4276,7 @@ REQUIREMENTS:
 - Include at least 3 framework/comparison tables with real data points
 - Every recommendation must be specific and measurable (include KPIs, percentages, timelines)
 - Include real industry examples with specific numbers and named companies
-- Include 2-3 [FIGURE X: description] markers for visual frameworks
+- Follow Visual Intelligence Engine rules for [FIGURE X] placement
 - Concept Budget: introduce and name 8-12 strategic concepts
 ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts - do NOT repeat introductions' : ''}
 
