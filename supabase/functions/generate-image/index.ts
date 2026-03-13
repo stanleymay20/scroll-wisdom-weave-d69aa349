@@ -207,13 +207,15 @@ Quality: Clean and readable. Only generate if the image adds educational value.`
     };
 
     // Resolve art direction: bookType takes priority, then style param, then default
-    const artDirection = (bookType && BOOK_TYPE_ART_DIRECTION[bookType])
-      ? BOOK_TYPE_ART_DIRECTION[bookType]
+    const artDirection = (effectiveBookType && BOOK_TYPE_ART_DIRECTION[effectiveBookType])
+      ? BOOK_TYPE_ART_DIRECTION[effectiveBookType]
       : LEGACY_STYLE_PROMPTS[style] || BOOK_TYPE_ART_DIRECTION[style] || BOOK_TYPE_ART_DIRECTION.text;
 
-    const contextHint = category ? `Subject: ${category.replace(/_/g, ' ')}.` : '';
-    const chapterHint = chapterTitle ? `Chapter context: ${chapterTitle}.` : '';
-    const enhancedPrompt = `${prompt}.\n\n${artDirection}\n\n${contextHint} ${chapterHint} IMPORTANT: Do NOT render any text, words, or letters in the image.`;
+    const contextHint = effectiveCategory ? `Subject: ${effectiveCategory.replace(/_/g, ' ')}.` : '';
+    const chapterHint = effectiveChapterTitle ? `Chapter context: ${effectiveChapterTitle}.` : '';
+    const purposeHint = figureSpec?.purpose ? `Purpose: ${figureSpec.purpose}.` : '';
+    const captionHint = figureSpec?.caption ? `Caption: ${figureSpec.caption}.` : '';
+    const enhancedPrompt = `${effectivePrompt}.\n\n${artDirection}\n\n${contextHint} ${chapterHint} ${purposeHint} ${captionHint} IMPORTANT: Do NOT render any text, words, or letters in the image.`;
 
     // Use Gemini 3 Pro Image for all tiers (only supported image model)
     const model = "google/gemini-3-pro-image-preview";
