@@ -210,6 +210,7 @@ export default function Reader() {
   const [isBookOwner, setIsBookOwner] = useState(false);
   const [showFlashcardDialog, setShowFlashcardDialog] = useState(false);
   const [showLearningDeckDialog, setShowLearningDeckDialog] = useState(false);
+  const [showKnowledgeGraph, setShowKnowledgeGraph] = useState(false);
   
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
   const [shouldResumeTTS, setShouldResumeTTS] = useState(false);
