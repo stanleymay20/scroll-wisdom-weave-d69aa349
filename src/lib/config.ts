@@ -47,4 +47,5 @@ export const FEATURES = {
   enableSkillRadar: !PMF_MODE,
   enableComicMode: !PMF_MODE,
   enableChapterVideo: !PMF_MODE,
+  enableKnowledgeGraph: true,
 };

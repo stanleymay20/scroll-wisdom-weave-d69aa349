@@ -27,6 +27,7 @@ import {
   Sparkles,
   Video,
   X,
+  Brain,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FEATURES } from "@/lib/config";
@@ -57,6 +58,7 @@ interface ReaderToolsSheetProps {
   onLearningDeckClick: () => void;
   onFlashcardsClick: () => void;
   onVideoClick?: () => void;
+  onKnowledgeGraphClick?: () => void;
 }
 
 export function ReaderToolsSheet({
@@ -74,6 +76,7 @@ export function ReaderToolsSheet({
   onLearningDeckClick,
   onFlashcardsClick,
   onVideoClick,
+  onKnowledgeGraphClick,
 }: ReaderToolsSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -143,6 +146,14 @@ export function ReaderToolsSheet({
       onClick: onVideoClick || (() => {}),
       hidden: !FEATURES.enableChapterVideo,
       variant: "accent",
+    },
+    {
+      id: "knowledge",
+      label: "Knowledge Graph",
+      icon: <Brain className="h-5 w-5" />,
+      onClick: onKnowledgeGraphClick || (() => {}),
+      hidden: !FEATURES.enableKnowledgeGraph,
+      variant: "primary",
     },
   ];
 

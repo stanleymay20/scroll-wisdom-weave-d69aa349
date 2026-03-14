@@ -72,6 +72,7 @@ import { CompetencyLearningPanel } from "@/components/reader/CompetencyLearningP
 import { AdaptiveLearningPath } from "@/components/reader/AdaptiveLearningPath";
 import { PresenceAvatars } from "@/components/reader/PresenceAvatars";
 import { useEditorPresence } from "@/hooks/useCollaboration";
+import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
 
 interface BookData {
   id: string;
@@ -209,6 +210,7 @@ export default function Reader() {
   const [isBookOwner, setIsBookOwner] = useState(false);
   const [showFlashcardDialog, setShowFlashcardDialog] = useState(false);
   const [showLearningDeckDialog, setShowLearningDeckDialog] = useState(false);
+  const [showKnowledgeGraph, setShowKnowledgeGraph] = useState(false);
   
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
   const [shouldResumeTTS, setShouldResumeTTS] = useState(false);
@@ -1365,6 +1367,10 @@ export default function Reader() {
             closeTopPanels();
             setShowChapterVideo(true);
           }}
+          onKnowledgeGraphClick={() => {
+            closeTopPanels();
+            setShowKnowledgeGraph(true);
+          }}
         />
       )}
 
@@ -1490,6 +1496,19 @@ export default function Reader() {
           onOpenChange={setShowLearningDeckDialog}
           variant="inline"
           className="hidden"
+        />
+      )}
+
+      {/* Knowledge Graph — Cognitive Assimilation Interface */}
+      {chapter?.content && (
+        <KnowledgeGraphPanel
+          isOpen={showKnowledgeGraph}
+          onClose={() => setShowKnowledgeGraph(false)}
+          chapterContent={chapter.content}
+          chapterTitle={chapter.title}
+          bookTitle={book?.title || ''}
+          chapterNumber={currentChapter}
+          bookId={bookId}
         />
       )}
 
