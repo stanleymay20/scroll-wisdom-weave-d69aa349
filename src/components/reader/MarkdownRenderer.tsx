@@ -204,6 +204,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     caption: string;
     description: string;
     renderMode: RenderMode;
+    cognitiveScore?: number;
   }
 
   const { figureMarkers, cleanedAfterFigures } = useMemo(() => {
@@ -212,9 +213,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     const markers: ParsedFigureMarker[] = [];
     let text = cleanedAfterEvidence;
 
-    // v2.0 Structured: [FIGURE X\nTYPE: ...\nCAPTION: ...\nDESCRIPTION: ...\n]
-    const structuredRegex = /\[FIGURE\s*(\d+)\s*\n\s*TYPE:\s*([^\n]+)\n\s*CAPTION:\s*([^\n]+)\n\s*DESCRIPTION:\s*([\s\S]*?)\]/gi;
-    text = text.replace(structuredRegex, (match, num, type, caption, desc) => {
+    // v2.0 Structured: [FIGURE X\nTYPE: ...\nCAPTION: ...\nDESCRIPTION: ...\n] with optional COGNITIVE_SCORE
+    const structuredRegex = /\[FIGURE\s*(\d+)\s*\n\s*TYPE:\s*([^\n]+)\n\s*CAPTION:\s*([^\n]+)\n\s*DESCRIPTION:\s*([\s\S]*?)(?:\n\s*COGNITIVE_SCORE:\s*(\d+(?:\.\d+)?))?\s*\]/gi;
+    text = text.replace(structuredRegex, (match, num, type, caption, desc, score) => {
       const figNum = parseInt(num);
       const visualType = type.trim().toLowerCase();
       markers.push({
@@ -223,6 +224,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
         caption: caption.trim(),
         description: desc.trim(),
         renderMode: resolveRenderModeClient(visualType),
+        cognitiveScore: score ? parseFloat(score) : undefined,
       });
       return `<!--FIGURE_MARKER_${markers.length - 1}-->`;
     });
@@ -696,6 +698,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
               description={fig.description}
               renderMode={fig.renderMode}
               visualType={fig.type}
+              cognitiveScore={fig.cognitiveScore}
               className="my-6"
             />
           );
