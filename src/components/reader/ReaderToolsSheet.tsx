@@ -76,6 +76,7 @@ export function ReaderToolsSheet({
   onLearningDeckClick,
   onFlashcardsClick,
   onVideoClick,
+  onKnowledgeGraphClick,
 }: ReaderToolsSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
 
