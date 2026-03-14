@@ -43,6 +43,7 @@ import { StyleClonePanel, StyleProfile } from "@/components/generate/StyleCloneP
 import { usePagePerformance } from "@/lib/performance";
 import { useGracefulDegradation } from "@/hooks/useNetworkAction";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { sanitizeForDisplay, VALIDATION_LIMITS } from "@/lib/validation";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { cn } from "@/lib/utils";
 
@@ -228,10 +229,46 @@ export default function Generate() {
       return;
     }
 
-    if (!title || !category) {
+    // ── Input validation & sanitization ──
+    const sanitizedTitle = sanitizeForDisplay(title);
+    const sanitizedDescription = sanitizeForDisplay(description);
+    const sanitizedAuthorName = sanitizeForDisplay(authorDisplayName);
+    const sanitizedPenName = sanitizeForDisplay(penName);
+    const sanitizedImprint = sanitizeForDisplay(publisherImprint);
+
+    if (!sanitizedTitle || !category) {
       toast({
         title: t('generate.missingInfo'),
         description: t('generate.provideTitleCategory'),
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (sanitizedTitle.length > VALIDATION_LIMITS.TITLE_MAX) {
+      toast({
+        title: "Title too long",
+        description: `Title must be under ${VALIDATION_LIMITS.TITLE_MAX} characters.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (sanitizedDescription.length > VALIDATION_LIMITS.DESCRIPTION_MAX) {
+      toast({
+        title: "Description too long",
+        description: `Description must be under ${VALIDATION_LIMITS.DESCRIPTION_MAX} characters.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    if (sanitizedAuthorName.length > VALIDATION_LIMITS.NAME_MAX ||
+        sanitizedPenName.length > VALIDATION_LIMITS.NAME_MAX ||
+        sanitizedImprint.length > VALIDATION_LIMITS.NAME_MAX) {
+      toast({
+        title: "Name too long",
+        description: `Author/pen/imprint names must be under ${VALIDATION_LIMITS.NAME_MAX} characters.`,
         variant: "destructive",
       });
       return;
@@ -301,8 +338,8 @@ export default function Generate() {
     try {
       const { data, error } = await supabase.functions.invoke("generate-book", {
         body: {
-          title,
-          description,
+          title: sanitizedTitle,
+          description: sanitizedDescription,
           category,
           numChapters: parseInt(numChapters),
           wordCount: getEffectiveWordCount(),
@@ -318,9 +355,9 @@ export default function Generate() {
           bestsellerMode: entitlements.isPaid || entitlements.isTrialMode ? bestsellerMode : false,
           // Author & Imprint fields
           authorMode,
-          authorDisplayName: authorDisplayName || undefined,
-          penName: penName || undefined,
-          publisherImprint: publisherImprint || undefined,
+          authorDisplayName: sanitizedAuthorName || undefined,
+          penName: sanitizedPenName || undefined,
+          publisherImprint: sanitizedImprint || undefined,
           // Workbook-specific fields
           workbookDensity: extendedBookType === "workbook" ? workbookDensity : null,
           // Comic-specific fields

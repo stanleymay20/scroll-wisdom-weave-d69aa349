@@ -113,13 +113,53 @@ serve(async (req) => {
     // Parse request body
     const body = await req.json();
     const {
-      title, description, category, numChapters, language = "en", customCover,
+      title: rawTitle, description: rawDescription, category, numChapters, language = "en", customCover,
       bookType = "text", extendedBookType = null,
       enableReferences = false, academicMode = false, bestsellerMode = true,
-      authorMode = "ai", authorDisplayName = null, penName = null,
+      authorMode = "ai", authorDisplayName: rawAuthorName = null, penName: rawPenName = null,
     } = body;
 
-    const effectiveBookType = extendedBookType || bookType;
+    // ── Server-side input validation ──────────────────────
+    const sanitize = (s: unknown, max: number): string => {
+      if (typeof s !== 'string') return '';
+      return s.trim().replace(/\0/g, '').slice(0, max);
+    };
+
+    const title = sanitize(rawTitle, 200);
+    const description = sanitize(rawDescription, 2000);
+    const authorDisplayName = sanitize(rawAuthorName, 100);
+    const penName = sanitize(rawPenName, 100);
+
+    if (!title || title.length < 1) {
+      return new Response(JSON.stringify({ error: "Title is required." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (!category || typeof category !== 'string' || category.length > 50) {
+      return new Response(JSON.stringify({ error: "Invalid category." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (typeof numChapters !== 'number' || !Number.isInteger(numChapters) || numChapters < 1 || numChapters > 100) {
+      return new Response(JSON.stringify({ error: "Invalid chapter count." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const VALID_LANGUAGES = ['en', 'fr', 'de', 'es', 'ar', 'sw', 'pt'];
+    if (!VALID_LANGUAGES.includes(language)) {
+      return new Response(JSON.stringify({ error: "Invalid language." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const VALID_BOOK_TYPES = ['text', 'illustrated', 'comic', 'workbook', 'academic', 'professional', 'reference', 'technical', 'bestseller', 'children', 'fiction'];
+    const safeExtendedBookType = extendedBookType && VALID_BOOK_TYPES.includes(extendedBookType) ? extendedBookType : null;
+    const safeBookType = VALID_BOOK_TYPES.includes(bookType) ? bookType : 'text';
+
+    const effectiveBookType = safeExtendedBookType || safeBookType;
     const isAcademicType = ["academic", "technical", "reference", "professional"].includes(effectiveBookType);
     const effectiveChapters = Math.min(numChapters, limits.maxChapters);
     const languageName = LANG_MAP[language] || "English";
