@@ -4420,6 +4420,7 @@ ${MASTER_FORMATTING_CONTRACT}
 ${buildVisualIntelligencePrompt('text', chapterNumber, targetWords)}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
+      }
       
       if (isBestsellerMode) {
         chapterPrompt = `${previousChaptersContext}Write Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
