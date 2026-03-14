@@ -147,6 +147,14 @@ export function ReaderToolsSheet({
       hidden: !FEATURES.enableChapterVideo,
       variant: "accent",
     },
+    {
+      id: "knowledge",
+      label: "Knowledge Graph",
+      icon: <Brain className="h-5 w-5" />,
+      onClick: onKnowledgeGraphClick || (() => {}),
+      hidden: !FEATURES.enableKnowledgeGraph,
+      variant: "primary",
+    },
   ];
 
   const visibleTools = tools.filter((t) => !t.hidden);
