@@ -43,6 +43,7 @@ import { StyleClonePanel, StyleProfile } from "@/components/generate/StyleCloneP
 import { usePagePerformance } from "@/lib/performance";
 import { useGracefulDegradation } from "@/hooks/useNetworkAction";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { sanitizeForDisplay, VALIDATION_LIMITS } from "@/lib/validation";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { cn } from "@/lib/utils";
 
