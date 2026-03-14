@@ -72,6 +72,7 @@ import { CompetencyLearningPanel } from "@/components/reader/CompetencyLearningP
 import { AdaptiveLearningPath } from "@/components/reader/AdaptiveLearningPath";
 import { PresenceAvatars } from "@/components/reader/PresenceAvatars";
 import { useEditorPresence } from "@/hooks/useCollaboration";
+import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
 
 interface BookData {
   id: string;
