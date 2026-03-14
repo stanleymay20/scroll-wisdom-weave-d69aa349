@@ -345,6 +345,47 @@ export type Database = {
           },
         ]
       }
+      book_knowledge_graphs: {
+        Row: {
+          book_id: string
+          chapters_indexed: number[]
+          created_at: string
+          id: string
+          last_updated_at: string
+          mermaid_graph: string | null
+          total_edges: number
+          total_nodes: number
+        }
+        Insert: {
+          book_id: string
+          chapters_indexed?: number[]
+          created_at?: string
+          id?: string
+          last_updated_at?: string
+          mermaid_graph?: string | null
+          total_edges?: number
+          total_nodes?: number
+        }
+        Update: {
+          book_id?: string
+          chapters_indexed?: number[]
+          created_at?: string
+          id?: string
+          last_updated_at?: string
+          mermaid_graph?: string | null
+          total_edges?: number
+          total_nodes?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_knowledge_graphs_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: true
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       bookmarks: {
         Row: {
           book_id: string
@@ -829,6 +870,120 @@ export type Database = {
           },
         ]
       }
+      concept_edges: {
+        Row: {
+          book_id: string
+          chapter_introduced: number | null
+          created_at: string
+          id: string
+          relationship_type: string
+          source_node_id: string
+          target_node_id: string
+          weight: number
+        }
+        Insert: {
+          book_id: string
+          chapter_introduced?: number | null
+          created_at?: string
+          id?: string
+          relationship_type?: string
+          source_node_id: string
+          target_node_id: string
+          weight?: number
+        }
+        Update: {
+          book_id?: string
+          chapter_introduced?: number | null
+          created_at?: string
+          id?: string
+          relationship_type?: string
+          source_node_id?: string
+          target_node_id?: string
+          weight?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concept_edges_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concept_edges_source_node_id_fkey"
+            columns: ["source_node_id"]
+            isOneToOne: false
+            referencedRelation: "concept_nodes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "concept_edges_target_node_id_fkey"
+            columns: ["target_node_id"]
+            isOneToOne: false
+            referencedRelation: "concept_nodes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      concept_nodes: {
+        Row: {
+          applications: string[]
+          book_id: string
+          chapter_first_seen: number
+          chapters_referenced: number[]
+          citation_refs: string[]
+          created_at: string
+          definition: string | null
+          difficulty: number
+          examples: string[]
+          id: string
+          importance: number
+          label: string
+          normalized_label: string
+          updated_at: string
+        }
+        Insert: {
+          applications?: string[]
+          book_id: string
+          chapter_first_seen?: number
+          chapters_referenced?: number[]
+          citation_refs?: string[]
+          created_at?: string
+          definition?: string | null
+          difficulty?: number
+          examples?: string[]
+          id?: string
+          importance?: number
+          label: string
+          normalized_label: string
+          updated_at?: string
+        }
+        Update: {
+          applications?: string[]
+          book_id?: string
+          chapter_first_seen?: number
+          chapters_referenced?: number[]
+          citation_refs?: string[]
+          created_at?: string
+          definition?: string | null
+          difficulty?: number
+          examples?: string[]
+          id?: string
+          importance?: number
+          label?: string
+          normalized_label?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "concept_nodes_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       contact_submissions: {
         Row: {
           created_at: string
@@ -996,6 +1151,59 @@ export type Database = {
             columns: ["chapter_id"]
             isOneToOne: false
             referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      learner_concept_states: {
+        Row: {
+          application_confidence: number
+          concept_node_id: string
+          created_at: string
+          familiarity_score: number
+          id: string
+          last_assessed_at: string | null
+          last_seen_at: string | null
+          mastery_score: number
+          misconception_flags: string[]
+          times_reviewed: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          application_confidence?: number
+          concept_node_id: string
+          created_at?: string
+          familiarity_score?: number
+          id?: string
+          last_assessed_at?: string | null
+          last_seen_at?: string | null
+          mastery_score?: number
+          misconception_flags?: string[]
+          times_reviewed?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          application_confidence?: number
+          concept_node_id?: string
+          created_at?: string
+          familiarity_score?: number
+          id?: string
+          last_assessed_at?: string | null
+          last_seen_at?: string | null
+          mastery_score?: number
+          misconception_flags?: string[]
+          times_reviewed?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "learner_concept_states_concept_node_id_fkey"
+            columns: ["concept_node_id"]
+            isOneToOne: false
+            referencedRelation: "concept_nodes"
             referencedColumns: ["id"]
           },
         ]
