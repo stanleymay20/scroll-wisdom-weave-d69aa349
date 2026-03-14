@@ -355,9 +355,9 @@ export default function Generate() {
           bestsellerMode: entitlements.isPaid || entitlements.isTrialMode ? bestsellerMode : false,
           // Author & Imprint fields
           authorMode,
-          authorDisplayName: authorDisplayName || undefined,
-          penName: penName || undefined,
-          publisherImprint: publisherImprint || undefined,
+          authorDisplayName: sanitizedAuthorName || undefined,
+          penName: sanitizedPenName || undefined,
+          publisherImprint: sanitizedImprint || undefined,
           // Workbook-specific fields
           workbookDensity: extendedBookType === "workbook" ? workbookDensity : null,
           // Comic-specific fields
