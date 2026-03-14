@@ -58,6 +58,7 @@ interface ReaderToolsSheetProps {
   onLearningDeckClick: () => void;
   onFlashcardsClick: () => void;
   onVideoClick?: () => void;
+  onKnowledgeGraphClick?: () => void;
 }
 
 export function ReaderToolsSheet({
