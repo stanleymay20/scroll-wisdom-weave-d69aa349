@@ -1499,6 +1499,19 @@ export default function Reader() {
         />
       )}
 
+      {/* Knowledge Graph — Cognitive Assimilation Interface */}
+      {chapter?.content && (
+        <KnowledgeGraphPanel
+          isOpen={showKnowledgeGraph}
+          onClose={() => setShowKnowledgeGraph(false)}
+          chapterContent={chapter.content}
+          chapterTitle={chapter.title}
+          bookTitle={book?.title || ''}
+          chapterNumber={currentChapter}
+          bookId={bookId}
+        />
+      )}
+
 
       {/* CONTRACT 5.2: Navigation Footer with HARD safe area inset - NEVER overlaps home indicator */}
       <footer 
