@@ -1367,6 +1367,10 @@ export default function Reader() {
             closeTopPanels();
             setShowChapterVideo(true);
           }}
+          onKnowledgeGraphClick={() => {
+            closeTopPanels();
+            setShowKnowledgeGraph(true);
+          }}
         />
       )}
 
