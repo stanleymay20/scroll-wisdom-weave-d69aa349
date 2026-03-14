@@ -11,14 +11,13 @@ const log = (step: string, details?: any) => {
 
 // ============================================================
 // BOOK-TYPE COGNITIVE PROFILES
-// Each book type has fundamentally different mastery requirements
 // ============================================================
 
 interface CognitiveProfile {
   identity: string;
   conceptExtractionFocus: string;
   questionStyle: string;
-  bloomWeights: Record<string, number>; // relative weight for distribution
+  bloomWeights: Record<string, number>;
   scoringModifiers: {
     minPassScore: number;
     applyAnalyzeThreshold: number;
@@ -125,7 +124,7 @@ const COGNITIVE_PROFILES: Record<string, CognitiveProfile> = {
     questionStyle: `Applied wisdom: questions must test whether the reader can USE the ideas.
 - Present novel real-world scenarios where the reader must apply a named principle
 - Require predicting outcomes based on the chapter's frameworks
-- Include at least one "belief disruption" question (testing whether the reader understands the counterintuitive insight)
+- Include at least one "belief disruption" question
 - Require distinguishing between similar principles in different contexts
 - Distractors must represent common misapplications of the concepts
 - Questions should feel like coaching scenarios, not academic exams`,
@@ -239,7 +238,7 @@ const COGNITIVE_PROFILES: Record<string, CognitiveProfile> = {
 - Identify boundary conditions where visual models simplify reality
 - Identify cross-concept connections illustrated through visual metaphors`,
     questionStyle: `Visual-textual synthesis: questions must test integrated comprehension.
-- Reference how visuals relate to textual concepts ("Based on the framework shown in Figure X...")
+- Reference how visuals relate to textual concepts
 - Test interpretation of data visualizations or diagrams described in the text
 - Require connecting visual representations to their underlying mechanisms
 - Include at least one question testing whether the reader can extend the visual model
@@ -257,7 +256,6 @@ const COGNITIVE_PROFILES: Record<string, CognitiveProfile> = {
     requiredQuestionTypes: ["mechanism-breakdown", "trade-off", "boundary-case"],
   },
 
-  // Default/text fallback
   text: {
     identity: "General Comprehension Assessment — Critical Thinking Standard",
     conceptExtractionFocus: `
@@ -283,7 +281,6 @@ const COGNITIVE_PROFILES: Record<string, CognitiveProfile> = {
   },
 };
 
-// Resolve profile from bookType
 function getProfile(bookType: string): CognitiveProfile {
   const normalized = bookType?.toLowerCase().trim() || 'text';
   if (normalized === 'business' || normalized === 'technical') return COGNITIVE_PROFILES.professional;
@@ -303,6 +300,7 @@ From the chapter below:
 2. Identify the 3 most intellectually dense mechanisms (explain WHY they are dense).
 3. Identify 2 boundary conditions where a major idea weakens or fails.
 4. Identify 2 assumptions the chapter relies on but does not explicitly defend.
+5. For each named construct, identify 2-3 SEMANTICALLY RELATED concepts that could serve as plausible distractors (concepts that are close enough to confuse a surface-level learner but clearly distinct under scrutiny).
 
 TYPE-SPECIFIC EXTRACTION:
 ${profile.conceptExtractionFocus}
@@ -356,6 +354,131 @@ Use sparingly — maximum 1 per assessment.`,
 };
 
 // ============================================================
+// QUESTION FORMAT TYPES — Diversification Engine
+// ============================================================
+
+const QUESTION_FORMATS = [
+  'definition',
+  'scenario_application',
+  'comparison',
+  'error_detection',
+  'reverse_reasoning',
+] as const;
+
+type QuestionFormat = typeof QUESTION_FORMATS[number];
+
+const QUESTION_FORMAT_INSTRUCTIONS: Record<QuestionFormat, string> = {
+  definition: `DEFINITION FORMAT: Ask what a concept means or how it is characterized. Use only for Remember/Understand levels. Frame as recognition, not verbatim recall.`,
+
+  scenario_application: `SCENARIO APPLICATION FORMAT (DEFAULT for Apply/Analyze/Evaluate):
+Present a SHORT real-world scenario (2-3 sentences) describing a specific situation with concrete details.
+Then ask which concept, principle, or approach applies.
+
+EXAMPLE PATTERN:
+"A marketing team notices that their A/B test shows a 2% improvement but the sample size is only 50 users per group. They declare the new design a winner. Which statistical principle does this violate?"
+
+The scenario MUST be novel — not copied from the chapter. It must require TRANSFER of understanding.`,
+
+  comparison: `COMPARISON FORMAT: Present two or more related concepts and ask the learner to distinguish them, identify when each applies, or explain why one is preferred over another in a given context.
+
+EXAMPLE PATTERN:
+"Both [Concept A] and [Concept B] address [problem domain]. Under what conditions would [Concept A] be preferred, and why does [Concept B] fail in that context?"`,
+
+  error_detection: `ERROR DETECTION FORMAT: Present a statement, argument, or scenario that contains a SPECIFIC logical flaw, misconception, or misapplication of a concept from the chapter. Ask the learner to identify what is wrong.
+
+EXAMPLE PATTERN:
+"A colleague argues: '[flawed reasoning that sounds plausible].' Which error in reasoning is present?"
+
+The flaw must be subtle enough that someone who only memorized definitions would miss it.`,
+
+  reverse_reasoning: `REVERSE REASONING FORMAT: Present an outcome, result, or conclusion FIRST, then ask the learner to work backwards to identify which concept, mechanism, or cause explains it.
+
+EXAMPLE PATTERN:
+"A system exhibits [specific observable behavior]. Based on the chapter content, which underlying mechanism most likely causes this?"
+
+This format catches memorizers because it requires understanding the causal chain, not just the definition.`,
+};
+
+// ============================================================
+// QUESTION ENTROPY & DIVERSITY RULES
+// ============================================================
+
+const ENTROPY_RULES = {
+  maxDefinitionPercent: 0.30,
+  minScenarioPercent: 0.40,
+  minComparisonOrReasoning: 1, // per concept cluster
+  maxSameFormatConsecutive: 2,
+};
+
+function assignQuestionFormats(count: number, bloomLevels: string[], isChildren: boolean): QuestionFormat[] {
+  if (isChildren) {
+    // Children: simpler format distribution
+    return bloomLevels.map(bl => {
+      if (bl === 'remember') return 'definition';
+      if (bl === 'understand') return Math.random() > 0.5 ? 'definition' : 'comparison';
+      return 'scenario_application';
+    });
+  }
+
+  const formats: QuestionFormat[] = [];
+  const maxDef = Math.floor(count * ENTROPY_RULES.maxDefinitionPercent);
+  const minScenario = Math.ceil(count * ENTROPY_RULES.minScenarioPercent);
+  let defCount = 0;
+  let scenarioCount = 0;
+
+  // Higher Bloom levels MUST use scenario/comparison/error/reverse
+  const higherBloomFormats: QuestionFormat[] = ['scenario_application', 'comparison', 'error_detection', 'reverse_reasoning'];
+
+  for (let i = 0; i < count; i++) {
+    const bl = bloomLevels[i] || 'analyze';
+
+    if (bl === 'remember' && defCount < maxDef) {
+      formats.push('definition');
+      defCount++;
+    } else if (bl === 'understand' && defCount < maxDef && Math.random() < 0.3) {
+      formats.push('definition');
+      defCount++;
+    } else if (['apply', 'analyze', 'evaluate', 'create'].includes(bl)) {
+      // Force scenario-based for higher Bloom unless we already have enough
+      if (scenarioCount < minScenario) {
+        formats.push('scenario_application');
+        scenarioCount++;
+      } else {
+        const fmt = higherBloomFormats[Math.floor(Math.random() * higherBloomFormats.length)];
+        formats.push(fmt);
+        if (fmt === 'scenario_application') scenarioCount++;
+      }
+    } else {
+      // understand level: mix comparison and scenario
+      const fmt = Math.random() < 0.5 ? 'comparison' : 'scenario_application';
+      formats.push(fmt);
+      if (fmt === 'scenario_application') scenarioCount++;
+    }
+  }
+
+  // Enforce minimum scenario count
+  while (scenarioCount < minScenario) {
+    const defIdx = formats.findIndex(f => f === 'definition');
+    if (defIdx >= 0) {
+      formats[defIdx] = 'scenario_application';
+      scenarioCount++;
+      defCount--;
+    } else break;
+  }
+
+  // Ensure at least one comparison or reverse_reasoning
+  if (!formats.includes('comparison') && !formats.includes('reverse_reasoning') && !formats.includes('error_detection')) {
+    // Replace the last scenario with a comparison
+    const lastScenario = formats.lastIndexOf('scenario_application');
+    if (lastScenario >= 0 && scenarioCount > minScenario) {
+      formats[lastScenario] = Math.random() > 0.5 ? 'comparison' : 'error_detection';
+    }
+  }
+
+  return formats;
+}
+
+// ============================================================
 // LAYER 3 — BLOOM DISTRIBUTION (PROFILE-DRIVEN)
 // ============================================================
 
@@ -363,14 +486,8 @@ function buildBloomDistribution(count: number, primaryLevel: string, profile: Co
   const weights = profile.bloomWeights;
   const totalWeight = Object.values(weights).reduce((a, b) => a + b, 0);
 
-  // Build weighted distribution
-  const levels = Object.entries(weights)
-    .sort(([, a], [, b]) => b - a) // highest weight first
-    .map(([level]) => level);
-
   const distribution: string[] = [];
 
-  // Allocate proportionally to weights
   for (const [level, weight] of Object.entries(weights)) {
     const allocated = Math.round((weight / totalWeight) * count);
     for (let i = 0; i < allocated && distribution.length < count; i++) {
@@ -378,19 +495,26 @@ function buildBloomDistribution(count: number, primaryLevel: string, profile: Co
     }
   }
 
-  // Ensure we always include evaluate if required
   if (profile.scoringModifiers.requiresEvalCreate && !distribution.includes('evaluate')) {
     distribution[distribution.length - 1] = 'evaluate';
   }
 
-  // Pad to requested count with highest-weighted levels
   let padIdx = 0;
+  const levels = Object.entries(weights)
+    .sort(([, a], [, b]) => b - a)
+    .map(([level]) => level);
+
   while (distribution.length < count) {
     distribution.push(levels[padIdx % levels.length]);
     padIdx++;
   }
 
-  // Trim to requested count
+  // Fisher-Yates shuffle the distribution so bloom levels aren't in predictable order
+  for (let i = distribution.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [distribution[i], distribution[j]] = [distribution[j], distribution[i]];
+  }
+
   return distribution.slice(0, count);
 }
 
@@ -414,6 +538,8 @@ serve(async (req) => {
       bookType = "text",
       bloomLevel = "analyze",
       questionCount = 5,
+      previousQuestionTexts = [],
+      learnerScore,
     } = await req.json();
 
     if (!chapterContent) {
@@ -425,7 +551,24 @@ serve(async (req) => {
 
     const profile = getProfile(bookType);
     const contentSlice = chapterContent.slice(0, 15000);
+    const isChildren = bookType === 'children';
+    const optionCount = isChildren ? 3 : 4;
+
     log("Starting mastery assessment", { bloomLevel, questionCount, bookType, profile: profile.identity, contentLen: contentSlice.length });
+
+    // ──────────────────────────────────────────────
+    // Adaptive difficulty based on learner score
+    // ──────────────────────────────────────────────
+    let difficultyDirective = '';
+    if (typeof learnerScore === 'number') {
+      if (learnerScore > 80) {
+        difficultyDirective = `ADAPTIVE DIFFICULTY: HARD MODE. The learner scored ${learnerScore}%. Generate questions that target edge cases, boundary conditions, multi-step reasoning, and adversarial scenarios. Focus on Analyze/Evaluate/Create levels. Include at least one question designed to catch shallow memorization.`;
+      } else if (learnerScore >= 50) {
+        difficultyDirective = `ADAPTIVE DIFFICULTY: MIXED MODE. The learner scored ${learnerScore}%. Generate a balanced mix: some reinforcement questions at Apply level and some challenging questions at Analyze/Evaluate. Gradually increase complexity.`;
+      } else {
+        difficultyDirective = `ADAPTIVE DIFFICULTY: REINFORCEMENT MODE. The learner scored ${learnerScore}%. Generate questions that reinforce core concepts with simpler scenarios. Focus on Understand/Apply levels. Use concrete, familiar contexts. Build confidence before escalating.`;
+      }
+    }
 
     // ──────────────────────────────────────────────
     // STEP 1: Concept Extraction (profile-driven)
@@ -448,7 +591,7 @@ serve(async (req) => {
           type: "function",
           function: {
             name: "extract_concepts",
-            description: "Extract named constructs, mechanisms, boundary conditions, and assumptions from chapter content.",
+            description: "Extract named constructs, mechanisms, boundary conditions, assumptions, and distractor concepts.",
             parameters: {
               type: "object",
               properties: {
@@ -495,9 +638,26 @@ serve(async (req) => {
                     additionalProperties: false
                   },
                   description: "2 assumptions the chapter relies on but doesn't defend"
+                },
+                conceptGraph: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      concept: { type: "string" },
+                      relatedConcepts: {
+                        type: "array",
+                        items: { type: "string" },
+                        description: "2-3 semantically related concepts that could serve as plausible distractors"
+                      }
+                    },
+                    required: ["concept", "relatedConcepts"],
+                    additionalProperties: false
+                  },
+                  description: "Concept graph mapping each construct to semantically related distractors"
                 }
               },
-              required: ["namedConstructs", "denseMechanisms", "boundaryConditions", "implicitAssumptions"],
+              required: ["namedConstructs", "denseMechanisms", "boundaryConditions", "implicitAssumptions", "conceptGraph"],
               additionalProperties: false
             }
           }
@@ -511,6 +671,7 @@ serve(async (req) => {
       denseMechanisms: [],
       boundaryConditions: [],
       implicitAssumptions: [],
+      conceptGraph: [],
     };
 
     if (extractionResp.ok) {
@@ -521,6 +682,7 @@ serve(async (req) => {
         log("Concepts extracted", {
           constructs: concepts.namedConstructs?.length || 0,
           mechanisms: concepts.denseMechanisms?.length || 0,
+          graphSize: concepts.conceptGraph?.length || 0,
         });
       } catch (e) {
         log("Concept extraction parse failed, using empty", { error: String(e) });
@@ -541,15 +703,23 @@ serve(async (req) => {
     }
 
     // ──────────────────────────────────────────────
-    // STEP 2: Generate Questions with Profile-Driven Bloom Enforcement
+    // STEP 2: Generate Questions with Diversification Engine
     // ──────────────────────────────────────────────
-    log("Step 2: Question Generation with Profile-Driven Bloom Enforcement");
+    log("Step 2: Question Generation with Diversification Engine");
 
     const bloomDistribution = buildBloomDistribution(questionCount, bloomLevel, profile);
-    log("Bloom distribution", { distribution: bloomDistribution, profile: profile.identity });
+    const questionFormats = assignQuestionFormats(questionCount, bloomDistribution, isChildren);
+    log("Bloom distribution", { distribution: bloomDistribution, formats: questionFormats, profile: profile.identity });
 
-    const isChildren = bookType === 'children';
-    const optionCount = isChildren ? 3 : 4;
+    // Build distractor pool from concept graph
+    const distractorPool = (concepts.conceptGraph || [])
+      .map((c: any) => `${c.concept} → related: ${(c.relatedConcepts || []).join(', ')}`)
+      .join('\n');
+
+    // Session dedup directive
+    const dedupDirective = previousQuestionTexts.length > 0
+      ? `\n\nSESSION DEDUP — FORBIDDEN QUESTIONS (do NOT repeat or paraphrase):\n${previousQuestionTexts.slice(-20).map((t: string, i: number) => `${i + 1}. "${t}"`).join('\n')}\n\nEvery question you generate MUST be structurally different from the above. Vary wording, scenario context, and reasoning depth.`
+      : '';
 
     const batchPrompt = `Generate exactly ${questionCount} mastery assessment questions for the chapter "${chapterTitle}" from "${bookTitle}".
 
@@ -559,35 +729,64 @@ CHAPTER CONTENT:
 ${contentSlice.slice(0, 8000)}
 
 EXTRACTED CONCEPTS:
-${JSON.stringify(concepts, null, 2)}
+${JSON.stringify(concepts.namedConstructs || [], null, 2)}
+
+DENSE MECHANISMS:
+${JSON.stringify(concepts.denseMechanisms || [], null, 2)}
+
+BOUNDARY CONDITIONS:
+${JSON.stringify(concepts.boundaryConditions || [], null, 2)}
+
+DISTRACTOR CONCEPT GRAPH (use these related concepts as wrong-answer sources):
+${distractorPool || 'Not available — generate plausible distractors from chapter content.'}
 
 TYPE-SPECIFIC QUESTION STYLE:
 ${profile.questionStyle}
 
-For each question, follow the specific Bloom level enforcement below.
+${difficultyDirective}
+
+QUESTION FORMAT DIVERSIFICATION (MANDATORY):
+Each question MUST follow its assigned format. Do NOT default to definition-style questions.
 
 ${bloomDistribution.map((bl: string, i: number) => `
-QUESTION ${i + 1} — Bloom Level: ${bl.toUpperCase()}
+QUESTION ${i + 1} — Bloom Level: ${bl.toUpperCase()} | Format: ${questionFormats[i].toUpperCase()}
 ${BLOOM_ENFORCEMENT[bl] || BLOOM_ENFORCEMENT.analyze}
+${QUESTION_FORMAT_INSTRUCTIONS[questionFormats[i]]}
 `).join('\n')}
 
+DISTRACTOR ENGINEERING (CRITICAL):
+- Wrong answers MUST come from semantically related concepts in the distractor graph above.
+- Each wrong answer must be a PLAUSIBLE misapplication, a related-but-incorrect concept, or a common misconception.
+- NEVER use obviously incorrect fillers (e.g., "None of the above", random unrelated terms).
+- All ${optionCount} options must be similar in length, specificity, and linguistic style.
+- Only ONE option may be clearly correct. The others must require genuine reasoning to eliminate.
+
+QUESTION MUTATION CONTRACT:
+- Each question must use a DIFFERENT scenario, context, or framing — even if testing the same concept.
+- Vary: sentence structure, scenario domain (workplace, research, everyday life), and reasoning chain.
+- For the same concept, generate questions that approach it from completely different angles.
+${dedupDirective}
+
 ANTI-PREDICTABILITY CONTRACT (CRITICAL — HARD ENFORCEMENT):
-1. RANDOMIZE correctIndex: Distribute correct answers EVENLY across positions 0-${optionCount - 1}. Do NOT cluster at position 0. For ${questionCount} questions, no single position should hold more than ${Math.ceil(questionCount / optionCount)} correct answers.
-2. EQUAL-LENGTH OPTIONS: All ${optionCount} options MUST be similar in length (within 20% word count). The correct answer must NOT be longer, more detailed, or more specific than distractors.
-3. PLAUSIBLE DISTRACTORS: Every wrong option must represent a real misconception, a related-but-incorrect concept, or reasoning from flawed-but-reasonable logic. NO obviously absurd options.
-4. STYLE CONSISTENCY: If one option uses technical language, ALL must. If one describes a scenario, ALL must. No mixing formal/casual within one question's options.
-5. NO HEDGING BIAS: Do NOT make the correct answer the only one with words like "may", "sometimes", "it depends". Either ALL options hedge or NONE do.
+1. RANDOMIZE correctIndex: Distribute correct answers EVENLY across positions 0-${optionCount - 1}. No single position should hold more than ${Math.ceil(questionCount / optionCount)} correct answers.
+2. EQUAL-LENGTH OPTIONS: All ${optionCount} options MUST be similar in length (within 20% word count).
+3. PLAUSIBLE DISTRACTORS: Every wrong option must represent a real misconception from the concept graph.
+4. STYLE CONSISTENCY: If one option uses technical language, ALL must.
+5. NO HEDGING BIAS: Do NOT make the correct answer the only one with "may", "sometimes", etc.
 6. NO GIVEAWAYS: No "all of the above", "none of the above", or joke answers.
 
-UNIVERSAL RULES:
-- Every question must reference at least ${isChildren ? '1' : '2'} named constructs from the extracted list.
-- ${isChildren ? 'Use simple, encouraging language appropriate for ages 6-12.' : 'Every question must introduce a trade-off, boundary case, constraint, or counterfactual.'}
-- ${isChildren ? 'Maximum 20 words per question. Use 3 options, not 4.' : 'No definition questions. No "which is correct?" No surface recall.'}
-- Distractors must ${isChildren ? 'be plausible for a child\'s understanding' : 'reflect common misconceptions, not obviously wrong answers'}.
-- Book type: "${bookType}" — ${profile.identity}.
+ADVERSARIAL QUESTIONS (include at least 1):
+Generate at least one question specifically designed to catch someone who MEMORIZED the definition but does NOT understand the concept. This question should:
+- Present a scenario where the definition seems to apply but actually doesn't (boundary case)
+- OR present two concepts whose definitions overlap but whose applications differ
+- OR require the learner to predict what happens when conditions change
 
-PROHIBITED QUESTION TYPES: ${profile.prohibitedQuestionTypes.join(', ') || 'none'}
-REQUIRED QUESTION TYPES (include at least one): ${profile.requiredQuestionTypes.join(', ')}
+UNIVERSAL RULES:
+- Every question must reference at least ${isChildren ? '1' : '2'} named constructs.
+- ${isChildren ? 'Use simple, encouraging language for ages 6-12.' : 'No definition questions unless format explicitly says definition. No surface recall.'}
+- Book type: "${bookType}" — ${profile.identity}.
+- PROHIBITED: ${profile.prohibitedQuestionTypes.join(', ') || 'none'}
+- REQUIRED (include at least one): ${profile.requiredQuestionTypes.join(', ')}
 
 Each question must have exactly ${optionCount} options.`;
 
@@ -600,14 +799,14 @@ Each question must have exactly ${optionCount} options.`;
       body: JSON.stringify({
         model: "google/gemini-2.5-flash",
         messages: [
-          { role: "system", content: `You are the ScrollLibrary Mastery Engine v2 — ${profile.identity}. Generate intellectually rigorous assessment questions calibrated to this specific book type.` },
+          { role: "system", content: `You are the ScrollLibrary Mastery Engine v3 — ${profile.identity}. Generate intellectually rigorous, format-diversified assessment questions. Every question must follow its assigned format and use distractors from the concept graph.` },
           { role: "user", content: batchPrompt },
         ],
         tools: [{
           type: "function",
           function: {
             name: "generate_mastery_questions",
-            description: "Generate mastery assessment questions with Bloom enforcement",
+            description: "Generate mastery assessment questions with Bloom enforcement and format diversification",
             parameters: {
               type: "object",
               properties: {
@@ -617,18 +816,22 @@ Each question must have exactly ${optionCount} options.`;
                     type: "object",
                     properties: {
                       bloomLevel: { type: "string", enum: ["remember", "understand", "apply", "analyze", "evaluate", "create"] },
+                      questionFormat: { type: "string", enum: ["definition", "scenario_application", "comparison", "error_detection", "reverse_reasoning"] },
                       question: { type: "string" },
+                      scenario: { type: "string", description: "The scenario context (for scenario/error/reverse formats). Empty for definition questions." },
                       options: { type: "array", items: { type: "string" } },
                       correctIndex: { type: "number" },
                       reasoningExplanation: { type: "string", description: "Detailed mechanism-level explanation of why the answer is correct" },
                       bloomJustification: { type: "string", description: "Why this question qualifies for its Bloom level" },
-                      conceptsUsed: { type: "array", items: { type: "string" }, description: "Named constructs referenced in this question" },
-                      questionType: { type: "string", enum: ["trade-off", "boundary-case", "constraint", "counterfactual", "mechanism-breakdown", "assumption-challenge"] },
+                      conceptsUsed: { type: "array", items: { type: "string" }, description: "Named constructs referenced" },
+                      distractorSources: { type: "array", items: { type: "string" }, description: "Which related concepts the wrong answers come from" },
+                      questionType: { type: "string", enum: ["trade-off", "boundary-case", "constraint", "counterfactual", "mechanism-breakdown", "assumption-challenge", "error-identification", "reverse-inference"] },
+                      isAdversarial: { type: "boolean", description: "True if this question is designed to catch memorizers" },
                       difficulty: { type: "number", description: "1-6 difficulty scale" },
                       pointValue: { type: "number" },
                       timeLimit: { type: "number" }
                     },
-                    required: ["bloomLevel", "question", "options", "correctIndex", "reasoningExplanation", "bloomJustification", "conceptsUsed", "questionType", "difficulty", "pointValue", "timeLimit"],
+                    required: ["bloomLevel", "questionFormat", "question", "options", "correctIndex", "reasoningExplanation", "bloomJustification", "conceptsUsed", "distractorSources", "questionType", "isAdversarial", "difficulty", "pointValue", "timeLimit"],
                     additionalProperties: false
                   }
                 }
@@ -689,35 +892,37 @@ Each question must have exactly ${optionCount} options.`;
           messages: [
             { role: "system", content: `You are a Question Quality Validator — ${profile.identity}.
 
-Evaluate this assessment question against these criteria:
+Evaluate each assessment question against these criteria:
 1. Does it require mechanism-level reasoning? (not just recall)
 2. Does it force trade-off evaluation or boundary analysis?
 3. Can it be answered by trivial elimination of options?
 4. Can it be answered with a single-sentence recall?
 5. Are distractors plausible and based on common misconceptions?
 6. Does it incorporate named constructs from the domain?
+7. Does it follow its assigned question format correctly?
+8. Would a memorizer (someone who memorized definitions but doesn't understand) get it right?
 
 TYPE-SPECIFIC QUALITY CHECKS ("${bookType}"):
 ${profile.questionStyle}
 
 PROHIBITED PATTERNS: ${profile.prohibitedQuestionTypes.join(', ') || 'none'}
 
-${isChildren ? 'FOR CHILDREN: Evaluate age-appropriateness, clarity, and supportive framing instead of mechanism complexity.' : ''}
+${isChildren ? 'FOR CHILDREN: Evaluate age-appropriateness and supportive framing instead of mechanism complexity.' : ''}
 
-If ANY of criteria 1-2 are NO, or if criteria 3-4 are YES, mark as FAIL.
-${isChildren ? 'EXCEPTION: For children\'s books, criteria 1-2 are relaxed — focus on age-appropriate reasoning instead.' : ''}
+FAIL CONDITIONS:
+- Criteria 1-2 are NO (unless children's book)
+- Criteria 3-4 are YES
+- Criterion 8 is YES (memorizer would pass)
+- Format doesn't match assignment
 
-Return JSON:
-{
-  "pass": true/false,
-  "failReasons": ["..."],
-  "strengthScore": 1-10
-}` },
+Return JSON.` },
             { role: "user", content: `Evaluate these ${questions.length} questions:\n${JSON.stringify(questions.map((q: any, i: number) => ({
               index: i,
               bloomLevel: q.bloomLevel,
+              questionFormat: q.questionFormat,
               question: q.question,
               options: q.options,
+              isAdversarial: q.isAdversarial,
             })), null, 2)}` },
           ],
           tools: [{
@@ -736,15 +941,17 @@ Return JSON:
                         index: { type: "number" },
                         pass: { type: "boolean" },
                         strengthScore: { type: "number" },
-                        failReasons: { type: "array", items: { type: "string" } }
+                        failReasons: { type: "array", items: { type: "string" } },
+                        memorizeResistant: { type: "boolean", description: "True if a memorizer would likely fail this question" }
                       },
-                      required: ["index", "pass", "strengthScore"],
+                      required: ["index", "pass", "strengthScore", "memorizeResistant"],
                       additionalProperties: false
                     }
                   },
-                  overallDepthScore: { type: "number", description: "Average depth score 1-10" }
+                  overallDepthScore: { type: "number", description: "Average depth score 1-10" },
+                  formatDiversityScore: { type: "number", description: "How diverse the question formats are, 1-10" }
                 },
-                required: ["results", "overallDepthScore"],
+                required: ["results", "overallDepthScore", "formatDiversityScore"],
                 additionalProperties: false
               }
             }
@@ -772,6 +979,7 @@ Return JSON:
             questions[result.index].stressTestPass = result.pass;
             questions[result.index].strengthScore = result.strengthScore;
             questions[result.index].stressTestFailReasons = result.failReasons || [];
+            questions[result.index].memorizeResistant = result.memorizeResistant ?? true;
           }
         }
 
@@ -780,14 +988,15 @@ Return JSON:
           passed: passCount,
           total: stressResults.results.length,
           overallDepth: stressResults.overallDepthScore,
+          formatDiversity: stressResults.formatDiversityScore,
         });
       }
     }
 
     // ──────────────────────────────────────────────
-    // STEP 4: Normalize and compute mastery depth (profile-aware scoring)
+    // STEP 4: Normalize, shuffle, compute entropy
     // ──────────────────────────────────────────────
-    log("Step 4: Compute mastery depth score", { profile: profile.identity });
+    log("Step 4: Normalize, shuffle, compute entropy", { profile: profile.identity });
 
     const maxOptions = isChildren ? 3 : 4;
 
@@ -804,47 +1013,80 @@ Return JSON:
       };
     }
 
-    // Track position distribution to detect and fix clustering
     const positionCounts: Record<number, number> = {};
 
     questions = questions.map((q: any, idx: number) => {
       const bl = q.bloomLevel || bloomDistribution[idx] || "analyze";
       const timeMult = profile.scoringModifiers.timeLimitMultiplier;
+      const fmt = q.questionFormat || questionFormats[idx] || 'scenario_application';
 
       let options = Array.isArray(q.options) && q.options.length >= maxOptions
         ? q.options.slice(0, maxOptions)
         : isChildren ? ["A", "B", "C"] : ["A", "B", "C", "D"];
       let correctIndex = typeof q.correctIndex === "number" && q.correctIndex >= 0 && q.correctIndex < maxOptions ? q.correctIndex : 0;
 
-      // ALWAYS shuffle options server-side to eliminate AI position bias
+      // ALWAYS shuffle options server-side
       const shuffled = shuffleWithTracking(options, correctIndex);
       options = shuffled.options;
       correctIndex = shuffled.correctIndex;
 
-      // Track position distribution
       positionCounts[correctIndex] = (positionCounts[correctIndex] || 0) + 1;
 
       return {
         bloomLevel: bl,
+        questionFormat: fmt,
         question: q.question || `Question ${idx + 1}`,
+        scenario: q.scenario || null,
         options,
         correctIndex,
         reasoningExplanation: q.reasoningExplanation || q.explanation || "Correct based on chapter content.",
         bloomJustification: q.bloomJustification || `This question targets the ${bl} level of Bloom's taxonomy.`,
         conceptsUsed: Array.isArray(q.conceptsUsed) ? q.conceptsUsed : [],
+        distractorSources: Array.isArray(q.distractorSources) ? q.distractorSources : [],
         questionType: q.questionType || "mechanism-breakdown",
+        isAdversarial: q.isAdversarial || false,
         difficulty: q.difficulty || 3,
         pointValue: q.pointValue || (bl === "evaluate" ? 7 : bl === "analyze" ? 5 : bl === "apply" ? 3 : 1),
         timeLimit: Math.round((q.timeLimit || 120) * timeMult),
         stressTestPass: q.stressTestPass ?? true,
         strengthScore: q.strengthScore ?? 5,
         stressTestFailReasons: q.stressTestFailReasons || [],
+        memorizeResistant: q.memorizeResistant ?? true,
       };
     });
 
+    // Shuffle question ORDER (so concept sequence is unpredictable)
+    for (let i = questions.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [questions[i], questions[j]] = [questions[j], questions[i]];
+    }
+
     log("Answer position distribution", positionCounts);
 
-    // Compute mastery depth score (scaled 0-100)
+    // ──────────────────────────────────────────────
+    // STEP 5: Entropy validation
+    // ──────────────────────────────────────────────
+    const formatCounts: Record<string, number> = {};
+    for (const q of questions) {
+      formatCounts[q.questionFormat] = (formatCounts[q.questionFormat] || 0) + 1;
+    }
+    const defPercent = (formatCounts['definition'] || 0) / Math.max(questions.length, 1);
+    const scenarioPercent = (formatCounts['scenario_application'] || 0) / Math.max(questions.length, 1);
+    const hasComparisonOrReasoning = (formatCounts['comparison'] || 0) + (formatCounts['error_detection'] || 0) + (formatCounts['reverse_reasoning'] || 0) > 0;
+    const adversarialCount = questions.filter((q: any) => q.isAdversarial).length;
+
+    const entropyReport = {
+      formatDistribution: formatCounts,
+      definitionPercent: Math.round(defPercent * 100),
+      scenarioPercent: Math.round(scenarioPercent * 100),
+      hasComparisonOrReasoning,
+      adversarialCount,
+      passesEntropyCheck: defPercent <= ENTROPY_RULES.maxDefinitionPercent && scenarioPercent >= ENTROPY_RULES.minScenarioPercent && hasComparisonOrReasoning,
+    };
+
+    log("Entropy report", entropyReport);
+
+    // Compute mastery depth score
     const depthScores = questions.map((q: any) => q.strengthScore || 5);
     const masteryDepthScore = depthScores.length > 0
       ? Math.round((depthScores.reduce((a: number, b: number) => a + b, 0) / depthScores.length) * 10)
@@ -874,6 +1116,7 @@ Return JSON:
           ? Math.round((depthScores.reduce((a: number, b: number) => a + b, 0) / depthScores.length) * 10) / 10
           : 0,
       },
+      entropyReport,
       cognitiveProfile: {
         bookType,
         identity: profile.identity,
@@ -887,6 +1130,7 @@ Return JSON:
       questions: result.questions.length,
       depth: result.masteryDepthScore,
       hasEvalCreate: result.hasEvaluateOrCreate,
+      entropy: entropyReport.passesEntropyCheck,
       profile: profile.identity,
     });
 

@@ -698,6 +698,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
               description={fig.description}
               renderMode={fig.renderMode}
               visualType={fig.type}
+              cognitiveScore={fig.cognitiveScore}
               className="my-6"
             />
           );

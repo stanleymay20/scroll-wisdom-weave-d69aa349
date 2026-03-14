@@ -1,4 +1,4 @@
-import { memo, useMemo } from "react";
+import { memo, useMemo, Component, type ReactNode } from "react";
 import { MermaidDiagram, descriptionToMermaid } from "./visuals/MermaidDiagram";
 import { DataChart } from "./visuals/DataChart";
 import { ComparisonTable } from "./visuals/ComparisonTable";
@@ -25,6 +25,49 @@ export interface FigureRendererProps {
   cognitiveScore?: number;
   figureNumber: number;
   className?: string;
+}
+
+/**
+ * ErrorFallback — Catches render failures and shows caption + description
+ * instead of a broken UI. Uses React error boundary pattern.
+ */
+interface ErrorFallbackProps {
+  children: ReactNode;
+  fallbackCaption: string;
+  fallbackDescription: string;
+  visualType: string;
+}
+
+interface ErrorFallbackState {
+  hasError: boolean;
+  errorMessage: string;
+}
+
+class ErrorFallback extends Component<ErrorFallbackProps, ErrorFallbackState> {
+  state: ErrorFallbackState = { hasError: false, errorMessage: '' };
+
+  static getDerivedStateFromError(error: Error): ErrorFallbackState {
+    return { hasError: true, errorMessage: error.message || 'Render failed' };
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="bg-muted/20 border border-dashed border-border rounded-lg p-4 text-center">
+          <div className="text-xs text-muted-foreground/60 mb-1 font-mono">
+            {this.props.visualType.replace(/_/g, ' ')} — fallback
+          </div>
+          <p className="text-sm text-muted-foreground">
+            {this.props.fallbackCaption}
+          </p>
+          <p className="text-xs text-muted-foreground/70 mt-1">
+            {this.props.fallbackDescription}
+          </p>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
 }
 
 /**
@@ -154,50 +197,6 @@ export const FigureRenderer = memo(function FigureRenderer({
     </figure>
   );
 });
-
-/**
- * ErrorFallback — Catches render failures and shows caption + description
- * instead of a broken UI. Uses React error boundary pattern.
- */
-import { Component, type ReactNode } from "react";
-
-interface ErrorFallbackProps {
-  children: ReactNode;
-  fallbackCaption: string;
-  fallbackDescription: string;
-  visualType: string;
-}
-
-interface ErrorFallbackState {
-  hasError: boolean;
-}
-
-class ErrorFallback extends Component<ErrorFallbackProps, ErrorFallbackState> {
-  state: ErrorFallbackState = { hasError: false };
-
-  static getDerivedStateFromError(): ErrorFallbackState {
-    return { hasError: true };
-  }
-
-  render() {
-    if (this.state.hasError) {
-      return (
-        <div className="bg-muted/20 border border-dashed border-border rounded-lg p-4 text-center">
-          <div className="text-xs text-muted-foreground/60 mb-1 font-mono">
-            {this.props.visualType.replace(/_/g, ' ')}
-          </div>
-          <p className="text-sm text-muted-foreground">
-            {this.props.fallbackCaption}
-          </p>
-          <p className="text-xs text-muted-foreground/70 mt-1">
-            {this.props.fallbackDescription}
-          </p>
-        </div>
-      );
-    }
-    return this.props.children;
-  }
-}
 
 /**
  * Render mode badge for diagnostic/admin views
