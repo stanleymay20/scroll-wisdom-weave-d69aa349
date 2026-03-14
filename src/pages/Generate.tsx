@@ -338,8 +338,8 @@ export default function Generate() {
     try {
       const { data, error } = await supabase.functions.invoke("generate-book", {
         body: {
-          title,
-          description,
+          title: sanitizedTitle,
+          description: sanitizedDescription,
           category,
           numChapters: parseInt(numChapters),
           wordCount: getEffectiveWordCount(),
