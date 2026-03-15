@@ -105,9 +105,11 @@ export function QuizMode({
   const [stressTestSummary, setStressTestSummary] = useState<any>(null);
   const [adaptiveDifficulty, setAdaptiveDifficulty] = useState(3);
   const [wrongAnswers, setWrongAnswers] = useState<MasteryQuestion[]>([]);
+  const [graphQuestionCount, setGraphQuestionCount] = useState(0);
   const { toast } = useToast();
   const quizStartTime = useRef(Date.now());
   const { t } = useLanguage();
+  const { generateGraphQuestions } = useGraphDrivenQuestions();
 
   // Fetch adaptive difficulty on mount
   useEffect(() => {

@@ -95,3 +95,6 @@ verify_jwt = false
 
 [functions.merge-book-graph]
 verify_jwt = false
+
+[functions.graph-driven-questions]
+verify_jwt = false
