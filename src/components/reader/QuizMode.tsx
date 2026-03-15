@@ -25,6 +25,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { type BloomLevel } from "@/lib/masteryEngine";
 import { computeAdaptiveRecommendation, getDifficultyLabel, type PerformanceSnapshot } from "@/lib/adaptiveDifficulty";
 import { scoreToQuality } from "@/lib/spacedRepetition";
+import { useGraphDrivenQuestions } from "@/hooks/useGraphDrivenQuestions";
 
 interface MasteryQuestion {
   bloomLevel: BloomLevel;
