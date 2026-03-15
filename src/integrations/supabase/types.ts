@@ -1573,6 +1573,59 @@ export type Database = {
           },
         ]
       }
+      quiz_question_history: {
+        Row: {
+          bloom_level: string
+          book_id: string
+          concept_pair_key: string
+          created_at: string
+          id: string
+          is_graph_driven: boolean
+          question_hash: string | null
+          question_type: string
+          relationship_types: string[]
+          source_chapters: number[]
+          source_concept_ids: string[]
+          user_id: string
+        }
+        Insert: {
+          bloom_level: string
+          book_id: string
+          concept_pair_key: string
+          created_at?: string
+          id?: string
+          is_graph_driven?: boolean
+          question_hash?: string | null
+          question_type: string
+          relationship_types?: string[]
+          source_chapters?: number[]
+          source_concept_ids?: string[]
+          user_id: string
+        }
+        Update: {
+          bloom_level?: string
+          book_id?: string
+          concept_pair_key?: string
+          created_at?: string
+          id?: string
+          is_graph_driven?: boolean
+          question_hash?: string | null
+          question_type?: string
+          relationship_types?: string[]
+          source_chapters?: number[]
+          source_concept_ids?: string[]
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "quiz_question_history_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       reading_goals: {
         Row: {
           created_at: string
