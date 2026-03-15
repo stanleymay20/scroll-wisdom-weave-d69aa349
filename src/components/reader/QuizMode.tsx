@@ -25,6 +25,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { type BloomLevel } from "@/lib/masteryEngine";
 import { computeAdaptiveRecommendation, getDifficultyLabel, type PerformanceSnapshot } from "@/lib/adaptiveDifficulty";
 import { scoreToQuality } from "@/lib/spacedRepetition";
+import { useGraphDrivenQuestions } from "@/hooks/useGraphDrivenQuestions";
 
 interface MasteryQuestion {
   bloomLevel: BloomLevel;
@@ -78,6 +79,11 @@ const QUESTION_TYPE_LABELS: Record<string, string> = {
   "counterfactual": "Counterfactual",
   "mechanism-breakdown": "Mechanism Analysis",
   "assumption-challenge": "Assumption Challenge",
+  "prerequisite_check": "Prerequisite Check",
+  "comparison": "Comparison",
+  "cross_chapter_synthesis": "Cross-Chapter Synthesis",
+  "dependency_reasoning": "Dependency Reasoning",
+  "misconception_repair": "Misconception Repair",
 };
 
 export function QuizMode({
@@ -104,9 +110,11 @@ export function QuizMode({
   const [stressTestSummary, setStressTestSummary] = useState<any>(null);
   const [adaptiveDifficulty, setAdaptiveDifficulty] = useState(3);
   const [wrongAnswers, setWrongAnswers] = useState<MasteryQuestion[]>([]);
+  const [graphQuestionCount, setGraphQuestionCount] = useState(0);
   const { toast } = useToast();
   const quizStartTime = useRef(Date.now());
   const { t } = useLanguage();
+  const { generateGraphQuestions } = useGraphDrivenQuestions();
 
   // Fetch adaptive difficulty on mount
   useEffect(() => {
@@ -145,36 +153,94 @@ export function QuizMode({
     setSelectedAnswer(null);
     setShowResult(false);
     setWrongAnswers([]);
+    setGraphQuestionCount(0);
     quizStartTime.current = Date.now();
 
     try {
-      const { data, error } = await supabase.functions.invoke("mastery-assessment", {
-        body: {
-          chapterContent: chapterContent.slice(0, 10000),
-          chapterTitle,
+      const totalCount = isMasteryMode ? 7 : 5;
+
+      // ── Try graph-driven questions first ────────
+      let graphQuestions: MasteryQuestion[] = [];
+      try {
+        const graphResult = await generateGraphQuestions({
+          bookId,
           bookTitle,
           bookType,
-          bloomLevel: isMasteryMode ? "evaluate" : "analyze",
-          questionCount: isMasteryMode ? 7 : 5,
-          difficulty: adaptiveDifficulty,
-        },
-      });
+          currentChapter: undefined,
+          questionCount: Math.ceil(totalCount * 0.5), // up to 50% from graph
+          chapterContent: chapterContent.slice(0, 5000),
+        });
 
-      if (error) {
-        if (error.message?.includes('429') || error.message?.includes('Rate limit')) {
-          throw new Error('Too many requests. Please wait 30 seconds and try again.');
+        if (graphResult?.questions?.length) {
+          graphQuestions = graphResult.questions.map((gq) => ({
+            bloomLevel: gq.bloomLevel as BloomLevel,
+            question: gq.question,
+            options: gq.options,
+            correctIndex: gq.correctIndex,
+            reasoningExplanation: gq.reasoningExplanation,
+            bloomJustification: gq.bloomJustification,
+            conceptsUsed: gq.conceptsUsed,
+            questionType: gq.questionType,
+            difficulty: gq.difficulty,
+            pointValue: gq.pointValue,
+            timeLimit: gq.timeLimit,
+            // Preserve graph metadata
+            sourceConceptIds: (gq as any).sourceConceptIds,
+            sourceChapters: (gq as any).sourceChapters,
+            graphReason: (gq as any).graphReason,
+            isGraphDriven: true,
+          } as any));
+          setGraphQuestionCount(graphQuestions.length);
         }
-        if (error.message?.includes('402')) {
-          throw new Error('AI credits exhausted. Please check your subscription.');
-        }
-        throw error;
+      } catch {
+        // Silent — fall back to standard questions only
       }
 
-      if (data?.questions && Array.isArray(data.questions)) {
-        setQuestions(data.questions);
-        setConcepts(data.concepts || null);
-        setMasteryDepthScore(data.masteryDepthScore || 0);
-        setStressTestSummary(data.stressTestSummary || null);
+      // ── Fill remaining with standard mastery-assessment ──
+      const remainingCount = totalCount - graphQuestions.length;
+
+      let standardQuestions: MasteryQuestion[] = [];
+      if (remainingCount > 0) {
+        const { data, error } = await supabase.functions.invoke("mastery-assessment", {
+          body: {
+            chapterContent: chapterContent.slice(0, 10000),
+            chapterTitle,
+            bookTitle,
+            bookType,
+            bloomLevel: isMasteryMode ? "evaluate" : "analyze",
+            questionCount: remainingCount,
+            difficulty: adaptiveDifficulty,
+          },
+        });
+
+        if (error) {
+          if (error.message?.includes('429') || error.message?.includes('Rate limit')) {
+            throw new Error('Too many requests. Please wait 30 seconds and try again.');
+          }
+          if (error.message?.includes('402')) {
+            throw new Error('AI credits exhausted. Please check your subscription.');
+          }
+          throw error;
+        }
+
+        if (data?.questions && Array.isArray(data.questions)) {
+          standardQuestions = data.questions;
+          setConcepts(data.concepts || null);
+          setMasteryDepthScore(data.masteryDepthScore || 0);
+          setStressTestSummary(data.stressTestSummary || null);
+        }
+      }
+
+      // ── Merge & shuffle ──────────────────────────
+      const allQuestions = [...graphQuestions, ...standardQuestions];
+      // Fisher-Yates shuffle
+      for (let i = allQuestions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
+      }
+
+      if (allQuestions.length > 0) {
+        setQuestions(allQuestions);
       } else {
         throw new Error("No assessment questions generated");
       }
@@ -189,7 +255,7 @@ export function QuizMode({
     } finally {
       setIsLoading(false);
     }
-  }, [chapterContent, chapterTitle, bookTitle, isMasteryMode, bookType, toast, t, adaptiveDifficulty]);
+  }, [chapterContent, chapterTitle, bookTitle, isMasteryMode, bookType, toast, t, adaptiveDifficulty, bookId, generateGraphQuestions]);
 
   const handleSelectAnswer = (index: number) => {
     if (showResult) return;
