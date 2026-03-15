@@ -26,6 +26,7 @@ import { type BloomLevel } from "@/lib/masteryEngine";
 import { computeAdaptiveRecommendation, getDifficultyLabel, type PerformanceSnapshot } from "@/lib/adaptiveDifficulty";
 import { scoreToQuality } from "@/lib/spacedRepetition";
 import { useGraphDrivenQuestions } from "@/hooks/useGraphDrivenQuestions";
+import { runEntropyPipeline, computeEntropyScore, type EntropyScore } from "@/lib/quizEntropy";
 
 interface MasteryQuestion {
   bloomLevel: BloomLevel;
@@ -111,6 +112,7 @@ export function QuizMode({
   const [adaptiveDifficulty, setAdaptiveDifficulty] = useState(3);
   const [wrongAnswers, setWrongAnswers] = useState<MasteryQuestion[]>([]);
   const [graphQuestionCount, setGraphQuestionCount] = useState(0);
+  const [entropyScore, setEntropyScore] = useState<EntropyScore | null>(null);
   const { toast } = useToast();
   const quizStartTime = useRef(Date.now());
   const { t } = useLanguage();
@@ -201,6 +203,8 @@ export function QuizMode({
 
       let standardQuestions: MasteryQuestion[] = [];
       if (remainingCount > 0) {
+        // Pass graph question texts for cross-source dedup
+        const previousTexts = graphQuestions.map((q: any) => q.question).filter(Boolean);
         const { data, error } = await supabase.functions.invoke("mastery-assessment", {
           body: {
             chapterContent: chapterContent.slice(0, 10000),
@@ -210,6 +214,7 @@ export function QuizMode({
             bloomLevel: isMasteryMode ? "evaluate" : "analyze",
             questionCount: remainingCount,
             difficulty: adaptiveDifficulty,
+            previousQuestionTexts: previousTexts,
           },
         });
 
@@ -231,16 +236,74 @@ export function QuizMode({
         }
       }
 
-      // ── Merge & shuffle ──────────────────────────
+      // ── Merge, dedup, entropy check, shuffle ───
       const allQuestions = [...graphQuestions, ...standardQuestions];
-      // Fisher-Yates shuffle
-      for (let i = allQuestions.length - 1; i > 0; i--) {
-        const j = Math.floor(Math.random() * (i + 1));
-        [allQuestions[i], allQuestions[j]] = [allQuestions[j], allQuestions[i]];
+
+      // Run entropy pipeline (dedup + scoring + history recording)
+      let finalQuestions = allQuestions;
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+          const pipelineResult = await runEntropyPipeline(
+            user.id,
+            bookId,
+            allQuestions,
+            undefined // weakConceptIds — could pass from graph hook
+          );
+          finalQuestions = pipelineResult.questions;
+          setEntropyScore(pipelineResult.entropy);
+
+          if (pipelineResult.dedupStats.rejected > 0) {
+            console.log(`[QuizMode] Entropy: rejected ${pipelineResult.dedupStats.rejected} repetitive questions, entropy=${pipelineResult.entropy.overall}`);
+          }
+
+          // If entropy is below threshold and we have enough questions, try one more
+          // round of graph questions to fill gaps (but only once to avoid loops)
+          if (pipelineResult.entropy.belowThreshold && pipelineResult.questions.length < totalCount) {
+            try {
+              const supplementResult = await generateGraphQuestions({
+                bookId,
+                bookTitle,
+                bookType,
+                questionCount: totalCount - pipelineResult.questions.length,
+                chapterContent: chapterContent.slice(0, 3000),
+              });
+              if (supplementResult?.questions?.length) {
+                const supplementMapped = supplementResult.questions.map((gq) => ({
+                  bloomLevel: gq.bloomLevel,
+                  question: gq.question,
+                  options: gq.options,
+                  correctIndex: gq.correctIndex,
+                  reasoningExplanation: gq.reasoningExplanation,
+                  bloomJustification: gq.bloomJustification,
+                  conceptsUsed: gq.conceptsUsed,
+                  questionType: gq.questionType,
+                  difficulty: gq.difficulty,
+                  pointValue: gq.pointValue,
+                  timeLimit: gq.timeLimit,
+                  sourceConceptIds: gq.sourceConceptIds,
+                  sourceChapters: gq.sourceChapters,
+                  graphReason: gq.graphReason,
+                  isGraphDriven: true,
+                }));
+                finalQuestions = [...pipelineResult.questions, ...supplementMapped];
+                setEntropyScore(computeEntropyScore(finalQuestions));
+              }
+            } catch { /* silent */ }
+          }
+        }
+      } catch {
+        // If entropy pipeline fails, just use raw merged questions
       }
 
-      if (allQuestions.length > 0) {
-        setQuestions(allQuestions);
+      // Fisher-Yates shuffle
+      for (let i = finalQuestions.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [finalQuestions[i], finalQuestions[j]] = [finalQuestions[j], finalQuestions[i]];
+      }
+
+      if (finalQuestions.length > 0) {
+        setQuestions(finalQuestions as any);
       } else {
         throw new Error("No assessment questions generated");
       }
