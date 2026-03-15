@@ -26,6 +26,7 @@ import { type BloomLevel } from "@/lib/masteryEngine";
 import { computeAdaptiveRecommendation, getDifficultyLabel, type PerformanceSnapshot } from "@/lib/adaptiveDifficulty";
 import { scoreToQuality } from "@/lib/spacedRepetition";
 import { useGraphDrivenQuestions } from "@/hooks/useGraphDrivenQuestions";
+import { runEntropyPipeline, computeEntropyScore, type EntropyScore } from "@/lib/quizEntropy";
 
 interface MasteryQuestion {
   bloomLevel: BloomLevel;
