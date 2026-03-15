@@ -112,6 +112,7 @@ export function QuizMode({
   const [adaptiveDifficulty, setAdaptiveDifficulty] = useState(3);
   const [wrongAnswers, setWrongAnswers] = useState<MasteryQuestion[]>([]);
   const [graphQuestionCount, setGraphQuestionCount] = useState(0);
+  const [entropyScore, setEntropyScore] = useState<EntropyScore | null>(null);
   const { toast } = useToast();
   const quizStartTime = useRef(Date.now());
   const { t } = useLanguage();
