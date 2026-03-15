@@ -203,6 +203,8 @@ export function QuizMode({
 
       let standardQuestions: MasteryQuestion[] = [];
       if (remainingCount > 0) {
+        // Pass graph question texts for cross-source dedup
+        const previousTexts = graphQuestions.map((q: any) => q.question).filter(Boolean);
         const { data, error } = await supabase.functions.invoke("mastery-assessment", {
           body: {
             chapterContent: chapterContent.slice(0, 10000),
@@ -212,6 +214,7 @@ export function QuizMode({
             bloomLevel: isMasteryMode ? "evaluate" : "analyze",
             questionCount: remainingCount,
             difficulty: adaptiveDifficulty,
+            previousQuestionTexts: previousTexts,
           },
         });
 
