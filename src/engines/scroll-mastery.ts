@@ -31,6 +31,9 @@ export {
 // ─── Spaced Repetition ───────────────────────────────────
 export { useSpacedRepetition } from '@/hooks/useSpacedRepetition';
 
+// ─── Graph-Driven Questions ─────────────────────────────
+export { useGraphDrivenQuestions } from '@/hooks/useGraphDrivenQuestions';
+
 // ─── Adaptive Difficulty ─────────────────────────────────
 export { useAdaptiveDifficulty } from '@/hooks/useAdaptiveDifficulty';
 

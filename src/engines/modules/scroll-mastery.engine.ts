@@ -28,6 +28,7 @@ export const ScrollMasteryEngine: EngineModule = {
             'competency_learning_panel',
             'spaced_repetition',
             'adaptive_difficulty',
+            'graph_driven_questions',
           ],
           chaptersAssessable: context.totalChapters,
         },

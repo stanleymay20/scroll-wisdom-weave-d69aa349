@@ -79,6 +79,11 @@ const QUESTION_TYPE_LABELS: Record<string, string> = {
   "counterfactual": "Counterfactual",
   "mechanism-breakdown": "Mechanism Analysis",
   "assumption-challenge": "Assumption Challenge",
+  "prerequisite_check": "Prerequisite Check",
+  "comparison": "Comparison",
+  "cross_chapter_synthesis": "Cross-Chapter Synthesis",
+  "dependency_reasoning": "Dependency Reasoning",
+  "misconception_repair": "Misconception Repair",
 };
 
 export function QuizMode({
