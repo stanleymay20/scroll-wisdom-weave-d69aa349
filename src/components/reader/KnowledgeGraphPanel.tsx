@@ -730,6 +730,7 @@ export function KnowledgeGraphPanel({
             />
           )}
         </AnimatePresence>
+        </div>
           </motion.div>
         </>
       )}
