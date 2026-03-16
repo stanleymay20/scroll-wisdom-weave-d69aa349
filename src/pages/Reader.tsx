@@ -201,7 +201,7 @@ export default function Reader() {
   const [guidedModeActive, setGuidedModeActive] = useState(true);
   const [showQA, setShowQA] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
-  const [showVoiceConversation, setShowVoiceConversation] = useState(false);
+  // VoiceConversation merged into InteractiveQA
   const [showPlayground, setShowPlayground] = useState(false);
   const [showChapterVideo, setShowChapterVideo] = useState(false);
   

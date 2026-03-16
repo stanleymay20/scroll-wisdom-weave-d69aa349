@@ -82,18 +82,11 @@ export function ReaderToolsSheet({
 
   const tools: ToolAction[] = [
     {
-      id: "voice",
-      label: "Voice AI",
-      icon: <Mic className="h-5 w-5" />,
-      onClick: onVoiceClick,
-      variant: "primary",
-      hidden: !FEATURES.enableVoiceConversation,
-    },
-    {
       id: "qa",
       label: "Ask AI",
       icon: <MessageCircle className="h-5 w-5" />,
       onClick: onQAClick,
+      variant: "primary",
     },
     {
       id: "quiz",
