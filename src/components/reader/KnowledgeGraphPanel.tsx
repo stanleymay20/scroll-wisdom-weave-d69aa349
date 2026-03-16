@@ -299,6 +299,12 @@ export function KnowledgeGraphPanel({
     }
   }, [isOpen, chapterGraph, isLoading, extractGraph]);
 
+  useEffect(() => {
+    if (isOpen && !chapterGraph && bookGraph.hasGraph) {
+      setViewMode('book');
+    }
+  }, [isOpen, chapterGraph, bookGraph.hasGraph]);
+
   // Reset on chapter change
   useEffect(() => {
     setChapterGraph(null);
