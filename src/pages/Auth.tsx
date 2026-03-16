@@ -395,16 +395,35 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
                   setIsLoading(true);
                   setAuthError(null);
                   try {
-                    const result = await lovable.auth.signInWithOAuth("google", {
-                      redirect_uri: window.location.origin,
-                    });
-                    if (result?.error) {
-                      console.error("[Auth] Google OAuth error:", result.error);
-                      setAuthError(getErrorMessage(result.error));
-                      setIsLoading(false);
+                    const isCustomDomain =
+                      !window.location.hostname.includes("lovable.app") &&
+                      !window.location.hostname.includes("lovableproject.com");
+
+                    if (isCustomDomain) {
+                      const { data, error } = await supabase.auth.signInWithOAuth({
+                        provider: "google",
+                        options: {
+                          redirectTo: `${window.location.origin}${redirectTo}`,
+                          skipBrowserRedirect: true,
+                        },
+                      });
+                      if (error) throw error;
+                      if (data?.url) {
+                        const oauthUrl = new URL(data.url);
+                        const allowedHosts = ["accounts.google.com", `${import.meta.env.VITE_SUPABASE_PROJECT_ID}.supabase.co`];
+                        if (!allowedHosts.some((h) => oauthUrl.hostname.includes(h))) {
+                          throw new Error("Invalid OAuth redirect URL");
+                        }
+                        window.location.href = data.url;
+                      }
+                    } else {
+                      const result = await lovable.auth.signInWithOAuth("google", {
+                        redirect_uri: window.location.origin,
+                      });
+                      if (result?.error) throw result.error;
                     }
                   } catch (err) {
-                    console.error("[Auth] Google OAuth exception:", err);
+                    console.error("[Auth] Google OAuth error:", err);
                     setAuthError(getErrorMessage(err));
                     setIsLoading(false);
                   }
