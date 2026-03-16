@@ -112,6 +112,7 @@ export function useBookKnowledgeGraph(bookId: string | undefined) {
       }
       const { data, error } = await supabase.functions.invoke('merge-book-graph', {
         body: { bookId, chapterNumber, concepts, relationships, mermaidGraph },
+        headers: { Authorization: `Bearer ${session.access_token}` },
       });
       if (error) throw error;
       // Refresh

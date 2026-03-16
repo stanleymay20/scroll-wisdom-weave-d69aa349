@@ -264,8 +264,13 @@ export function KnowledgeGraphPanel({
     setError(null);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+      const headers = accessToken ? { Authorization: `Bearer ${accessToken}` } : undefined;
+
       const { data, error: fnError } = await supabase.functions.invoke('extract-knowledge-graph', {
         body: { chapterContent, chapterTitle, bookTitle, chapterNumber },
+        headers,
       });
 
       if (fnError) throw fnError;

@@ -160,7 +160,7 @@ export function InteractiveQA({
         const { data, error } = await supabase.functions.invoke("voice-conversation", {
           body: {
             userMessage: question.trim(),
-            chapterContent: chapterContent.slice(0, 8000),
+            chapterContent: chapterContent.slice(0, 4000),
             chapterTitle,
             bookTitle,
             cognitiveLevel,
