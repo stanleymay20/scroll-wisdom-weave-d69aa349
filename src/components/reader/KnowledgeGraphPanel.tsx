@@ -244,6 +244,12 @@ export function KnowledgeGraphPanel({
   const extractGraph = useCallback(async () => {
     if (!chapterContent || chapterContent.length < 50) return;
 
+    // If we already have persistent book graph data for this chapter/book, prefer it immediately.
+    if (bookGraph.hasGraph) {
+      const hasChapterNodes = bookGraph.getNodesForChapter(chapterNumber).length > 0;
+      setViewMode(hasChapterNodes ? 'chapter' : 'book');
+    }
+
     // Check localStorage cache
     try {
       const cached = localStorage.getItem(cacheKey);
@@ -251,7 +257,6 @@ export function KnowledgeGraphPanel({
         const parsed = JSON.parse(cached);
         if (parsed.concepts?.length > 0) {
           setChapterGraph(parsed);
-          // Auto-merge to book graph if we have bookId
           if (bookId && parsed.concepts) {
             bookGraph.mergeChapterGraph(chapterNumber, parsed.concepts, parsed.relationships, parsed.mermaidGraph);
           }
@@ -279,18 +284,20 @@ export function KnowledgeGraphPanel({
       setChapterGraph(data);
       try { localStorage.setItem(cacheKey, JSON.stringify(data)); } catch {}
 
-      // Auto-merge to book-level graph
       if (bookId && data.concepts) {
-        bookGraph.mergeChapterGraph(chapterNumber, data.concepts, data.relationships, data.mermaidGraph);
+        await bookGraph.mergeChapterGraph(chapterNumber, data.concepts, data.relationships, data.mermaidGraph);
       }
     } catch (err: any) {
       const msg = err?.message || 'Failed to extract knowledge graph';
       setError(msg);
-      toast({ title: 'Knowledge extraction failed', description: msg, variant: 'destructive' });
+
+      if (!bookGraph.hasGraph) {
+        toast({ title: 'Knowledge extraction failed', description: msg, variant: 'destructive' });
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [chapterContent, chapterTitle, bookTitle, chapterNumber, cacheKey, toast, bookId]);
+  }, [chapterContent, chapterTitle, bookTitle, chapterNumber, cacheKey, toast, bookId, bookGraph]);
 
   // Auto-extract when panel opens
   useEffect(() => {
