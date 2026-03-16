@@ -413,7 +413,7 @@ export function InteractiveQA({
           </div>
 
           {/* Messages Area */}
-          <ScrollArea className="h-64 p-4" ref={scrollRef}>
+          <ScrollArea className="h-[min(56vh,26rem)] p-4" ref={scrollRef}>
             {highlightedText && <HighlightedTextContext text={highlightedText} />}
 
             {messages.length === 0 ? (
