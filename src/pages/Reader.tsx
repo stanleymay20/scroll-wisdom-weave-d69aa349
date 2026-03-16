@@ -800,7 +800,7 @@ export default function Reader() {
                 openExclusive('refs');
                 setShowQA(false);
                 setShowQuiz(false);
-                setShowVoiceConversation(false);
+                // Voice conversation merged into Ask AI
               }}
               className={showReferences ? "text-primary" : ""}
               title="Citations & References"
