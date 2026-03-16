@@ -1326,7 +1326,7 @@ export default function Reader() {
       </AnimatePresence>
 
       {/* Single "Tools" FAB → Bottom Sheet with all reader actions */}
-      {chapter?.content && !showQA && !showVoiceConversation && !showQuiz && (
+      {chapter?.content && !showQA && !showQuiz && (
         <ReaderToolsSheet
           isQuizUnlocked={quizGating.isQuizUnlocked}
           quizProgress={quizGating.readProgress}
@@ -1335,20 +1335,17 @@ export default function Reader() {
           isBookOwner={isBookOwner}
           onVoiceClick={() => {
             closeTopPanels();
-            setShowQA(false);
             setShowQuiz(false);
-            setShowVoiceConversation(true);
+            setShowQA(true);
           }}
           onQuizClick={() => {
             closeTopPanels();
             setShowQA(false);
-            setShowVoiceConversation(false);
             setShowQuiz(true);
           }}
           onQAClick={() => {
             closeTopPanels();
             setShowQuiz(false);
-            setShowVoiceConversation(false);
             setShowQA(true);
           }}
           onPlaygroundClick={() => {
