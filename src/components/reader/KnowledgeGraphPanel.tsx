@@ -390,7 +390,7 @@ export function KnowledgeGraphPanel({
         )}
 
         {/* Error State */}
-        {error && !isLoading && (
+        {error && !isLoading && !chapterGraph && !bookGraph.hasGraph && (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12">
             <p className="text-sm text-destructive">{error}</p>
             <Button size="sm" onClick={extractGraph}>Retry</Button>
