@@ -75,13 +75,6 @@ export function InteractiveQA({
     return () => {
       isMountedRef.current = false;
       if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ""; audioRef.current = null; }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
     };
   }, []);
 
