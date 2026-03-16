@@ -906,7 +906,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         </Button>
       )}
       
-      {/* Interactive Guard Mode - Ask Question Button (Rule 5.4) */}
+      {/* Interactive Guard Mode - Voice AI Button (Rule 5.4) */}
       {isPlaying && onInterrupt && (
         <Button
           variant="outline"
@@ -918,10 +918,10 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
             complete();
           }}
           className="h-8 gap-1.5 text-xs border-primary/50 text-primary hover:bg-primary/10"
-          title="Ask a question"
+          title="Open Voice AI"
         >
           <Mic className="h-3 w-3" />
-          Ask
+          Voice AI
         </Button>
       )}
 
