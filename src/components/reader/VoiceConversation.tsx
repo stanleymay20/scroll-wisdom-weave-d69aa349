@@ -257,9 +257,17 @@ export function VoiceConversation({
     setTranscript(t('voice.processing'));
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("You need to sign in again to use AI voice tools.");
+      }
+
       // Transcribe
       const { data: sttData, error: sttError } = await supabase.functions.invoke("voice-stt", {
         body: { audio: base64Audio },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (!isMountedRef.current) return;
@@ -283,6 +291,7 @@ export function VoiceConversation({
           voice: selectedVoice,
           generateAudio: true,
         },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (!isMountedRef.current) return;

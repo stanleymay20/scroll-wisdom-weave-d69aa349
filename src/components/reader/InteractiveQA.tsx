@@ -283,8 +283,16 @@ export function InteractiveQA({
     setTranscript(t('voice.processing'));
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("You need to sign in again to use AI voice tools.");
+      }
+
       const { data: sttData, error: sttError } = await supabase.functions.invoke("voice-stt", {
         body: { audio: base64Audio },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!isMountedRef.current) return;
       if (sttError || !sttData?.text) throw new Error(sttData?.error || "Failed to transcribe audio");
