@@ -1054,9 +1054,8 @@ export default function Reader() {
               author="ScrollLibrary"
               onClose={() => setShowTTS(false)}
               onInterrupt={() => {
-                // CONTRACT 5 - Rule 5.4: Interactive Guard Mode
-                // When user interrupts TTS, open VoiceConversation for Q&A
-                setShowQA(true);
+                setShowVoiceAI(true);
+                setShouldResumeTTS(true);
               }}
               autoContinue={autoContinueAudio}
               autoPlay={pendingAutoPlay}
