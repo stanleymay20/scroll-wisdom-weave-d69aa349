@@ -141,7 +141,7 @@ CONTEXT:
 - Learning Mode: ${cognitiveLevel}
 
 CHAPTER CONTENT:
-${chapterContent?.slice(0, 8000) || ""}
+${chapterContent?.slice(0, 4000) || ""}
 
 IMPORTANT:
 - Respond conversationally as if speaking
@@ -160,8 +160,8 @@ ${cognitiveLevel === "familiarisation" ? "- ONLY read/explain what's in the text
       }
     ];
 
-    // Call AI
-    logStep("Calling AI", { model: "google/gemini-2.5-flash" });
+    // Call AI - use fast model for voice latency
+    logStep("Calling AI", { model: "google/gemini-3-flash-preview" });
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -170,7 +170,7 @@ ${cognitiveLevel === "familiarisation" ? "- ONLY read/explain what's in the text
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-3-flash-preview",
         messages,
       }),
     });
@@ -212,7 +212,7 @@ ${cognitiveLevel === "familiarisation" ? "- ONLY read/explain what's in the text
         logStep("Generating audio response", { voiceId });
 
         const ttsResponse = await fetch(
-          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_22050_32`,
           {
             method: "POST",
             headers: {
@@ -220,9 +220,8 @@ ${cognitiveLevel === "familiarisation" ? "- ONLY read/explain what's in the text
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              text: textResponse.slice(0, 3000),
+              text: textResponse.slice(0, 2000),
               model_id: "eleven_turbo_v2_5",
-              output_format: "mp3_44100_128",
               voice_settings: {
                 stability: 0.5,
                 similarity_boost: 0.75,
