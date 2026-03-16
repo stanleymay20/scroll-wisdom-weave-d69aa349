@@ -369,7 +369,7 @@ export function VoiceConversation({
     }
   };
 
-  const playAudio = useCallback((base64Audio: string) => {
+  function playAudio(base64Audio: string) {
     try {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -385,7 +385,7 @@ export function VoiceConversation({
     } catch (error) {
       console.error("Audio playback error:", error);
     }
-  }, []);
+  }
 
   const stopAudio = useCallback(() => {
     if (audioRef.current) {
