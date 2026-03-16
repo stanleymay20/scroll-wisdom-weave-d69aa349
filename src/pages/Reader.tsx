@@ -1398,7 +1398,7 @@ export default function Reader() {
           onClearHighlight={() => setHighlightedText("")}
           cognitiveLevel={cognitiveLevel}
         />
-      )
+      )}
 
       {/* Code Playground */}
       {chapter?.content && (
