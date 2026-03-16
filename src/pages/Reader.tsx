@@ -47,7 +47,7 @@ import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
 import { InteractiveQA } from "@/components/reader/InteractiveQA";
 import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode } from "@/components/reader/QuizMode";
-import { VoiceConversation } from "@/components/reader/VoiceConversation";
+// VoiceConversation merged into InteractiveQA
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 import { CodePlayground } from "@/components/reader/CodePlayground";
@@ -201,7 +201,7 @@ export default function Reader() {
   const [guidedModeActive, setGuidedModeActive] = useState(true);
   const [showQA, setShowQA] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
-  const [showVoiceConversation, setShowVoiceConversation] = useState(false);
+  // VoiceConversation merged into InteractiveQA
   const [showPlayground, setShowPlayground] = useState(false);
   const [showChapterVideo, setShowChapterVideo] = useState(false);
   
@@ -772,7 +772,7 @@ export default function Reader() {
                 openExclusive('level');
                 setShowQA(false);
                 setShowQuiz(false);
-                setShowVoiceConversation(false);
+                // Voice conversation merged into Ask AI
               }}
               className={showLevelSelector ? "text-primary" : ""}
             >
@@ -800,7 +800,7 @@ export default function Reader() {
                 openExclusive('refs');
                 setShowQA(false);
                 setShowQuiz(false);
-                setShowVoiceConversation(false);
+                // Voice conversation merged into Ask AI
               }}
               className={showReferences ? "text-primary" : ""}
               title="Citations & References"
@@ -821,7 +821,7 @@ export default function Reader() {
                 openExclusive('settings');
                 setShowQA(false);
                 setShowQuiz(false);
-                setShowVoiceConversation(false);
+                // Voice conversation merged into Ask AI
               }}
             >
               <Settings className="h-5 w-5" />
@@ -1056,7 +1056,7 @@ export default function Reader() {
               onInterrupt={() => {
                 // CONTRACT 5 - Rule 5.4: Interactive Guard Mode
                 // When user interrupts TTS, open VoiceConversation for Q&A
-                setShowVoiceConversation(true);
+                setShowQA(true);
               }}
               autoContinue={autoContinueAudio}
               autoPlay={pendingAutoPlay}
@@ -1221,7 +1221,7 @@ export default function Reader() {
               setHighlightedText(text);
               closeTopPanels();
               setShowQuiz(false);
-              setShowVoiceConversation(false);
+              // Voice conversation merged into Ask AI
               setShowQA(true);
               // Show TTS player if hidden
               setShowTTS(true);
@@ -1326,7 +1326,7 @@ export default function Reader() {
       </AnimatePresence>
 
       {/* Single "Tools" FAB → Bottom Sheet with all reader actions */}
-      {chapter?.content && !showQA && !showVoiceConversation && !showQuiz && (
+      {chapter?.content && !showQA && !showQuiz && (
         <ReaderToolsSheet
           isQuizUnlocked={quizGating.isQuizUnlocked}
           quizProgress={quizGating.readProgress}
@@ -1335,20 +1335,17 @@ export default function Reader() {
           isBookOwner={isBookOwner}
           onVoiceClick={() => {
             closeTopPanels();
-            setShowQA(false);
             setShowQuiz(false);
-            setShowVoiceConversation(true);
+            setShowQA(true);
           }}
           onQuizClick={() => {
             closeTopPanels();
             setShowQA(false);
-            setShowVoiceConversation(false);
             setShowQuiz(true);
           }}
           onQAClick={() => {
             closeTopPanels();
             setShowQuiz(false);
-            setShowVoiceConversation(false);
             setShowQA(true);
           }}
           onPlaygroundClick={() => {
@@ -1387,7 +1384,7 @@ export default function Reader() {
         />
       )}
 
-      {/* Interactive Q&A Panel */}
+      {/* Interactive Q&A Panel — unified Ask AI with voice + text */}
       {chapter?.content && (
         <InteractiveQA
           isOpen={showQA}
@@ -1399,28 +1396,9 @@ export default function Reader() {
           chapterId={chapter.id}
           highlightedText={highlightedText}
           onClearHighlight={() => setHighlightedText("")}
+          cognitiveLevel={cognitiveLevel}
         />
       )}
-
-      {/* Voice Conversation */}
-      <AnimatePresence>
-        {showVoiceConversation && chapter?.content && (
-          <VoiceConversation
-            chapterContent={chapter.content}
-            chapterTitle={chapter.title}
-            bookTitle={book?.title || ""}
-            cognitiveLevel={cognitiveLevel}
-            bookId={bookId || ""}
-            chapterId={chapter.id}
-            onClose={() => setShowVoiceConversation(false)}
-            onResumeTTS={() => {
-              // CONTRACT 5 - Rule 5.4: Resume TTS when user finishes asking
-              setShouldResumeTTS(true);
-              setShowTTS(true);
-            }}
-          />
-        )}
-      </AnimatePresence>
 
       {/* Code Playground */}
       {chapter?.content && (
