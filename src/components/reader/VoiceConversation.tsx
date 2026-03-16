@@ -440,11 +440,11 @@ export function VoiceConversation({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-3 sm:p-4"
     >
       <motion.div 
         className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg overflow-hidden flex flex-col"
-        style={{ maxHeight: "85vh" }}
+        style={{ maxHeight: "min(85vh, 720px)" }}
         initial={{ y: 50 }}
         animate={{ y: 0 }}
       >
