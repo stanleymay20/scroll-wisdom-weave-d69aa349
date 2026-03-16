@@ -1,9 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const logStep = (step: string, details?: any) => {
@@ -91,6 +92,7 @@ serve(async (req) => {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    const ELEVENLABS_API_KEY = Deno.env.get("ELEVENLABS_API_KEY");
 
     if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
       throw new Error("Supabase configuration is missing");
@@ -132,7 +134,9 @@ serve(async (req) => {
       conversationHistory = [], 
       isQuizMode = false,
       isMasteryMode = false,
-      bookType = 'text'
+      bookType = 'text',
+      highlightedText,
+      speakResponse = false,
     } = await req.json();
 
     if (!question || !chapterContent) {
@@ -148,7 +152,8 @@ serve(async (req) => {
       historyLength: conversationHistory.length,
       isQuizMode,
       isMasteryMode,
-      bookType
+      bookType,
+      speakResponse,
     });
 
     // Handle Multi-Tier Quiz Mode
@@ -201,44 +206,15 @@ ${isMasteryMode ? 'Include at least 1 Tier 4 integrity-weighted question.' : 'Ti
                       items: {
                         type: "object",
                         properties: {
-                          tier: { 
-                            type: "number", 
-                            description: "Assessment tier (1-4)" 
-                          },
-                          type: { 
-                            type: "string", 
-                            enum: ["knowledge", "reasoning", "scenario", "integrity"],
-                            description: "Question type based on tier" 
-                          },
-                          question: { 
-                            type: "string", 
-                            description: "The quiz question text" 
-                          },
-                          context: {
-                            type: "string",
-                            description: "Optional context or code snippet for the question"
-                          },
-                          options: { 
-                            type: "array", 
-                            items: { type: "string" },
-                            description: "Array of 4 answer options"
-                          },
-                          correctIndex: { 
-                            type: "number",
-                            description: "Index (0-3) of the correct answer"
-                          },
-                          explanation: { 
-                            type: "string",
-                            description: "Detailed explanation of why the correct answer is right"
-                          },
-                          pointValue: {
-                            type: "number",
-                            description: "Point value (1 for T1, 3 for T2, 5 for T3, 7 for T4)"
-                          },
-                          timeLimit: {
-                            type: "number",
-                            description: "Time limit in seconds"
-                          }
+                          tier: { type: "number", description: "Assessment tier (1-4)" },
+                          type: { type: "string", enum: ["knowledge", "reasoning", "scenario", "integrity"], description: "Question type based on tier" },
+                          question: { type: "string", description: "The quiz question text" },
+                          context: { type: "string", description: "Optional context or code snippet for the question" },
+                          options: { type: "array", items: { type: "string" }, description: "Array of 4 answer options" },
+                          correctIndex: { type: "number", description: "Index (0-3) of the correct answer" },
+                          explanation: { type: "string", description: "Detailed explanation of why the correct answer is right" },
+                          pointValue: { type: "number", description: "Point value (1 for T1, 3 for T2, 5 for T3, 7 for T4)" },
+                          timeLimit: { type: "number", description: "Time limit in seconds" }
                         },
                         required: ["tier", "type", "question", "options", "correctIndex", "explanation", "pointValue", "timeLimit"],
                         additionalProperties: false
@@ -290,7 +266,6 @@ ${isMasteryMode ? 'Include at least 1 Tier 4 integrity-weighted question.' : 'Ti
       const quizData = await quizResponse.json();
       logStep("Quiz response received", { hasChoices: !!quizData.choices });
 
-      // Extract questions from tool call response
       let questions: any[] = [];
       let tierBreakdown = { tier1: 0, tier2: 0, tier3: 0, tier4: 0 };
       let certificationEligible = false;
@@ -307,7 +282,6 @@ ${isMasteryMode ? 'Include at least 1 Tier 4 integrity-weighted question.' : 'Ti
         }
       }
 
-      // Fallback: try to parse from content if tool call failed
       if (questions.length === 0 && quizData.choices?.[0]?.message?.content) {
         try {
           const content = quizData.choices[0].message.content;
@@ -321,13 +295,11 @@ ${isMasteryMode ? 'Include at least 1 Tier 4 integrity-weighted question.' : 'Ti
         }
       }
 
-      // Generate multi-tier fallback questions if all else fails
       if (questions.length === 0) {
         logStep("Using multi-tier fallback questions");
         questions = generateFallbackMultiTierQuestions(chapterTitle, bookTitle, bookType);
       }
 
-      // Validate and normalize question structure
       questions = questions.map((q: any, idx: number) => ({
         tier: typeof q.tier === 'number' && q.tier >= 1 && q.tier <= 4 ? q.tier : (idx < 2 ? 1 : idx < 4 ? 2 : 3),
         type: q.type || (q.tier === 1 ? 'knowledge' : q.tier === 2 ? 'reasoning' : q.tier === 3 ? 'scenario' : 'integrity'),
@@ -344,7 +316,6 @@ ${isMasteryMode ? 'Include at least 1 Tier 4 integrity-weighted question.' : 'Ti
         timeLimit: q.timeLimit || (q.tier === 1 ? 30 : q.tier === 2 ? 120 : q.tier === 3 ? 180 : 60)
       }));
 
-      // Calculate tier breakdown from actual questions
       tierBreakdown = {
         tier1: questions.filter((q: any) => q.tier === 1).length,
         tier2: questions.filter((q: any) => q.tier === 2).length,
@@ -352,32 +323,19 @@ ${isMasteryMode ? 'Include at least 1 Tier 4 integrity-weighted question.' : 'Ti
         tier4: questions.filter((q: any) => q.tier === 4).length
       };
 
-      // Determine certification eligibility
       certificationEligible = tierBreakdown.tier2 >= 2 && tierBreakdown.tier3 >= 1;
       const masteryEligible = certificationEligible && tierBreakdown.tier4 >= 1;
-
-      // Calculate total points
       const totalPoints = questions.reduce((sum: number, q: any) => sum + q.pointValue, 0);
-      const estimatedTime = questions.reduce((sum: number, q: any) => sum + q.timeLimit, 0) / 60; // minutes
+      const estimatedTime = questions.reduce((sum: number, q: any) => sum + q.timeLimit, 0) / 60;
 
       logStep("Multi-tier quiz generation complete", { 
-        questionCount: questions.length,
-        tierBreakdown,
-        certificationEligible,
-        masteryEligible,
-        totalPoints
+        questionCount: questions.length, tierBreakdown, certificationEligible, masteryEligible, totalPoints
       });
 
       return new Response(
         JSON.stringify({
-          success: true,
-          questions,
-          isQuiz: true,
-          isMultiTier: true,
-          tierBreakdown,
-          certificationEligible,
-          masteryEligible,
-          totalPoints,
+          success: true, questions, isQuiz: true, isMultiTier: true,
+          tierBreakdown, certificationEligible, masteryEligible, totalPoints,
           estimatedTimeMinutes: Math.ceil(estimatedTime)
         }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -385,6 +343,10 @@ ${isMasteryMode ? 'Include at least 1 Tier 4 integrity-weighted question.' : 'Ti
     }
 
     // Standard Q&A mode
+    const contextNote = highlightedText 
+      ? `\n\nThe user has highlighted this specific text and is asking about it:\n"${highlightedText}"\n`
+      : '';
+
     const messages = [
       {
         role: "system",
@@ -394,7 +356,7 @@ CONTEXT:
 - Book: "${bookTitle}"
 - Chapter: "${chapterTitle}"
 - The user is currently reading this chapter and has questions about it.
-
+${contextNote}
 YOUR ROLE:
 - Answer questions about the chapter content clearly and helpfully
 - If the answer isn't directly in the text, provide relevant explanations using your knowledge
@@ -462,10 +424,52 @@ IMPORTANT:
 
     logStep("Answer generated successfully", { answerLength: answer.length });
 
+    // Generate TTS audio if speakResponse is requested and ElevenLabs is available
+    let audioContent = null;
+    if (speakResponse && ELEVENLABS_API_KEY) {
+      try {
+        const voiceId = "FGY2WhTYpPnrIDTdsKH5"; // Nova
+        logStep("Generating TTS for Q&A response", { voiceId });
+
+        const ttsResponse = await fetch(
+          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+          {
+            method: "POST",
+            headers: {
+              "xi-api-key": ELEVENLABS_API_KEY,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              text: answer.slice(0, 3000),
+              model_id: "eleven_turbo_v2_5",
+              output_format: "mp3_44100_128",
+              voice_settings: {
+                stability: 0.5,
+                similarity_boost: 0.75,
+                style: 0.3,
+                use_speaker_boost: true,
+              },
+            }),
+          }
+        );
+
+        if (ttsResponse.ok) {
+          const audioBuffer = await ttsResponse.arrayBuffer();
+          audioContent = base64Encode(audioBuffer);
+          logStep("TTS audio generated", { audioSize: audioBuffer.byteLength });
+        } else {
+          logStep("TTS failed, returning text only", { status: ttsResponse.status });
+        }
+      } catch (ttsError) {
+        logStep("TTS error, returning text only", { error: String(ttsError) });
+      }
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
         answer,
+        audioContent,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
@@ -498,184 +502,96 @@ interface QuizQuestion {
 }
 
 function generateFallbackMultiTierQuestions(chapterTitle: string, bookTitle: string, bookType: string): QuizQuestion[] {
-  // Check if this is a technical book that should include coding questions
   const isTechnical = /technology|science|programming|computer|data|engineering|software|python|javascript|java|api|database/i.test(bookTitle + chapterTitle + bookType);
   
   const baseQuestions: QuizQuestion[] = [
-    // Tier 1 - Knowledge Check (max 2, ~30%)
     {
-      tier: 1,
-      type: "knowledge",
+      tier: 1, type: "knowledge",
       question: `What is the main topic discussed in the chapter "${chapterTitle}"?`,
-      options: [
-        "Historical background and context",
-        "The introduction of key concepts and fundamentals",
-        "Advanced theoretical frameworks",
-        "Practical applications only"
-      ],
+      options: ["Historical background and context", "The introduction of key concepts and fundamentals", "Advanced theoretical frameworks", "Practical applications only"],
       correctIndex: 1,
-      explanation: "The chapter primarily focuses on introducing and explaining the key concepts central to its theme, building a foundation for deeper understanding.",
-      pointValue: 1,
-      timeLimit: 30
+      explanation: "The chapter primarily focuses on introducing and explaining the key concepts central to its theme.",
+      pointValue: 1, timeLimit: 30
     },
-    // Tier 2 - Applied Reasoning (REQUIRED - 2 questions)
     {
-      tier: 2,
-      type: "reasoning",
+      tier: 2, type: "reasoning",
       question: "What would happen if you applied the main concept from this chapter to a real-world scenario?",
-      options: [
-        "The concept would fail completely in practice",
-        "Nothing would change because theory doesn't apply",
-        "You would see measurable improvements in understanding and outcomes",
-        "Additional unrelated concepts would be needed"
-      ],
+      options: ["The concept would fail completely in practice", "Nothing would change because theory doesn't apply", "You would see measurable improvements in understanding and outcomes", "Additional unrelated concepts would be needed"],
       correctIndex: 2,
-      explanation: "When correctly applied, the concepts in this chapter lead to tangible improvements because the chapter bridges theory with practical application through concrete examples.",
-      pointValue: 3,
-      timeLimit: 120
+      explanation: "When correctly applied, the concepts lead to tangible improvements because the chapter bridges theory with practical application.",
+      pointValue: 3, timeLimit: 120
     },
     {
-      tier: 2,
-      type: "reasoning",
+      tier: 2, type: "reasoning",
       question: "Why does the chapter present information in this particular sequence?",
-      options: [
-        "Alphabetical organization by topic",
-        "Random structure with no pattern",
-        "Building from foundational concepts to advanced applications",
-        "Most recent research first"
-      ],
+      options: ["Alphabetical organization by topic", "Random structure with no pattern", "Building from foundational concepts to advanced applications", "Most recent research first"],
       correctIndex: 2,
-      explanation: "The chapter follows a pedagogical structure, building from foundational concepts to more complex applications. This scaffolding enables progressive understanding.",
-      pointValue: 3,
-      timeLimit: 120
+      explanation: "The chapter follows a pedagogical structure, building from foundational concepts to more complex applications.",
+      pointValue: 3, timeLimit: 120
     },
-    // Tier 3 - Scenario & Debugging (REQUIRED - 2 questions)
     {
-      tier: 3,
-      type: "scenario",
-      question: "A learner misunderstands a key concept from this chapter and makes an error in applying it. Based on the chapter content, which misconception is most likely?",
-      options: [
-        "Applying concepts too literally without contextual adaptation",
-        "Skipping foundational steps and jumping to advanced conclusions",
-        "Confusing correlation with causation in the subject matter",
-        "All of the above are common misconceptions addressed in this chapter"
-      ],
+      tier: 3, type: "scenario",
+      question: "A learner misunderstands a key concept from this chapter. Based on the content, which misconception is most likely?",
+      options: ["Applying concepts too literally without contextual adaptation", "Skipping foundational steps and jumping to advanced conclusions", "Confusing correlation with causation in the subject matter", "All of the above are common misconceptions addressed in this chapter"],
       correctIndex: 3,
-      explanation: "The chapter addresses multiple common misconceptions. Learners often encounter all of these errors because they represent typical learning barriers in this domain.",
-      pointValue: 5,
-      timeLimit: 180
+      explanation: "The chapter addresses multiple common misconceptions. Learners often encounter all of these errors.",
+      pointValue: 5, timeLimit: 180
     },
     {
-      tier: 3,
-      type: "scenario",
+      tier: 3, type: "scenario",
       question: "Given a scenario where the primary approach fails, which alternative strategy from the chapter should you try first?",
-      options: [
-        "Abandon the approach entirely and use a different methodology",
-        "Apply the troubleshooting and diagnostic techniques mentioned",
-        "Ignore the failure and continue with the same approach",
-        "Wait for external guidance before taking any action"
-      ],
+      options: ["Abandon the approach entirely", "Apply the troubleshooting and diagnostic techniques mentioned", "Ignore the failure and continue", "Wait for external guidance"],
       correctIndex: 1,
-      explanation: "The chapter provides systematic troubleshooting techniques. Before abandoning an approach, the diagnostic strategies should be applied to identify root causes.",
-      pointValue: 5,
-      timeLimit: 180
+      explanation: "The chapter provides systematic troubleshooting techniques to identify root causes before abandoning an approach.",
+      pointValue: 5, timeLimit: 180
     },
-    // Tier 4 - Integrity-Weighted (for mastery)
     {
-      tier: 4,
-      type: "integrity",
+      tier: 4, type: "integrity",
       question: "In 60 seconds: Synthesize the three most important takeaways from this chapter and explain their interconnection.",
-      options: [
-        "The concepts are unrelated standalone facts",
-        "They form a progressive learning path from theory to practice to mastery",
-        "They contradict each other to encourage critical thinking",
-        "They are only relevant to specific industries"
-      ],
+      options: ["The concepts are unrelated standalone facts", "They form a progressive learning path from theory to practice to mastery", "They contradict each other to encourage critical thinking", "They are only relevant to specific industries"],
       correctIndex: 1,
-      explanation: "The chapter's main concepts are interconnected, forming a coherent framework. Theory provides foundation, practice enables application, and mastery emerges from integration.",
-      pointValue: 7,
-      timeLimit: 60
+      explanation: "The chapter's main concepts form a coherent framework: theory → practice → mastery.",
+      pointValue: 7, timeLimit: 60
     }
   ];
 
-  // Add coding questions for technical content (MANDATORY per ARC-1.0)
   if (isTechnical) {
-    // Add Tier 2 coding question - Output Prediction
     baseQuestions.splice(2, 0, {
-      tier: 2,
-      type: "coding",
+      tier: 2, type: "coding",
       question: "What will this code output?",
-      codeSnippet: `def process(items):
-    result = []
-    for item in items:
-        if item > 0:
-            result.append(item * 2)
-    return result
-
-print(process([1, -2, 3, -4, 5]))`,
+      codeSnippet: `def process(items):\n    result = []\n    for item in items:\n        if item > 0:\n            result.append(item * 2)\n    return result\n\nprint(process([1, -2, 3, -4, 5]))`,
       language: "python",
-      options: [
-        "[2, 6, 10]",
-        "[2, -4, 6, -8, 10]",
-        "[1, 3, 5]",
-        "Error: cannot multiply"
-      ],
+      options: ["[2, 6, 10]", "[2, -4, 6, -8, 10]", "[1, 3, 5]", "Error: cannot multiply"],
       correctIndex: 0,
-      explanation: "The function filters out negative numbers (keeping 1, 3, 5) and doubles the remaining values: 1*2=2, 3*2=6, 5*2=10. Result: [2, 6, 10]",
-      pointValue: 3,
-      timeLimit: 120
+      explanation: "The function filters out negatives (keeping 1, 3, 5) and doubles them: [2, 6, 10]",
+      pointValue: 3, timeLimit: 120
     });
 
-    // Add Tier 3 coding question - Debug/Fix
     baseQuestions.splice(5, 0, {
-      tier: 3,
-      type: "coding",
+      tier: 3, type: "coding",
       question: "This function should calculate the average, but it has a bug. What is wrong?",
-      codeSnippet: `def calculate_average(numbers):
-    total = 0
-    for num in numbers:
-        total = total + num
-    return total / len(numbers)
-
-# Crashes when called with: calculate_average([])`,
+      codeSnippet: `def calculate_average(numbers):\n    total = 0\n    for num in numbers:\n        total = total + num\n    return total / len(numbers)\n\n# Crashes when called with: calculate_average([])`,
       language: "python",
-      options: [
-        "Should use 'total += num' instead of 'total = total + num'",
-        "No check for empty list causes division by zero error",
-        "The loop variable should be 'number' not 'num'",
-        "return statement should be inside the loop"
-      ],
+      options: ["Should use 'total += num'", "No check for empty list causes division by zero", "Loop variable should be 'number'", "return should be inside the loop"],
       correctIndex: 1,
-      explanation: "When called with an empty list, len(numbers) is 0, causing division by zero. Fix: add 'if not numbers: return 0' at the start.",
-      pointValue: 5,
-      timeLimit: 180
+      explanation: "When called with empty list, len(numbers) is 0, causing division by zero.",
+      pointValue: 5, timeLimit: 180
     });
 
-    // Add another Tier 3 - Trace Execution
     baseQuestions.push({
-      tier: 3,
-      type: "coding",
+      tier: 3, type: "coding",
       question: "After this code executes, what is the value of 'result'?",
-      codeSnippet: `data = {'a': 1, 'b': 2, 'c': 3}
-result = sum(v for v in data.values() if v > 1)`,
+      codeSnippet: `data = {'a': 1, 'b': 2, 'c': 3}\nresult = sum(v for v in data.values() if v > 1)`,
       language: "python",
-      options: [
-        "6",
-        "5",
-        "3",
-        "Error: cannot sum dictionary"
-      ],
+      options: ["6", "5", "3", "Error: cannot sum dictionary"],
       correctIndex: 1,
-      explanation: "data.values() returns [1, 2, 3]. The generator filters v > 1, keeping [2, 3]. sum([2, 3]) = 5.",
-      pointValue: 5,
-      timeLimit: 180
+      explanation: "data.values() returns [1, 2, 3]. Filter v > 1 keeps [2, 3]. sum([2, 3]) = 5.",
+      pointValue: 5, timeLimit: 180
     });
   }
 
-  // Randomize correct answer positions to avoid anti-pattern
   return baseQuestions.map(q => {
     if (q.options && q.correctIndex !== undefined) {
-      // Shuffle options while tracking correct answer
       const correctAnswer = q.options[q.correctIndex];
       const shuffled = [...q.options].sort(() => Math.random() - 0.5);
       const newCorrectIndex = shuffled.indexOf(correctAnswer);
