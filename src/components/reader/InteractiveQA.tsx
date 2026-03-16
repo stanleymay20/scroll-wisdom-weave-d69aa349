@@ -64,14 +64,8 @@ export function InteractiveQA({
   const [isLoading, setIsLoading] = useState(false);
   const [speakResponses, setSpeakResponses] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [inputMode, setInputMode] = useState<"text" | "voice">("text");
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
   const { toast } = useToast();
   const { t } = useLanguage();
