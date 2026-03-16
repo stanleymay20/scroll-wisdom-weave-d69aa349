@@ -383,6 +383,7 @@ export function KnowledgeGraphPanel({
               </p>
             </div>
 
+        <div className="px-6 flex-1 overflow-hidden flex flex-col">
         {/* View Mode Toggle */}
         {bookGraph.hasGraph && (
           <div className="flex gap-1 shrink-0 mb-2">
