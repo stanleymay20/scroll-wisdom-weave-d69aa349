@@ -160,13 +160,13 @@ export function InteractiveQA({
         const { data, error } = await supabase.functions.invoke("voice-conversation", {
           body: {
             userMessage: question.trim(),
-            chapterContent: chapterContent.slice(0, 4000),
+            chapterContent: chapterContent.slice(0, 2500),
             chapterTitle,
             bookTitle,
             cognitiveLevel,
-            conversationHistory: newMessages.slice(-10).map(m => ({ role: m.role, content: m.content })),
+            conversationHistory: newMessages.slice(-8).map(m => ({ role: m.role, content: m.content })),
             voice: "nova",
-            generateAudio: speakResponses,
+            generateAudio: false,
           },
           headers: authHeaders,
         });
@@ -174,6 +174,16 @@ export function InteractiveQA({
         if (error) throw new Error(data?.error || error.message);
         responseText = data?.text || "";
         responseAudio = data?.audio;
+
+        if (!responseAudio && speakResponses) {
+          const { data: ttsData, error: ttsError } = await supabase.functions.invoke("voice-tts", {
+            body: { text: responseText, voice: "nova" },
+            headers: authHeaders,
+          });
+          if (!isMountedRef.current) return;
+          if (ttsError) throw new Error(ttsData?.error || ttsError.message);
+          responseAudio = ttsData?.audioContent;
+        }
       } else {
         const { data, error } = await supabase.functions.invoke("interactive-qa", {
           body: {

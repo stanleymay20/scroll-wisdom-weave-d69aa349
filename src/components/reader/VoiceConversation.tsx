@@ -129,18 +129,19 @@ export function VoiceConversation({
         throw new Error("You need to sign in again to use AI voice tools.");
       }
 
+      const authHeaders = { Authorization: `Bearer ${accessToken}` };
       const { data: convData, error: convError } = await supabase.functions.invoke("voice-conversation", {
         body: {
           userMessage: userMsg,
-          chapterContent: chapterContent.slice(0, 8000),
+          chapterContent: chapterContent.slice(0, 2500),
           chapterTitle,
           bookTitle,
           cognitiveLevel,
-          conversationHistory: newMessages.slice(-10),
+          conversationHistory: newMessages.slice(-8),
           voice: selectedVoice,
-          generateAudio: true,
+          generateAudio: false,
         },
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: authHeaders,
       });
 
       if (!isMountedRef.current) return;
@@ -160,15 +161,33 @@ export function VoiceConversation({
         throw new Error("No response received");
       }
 
-      setMessages([...newMessages, { 
-        role: "assistant", 
+      const assistantMessage: Message = {
+        role: "assistant",
         content: convData.text,
         audio: convData.audio,
-      }]);
+      };
 
-      // Auto-play audio response
+      setMessages([...newMessages, assistantMessage]);
+
       if (convData.audio && isMountedRef.current) {
         playAudio(convData.audio);
+        return;
+      }
+
+      const { data: ttsData, error: ttsError } = await supabase.functions.invoke("voice-tts", {
+        body: {
+          text: convData.text,
+          voice: selectedVoice,
+        },
+        headers: authHeaders,
+      });
+
+      if (!isMountedRef.current) return;
+      if (ttsError) throw new Error(ttsData?.error || ttsError.message || "Voice playback unavailable");
+
+      if (ttsData?.audioContent) {
+        setMessages([...newMessages, { ...assistantMessage, audio: ttsData.audioContent }]);
+        playAudio(ttsData.audioContent);
       }
     } catch (error) {
       console.error("Voice processing error:", error);
@@ -184,7 +203,7 @@ export function VoiceConversation({
         setIsProcessing(false);
       }
     }
-  }, [messages, chapterContent, chapterTitle, bookTitle, cognitiveLevel, selectedVoice, isProcessing, toast, t]);
+  }, [messages, chapterContent, chapterTitle, bookTitle, cognitiveLevel, selectedVoice, isProcessing, toast, t, playAudio]);
 
   // Start recording
   const startRecording = useCallback(async () => {
