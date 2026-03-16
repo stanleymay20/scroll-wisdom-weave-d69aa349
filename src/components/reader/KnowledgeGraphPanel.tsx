@@ -14,7 +14,6 @@ import {
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from '@/components/ui/sheet';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
@@ -339,28 +338,52 @@ export function KnowledgeGraphPanel({
   const selectedLearnerState = selectedNodeId ? bookGraph.learnerStates.find(s => s.concept_node_id === selectedNodeId) : undefined;
 
   return (
-    <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="bottom" className="z-[70] rounded-t-2xl max-h-[min(85vh,720px)] overflow-hidden flex flex-col relative pb-[calc(env(safe-area-inset-bottom)+1rem)]">
-        <SheetHeader className="pb-2 shrink-0">
-          <SheetTitle className="flex items-center gap-2 text-base">
-            <Brain className="h-5 w-5 text-primary" />
-            Knowledge Graph Brain
-            {bookGraph.hasGraph && (
-              <Badge variant="secondary" className="text-[10px] ml-auto">
-                {bookGraph.nodes.length} concepts · {bookGraph.edges.length} links
-              </Badge>
-            )}
-          </SheetTitle>
-          <SheetDescription className="text-xs flex items-center gap-2">
-            <span>Ch. {chapterNumber}: {chapterTitle}</span>
-            {bookGraph.meta && (
-              <span className="text-muted-foreground">
-                · {bookGraph.meta.chapters_indexed?.length || 0} chapters indexed
-              </span>
-            )}
-          </SheetDescription>
-        </SheetHeader>
+    <AnimatePresence>
+      {isOpen && (
+        <>
+          {/* Backdrop */}
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-[70] bg-black/80"
+            onClick={onClose}
+          />
+          {/* Panel */}
+          <motion.div
+            initial={{ y: '100%' }}
+            animate={{ y: 0 }}
+            exit={{ y: '100%' }}
+            transition={{ type: 'spring', damping: 30, stiffness: 300 }}
+            className="fixed inset-x-0 bottom-0 z-[71] bg-background rounded-t-2xl max-h-[min(85vh,720px)] overflow-hidden flex flex-col pb-[calc(env(safe-area-inset-bottom)+1rem)] shadow-lg"
+          >
+            {/* Close button */}
+            <button onClick={onClose} className="absolute right-4 top-4 z-10 rounded-sm opacity-70 hover:opacity-100 transition-opacity">
+              <X className="h-4 w-4" />
+              <span className="sr-only">Close</span>
+            </button>
+            {/* Header */}
+            <div className="px-6 pt-6 pb-2 shrink-0">
+              <h2 className="flex items-center gap-2 text-base font-semibold text-foreground">
+                <Brain className="h-5 w-5 text-primary" />
+                Knowledge Graph Brain
+                {bookGraph.hasGraph && (
+                  <Badge variant="secondary" className="text-[10px] ml-auto">
+                    {bookGraph.nodes.length} concepts · {bookGraph.edges.length} links
+                  </Badge>
+                )}
+              </h2>
+              <p className="text-xs text-muted-foreground flex items-center gap-2 mt-1">
+                <span>Ch. {chapterNumber}: {chapterTitle}</span>
+                {bookGraph.meta && (
+                  <span className="text-muted-foreground">
+                    · {bookGraph.meta.chapters_indexed?.length || 0} chapters indexed
+                  </span>
+                )}
+              </p>
+            </div>
 
+        <div className="px-6 flex-1 overflow-hidden flex flex-col">
         {/* View Mode Toggle */}
         {bookGraph.hasGraph && (
           <div className="flex gap-1 shrink-0 mb-2">
@@ -707,7 +730,10 @@ export function KnowledgeGraphPanel({
             />
           )}
         </AnimatePresence>
-      </SheetContent>
-    </Sheet>
+        </div>
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   );
 }
