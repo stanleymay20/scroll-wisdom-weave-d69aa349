@@ -299,6 +299,12 @@ export function KnowledgeGraphPanel({
     }
   }, [isOpen, chapterGraph, isLoading, extractGraph]);
 
+  useEffect(() => {
+    if (isOpen && !chapterGraph && bookGraph.hasGraph) {
+      setViewMode('book');
+    }
+  }, [isOpen, chapterGraph, bookGraph.hasGraph]);
+
   // Reset on chapter change
   useEffect(() => {
     setChapterGraph(null);
@@ -384,7 +390,7 @@ export function KnowledgeGraphPanel({
         )}
 
         {/* Error State */}
-        {error && !isLoading && (
+        {error && !isLoading && !chapterGraph && !bookGraph.hasGraph && (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12">
             <p className="text-sm text-destructive">{error}</p>
             <Button size="sm" onClick={extractGraph}>Retry</Button>
@@ -448,7 +454,7 @@ export function KnowledgeGraphPanel({
                 ) : null}
 
                 {/* Concept List — book-level nodes */}
-                {viewMode === 'book' && bookNodes.length > 0 ? (
+                {bookNodes.length > 0 ? (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       {bookNodes.length} Concepts {viewMode === 'book' ? '(All Chapters)' : `(Chapter ${chapterNumber})`}

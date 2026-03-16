@@ -129,18 +129,19 @@ export function VoiceConversation({
         throw new Error("You need to sign in again to use AI voice tools.");
       }
 
+      const authHeaders = { Authorization: `Bearer ${accessToken}` };
       const { data: convData, error: convError } = await supabase.functions.invoke("voice-conversation", {
         body: {
           userMessage: userMsg,
-          chapterContent: chapterContent.slice(0, 8000),
+          chapterContent: chapterContent.slice(0, 2500),
           chapterTitle,
           bookTitle,
           cognitiveLevel,
-          conversationHistory: newMessages.slice(-10),
+          conversationHistory: newMessages.slice(-8),
           voice: selectedVoice,
-          generateAudio: true,
+          generateAudio: false,
         },
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: authHeaders,
       });
 
       if (!isMountedRef.current) return;
@@ -160,15 +161,33 @@ export function VoiceConversation({
         throw new Error("No response received");
       }
 
-      setMessages([...newMessages, { 
-        role: "assistant", 
+      const assistantMessage: Message = {
+        role: "assistant",
         content: convData.text,
         audio: convData.audio,
-      }]);
+      };
 
-      // Auto-play audio response
+      setMessages([...newMessages, assistantMessage]);
+
       if (convData.audio && isMountedRef.current) {
         playAudio(convData.audio);
+        return;
+      }
+
+      const { data: ttsData, error: ttsError } = await supabase.functions.invoke("voice-tts", {
+        body: {
+          text: convData.text,
+          voice: selectedVoice,
+        },
+        headers: authHeaders,
+      });
+
+      if (!isMountedRef.current) return;
+      if (ttsError) throw new Error(ttsData?.error || ttsError.message || "Voice playback unavailable");
+
+      if (ttsData?.audioContent) {
+        setMessages([...newMessages, { ...assistantMessage, audio: ttsData.audioContent }]);
+        playAudio(ttsData.audioContent);
       }
     } catch (error) {
       console.error("Voice processing error:", error);
@@ -184,7 +203,7 @@ export function VoiceConversation({
         setIsProcessing(false);
       }
     }
-  }, [messages, chapterContent, chapterTitle, bookTitle, cognitiveLevel, selectedVoice, isProcessing, toast, t]);
+  }, [messages, chapterContent, chapterTitle, bookTitle, cognitiveLevel, selectedVoice, isProcessing, toast, t, playAudio]);
 
   // Start recording
   const startRecording = useCallback(async () => {
@@ -264,10 +283,12 @@ export function VoiceConversation({
         throw new Error("You need to sign in again to use AI voice tools.");
       }
 
+      const authHeaders = { Authorization: `Bearer ${accessToken}` };
+
       // Transcribe
       const { data: sttData, error: sttError } = await supabase.functions.invoke("voice-stt", {
         body: { audio: base64Audio },
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: authHeaders,
       });
 
       if (!isMountedRef.current) return;
@@ -279,19 +300,18 @@ export function VoiceConversation({
       const newMessages: Message[] = [...messages, { role: "user", content: userMessage }];
       setMessages(newMessages);
 
-      // Get AI response with audio
       const { data: convData, error: convError } = await supabase.functions.invoke("voice-conversation", {
         body: {
           userMessage,
-          chapterContent: chapterContent.slice(0, 8000),
+          chapterContent: chapterContent.slice(0, 2500),
           chapterTitle,
           bookTitle,
           cognitiveLevel,
-          conversationHistory: newMessages.slice(-10),
+          conversationHistory: newMessages.slice(-8),
           voice: selectedVoice,
-          generateAudio: true,
+          generateAudio: false,
         },
-        headers: { Authorization: `Bearer ${accessToken}` },
+        headers: authHeaders,
       });
 
       if (!isMountedRef.current) return;
@@ -305,14 +325,32 @@ export function VoiceConversation({
 
       if (!convData?.text) throw new Error("No response received");
 
-      setMessages([...newMessages, { 
-        role: "assistant", 
+      const assistantMessage: Message = {
+        role: "assistant",
         content: convData.text,
         audio: convData.audio,
-      }]);
+      };
+
+      setMessages([...newMessages, assistantMessage]);
 
       if (convData.audio && isMountedRef.current) {
         playAudio(convData.audio);
+      } else {
+        const { data: ttsData, error: ttsError } = await supabase.functions.invoke("voice-tts", {
+          body: {
+            text: convData.text,
+            voice: selectedVoice,
+          },
+          headers: authHeaders,
+        });
+
+        if (!isMountedRef.current) return;
+        if (ttsError) throw new Error(ttsData?.error || ttsError.message || "Voice playback unavailable");
+
+        if (ttsData?.audioContent) {
+          setMessages([...newMessages, { ...assistantMessage, audio: ttsData.audioContent }]);
+          playAudio(ttsData.audioContent);
+        }
       }
 
       setTranscript("");
@@ -331,7 +369,7 @@ export function VoiceConversation({
     }
   };
 
-  const playAudio = useCallback((base64Audio: string) => {
+  function playAudio(base64Audio: string) {
     try {
       if (audioRef.current) {
         audioRef.current.pause();
@@ -347,7 +385,7 @@ export function VoiceConversation({
     } catch (error) {
       console.error("Audio playback error:", error);
     }
-  }, []);
+  }
 
   const stopAudio = useCallback(() => {
     if (audioRef.current) {
@@ -402,11 +440,11 @@ export function VoiceConversation({
       initial={{ opacity: 0, scale: 0.95 }}
       animate={{ opacity: 1, scale: 1 }}
       exit={{ opacity: 0, scale: 0.95 }}
-      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-4"
+      className="fixed inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm p-3 sm:p-4"
     >
       <motion.div 
         className="bg-card rounded-2xl border border-border shadow-2xl w-full max-w-lg overflow-hidden flex flex-col"
-        style={{ maxHeight: "85vh" }}
+        style={{ maxHeight: "min(85vh, 720px)" }}
         initial={{ y: 50 }}
         animate={{ y: 0 }}
       >
@@ -469,7 +507,7 @@ export function VoiceConversation({
         </div>
 
         {/* Messages */}
-        <div className="flex-1 overflow-y-auto p-4 space-y-3 min-h-0">
+        <div className="flex-1 overflow-y-auto p-3 sm:p-4 space-y-3 min-h-0">
           {messages.map((msg, i) => (
             <motion.div
               key={i}
@@ -521,7 +559,7 @@ export function VoiceConversation({
         </div>
 
         {/* Input area — toggle between voice and text */}
-        <div className="p-4 border-t border-border bg-muted/30 shrink-0">
+        <div className="p-3 sm:p-4 border-t border-border bg-muted/30 shrink-0">
           {/* Input mode toggle */}
           <div className="flex items-center justify-center gap-2 mb-3">
             <Button

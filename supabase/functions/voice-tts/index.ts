@@ -4,7 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const logStep = (step: string, details?: Record<string, unknown>) => {
@@ -83,60 +83,8 @@ serve(async (req) => {
 
     let audioBuffer: ArrayBuffer | null = null;
 
-    // Try ElevenLabs first (higher quality)
-    if (useElevenLabs) {
-      try {
-        const voiceId = ELEVEN_VOICES[voice] || ELEVEN_VOICES.nova;
-        logStep("Sending to ElevenLabs TTS", { voiceId });
-
-        const response = await fetch(
-          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
-          {
-            method: "POST",
-            headers: {
-              "xi-api-key": ELEVENLABS_API_KEY!,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({
-              text: cleanText,
-              model_id: "eleven_turbo_v2_5",
-              output_format: "mp3_44100_128",
-              voice_settings: {
-                stability: 0.5,
-                similarity_boost: 0.75,
-                style: 0.3,
-                use_speaker_boost: true,
-              },
-            }),
-          }
-        );
-
-        if (response.ok) {
-          audioBuffer = await response.arrayBuffer();
-          logStep("ElevenLabs TTS successful", { audioSize: audioBuffer.byteLength });
-        } else {
-          const errorText = await response.text();
-          logStep("ElevenLabs TTS failed", { status: response.status, error: errorText });
-          
-          if (response.status === 429) {
-            return new Response(JSON.stringify({ error: "Rate limit exceeded. Please try again." }), {
-              status: 429,
-              headers: { ...corsHeaders, "Content-Type": "application/json" },
-            });
-          }
-          
-          if (!useOpenAI) {
-            throw new Error(`ElevenLabs TTS error: ${response.status}`);
-          }
-        }
-      } catch (elevenLabsError) {
-        if (!useOpenAI) throw elevenLabsError;
-        logStep("ElevenLabs failed, trying OpenAI fallback");
-      }
-    }
-
-    // Fallback to OpenAI TTS
-    if (!audioBuffer && useOpenAI) {
+    // Prefer OpenAI first for lower latency and reliability on this project
+    if (useOpenAI) {
       logStep("Sending to OpenAI TTS");
       
       const response = await fetch("https://api.openai.com/v1/audio/speech", {
