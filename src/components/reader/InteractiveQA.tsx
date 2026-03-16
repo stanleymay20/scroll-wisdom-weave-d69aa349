@@ -362,7 +362,7 @@ export function InteractiveQA({
               <div>
                 <h3 className="font-semibold text-sm">{t('qa.title')}</h3>
                 <p className="text-xs text-muted-foreground">
-                  {inputMode === "voice" ? "Voice + Text" : t('qa.subtitle')}
+                  Text-first chapter Q&A
                 </p>
               </div>
             </div>
