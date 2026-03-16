@@ -340,7 +340,7 @@ export function KnowledgeGraphPanel({
 
   return (
     <Sheet open={isOpen} onOpenChange={(open) => !open && onClose()}>
-      <SheetContent side="bottom" className="rounded-t-2xl max-h-[85vh] overflow-hidden flex flex-col relative">
+      <SheetContent side="bottom" className="z-[70] rounded-t-2xl max-h-[min(85vh,720px)] overflow-hidden flex flex-col relative pb-[calc(env(safe-area-inset-bottom)+1rem)]">
         <SheetHeader className="pb-2 shrink-0">
           <SheetTitle className="flex items-center gap-2 text-base">
             <Brain className="h-5 w-5 text-primary" />
