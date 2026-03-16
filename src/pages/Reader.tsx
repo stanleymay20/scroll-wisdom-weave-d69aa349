@@ -772,7 +772,7 @@ export default function Reader() {
                 openExclusive('level');
                 setShowQA(false);
                 setShowQuiz(false);
-                setShowVoiceConversation(false);
+                // Voice conversation merged into Ask AI
               }}
               className={showLevelSelector ? "text-primary" : ""}
             >
