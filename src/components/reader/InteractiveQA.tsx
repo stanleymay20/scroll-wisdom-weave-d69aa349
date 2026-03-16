@@ -2,21 +2,17 @@ import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  MessageCircle, 
-  Send, 
-  Loader2, 
-  X, 
+import {
+  MessageCircle,
+  Send,
+  Loader2,
+  X,
   Lightbulb,
   HelpCircle,
   Sparkles,
   Volume2,
   VolumeX,
   BookmarkPlus,
-  Mic,
-  MicOff,
-  Keyboard,
-  AudioLines,
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -62,14 +58,8 @@ export function InteractiveQA({
   const [isLoading, setIsLoading] = useState(false);
   const [speakResponses, setSpeakResponses] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
-  const [inputMode, setInputMode] = useState<"text" | "voice">("text");
-  const [isListening, setIsListening] = useState(false);
-  const [transcript, setTranscript] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
-  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
-  const audioChunksRef = useRef<Blob[]>([]);
-  const streamRef = useRef<MediaStream | null>(null);
   const isMountedRef = useRef(true);
   const { toast } = useToast();
   const { t } = useLanguage();
@@ -79,13 +69,6 @@ export function InteractiveQA({
     return () => {
       isMountedRef.current = false;
       if (audioRef.current) { audioRef.current.pause(); audioRef.current.src = ""; audioRef.current = null; }
-      if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
-        try { mediaRecorderRef.current.stop(); } catch { /* ignore */ }
-      }
-      if (streamRef.current) {
-        streamRef.current.getTracks().forEach(track => track.stop());
-        streamRef.current = null;
-      }
     };
   }, []);
 
@@ -100,7 +83,7 @@ export function InteractiveQA({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, transcript]);
+  }, [messages]);
 
   // Play audio response
   const playAudio = useCallback((audioContent: string) => {
@@ -138,7 +121,6 @@ export function InteractiveQA({
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
-    setTranscript("");
     setIsLoading(true);
 
     try {
@@ -149,58 +131,37 @@ export function InteractiveQA({
         throw new Error("You need to sign in again to use AI voice tools.");
       }
 
-      // Use voice-conversation for voice mode (richer responses), interactive-qa for text mode
-      const useVoiceEndpoint = speakResponses || inputMode === "voice";
+      // Ask AI stays text-first; optional TTS is generated separately only when enabled
       const authHeaders = { Authorization: `Bearer ${accessToken}` };
 
       let responseText = "";
       let responseAudio: string | undefined;
 
-      if (useVoiceEndpoint) {
-        const { data, error } = await supabase.functions.invoke("voice-conversation", {
-          body: {
-            userMessage: question.trim(),
-            chapterContent: chapterContent.slice(0, 2500),
-            chapterTitle,
-            bookTitle,
-            cognitiveLevel,
-            conversationHistory: newMessages.slice(-8).map(m => ({ role: m.role, content: m.content })),
-            voice: "nova",
-            generateAudio: false,
-          },
-          headers: authHeaders,
-        });
-        if (!isMountedRef.current) return;
-        if (error) throw new Error(data?.error || error.message);
-        responseText = data?.text || "";
-        responseAudio = data?.audio;
+      const { data, error } = await supabase.functions.invoke("interactive-qa", {
+        body: {
+          question: question.trim(),
+          chapterContent: chapterContent.slice(0, 8000),
+          chapterTitle,
+          bookTitle,
+          conversationHistory: messages.slice(-6),
+          highlightedText: highlightedText || undefined,
+          speakResponse: false,
+        },
+        headers: authHeaders,
+      });
+      if (!isMountedRef.current) return;
+      if (error) throw new Error(data?.error || error.message);
+      responseText = data?.answer || "";
+      responseAudio = data?.audioContent;
 
-        if (!responseAudio && speakResponses) {
-          const { data: ttsData, error: ttsError } = await supabase.functions.invoke("voice-tts", {
-            body: { text: responseText, voice: "nova" },
-            headers: authHeaders,
-          });
-          if (!isMountedRef.current) return;
-          if (ttsError) throw new Error(ttsData?.error || ttsError.message);
-          responseAudio = ttsData?.audioContent;
-        }
-      } else {
-        const { data, error } = await supabase.functions.invoke("interactive-qa", {
-          body: {
-            question: question.trim(),
-            chapterContent: chapterContent.slice(0, 8000),
-            chapterTitle,
-            bookTitle,
-            conversationHistory: messages.slice(-6),
-            highlightedText: highlightedText || undefined,
-            speakResponse: speakResponses,
-          },
+      if (!responseAudio && speakResponses && responseText) {
+        const { data: ttsData, error: ttsError } = await supabase.functions.invoke("voice-tts", {
+          body: { text: responseText, voice: "nova" },
           headers: authHeaders,
         });
         if (!isMountedRef.current) return;
-        if (error) throw new Error(data?.error || error.message);
-        responseText = data?.answer || "";
-        responseAudio = data?.audioContent;
+        if (ttsError) throw new Error(ttsData?.error || ttsError.message);
+        responseAudio = ttsData?.audioContent;
       }
 
       if (!responseText) throw new Error("No response received");
@@ -233,105 +194,6 @@ export function InteractiveQA({
       if (isMountedRef.current) setIsLoading(false);
     }
   };
-
-  // Voice recording
-  const startRecording = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { sampleRate: 16000, channelCount: 1, echoCancellation: true, noiseSuppression: true },
-      });
-      streamRef.current = stream;
-      const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-        ? "audio/webm;codecs=opus" : "audio/webm";
-      const mediaRecorder = new MediaRecorder(stream, { mimeType });
-      audioChunksRef.current = [];
-
-      mediaRecorder.ondataavailable = (event) => {
-        if (event.data.size > 0) audioChunksRef.current.push(event.data);
-      };
-
-      mediaRecorder.onstop = async () => {
-        if (streamRef.current) {
-          streamRef.current.getTracks().forEach(track => track.stop());
-          streamRef.current = null;
-        }
-        if (!isMountedRef.current || audioChunksRef.current.length === 0) return;
-        
-        const audioBlob = new Blob(audioChunksRef.current, { type: "audio/webm" });
-        const reader = new FileReader();
-        reader.onloadend = async () => {
-          if (!isMountedRef.current) return;
-          const base64 = (reader.result as string).split(",")[1];
-          await processVoiceInput(base64);
-        };
-        reader.readAsDataURL(audioBlob);
-      };
-
-      mediaRecorderRef.current = mediaRecorder;
-      mediaRecorder.start();
-      setIsListening(true);
-      setTranscript("");
-    } catch (error) {
-      toast({
-        title: t('voice.microphoneError'),
-        description: t('voice.allowMicAccess'),
-        variant: "destructive",
-      });
-    }
-  }, [toast, t]);
-
-  const stopRecording = useCallback(() => {
-    if (mediaRecorderRef.current && isListening) {
-      mediaRecorderRef.current.stop();
-      setIsListening(false);
-    }
-  }, [isListening]);
-
-  const processVoiceInput = async (base64Audio: string) => {
-    if (!isMountedRef.current) return;
-    setIsLoading(true);
-    setTranscript(t('voice.processing'));
-
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const accessToken = sessionData.session?.access_token;
-
-      if (!accessToken) {
-        throw new Error("You need to sign in again to use AI voice tools.");
-      }
-
-      const { data: sttData, error: sttError } = await supabase.functions.invoke("voice-stt", {
-        body: { audio: base64Audio },
-        headers: { Authorization: `Bearer ${accessToken}` },
-      });
-      if (!isMountedRef.current) return;
-      if (sttError || !sttData?.text) throw new Error(sttData?.error || "Failed to transcribe audio");
-
-      setTranscript(sttData.text);
-      // Auto-enable audio responses for voice input
-      setSpeakResponses(true);
-      await sendMessage(sttData.text);
-    } catch (error) {
-      if (isMountedRef.current) {
-        toast({
-          title: t('common.error'),
-          description: error instanceof Error ? error.message : t('voice.processingFailed'),
-          variant: "destructive",
-        });
-        setTranscript("");
-        setIsLoading(false);
-      }
-    }
-  };
-
-  const toggleRecording = useCallback(() => {
-    if (isListening) {
-      stopRecording();
-    } else {
-      if (isPlayingAudio) stopAudio();
-      startRecording();
-    }
-  }, [isListening, isPlayingAudio, stopRecording, stopAudio, startRecording]);
 
   const saveAsNote = async () => {
     if (messages.length < 2) {
@@ -383,7 +245,7 @@ export function InteractiveQA({
               <div>
                 <h3 className="font-semibold text-sm">{t('qa.title')}</h3>
                 <p className="text-xs text-muted-foreground">
-                  {inputMode === "voice" ? "Voice + Text" : t('qa.subtitle')}
+                  Text-first chapter Q&A
                 </p>
               </div>
             </div>
@@ -456,11 +318,6 @@ export function InteractiveQA({
                     </div>
                   </div>
                 ))}
-                {transcript && (
-                  <div className="p-3 rounded-lg bg-muted/50 border border-dashed border-border">
-                    <p className="text-sm text-muted-foreground italic">{transcript}</p>
-                  </div>
-                )}
                 {isLoading && (
                   <div className="flex justify-start">
                     <div className="bg-muted rounded-lg px-3 py-2 flex items-center gap-2">
@@ -473,72 +330,25 @@ export function InteractiveQA({
             )}
           </ScrollArea>
 
-          {/* Input Area — Text + Voice toggle */}
+          {/* Input Area — text-only Ask AI */}
           <div className="p-3 sm:p-4 border-t border-border">
-            {/* Input mode toggle */}
-            <div className="flex items-center gap-1 mb-2">
-              <Button
-                variant={inputMode === "text" ? "default" : "ghost"}
-                size="sm"
-                className="h-7 text-xs gap-1 flex-1"
-                onClick={() => setInputMode("text")}
-              >
-                <Keyboard className="h-3 w-3" /> Type
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <Textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={highlightedText ? t('qa.placeholderHighlight') : t('qa.placeholder')}
+                className="min-h-[44px] max-h-24 resize-none text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                }}
+              />
+              <Button type="submit" size="icon" disabled={!input.trim() || isLoading} className="flex-shrink-0">
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
-              <Button
-                variant={inputMode === "voice" ? "default" : "ghost"}
-                size="sm"
-                className="h-7 text-xs gap-1 flex-1"
-                onClick={() => setInputMode("voice")}
-              >
-                <AudioLines className="h-3 w-3" /> Voice
-              </Button>
-            </div>
-
-            {inputMode === "text" ? (
-              <form onSubmit={handleSubmit} className="flex gap-2">
-                <Textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder={highlightedText ? t('qa.placeholderHighlight') : t('qa.placeholder')}
-                  className="min-h-[44px] max-h-24 resize-none text-sm"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSubmit(e);
-                    }
-                  }}
-                />
-                <Button type="submit" size="icon" disabled={!input.trim() || isLoading} className="flex-shrink-0">
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
-              </form>
-            ) : (
-              <div className="flex items-center justify-center gap-4">
-                <button
-                  onClick={toggleRecording}
-                  disabled={isLoading}
-                  className={cn(
-                    "w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg",
-                    isListening
-                      ? "bg-destructive text-destructive-foreground animate-pulse"
-                      : "bg-primary text-primary-foreground hover:bg-primary/90",
-                    isLoading && "opacity-50 cursor-not-allowed"
-                  )}
-                >
-                  {isLoading ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  ) : isListening ? (
-                    <MicOff className="h-6 w-6" />
-                  ) : (
-                    <Mic className="h-6 w-6" />
-                  )}
-                </button>
-                <p className="text-xs text-muted-foreground">
-                  {isListening ? "Listening... tap to stop" : isLoading ? "Processing..." : "Tap to speak"}
-                </p>
-              </div>
-            )}
+            </form>
           </div>
         </div>
       </motion.div>

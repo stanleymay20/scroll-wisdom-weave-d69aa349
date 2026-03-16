@@ -45,9 +45,9 @@ import { DeepResearchPanel } from "@/components/academic/DeepResearchPanel";
 import { AcademicModeIndicator } from "@/components/academic/AcademicModeIndicator";
 import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
 import { InteractiveQA } from "@/components/reader/InteractiveQA";
+import { VoiceConversation } from "@/components/reader/VoiceConversation";
 import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode } from "@/components/reader/QuizMode";
-// VoiceConversation merged into InteractiveQA
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 import { CodePlayground } from "@/components/reader/CodePlayground";
@@ -200,8 +200,8 @@ export default function Reader() {
   const [readingProgress, setReadingProgress] = useState(0);
   const [guidedModeActive, setGuidedModeActive] = useState(true);
   const [showQA, setShowQA] = useState(false);
+  const [showVoiceAI, setShowVoiceAI] = useState(false);
   const [showQuiz, setShowQuiz] = useState(false);
-  // VoiceConversation merged into InteractiveQA
   const [showPlayground, setShowPlayground] = useState(false);
   const [showChapterVideo, setShowChapterVideo] = useState(false);
   
@@ -1054,9 +1054,8 @@ export default function Reader() {
               author="ScrollLibrary"
               onClose={() => setShowTTS(false)}
               onInterrupt={() => {
-                // CONTRACT 5 - Rule 5.4: Interactive Guard Mode
-                // When user interrupts TTS, open VoiceConversation for Q&A
-                setShowQA(true);
+                setShowVoiceAI(true);
+                setShouldResumeTTS(true);
               }}
               autoContinue={autoContinueAudio}
               autoPlay={pendingAutoPlay}
@@ -1336,16 +1335,19 @@ export default function Reader() {
           onVoiceClick={() => {
             closeTopPanels();
             setShowQuiz(false);
-            setShowQA(true);
+            setShowQA(false);
+            setShowVoiceAI(true);
           }}
           onQuizClick={() => {
             closeTopPanels();
             setShowQA(false);
+            setShowVoiceAI(false);
             setShowQuiz(true);
           }}
           onQAClick={() => {
             closeTopPanels();
             setShowQuiz(false);
+            setShowVoiceAI(false);
             setShowQA(true);
           }}
           onPlaygroundClick={() => {
@@ -1384,7 +1386,7 @@ export default function Reader() {
         />
       )}
 
-      {/* Interactive Q&A Panel — unified Ask AI with voice + text */}
+      {/* Ask AI Panel — text-first Q&A */}
       {chapter?.content && (
         <InteractiveQA
           isOpen={showQA}
@@ -1397,6 +1399,24 @@ export default function Reader() {
           highlightedText={highlightedText}
           onClearHighlight={() => setHighlightedText("")}
           cognitiveLevel={cognitiveLevel}
+        />
+      )}
+
+      {/* Dedicated Voice AI */}
+      {showVoiceAI && chapter?.content && book && (
+        <VoiceConversation
+          chapterContent={chapter.content}
+          chapterTitle={chapter.title}
+          bookTitle={book.title}
+          cognitiveLevel={cognitiveLevel}
+          bookId={bookId || ""}
+          chapterId={chapter.id}
+          onClose={() => setShowVoiceAI(false)}
+          onResumeTTS={shouldResumeTTS ? () => {
+            setShowVoiceAI(false);
+            setShouldResumeTTS(false);
+            setShowTTS(true);
+          } : undefined}
         />
       )}
 
