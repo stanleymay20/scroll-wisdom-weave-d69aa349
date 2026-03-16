@@ -141,7 +141,7 @@ CONTEXT:
 - Learning Mode: ${cognitiveLevel}
 
 CHAPTER CONTENT:
-${chapterContent?.slice(0, 8000) || ""}
+${chapterContent?.slice(0, 4000) || ""}
 
 IMPORTANT:
 - Respond conversationally as if speaking
