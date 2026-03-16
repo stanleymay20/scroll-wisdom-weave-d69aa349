@@ -127,7 +127,6 @@ export function InteractiveQA({
     const newMessages = [...messages, userMessage];
     setMessages(newMessages);
     setInput("");
-    setTranscript("");
     setIsLoading(true);
 
     try {
