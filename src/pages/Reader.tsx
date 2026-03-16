@@ -1056,7 +1056,7 @@ export default function Reader() {
               onInterrupt={() => {
                 // CONTRACT 5 - Rule 5.4: Interactive Guard Mode
                 // When user interrupts TTS, open VoiceConversation for Q&A
-                setShowVoiceConversation(true);
+                setShowQA(true);
               }}
               autoContinue={autoContinueAudio}
               autoPlay={pendingAutoPlay}
