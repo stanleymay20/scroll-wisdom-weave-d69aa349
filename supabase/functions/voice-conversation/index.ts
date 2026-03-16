@@ -78,9 +78,9 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Authenticate user
+    // Authenticate user using getClaims
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Authentication required" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -88,17 +88,17 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
 
-    if (authError || !user) {
-      logStep("Auth error", { error: authError?.message });
+    if (claimsError || !claimsData?.claims?.sub) {
+      logStep("Auth error", { error: claimsError?.message });
       return new Response(JSON.stringify({ error: "Invalid authentication" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    logStep("User authenticated", { userId: user.id.slice(0, 8) + "..." });
+    logStep("User authenticated", { userId: (claimsData.claims.sub as string).slice(0, 8) + "..." });
 
     const { 
       userMessage, 
