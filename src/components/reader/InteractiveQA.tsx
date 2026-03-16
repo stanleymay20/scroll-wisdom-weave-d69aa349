@@ -2,22 +2,24 @@ import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { 
-  MessageCircle, 
-  Send, 
-  Loader2, 
-  X, 
+import {
+  MessageCircle,
+  Send,
+  Loader2,
+  X,
   Lightbulb,
   HelpCircle,
   Sparkles,
   Volume2,
   VolumeX,
   BookmarkPlus,
-  Mic,
-  MicOff,
-  Keyboard,
-  AudioLines,
 } from "lucide-react";
+import { motion, AnimatePresence } from "framer-motion";
+import { supabase } from "@/integrations/supabase/client";
+import { useToast } from "@/hooks/use-toast";
+import { cn } from "@/lib/utils";
+import { HighlightedTextContext } from "./TextHighlighter";
+import { useLanguage } from "@/contexts/LanguageContext";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
