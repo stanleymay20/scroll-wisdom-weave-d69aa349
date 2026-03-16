@@ -303,13 +303,13 @@ export function VoiceConversation({
       const { data: convData, error: convError } = await supabase.functions.invoke("voice-conversation", {
         body: {
           userMessage,
-          chapterContent: chapterContent.slice(0, 2500),
+          chapterContent: chapterContent.slice(0, 1800),
           chapterTitle,
           bookTitle,
           cognitiveLevel,
-          conversationHistory: newMessages.slice(-8),
+          conversationHistory: newMessages.slice(-6),
           voice: selectedVoice,
-          generateAudio: false,
+          generateAudio: true,
         },
         headers: authHeaders,
       });

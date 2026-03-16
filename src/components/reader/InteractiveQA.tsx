@@ -452,72 +452,25 @@ export function InteractiveQA({
             )}
           </ScrollArea>
 
-          {/* Input Area — Text + Voice toggle */}
+          {/* Input Area — text-only Ask AI */}
           <div className="p-3 sm:p-4 border-t border-border">
-            {/* Input mode toggle */}
-            <div className="flex items-center gap-1 mb-2">
-              <Button
-                variant={inputMode === "text" ? "default" : "ghost"}
-                size="sm"
-                className="h-7 text-xs gap-1 flex-1"
-                onClick={() => setInputMode("text")}
-              >
-                <Keyboard className="h-3 w-3" /> Type
+            <form onSubmit={handleSubmit} className="flex gap-2">
+              <Textarea
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                placeholder={highlightedText ? t('qa.placeholderHighlight') : t('qa.placeholder')}
+                className="min-h-[44px] max-h-24 resize-none text-sm"
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
+                    e.preventDefault();
+                    handleSubmit(e);
+                  }
+                }}
+              />
+              <Button type="submit" size="icon" disabled={!input.trim() || isLoading} className="flex-shrink-0">
+                {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
-              <Button
-                variant={inputMode === "voice" ? "default" : "ghost"}
-                size="sm"
-                className="h-7 text-xs gap-1 flex-1"
-                onClick={() => setInputMode("voice")}
-              >
-                <AudioLines className="h-3 w-3" /> Voice
-              </Button>
-            </div>
-
-            {inputMode === "text" ? (
-              <form onSubmit={handleSubmit} className="flex gap-2">
-                <Textarea
-                  value={input}
-                  onChange={(e) => setInput(e.target.value)}
-                  placeholder={highlightedText ? t('qa.placeholderHighlight') : t('qa.placeholder')}
-                  className="min-h-[44px] max-h-24 resize-none text-sm"
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" && !e.shiftKey) {
-                      e.preventDefault();
-                      handleSubmit(e);
-                    }
-                  }}
-                />
-                <Button type="submit" size="icon" disabled={!input.trim() || isLoading} className="flex-shrink-0">
-                  {isLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
-              </form>
-            ) : (
-              <div className="flex items-center justify-center gap-4">
-                <button
-                  onClick={toggleRecording}
-                  disabled={isLoading}
-                  className={cn(
-                    "w-16 h-16 rounded-full flex items-center justify-center transition-all shadow-lg",
-                    isListening
-                      ? "bg-destructive text-destructive-foreground animate-pulse"
-                      : "bg-primary text-primary-foreground hover:bg-primary/90",
-                    isLoading && "opacity-50 cursor-not-allowed"
-                  )}
-                >
-                  {isLoading ? (
-                    <Loader2 className="h-6 w-6 animate-spin" />
-                  ) : isListening ? (
-                    <MicOff className="h-6 w-6" />
-                  ) : (
-                    <Mic className="h-6 w-6" />
-                  )}
-                </button>
-                <p className="text-xs text-muted-foreground">
-                  {isListening ? "Listening... tap to stop" : isLoading ? "Processing..." : "Tap to speak"}
-                </p>
-              </div>
-            )}
+            </form>
           </div>
         </div>
       </motion.div>

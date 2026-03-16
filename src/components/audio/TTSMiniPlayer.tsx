@@ -907,13 +907,15 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       )}
       
       {/* Interactive Guard Mode - Voice AI Button (Rule 5.4) */}
-      {isPlaying && onInterrupt && (
+      {onInterrupt && (
         <Button
           variant="outline"
           size="sm"
           onClick={() => {
             const complete = audioReliability.acknowledgeUserAction('interrupt');
-            pauseForInteraction();
+            if (isPlaying) {
+              pauseForInteraction();
+            }
             onInterrupt();
             complete();
           }}
