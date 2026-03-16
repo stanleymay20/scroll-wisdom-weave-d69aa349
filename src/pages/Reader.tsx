@@ -1221,7 +1221,7 @@ export default function Reader() {
               setHighlightedText(text);
               closeTopPanels();
               setShowQuiz(false);
-              setShowVoiceConversation(false);
+              // Voice conversation merged into Ask AI
               setShowQA(true);
               // Show TTS player if hidden
               setShowTTS(true);
