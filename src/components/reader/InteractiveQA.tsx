@@ -142,9 +142,17 @@ export function InteractiveQA({
     setIsLoading(true);
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("You need to sign in again to use AI voice tools.");
+      }
+
       // Use voice-conversation for voice mode (richer responses), interactive-qa for text mode
       const useVoiceEndpoint = speakResponses || inputMode === "voice";
-      
+      const authHeaders = { Authorization: `Bearer ${accessToken}` };
+
       let responseText = "";
       let responseAudio: string | undefined;
 
@@ -160,6 +168,7 @@ export function InteractiveQA({
             voice: "nova",
             generateAudio: speakResponses,
           },
+          headers: authHeaders,
         });
         if (!isMountedRef.current) return;
         if (error) throw new Error(data?.error || error.message);
@@ -176,6 +185,7 @@ export function InteractiveQA({
             highlightedText: highlightedText || undefined,
             speakResponse: speakResponses,
           },
+          headers: authHeaders,
         });
         if (!isMountedRef.current) return;
         if (error) throw new Error(data?.error || error.message);
@@ -273,8 +283,16 @@ export function InteractiveQA({
     setTranscript(t('voice.processing'));
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("You need to sign in again to use AI voice tools.");
+      }
+
       const { data: sttData, error: sttError } = await supabase.functions.invoke("voice-stt", {
         body: { audio: base64Audio },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
       if (!isMountedRef.current) return;
       if (sttError || !sttData?.text) throw new Error(sttData?.error || "Failed to transcribe audio");
