@@ -1335,16 +1335,19 @@ export default function Reader() {
           onVoiceClick={() => {
             closeTopPanels();
             setShowQuiz(false);
-            setShowQA(true);
+            setShowQA(false);
+            setShowVoiceAI(true);
           }}
           onQuizClick={() => {
             closeTopPanels();
             setShowQA(false);
+            setShowVoiceAI(false);
             setShowQuiz(true);
           }}
           onQAClick={() => {
             closeTopPanels();
             setShowQuiz(false);
+            setShowVoiceAI(false);
             setShowQA(true);
           }}
           onPlaygroundClick={() => {
