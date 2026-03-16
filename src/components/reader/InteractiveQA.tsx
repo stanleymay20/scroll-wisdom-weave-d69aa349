@@ -474,7 +474,7 @@ export function InteractiveQA({
           </ScrollArea>
 
           {/* Input Area — Text + Voice toggle */}
-          <div className="p-4 border-t border-border">
+          <div className="p-3 sm:p-4 border-t border-border">
             {/* Input mode toggle */}
             <div className="flex items-center gap-1 mb-2">
               <Button

@@ -559,7 +559,7 @@ export function VoiceConversation({
         </div>
 
         {/* Input area — toggle between voice and text */}
-        <div className="p-4 border-t border-border bg-muted/30 shrink-0">
+        <div className="p-3 sm:p-4 border-t border-border bg-muted/30 shrink-0">
           {/* Input mode toggle */}
           <div className="flex items-center justify-center gap-2 mb-3">
             <Button
