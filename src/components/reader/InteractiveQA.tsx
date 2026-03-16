@@ -20,12 +20,6 @@ import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { HighlightedTextContext } from "./TextHighlighter";
 import { useLanguage } from "@/contexts/LanguageContext";
-import { motion, AnimatePresence } from "framer-motion";
-import { supabase } from "@/integrations/supabase/client";
-import { useToast } from "@/hooks/use-toast";
-import { cn } from "@/lib/utils";
-import { HighlightedTextContext } from "./TextHighlighter";
-import { useLanguage } from "@/contexts/LanguageContext";
 
 interface Message {
   id: string;
