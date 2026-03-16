@@ -89,7 +89,7 @@ export function InteractiveQA({
     if (scrollRef.current) {
       scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
     }
-  }, [messages, transcript]);
+  }, [messages]);
 
   // Play audio response
   const playAudio = useCallback((audioContent: string) => {
