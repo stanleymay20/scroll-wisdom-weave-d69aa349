@@ -149,58 +149,37 @@ export function InteractiveQA({
         throw new Error("You need to sign in again to use AI voice tools.");
       }
 
-      // Use voice-conversation for voice mode (richer responses), interactive-qa for text mode
-      const useVoiceEndpoint = speakResponses || inputMode === "voice";
+      // Ask AI stays text-first; optional TTS is generated separately only when enabled
       const authHeaders = { Authorization: `Bearer ${accessToken}` };
 
       let responseText = "";
       let responseAudio: string | undefined;
 
-      if (useVoiceEndpoint) {
-        const { data, error } = await supabase.functions.invoke("voice-conversation", {
-          body: {
-            userMessage: question.trim(),
-            chapterContent: chapterContent.slice(0, 2500),
-            chapterTitle,
-            bookTitle,
-            cognitiveLevel,
-            conversationHistory: newMessages.slice(-8).map(m => ({ role: m.role, content: m.content })),
-            voice: "nova",
-            generateAudio: false,
-          },
-          headers: authHeaders,
-        });
-        if (!isMountedRef.current) return;
-        if (error) throw new Error(data?.error || error.message);
-        responseText = data?.text || "";
-        responseAudio = data?.audio;
+      const { data, error } = await supabase.functions.invoke("interactive-qa", {
+        body: {
+          question: question.trim(),
+          chapterContent: chapterContent.slice(0, 8000),
+          chapterTitle,
+          bookTitle,
+          conversationHistory: messages.slice(-6),
+          highlightedText: highlightedText || undefined,
+          speakResponse: false,
+        },
+        headers: authHeaders,
+      });
+      if (!isMountedRef.current) return;
+      if (error) throw new Error(data?.error || error.message);
+      responseText = data?.answer || "";
+      responseAudio = data?.audioContent;
 
-        if (!responseAudio && speakResponses) {
-          const { data: ttsData, error: ttsError } = await supabase.functions.invoke("voice-tts", {
-            body: { text: responseText, voice: "nova" },
-            headers: authHeaders,
-          });
-          if (!isMountedRef.current) return;
-          if (ttsError) throw new Error(ttsData?.error || ttsError.message);
-          responseAudio = ttsData?.audioContent;
-        }
-      } else {
-        const { data, error } = await supabase.functions.invoke("interactive-qa", {
-          body: {
-            question: question.trim(),
-            chapterContent: chapterContent.slice(0, 8000),
-            chapterTitle,
-            bookTitle,
-            conversationHistory: messages.slice(-6),
-            highlightedText: highlightedText || undefined,
-            speakResponse: speakResponses,
-          },
+      if (!responseAudio && speakResponses && responseText) {
+        const { data: ttsData, error: ttsError } = await supabase.functions.invoke("voice-tts", {
+          body: { text: responseText, voice: "nova" },
           headers: authHeaders,
         });
         if (!isMountedRef.current) return;
-        if (error) throw new Error(data?.error || error.message);
-        responseText = data?.answer || "";
-        responseAudio = data?.audioContent;
+        if (ttsError) throw new Error(ttsData?.error || ttsError.message);
+        responseAudio = ttsData?.audioContent;
       }
 
       if (!responseText) throw new Error("No response received");

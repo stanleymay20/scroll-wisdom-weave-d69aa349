@@ -1386,7 +1386,7 @@ export default function Reader() {
         />
       )}
 
-      {/* Interactive Q&A Panel — unified Ask AI with voice + text */}
+      {/* Ask AI Panel — text-first Q&A */}
       {chapter?.content && (
         <InteractiveQA
           isOpen={showQA}
@@ -1399,6 +1399,24 @@ export default function Reader() {
           highlightedText={highlightedText}
           onClearHighlight={() => setHighlightedText("")}
           cognitiveLevel={cognitiveLevel}
+        />
+      )}
+
+      {/* Dedicated Voice AI */}
+      {showVoiceAI && chapter?.content && book && (
+        <VoiceConversation
+          chapterContent={chapter.content}
+          chapterTitle={chapter.title}
+          bookTitle={book.title}
+          cognitiveLevel={cognitiveLevel}
+          bookId={bookId || ""}
+          chapterId={chapter.id}
+          onClose={() => setShowVoiceAI(false)}
+          onResumeTTS={shouldResumeTTS ? () => {
+            setShowVoiceAI(false);
+            setShouldResumeTTS(false);
+            setShowTTS(true);
+          } : undefined}
         />
       )}
 
