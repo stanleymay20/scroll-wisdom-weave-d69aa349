@@ -1384,7 +1384,7 @@ export default function Reader() {
         />
       )}
 
-      {/* Interactive Q&A Panel */}
+      {/* Interactive Q&A Panel — unified Ask AI with voice + text */}
       {chapter?.content && (
         <InteractiveQA
           isOpen={showQA}
@@ -1396,28 +1396,9 @@ export default function Reader() {
           chapterId={chapter.id}
           highlightedText={highlightedText}
           onClearHighlight={() => setHighlightedText("")}
+          cognitiveLevel={cognitiveLevel}
         />
-      )}
-
-      {/* Voice Conversation */}
-      <AnimatePresence>
-        {showVoiceConversation && chapter?.content && (
-          <VoiceConversation
-            chapterContent={chapter.content}
-            chapterTitle={chapter.title}
-            bookTitle={book?.title || ""}
-            cognitiveLevel={cognitiveLevel}
-            bookId={bookId || ""}
-            chapterId={chapter.id}
-            onClose={() => setShowVoiceConversation(false)}
-            onResumeTTS={() => {
-              // CONTRACT 5 - Rule 5.4: Resume TTS when user finishes asking
-              setShouldResumeTTS(true);
-              setShowTTS(true);
-            }}
-          />
-        )}
-      </AnimatePresence>
+      )
 
       {/* Code Playground */}
       {chapter?.content && (
