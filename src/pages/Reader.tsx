@@ -47,7 +47,7 @@ import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
 import { InteractiveQA } from "@/components/reader/InteractiveQA";
 import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode } from "@/components/reader/QuizMode";
-import { VoiceConversation } from "@/components/reader/VoiceConversation";
+// VoiceConversation merged into InteractiveQA
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 import { CodePlayground } from "@/components/reader/CodePlayground";
