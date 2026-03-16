@@ -324,11 +324,6 @@ export function InteractiveQA({
                     </div>
                   </div>
                 ))}
-                {transcript && (
-                  <div className="p-3 rounded-lg bg-muted/50 border border-dashed border-border">
-                    <p className="text-sm text-muted-foreground italic">{transcript}</p>
-                  </div>
-                )}
                 {isLoading && (
                   <div className="flex justify-start">
                     <div className="bg-muted rounded-lg px-3 py-2 flex items-center gap-2">
