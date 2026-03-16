@@ -384,7 +384,7 @@ export function KnowledgeGraphPanel({
         )}
 
         {/* Loading State */}
-        {isLoading && (
+        {isLoading && !chapterGraph && !bookGraph.hasGraph && (
           <div className="flex-1 flex flex-col items-center justify-center gap-4 py-12">
             <div className="relative">
               <Loader2 className="h-10 w-10 animate-spin text-primary" />
