@@ -160,8 +160,8 @@ ${cognitiveLevel === "familiarisation" ? "- ONLY read/explain what's in the text
       }
     ];
 
-    // Call AI
-    logStep("Calling AI", { model: "google/gemini-2.5-flash" });
+    // Call AI - use fast model for voice latency
+    logStep("Calling AI", { model: "google/gemini-3-flash-preview" });
 
     const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -170,7 +170,7 @@ ${cognitiveLevel === "familiarisation" ? "- ONLY read/explain what's in the text
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-3-flash-preview",
         messages,
       }),
     });
