@@ -104,6 +104,12 @@ export function useBookKnowledgeGraph(bookId: string | undefined) {
   ) => {
     if (!bookId) return;
     try {
+      // Ensure user is authenticated before calling
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) {
+        console.warn('merge-book-graph skipped: no active session');
+        return;
+      }
       const { data, error } = await supabase.functions.invoke('merge-book-graph', {
         body: { bookId, chapterNumber, concepts, relationships, mermaidGraph },
       });
