@@ -122,6 +122,13 @@ export function VoiceConversation({
     setTextInput("");
 
     try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const accessToken = sessionData.session?.access_token;
+
+      if (!accessToken) {
+        throw new Error("You need to sign in again to use AI voice tools.");
+      }
+
       const { data: convData, error: convError } = await supabase.functions.invoke("voice-conversation", {
         body: {
           userMessage: userMsg,
@@ -133,6 +140,7 @@ export function VoiceConversation({
           voice: selectedVoice,
           generateAudio: true,
         },
+        headers: { Authorization: `Bearer ${accessToken}` },
       });
 
       if (!isMountedRef.current) return;
