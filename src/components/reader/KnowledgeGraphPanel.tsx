@@ -299,18 +299,19 @@ export function KnowledgeGraphPanel({
     }
   }, [chapterContent, chapterTitle, bookTitle, chapterNumber, cacheKey, toast, bookId, bookGraph]);
 
-  // Auto-extract when panel opens
+  // Auto-extract when panel opens, but don't block already-persisted book graph rendering
   useEffect(() => {
-    if (isOpen && !chapterGraph && !isLoading) {
+    if (!isOpen) return;
+
+    if (bookGraph.hasGraph) {
+      const hasChapterNodes = bookGraph.getNodesForChapter(chapterNumber).length > 0;
+      setViewMode(hasChapterNodes ? 'chapter' : 'book');
+    }
+
+    if (!chapterGraph && !isLoading && !bookGraph.hasGraph) {
       extractGraph();
     }
-  }, [isOpen, chapterGraph, isLoading, extractGraph]);
-
-  useEffect(() => {
-    if (isOpen && !chapterGraph && bookGraph.hasGraph) {
-      setViewMode('book');
-    }
-  }, [isOpen, chapterGraph, bookGraph.hasGraph]);
+  }, [isOpen, chapterGraph, isLoading, extractGraph, bookGraph, chapterNumber]);
 
   // Reset on chapter change
   useEffect(() => {
