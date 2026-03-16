@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 const logStep = (step: string, details?: Record<string, unknown>) => {
@@ -56,7 +56,6 @@ serve(async (req) => {
       throw new Error("Supabase configuration is missing");
     }
 
-    // Support both ElevenLabs and OpenAI Whisper
     const useElevenLabs = !!ELEVENLABS_API_KEY;
     const useOpenAI = !!OPENAI_API_KEY;
 
@@ -66,9 +65,9 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Authenticate user
+    // Authenticate user using getClaims
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Authentication required" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
@@ -76,17 +75,18 @@ serve(async (req) => {
     }
 
     const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
 
-    if (authError || !user) {
-      logStep("Auth error", { error: authError?.message });
+    if (claimsError || !claimsData?.claims?.sub) {
+      logStep("Auth error", { error: claimsError?.message });
       return new Response(JSON.stringify({ error: "Invalid authentication" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    logStep("User authenticated", { userId: user.id.slice(0, 8) + "..." });
+    const userId = claimsData.claims.sub as string;
+    logStep("User authenticated", { userId: userId.slice(0, 8) + "..." });
 
     const { audio, language = "en" } = await req.json();
 
@@ -99,13 +99,11 @@ serve(async (req) => {
 
     logStep("Processing audio", { audioLength: audio.length, language });
 
-    // Process audio in chunks
     const binaryAudio = processBase64Chunks(audio);
     logStep("Audio processed", { binarySize: binaryAudio.length });
 
     let transcriptText = "";
 
-    // Try ElevenLabs first, fall back to OpenAI
     if (useElevenLabs) {
       try {
         const formData = new FormData();
@@ -145,7 +143,6 @@ serve(async (req) => {
       }
     }
 
-    // Fallback to OpenAI Whisper
     if (!transcriptText && useOpenAI) {
       const formData = new FormData();
       const blob = new Blob([binaryAudio.buffer as ArrayBuffer], { type: "audio/webm" });
@@ -173,7 +170,6 @@ serve(async (req) => {
             headers: { ...corsHeaders, "Content-Type": "application/json" },
           });
         }
-        
         throw new Error(`OpenAI Whisper error: ${response.status}`);
       }
 
@@ -187,10 +183,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({
-        success: true,
-        text: transcriptText,
-      }),
+      JSON.stringify({ success: true, text: transcriptText }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
 
