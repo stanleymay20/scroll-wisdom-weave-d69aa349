@@ -821,7 +821,7 @@ export default function Reader() {
                 openExclusive('settings');
                 setShowQA(false);
                 setShowQuiz(false);
-                setShowVoiceConversation(false);
+                // Voice conversation merged into Ask AI
               }}
             >
               <Settings className="h-5 w-5" />
