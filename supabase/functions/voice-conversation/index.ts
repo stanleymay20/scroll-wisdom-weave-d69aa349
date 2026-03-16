@@ -204,44 +204,79 @@ ${cognitiveLevel === "familiarisation" ? "- ONLY read/explain what's in the text
 
     logStep("AI response received", { responseLength: textResponse.length });
 
-    // Generate audio response if requested and ElevenLabs is available
+    // Generate audio response if requested
     let audioContent = null;
-    if (generateAudio && ELEVENLABS_API_KEY) {
-      try {
-        const voiceId = VOICES[voice] || VOICES.nova;
-        
-        logStep("Generating audio response", { voiceId });
+    if (generateAudio) {
+      const ttsInput = textResponse.slice(0, 1200);
 
-        const ttsResponse = await fetch(
-          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_22050_32`,
-          {
+      if (OPENAI_API_KEY) {
+        try {
+          logStep("Generating audio response with OpenAI", { voice });
+
+          const openAITtsResponse = await fetch("https://api.openai.com/v1/audio/speech", {
             method: "POST",
             headers: {
-              "xi-api-key": ELEVENLABS_API_KEY,
+              Authorization: `Bearer ${OPENAI_API_KEY}`,
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              text: textResponse.slice(0, 2000),
-              model_id: "eleven_turbo_v2_5",
-              voice_settings: {
-                stability: 0.5,
-                similarity_boost: 0.75,
-                style: 0.3,
-                use_speaker_boost: true,
-              },
+              model: "tts-1",
+              input: ttsInput,
+              voice: voice === "shimmer" ? "shimmer" : voice === "alloy" ? "alloy" : "nova",
+              response_format: "mp3",
             }),
-          }
-        );
+          });
 
-        if (ttsResponse.ok) {
-          const audioBuffer = await ttsResponse.arrayBuffer();
-          audioContent = base64Encode(audioBuffer);
-          logStep("Audio generated", { audioSize: audioBuffer.byteLength });
-        } else {
-          logStep("TTS failed, returning text only", { status: ttsResponse.status });
+          if (openAITtsResponse.ok) {
+            const audioBuffer = await openAITtsResponse.arrayBuffer();
+            audioContent = base64Encode(audioBuffer);
+            logStep("Audio generated with OpenAI", { audioSize: audioBuffer.byteLength });
+          } else {
+            const errorText = await openAITtsResponse.text();
+            logStep("OpenAI TTS failed, trying fallback", { status: openAITtsResponse.status, error: errorText });
+          }
+        } catch (ttsError) {
+          logStep("OpenAI TTS error, trying fallback", { error: String(ttsError) });
         }
-      } catch (ttsError) {
-        logStep("TTS error, returning text only", { error: String(ttsError) });
+      }
+
+      if (!audioContent && ELEVENLABS_API_KEY) {
+        try {
+          const voiceId = VOICES[voice] || VOICES.nova;
+          logStep("Generating audio response with ElevenLabs", { voiceId });
+
+          const ttsResponse = await fetch(
+            `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_22050_32`,
+            {
+              method: "POST",
+              headers: {
+                "xi-api-key": ELEVENLABS_API_KEY,
+                "Content-Type": "application/json",
+              },
+              body: JSON.stringify({
+                text: ttsInput,
+                model_id: "eleven_turbo_v2_5",
+                voice_settings: {
+                  stability: 0.5,
+                  similarity_boost: 0.75,
+                  style: 0.3,
+                  use_speaker_boost: true,
+                },
+              }),
+            }
+          );
+
+          if (ttsResponse.ok) {
+            const audioBuffer = await ttsResponse.arrayBuffer();
+            audioContent = base64Encode(audioBuffer);
+            logStep("Audio generated with ElevenLabs", { audioSize: audioBuffer.byteLength });
+          } else {
+            const errorText = await ttsResponse.text();
+            logStep("TTS failed, returning text only", { status: ttsResponse.status, error: errorText });
+          }
+        } catch (ttsError) {
+          logStep("TTS error, returning text only", { error: String(ttsError) });
+        }
       }
     }
 

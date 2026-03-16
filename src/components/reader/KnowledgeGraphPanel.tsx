@@ -454,7 +454,7 @@ export function KnowledgeGraphPanel({
                 ) : null}
 
                 {/* Concept List — book-level nodes */}
-                {viewMode === 'book' && bookNodes.length > 0 ? (
+                {bookNodes.length > 0 ? (
                   <div className="space-y-2">
                     <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider">
                       {bookNodes.length} Concepts {viewMode === 'book' ? '(All Chapters)' : `(Chapter ${chapterNumber})`}
