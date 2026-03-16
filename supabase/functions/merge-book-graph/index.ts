@@ -70,7 +70,7 @@ serve(async (req) => {
 
     // Verify book ownership
     const { data: book } = await supabase.from('books').select('id, user_id').eq('id', bookId).single();
-    if (!book || book.user_id !== user.id) {
+    if (!book || book.user_id !== userId) {
       return new Response(JSON.stringify({ error: 'Book not found or not owned' }), {
         status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
