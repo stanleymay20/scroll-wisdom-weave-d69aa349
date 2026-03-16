@@ -212,7 +212,7 @@ ${cognitiveLevel === "familiarisation" ? "- ONLY read/explain what's in the text
         logStep("Generating audio response", { voiceId });
 
         const ttsResponse = await fetch(
-          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}`,
+          `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}?output_format=mp3_22050_32`,
           {
             method: "POST",
             headers: {
@@ -220,9 +220,8 @@ ${cognitiveLevel === "familiarisation" ? "- ONLY read/explain what's in the text
               "Content-Type": "application/json",
             },
             body: JSON.stringify({
-              text: textResponse.slice(0, 3000),
+              text: textResponse.slice(0, 2000),
               model_id: "eleven_turbo_v2_5",
-              output_format: "mp3_44100_128",
               voice_settings: {
                 stability: 0.5,
                 similarity_boost: 0.75,

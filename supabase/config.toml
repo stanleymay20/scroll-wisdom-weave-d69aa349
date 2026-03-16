@@ -98,3 +98,9 @@ verify_jwt = false
 
 [functions.graph-driven-questions]
 verify_jwt = false
+
+[functions.extract-knowledge-graph]
+verify_jwt = false
+
+[functions.generate-cinematic-video]
+verify_jwt = false
