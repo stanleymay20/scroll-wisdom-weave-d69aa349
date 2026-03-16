@@ -162,8 +162,8 @@ export function ReaderToolsSheet({
   const handleToolClick = (tool: ToolAction) => {
     if (tool.disabled) return;
     setIsOpen(false);
-    // Small delay so sheet closes before panel opens
-    setTimeout(() => tool.onClick(), 150);
+    // Let the current sheet finish closing before opening a second modal/sheet.
+    window.setTimeout(() => tool.onClick(), 280);
   };
 
   return (

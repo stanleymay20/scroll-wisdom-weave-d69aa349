@@ -1368,6 +1368,11 @@ export default function Reader() {
           }}
           onKnowledgeGraphClick={() => {
             closeTopPanels();
+            setShowQuiz(false);
+            setShowQA(false);
+            setShowVoiceAI(false);
+            setShowPlayground(false);
+            setShowChapterVideo(false);
             setShowKnowledgeGraph(true);
           }}
         />
