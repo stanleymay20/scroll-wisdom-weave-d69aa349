@@ -371,7 +371,7 @@ export function InteractiveQA({
         initial={{ opacity: 0, y: 20, scale: 0.95 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 20, scale: 0.95 }}
-        className="fixed bottom-20 right-4 md:right-8 z-50 w-[calc(100%-2rem)] max-w-md"
+        className="fixed bottom-20 left-4 right-4 md:left-auto md:right-8 z-50 w-auto md:w-[calc(100%-2rem)] md:max-w-md"
       >
         <div className="bg-card border border-border rounded-xl shadow-2xl overflow-hidden">
           {/* Header */}
