@@ -715,10 +715,11 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           const fig = figureMarkers[figureIndex];
           elements.push(
             <FigureRenderer
-              key={`figure-${fig.figureNumber}`}
+              key={`figure-${fig.figureNumber}-${figureIndex}`}
               figureNumber={fig.figureNumber}
               caption={fig.caption}
               description={fig.description}
+              imageUrl={fig.imageUrl}
               renderMode={fig.renderMode}
               visualType={fig.type}
               cognitiveScore={fig.cognitiveScore}

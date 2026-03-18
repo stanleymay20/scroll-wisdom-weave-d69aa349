@@ -23,7 +23,7 @@ export interface FigureRendererProps {
   renderMode: RenderMode;
   visualType: string;
   cognitiveScore?: number;
-  figureNumber: number;
+  figureNumber: string | number;
   className?: string;
 }
 
