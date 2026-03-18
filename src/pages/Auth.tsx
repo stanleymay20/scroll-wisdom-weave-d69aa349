@@ -116,10 +116,12 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [navigate]);
 
-  const getErrorMessage = (error: any): string => {
-    const message = error?.message || String(error);
+  const getErrorMessage = (error: unknown): string => {
+    const message = getErrorMessageText(error);
     
-    // Handle common auth errors with user-friendly messages
+    if (isTransientAuthError(error)) {
+      return "The authentication service is temporarily unavailable. Please wait a few seconds and try again.";
+    }
     if (message.includes("Invalid login credentials")) {
       return "Invalid email or password. If you don't have an account yet, please sign up first.";
     }
