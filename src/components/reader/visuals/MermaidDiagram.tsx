@@ -34,11 +34,11 @@ export function descriptionToMermaid(description: string, visualType: string): s
 
   if (visualType === 'taxonomy_tree' || visualType === 'concept_map') {
     if (lines.length < 2) {
-      return `graph TD\n  A["${lines[0] || description}"]`;
+      return `graph TD\n  A["${sanitizeLabel(lines[0] || description, 60)}"]`;
     }
     const nodes = lines.slice(0, 8).map((line, i) => {
       const id = String.fromCharCode(65 + i);
-      return `  ${i === 0 ? '' : 'A --> '}${id}["${line.substring(0, 60)}"]`;
+      return `  ${i === 0 ? '' : 'A --> '}${id}["${sanitizeLabel(line)}"]`;
     });
     return `graph TD\n${nodes.join('\n')}`;
   }
@@ -48,9 +48,8 @@ export function descriptionToMermaid(description: string, visualType: string): s
     const nodes = steps.map((step, i) => {
       const id = String.fromCharCode(65 + i);
       const next = i < steps.length - 1 ? ` --> ${String.fromCharCode(66 + i)}` : '';
-      return `  ${id}["${step.substring(0, 50)}"]${next}`;
+      return `  ${id}["${sanitizeLabel(step)}"]${next}`;
     });
-    // Loop back for lifecycle
     if (steps.length > 2) {
       nodes.push(`  ${String.fromCharCode(64 + steps.length)} --> A`);
     }
@@ -61,9 +60,8 @@ export function descriptionToMermaid(description: string, visualType: string): s
     const components = lines.slice(0, 6);
     const nodes = components.map((comp, i) => {
       const id = String.fromCharCode(65 + i);
-      return `  ${id}["${comp.substring(0, 50)}"]`;
+      return `  ${id}["${sanitizeLabel(comp)}"]`;
     });
-    // Connect sequentially
     const edges = components.slice(1).map((_, i) => {
       return `  ${String.fromCharCode(65 + i)} --> ${String.fromCharCode(66 + i)}`;
     });
@@ -73,12 +71,12 @@ export function descriptionToMermaid(description: string, visualType: string): s
   // Default flowchart
   const steps = lines.slice(0, 8);
   if (steps.length === 0) {
-    return `graph TD\n  A["${description.substring(0, 60)}"]`;
+    return `graph TD\n  A["${sanitizeLabel(description, 60)}"]`;
   }
   const nodes = steps.map((step, i) => {
     const id = String.fromCharCode(65 + i);
     const next = i < steps.length - 1 ? ` --> ${String.fromCharCode(66 + i)}` : '';
-    return `  ${id}["${step.substring(0, 50)}"]${next}`;
+    return `  ${id}["${sanitizeLabel(step)}"]${next}`;
   });
   return `graph TD\n${nodes.join('\n')}`;
 }
