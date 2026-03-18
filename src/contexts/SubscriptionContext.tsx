@@ -2,98 +2,17 @@ import { createContext, useContext, useState, useEffect, ReactNode, useCallback,
 import { supabase } from '@/integrations/supabase/client';
 import { SubscriptionTier, getTierFromProductId, SUBSCRIPTION_TIERS } from '@/lib/subscription';
 import { LAUNCH_MODE_CONFIG, isLaunchModeActive } from '@/lib/config';
+import { getErrorMessageText, isTransientAuthError } from '@/lib/authResilience';
 import { User } from '@supabase/supabase-js';
-
-interface DailyLimitInfo {
-  dailyBookCount: number;
-  lastBookDate: string | null;
-  canGenerateToday: boolean; // kept for API compat — now means "can generate this month"
-}
-
-interface SubscriptionContextType {
-  user: User | null;
-  tier: SubscriptionTier;
-  isSubscribed: boolean;
-  subscriptionEnd: string | null;
-  isLoading: boolean;
-  checkSubscription: () => Promise<void>;
-  canGenerateBooks: boolean;
-  maxWordCount: number;
-  dailyLimitInfo: DailyLimitInfo;
-  incrementDailyBookCount: () => Promise<void>;
-  ttsMinutesUsed: number;
-  updateTTSUsage: (minutes: number) => Promise<void>;
-}
-
-const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
-
-export function SubscriptionProvider({ children }: { children: ReactNode }) {
-  const [user, setUser] = useState<User | null>(null);
-  const [tier, setTier] = useState<SubscriptionTier>('free');
-  const [subscriptionEnd, setSubscriptionEnd] = useState<string | null>(null);
-  const [isLoading, setIsLoading] = useState(true);
-  const [dailyLimitInfo, setDailyLimitInfo] = useState<DailyLimitInfo>({
-    dailyBookCount: 0,
-    lastBookDate: null,
-    canGenerateToday: true,
-  });
-  const [ttsMinutesUsed, setTtsMinutesUsed] = useState(0);
-
-  // Track last fetch time to prevent redundant calls
-  const lastFetchRef = useRef<number>(0);
-  const FETCH_COOLDOWN = 30000; // 30 seconds between fetches
-
-  const checkDailyLimits = useCallback(async (userId: string) => {
-    try {
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('daily_book_count, last_book_date')
-        .or(`user_id.eq.${userId},id.eq.${userId}`)
-        .maybeSingle();
-
-      if (profile) {
-        const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-        const lastDate = profile.last_book_date;
-        const lastMonth = lastDate ? lastDate.slice(0, 7) : null;
-        
-        // Reset count if it's a new month
-        const count = lastMonth === currentMonth ? (profile.daily_book_count || 0) : 0;
-        const canGenerate = count < LAUNCH_MODE_CONFIG.freeBookLimit;
-
-        setDailyLimitInfo({
-          dailyBookCount: count,
-          lastBookDate: lastDate,
-          canGenerateToday: canGenerate,
-        });
-      }
-    } catch (error) {
-      console.error('Error checking daily limits:', error);
-    }
-  }, []);
-
-  const checkTTSUsage = useCallback(async (userId: string) => {
-    try {
-      const currentMonth = new Date().toISOString().slice(0, 7); // YYYY-MM
-      
-      const { data } = await supabase
-        .from('tts_usage')
-        .select('minutes_used')
-        .eq('user_id', userId)
-        .eq('month', currentMonth)
-        .maybeSingle();
-
-      if (data) {
-        setTtsMinutesUsed(data.minutes_used);
-      } else {
-        setTtsMinutesUsed(0);
-      }
-    } catch (error) {
-      console.error('Error checking TTS usage:', error);
-    }
+...
+  const resetAnonymousState = useCallback(() => {
+    setUser(null);
+    setTier('free');
+    setSubscriptionEnd(null);
+    setIsLoading(false);
   }, []);
 
   const checkSubscription = useCallback(async (force = false) => {
-    // Prevent redundant fetches within cooldown period
     const now = Date.now();
     if (!force && now - lastFetchRef.current < FETCH_COOLDOWN) {
       return;
@@ -101,19 +20,30 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     lastFetchRef.current = now;
 
     try {
-      const { data: { session } } = await supabase.auth.getSession();
-      
-      if (!session?.user) {
-        setUser(null);
-        setTier('free');
-        setSubscriptionEnd(null);
-        setIsLoading(false);
+      const {
+        data: { session },
+        error: sessionError,
+      } = await supabase.auth.getSession();
+
+      if (sessionError) {
+        if (isTransientAuthError(sessionError)) {
+          console.warn('Transient getSession() error during subscription check; preserving auth state');
+          setIsLoading(false);
+          return;
+        }
+
+        console.warn('Session lookup failed during subscription check:', getErrorMessageText(sessionError));
+        resetAnonymousState();
         return;
       }
 
-      setUser(session.user);
-      
-      // Batch all profile data in a single query for efficiency
+      if (!session?.user) {
+        resetAnonymousState();
+        return;
+      }
+
+      setUser((prev) => (prev?.id === session.user.id ? prev : session.user));
+
       const [profileResult, subResult] = await Promise.all([
         supabase
           .from('profiles')
@@ -122,14 +52,17 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           .maybeSingle(),
         supabase.functions.invoke('check-subscription'),
       ]);
+...
+      if (profileResult.error) {
+        console.warn('Profile fetch failed during subscription check:', profileResult.error.message);
+      }
 
-      // Process profile data (monthly limits + plan)
-      if (profileResult.data) {
-        const profile = profileResult.data;
+      const profileData = profileResult.data;
+      if (profileData) {
         const currentMonth = new Date().toISOString().slice(0, 7);
-        const lastDate = profile.last_book_date;
+        const lastDate = profileData.last_book_date;
         const lastMonth = lastDate ? lastDate.slice(0, 7) : null;
-        const count = lastMonth === currentMonth ? (profile.daily_book_count || 0) : 0;
+        const count = lastMonth === currentMonth ? (profileData.daily_book_count || 0) : 0;
 
         setDailyLimitInfo({
           dailyBookCount: count,
@@ -138,11 +71,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         });
       }
 
-      // Check TTS usage separately (less critical)
-      checkTTSUsage(session.user.id);
+      void checkTTSUsage(session.user.id);
 
       const { data: subData, error: subError } = subResult;
-      const profileData = profileResult.data;
 
       if (subError) {
         console.error('Error checking subscription:', subError);
@@ -153,99 +84,66 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         return;
       }
 
-      // Prefer Stripe tier when available, otherwise fall back to profile plan
       if (subData?.subscribed) {
-        // Stripe product_id takes priority, then local tier field
         const detectedTier = subData.product_id
           ? getTierFromProductId(subData.product_id)
           : (subData.tier as SubscriptionTier) || 'free';
         setTier(detectedTier);
         setSubscriptionEnd(subData.subscription_end);
 
-        // Update profile plan to keep things consistent (fire and forget)
         const validPlans: SubscriptionTier[] = ['free', 'premium', 'prophet_tier', 'student'];
         const planToSave = validPlans.includes(detectedTier) ? detectedTier : 'premium';
 
-        supabase
+        void supabase
           .from('profiles')
           .update({ plan: planToSave as 'free' | 'premium' | 'prophet_tier' | 'student' })
           .or(`user_id.eq.${session.user.id},id.eq.${session.user.id}`)
           .then(() => {});
       } else {
-        // No active subscription anywhere
-        setTier('free');
+        setTier(profileData?.plan as SubscriptionTier || 'free');
         setSubscriptionEnd(null);
       }
     } catch (error) {
-      console.error('Subscription check error:', error);
+      if (isTransientAuthError(error)) {
+        console.warn('Transient subscription check error; preserving auth state');
+      } else {
+        console.error('Subscription check error:', error);
+      }
     } finally {
       setIsLoading(false);
     }
-  }, [checkTTSUsage]);
-
-  const incrementDailyBookCount = useCallback(async () => {
-    if (!user) return;
-    
-    const today = new Date().toISOString().split('T')[0];
-    const currentMonth = today.slice(0, 7);
-    const lastMonth = dailyLimitInfo.lastBookDate ? dailyLimitInfo.lastBookDate.slice(0, 7) : null;
-    const newCount = lastMonth === currentMonth 
-      ? dailyLimitInfo.dailyBookCount + 1 
-      : 1;
-
-    await supabase
-      .from('profiles')
-      .update({
-        daily_book_count: newCount,
-        last_book_date: today,
-      })
-      .or(`user_id.eq.${user.id},id.eq.${user.id}`);
-
-    setDailyLimitInfo({
-      dailyBookCount: newCount,
-      lastBookDate: today,
-      canGenerateToday: newCount < LAUNCH_MODE_CONFIG.freeBookLimit,
-    });
-  }, [user, dailyLimitInfo]);
-
-  const updateTTSUsage = useCallback(async (minutes: number) => {
-    if (!user) return;
-
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    const newTotal = ttsMinutesUsed + minutes;
-
-    // Upsert TTS usage
-    await supabase
-      .from('tts_usage')
-      .upsert({
-        user_id: user.id,
-        month: currentMonth,
-        minutes_used: newTotal,
-        updated_at: new Date().toISOString(),
-      }, {
-        onConflict: 'user_id,month',
-      });
-
-    setTtsMinutesUsed(newTotal);
-  }, [user, ttsMinutesUsed]);
-
+  }, [checkTTSUsage, resetAnonymousState]);
+...
   useEffect(() => {
     let mounted = true;
-    (async () => {
+
+    const bootstrapAuth = async () => {
       try {
-        const { data: { session }, error } = await supabase.auth.getSession();
-        if (error || !session) {
+        const {
+          data: { session },
+          error,
+        } = await supabase.auth.getSession();
+
+        if (error) {
+          if (isTransientAuthError(error)) {
+            console.warn('Transient bootstrap session error; preserving auth state');
+            if (mounted) setIsLoading(false);
+            return;
+          }
+
           if (mounted) {
-            setUser(null);
-            setTier('free');
-            setSubscriptionEnd(null);
-            setIsLoading(false);
+            resetAnonymousState();
           }
           return;
         }
 
-        // Lightweight server check — but DON'T sign out on transient failures.
-        // Only sign out if the server explicitly rejects the token (401/403).
+        if (!session?.user) {
+          if (mounted) {
+            resetAnonymousState();
+          }
+          return;
+        }
+
         const { error: userError } = await supabase.auth.getUser();
         if (userError) {
           const msg = userError.message?.toLowerCase() || '';
@@ -254,55 +152,48 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
             console.warn('JWT rejected by server, clearing session:', userError.message);
             await supabase.auth.signOut({ scope: 'local' });
             if (mounted) {
-              setUser(null);
-              setTier('free');
-              setSubscriptionEnd(null);
-              setIsLoading(false);
+              resetAnonymousState();
             }
             return;
           }
-          // Transient error (network timeout, 5xx) — keep session, it's likely still valid
+
           console.warn('getUser() transient error, keeping session:', userError.message);
         }
 
         if (mounted) {
           setUser(session.user);
-          checkSubscription(true);
+          void checkSubscription(true);
         }
-      } catch {
-        // Network error — DON'T sign out. The token may still be perfectly valid.
-        console.warn('Network error during session validation — keeping existing session');
+      } catch (error) {
+        if (isTransientAuthError(error)) {
+          console.warn('Network error during session validation — keeping existing session');
+        } else {
+          console.error('Unexpected bootstrap auth error:', error);
+        }
+
         if (mounted) {
-          // Try to use cached session
           const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
           if (session?.user) {
             setUser(session.user);
-            checkSubscription(true);
+            void checkSubscription(true);
           } else {
-            setUser(null);
-            setTier('free');
-            setSubscriptionEnd(null);
-            setIsLoading(false);
+            resetAnonymousState();
           }
         }
       }
-    })();
+    };
 
-    // Set up auth state listener for subsequent changes
+    void bootstrapAuth();
+
     const { data: { subscription } } = supabase.auth.onAuthStateChange(
       (event, session) => {
         if (!mounted) return;
 
         if (event === 'SIGNED_OUT') {
-          setUser(null);
-          setTier('free');
-          setSubscriptionEnd(null);
-          setIsLoading(false);
+          resetAnonymousState();
           return;
         }
 
-        // TOKEN_REFRESHED can briefly emit without a hydrated session on flaky networks.
-        // Re-check once before clearing anything so users aren't logged out spuriously.
         if (event === 'TOKEN_REFRESHED' && !session) {
           setTimeout(async () => {
             const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
@@ -318,21 +209,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // Only update if user actually changed to prevent cascading re-renders
-        setUser(prev => {
-          if (prev?.id === session?.user?.id) return prev;
-          return session?.user ?? prev ?? null;
-        });
-        if (session?.user) {
-          // Force check on auth state change (deferred to avoid deadlock)
-          setTimeout(() => checkSubscription(true), 0);
-        } else {
+        if (!session?.user) {
           setIsLoading(false);
+          return;
         }
+
+        setUser(prev => (prev?.id === session.user.id ? prev : session.user));
+        setTimeout(() => checkSubscription(true), 0);
       }
     );
 
-    // Periodic check every 5 minutes
     const interval = setInterval(() => checkSubscription(false), 300000);
 
     return () => {
@@ -340,7 +226,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
       clearInterval(interval);
     };
-  }, [checkSubscription]);
+  }, [checkSubscription, resetAnonymousState]);
 
   const isSubscribed = tier !== 'free';
   
