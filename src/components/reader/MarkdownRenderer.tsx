@@ -199,19 +199,25 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
 
   // Extract [FIGURE] markers for FigureRenderer integration
   interface ParsedFigureMarker {
-    figureNumber: number;
+    figureNumber: string;
     type: string;
     caption: string;
     description: string;
     renderMode: RenderMode;
     cognitiveScore?: number;
+    imageUrl?: string;
   }
 
   const { figureMarkers, cleanedAfterFigures } = useMemo(() => {
     if (!cleanedAfterEvidence) return { figureMarkers: [] as ParsedFigureMarker[], cleanedAfterFigures: "" };
-    
+
     const markers: ParsedFigureMarker[] = [];
     let text = cleanedAfterEvidence;
+
+    const extractFigureField = (block: string, label: string) => {
+      const fieldRegex = new RegExp(`(?:^|\\n)\\s*${label}:\\s*([\\s\\S]*?)(?=\\n\\s*(?:TYPE|CAPTION|DESCRIPTION|COGNITIVE_SCORE|IMAGE_URL|IMAGE):|$)`, 'i');
+      return block.match(fieldRegex)?.[1]?.trim();
+    };
 
     // Strip orphaned figure markers from previously-saved content.
     // These are runtime-only placeholders that should never be persisted in the DB.
@@ -219,30 +225,39 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     text = text.replace(/<!--FIGURE_MARKER_\d+-->/g, '');
     text = text.replace(/&lt;!--FIGURE_MARKER_\d+--&gt;/g, '');
 
-    // v2.0 Structured: [FIGURE X\nTYPE: ...\nCAPTION: ...\nDESCRIPTION: ...\n] with optional COGNITIVE_SCORE
-    const structuredRegex = /\[FIGURE\s*(\d+)\s*\n\s*TYPE:\s*([^\n]+)\n\s*CAPTION:\s*([^\n]+)\n\s*DESCRIPTION:\s*([\s\S]*?)(?:\n\s*COGNITIVE_SCORE:\s*(\d+(?:\.\d+)?))?\s*\]/gi;
-    text = text.replace(structuredRegex, (match, num, type, caption, desc, score) => {
-      const figNum = parseInt(num);
-      const visualType = type.trim().toLowerCase();
+    // Structured figures support decimal numbering (e.g. 1.1) and optional IMAGE_URL/IMAGE fields.
+    const structuredRegex = /\[FIGURE\s*([0-9]+(?:\.[0-9]+)*)\s*\n([\s\S]*?)\]/gi;
+    text = text.replace(structuredRegex, (match, figureNumber, block) => {
+      const visualType = extractFigureField(block, 'TYPE')?.toLowerCase();
+      const caption = extractFigureField(block, 'CAPTION');
+      const description = extractFigureField(block, 'DESCRIPTION');
+      const score = extractFigureField(block, 'COGNITIVE_SCORE');
+      const imageUrl = extractFigureField(block, 'IMAGE_URL') || extractFigureField(block, 'IMAGE');
+
+      if (!visualType || !caption || !description) {
+        return match;
+      }
+
       markers.push({
-        figureNumber: figNum,
+        figureNumber,
         type: visualType,
-        caption: caption.trim(),
-        description: desc.trim(),
+        caption,
+        description,
         renderMode: resolveRenderModeClient(visualType),
         cognitiveScore: score ? parseFloat(score) : undefined,
+        imageUrl,
       });
       return `<!--FIGURE_MARKER_${markers.length - 1}-->`;
     });
 
-    // Legacy: [FIGURE X: description]
-    text = text.replace(/\[FIGURE\s*(\d+)\s*:\s*([\s\S]*?)\]/gi, (match, num, desc) => {
-      const figNum = parseInt(num);
+    // Legacy: [FIGURE X: description] with integer or decimal figure IDs.
+    text = text.replace(/\[FIGURE\s*([0-9]+(?:\.[0-9]+)*)\s*:\s*([\s\S]*?)\]/gi, (match, figureNumber, desc) => {
+      const description = desc.trim();
       markers.push({
-        figureNumber: figNum,
+        figureNumber,
         type: 'labeled_illustration',
-        caption: desc.trim().split('.')[0] || `Figure ${figNum}`,
-        description: desc.trim(),
+        caption: description.split('.')[0] || `Figure ${figureNumber}`,
+        description,
         renderMode: 'ai_image',
       });
       return `<!--FIGURE_MARKER_${markers.length - 1}-->`;
@@ -700,10 +715,11 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           const fig = figureMarkers[figureIndex];
           elements.push(
             <FigureRenderer
-              key={`figure-${fig.figureNumber}`}
+              key={`figure-${fig.figureNumber}-${figureIndex}`}
               figureNumber={fig.figureNumber}
               caption={fig.caption}
               description={fig.description}
+              imageUrl={fig.imageUrl}
               renderMode={fig.renderMode}
               visualType={fig.type}
               cognitiveScore={fig.cognitiveScore}

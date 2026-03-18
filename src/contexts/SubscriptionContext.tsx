@@ -293,9 +293,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       (event, session) => {
         if (!mounted) return;
 
-        // If token refresh produced no session, the refresh token is dead – clean up
-        if (event === 'TOKEN_REFRESHED' && !session) {
-          supabase.auth.signOut({ scope: 'local' });
+        if (event === 'SIGNED_OUT') {
           setUser(null);
           setTier('free');
           setSubscriptionEnd(null);
@@ -303,17 +301,32 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           return;
         }
 
+        // TOKEN_REFRESHED can briefly emit without a hydrated session on flaky networks.
+        // Re-check once before clearing anything so users aren't logged out spuriously.
+        if (event === 'TOKEN_REFRESHED' && !session) {
+          setTimeout(async () => {
+            const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+            if (!mounted) return;
+            if (data.session?.user) {
+              setUser(prev => (prev?.id === data.session?.user?.id ? prev : data.session.user));
+              setTimeout(() => checkSubscription(true), 0);
+            } else {
+              console.warn('TOKEN_REFRESHED yielded no session; preserving current auth state');
+              setIsLoading(false);
+            }
+          }, 250);
+          return;
+        }
+
         // Only update if user actually changed to prevent cascading re-renders
         setUser(prev => {
           if (prev?.id === session?.user?.id) return prev;
-          return session?.user ?? null;
+          return session?.user ?? prev ?? null;
         });
         if (session?.user) {
           // Force check on auth state change (deferred to avoid deadlock)
           setTimeout(() => checkSubscription(true), 0);
         } else {
-          setTier('free');
-          setSubscriptionEnd(null);
           setIsLoading(false);
         }
       }
