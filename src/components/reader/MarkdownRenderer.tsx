@@ -213,6 +213,12 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     const markers: ParsedFigureMarker[] = [];
     let text = cleanedAfterEvidence;
 
+    // Strip orphaned figure markers from previously-saved content.
+    // These are runtime-only placeholders that should never be persisted in the DB.
+    // Both raw HTML comments and entity-escaped variants must be removed.
+    text = text.replace(/<!--FIGURE_MARKER_\d+-->/g, '');
+    text = text.replace(/&lt;!--FIGURE_MARKER_\d+--&gt;/g, '');
+
     // v2.0 Structured: [FIGURE X\nTYPE: ...\nCAPTION: ...\nDESCRIPTION: ...\n] with optional COGNITIVE_SCORE
     const structuredRegex = /\[FIGURE\s*(\d+)\s*\n\s*TYPE:\s*([^\n]+)\n\s*CAPTION:\s*([^\n]+)\n\s*DESCRIPTION:\s*([\s\S]*?)(?:\n\s*COGNITIVE_SCORE:\s*(\d+(?:\.\d+)?))?\s*\]/gi;
     text = text.replace(structuredRegex, (match, num, type, caption, desc, score) => {
