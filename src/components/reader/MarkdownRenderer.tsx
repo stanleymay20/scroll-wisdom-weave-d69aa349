@@ -331,9 +331,10 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     // If we unescape after formatting, escaped markers stay as raw text.
     html = html.replace(/\\([\\`*_{}[\]()#+\-.!~|$>])/g, '$1');
     
-    // Protect structured code block and evidence block placeholders before HTML escaping
+    // Protect structured code block, evidence block, and figure marker placeholders before HTML escaping
     html = html.replace(/<!--STRUCTURED_CODE_BLOCK_(\d+)-->/g, '___STRUCTURED_CODE_BLOCK_$1___');
     html = html.replace(/<!--EVIDENCE_BLOCK_(\d+)-->/g, '___EVIDENCE_BLOCK_$1___');
+    html = html.replace(/<!--FIGURE_MARKER_(\d+)-->/g, '___FIGURE_MARKER_$1___');
     
     // Escape HTML entities first
     html = html
@@ -341,9 +342,10 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       .replace(/</g, '&lt;')
       .replace(/>/g, '&gt;');
     
-    // Restore structured code block and evidence block placeholders after escaping
+    // Restore placeholders after escaping
     html = html.replace(/___STRUCTURED_CODE_BLOCK_(\d+)___/g, '<!--STRUCTURED_CODE_BLOCK_$1-->');
     html = html.replace(/___EVIDENCE_BLOCK_(\d+)___/g, '<!--EVIDENCE_BLOCK_$1-->');
+    html = html.replace(/___FIGURE_MARKER_(\d+)___/g, '<!--FIGURE_MARKER_$1-->');
 
     // NOTE: Fenced code block placeholders (___FENCED_CODE_N___) are restored
     // AFTER paragraph splitting to prevent \n\n inside <pre> from being split.
