@@ -230,18 +230,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   }, [user, ttsMinutesUsed]);
 
   useEffect(() => {
-    // Proactively validate the stored session on mount.
-    // Uses getUser() to SERVER-VALIDATE the JWT signature, catching tokens
-    // that look valid locally but were invalidated by infrastructure changes.
     let mounted = true;
     (async () => {
       try {
         const { data: { session }, error } = await supabase.auth.getSession();
         if (error || !session) {
-          if (error) {
-            console.warn('Session validation failed, clearing stale auth state:', error.message);
-            await supabase.auth.signOut({ scope: 'local' });
-          }
           if (mounted) {
             setUser(null);
             setTier('free');
@@ -251,20 +244,25 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        // SERVER-SIDE validation: getUser() sends the JWT to the auth server.
-        // If the token signature is invalid (e.g., after infra restart), this
-        // returns an error while getSession() would succeed from local cache.
+        // Lightweight server check — but DON'T sign out on transient failures.
+        // Only sign out if the server explicitly rejects the token (401/403).
         const { error: userError } = await supabase.auth.getUser();
         if (userError) {
-          console.warn('JWT server validation failed, clearing invalid session:', userError.message);
-          await supabase.auth.signOut({ scope: 'local' });
-          if (mounted) {
-            setUser(null);
-            setTier('free');
-            setSubscriptionEnd(null);
-            setIsLoading(false);
+          const msg = userError.message?.toLowerCase() || '';
+          const isAuthRejection = msg.includes('invalid') || msg.includes('expired') || msg.includes('not authorized');
+          if (isAuthRejection) {
+            console.warn('JWT rejected by server, clearing session:', userError.message);
+            await supabase.auth.signOut({ scope: 'local' });
+            if (mounted) {
+              setUser(null);
+              setTier('free');
+              setSubscriptionEnd(null);
+              setIsLoading(false);
+            }
+            return;
           }
-          return;
+          // Transient error (network timeout, 5xx) — keep session, it's likely still valid
+          console.warn('getUser() transient error, keeping session:', userError.message);
         }
 
         if (mounted) {
@@ -272,13 +270,20 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           checkSubscription(true);
         }
       } catch {
-        // Network error during initial validation – clear state to stop retries
-        await supabase.auth.signOut({ scope: 'local' }).catch(() => {});
+        // Network error — DON'T sign out. The token may still be perfectly valid.
+        console.warn('Network error during session validation — keeping existing session');
         if (mounted) {
-          setUser(null);
-          setTier('free');
-          setSubscriptionEnd(null);
-          setIsLoading(false);
+          // Try to use cached session
+          const { data: { session } } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (session?.user) {
+            setUser(session.user);
+            checkSubscription(true);
+          } else {
+            setUser(null);
+            setTier('free');
+            setSubscriptionEnd(null);
+            setIsLoading(false);
+          }
         }
       }
     })();
