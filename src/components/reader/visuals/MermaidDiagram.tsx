@@ -16,6 +16,16 @@ interface MermaidDiagramProps {
  * Generates a Mermaid definition from a figure description when no explicit
  * mermaid code block is provided. Maps visual types to sensible defaults.
  */
+/** Sanitise a string so it's safe inside Mermaid node labels (double-quoted). */
+function sanitizeLabel(text: string, maxLen = 50): string {
+  return text
+    .substring(0, maxLen)
+    .replace(/"/g, "'")
+    .replace(/[[\]{}()<>#&|]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim() || 'Node';
+}
+
 export function descriptionToMermaid(description: string, visualType: string): string {
   const lines = description
     .split(/[.;\n]/)
