@@ -209,7 +209,9 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
 
     try {
       if (mode === "login") {
-        const { error } = await supabase.auth.signInWithPassword({ email: safeEmail, password: safePassword });
+        const { error } = await withTransientRetry(() =>
+          supabase.auth.signInWithPassword({ email: safeEmail, password: safePassword })
+        );
         if (error) throw error;
         toast({ title: "Welcome back!", description: "You have successfully signed in." });
       } else if (mode === "signup") {
@@ -217,23 +219,24 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
           throw new Error("You must accept the Terms of Service and Privacy Policy to create an account.");
         }
         const redirectUrl = `${window.location.origin}/`;
-        const { data, error } = await supabase.auth.signUp({
-          email: safeEmail,
-          password: safePassword,
-          options: {
-            emailRedirectTo: redirectUrl,
-            data: {
-              full_name: fullName.trim(),
-              accepted_terms: true,
-              newsletter_subscribed: newsletterSubscribed,
+        const { data, error } = await withTransientRetry(() =>
+          supabase.auth.signUp({
+            email: safeEmail,
+            password: safePassword,
+            options: {
+              emailRedirectTo: redirectUrl,
+              data: {
+                full_name: fullName.trim(),
+                accepted_terms: true,
+                newsletter_subscribed: newsletterSubscribed,
+              },
             },
-          },
-        });
+          })
+        );
         if (error) throw error;
 
-        // Store consent in profiles
         if (data.user) {
-          await supabase.from("profiles").update({
+          void supabase.from("profiles").update({
             accepted_terms: true,
             accepted_terms_at: new Date().toISOString(),
             newsletter_subscribed: newsletterSubscribed,
@@ -241,7 +244,6 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
           }).eq("user_id", data.user.id);
         }
 
-        // Check if user was actually created (not just returned existing)
         if (data.user && !data.session) {
           toast({
             title: "Check your email",
@@ -257,11 +259,10 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
       } else if (mode === "reset-password") {
         let { data: { session } } = await supabase.auth.getSession();
         if (!session) {
-          // Mobile browsers often use PKCE recovery links with ?code=...
           const url = new URL(window.location.href);
           const code = url.searchParams.get("code");
           if (code) {
-            const { error } = await supabase.auth.exchangeCodeForSession(code);
+            const { error } = await withTransientRetry(() => supabase.auth.exchangeCodeForSession(code));
             if (!error) {
               ({ data: { session } } = await supabase.auth.getSession());
             }
@@ -271,7 +272,7 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
         if (safeNewPassword.length < 6) {
           throw new Error("Password must be at least 6 characters long.");
         }
-        const { error } = await supabase.auth.updateUser({ password: safeNewPassword });
+        const { error } = await withTransientRetry(() => supabase.auth.updateUser({ password: safeNewPassword }));
         if (error) throw error;
         toast({ title: "Password updated!", description: "You can now sign in with your new password." });
         await supabase.auth.signOut();

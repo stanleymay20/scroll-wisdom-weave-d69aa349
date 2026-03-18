@@ -1,15 +1,100 @@
 import { createContext, useContext, useState, useEffect, ReactNode, useCallback, useRef } from 'react';
+import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { SubscriptionTier, getTierFromProductId, SUBSCRIPTION_TIERS } from '@/lib/subscription';
 import { LAUNCH_MODE_CONFIG, isLaunchModeActive } from '@/lib/config';
 import { getErrorMessageText, isTransientAuthError } from '@/lib/authResilience';
-import { User } from '@supabase/supabase-js';
-...
+
+interface DailyLimitInfo {
+  dailyBookCount: number;
+  lastBookDate: string | null;
+  canGenerateToday: boolean;
+}
+
+interface SubscriptionContextType {
+  user: User | null;
+  tier: SubscriptionTier;
+  isSubscribed: boolean;
+  subscriptionEnd: string | null;
+  isLoading: boolean;
+  checkSubscription: () => Promise<void>;
+  canGenerateBooks: boolean;
+  maxWordCount: number;
+  dailyLimitInfo: DailyLimitInfo;
+  incrementDailyBookCount: () => Promise<void>;
+  ttsMinutesUsed: number;
+  updateTTSUsage: (minutes: number) => Promise<void>;
+}
+
+const SubscriptionContext = createContext<SubscriptionContextType | undefined>(undefined);
+
+export function SubscriptionProvider({ children }: { children: ReactNode }) {
+  const [user, setUser] = useState<User | null>(null);
+  const [tier, setTier] = useState<SubscriptionTier>('free');
+  const [subscriptionEnd, setSubscriptionEnd] = useState<string | null>(null);
+  const [isLoading, setIsLoading] = useState(true);
+  const [dailyLimitInfo, setDailyLimitInfo] = useState<DailyLimitInfo>({
+    dailyBookCount: 0,
+    lastBookDate: null,
+    canGenerateToday: true,
+  });
+  const [ttsMinutesUsed, setTtsMinutesUsed] = useState(0);
+
+  const lastFetchRef = useRef<number>(0);
+  const FETCH_COOLDOWN = 30000;
+
   const resetAnonymousState = useCallback(() => {
     setUser(null);
     setTier('free');
     setSubscriptionEnd(null);
     setIsLoading(false);
+  }, []);
+
+  const checkDailyLimits = useCallback(async (userId: string) => {
+    try {
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('daily_book_count, last_book_date')
+        .or(`user_id.eq.${userId},id.eq.${userId}`)
+        .maybeSingle();
+
+      if (profile) {
+        const currentMonth = new Date().toISOString().slice(0, 7);
+        const lastDate = profile.last_book_date;
+        const lastMonth = lastDate ? lastDate.slice(0, 7) : null;
+        const count = lastMonth === currentMonth ? (profile.daily_book_count || 0) : 0;
+        const canGenerate = count < LAUNCH_MODE_CONFIG.freeBookLimit;
+
+        setDailyLimitInfo({
+          dailyBookCount: count,
+          lastBookDate: lastDate,
+          canGenerateToday: canGenerate,
+        });
+      }
+    } catch (error) {
+      console.error('Error checking daily limits:', error);
+    }
+  }, []);
+
+  const checkTTSUsage = useCallback(async (userId: string) => {
+    try {
+      const currentMonth = new Date().toISOString().slice(0, 7);
+
+      const { data } = await supabase
+        .from('tts_usage')
+        .select('minutes_used')
+        .eq('user_id', userId)
+        .eq('month', currentMonth)
+        .maybeSingle();
+
+      if (data) {
+        setTtsMinutesUsed(data.minutes_used);
+      } else {
+        setTtsMinutesUsed(0);
+      }
+    } catch (error) {
+      console.error('Error checking TTS usage:', error);
+    }
   }, []);
 
   const checkSubscription = useCallback(async (force = false) => {
@@ -52,7 +137,7 @@ import { User } from '@supabase/supabase-js';
           .maybeSingle(),
         supabase.functions.invoke('check-subscription'),
       ]);
-...
+
       if (profileResult.error) {
         console.warn('Profile fetch failed during subscription check:', profileResult.error.message);
       }
@@ -74,7 +159,6 @@ import { User } from '@supabase/supabase-js';
       void checkTTSUsage(session.user.id);
 
       const { data: subData, error: subError } = subResult;
-
       if (subError) {
         console.error('Error checking subscription:', subError);
         if (profileData?.plan) {
@@ -100,7 +184,7 @@ import { User } from '@supabase/supabase-js';
           .or(`user_id.eq.${session.user.id},id.eq.${session.user.id}`)
           .then(() => {});
       } else {
-        setTier(profileData?.plan as SubscriptionTier || 'free');
+        setTier((profileData?.plan as SubscriptionTier) || 'free');
         setSubscriptionEnd(null);
       }
     } catch (error) {
@@ -113,7 +197,53 @@ import { User } from '@supabase/supabase-js';
       setIsLoading(false);
     }
   }, [checkTTSUsage, resetAnonymousState]);
-...
+
+  const incrementDailyBookCount = useCallback(async () => {
+    if (!user) return;
+
+    const today = new Date().toISOString().split('T')[0];
+    const currentMonth = today.slice(0, 7);
+    const lastMonth = dailyLimitInfo.lastBookDate ? dailyLimitInfo.lastBookDate.slice(0, 7) : null;
+    const newCount = lastMonth === currentMonth ? dailyLimitInfo.dailyBookCount + 1 : 1;
+
+    await supabase
+      .from('profiles')
+      .update({
+        daily_book_count: newCount,
+        last_book_date: today,
+      })
+      .or(`user_id.eq.${user.id},id.eq.${user.id}`);
+
+    setDailyLimitInfo({
+      dailyBookCount: newCount,
+      lastBookDate: today,
+      canGenerateToday: newCount < LAUNCH_MODE_CONFIG.freeBookLimit,
+    });
+  }, [user, dailyLimitInfo]);
+
+  const updateTTSUsage = useCallback(async (minutes: number) => {
+    if (!user) return;
+
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const newTotal = ttsMinutesUsed + minutes;
+
+    await supabase
+      .from('tts_usage')
+      .upsert(
+        {
+          user_id: user.id,
+          month: currentMonth,
+          minutes_used: newTotal,
+          updated_at: new Date().toISOString(),
+        },
+        {
+          onConflict: 'user_id,month',
+        }
+      );
+
+    setTtsMinutesUsed(newTotal);
+  }, [user, ttsMinutesUsed]);
+
   useEffect(() => {
     let mounted = true;
 
@@ -131,16 +261,12 @@ import { User } from '@supabase/supabase-js';
             return;
           }
 
-          if (mounted) {
-            resetAnonymousState();
-          }
+          if (mounted) resetAnonymousState();
           return;
         }
 
         if (!session?.user) {
-          if (mounted) {
-            resetAnonymousState();
-          }
+          if (mounted) resetAnonymousState();
           return;
         }
 
@@ -151,9 +277,7 @@ import { User } from '@supabase/supabase-js';
           if (isAuthRejection) {
             console.warn('JWT rejected by server, clearing session:', userError.message);
             await supabase.auth.signOut({ scope: 'local' });
-            if (mounted) {
-              resetAnonymousState();
-            }
+            if (mounted) resetAnonymousState();
             return;
           }
 
@@ -185,41 +309,40 @@ import { User } from '@supabase/supabase-js';
 
     void bootstrapAuth();
 
-    const { data: { subscription } } = supabase.auth.onAuthStateChange(
-      (event, session) => {
-        if (!mounted) return;
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (!mounted) return;
 
-        if (event === 'SIGNED_OUT') {
-          resetAnonymousState();
-          return;
-        }
-
-        if (event === 'TOKEN_REFRESHED' && !session) {
-          setTimeout(async () => {
-            const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
-            if (!mounted) return;
-            if (data.session?.user) {
-              setUser(prev => (prev?.id === data.session?.user?.id ? prev : data.session.user));
-              setTimeout(() => checkSubscription(true), 0);
-            } else {
-              console.warn('TOKEN_REFRESHED yielded no session; preserving current auth state');
-              setIsLoading(false);
-            }
-          }, 250);
-          return;
-        }
-
-        if (!session?.user) {
-          setIsLoading(false);
-          return;
-        }
-
-        setUser(prev => (prev?.id === session.user.id ? prev : session.user));
-        setTimeout(() => checkSubscription(true), 0);
+      if (event === 'SIGNED_OUT') {
+        resetAnonymousState();
+        return;
       }
-    );
 
-    const interval = setInterval(() => checkSubscription(false), 300000);
+      if (event === 'TOKEN_REFRESHED' && !session) {
+        setTimeout(async () => {
+          const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
+          if (!mounted) return;
+
+          if (data.session?.user) {
+            setUser((prev) => (prev?.id === data.session?.user?.id ? prev : data.session.user));
+            setTimeout(() => void checkSubscription(true), 0);
+          } else {
+            console.warn('TOKEN_REFRESHED yielded no session; preserving current auth state');
+            setIsLoading(false);
+          }
+        }, 250);
+        return;
+      }
+
+      if (!session?.user) {
+        setIsLoading(false);
+        return;
+      }
+
+      setUser((prev) => (prev?.id === session.user.id ? prev : session.user));
+      setTimeout(() => void checkSubscription(true), 0);
+    });
+
+    const interval = setInterval(() => void checkSubscription(false), 300000);
 
     return () => {
       mounted = false;
@@ -229,20 +352,17 @@ import { User } from '@supabase/supabase-js';
   }, [checkSubscription, resetAnonymousState]);
 
   const isSubscribed = tier !== 'free';
-  
-  // Can generate books logic - considers launch mode (disabled during trial)
+
   const canGenerateBooks = (() => {
     if (SUBSCRIPTION_TIERS[tier].features.canGenerateBooks) {
       return true;
     }
-    // In launch mode (not trial), free tier can generate with daily limit
     if (isLaunchModeActive() && tier === 'free' && dailyLimitInfo.canGenerateToday) {
       return true;
     }
     return false;
   })();
 
-  // Max word count - respects launch mode limits (disabled during trial)
   const maxWordCount = (() => {
     if (isLaunchModeActive() && tier === 'free') {
       return LAUNCH_MODE_CONFIG.freeMaxWordCount;
@@ -251,20 +371,22 @@ import { User } from '@supabase/supabase-js';
   })();
 
   return (
-    <SubscriptionContext.Provider value={{
-      user,
-      tier,
-      isSubscribed,
-      subscriptionEnd,
-      isLoading,
-      checkSubscription,
-      canGenerateBooks,
-      maxWordCount,
-      dailyLimitInfo,
-      incrementDailyBookCount,
-      ttsMinutesUsed,
-      updateTTSUsage,
-    }}>
+    <SubscriptionContext.Provider
+      value={{
+        user,
+        tier,
+        isSubscribed,
+        subscriptionEnd,
+        isLoading,
+        checkSubscription,
+        canGenerateBooks,
+        maxWordCount,
+        dailyLimitInfo,
+        incrementDailyBookCount,
+        ttsMinutesUsed,
+        updateTTSUsage,
+      }}
+    >
       {children}
     </SubscriptionContext.Provider>
   );
