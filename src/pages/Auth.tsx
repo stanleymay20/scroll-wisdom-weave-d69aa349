@@ -157,10 +157,12 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
     setIsLoading(true);
     setAuthError(null);
     try {
-      const { error } = await supabase.auth.signInWithOtp({
-        email: safeEmail,
-        options: { emailRedirectTo: `${window.location.origin}/` },
-      });
+      const { error } = await withTransientRetry(() =>
+        supabase.auth.signInWithOtp({
+          email: safeEmail,
+          options: { emailRedirectTo: `${window.location.origin}/` },
+        })
+      );
       if (error) throw error;
       toast({ title: "Magic link sent!", description: "Check your email for the login link." });
     } catch (error: any) {
@@ -179,9 +181,11 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
     setIsLoading(true);
     setAuthError(null);
     try {
-      const { error } = await supabase.auth.resetPasswordForEmail(safeEmail, {
-        redirectTo: `${window.location.origin}/auth?mode=reset-password`,
-      });
+      const { error } = await withTransientRetry(() =>
+        supabase.auth.resetPasswordForEmail(safeEmail, {
+          redirectTo: `${window.location.origin}/auth?mode=reset-password`,
+        })
+      );
       if (error) throw error;
       toast({ title: "Reset email sent!", description: "Check your email for a password reset link." });
       setMode("login");
