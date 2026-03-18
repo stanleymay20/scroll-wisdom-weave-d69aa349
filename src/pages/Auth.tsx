@@ -12,6 +12,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { hasRecoveryTokens, isRecoveryCode, parseHashTokens } from "@/lib/authRecovery";
+import { getErrorMessageText, isTransientAuthError, withTransientRetry } from "@/lib/authResilience";
 
 
 type AuthMode = "login" | "signup" | "forgot-password" | "magic-link" | "reset-password";
