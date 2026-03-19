@@ -470,18 +470,33 @@ export function KnowledgeGraphPanel({
                   </div>
                 )}
 
-                {/* Graph visualization */}
-                {viewMode === 'book' && bookMermaid ? (
-                  <div className="bg-muted/20 rounded-xl border border-border/50 p-3">
+                {/* Interactive Mind Map */}
+                {viewMode === 'book' && bookNodes.length > 0 ? (
+                  <div>
                     <p className="text-xs text-muted-foreground mb-2 font-medium flex items-center gap-1.5">
-                      <Globe className="h-3.5 w-3.5" /> Book-Level Concept Network
+                      <Globe className="h-3.5 w-3.5" /> Book-Level Mind Map
+                      <span className="text-[10px] ml-auto opacity-60">drag nodes · scroll to zoom · click to inspect</span>
                     </p>
-                    <MermaidDiagram definition={bookMermaid} className="min-h-[200px]" />
+                    <InteractiveMindMap
+                      concepts={bookNodes.map(n => ({ id: n.id, label: n.label, importance: n.importance, definition: n.definition }))}
+                      relationships={bookGraph.edges.map(e => ({ source: e.source_node_id, target: e.target_node_id, type: e.relationship_type }))}
+                      onSelectNode={(id) => setSelectedNodeId(id)}
+                      selectedNodeId={selectedNodeId}
+                      className="min-h-[350px]"
+                    />
                   </div>
-                ) : chapterGraph?.mermaidGraph ? (
-                  <div className="bg-muted/20 rounded-xl border border-border/50 p-3">
-                    <p className="text-xs text-muted-foreground mb-2 font-medium">Chapter Concept Network</p>
-                    <MermaidDiagram definition={chapterGraph.mermaidGraph} className="min-h-[200px]" />
+                ) : chapterGraph?.concepts?.length ? (
+                  <div>
+                    <p className="text-xs text-muted-foreground mb-2 font-medium">Chapter Mind Map</p>
+                    <InteractiveMindMap
+                      concepts={chapterGraph.concepts.map(c => ({ id: c.id, label: c.label, importance: c.importance, definition: c.description }))}
+                      relationships={chapterGraph.relationships}
+                      onSelectNode={(id) => {
+                        setExpandedConcept(expandedConcept === id ? null : id);
+                      }}
+                      selectedNodeId={expandedConcept}
+                      className="min-h-[300px]"
+                    />
                   </div>
                 ) : null}
 
