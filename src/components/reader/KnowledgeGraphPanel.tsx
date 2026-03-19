@@ -620,10 +620,8 @@ export function KnowledgeGraphPanel({
                     <InteractiveMindMap
                       concepts={chapterGraph.concepts.map(c => ({ id: c.id, label: c.label, importance: c.importance, definition: c.description }))}
                       relationships={chapterGraph.relationships}
-                      onSelectNode={(id) => {
-                        setExpandedConcept(expandedConcept === id ? null : id);
-                      }}
-                      selectedNodeId={expandedConcept}
+                      onSelectNode={(id) => setSelectedNodeId(id)}
+                      selectedNodeId={selectedNodeId}
                       className="min-h-[300px]"
                     />
                   </div>
