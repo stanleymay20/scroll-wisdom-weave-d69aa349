@@ -3,6 +3,7 @@
  * 
  * Generates flashcards from book/chapter content using AI.
  * Supports different difficulty levels and categories.
+ * Saves session results to learning_progress for certification.
  */
 
 import { useState, useCallback } from 'react';
@@ -41,7 +42,10 @@ import {
 import { useToast } from '@/hooks/use-toast';
 import { supabase } from '@/integrations/supabase/client';
 import { cn } from '@/lib/utils';
-import { FlashcardDeck, FlashcardViewer, Flashcard } from './FlashcardDeck';
+import { FlashcardDeck, FlashcardViewer, Flashcard, FlashcardSessionResult } from './FlashcardDeck';
+import { createLogger } from '@/lib/logger';
+
+const logger = createLogger('FlashcardGenerator');
 
 interface FlashcardGeneratorProps {
   bookId: string;
