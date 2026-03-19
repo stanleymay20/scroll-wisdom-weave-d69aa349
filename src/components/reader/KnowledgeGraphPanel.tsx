@@ -441,6 +441,24 @@ export function KnowledgeGraphPanel({
     });
   };
 
+  // ─── Think Tab: AI-grade a single answer ───
+  const gradeAnswer = useCallback(async (questionIdx: number, question: string, answer: string) => {
+    setThinkGrading(prev => new Set(prev).add(questionIdx));
+    try {
+      const { data, error } = await supabase.functions.invoke('grade-think-answer', {
+        body: { question, answer, chapterTitle, bookTitle },
+      });
+      if (error) throw error;
+      
+      setThinkGrades(prev => ({ ...prev, [questionIdx]: data.grade }));
+      setThinkFeedback(prev => ({ ...prev, [questionIdx]: data.feedback }));
+    } catch {
+      toast({ title: 'Grading failed, please try again', variant: 'destructive' });
+    } finally {
+      setThinkGrading(prev => { const n = new Set(prev); n.delete(questionIdx); return n; });
+    }
+  }, [chapterTitle, bookTitle, toast]);
+
   // ─── Think Tab: Save session to certification ───
   const saveThinkSession = useCallback(async () => {
     const { data: { user } } = await supabase.auth.getUser();
