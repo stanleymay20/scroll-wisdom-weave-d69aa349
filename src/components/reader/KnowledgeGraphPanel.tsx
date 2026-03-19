@@ -335,6 +335,10 @@ export function KnowledgeGraphPanel({
   const [revealedAnswers, setRevealedAnswers] = useState<Set<number>>(new Set());
   const [viewMode, setViewMode] = useState<'chapter' | 'book'>('chapter');
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+  const [thinkAnswers, setThinkAnswers] = useState<Record<number, string>>({});
+  const [thinkGrades, setThinkGrades] = useState<Record<number, number>>({});
+  const [thinkRevealed, setThinkRevealed] = useState<Set<number>>(new Set());
+  const [thinkSaved, setThinkSaved] = useState(false);
   const { toast } = useToast();
 
   // Book-level graph hook
