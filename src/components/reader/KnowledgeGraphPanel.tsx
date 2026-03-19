@@ -447,10 +447,10 @@ export function KnowledgeGraphPanel({
     const graded = Object.entries(thinkGrades);
     if (graded.length === 0) return;
 
-    const avgQuality = graded.reduce((s, [, q]) => s + q, 0) / graded.length;
+    const avgQuality = graded.reduce((s, [, q]) => s + (q as number), 0) / graded.length;
     const bloomLevel = avgQuality >= 4 ? 'apply' : avgQuality >= 3 ? 'understand' : 'remember';
     const masteryStatus = avgQuality >= 4 ? 'mastered' : avgQuality >= 3 ? 'developing' : 'struggling';
-    const masteryPercent = Math.round((graded.filter(([, q]) => q >= 4).length / graded.length) * 100);
+    const masteryPercent = Math.round((graded.filter(([, q]) => (q as number) >= 4).length / graded.length) * 100);
 
     try {
       await supabase.from('learning_progress').insert({
