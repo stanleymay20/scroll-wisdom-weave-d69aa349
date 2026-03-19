@@ -420,6 +420,10 @@ export function KnowledgeGraphPanel({
     setExpandedConcept(null);
     setRevealedAnswers(new Set());
     setSelectedNodeId(null);
+    setThinkAnswers({});
+    setThinkGrades({});
+    setThinkRevealed(new Set());
+    setThinkSaved(false);
   }, [chapterNumber, bookId]);
 
   const toggleAnswer = (idx: number) => {
@@ -430,6 +434,62 @@ export function KnowledgeGraphPanel({
       return next;
     });
   };
+
+  // ─── Think Tab: Save session to certification ───
+  const saveThinkSession = useCallback(async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user || !bookId) return;
+
+    const graded = Object.entries(thinkGrades);
+    if (graded.length === 0) return;
+
+    const avgQuality = graded.reduce((s, [, q]) => s + q, 0) / graded.length;
+    const bloomLevel = avgQuality >= 4 ? 'apply' : avgQuality >= 3 ? 'understand' : 'remember';
+    const masteryStatus = avgQuality >= 4 ? 'mastered' : avgQuality >= 3 ? 'developing' : 'struggling';
+    const masteryPercent = Math.round((graded.filter(([, q]) => q >= 4).length / graded.length) * 100);
+
+    try {
+      await supabase.from('learning_progress').insert({
+        user_id: user.id,
+        book_id: bookId,
+        score: Math.round(avgQuality * 20),
+        bloom_level: bloomLevel,
+        mastery_status: masteryStatus,
+        questions_answered: graded.length,
+        question_difficulty: Math.round(avgQuality),
+        time_spent_seconds: 0,
+      });
+
+      // Update competency profile
+      const bloomField = `${bloomLevel}_score` as const;
+      const { data: existing } = await supabase
+        .from('competency_profile')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('domain', 'general')
+        .maybeSingle();
+
+      if (existing) {
+        const currentScore = Number((existing as any)[bloomField] || 0);
+        const newScore = Math.min(100, currentScore + (avgQuality * 3));
+        await supabase.from('competency_profile')
+          .update({ [bloomField]: newScore, total_attempts: (existing.total_attempts || 0) + 1, last_updated: new Date().toISOString() })
+          .eq('id', existing.id);
+      } else {
+        await supabase.from('competency_profile').insert({
+          user_id: user.id,
+          domain: 'general',
+          [bloomField]: avgQuality * 3,
+          total_attempts: 1,
+        });
+      }
+
+      setThinkSaved(true);
+      toast({ title: `${masteryPercent}% mastery · Added to certification`, description: `${graded.length} questions graded at ${bloomLevel} level` });
+    } catch {
+      toast({ title: 'Failed to save progress', variant: 'destructive' });
+    }
+  }, [thinkGrades, bookId, toast]);
 
   // Book-level nodes, optionally filtered by chapter
   const bookNodes = viewMode === 'book' ? bookGraph.nodes : bookGraph.getNodesForChapter(chapterNumber);
