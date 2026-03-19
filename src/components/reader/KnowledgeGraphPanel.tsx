@@ -10,9 +10,12 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { 
   Brain, Network, Zap, BookOpen, HelpCircle, ChevronRight, 
   Loader2, X, Lightbulb, Target, Layers, MessageSquare,
-  Globe, Filter, BookMarked, AlertTriangle, TrendingUp, ArrowRight
+  Globe, Filter, BookMarked, AlertTriangle, TrendingUp, ArrowRight,
+  Eye, Send, Award, Check
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Progress } from '@/components/ui/progress';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
