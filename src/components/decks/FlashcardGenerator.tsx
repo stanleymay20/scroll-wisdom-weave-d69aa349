@@ -164,6 +164,86 @@ export function FlashcardGenerator({
     );
   };
 
+  // Save session results to learning_progress for certification
+  const handleSessionComplete = useCallback(async (result: FlashcardSessionResult) => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // Map quality to bloom level and mastery status
+      const bloomLevel = result.averageQuality >= 4 ? 'apply' : result.averageQuality >= 3 ? 'understand' : 'remember';
+      const masteryStatus = result.masteryPercent >= 80 ? 'mastered' : result.masteryPercent >= 50 ? 'developing' : 'needs_work';
+      const score = Math.round(result.averageQuality * 20); // Scale 1-5 → 20-100
+
+      // Insert into learning_progress
+      await supabase.from('learning_progress').insert({
+        user_id: user.id,
+        book_id: bookId,
+        score,
+        bloom_level: bloomLevel,
+        mastery_status: masteryStatus,
+        questions_answered: result.totalCards,
+        time_spent_seconds: 0,
+      } as any);
+
+      // Update competency_profile
+      const { data: profile } = await supabase
+        .from('competency_profile')
+        .select('*')
+        .eq('user_id', user.id)
+        .eq('domain', 'general')
+        .maybeSingle();
+
+      const scoreField = bloomLevel === 'apply' ? 'apply_score' : bloomLevel === 'understand' ? 'understand_score' : 'remember_score';
+      
+      if (profile) {
+        const currentScore = Number((profile as any)[scoreField]) || 0;
+        const attempts = (profile.total_attempts || 0) + 1;
+        const newScore = Math.round(((currentScore * (attempts - 1)) + score) / attempts);
+        
+        await supabase.from('competency_profile').update({
+          [scoreField]: newScore,
+          total_attempts: attempts,
+          last_updated: new Date().toISOString(),
+        } as any).eq('id', profile.id);
+      } else {
+        await supabase.from('competency_profile').insert({
+          user_id: user.id,
+          domain: 'general',
+          [scoreField]: score,
+          total_attempts: 1,
+        } as any);
+      }
+
+      // Add to SRS if spaced_repetition_cards table exists — add weak cards
+      const weakCards = result.results.filter(r => r.quality <= 2);
+      if (weakCards.length > 0) {
+        const srsRecords = weakCards.map(r => {
+          const card = generatedDeck?.cards.find(c => c.id === r.cardId);
+          return {
+            user_id: user.id,
+            book_id: bookId,
+            question: card?.front || r.correctAnswer,
+            answer: r.correctAnswer,
+            bloom_level: 'remember',
+          };
+        }).filter(Boolean);
+
+        if (srsRecords.length > 0) {
+          await supabase.from('spaced_repetition_cards').insert(srsRecords as any);
+        }
+      }
+
+      logger.info('Flashcard session saved to certification pipeline', { score, masteryStatus, bloomLevel });
+      toast({
+        title: 'Progress Saved',
+        description: `Session recorded — ${masteryStatus === 'mastered' ? '🏆 Mastery achieved!' : 'Keep studying!'}`,
+      });
+    } catch (err) {
+      logger.error('Failed to save flashcard session:', err);
+    }
+  }, [bookId, generatedDeck, toast]);
+
   // If showing viewer, render fullscreen
   if (showViewer && generatedDeck) {
     return (
@@ -171,6 +251,7 @@ export function FlashcardGenerator({
         <FlashcardViewer
           deck={generatedDeck}
           onClose={() => setShowViewer(false)}
+          onSessionComplete={handleSessionComplete}
           className="max-w-2xl mx-auto h-full"
         />
       </div>
