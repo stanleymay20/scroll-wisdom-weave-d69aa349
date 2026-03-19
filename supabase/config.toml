@@ -104,3 +104,6 @@ verify_jwt = false
 
 [functions.generate-cinematic-video]
 verify_jwt = false
+
+[functions.grade-think-answer]
+verify_jwt = false
