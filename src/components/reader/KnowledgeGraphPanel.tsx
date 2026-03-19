@@ -873,43 +873,139 @@ export function KnowledgeGraphPanel({
                 ))}
               </TabsContent>
 
-              {/* Layer 4: Active Cognition */}
+              {/* Layer 4: Active Cognition — Answer + Grade + Certify */}
               <TabsContent value="activate" className="mt-0 space-y-3">
                 <div className="bg-accent/10 border border-accent/20 rounded-lg p-3 mb-2">
                   <p className="text-xs text-foreground/70 flex items-center gap-1.5">
                     <MessageSquare className="h-3.5 w-3.5" />
-                    Answer these to lock knowledge into memory
+                    Type your answer, reveal, then self-grade to add to certification
                   </p>
+                  {Object.keys(thinkGrades).length > 0 && (
+                    <div className="mt-2">
+                      <Progress value={(Object.keys(thinkGrades).length / (chapterGraph?.activeQuestions.length || 1)) * 100} className="h-1.5" />
+                      <p className="text-[10px] text-muted-foreground mt-1">
+                        {Object.keys(thinkGrades).length}/{chapterGraph?.activeQuestions.length || 0} graded
+                      </p>
+                    </div>
+                  )}
                 </div>
-                {chapterGraph?.activeQuestions.map((q, i) => (
-                  <div key={i} className="bg-card border border-border/50 rounded-lg p-4">
-                    <div className="flex items-start gap-3">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-primary/20 text-primary flex items-center justify-center text-xs font-bold">
-                        {i + 1}
-                      </div>
-                      <div className="flex-1">
-                        <p className="text-sm font-medium leading-relaxed">{q}</p>
-                        <Button 
-                          variant="ghost" 
-                          size="sm" 
-                          className="mt-2 text-xs h-7"
-                          onClick={() => toggleAnswer(i)}
-                        >
-                          {revealedAnswers.has(i) ? 'I\'ve reflected ✓' : 'Think about it…'}
-                        </Button>
-                        {revealedAnswers.has(i) && (
-                          <motion.p 
-                            initial={{ opacity: 0 }}
-                            animate={{ opacity: 1 }}
-                            className="text-xs text-muted-foreground mt-1 italic"
-                          >
-                            ✓ Reflected — this strengthens neural pathways for this concept
-                          </motion.p>
-                        )}
+                {chapterGraph?.activeQuestions.map((q, i) => {
+                  const isRevealed = thinkRevealed.has(i);
+                  const grade = thinkGrades[i];
+                  const hasGrade = grade !== undefined;
+
+                  return (
+                    <div key={i} className={cn(
+                      "bg-card border rounded-lg p-4 transition-all",
+                      hasGrade && grade >= 4 ? "border-emerald-500/40 bg-emerald-500/5" :
+                      hasGrade && grade >= 3 ? "border-amber-500/40 bg-amber-500/5" :
+                      hasGrade ? "border-destructive/40 bg-destructive/5" :
+                      "border-border/50"
+                    )}>
+                      <div className="flex items-start gap-3">
+                        <div className={cn(
+                          "flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
+                          hasGrade && grade >= 4 ? "bg-emerald-500/20 text-emerald-600" :
+                          hasGrade ? "bg-primary/20 text-primary" :
+                          "bg-primary/20 text-primary"
+                        )}>
+                          {hasGrade ? <Check className="h-3.5 w-3.5" /> : i + 1}
+                        </div>
+                        <div className="flex-1 space-y-2">
+                          <p className="text-sm font-medium leading-relaxed">{q}</p>
+
+                          {/* Answer Input */}
+                          {!hasGrade && (
+                            <Textarea
+                              value={thinkAnswers[i] || ''}
+                              onChange={(e) => setThinkAnswers(prev => ({ ...prev, [i]: e.target.value }))}
+                              placeholder="Type your answer…"
+                              className="min-h-[60px] resize-none text-sm"
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey) && thinkAnswers[i]?.trim()) {
+                                  setThinkRevealed(prev => new Set(prev).add(i));
+                                }
+                              }}
+                            />
+                          )}
+
+                          {/* Reveal / Already answered */}
+                          {!isRevealed && !hasGrade && (
+                            <div className="flex gap-2">
+                              <Button variant="default" size="sm" className="text-xs gap-1.5"
+                                disabled={!thinkAnswers[i]?.trim()}
+                                onClick={() => setThinkRevealed(prev => new Set(prev).add(i))}>
+                                <Eye className="h-3.5 w-3.5" /> Reveal & Grade
+                              </Button>
+                              <Button variant="ghost" size="sm" className="text-xs text-muted-foreground"
+                                onClick={() => {
+                                  setThinkRevealed(prev => new Set(prev).add(i));
+                                }}>
+                                Skip
+                              </Button>
+                            </div>
+                          )}
+
+                          {/* Show user's answer after reveal */}
+                          {isRevealed && thinkAnswers[i]?.trim() && !hasGrade && (
+                            <div className="p-2.5 rounded-lg bg-muted/50 border border-border/50">
+                              <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Your Answer</span>
+                              <p className="text-xs mt-0.5">{thinkAnswers[i]}</p>
+                            </div>
+                          )}
+
+                          {/* SRS Grade Buttons */}
+                          {isRevealed && !hasGrade && (
+                            <motion.div initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className="space-y-2">
+                              <p className="text-[10px] text-muted-foreground text-center font-medium">How well did you know this?</p>
+                              <div className="grid grid-cols-5 gap-1">
+                                {[
+                                  { q: 1, label: 'Wrong', emoji: '❌', color: 'bg-destructive/20 text-destructive border-destructive/40 hover:bg-destructive/30' },
+                                  { q: 2, label: 'Barely', emoji: '😰', color: 'bg-orange-500/20 text-orange-700 dark:text-orange-400 border-orange-500/40 hover:bg-orange-500/30' },
+                                  { q: 3, label: 'Okay', emoji: '🤔', color: 'bg-amber-500/20 text-amber-700 dark:text-amber-400 border-amber-500/40 hover:bg-amber-500/30' },
+                                  { q: 4, label: 'Good', emoji: '✅', color: 'bg-emerald-500/20 text-emerald-700 dark:text-emerald-400 border-emerald-500/40 hover:bg-emerald-500/30' },
+                                  { q: 5, label: 'Perfect', emoji: '🌟', color: 'bg-primary/20 text-primary border-primary/40 hover:bg-primary/30' },
+                                ].map((g) => (
+                                  <button key={g.q} onClick={() => setThinkGrades(prev => ({ ...prev, [i]: g.q }))}
+                                    className={cn('flex flex-col items-center gap-0.5 p-1.5 rounded-lg border transition-all text-[10px]', g.color)}>
+                                    <span>{g.emoji}</span>
+                                    <span className="font-medium">{g.label}</span>
+                                  </button>
+                                ))}
+                              </div>
+                            </motion.div>
+                          )}
+
+                          {/* Graded indicator */}
+                          {hasGrade && (
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                              <Badge variant="outline" className="text-[10px]">
+                                {grade >= 4 ? '✅' : grade >= 3 ? '🤔' : '❌'} {grade >= 4 ? 'Good' : grade >= 3 ? 'Okay' : 'Needs review'}
+                              </Badge>
+                              {thinkAnswers[i]?.trim() && (
+                                <span className="text-[10px] opacity-60 truncate max-w-[150px]">"{thinkAnswers[i]}"</span>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       </div>
                     </div>
+                  );
+                })}
+
+                {/* Save to certification */}
+                {Object.keys(thinkGrades).length > 0 && !thinkSaved && (
+                  <Button variant="default" className="w-full gap-2" onClick={saveThinkSession}>
+                    <Award className="h-4 w-4" />
+                    Save to Certification ({Object.keys(thinkGrades).length} graded)
+                  </Button>
+                )}
+                {thinkSaved && (
+                  <div className="p-3 rounded-lg bg-primary/10 border border-primary/30 flex items-center gap-2 text-sm">
+                    <Award className="h-4 w-4 text-primary" />
+                    <span className="text-primary font-medium">Session saved to certification profile</span>
                   </div>
-                ))}
+                )}
               </TabsContent>
             </div>
           </Tabs>
