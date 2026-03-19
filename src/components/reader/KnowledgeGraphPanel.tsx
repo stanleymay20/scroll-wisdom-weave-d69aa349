@@ -88,21 +88,40 @@ const IMPORTANCE_COLORS = [
   'bg-primary/30 text-primary font-semibold border-primary/50',
 ];
 
-// ─── Concept Detail Drawer ───
+// ─── Unified Concept Detail Drawer ───
+// Works for both book-level BookConceptNode AND chapter-level KnowledgeConcept
+interface ConceptDetail {
+  id: string;
+  label: string;
+  definition?: string | null;
+  chapters_referenced?: number[];
+  chapter_first_seen?: number;
+  examples?: string[];
+  applications?: string[];
+  importance?: number;
+  difficulty?: number;
+}
+
 function ConceptDetailDrawer({ 
-  node, 
-  allNodes, 
-  edges, 
+  concept, 
+  allConcepts,
+  bookEdges,
+  chapterRelationships,
   learnerState,
-  onClose 
+  onClose,
+  onNavigateConcept,
 }: { 
-  node: BookConceptNode;
-  allNodes: BookConceptNode[];
-  edges: Array<{ source_node_id: string; target_node_id: string; relationship_type: string }>;
+  concept: ConceptDetail;
+  allConcepts: ConceptDetail[];
+  bookEdges: Array<{ source_node_id: string; target_node_id: string; relationship_type: string }>;
+  chapterRelationships?: KnowledgeRelationship[];
   learnerState?: { mastery_score: number; familiarity_score: number; misconception_flags: string[] };
   onClose: () => void;
+  onNavigateConcept?: (id: string) => void;
 }) {
-  const relatedEdges = edges.filter(e => e.source_node_id === node.id || e.target_node_id === node.id);
+  // Collect edges from book-level or chapter-level data
+  const relatedEdges = bookEdges.filter(e => e.source_node_id === concept.id || e.target_node_id === concept.id);
+  const chapterRels = chapterRelationships?.filter(r => r.source === concept.id || r.target === concept.id) || [];
 
   return (
     <motion.div
@@ -112,58 +131,85 @@ function ConceptDetailDrawer({
       transition={{ type: 'spring', damping: 25 }}
       className="absolute inset-0 bg-background z-50 overflow-y-auto"
     >
-      <div className="p-4 space-y-4">
-        <div className="flex items-center justify-between">
-          <h3 className="font-semibold text-base">{node.label}</h3>
-          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8">
+      <div className="p-5 space-y-5">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex-1">
+            <h3 className="font-bold text-lg leading-tight">{concept.label}</h3>
+            {concept.importance && (
+              <div className="flex items-center gap-1 mt-1.5">
+                {Array.from({ length: concept.importance }, (_, i) => (
+                  <div key={i} className="w-2 h-2 rounded-full bg-primary" />
+                ))}
+                <span className="text-[10px] text-muted-foreground ml-1">
+                  Importance {concept.importance}/5
+                </span>
+              </div>
+            )}
+          </div>
+          <Button variant="ghost" size="icon" onClick={onClose} className="h-8 w-8 shrink-0">
             <X className="h-4 w-4" />
           </Button>
         </div>
 
         {/* Mastery indicator */}
         {learnerState && (
-          <div className="flex items-center gap-2">
-            <div className="flex-1 h-2 bg-muted rounded-full overflow-hidden">
-              <div 
-                className={cn("h-full rounded-full transition-all", 
-                  learnerState.mastery_score >= 70 ? "bg-green-500" : 
-                  learnerState.mastery_score >= 40 ? "bg-yellow-500" : "bg-destructive"
-                )}
-                style={{ width: `${learnerState.mastery_score}%` }}
-              />
+          <div className="bg-muted/30 rounded-lg p-3">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-2 flex items-center gap-1">
+              <TrendingUp className="h-3 w-3" /> Your Mastery
+            </p>
+            <div className="flex items-center gap-3">
+              <div className="flex-1 h-3 bg-muted rounded-full overflow-hidden">
+                <div 
+                  className={cn("h-full rounded-full transition-all", 
+                    learnerState.mastery_score >= 70 ? "bg-primary" : 
+                    learnerState.mastery_score >= 40 ? "bg-accent-foreground/60" : "bg-destructive"
+                  )}
+                  style={{ width: `${learnerState.mastery_score}%` }}
+                />
+              </div>
+              <span className="text-sm font-semibold">{Math.round(learnerState.mastery_score)}%</span>
             </div>
-            <span className="text-xs text-muted-foreground">{Math.round(learnerState.mastery_score)}% mastery</span>
           </div>
         )}
 
         {/* Definition */}
-        {node.definition && (
-          <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Definition</p>
-            <p className="text-sm leading-relaxed">{node.definition}</p>
+        {concept.definition && (
+          <div className="bg-primary/5 border border-primary/20 rounded-lg p-4">
+            <p className="text-[10px] uppercase tracking-wider text-primary font-semibold mb-1.5 flex items-center gap-1">
+              <BookOpen className="h-3 w-3" /> Definition
+            </p>
+            <p className="text-sm leading-relaxed">{concept.definition}</p>
           </div>
         )}
 
         {/* Chapters */}
-        <div>
-          <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Appears in</p>
-          <div className="flex flex-wrap gap-1.5">
-            {node.chapters_referenced?.map(ch => (
-              <Badge key={ch} variant="outline" className="text-[10px]">
-                {ch === node.chapter_first_seen ? `Ch. ${ch} (first)` : `Ch. ${ch}`}
-              </Badge>
-            ))}
+        {concept.chapters_referenced && concept.chapters_referenced.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 flex items-center gap-1">
+              <BookMarked className="h-3 w-3" /> Appears in Chapters
+            </p>
+            <div className="flex flex-wrap gap-1.5">
+              {concept.chapters_referenced.map(ch => (
+                <Badge key={ch} variant={ch === concept.chapter_first_seen ? 'default' : 'outline'} className="text-xs">
+                  Ch. {ch}{ch === concept.chapter_first_seen ? ' (introduced)' : ''}
+                </Badge>
+              ))}
+            </div>
           </div>
-        </div>
+        )}
 
         {/* Examples */}
-        {node.examples?.length > 0 && (
+        {concept.examples && concept.examples.length > 0 && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Examples</p>
-            <ul className="space-y-1">
-              {node.examples.map((ex, i) => (
-                <li key={i} className="text-sm text-foreground/80 flex items-start gap-1.5">
-                  <span className="text-primary mt-0.5">•</span> {ex}
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 flex items-center gap-1">
+              <Lightbulb className="h-3 w-3" /> Examples
+            </p>
+            <ul className="space-y-2">
+              {concept.examples.map((ex, i) => (
+                <li key={i} className="text-sm text-foreground/80 flex items-start gap-2 bg-muted/20 rounded-lg p-3">
+                  <span className="text-primary font-bold mt-0.5">{i + 1}</span>
+                  <span className="leading-relaxed">{ex}</span>
                 </li>
               ))}
             </ul>
@@ -171,36 +217,76 @@ function ConceptDetailDrawer({
         )}
 
         {/* Applications */}
-        {node.applications?.length > 0 && (
+        {concept.applications && concept.applications.length > 0 && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-primary font-medium mb-1">Applications</p>
-            <ul className="space-y-1">
-              {node.applications.map((app, i) => (
-                <li key={i} className="text-sm text-foreground/80 flex items-start gap-1.5">
-                  <ArrowRight className="h-3 w-3 text-primary mt-1 shrink-0" /> {app}
+            <p className="text-[10px] uppercase tracking-wider text-primary font-semibold mb-1.5 flex items-center gap-1">
+              <Target className="h-3 w-3" /> Real-World Applications
+            </p>
+            <ul className="space-y-2">
+              {concept.applications.map((app, i) => (
+                <li key={i} className="text-sm text-foreground/80 flex items-start gap-2">
+                  <ArrowRight className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                  <span className="leading-relaxed">{app}</span>
                 </li>
               ))}
             </ul>
           </div>
         )}
 
-        {/* Relationships */}
+        {/* Connections — book edges */}
         {relatedEdges.length > 0 && (
           <div>
-            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1">Connections</p>
-            <div className="space-y-1.5">
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 flex items-center gap-1">
+              <Network className="h-3 w-3" /> Connected Concepts
+            </p>
+            <div className="space-y-2">
               {relatedEdges.map((edge, i) => {
-                const isSource = edge.source_node_id === node.id;
+                const isSource = edge.source_node_id === concept.id;
                 const otherId = isSource ? edge.target_node_id : edge.source_node_id;
-                const other = allNodes.find(n => n.id === otherId);
+                const other = allConcepts.find(n => n.id === otherId);
                 return (
-                  <div key={i} className="flex items-center gap-1.5 text-xs text-foreground/70">
-                    <span>{isSource ? '→' : '←'}</span>
-                    <Badge variant="outline" className="text-[10px] py-0">
+                  <button
+                    key={i}
+                    onClick={() => other && onNavigateConcept?.(other.id)}
+                    className="w-full flex items-center gap-2 text-xs text-foreground/70 bg-muted/20 rounded-lg p-2.5 hover:bg-muted/40 transition-colors text-left"
+                  >
+                    <span className="text-primary font-bold">{isSource ? '→' : '←'}</span>
+                    <Badge variant="outline" className="text-[10px] py-0 shrink-0">
                       {RELATIONSHIP_LABELS[edge.relationship_type] || edge.relationship_type}
                     </Badge>
-                    <span className="font-medium">{other?.label || 'Unknown'}</span>
-                  </div>
+                    <span className="font-medium truncate">{other?.label || 'Unknown'}</span>
+                    <ChevronRight className="h-3 w-3 ml-auto shrink-0 opacity-40" />
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Connections — chapter relationships (fallback) */}
+        {relatedEdges.length === 0 && chapterRels.length > 0 && (
+          <div>
+            <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium mb-1.5 flex items-center gap-1">
+              <Network className="h-3 w-3" /> Connected Concepts
+            </p>
+            <div className="space-y-2">
+              {chapterRels.map((rel, i) => {
+                const isSource = rel.source === concept.id;
+                const otherId = isSource ? rel.target : rel.source;
+                const other = allConcepts.find(c => c.id === otherId);
+                return (
+                  <button
+                    key={i}
+                    onClick={() => other && onNavigateConcept?.(other.id)}
+                    className="w-full flex items-center gap-2 text-xs text-foreground/70 bg-muted/20 rounded-lg p-2.5 hover:bg-muted/40 transition-colors text-left"
+                  >
+                    <span className="text-primary font-bold">{isSource ? '→' : '←'}</span>
+                    <Badge variant="outline" className="text-[10px] py-0 shrink-0">
+                      {RELATIONSHIP_LABELS[rel.type] || rel.type}
+                    </Badge>
+                    <span className="font-medium truncate">{other?.label || otherId}</span>
+                    <ChevronRight className="h-3 w-3 ml-auto shrink-0 opacity-40" />
+                  </button>
                 );
               })}
             </div>
@@ -211,11 +297,23 @@ function ConceptDetailDrawer({
         {learnerState?.misconception_flags?.length > 0 && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
             <p className="text-[10px] uppercase tracking-wider text-destructive font-medium mb-1 flex items-center gap-1">
-              <AlertTriangle className="h-3 w-3" /> Misconceptions
+              <AlertTriangle className="h-3 w-3" /> Misconceptions to Address
             </p>
             {learnerState.misconception_flags.map((flag, i) => (
-              <p key={i} className="text-xs text-destructive/80">{flag}</p>
+              <p key={i} className="text-xs text-destructive/80 mt-1">{flag}</p>
             ))}
+          </div>
+        )}
+
+        {/* Difficulty badge */}
+        {concept.difficulty && (
+          <div className="flex items-center gap-2 text-xs text-muted-foreground pt-2 border-t border-border/30">
+            <span>Difficulty:</span>
+            <div className="flex gap-0.5">
+              {Array.from({ length: 5 }, (_, i) => (
+                <div key={i} className={cn("w-3 h-1.5 rounded-full", i < concept.difficulty! ? "bg-primary" : "bg-muted")} />
+              ))}
+            </div>
           </div>
         )}
       </div>
@@ -335,7 +433,38 @@ export function KnowledgeGraphPanel({
   const bookMermaid = bookGraph.generateBookMermaid();
   const weakConcepts = bookGraph.getWeakConcepts();
 
-  const selectedNode = selectedNodeId ? bookGraph.nodes.find(n => n.id === selectedNodeId) : null;
+  // Resolve selected concept from book nodes OR chapter concepts
+  const selectedBookNode = selectedNodeId ? bookGraph.nodes.find(n => n.id === selectedNodeId) : null;
+  const selectedChapterConcept = selectedNodeId && !selectedBookNode && chapterGraph
+    ? chapterGraph.concepts.find(c => c.id === selectedNodeId) : null;
+
+  const selectedConcept: ConceptDetail | null = selectedBookNode
+    ? {
+        id: selectedBookNode.id,
+        label: selectedBookNode.label,
+        definition: selectedBookNode.definition,
+        chapters_referenced: selectedBookNode.chapters_referenced,
+        chapter_first_seen: selectedBookNode.chapter_first_seen,
+        examples: selectedBookNode.examples,
+        applications: selectedBookNode.applications,
+        importance: selectedBookNode.importance,
+        difficulty: selectedBookNode.difficulty,
+      }
+    : selectedChapterConcept
+    ? {
+        id: selectedChapterConcept.id,
+        label: selectedChapterConcept.label,
+        definition: selectedChapterConcept.description,
+        importance: selectedChapterConcept.importance,
+        chapters_referenced: [chapterNumber],
+        chapter_first_seen: chapterNumber,
+      }
+    : null;
+
+  const allConceptDetails: ConceptDetail[] = bookGraph.nodes.length > 0
+    ? bookGraph.nodes.map(n => ({ id: n.id, label: n.label, definition: n.definition, chapters_referenced: n.chapters_referenced, chapter_first_seen: n.chapter_first_seen, examples: n.examples, applications: n.applications, importance: n.importance, difficulty: n.difficulty }))
+    : (chapterGraph?.concepts || []).map(c => ({ id: c.id, label: c.label, definition: c.description, importance: c.importance }));
+
   const selectedLearnerState = selectedNodeId ? bookGraph.learnerStates.find(s => s.concept_node_id === selectedNodeId) : undefined;
 
   return (
@@ -491,10 +620,8 @@ export function KnowledgeGraphPanel({
                     <InteractiveMindMap
                       concepts={chapterGraph.concepts.map(c => ({ id: c.id, label: c.label, importance: c.importance, definition: c.description }))}
                       relationships={chapterGraph.relationships}
-                      onSelectNode={(id) => {
-                        setExpandedConcept(expandedConcept === id ? null : id);
-                      }}
-                      selectedNodeId={expandedConcept}
+                      onSelectNode={(id) => setSelectedNodeId(id)}
+                      selectedNodeId={selectedNodeId}
                       className="min-h-[300px]"
                     />
                   </div>
@@ -736,13 +863,15 @@ export function KnowledgeGraphPanel({
 
         {/* Concept Detail Drawer */}
         <AnimatePresence>
-          {selectedNode && (
+          {selectedConcept && (
             <ConceptDetailDrawer
-              node={selectedNode}
-              allNodes={bookGraph.nodes}
-              edges={bookGraph.edges}
+              concept={selectedConcept}
+              allConcepts={allConceptDetails}
+              bookEdges={bookGraph.edges}
+              chapterRelationships={chapterGraph?.relationships}
               learnerState={selectedLearnerState}
               onClose={() => setSelectedNodeId(null)}
+              onNavigateConcept={(id) => setSelectedNodeId(id)}
             />
           )}
         </AnimatePresence>
