@@ -433,7 +433,38 @@ export function KnowledgeGraphPanel({
   const bookMermaid = bookGraph.generateBookMermaid();
   const weakConcepts = bookGraph.getWeakConcepts();
 
-  const selectedNode = selectedNodeId ? bookGraph.nodes.find(n => n.id === selectedNodeId) : null;
+  // Resolve selected concept from book nodes OR chapter concepts
+  const selectedBookNode = selectedNodeId ? bookGraph.nodes.find(n => n.id === selectedNodeId) : null;
+  const selectedChapterConcept = selectedNodeId && !selectedBookNode && chapterGraph
+    ? chapterGraph.concepts.find(c => c.id === selectedNodeId) : null;
+
+  const selectedConcept: ConceptDetail | null = selectedBookNode
+    ? {
+        id: selectedBookNode.id,
+        label: selectedBookNode.label,
+        definition: selectedBookNode.definition,
+        chapters_referenced: selectedBookNode.chapters_referenced,
+        chapter_first_seen: selectedBookNode.chapter_first_seen,
+        examples: selectedBookNode.examples,
+        applications: selectedBookNode.applications,
+        importance: selectedBookNode.importance,
+        difficulty: selectedBookNode.difficulty,
+      }
+    : selectedChapterConcept
+    ? {
+        id: selectedChapterConcept.id,
+        label: selectedChapterConcept.label,
+        definition: selectedChapterConcept.description,
+        importance: selectedChapterConcept.importance,
+        chapters_referenced: [chapterNumber],
+        chapter_first_seen: chapterNumber,
+      }
+    : null;
+
+  const allConceptDetails: ConceptDetail[] = bookGraph.nodes.length > 0
+    ? bookGraph.nodes.map(n => ({ id: n.id, label: n.label, definition: n.definition, chapters_referenced: n.chapters_referenced, chapter_first_seen: n.chapter_first_seen, examples: n.examples, applications: n.applications, importance: n.importance, difficulty: n.difficulty }))
+    : (chapterGraph?.concepts || []).map(c => ({ id: c.id, label: c.label, definition: c.description, importance: c.importance }));
+
   const selectedLearnerState = selectedNodeId ? bookGraph.learnerStates.find(s => s.concept_node_id === selectedNodeId) : undefined;
 
   return (
