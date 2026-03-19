@@ -337,7 +337,8 @@ export function KnowledgeGraphPanel({
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [thinkAnswers, setThinkAnswers] = useState<Record<number, string>>({});
   const [thinkGrades, setThinkGrades] = useState<Record<number, number>>({});
-  const [thinkRevealed, setThinkRevealed] = useState<Set<number>>(new Set());
+  const [thinkFeedback, setThinkFeedback] = useState<Record<number, string>>({});
+  const [thinkGrading, setThinkGrading] = useState<Set<number>>(new Set());
   const [thinkSaved, setThinkSaved] = useState(false);
   const { toast } = useToast();
 
