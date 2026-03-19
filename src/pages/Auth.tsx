@@ -12,10 +12,21 @@ import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Alert, AlertDescription } from "@/components/ui/alert";
 import { hasRecoveryTokens, isRecoveryCode, parseHashTokens } from "@/lib/authRecovery";
-import { getErrorMessageText, isTransientAuthError, withTransientRetry } from "@/lib/authResilience";
+import {
+  getErrorMessageText,
+  isTransientAuthError,
+  signInWithPasswordFallback,
+  signUpFallback,
+  withTransientRetry,
+} from "@/lib/authResilience";
 
 
 type AuthMode = "login" | "signup" | "forgot-password" | "magic-link" | "reset-password";
+
+type AuthSessionLike = {
+  access_token: string;
+  refresh_token: string;
+};
 
 const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
   const [searchParams] = useSearchParams();
@@ -67,20 +78,16 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
       }
 
       if (event === "SIGNED_IN" && session?.user) {
-        // If we're in recovery, stay on the reset screen.
         if (isRecoveryRef.current || modeRef.current === "reset-password") return;
-        // Defer navigation to avoid potential deadlocks
         setTimeout(() => navigate(redirectRef.current), 0);
       }
     });
 
-    // If user landed here via recovery link, restore session.
     (async () => {
       if (!isRecoveryRef.current) return;
       const { data: { session } } = await supabase.auth.getSession();
       if (session) return;
 
-      // PKCE: exchange ?code= for session
       const pkceCode = new URL(window.location.href).searchParams.get("code");
       if (pkceCode) {
         const { error } = await supabase.auth.exchangeCodeForSession(pkceCode);
@@ -88,7 +95,6 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
         return;
       }
 
-      // Implicit: restore from hash tokens
       const tokens = parseHashTokens(window.location.hash);
       if (!tokens) return;
 
@@ -99,7 +105,6 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
       if (error) console.warn("Recovery session restore failed:", error.message);
     })();
 
-    // For normal signed-in visits, redirect home.
     supabase.auth.getSession().then(({ data: { session }, error }) => {
       if (error) {
         console.warn("Initial session check failed; preserving local session:", error.message);
@@ -149,6 +154,26 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
 
   const normalizeEmail = (value: string) => value.trim().toLowerCase();
   const normalizePassword = (value: string) => value;
+
+  const persistFallbackSession = async (session: AuthSessionLike) => {
+    const { error } = await supabase.auth.setSession({
+      access_token: session.access_token,
+      refresh_token: session.refresh_token,
+    });
+
+    if (error) {
+      throw error;
+    }
+  };
+
+  const saveProfileConsent = async (userId: string) => {
+    await supabase.from("profiles").update({
+      accepted_terms: true,
+      accepted_terms_at: new Date().toISOString(),
+      newsletter_subscribed: newsletterSubscribed,
+      newsletter_subscribed_at: newsletterSubscribed ? new Date().toISOString() : null,
+    }).eq("user_id", userId);
+  };
 
   const handleSendMagicLink = async (targetEmail?: string) => {
     const safeEmail = normalizeEmail(targetEmail ?? email);
@@ -209,42 +234,68 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
 
     try {
       if (mode === "login") {
-        const { error } = await withTransientRetry(() =>
-          supabase.auth.signInWithPassword({ email: safeEmail, password: safePassword })
-        );
-        if (error) throw error;
+        try {
+          const { error } = await withTransientRetry(() =>
+            supabase.auth.signInWithPassword({ email: safeEmail, password: safePassword })
+          );
+          if (error) throw error;
+        } catch (error) {
+          if (!isTransientAuthError(error)) throw error;
+          const fallbackSession = await signInWithPasswordFallback(safeEmail, safePassword);
+          await persistFallbackSession(fallbackSession);
+        }
+
         toast({ title: "Welcome back!", description: "You have successfully signed in." });
       } else if (mode === "signup") {
         if (!acceptedTerms) {
           throw new Error("You must accept the Terms of Service and Privacy Policy to create an account.");
         }
-        const redirectUrl = `${window.location.origin}/`;
-        const { data, error } = await withTransientRetry(() =>
-          supabase.auth.signUp({
-            email: safeEmail,
-            password: safePassword,
-            options: {
-              emailRedirectTo: redirectUrl,
-              data: {
-                full_name: fullName.trim(),
-                accepted_terms: true,
-                newsletter_subscribed: newsletterSubscribed,
-              },
-            },
-          })
-        );
-        if (error) throw error;
 
-        if (data.user) {
-          void supabase.from("profiles").update({
-            accepted_terms: true,
-            accepted_terms_at: new Date().toISOString(),
-            newsletter_subscribed: newsletterSubscribed,
-            newsletter_subscribed_at: newsletterSubscribed ? new Date().toISOString() : null,
-          }).eq("user_id", data.user.id);
+        const signupMetadata = {
+          full_name: fullName.trim(),
+          accepted_terms: true,
+          newsletter_subscribed: newsletterSubscribed,
+        };
+
+        const redirectUrl = `${window.location.origin}/`;
+        let signupData: { user?: { id?: string } | null; session?: AuthSessionLike | null } | null = null;
+
+        try {
+          const { data, error } = await withTransientRetry(() =>
+            supabase.auth.signUp({
+              email: safeEmail,
+              password: safePassword,
+              options: {
+                emailRedirectTo: redirectUrl,
+                data: signupMetadata,
+              },
+            })
+          );
+          if (error) throw error;
+          signupData = data;
+        } catch (error) {
+          if (!isTransientAuthError(error)) throw error;
+          const fallbackData = await signUpFallback(safeEmail, safePassword, signupMetadata);
+          signupData = {
+            user: fallbackData.user ? { id: fallbackData.user.id } : null,
+            session: fallbackData.access_token && fallbackData.refresh_token
+              ? {
+                  access_token: fallbackData.access_token,
+                  refresh_token: fallbackData.refresh_token,
+                }
+              : null,
+          };
         }
 
-        if (data.user && !data.session) {
+        if (signupData?.session) {
+          await persistFallbackSession(signupData.session);
+        }
+
+        if (signupData?.user?.id) {
+          void saveProfileConsent(signupData.user.id);
+        }
+
+        if (signupData?.user && !signupData.session) {
           toast({
             title: "Check your email",
             description: "We sent you a confirmation link to complete signup.",
@@ -280,7 +331,6 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
       }
     } catch (error: any) {
       const friendlyMessage = getErrorMessage(error);
-      // Avoid logging full auth error objects (may contain sensitive metadata)
       console.warn("Auth error:", friendlyMessage);
       setAuthError(friendlyMessage);
       toast({
@@ -294,7 +344,6 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
         typeof friendlyMessage === "string" &&
         friendlyMessage.toLowerCase().includes("reset link")
       ) {
-        // Offer a safe escape hatch back to requesting a reset email.
         setMode("forgot-password");
       }
     } finally {

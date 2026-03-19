@@ -7,6 +7,16 @@ interface UpdateState {
 }
 
 let updateSW: ((reloadPage?: boolean) => Promise<void>) | undefined;
+let pwaRegistered = false;
+
+function shouldBypassServiceWorker() {
+  if (typeof window === "undefined") return true;
+
+  const host = window.location.hostname;
+  const path = window.location.pathname;
+
+  return host.includes("lovable.app") || path.startsWith("/auth") || path.startsWith("/~oauth");
+}
 
 export function usePWAUpdate() {
   const [updateState, setUpdateState] = useState<UpdateState>({
@@ -15,24 +25,21 @@ export function usePWAUpdate() {
   });
 
   useEffect(() => {
-    // Only register once
-    if (updateSW) return;
+    if (pwaRegistered || shouldBypassServiceWorker()) return;
 
+    pwaRegistered = true;
     updateSW = registerSW({
       immediate: true,
       onNeedRefresh() {
-        // New content available - show non-blocking notification
         setUpdateState((prev) => ({ ...prev, needRefresh: true }));
       },
       onOfflineReady() {
-        // App ready to work offline
         setUpdateState((prev) => ({ ...prev, offlineReady: true }));
         console.log("ScrollLibrary ready for offline use");
       },
       onRegisteredSW(swUrl, registration) {
         console.log("Service worker registered:", swUrl);
-        
-        // Check for updates every 15 minutes (more aggressive for faster rollouts)
+
         if (registration) {
           setInterval(() => {
             registration.update();
@@ -40,6 +47,7 @@ export function usePWAUpdate() {
         }
       },
       onRegisterError(error) {
+        pwaRegistered = false;
         console.error("Service worker registration error:", error);
       },
     });
@@ -47,7 +55,7 @@ export function usePWAUpdate() {
 
   const updateApp = useCallback(() => {
     if (updateSW) {
-      updateSW(true); // Reload page to apply update
+      updateSW(true);
     }
   }, []);
 
@@ -67,3 +75,4 @@ export function usePWAUpdate() {
     dismissOfflineReady,
   };
 }
+
