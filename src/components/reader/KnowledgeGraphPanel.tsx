@@ -427,7 +427,8 @@ export function KnowledgeGraphPanel({
     setSelectedNodeId(null);
     setThinkAnswers({});
     setThinkGrades({});
-    setThinkRevealed(new Set());
+    setThinkFeedback({});
+    setThinkGrading(new Set());
     setThinkSaved(false);
   }, [chapterNumber, bookId]);
 
