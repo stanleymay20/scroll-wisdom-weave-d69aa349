@@ -18,6 +18,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { supabase } from '@/integrations/supabase/client';
 import { useToast } from '@/hooks/use-toast';
 import { MermaidDiagram } from '@/components/reader/visuals/MermaidDiagram';
+import { InteractiveMindMap } from '@/components/reader/mindmap';
 import { useBookKnowledgeGraph, BookConceptNode } from '@/hooks/useBookKnowledgeGraph';
 import { cn } from '@/lib/utils';
 
