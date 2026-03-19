@@ -865,13 +865,15 @@ export function KnowledgeGraphPanel({
 
         {/* Concept Detail Drawer */}
         <AnimatePresence>
-          {selectedNode && (
+          {selectedConcept && (
             <ConceptDetailDrawer
-              node={selectedNode}
-              allNodes={bookGraph.nodes}
-              edges={bookGraph.edges}
+              concept={selectedConcept}
+              allConcepts={allConceptDetails}
+              bookEdges={bookGraph.edges}
+              chapterRelationships={chapterGraph?.relationships}
               learnerState={selectedLearnerState}
               onClose={() => setSelectedNodeId(null)}
+              onNavigateConcept={(id) => setSelectedNodeId(id)}
             />
           )}
         </AnimatePresence>
