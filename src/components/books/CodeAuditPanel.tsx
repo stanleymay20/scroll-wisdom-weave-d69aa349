@@ -279,18 +279,28 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
 
     for (const result of fixableResults) {
       setApplyingChapterId(result.chapterId);
-      const chapter = chapters.find(ch => ch.id === result.chapterId);
-      if (!chapter?.content) continue;
 
       try {
-        const fixedContent = applyCodeFixes(chapter.content, result.result.codeBlocks);
+        // Re-fetch latest chapter content to avoid stale data
+        const { data: freshChapter, error: fetchErr } = await supabase
+          .from('chapters')
+          .select('content, version_number')
+          .eq('id', result.chapterId)
+          .single();
+        
+        if (fetchErr || !freshChapter?.content) {
+          console.error(`Failed to fetch chapter ${result.chapterNumber}:`, fetchErr);
+          continue;
+        }
+
+        const fixedContent = applyCodeFixes(freshChapter.content, result.result.codeBlocks);
         // Save previous_content for rollback (matches Chief Editor pattern)
         const { error } = await supabase
           .from('chapters')
           .update({ 
             content: fixedContent, 
-            previous_content: chapter.content,
-            version_number: ((chapter as any).version_number || 1) + 1,
+            previous_content: freshChapter.content,
+            version_number: (freshChapter.version_number || 1) + 1,
             updated_at: new Date().toISOString(),
           })
           .eq('id', result.chapterId);
