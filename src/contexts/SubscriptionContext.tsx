@@ -273,15 +273,41 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         const { error: userError } = await supabase.auth.getUser();
         if (userError) {
           const msg = userError.message?.toLowerCase() || '';
-          const isAuthRejection = msg.includes('invalid') || msg.includes('expired') || msg.includes('not authorized');
-          if (isAuthRejection) {
-            console.warn('JWT rejected by server, clearing session:', userError.message);
+          
+          // Only treat truly invalid/revoked tokens as hard rejections
+          // "expired" is NOT a rejection — the refresh token can recover it
+          const isHardRejection = (msg.includes('invalid') || msg.includes('not authorized') || msg.includes('session_not_found'))
+            && !msg.includes('expired');
+          
+          if (isHardRejection) {
+            console.warn('JWT hard-rejected by server, clearing session:', userError.message);
             await supabase.auth.signOut({ scope: 'local' });
             if (mounted) resetAnonymousState();
             return;
           }
 
-          console.warn('getUser() transient error, keeping session:', userError.message);
+          // For expired tokens, attempt an explicit refresh
+          if (msg.includes('expired') || msg.includes('token')) {
+            console.info('Token may be expired, attempting refresh...');
+            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
+            if (refreshError || !refreshData.session) {
+              const refreshMsg = refreshError?.message?.toLowerCase() || '';
+              const isRefreshRejection = refreshMsg.includes('invalid') || refreshMsg.includes('not authorized') || refreshMsg.includes('session_not_found');
+              if (isRefreshRejection) {
+                console.warn('Refresh token also rejected, clearing session:', refreshError?.message);
+                await supabase.auth.signOut({ scope: 'local' });
+                if (mounted) resetAnonymousState();
+                return;
+              }
+              // Transient refresh failure — keep existing session
+              console.warn('Refresh failed transiently, keeping session:', refreshError?.message);
+            } else {
+              // Refresh succeeded — update user
+              if (mounted) setUser(refreshData.session.user);
+            }
+          } else {
+            console.warn('getUser() transient error, keeping session:', userError.message);
+          }
         }
 
         if (mounted) {
