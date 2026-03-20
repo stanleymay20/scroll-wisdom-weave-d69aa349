@@ -1859,7 +1859,7 @@ async function generatePDF(
             }
             
             for (let colIdx = 0; colIdx < numCols && colIdx < row.length; colIdx++) {
-              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 30));
+              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 60));
               page.drawText(cellText, {
                 x: margin + (colIdx * colWidth) + 5,
                 y: y - 12,
