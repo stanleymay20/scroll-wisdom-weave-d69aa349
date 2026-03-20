@@ -59,6 +59,7 @@ export function InteractiveQA({
   const [speakResponses, setSpeakResponses] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isMountedRef = useRef(true);
   const { toast } = useToast();
