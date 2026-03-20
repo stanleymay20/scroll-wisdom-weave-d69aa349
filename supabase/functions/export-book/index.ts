@@ -1761,7 +1761,7 @@ async function generatePDF(
             }
             
             for (let colIdx = 0; colIdx < row.length && colIdx < numCols; colIdx++) {
-              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 30)); // Truncate long values
+              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 60)); // Truncate long values
               page.drawText(cellText, {
                 x: margin + (colIdx * colWidth) + 5,
                 y: y - 12,
