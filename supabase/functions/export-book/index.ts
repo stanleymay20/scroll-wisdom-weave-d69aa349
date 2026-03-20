@@ -2083,6 +2083,7 @@ async function generateKDPPDF(
   const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
   const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
   const timesRomanItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const timesRomanBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const courier = await pdfDoc.embedFont(StandardFonts.Courier);
 
