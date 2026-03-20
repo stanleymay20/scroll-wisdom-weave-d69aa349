@@ -80,11 +80,14 @@ export function InteractiveQA({
     t('qa.example'),
   ];
 
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
+    // Small delay to ensure DOM has updated
+    const timer = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [messages, isLoading]);
 
   // Play audio response
   const playAudio = useCallback((audioContent: string) => {
