@@ -1734,7 +1734,7 @@ async function generatePDF(
           
           // Draw headers
           for (let i = 0; i < table.headers.length; i++) {
-            const headerText = sanitizeForPDF(table.headers[i].slice(0, 25)); // Truncate long headers
+            const headerText = sanitizeForPDF(table.headers[i].slice(0, 40)); // Truncate long headers
             page.drawText(headerText, {
               x: margin + (i * colWidth) + 5,
               y: y - 12,
