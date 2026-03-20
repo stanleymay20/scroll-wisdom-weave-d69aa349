@@ -5,7 +5,7 @@ import * as zip from "https://deno.land/x/zipjs@v2.7.32/index.js";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
 // ===========================================
@@ -1734,7 +1734,7 @@ async function generatePDF(
           
           // Draw headers
           for (let i = 0; i < table.headers.length; i++) {
-            const headerText = sanitizeForPDF(table.headers[i].slice(0, 25)); // Truncate long headers
+            const headerText = sanitizeForPDF(table.headers[i].slice(0, 40)); // Truncate long headers
             page.drawText(headerText, {
               x: margin + (i * colWidth) + 5,
               y: y - 12,
@@ -1761,7 +1761,7 @@ async function generatePDF(
             }
             
             for (let colIdx = 0; colIdx < row.length && colIdx < numCols; colIdx++) {
-              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 30)); // Truncate long values
+              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 60)); // Truncate long values
               page.drawText(cellText, {
                 x: margin + (colIdx * colWidth) + 5,
                 y: y - 12,
@@ -1832,7 +1832,7 @@ async function generatePDF(
           
           // Draw headers - MUST sanitize for PDF encoding
           for (let i = 0; i < numCols; i++) {
-            const headerText = sanitizeForPDF((table.headers[i] || '').slice(0, 25));
+            const headerText = sanitizeForPDF((table.headers[i] || '').slice(0, 40));
             page.drawText(headerText, {
               x: margin + (i * colWidth) + 5,
               y: y - 12,
@@ -1859,7 +1859,7 @@ async function generatePDF(
             }
             
             for (let colIdx = 0; colIdx < numCols && colIdx < row.length; colIdx++) {
-              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 30));
+              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 60));
               page.drawText(cellText, {
                 x: margin + (colIdx * colWidth) + 5,
                 y: y - 12,
@@ -2083,6 +2083,7 @@ async function generateKDPPDF(
   const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
   const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
   const timesRomanItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const timesRomanBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
   const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
   const courier = await pdfDoc.embedFont(StandardFonts.Courier);
 
@@ -2270,6 +2271,18 @@ async function generateKDPPDF(
         const block = processed.codeBlocks[parseInt(codeMatch[1])];
         if (block) {
           y -= 4;
+          // Language label
+          if (y < textBottom + 20) {
+            addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            leftMargin = getLeftMargin(pageNumber);
+            y = textTop - 15;
+          }
+          page.drawText(block.lang.toUpperCase(), {
+            x: leftMargin, y, size: 7, font: helvetica, color: rgb(0.5, 0.5, 0.5),
+          });
+          y -= 12;
           for (const codeLine of block.code.split('\n').slice(0, 25)) {
             if (y < textBottom + 12) {
               addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
@@ -2286,6 +2299,190 @@ async function generateKDPPDF(
           }
           y -= 6;
         }
+        continue;
+      }
+
+      // Structured code block
+      const structuredMatch = trimmed.match(/\[STRUCTURED_CODE_(\d+)\]/);
+      if (structuredMatch) {
+        const block = processed.structuredBlocks[parseInt(structuredMatch[1])];
+        if (block) {
+          y -= 6;
+          if (y < textBottom + 60) {
+            addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            leftMargin = getLeftMargin(pageNumber);
+            y = textTop - 15;
+          }
+          // Header bar
+          page.drawRectangle({ x: leftMargin - 3, y: y - 18, width: textWidth + 6, height: 22, color: rgb(0.92, 0.92, 0.92) });
+          page.drawText(sanitizeForPDF(`[${block.language.toUpperCase()}]${block.title ? ' - ' + block.title : ''}`), {
+            x: leftMargin, y: y - 12, size: 9, font: timesRomanBold, color: rgb(0.2, 0.2, 0.2),
+          });
+          y -= 24;
+          if (block.purpose) {
+            page.drawText(sanitizeForPDF(`Purpose: ${block.purpose}`), {
+              x: leftMargin, y: y - 10, size: 8, font: helvetica, color: rgb(0.4, 0.4, 0.4),
+            });
+            y -= 16;
+          }
+          for (const codeLine of block.code.split('\n').slice(0, 25)) {
+            if (y < textBottom + 12) {
+              addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              leftMargin = getLeftMargin(pageNumber);
+              y = textTop - 15;
+            }
+            page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.12, 0.12, 0.15) });
+            page.drawText(sanitizeForPDF(codeLine.slice(0, 70)), {
+              x: leftMargin, y, size: 8, font: courier, color: rgb(0.9, 0.9, 0.9),
+            });
+            y -= lineHeight * 0.85;
+          }
+          if (block.output) {
+            y -= 4;
+            page.drawText("OUTPUT:", { x: leftMargin, y, size: 7, font: helvetica, color: rgb(0.3, 0.7, 0.3) });
+            y -= 12;
+            for (const outLine of block.output.split('\n').slice(0, 10)) {
+              if (y < textBottom + 12) {
+                addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+                page = pdfDoc.addPage([pageWidth, pageHeight]);
+                pageNumber++;
+                leftMargin = getLeftMargin(pageNumber);
+                y = textTop - 15;
+              }
+              page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.08, 0.10, 0.08) });
+              page.drawText(sanitizeForPDF(outLine.slice(0, 70)), {
+                x: leftMargin, y, size: 8, font: courier, color: rgb(0.4, 0.9, 0.4),
+              });
+              y -= lineHeight * 0.85;
+            }
+          }
+          y -= 10;
+        }
+        continue;
+      }
+
+      // Markdown table
+      const mdTableMatch = trimmed.match(/\[MD_TABLE_(\d+)\]/);
+      if (mdTableMatch) {
+        const table = processed.tables[parseInt(mdTableMatch[1])];
+        if (table) {
+          y -= 8;
+          const numCols = Math.min(table.headers.length, 5);
+          const colWidth = textWidth / numCols;
+          const rowHeight = 16;
+          const headerHeight = 20;
+          
+          if (y - headerHeight - (table.rows.length * rowHeight) < textBottom + 20) {
+            addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            leftMargin = getLeftMargin(pageNumber);
+            y = textTop - 15;
+          }
+          
+          if (table.name && table.name !== 'Table') {
+            page.drawText(sanitizeForPDF(table.name), { x: leftMargin, y, size: 10, font: timesRomanBold, color: rgb(0, 0, 0) });
+            y -= 16;
+          }
+          page.drawRectangle({ x: leftMargin, y: y - headerHeight + 4, width: textWidth, height: headerHeight, color: rgb(0.92, 0.92, 0.92) });
+          for (let i = 0; i < numCols; i++) {
+            page.drawText(sanitizeForPDF((table.headers[i] || '').slice(0, 25)), {
+              x: leftMargin + (i * colWidth) + 4, y: y - 10, size: 8, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1),
+            });
+          }
+          y -= headerHeight;
+          for (let rowIdx = 0; rowIdx < table.rows.length; rowIdx++) {
+            if (y < textBottom + 12) {
+              addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              leftMargin = getLeftMargin(pageNumber);
+              y = textTop - 15;
+            }
+            if (rowIdx % 2 === 1) {
+              page.drawRectangle({ x: leftMargin, y: y - rowHeight + 4, width: textWidth, height: rowHeight, color: rgb(0.97, 0.97, 0.97) });
+            }
+            for (let colIdx = 0; colIdx < numCols && colIdx < table.rows[rowIdx].length; colIdx++) {
+              page.drawText(sanitizeForPDF((table.rows[rowIdx][colIdx] || '').slice(0, 40)), {
+                x: leftMargin + (colIdx * colWidth) + 4, y: y - 10, size: 8, font: timesRoman, color: rgb(0.2, 0.2, 0.2),
+              });
+            }
+            y -= rowHeight;
+          }
+          y -= 10;
+        }
+        continue;
+      }
+
+      // Custom table
+      const customTableMatch = trimmed.match(/\[CUSTOM_TABLE_(\d+)\]/);
+      if (customTableMatch) {
+        const table = processed.customTables[parseInt(customTableMatch[1])];
+        if (table) {
+          y -= 8;
+          const numCols = Math.min(table.headers.length, 5);
+          const colWidth = textWidth / numCols;
+          const rowHeight = 16;
+          const headerHeight = 20;
+          
+          if (y - headerHeight - (table.rows.length * rowHeight) < textBottom + 20) {
+            addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+            page = pdfDoc.addPage([pageWidth, pageHeight]);
+            pageNumber++;
+            leftMargin = getLeftMargin(pageNumber);
+            y = textTop - 15;
+          }
+          
+          page.drawText(sanitizeForPDF(table.name), { x: leftMargin, y, size: 10, font: timesRomanBold, color: rgb(0, 0, 0) });
+          y -= 16;
+          page.drawRectangle({ x: leftMargin, y: y - headerHeight + 4, width: textWidth, height: headerHeight, color: rgb(0.92, 0.92, 0.92) });
+          for (let i = 0; i < numCols; i++) {
+            page.drawText(sanitizeForPDF((table.headers[i] || '').slice(0, 25)), {
+              x: leftMargin + (i * colWidth) + 4, y: y - 10, size: 8, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1),
+            });
+          }
+          y -= headerHeight;
+          for (let rowIdx = 0; rowIdx < table.rows.length; rowIdx++) {
+            if (y < textBottom + 12) {
+              addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              leftMargin = getLeftMargin(pageNumber);
+              y = textTop - 15;
+            }
+            for (let colIdx = 0; colIdx < numCols && colIdx < table.rows[rowIdx].length; colIdx++) {
+              page.drawText(sanitizeForPDF((table.rows[rowIdx][colIdx] || '').slice(0, 40)), {
+                x: leftMargin + (colIdx * colWidth) + 4, y: y - 10, size: 8, font: timesRoman, color: rgb(0.2, 0.2, 0.2),
+              });
+            }
+            y -= rowHeight;
+          }
+          y -= 10;
+        }
+        continue;
+      }
+
+      // Image placeholder
+      const imageMatch = trimmed.match(/\[IMAGE_(\d+)\]/);
+      if (imageMatch) {
+        // KDP: show text placeholder for images (no embedding for stability)
+        const imgIdx = parseInt(imageMatch[1]);
+        const imgMeta = processed.images[imgIdx];
+        if (y < textBottom + 20) {
+          addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+          page = pdfDoc.addPage([pageWidth, pageHeight]);
+          pageNumber++;
+          leftMargin = getLeftMargin(pageNumber);
+          y = textTop - 15;
+        }
+        page.drawText(sanitizeForPDF(`[Image: ${imgMeta?.alt || 'Illustration'}]`), {
+          x: leftMargin, y, size: 9, font: helvetica, color: rgb(0.5, 0.5, 0.5),
+        });
+        y -= 16;
         continue;
       }
 
