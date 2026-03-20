@@ -1832,7 +1832,7 @@ async function generatePDF(
           
           // Draw headers - MUST sanitize for PDF encoding
           for (let i = 0; i < numCols; i++) {
-            const headerText = sanitizeForPDF((table.headers[i] || '').slice(0, 25));
+            const headerText = sanitizeForPDF((table.headers[i] || '').slice(0, 40));
             page.drawText(headerText, {
               x: margin + (i * colWidth) + 5,
               y: y - 12,
