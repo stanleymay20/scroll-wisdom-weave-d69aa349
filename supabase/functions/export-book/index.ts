@@ -22,7 +22,7 @@ function isTrialActive(): boolean {
 // Format restrictions by tier (bypassed during trial)
 const TIER_FORMATS = {
   free: ["pdf"],
-  student: ["pdf", "epub", "docx", "kdp-pdf"],
+  student: ["pdf", "docx"],
   premium: ["pdf", "epub", "docx", "kdp-pdf"],
   prophet_tier: ["pdf", "epub", "docx", "kdp-pdf"],
 };

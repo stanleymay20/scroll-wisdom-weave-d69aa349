@@ -59,6 +59,7 @@ export function InteractiveQA({
   const [speakResponses, setSpeakResponses] = useState(false);
   const [isPlayingAudio, setIsPlayingAudio] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const messagesEndRef = useRef<HTMLDivElement>(null);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const isMountedRef = useRef(true);
   const { toast } = useToast();
@@ -79,11 +80,14 @@ export function InteractiveQA({
     t('qa.example'),
   ];
 
+  // Auto-scroll to bottom when messages change
   useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
+    // Small delay to ensure DOM has updated
+    const timer = setTimeout(() => {
+      messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [messages, isLoading]);
 
   // Play audio response
   const playAudio = useCallback((audioContent: string) => {
@@ -275,7 +279,7 @@ export function InteractiveQA({
           </div>
 
           {/* Messages Area */}
-          <ScrollArea className="h-[min(56vh,26rem)] p-4" ref={scrollRef}>
+          <ScrollArea className="h-[min(56vh,26rem)] p-4">
             {highlightedText && <HighlightedTextContext text={highlightedText} />}
 
             {messages.length === 0 ? (
@@ -326,6 +330,7 @@ export function InteractiveQA({
                     </div>
                   </div>
                 )}
+                <div ref={messagesEndRef} />
               </div>
             )}
           </ScrollArea>
