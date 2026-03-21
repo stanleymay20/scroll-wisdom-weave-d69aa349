@@ -3661,7 +3661,7 @@ ${block.title ? `<w:r><w:t xml:space="preserve"> - ${escapeXml(block.title)}</w:
         if (hasFormatting) {
           documentContent += `<w:p>${markdownToDocxRuns(trimmed)}</w:p>`;
         } else {
-          documentContent += `<w:p><w:r><w:t>${escapeXml(trimmed)}</w:t></w:r></w:p>`;
+          documentContent += `<w:p><w:r><w:t xml:space="preserve">${escapeXml(trimmed)}</w:t></w:r></w:p>`;
         }
       }
     }
