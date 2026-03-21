@@ -2666,7 +2666,8 @@ async function generateEPUB(
     });
     
     // Extract and process images — cap at 5 per chapter to avoid CPU timeout
-    const imageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)].slice(0, 5);
+    const allImageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
+    const imageMatches = allImageMatches.slice(0, 5);
     const imageMap: Map<string, string> = new Map();
     
     for (const match of imageMatches) {
