@@ -2696,9 +2696,13 @@ async function generateEPUB(
       }
     }
     
-    // Replace image markdown with HTML
+    // Replace image markdown with HTML (processed images)
     for (const [original, replacement] of imageMap) {
       content = content.replace(original, replacement);
+    }
+    // Strip any remaining unprocessed image markdown (beyond the 5-per-chapter cap)
+    content = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m: string, alt: string) => {
+      return `<p><em>[Image: ${escapeXml(alt || 'Illustration')}]</em></p>`;
     }
     
     // Convert heading placeholders to proper HTML heading tags
