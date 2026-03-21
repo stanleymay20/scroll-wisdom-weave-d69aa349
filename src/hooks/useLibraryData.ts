@@ -278,35 +278,36 @@ export function useLibraryData({
   }, [userId]);
   
   // RULE 5B-1.3: Progressive Hydration - fetch fresh data after cache render
+  // Track previous filters to avoid skeleton flash on search-only changes
+  const prevFiltersRef = useRef({ statusFilter, searchQuery });
   useEffect(() => {
     if (!userId) return;
     
-    // When statusFilter or searchQuery changes, clear items to avoid stale data flash
-    if (statusFilter !== 'all' || searchQuery.trim()) {
-      setItems([]);
+    const prev = prevFiltersRef.current;
+    const isSearchOnlyChange = prev.searchQuery !== searchQuery && prev.statusFilter === statusFilter;
+    prevFiltersRef.current = { statusFilter, searchQuery };
+    
+    // Only show skeleton on initial load or status filter change — NOT on search typing
+    if (!isSearchOnlyChange) {
+      if (statusFilter !== 'all') {
+        setItems([]);
+      }
+      setLoadState('skeleton');
     }
-    setLoadState('skeleton');
     
-    // Debounce search queries to avoid excessive server calls
-    const delay = searchQuery.trim() ? 300 : 0;
-    
-    const timeoutId = setTimeout(() => {
-      const hydrateData = async () => {
-        await Promise.all([
-          fetchItems(0, true),
-          fetchStats(),
-        ]);
-        
-        if (mountedRef.current) {
-          setLoadState('ready');
-          markInteractive('Library');
-        }
-      };
+    const hydrateData = async () => {
+      await Promise.all([
+        fetchItems(0, true),
+        fetchStats(),
+      ]);
       
-      hydrateData();
-    }, delay);
+      if (mountedRef.current) {
+        setLoadState('ready');
+        markInteractive('Library');
+      }
+    };
     
-    return () => clearTimeout(timeoutId);
+    hydrateData();
   }, [userId, fetchItems, fetchStats]);
   
   // Load more (pagination)
