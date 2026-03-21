@@ -384,7 +384,7 @@ export function DirectTextEditor({
             setLocalContent(e.target.value);
             contentRef.current = e.target.value;
           }}
-          className="w-full h-full min-h-[calc(100vh-10rem)] bg-transparent border-none outline-none resize-none font-mono text-sm leading-relaxed"
+          className="w-full h-full min-h-[calc(100vh-10rem)] bg-transparent text-foreground border-none outline-none resize-none font-mono text-sm leading-relaxed placeholder:text-muted-foreground caret-primary"
           placeholder="Start typing..."
           onKeyDown={(e) => {
             if (e.ctrlKey || e.metaKey) {

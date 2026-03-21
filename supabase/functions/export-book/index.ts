@@ -1213,7 +1213,7 @@ async function generatePDF(
   }
   
   for (const line of copyrightText) {
-    page.drawText(line, {
+    page.drawText(sanitizeForPDF(line), {
       x: margin,
       y,
       size: 10,
@@ -2486,19 +2486,53 @@ async function generateKDPPDF(
         continue;
       }
 
-      // Regular paragraph with word-wrap
+      // Regular paragraph with word-wrap and bold/italic support
       const isBullet = /^[-\u2022]\s/.test(trimmed);
       const isNumbered = /^\d+[.)]\s/.test(trimmed);
       const indent = (isBullet || isNumbered) ? 14 : 0;
-      const prefix = isBullet ? '\u2022 ' : isNumbered ? (trimmed.match(/^\d+[.)]\s/)?.[0] || '') : '';
-      const bodyText = trimmed.replace(/^[-\u2022]\s|^\d+[.)]\s/, '');
-      const words = bodyText.split(/\s+/);
-      let line = prefix;
+      const hasFormatting = /\*/.test(trimmed);
+      
+      if (hasFormatting) {
+        // Use styled paragraph renderer for inline bold/italic
+        if (y < textBottom + 25) {
+          addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+          page = pdfDoc.addPage([pageWidth, pageHeight]);
+          pageNumber++;
+          leftMargin = getLeftMargin(pageNumber);
+          y = textTop - 15;
+        }
+        const kdpBodyFonts = { regular: timesRoman, bold: timesRomanBold, italic: timesRomanItalic, boldItalic: timesRomanBoldItalic };
+        const pageNumberRefKDP = { current: pageNumber };
+        const addPageKDP = (pg: any, num: number) => addRunningHeader(pg, num, num % 2 === 1);
+        y = drawStyledParagraph(page, trimmed, leftMargin + indent, y, textWidth - indent, bodySize, kdpBodyFonts, rgb(0, 0, 0), pdfDoc, pageWidth, pageHeight, margins.bottom, addPageKDP, pageNumberRefKDP);
+        pageNumber = pageNumberRefKDP.current;
+      } else {
+        const prefix = isBullet ? '\u2022 ' : isNumbered ? (trimmed.match(/^\d+[.)]\s/)?.[0] || '') : '';
+        const bodyText = trimmed.replace(/^[-\u2022]\s|^\d+[.)]\s/, '');
+        const words = bodyText.split(/\s+/);
+        let line = prefix;
 
-      for (const word of words) {
-        const testLine = line + (line && !prefix ? ' ' : line === prefix ? '' : ' ') + word;
-        const testW = timesRoman.widthOfTextAtSize(sanitizeForPDF(testLine), bodySize);
-        if (testW > textWidth - indent && line !== prefix) {
+        for (const word of words) {
+          const testLine = line + (line && !prefix ? ' ' : line === prefix ? '' : ' ') + word;
+          const testW = timesRoman.widthOfTextAtSize(sanitizeForPDF(testLine), bodySize);
+          if (testW > textWidth - indent && line !== prefix) {
+            if (y < textBottom + 12) {
+              addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              leftMargin = getLeftMargin(pageNumber);
+              y = textTop - 15;
+            }
+            page.drawText(sanitizeForPDF(line), {
+              x: leftMargin + indent, y, size: bodySize, font: timesRoman, color: rgb(0, 0, 0),
+            });
+            y -= lineHeight;
+            line = word;
+          } else {
+            line = testLine;
+          }
+        }
+        if (line) {
           if (y < textBottom + 12) {
             addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
             page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -2510,23 +2544,7 @@ async function generateKDPPDF(
             x: leftMargin + indent, y, size: bodySize, font: timesRoman, color: rgb(0, 0, 0),
           });
           y -= lineHeight;
-          line = word;
-        } else {
-          line = testLine;
         }
-      }
-      if (line) {
-        if (y < textBottom + 12) {
-          addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
-          page = pdfDoc.addPage([pageWidth, pageHeight]);
-          pageNumber++;
-          leftMargin = getLeftMargin(pageNumber);
-          y = textTop - 15;
-        }
-        page.drawText(sanitizeForPDF(line), {
-          x: leftMargin + indent, y, size: bodySize, font: timesRoman, color: rgb(0, 0, 0),
-        });
-        y -= lineHeight;
       }
       y -= lineHeight * 0.25;
     }
@@ -2666,7 +2684,8 @@ async function generateEPUB(
     });
     
     // Extract and process images — cap at 5 per chapter to avoid CPU timeout
-    const imageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)].slice(0, 5);
+    const allImageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
+    const imageMatches = allImageMatches.slice(0, 5);
     const imageMap: Map<string, string> = new Map();
     
     for (const match of imageMatches) {
@@ -2695,10 +2714,14 @@ async function generateEPUB(
       }
     }
     
-    // Replace image markdown with HTML
+    // Replace image markdown with HTML (processed images)
     for (const [original, replacement] of imageMap) {
       content = content.replace(original, replacement);
     }
+    // Strip any remaining unprocessed image markdown (beyond the 5-per-chapter cap)
+    content = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m: string, alt: string) => {
+      return `<p><em>[Image: ${escapeXml(alt || 'Illustration')}]</em></p>`;
+    });
     
     // Convert heading placeholders to proper HTML heading tags
     for (const [placeholder, headingData] of headingMap) {
@@ -3117,7 +3140,8 @@ async function generateDOCX(
   for (const chapter of chapters) {
     const content = chapter.content || "";
     // Cap images at 5 per chapter to avoid CPU timeout in edge function
-    const imageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)].slice(0, 5);
+    const allImgMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
+    const imageMatches = allImgMatches.slice(0, 5);
     const imageRefs: { index: number; alt: string }[] = [];
     
     for (const match of imageMatches) {
@@ -3131,7 +3155,7 @@ async function generateDOCX(
       }
     }
     
-    // Strip images from content for text processing
+    // Strip images from content for text processing (replaces ALL, not just first 5)
     let textContent = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '[IMAGE_PLACEHOLDER]');
     
     // FIRST: Detect plain-text headings (legacy content without ## markers)
@@ -3655,7 +3679,7 @@ ${block.title ? `<w:r><w:t xml:space="preserve"> - ${escapeXml(block.title)}</w:
         if (hasFormatting) {
           documentContent += `<w:p>${markdownToDocxRuns(trimmed)}</w:p>`;
         } else {
-          documentContent += `<w:p><w:r><w:t>${escapeXml(trimmed)}</w:t></w:r></w:p>`;
+          documentContent += `<w:p><w:r><w:t xml:space="preserve">${escapeXml(trimmed)}</w:t></w:r></w:p>`;
         }
       }
     }
