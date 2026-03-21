@@ -11,7 +11,7 @@
  * - 0 full-page spinners
  */
 
-import { useState, useEffect, useCallback, useMemo } from "react";
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
 import { useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -407,12 +407,19 @@ export default function Library() {
   const isMobile = useIsMobile();
   const { user, isLoading: subLoading } = useSubscription();
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [filterStatus, setFilterStatus] = useState<"all" | "reading" | "completed">("all");
   const [filterCategory, setFilterCategory] = useState<string>("all");
   const [sortBy, setSortBy] = useState<string>("recent");
   const navigate = useNavigate();
   const { toast } = useToast();
   const libraryLimits = useLibraryLimits();
+
+  // Debounce search to prevent focus loss from re-renders
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 400);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
   // CONTRACT 5B-1: Use new data hook with skeleton-first, cache-first strategy
   const {
@@ -431,7 +438,7 @@ export default function Library() {
     isMobile,
     userId: user?.id,
     statusFilter: filterStatus,
-    searchQuery: searchQuery
+    searchQuery: debouncedSearch
   });
 
   // Redirect to auth if not logged in (wait for subscription context to resolve)
