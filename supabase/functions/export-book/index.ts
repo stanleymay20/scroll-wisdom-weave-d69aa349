@@ -2721,7 +2721,7 @@ async function generateEPUB(
     // Strip any remaining unprocessed image markdown (beyond the 5-per-chapter cap)
     content = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, (_m: string, alt: string) => {
       return `<p><em>[Image: ${escapeXml(alt || 'Illustration')}]</em></p>`;
-    }
+    });
     
     // Convert heading placeholders to proper HTML heading tags
     for (const [placeholder, headingData] of headingMap) {
