@@ -2486,19 +2486,53 @@ async function generateKDPPDF(
         continue;
       }
 
-      // Regular paragraph with word-wrap
+      // Regular paragraph with word-wrap and bold/italic support
       const isBullet = /^[-\u2022]\s/.test(trimmed);
       const isNumbered = /^\d+[.)]\s/.test(trimmed);
       const indent = (isBullet || isNumbered) ? 14 : 0;
-      const prefix = isBullet ? '\u2022 ' : isNumbered ? (trimmed.match(/^\d+[.)]\s/)?.[0] || '') : '';
-      const bodyText = trimmed.replace(/^[-\u2022]\s|^\d+[.)]\s/, '');
-      const words = bodyText.split(/\s+/);
-      let line = prefix;
+      const hasFormatting = /\*/.test(trimmed);
+      
+      if (hasFormatting) {
+        // Use styled paragraph renderer for inline bold/italic
+        if (y < textBottom + 25) {
+          addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+          page = pdfDoc.addPage([pageWidth, pageHeight]);
+          pageNumber++;
+          leftMargin = getLeftMargin(pageNumber);
+          y = textTop - 15;
+        }
+        const kdpBodyFonts = { regular: timesRoman, bold: timesRomanBold, italic: timesRomanItalic, boldItalic: timesRomanBoldItalic };
+        const pageNumberRefKDP = { current: pageNumber };
+        const addPageKDP = (pg: any, num: number) => addRunningHeader(pg, num, num % 2 === 1);
+        y = drawStyledParagraph(page, trimmed, leftMargin + indent, y, textWidth - indent, bodySize, kdpBodyFonts, rgb(0, 0, 0), pdfDoc, pageWidth, pageHeight, margins.bottom, addPageKDP, pageNumberRefKDP);
+        pageNumber = pageNumberRefKDP.current;
+      } else {
+        const prefix = isBullet ? '\u2022 ' : isNumbered ? (trimmed.match(/^\d+[.)]\s/)?.[0] || '') : '';
+        const bodyText = trimmed.replace(/^[-\u2022]\s|^\d+[.)]\s/, '');
+        const words = bodyText.split(/\s+/);
+        let line = prefix;
 
-      for (const word of words) {
-        const testLine = line + (line && !prefix ? ' ' : line === prefix ? '' : ' ') + word;
-        const testW = timesRoman.widthOfTextAtSize(sanitizeForPDF(testLine), bodySize);
-        if (testW > textWidth - indent && line !== prefix) {
+        for (const word of words) {
+          const testLine = line + (line && !prefix ? ' ' : line === prefix ? '' : ' ') + word;
+          const testW = timesRoman.widthOfTextAtSize(sanitizeForPDF(testLine), bodySize);
+          if (testW > textWidth - indent && line !== prefix) {
+            if (y < textBottom + 12) {
+              addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              leftMargin = getLeftMargin(pageNumber);
+              y = textTop - 15;
+            }
+            page.drawText(sanitizeForPDF(line), {
+              x: leftMargin + indent, y, size: bodySize, font: timesRoman, color: rgb(0, 0, 0),
+            });
+            y -= lineHeight;
+            line = word;
+          } else {
+            line = testLine;
+          }
+        }
+        if (line) {
           if (y < textBottom + 12) {
             addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
             page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -2510,23 +2544,7 @@ async function generateKDPPDF(
             x: leftMargin + indent, y, size: bodySize, font: timesRoman, color: rgb(0, 0, 0),
           });
           y -= lineHeight;
-          line = word;
-        } else {
-          line = testLine;
         }
-      }
-      if (line) {
-        if (y < textBottom + 12) {
-          addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
-          page = pdfDoc.addPage([pageWidth, pageHeight]);
-          pageNumber++;
-          leftMargin = getLeftMargin(pageNumber);
-          y = textTop - 15;
-        }
-        page.drawText(sanitizeForPDF(line), {
-          x: leftMargin + indent, y, size: bodySize, font: timesRoman, color: rgb(0, 0, 0),
-        });
-        y -= lineHeight;
       }
       y -= lineHeight * 0.25;
     }
