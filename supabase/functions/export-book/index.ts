@@ -1213,7 +1213,7 @@ async function generatePDF(
   }
   
   for (const line of copyrightText) {
-    page.drawText(line, {
+    page.drawText(sanitizeForPDF(line), {
       x: margin,
       y,
       size: 10,
