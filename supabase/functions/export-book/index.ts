@@ -3122,7 +3122,8 @@ async function generateDOCX(
   for (const chapter of chapters) {
     const content = chapter.content || "";
     // Cap images at 5 per chapter to avoid CPU timeout in edge function
-    const imageMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)].slice(0, 5);
+    const allImgMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
+    const imageMatches = allImgMatches.slice(0, 5);
     const imageRefs: { index: number; alt: string }[] = [];
     
     for (const match of imageMatches) {
@@ -3136,7 +3137,7 @@ async function generateDOCX(
       }
     }
     
-    // Strip images from content for text processing
+    // Strip images from content for text processing (replaces ALL, not just first 5)
     let textContent = content.replace(/!\[([^\]]*)\]\(([^)]+)\)/g, '[IMAGE_PLACEHOLDER]');
     
     // FIRST: Detect plain-text headings (legacy content without ## markers)
