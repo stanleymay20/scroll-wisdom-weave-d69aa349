@@ -1477,11 +1477,10 @@ export default function Reader() {
           isOwner={isBookOwner}
           onSave={(newContent) => {
             setShowDirectEditor(false);
-            // Update chapter content in-place without full reload
-            if (chapter) {
-              (chapter as any).content = newContent;
-              (chapter as any).word_count = newContent.split(/\s+/).filter((w: string) => w.length > 0).length;
-            }
+            setChapterContentOverride({
+              content: newContent,
+              wordCount: newContent.split(/\s+/).filter((w: string) => w.length > 0).length,
+            });
             toast({
               title: "Content updated",
               description: "Your edits are now visible.",
