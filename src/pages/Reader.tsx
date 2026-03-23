@@ -121,7 +121,7 @@ export default function Reader() {
   // CONTRACT 5B-3: Single source of truth for reader data
   const {
     book,
-    chapter,
+    chapter: rawChapter,
     previewContent,
     loadState,
     isLoading,
@@ -129,6 +129,25 @@ export default function Reader() {
     resumePosition,
     userId,
   } = useReaderData({ bookId, chapterNumber: currentChapter });
+  
+  // Local override for chapter content after direct edits (avoids mutating state)
+  const [chapterContentOverride, setChapterContentOverride] = useState<{ content: string; wordCount: number } | null>(null);
+  
+  // Reset override when chapter changes
+  useEffect(() => {
+    setChapterContentOverride(null);
+  }, [currentChapter, bookId]);
+  
+  // Merge override into chapter data
+  const chapter = useMemo(() => {
+    if (!rawChapter) return null;
+    if (!chapterContentOverride) return rawChapter;
+    return {
+      ...rawChapter,
+      content: chapterContentOverride.content,
+      word_count: chapterContentOverride.wordCount,
+    };
+  }, [rawChapter, chapterContentOverride]);
   
   // CONTRACT 5: Quiz Gating - chapters must be read before quizzes unlock
   const quizGating = useQuizGating({
@@ -1458,11 +1477,10 @@ export default function Reader() {
           isOwner={isBookOwner}
           onSave={(newContent) => {
             setShowDirectEditor(false);
-            // Update chapter content in-place without full reload
-            if (chapter) {
-              (chapter as any).content = newContent;
-              (chapter as any).word_count = newContent.split(/\s+/).filter((w: string) => w.length > 0).length;
-            }
+            setChapterContentOverride({
+              content: newContent,
+              wordCount: newContent.split(/\s+/).filter((w: string) => w.length > 0).length,
+            });
             toast({
               title: "Content updated",
               description: "Your edits are now visible.",
