@@ -172,6 +172,7 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
 
     setIsApplying(true);
     let improved = 0;
+    let failed = 0;
 
     try {
       // Fetch book details once outside the loop
@@ -182,18 +183,37 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
         .single();
 
       for (const suggestion of audit.chapter_suggestions) {
-        const chapter = chapters.find(ch => ch.chapter_number === suggestion.chapterNumber);
-        if (!chapter || !chapter.content) continue;
+        const chapterMeta = chapters.find(ch => ch.chapter_number === suggestion.chapterNumber);
+        if (!chapterMeta) continue;
 
         const improvementPrompt = suggestion.improvements?.join("\n- ") || "";
         if (!improvementPrompt) continue;
 
-        // Save previous content for versioning
-        await supabase.from("chapters").update({
-          previous_content: chapter.content,
-          version_number: ((chapter as any).version_number || 1) + 1,
+        // CRITICAL: Re-fetch latest content from DB to avoid stale prop data
+        const { data: freshChapter, error: fetchErr } = await supabase
+          .from("chapters")
+          .select("id, content, version_number, chapter_number, title")
+          .eq("id", chapterMeta.id)
+          .single();
+
+        if (fetchErr || !freshChapter?.content) {
+          console.error(`[Chief Editor] Failed to fetch fresh content for Ch ${chapterMeta.chapter_number}:`, fetchErr);
+          failed++;
+          continue;
+        }
+
+        // Save previous content for versioning ATOMICALLY with the audit_id
+        const { error: versionErr } = await supabase.from("chapters").update({
+          previous_content: freshChapter.content,
+          version_number: (freshChapter.version_number || 1) + 1,
           audit_id: audit.id,
-        }).eq("id", chapter.id);
+        }).eq("id", freshChapter.id);
+
+        if (versionErr) {
+          console.error(`[Chief Editor] Versioning failed for Ch ${freshChapter.chapter_number}:`, versionErr);
+          failed++;
+          continue;
+        }
 
         // Build comprehensive Chief Editor edit intent with full audit context
         const auditContext = [
@@ -205,18 +225,18 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
           ``,
           `PENALTY VIOLATIONS TO FIX:`,
           ...(audit.penalty_log || [])
-            .filter((p: any) => p.chapterNumber === chapter.chapter_number)
+            .filter((p: any) => p.chapterNumber === freshChapter.chapter_number)
             .map((p: any) => `- ${p.rule}: ${p.evidence}`),
           ``,
           `FLAGGED SECTIONS:`,
           ...(audit.flagged_sections || [])
-            .filter((f: any) => f.chapterNumber === chapter.chapter_number)
+            .filter((f: any) => f.chapterNumber === freshChapter.chapter_number)
             .map((f: any) => `- [${f.severity}] ${f.section}: ${f.issue} → ${f.suggestion}`),
         ].join("\n");
 
-        // Collect other chapter openings to enforce narrative variation
+        // Collect other chapter openings to enforce narrative variation — use fresh DB data
         const otherOpenings = chapters
-          .filter(ch => ch.chapter_number !== chapter.chapter_number && ch.content)
+          .filter(ch => ch.chapter_number !== freshChapter.chapter_number && ch.content)
           .map(ch => `Ch.${ch.chapter_number}: "${(ch.content || '').slice(0, 200)}"`)
           .join('\n');
 
@@ -224,25 +244,51 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
           ? `\n\nCROSS-CHAPTER NARRATIVE OPENINGS (DO NOT REPEAT THESE PATTERNS):\n${otherOpenings}\n\nYour opening MUST use a COMPLETELY DIFFERENT narrative angle.`
           : '';
 
-        const { error } = await supabase.functions.invoke("generate-chapter", {
+        const { data: genData, error: genError } = await supabase.functions.invoke("generate-chapter", {
           body: {
-            chapterId: chapter.id,
+            chapterId: freshChapter.id,
             bookTitle: bookData?.title || "",
-            chapterTitle: chapter.title,
-            chapterNumber: chapter.chapter_number,
+            chapterTitle: freshChapter.title,
+            chapterNumber: freshChapter.chapter_number,
             category: bookData?.category || "general",
             bookType: bookData?.book_type || "text",
             language: bookData?.language || "en",
             regenerate: true,
             isRegeneration: true,
-            originalContent: chapter.content,
+            originalContent: freshChapter.content,
             editIntent: `[CHIEF_EDITOR_REWRITE]\n${auditContext}${crossChapterContext}`,
             forceModel: "google/gemini-2.5-flash",
           },
         });
 
-        if (!error) improved++;
-        await new Promise(r => setTimeout(r, 2000));
+        // Verify generation actually succeeded — check both invoke error AND response error codes
+        if (genError) {
+          console.error(`[Chief Editor] Generation failed for Ch ${freshChapter.chapter_number}:`, genError.message);
+          // Rollback versioning on failure
+          await supabase.from("chapters").update({
+            previous_content: null,
+            version_number: freshChapter.version_number || 1,
+            audit_id: null,
+          }).eq("id", freshChapter.id);
+          failed++;
+          continue;
+        }
+
+        if (genData?.error || genData?.code === 'GENERATION_ERROR' || genData?.code === 'PEDAGOGICAL_SCHEMA_VIOLATION') {
+          console.error(`[Chief Editor] Generation returned error for Ch ${freshChapter.chapter_number}:`, genData.error || genData.code);
+          // Rollback versioning on failure
+          await supabase.from("chapters").update({
+            previous_content: null,
+            version_number: freshChapter.version_number || 1,
+            audit_id: null,
+          }).eq("id", freshChapter.id);
+          failed++;
+          continue;
+        }
+
+        improved++;
+        // Gap between chapters to avoid rate limiting
+        await new Promise(r => setTimeout(r, 3000));
       }
 
       await supabase.from("book_audits").update({
@@ -253,18 +299,22 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
       setAudit(prev => prev ? { ...prev, improvements_applied: true } : null);
       onChaptersUpdated?.();
 
+      const totalAttempted = audit.chapter_suggestions.length;
       toast({
-        title: "Improvements Applied",
-        description: `${improved}/${audit.chapter_suggestions.length} chapters improved. Re-running audit to verify…`,
+        title: improved > 0 ? "Improvements Applied" : "Auto-Apply Failed",
+        description: improved > 0
+          ? `${improved}/${totalAttempted} chapters improved${failed > 0 ? ` (${failed} failed)` : ''}. Re-running audit to verify…`
+          : `All ${failed} chapters failed to generate. Check console for details.`,
+        variant: improved > 0 ? "default" : "destructive",
       });
 
-      // Wait for all chapter saves to propagate before re-auditing
-      // Each chapter takes ~2s gap + generation time; add buffer for DB consistency
-      const waitTime = Math.max(5000, improved * 2000);
-      setTimeout(() => {
-        onChaptersUpdated?.();
-        runAudit();
-      }, waitTime);
+      // Re-audit after a buffer for DB consistency — generation already completed synchronously
+      if (improved > 0) {
+        setTimeout(() => {
+          onChaptersUpdated?.();
+          runAudit();
+        }, 5000);
+      }
     } catch (err) {
       toast({ title: "Failed to apply improvements", description: String(err), variant: "destructive" });
     } finally {
