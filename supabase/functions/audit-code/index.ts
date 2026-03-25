@@ -300,6 +300,8 @@ serve(async (req) => {
         }),
       });
 
+      // Break on non-retryable errors or final attempt
+      if (response.status === 402) break; // credit errors are not retryable
       if (response.status !== 429 || attempt >= retryDelays.length) break;
       
       const wait = retryDelays[attempt];
@@ -316,6 +318,18 @@ serve(async (req) => {
       }), {
         status: 429,
         headers: { ...corsHeaders, 'Content-Type': 'application/json', 'Retry-After': '30' },
+      });
+    }
+
+    if (response.status === 402) {
+      log("Credit limit reached", { chapterNumber });
+      return new Response(JSON.stringify({ 
+        error: 'credits_exhausted',
+        message: 'AI credits have been exhausted. Please add more credits in your workspace settings to continue using code audits.',
+        retryAfter: 0,
+      }), {
+        status: 402,
+        headers: { ...corsHeaders, 'Content-Type': 'application/json' },
       });
     }
 
