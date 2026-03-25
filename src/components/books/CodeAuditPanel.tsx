@@ -149,11 +149,20 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
         },
       });
 
+      // Handle edge function errors - check response data for structured errors too
+      const data = response.data as any;
       if (response.error) {
         const errMsg = response.error.message || '';
         const is429 = errMsg.includes('429') || errMsg.includes('rate_limited') || errMsg.includes('rate');
         if (is429 && attempt < maxRetries) continue;
+        if (errMsg.includes('402') || errMsg.includes('credits')) {
+          throw new Error('AI credits exhausted. Please add more credits in your workspace settings.');
+        }
         throw new Error(response.error.message);
+      }
+      // Handle 402 returned as structured JSON (non-2xx mapped to data)
+      if (data?.error === 'credits_exhausted') {
+        throw new Error(data.message || 'AI credits exhausted. Please add more credits in your workspace settings.');
       }
 
       return response.data as ChapterAuditResult;
