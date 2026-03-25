@@ -195,7 +195,19 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
         const result = await auditWithRetry(chapter);
         newResults.push(result);
       } catch (error) {
+        const errorMsg = error instanceof Error ? error.message : 'Unknown error';
         console.error(`Audit failed for chapter ${chapter.chapter_number}:`, error);
+        
+        // Stop the entire loop on credit exhaustion — no point retrying
+        if (errorMsg.includes('credits') || errorMsg.includes('402') || errorMsg.includes('payment')) {
+          toast({
+            title: "AI Credits Exhausted",
+            description: "Please add more credits in your Lovable workspace (Settings → Workspace → Usage) to continue using code audits.",
+            variant: "destructive",
+          });
+          break;
+        }
+        
         newResults.push({
           chapterId: chapter.id,
           chapterTitle: chapter.title,
@@ -205,7 +217,7 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
             chapterScore: -1,
             riskLevel: 'error',
             codeBlocks: [],
-            overallRecommendations: [`Audit failed: ${error instanceof Error ? error.message : 'Unknown error'}`],
+            overallRecommendations: [`Audit failed: ${errorMsg}`],
             summary: 'Audit could not be completed for this chapter.',
           },
         } as ChapterAuditResult);
