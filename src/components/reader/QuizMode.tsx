@@ -101,6 +101,8 @@ export function QuizMode({
   onClose,
   isMasteryMode = false,
   bookType = 'text',
+  adaptiveBloomLevel,
+  adaptiveDifficultyOverride,
   onRecordAttempt,
 }: QuizModeProps) {
   const [questions, setQuestions] = useState<MasteryQuestion[]>([]);
