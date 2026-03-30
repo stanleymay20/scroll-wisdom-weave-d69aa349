@@ -871,7 +871,7 @@ export default function Generate() {
                   {/* Progress bar */}
                   <div className="relative h-2 w-full rounded-full bg-muted overflow-hidden">
                     <motion.div 
-                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-scroll-gold to-amber-500"
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary to-amber-500"
                       initial={{ width: 0 }}
                       animate={{ 
                         width: `${Math.min(100, (generationProgress.length / 5) * 100)}%` 
