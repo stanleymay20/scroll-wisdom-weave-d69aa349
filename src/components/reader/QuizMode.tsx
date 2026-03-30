@@ -54,6 +54,10 @@ interface QuizModeProps {
   onClose: () => void;
   isMasteryMode?: boolean;
   bookType?: string;
+  /** Adaptive engine override for Bloom level */
+  adaptiveBloomLevel?: string;
+  /** Adaptive engine override for difficulty (1-5) */
+  adaptiveDifficultyOverride?: number;
   onRecordAttempt?: (
     chapterId: string,
     bloomLevel: BloomLevel,
