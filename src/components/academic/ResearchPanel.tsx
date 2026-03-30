@@ -91,7 +91,7 @@ export function ResearchPanel({
       <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between mb-3">
           <h3 className="font-medium flex items-center gap-2">
-            <BookMarked className="h-5 w-5 text-scroll-gold" />
+            <BookMarked className="h-5 w-5 text-primary" />
             Research Panel
           </h3>
           <Button variant="ghost" size="icon" onClick={onClose}>
@@ -102,11 +102,11 @@ export function ResearchPanel({
         {/* Stats Row */}
         <div className="grid grid-cols-3 gap-2 text-center">
           <div className="p-2 rounded-lg bg-muted/50">
-            <p className="text-lg font-bold text-scroll-gold">{references.length}</p>
+            <p className="text-lg font-bold text-primary">{references.length}</p>
             <p className="text-[10px] text-muted-foreground">Sources</p>
           </div>
           <div className="p-2 rounded-lg bg-muted/50">
-            <p className="text-lg font-bold text-scroll-gold">{Object.keys(sourceTypes).length}</p>
+            <p className="text-lg font-bold text-primary">{Object.keys(sourceTypes).length}</p>
             <p className="text-[10px] text-muted-foreground">Types</p>
           </div>
           <div className="p-2 rounded-lg bg-muted/50">

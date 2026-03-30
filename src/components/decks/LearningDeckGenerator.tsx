@@ -255,9 +255,9 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
       <div className="space-y-3">
         {/* Subscription Tier Badge - shows subscription benefit */}
         {isPaidSubscriber && (
-          <div className="flex items-center gap-2 p-2 rounded-lg bg-scroll-gold/10 border border-scroll-gold/30">
-            <Crown className="h-4 w-4 text-scroll-gold" />
-            <span className="text-sm font-medium text-scroll-gold">
+          <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/10 border border-primary/30">
+            <Crown className="h-4 w-4 text-primary" />
+            <span className="text-sm font-medium text-primary">
               {tier === 'prophet_tier' ? 'Prophet Tier' : tier === 'premium' ? 'Premium' : 'Student'} Subscriber
             </span>
             <Badge variant="outline" className="ml-auto text-xs">
@@ -345,14 +345,14 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
         <div className={cn(
           'p-4 rounded-xl border transition-all cursor-pointer',
           isEligible 
-            ? 'bg-gradient-to-r from-scroll-gold/10 to-primary/10 border-scroll-gold/30 hover:border-scroll-gold/60' 
+            ? 'bg-gradient-to-r from-primary/10 to-primary/10 border-primary/30 hover:border-primary/60' 
             : 'bg-muted/30 border-border/50 hover:border-border',
           className
         )}>
           <div className="flex items-center gap-3">
             <div className={cn(
               'p-2 rounded-lg',
-              isEligible ? 'bg-scroll-gold/20 text-scroll-gold' : 'bg-muted text-muted-foreground'
+              isEligible ? 'bg-primary/20 text-primary' : 'bg-muted text-muted-foreground'
             )}>
               <Presentation className="h-5 w-5" />
             </div>
@@ -385,7 +385,7 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
       <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden flex flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Presentation className="h-5 w-5 text-scroll-gold" />
+            <Presentation className="h-5 w-5 text-primary" />
             {VLD_COPY.title}
           </DialogTitle>
           <DialogDescription>{VLD_COPY.description}</DialogDescription>
@@ -409,13 +409,13 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
               <div className={cn(
                 'p-4 rounded-lg border',
                 effectiveTier === 'premium'
-                  ? 'bg-scroll-gold/10 border-scroll-gold/30' 
+                  ? 'bg-primary/10 border-primary/30' 
                   : 'bg-emerald-500/10 border-emerald-500/30'
               )}>
                 <div className="flex items-center gap-2 mb-3">
                   <CheckCircle2 className={cn(
                     "h-5 w-5",
-                    effectiveTier === 'premium' ? 'text-scroll-gold' : 'text-emerald-600'
+                    effectiveTier === 'premium' ? 'text-primary' : 'text-emerald-600'
                   )} />
                   <span className="font-medium">
                     {effectiveTier === 'premium' ? '⭐ Premium Deck Ready' : 'Basic Deck Ready'}

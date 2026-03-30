@@ -97,8 +97,8 @@ export function HighlightedTextContext({ text }: { text: string }) {
   const displayText = text.length > 100 ? text.slice(0, 100) + "..." : text;
   
   return (
-    <div className="bg-scroll-gold/10 border border-scroll-gold/30 rounded-lg p-2 mb-2">
-      <div className="flex items-center gap-1.5 text-xs text-scroll-gold mb-1">
+    <div className="bg-primary/10 border border-primary/30 rounded-lg p-2 mb-2">
+      <div className="flex items-center gap-1.5 text-xs text-primary mb-1">
         <Highlighter className="h-3 w-3" />
         Selected text:
       </div>

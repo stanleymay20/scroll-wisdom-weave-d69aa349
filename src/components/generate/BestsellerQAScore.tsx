@@ -42,7 +42,7 @@ export function BestsellerQAScore({
 
   const getScoreColor = (score: number) => {
     if (score >= 90) return "text-green-500";
-    if (score >= 70) return "text-scroll-gold";
+    if (score >= 70) return "text-primary";
     if (score >= 50) return "text-amber-500";
     return "text-destructive";
   };
@@ -96,7 +96,7 @@ export function BestsellerQAScore({
             calculatedScore >= 90
               ? "bg-green-500"
               : calculatedScore >= 70
-              ? "bg-scroll-gold"
+              ? "bg-primary"
               : calculatedScore >= 50
               ? "bg-amber-500"
               : "bg-destructive"

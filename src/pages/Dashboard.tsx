@@ -190,7 +190,7 @@ export default function Dashboard() {
   }
 
   const statCards = [
-    { icon: Library, label: "Books in Library", value: stats.totalBooks, color: "text-scroll-gold" },
+    { icon: Library, label: "Books in Library", value: stats.totalBooks, color: "text-primary" },
     { icon: BookOpen, label: "Total Chapters", value: stats.totalChapters, color: "text-blue-400" },
     { icon: TrendingUp, label: "Words Read", value: stats.totalWords.toLocaleString(), color: "text-green-400" },
     { icon: Clock, label: "In Progress", value: stats.booksInProgress, color: "text-purple-400" },
@@ -308,7 +308,7 @@ export default function Dashboard() {
                                     <Button
                                       size="sm"
                                       variant="ghost"
-                                      className="opacity-0 group-hover:opacity-100 transition-opacity bg-scroll-gold/10 hover:bg-scroll-gold/20 text-scroll-gold"
+                                      className="opacity-0 group-hover:opacity-100 transition-opacity bg-primary/10 hover:bg-primary/20 text-primary"
                                       onClick={(e) => {
                                         e.stopPropagation();
                                         navigate(`/read/${book.id}/${book.last_read_chapter}`);

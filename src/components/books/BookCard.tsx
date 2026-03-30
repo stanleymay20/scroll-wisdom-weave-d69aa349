@@ -113,7 +113,7 @@ export function BookCard({
               variant="ghost"
               size="icon-sm"
               className={`absolute top-3 right-3 transition-all duration-200 bg-background/80 backdrop-blur-md hover:bg-background shadow-sm z-10 ${
-                isInLibrary ? 'opacity-100 text-scroll-gold' : 'opacity-0 group-hover:opacity-100'
+                isInLibrary ? 'opacity-100 text-primary' : 'opacity-0 group-hover:opacity-100'
               }`}
               onClick={handleAddToLibrary}
               disabled={isAddingToLibrary}

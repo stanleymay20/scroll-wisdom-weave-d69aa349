@@ -33,7 +33,14 @@ import {
   Brain,
   BookMarked,
   Palette,
+  MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { TTSMiniPlayer } from "@/components/audio/TTSMiniPlayer";
@@ -97,7 +104,7 @@ interface ChapterData {
 
 // Reading theme presets
 const READING_THEMES = {
-  default: { bg: 'bg-scroll-indigo-deep', text: 'text-foreground/90', name: 'Default' },
+  default: { bg: 'bg-secondary', text: 'text-foreground/90', name: 'Default' },
   sepia: { bg: 'bg-amber-50', text: 'text-amber-900', name: 'Sepia' },
   dark: { bg: 'bg-zinc-950', text: 'text-zinc-100', name: 'Dark' },
   cream: { bg: 'bg-orange-50', text: 'text-stone-800', name: 'Cream' },
@@ -651,7 +658,7 @@ export default function Reader() {
       // Handle comic page headers
       if (paragraph.startsWith('## Page') || paragraph.match(/^Page\s+\d+/i)) {
         return (
-          <h4 key={index} className="text-xl sm:text-2xl font-display font-bold text-scroll-gold mt-8 sm:mt-12 mb-4 sm:mb-6 text-center">
+          <h4 key={index} className="text-xl sm:text-2xl font-display font-bold text-primary mt-8 sm:mt-12 mb-4 sm:mb-6 text-center">
             {paragraph.replace(/^##\s*/, '')}
           </h4>
         );
@@ -660,7 +667,7 @@ export default function Reader() {
       if (paragraph.match(/^(?:\[PANEL\s*\d+\]|Panel\s+\d+)/i)) {
         return (
           <div key={index} className="text-center my-6">
-            <Badge variant="outline" className="text-sm px-4 py-1 border-scroll-gold/50 text-scroll-gold">
+            <Badge variant="outline" className="text-sm px-4 py-1 border-primary/50 text-primary">
               {paragraph.match(/(?:\[PANEL\s*\d+\]|Panel\s+\d+)/i)?.[0] || paragraph}
             </Badge>
           </div>
@@ -696,7 +703,7 @@ export default function Reader() {
       // Handle comic captions (blockquotes)
       if (paragraph.startsWith('>')) {
         return (
-          <div key={index} className="comic-caption text-center text-xl sm:text-2xl font-medium text-foreground my-4 sm:my-6 px-6 sm:px-12 py-4 bg-scroll-gold/10 rounded-xl border border-scroll-gold/30 max-w-md mx-auto">
+          <div key={index} className="comic-caption text-center text-xl sm:text-2xl font-medium text-foreground my-4 sm:my-6 px-6 sm:px-12 py-4 bg-primary/10 rounded-xl border border-primary/30 max-w-md mx-auto">
             {paragraph.replace(/^>\s*/, '')}
           </div>
         );
@@ -715,7 +722,7 @@ export default function Reader() {
       }
       if (paragraph.startsWith('## ')) {
         return (
-          <h4 key={index} className="text-xl sm:text-2xl font-display font-bold text-scroll-gold mt-8 sm:mt-12 mb-4 sm:mb-6">
+          <h4 key={index} className="text-xl sm:text-2xl font-display font-bold text-primary mt-8 sm:mt-12 mb-4 sm:mb-6">
             {paragraph.replace('## ', '')}
           </h4>
         );
@@ -730,7 +737,7 @@ export default function Reader() {
       // Handle Visual: descriptions in comics (show as scene description)
       if (paragraph.match(/^Visual:\s*/i)) {
         return (
-          <div key={index} className="my-4 p-4 bg-muted/20 rounded-lg border-l-4 border-scroll-gold/50 text-sm text-foreground/70 italic">
+          <div key={index} className="my-4 p-4 bg-muted/20 rounded-lg border-l-4 border-primary/50 text-sm text-foreground/70 italic">
             <span className="font-semibold text-foreground/90 not-italic">Scene: </span>
             {paragraph.replace(/^Visual:\s*/i, '')}
           </div>
@@ -816,50 +823,12 @@ export default function Reader() {
               variant="ghost" 
               size="icon"
               onClick={() => {
-                if (showLevelSelector) {
-                  setShowLevelSelector(false);
-                  return;
-                }
-                openExclusive('level');
-                setShowQA(false);
-                setShowQuiz(false);
-                // Voice conversation merged into Ask AI
-              }}
-              className={showLevelSelector ? "text-primary" : ""}
-            >
-              <Brain className="h-5 w-5" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => {
                 setShowTTS(!showTTS);
               }}
               className={showTTS ? "text-primary" : ""}
               title="Toggle Audio Player"
             >
               <Volume2 className="h-5 w-5" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => {
-                if (showReferences) {
-                  setShowReferences(false);
-                  return;
-                }
-                openExclusive('refs');
-                setShowQA(false);
-                setShowQuiz(false);
-                // Voice conversation merged into Ask AI
-              }}
-              className={showReferences ? "text-primary" : ""}
-              title="Citations & References"
-            >
-              <BookMarked className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon">
-              <Bookmark className="h-5 w-5" />
             </Button>
             <Button 
               variant="ghost" 
@@ -872,28 +841,63 @@ export default function Reader() {
                 openExclusive('settings');
                 setShowQA(false);
                 setShowQuiz(false);
-                // Voice conversation merged into Ask AI
               }}
             >
               <Settings className="h-5 w-5" />
             </Button>
-            <ReportContentDialog 
-              contentType="chapter" 
-              contentId={chapter?.id || ""} 
-              contentTitle={chapter?.title}
-              trigger={
+            {/* Overflow menu — low-frequency actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
-                  <Flag className="h-5 w-5" />
+                  <MoreVertical className="h-5 w-5" />
                 </Button>
-              }
-            />
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => navigate("/")}
-            >
-              <Home className="h-5 w-5" />
-            </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => {
+                  if (showLevelSelector) {
+                    setShowLevelSelector(false);
+                    return;
+                  }
+                  openExclusive('level');
+                  setShowQA(false);
+                  setShowQuiz(false);
+                }}>
+                  <Brain className="h-4 w-4 mr-2" />
+                  Cognitive Level
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  if (showReferences) {
+                    setShowReferences(false);
+                    return;
+                  }
+                  openExclusive('refs');
+                  setShowQA(false);
+                  setShowQuiz(false);
+                }}>
+                  <BookMarked className="h-4 w-4 mr-2" />
+                  Citations & References
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Bookmark className="h-4 w-4 mr-2" />
+                  Bookmark
+                </DropdownMenuItem>
+                <ReportContentDialog 
+                  contentType="chapter" 
+                  contentId={chapter?.id || ""} 
+                  contentTitle={chapter?.title}
+                  trigger={
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <Flag className="h-4 w-4 mr-2" />
+                      Report Content
+                    </DropdownMenuItem>
+                  }
+                />
+                <DropdownMenuItem onClick={() => navigate("/")}>
+                  <Home className="h-4 w-4 mr-2" />
+                  Back to Home
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
@@ -1631,7 +1635,7 @@ export default function Reader() {
           </Button>
           
           <div className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-scroll-gold" />
+            <BookOpen className="h-4 w-4 text-primary" />
             <span className="text-sm text-muted-foreground">
               {currentChapter} / {totalChapters}
             </span>

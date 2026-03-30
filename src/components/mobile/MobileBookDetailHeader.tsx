@@ -79,8 +79,8 @@ export const MobileBookDetailHeader = memo(function MobileBookDetailHeader({
               loading="eager"
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-scroll-indigo/50 to-scroll-indigo-deep/50 flex items-center justify-center">
-              <Book className="h-10 w-10 text-scroll-gold/30" />
+            <div className="w-full h-full bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
+              <Book className="h-10 w-10 text-primary/30" />
             </div>
           )}
         </div>
@@ -89,7 +89,7 @@ export const MobileBookDetailHeader = memo(function MobileBookDetailHeader({
         <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
           {/* Category + Visibility */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-block px-2 py-0.5 text-[10px] font-medium rounded-full bg-scroll-gold/20 text-scroll-gold border border-scroll-gold/30 capitalize">
+            <span className="inline-block px-2 py-0.5 text-[10px] font-medium rounded-full bg-primary/15 text-primary border border-primary/30 capitalize">
               {book.category.replace(/_/g, " ")}
             </span>
             {isOwner && (
@@ -122,15 +122,15 @@ export const MobileBookDetailHeader = memo(function MobileBookDetailHeader({
           {/* Meta */}
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-2">
             <span className="flex items-center gap-1">
-              <User className="h-3 w-3 text-scroll-gold" />
+              <User className="h-3 w-3 text-primary" />
               {book.author_ai_agent || "ScrollAuthorGPT"}
             </span>
             <span className="flex items-center gap-1">
-              <BookOpen className="h-3 w-3 text-scroll-gold" />
+              <BookOpen className="h-3 w-3 text-primary" />
               {chaptersCount} ch
             </span>
             <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3 text-scroll-gold" />
+              <Clock className="h-3 w-3 text-primary" />
               {readingTime} min
             </span>
           </div>

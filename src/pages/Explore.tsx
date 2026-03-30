@@ -424,7 +424,7 @@ export default function Explore() {
                   placeholder={t('explore.searchPlaceholder')}
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  className="pl-10 bg-muted/50 border-border/50 focus:border-scroll-gold"
+                  className="pl-10 bg-muted/50 border-border/50 focus:border-primary"
                 />
                 {searchQuery && (
                   <button

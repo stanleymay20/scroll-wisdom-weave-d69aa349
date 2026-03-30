@@ -147,7 +147,7 @@ export function ExportValidationStatus({
           {comicValidation && (
             <div className="p-2 rounded bg-muted/30">
               <div className="flex items-center gap-2 mb-2">
-                <BookOpen className="h-4 w-4 text-scroll-gold" />
+                <BookOpen className="h-4 w-4 text-primary" />
                 <span className="text-sm font-medium">Comic Validation</span>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">

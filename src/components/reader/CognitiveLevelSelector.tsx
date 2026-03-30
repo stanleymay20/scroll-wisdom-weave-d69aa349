@@ -82,7 +82,7 @@ export const COGNITIVE_LEVELS: CognitiveLevel[] = [
     description: "Expert-level deep study and internalization",
     icon: Trophy,
     timeMultiplier: 3.0,
-    color: "text-scroll-gold",
+    color: "text-primary",
     features: [
       "Teaching preparation",
       "Synthesis activities",
@@ -122,8 +122,8 @@ export function CognitiveLevelSelector({
       <div className="p-4 border-b border-border/50">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <div className="p-2 rounded-lg bg-scroll-gold/10">
-              <Brain className="h-5 w-5 text-scroll-gold" />
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Brain className="h-5 w-5 text-primary" />
             </div>
             <div>
               <h3 className="font-semibold text-foreground">Learning Mode</h3>
@@ -159,9 +159,9 @@ export function CognitiveLevelSelector({
                 onClick={() => onSelectLevel(level.id)}
                 className={cn(
                   "w-full p-3 rounded-lg text-left transition-all",
-                  "border hover:border-scroll-gold/50",
+                  "border hover:border-primary/50",
                   isSelected 
-                    ? "bg-scroll-gold/10 border-scroll-gold/50" 
+                    ? "bg-primary/10 border-primary/50" 
                     : "bg-muted/30 border-border/50"
                 )}
               >
@@ -169,7 +169,7 @@ export function CognitiveLevelSelector({
                   <div className="flex items-center gap-3">
                     <div className={cn(
                       "p-2 rounded-lg",
-                      isSelected ? "bg-scroll-gold/20" : "bg-muted"
+                      isSelected ? "bg-primary/20" : "bg-muted"
                     )}>
                       <Icon className={cn("h-4 w-4", level.color)} />
                     </div>
@@ -177,7 +177,7 @@ export function CognitiveLevelSelector({
                       <div className="flex items-center gap-2">
                         <span className="font-medium text-sm">{level.name}</span>
                         {isSelected && (
-                          <CheckCircle2 className="h-4 w-4 text-scroll-gold" />
+                          <CheckCircle2 className="h-4 w-4 text-primary" />
                         )}
                       </div>
                       {expanded && (
@@ -191,7 +191,7 @@ export function CognitiveLevelSelector({
                     <Clock className="h-3.5 w-3.5 text-muted-foreground" />
                     <span className={cn(
                       "font-mono",
-                      isSelected ? "text-scroll-gold" : "text-muted-foreground"
+                      isSelected ? "text-primary" : "text-muted-foreground"
                     )}>
                       {calculateTime(level.timeMultiplier)}
                     </span>
@@ -208,7 +208,7 @@ export function CognitiveLevelSelector({
                     <div className="space-y-1.5">
                       {level.features.map((feature, i) => (
                         <div key={i} className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <ChevronRight className="h-3 w-3 text-scroll-gold" />
+                          <ChevronRight className="h-3 w-3 text-primary" />
                           <span>{feature}</span>
                         </div>
                       ))}
@@ -239,7 +239,7 @@ export function CognitiveLevelSelector({
             {onStartReading && (
               <Button 
                 onClick={onStartReading}
-                className="bg-scroll-gold hover:bg-scroll-gold/90 text-scroll-dark flex-shrink-0"
+                className="bg-primary hover:bg-primary/90 text-scroll-dark flex-shrink-0"
                 size="sm"
               >
                 Start

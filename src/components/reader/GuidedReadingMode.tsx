@@ -126,7 +126,7 @@ export function GuidedReadingMode({
             transition={{ delay: 0.1 }}
           >
             <motion.div 
-              className={cn("p-1.5 rounded-md", "bg-scroll-gold/10")}
+              className={cn("p-1.5 rounded-md", "bg-primary/10")}
               whileHover={{ scale: 1.1 }}
               whileTap={{ scale: 0.95 }}
             >
@@ -149,7 +149,7 @@ export function GuidedReadingMode({
               ~{estimatedMinutesLeft} min left
             </span>
             <motion.span 
-              className="font-mono text-scroll-gold"
+              className="font-mono text-primary"
               key={currentProgress}
               initial={{ scale: 1.2 }}
               animate={{ scale: 1 }}
@@ -163,7 +163,7 @@ export function GuidedReadingMode({
         <div className="relative">
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-scroll-gold to-amber-500"
+              className="h-full bg-gradient-to-r from-primary to-amber-500"
               initial={{ width: 0 }}
               animate={{ width: `${currentProgress}%` }}
               transition={{ duration: 0.5, ease: "easeOut" }}
@@ -184,7 +184,7 @@ export function GuidedReadingMode({
                 className={cn(
                   "absolute top-0 w-2 h-2 rounded-full transform -translate-x-1/2 transition-colors",
                   currentProgress >= point
-                    ? "bg-scroll-gold shadow-[0_0_8px_rgba(218,165,32,0.5)]"
+                    ? "bg-primary shadow-[0_0_8px_rgba(218,165,32,0.5)]"
                     : "bg-muted-foreground/30"
                 )}
                 style={{ left: `${point}%` }}
@@ -385,7 +385,7 @@ export const CognitiveLevelIndicator = forwardRef<
       className={cn(
         "flex items-center gap-2 px-3 py-2 rounded-full",
         "bg-card/80 backdrop-blur-sm border border-border/50",
-        "hover:border-scroll-gold/50 transition-colors"
+        "hover:border-primary/50 transition-colors"
       )}
       whileHover={{ scale: 1.02 }}
       whileTap={{ scale: 0.98 }}
@@ -394,7 +394,7 @@ export const CognitiveLevelIndicator = forwardRef<
       <span className="text-sm font-medium">{levelData.name}</span>
       <div className="w-12 h-1.5 bg-muted rounded-full overflow-hidden">
         <motion.div
-          className="h-full bg-scroll-gold rounded-full"
+          className="h-full bg-primary rounded-full"
           initial={{ width: 0 }}
           animate={{ width: `${progress}%` }}
           transition={{ duration: 0.5 }}

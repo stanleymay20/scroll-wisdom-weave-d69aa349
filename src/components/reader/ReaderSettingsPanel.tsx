@@ -19,7 +19,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 
 // Reading theme presets
 export const READING_THEMES = {
-  default: { bg: 'bg-scroll-indigo-deep', text: 'text-foreground/90', name: 'Default' },
+  default: { bg: 'bg-secondary', text: 'text-foreground/90', name: 'Default' },
   sepia: { bg: 'bg-amber-50', text: 'text-amber-900', name: 'Sepia' },
   dark: { bg: 'bg-zinc-950', text: 'text-zinc-100', name: 'Dark' },
   cream: { bg: 'bg-orange-50', text: 'text-stone-800', name: 'Cream' },

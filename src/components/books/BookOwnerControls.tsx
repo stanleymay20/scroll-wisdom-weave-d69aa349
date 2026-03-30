@@ -112,14 +112,13 @@ export function BookOwnerControls({
           onValueChange={(v) => onUpdateBookType(v as "text" | "illustrated" | "comic")}
           className={`grid ${isMobile ? "grid-cols-2" : "grid-cols-1 sm:grid-cols-3"} gap-3 mt-4`}
         >
-          <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors">
+          <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
             <RadioGroupItem value="text" id={`bt-text${idSuffix}`} />
             <Label htmlFor={`bt-text${idSuffix}`} className="cursor-pointer flex-1">
-              <span className="text-sm font-medium">{t('book.text')}</span>
-              <span className="block text-xs text-muted-foreground">{t('book.noImages')}</span>
+              <span className="text-sm font-medium">Text</span>
             </Label>
           </div>
-          <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-scroll-gold/50 transition-colors">
+          <div className="flex items-center space-x-2 p-3 rounded-lg border border-border/50 hover:border-primary/50 transition-colors">
             <RadioGroupItem value="illustrated" id={`bt-illustrated${idSuffix}`} />
             <Label htmlFor={`bt-illustrated${idSuffix}`} className="cursor-pointer flex-1">
               <span className="text-sm font-medium">{t('generate.illustrated')}</span>

@@ -60,14 +60,14 @@ const layoutIcons: Record<string, typeof BookOpen> = {
 
 // Layout background colors (semantic tokens)
 const layoutStyles: Record<string, string> = {
-  'title-visual': 'from-primary/20 to-scroll-gold/10',
+  'title-visual': 'from-primary/20 to-primary/10',
   'learning-objectives': 'from-blue-500/10 to-cyan-500/10',
   'concept-text': 'from-background to-muted/30',
   'concept-visual': 'from-emerald-500/10 to-teal-500/10',
   'diagram-focus': 'from-purple-500/10 to-pink-500/10',
   'comparison': 'from-orange-500/10 to-amber-500/10',
   'example-walkthrough': 'from-indigo-500/10 to-blue-500/10',
-  'summary-proof': 'from-scroll-gold/20 to-primary/10',
+  'summary-proof': 'from-primary/20 to-primary/10',
 };
 
 // ElevenLabs voice options for premium users
@@ -398,7 +398,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                 <Button
                   variant="ghost"
                   size="icon"
-                  className={cn((useElevenLabs || autoPlay) && 'bg-scroll-gold/10 text-scroll-gold')}
+                  className={cn((useElevenLabs || autoPlay) && 'bg-primary/10 text-primary')}
                   title="Audio Settings"
                 >
                   <Settings2 className="h-4 w-4" />
@@ -427,7 +427,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                         ElevenLabs TTS
                       </Label>
                       {isPremiumUser ? (
-                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-scroll-gold/10 text-scroll-gold border-scroll-gold/30">
+                        <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary border-primary/30">
                           <Sparkles className="h-2.5 w-2.5 mr-0.5" />
                           Premium
                         </Badge>
@@ -689,8 +689,8 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
 
         {/* Provenance Badge */}
         {currentSlide.type === 'summary-proof' && (
-          <div className="absolute bottom-20 right-4 p-3 rounded-lg bg-scroll-gold/10 border border-scroll-gold/30 max-w-xs">
-            <div className="flex items-center gap-2 text-xs text-scroll-gold-dark">
+          <div className="absolute bottom-20 right-4 p-3 rounded-lg bg-primary/10 border border-primary/30 max-w-xs">
+            <div className="flex items-center gap-2 text-xs text-primary-dark">
               <CheckCircle2 className="h-4 w-4" />
               <span className="font-medium">Verified Learning Deck</span>
             </div>

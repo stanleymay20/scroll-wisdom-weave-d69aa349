@@ -441,8 +441,8 @@ export default function Generate() {
               animate={{ opacity: 1, y: 0 }}
               className="bg-gradient-card rounded-2xl border border-border/50 p-12"
             >
-              <div className="bg-scroll-gold/10 p-4 rounded-full w-fit mx-auto mb-6">
-                <Lock className="h-12 w-12 text-scroll-gold" />
+              <div className="bg-primary/10 p-4 rounded-full w-fit mx-auto mb-6">
+                <Lock className="h-12 w-12 text-primary" />
               </div>
               <h1 className="font-display text-3xl font-bold mb-4">
                 {t('generate.signInRequired')}
@@ -523,11 +523,11 @@ export default function Generate() {
             animate={{ opacity: 1, y: 0 }}
             className="text-center mb-12"
           >
-            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-scroll-gold/10 border border-scroll-gold/30 text-scroll-gold text-sm font-medium mb-6">
+            <div className="inline-flex items-center gap-2 px-4 py-2 rounded-full bg-primary/10 border border-primary/30 text-primary text-sm font-medium mb-6">
               <Sparkles className="h-4 w-4" />
               {t('generate.aiGenerator')}
               {tier !== "free" && (
-                <span className="ml-2 text-xs bg-scroll-gold/20 px-2 py-0.5 rounded-full">
+                <span className="ml-2 text-xs bg-primary/20 px-2 py-0.5 rounded-full">
                   {SUBSCRIPTION_TIERS[tier].name}
                 </span>
               )}
@@ -558,7 +558,7 @@ export default function Generate() {
                   placeholder={t('generate.bookTitlePlaceholder')}
                   value={title}
                   onChange={(e) => setTitle(e.target.value)}
-                  className="bg-muted/50 border-border/50 focus:border-scroll-gold"
+                  className="bg-muted/50 border-border/50 focus:border-primary"
                   disabled={isGenerating}
                 />
               </div>
@@ -573,7 +573,7 @@ export default function Generate() {
                   placeholder={t('generate.descriptionPlaceholder')}
                   value={description}
                   onChange={(e) => setDescription(e.target.value)}
-                  className="bg-muted/50 border-border/50 focus:border-scroll-gold min-h-[100px]"
+                  className="bg-muted/50 border-border/50 focus:border-primary min-h-[100px]"
                   disabled={isGenerating}
                 />
               </div>
@@ -583,7 +583,7 @@ export default function Generate() {
                 <div className="space-y-2">
                   <Label className="text-foreground">{t('generate.category')} *</Label>
                   <Select value={category} onValueChange={setCategory} disabled={isGenerating}>
-                    <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
+                    <SelectTrigger className="bg-muted/50 border-border/50 focus:border-primary">
                       <SelectValue placeholder={t('generate.selectCategory')} />
                     </SelectTrigger>
                     <SelectContent>
@@ -599,7 +599,7 @@ export default function Generate() {
                 <div className="space-y-2">
                   <Label className="text-foreground">{t('generate.numChapters')}</Label>
                   <Select value={numChapters} onValueChange={setNumChapters} disabled={isGenerating}>
-                    <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
+                    <SelectTrigger className="bg-muted/50 border-border/50 focus:border-primary">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -709,7 +709,7 @@ export default function Generate() {
                   <div className="space-y-2">
                     <Label className="text-foreground">{t('generate.wordsPerChapter')}</Label>
                     <Select value={wordCount} onValueChange={setWordCount} disabled={isGenerating}>
-                      <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
+                      <SelectTrigger className="bg-muted/50 border-border/50 focus:border-primary">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -721,7 +721,7 @@ export default function Generate() {
                       </SelectContent>
                     </Select>
                     {tier === "prophet_tier" && (
-                      <p className="text-xs text-scroll-gold">Institutional tier — maximum word count enabled</p>
+                      <p className="text-xs text-primary">Institutional tier — maximum word count enabled</p>
                     )}
                   </div>
                 )}
@@ -729,7 +729,7 @@ export default function Generate() {
                 <div className="space-y-2">
                   <Label className="text-foreground">{t('generate.language')}</Label>
                   <Select value={language} onValueChange={setLanguage} disabled={isGenerating}>
-                    <SelectTrigger className="bg-muted/50 border-border/50 focus:border-scroll-gold">
+                    <SelectTrigger className="bg-muted/50 border-border/50 focus:border-primary">
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
@@ -827,14 +827,14 @@ export default function Generate() {
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="ai" id="ai-cover" />
                     <Label htmlFor="ai-cover" className="flex items-center gap-2 cursor-pointer">
-                      <Wand2 className="h-4 w-4 text-scroll-gold" />
+                      <Wand2 className="h-4 w-4 text-primary" />
                       {t('generate.aiGenerated')}
                     </Label>
                   </div>
                   <div className="flex items-center space-x-2">
                     <RadioGroupItem value="upload" id="upload-cover" />
                     <Label htmlFor="upload-cover" className="flex items-center gap-2 cursor-pointer">
-                      <Upload className="h-4 w-4 text-scroll-gold" />
+                      <Upload className="h-4 w-4 text-primary" />
                       {t('generate.uploadCustom')}
                     </Label>
                   </div>
@@ -871,7 +871,7 @@ export default function Generate() {
                   {/* Progress bar */}
                   <div className="relative h-2 w-full rounded-full bg-muted overflow-hidden">
                     <motion.div 
-                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-scroll-gold to-amber-500"
+                      className="absolute inset-y-0 left-0 bg-gradient-to-r from-primary to-amber-500"
                       initial={{ width: 0 }}
                       animate={{ 
                         width: `${Math.min(100, (generationProgress.length / 5) * 100)}%` 
@@ -905,7 +905,7 @@ export default function Generate() {
                         {step.includes("❌") ? (
                           <XCircle className="h-4 w-4 text-destructive" />
                         ) : (
-                          <CheckCircle className="h-4 w-4 text-scroll-gold" />
+                          <CheckCircle className="h-4 w-4 text-primary" />
                         )}
                         {step}
                       </motion.div>
@@ -956,7 +956,7 @@ export default function Generate() {
                 key={index}
                 className="text-center p-6 rounded-xl bg-muted/20 border border-border/30"
               >
-                <feature.icon className="h-8 w-8 text-scroll-gold mx-auto mb-3" />
+                <feature.icon className="h-8 w-8 text-primary mx-auto mb-3" />
                 <h3 className="font-display font-semibold mb-2">{t(feature.titleKey)}</h3>
                 <p className="text-sm text-muted-foreground">{t(feature.descKey)}</p>
               </div>

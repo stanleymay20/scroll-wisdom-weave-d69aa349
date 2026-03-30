@@ -484,7 +484,7 @@ export function QuizMode({
             {/* Quiz Complete */}
             {isComplete && (
               <div className="text-center py-8 space-y-6">
-                <Trophy className="h-16 w-16 mx-auto text-scroll-gold" />
+                <Trophy className="h-16 w-16 mx-auto text-primary" />
                 <div>
                   <h4 className="text-2xl font-bold mb-2">Assessment Complete</h4>
                   <p className="text-lg text-muted-foreground">
