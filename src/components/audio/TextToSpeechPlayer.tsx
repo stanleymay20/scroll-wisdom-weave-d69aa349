@@ -466,12 +466,20 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     if (isLoading) return;
 
     if (isPlaying) {
-      stop();
+      // True pause - don't destroy audio
+      pause();
       return;
     }
 
+    // If audio element exists and has a src, try to resume
+    if (audioRef.current && audioRef.current.src && audioRef.current.src !== '') {
+      resume();
+      return;
+    }
+
+    // Otherwise generate fresh
     generateSpeech();
-  }, [generateSpeech, isLoading, isPlaying, stop]);
+  }, [generateSpeech, isLoading, isPlaying, pause, resume]);
 
   // Render a disabled control when the user doesn't have TTS access (never render nothing)
   if (!canUseTTS && !entitlements.isPaid && !entitlements.isAdmin) {
