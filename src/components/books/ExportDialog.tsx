@@ -27,6 +27,7 @@ import {
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEntitlements } from "@/hooks/useEntitlements";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { validateComicContent, ComicValidationResult } from "@/lib/systemDiagnostics";
 import { validateContentForExport, ExportValidationResult } from "@/lib/exportValidation";
