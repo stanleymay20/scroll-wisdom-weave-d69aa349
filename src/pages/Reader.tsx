@@ -715,7 +715,7 @@ export default function Reader() {
       }
       if (paragraph.startsWith('## ')) {
         return (
-          <h4 key={index} className="text-xl sm:text-2xl font-display font-bold text-scroll-gold mt-8 sm:mt-12 mb-4 sm:mb-6">
+          <h4 key={index} className="text-xl sm:text-2xl font-display font-bold text-primary mt-8 sm:mt-12 mb-4 sm:mb-6">
             {paragraph.replace('## ', '')}
           </h4>
         );
