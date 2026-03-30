@@ -235,10 +235,40 @@ export default function Reader() {
   
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
   const [shouldResumeTTS, setShouldResumeTTS] = useState(false);
+  const [showReflectionPause, setShowReflectionPause] = useState(false);
+  const [reflectionDismissedAt, setReflectionDismissedAt] = useState<number>(0);
   
   // AUTO-CONTINUE: Use settings from context
   const autoContinueAudio = settings.tts_auto_continue;
   const [pendingAutoPlay, setPendingAutoPlay] = useState(false);
+
+  // === ADAPTIVE LEARNING ENGINE ===
+  // Compute real-time recommendations from learner state
+  const adaptiveRec: AdaptiveRecommendation = useMemo(() => {
+    const profile = user ? undefined : undefined; // profile data loaded elsewhere
+    const state = defaultLearnerState({
+      chapterProgress: readingProgress,
+      chaptersCompleted: Math.max(0, currentChapter - 1),
+      totalChapters,
+      cognitiveLevel,
+      complexityLevel: 'intermediate', // TODO: wire from profile
+      studySpeed: 'normal', // TODO: wire from profile
+      avgQuizScore: competency.progress?.competency_score ?? 0,
+      totalAttempts: competency.progress?.competency_check_passed ? 1 : 0,
+      timeSpentSeconds: 0,
+    });
+    return computeAdaptiveRecommendation(state);
+  }, [readingProgress, currentChapter, totalChapters, cognitiveLevel, competency.progress]);
+
+  // Show reflection prompt when engine recommends it (once per progress threshold)
+  useEffect(() => {
+    if (adaptiveRec.showReflection && readingProgress >= 95 && reflectionDismissedAt < 95) {
+      setShowReflectionPause(true);
+    }
+    if (adaptiveRec.showRecap && readingProgress >= 48 && readingProgress <= 52 && reflectionDismissedAt < 48) {
+      setShowReflectionPause(true);
+    }
+  }, [adaptiveRec.showReflection, adaptiveRec.showRecap, readingProgress, reflectionDismissedAt]);
   
   // Reset pendingAutoPlay after it's been consumed (when chapter content loads)
   useEffect(() => {
