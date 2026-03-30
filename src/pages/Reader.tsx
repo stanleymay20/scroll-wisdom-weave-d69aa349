@@ -33,7 +33,14 @@ import {
   Brain,
   BookMarked,
   Palette,
+  MoreVertical,
 } from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { TTSMiniPlayer } from "@/components/audio/TTSMiniPlayer";
