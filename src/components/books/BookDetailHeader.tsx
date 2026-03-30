@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { stripMarkdownInline } from "@/lib/stripMarkdownInline";
 import { Book, BookOpen, Clock, User, Play, Bookmark, Loader2, RefreshCw, Palette, Globe, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
