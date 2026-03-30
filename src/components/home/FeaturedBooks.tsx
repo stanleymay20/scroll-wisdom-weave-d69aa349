@@ -139,7 +139,7 @@ export const FeaturedBooks = memo(function FeaturedBooks() {
           </div>
           <Button 
             variant="ghost" 
-            className="mt-4 md:mt-0 group text-scroll-gold hover:text-scroll-gold-light"
+            className="mt-4 md:mt-0 group text-primary hover:text-primary/80"
             onClick={() => navigate('/explore')}
           >
             {t('featured.viewAll')}

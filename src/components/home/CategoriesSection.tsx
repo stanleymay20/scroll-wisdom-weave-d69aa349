@@ -88,15 +88,15 @@ export function CategoriesSection() {
                   <div className={`
                     relative p-4 rounded-xl border border-border/50 
                     bg-gradient-to-br ${category.color}
-                    hover:border-scroll-gold/50 transition-all duration-300
-                    hover:shadow-lg hover:shadow-scroll-gold/10
+                    hover:border-primary/50 transition-all duration-300
+                    hover:shadow-lg hover:shadow-primary/10
                     hover:-translate-y-1
                   `}>
                     <div className="flex flex-col items-center text-center gap-3">
-                      <div className="p-3 rounded-lg bg-background/50 backdrop-blur-sm group-hover:bg-scroll-gold/10 transition-colors">
-                        <Icon className="h-5 w-5 text-scroll-gold" />
+                      <div className="p-3 rounded-lg bg-background/50 backdrop-blur-sm group-hover:bg-primary/10 transition-colors">
+                        <Icon className="h-5 w-5 text-primary" />
                       </div>
-                      <span className="text-sm font-medium text-foreground group-hover:text-scroll-gold transition-colors">
+                      <span className="text-sm font-medium text-foreground group-hover:text-primary transition-colors">
                         {t(category.labelKey)}
                       </span>
                     </div>
