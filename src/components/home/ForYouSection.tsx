@@ -162,7 +162,7 @@ export function ForYouSection() {
                   </div>
                   <div className="p-3">
                     <h3 className="text-sm font-semibold text-foreground line-clamp-2 mb-1 group-hover:text-primary transition-colors">
-                      {book.title}
+                      {stripMarkdownInline(book.title)}
                     </h3>
                     <Badge variant="secondary" className="text-[10px]">
                       {formatCategory(book.category)}

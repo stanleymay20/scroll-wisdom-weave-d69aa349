@@ -89,7 +89,7 @@ export const MobileBookCard = React.forwardRef<HTMLAnchorElement, MobileBookCard
 
         {/* Title */}
         <h3 className="mt-2 text-sm font-medium text-foreground line-clamp-2 leading-tight">
-          {title}
+          {stripMarkdownInline(title)}
         </h3>
       </Link>
     );
