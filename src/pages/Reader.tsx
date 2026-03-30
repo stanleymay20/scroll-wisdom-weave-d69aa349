@@ -245,20 +245,20 @@ export default function Reader() {
   // === ADAPTIVE LEARNING ENGINE ===
   // Compute real-time recommendations from learner state
   const adaptiveRec: AdaptiveRecommendation = useMemo(() => {
-    const profile = user ? undefined : undefined; // profile data loaded elsewhere
+    const chaptersTotal = book?.total_chapters || 1;
     const state = defaultLearnerState({
       chapterProgress: readingProgress,
       chaptersCompleted: Math.max(0, currentChapter - 1),
-      totalChapters,
+      totalChapters: chaptersTotal,
       cognitiveLevel,
-      complexityLevel: 'intermediate', // TODO: wire from profile
-      studySpeed: 'normal', // TODO: wire from profile
-      avgQuizScore: competency.progress?.competency_score ?? 0,
-      totalAttempts: competency.progress?.competency_check_passed ? 1 : 0,
+      complexityLevel: 'intermediate',
+      studySpeed: 'normal',
+      avgQuizScore: competency.progress?.competencyScore ?? 0,
+      totalAttempts: competency.progress?.competencyCheckPassed ? 1 : 0,
       timeSpentSeconds: 0,
     });
     return computeAdaptiveRecommendation(state);
-  }, [readingProgress, currentChapter, totalChapters, cognitiveLevel, competency.progress]);
+  }, [readingProgress, currentChapter, book?.total_chapters, cognitiveLevel, competency.progress]);
 
   // Show reflection prompt when engine recommends it (once per progress threshold)
   useEffect(() => {
