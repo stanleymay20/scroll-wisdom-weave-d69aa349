@@ -141,7 +141,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
             return;
           }
           // If refresh also failed and we have an existing user, preserve state
-          if (user) {
+          if (userRef.current) {
             console.warn('Periodic check: no session but user exists in state — preserving');
             setIsLoading(false);
             return;
