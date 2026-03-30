@@ -83,22 +83,20 @@ export function ExportDialog({
   const [authorName, setAuthorName] = useState(defaultAuthorName || "");
   const [isbn, setIsbn] = useState("");
   const [isOpen, setIsOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [kdpTrimSize, setKdpTrimSize] = useState('6x9');
   const [kdpBleed, setKdpBleed] = useState(false);
   const { toast } = useToast();
   const { t } = useLanguage();
   
   const entitlements = useEntitlements();
-  const isAuthenticated = !!entitlements.tier; // If entitlements resolve, user context exists
-  // Use subscription context user instead of redundant auth listener
   const { user } = useSubscription();
-  const isLoggedIn = !!user;
+  const isAuthenticated = !!user;
   const canExport = entitlements.canExport || entitlements.canDownload;
   
   // Determine which formats this user can actually use
   const allowedFormats: ExportFormat[] = (entitlements.isAdmin || entitlements.isProphet)
     ? ["pdf", "epub", "docx", "kdp-pdf"]
+    : (TIER_FORMAT_ACCESS[entitlements.tier] || TIER_FORMAT_ACCESS.free);
     : (TIER_FORMAT_ACCESS[entitlements.tier] || TIER_FORMAT_ACCESS.free);
 
   const [comicValidation, setComicValidation] = useState<ComicValidationResult | null>(null);
