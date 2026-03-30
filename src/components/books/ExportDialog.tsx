@@ -135,10 +135,7 @@ export function ExportDialog({
       toast({ title: t('export.noChapters'), description: t('export.noChaptersDesc'), variant: "destructive" });
       return;
     }
-    if (!coverImageUrl) {
-      toast({ title: t('export.coverRequired'), description: t('export.coverRequiredDesc'), variant: "destructive" });
-      return;
-    }
+    // Cover is optional — backend handles gracefully without it
     if (!authorName.trim()) {
       toast({ title: t('export.authorRequired'), description: t('export.authorRequiredDesc'), variant: "destructive" });
       return;
