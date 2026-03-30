@@ -798,10 +798,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const handlePlayChapter = () => {
     if (isLoading) return;
     if (isPlaying) {
-      stop();
-    } else {
-      generateSpeech(chapterText, false);
+      // TRUE PAUSE: pause the audio element and save chunk position for resume
+      pauseForInteraction();
+      return;
     }
+    // If we have a saved position, resume from there instead of restarting
+    if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
+      resumeFromPosition();
+      return;
+    }
+    generateSpeech(chapterText, false);
   };
 
   const handlePlaySelection = () => {
