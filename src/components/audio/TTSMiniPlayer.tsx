@@ -151,6 +151,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const autoplayBlockedRef = useRef(false);
   const { toast } = useToast();
   const entitlements = useEntitlements();
+  const { saveAudioState, clearAudioState } = useGlobalAudio();
   
   // CONTRACT 5 - Rule 5.3: Audio reliability tracking
   const audioReliability = useAudioReliability({
