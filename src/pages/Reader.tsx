@@ -1118,8 +1118,9 @@ export default function Reader() {
               onAudioRefChange={(el) => { ttsAudioRef.current = el; }}
               onCumulativeTimeChange={(secs) => { ttsCumulativeTimeRef.current = secs; }}
               onEstimatedDurationChange={setTtsEstimatedDuration}
-              onChunkPlaybackInfo={setChunkPlaybackInfo}
-              onPlaybackSpeedChange={setTtsPlaybackSpeed}
+               onChunkPlaybackInfo={setChunkPlaybackInfo}
+               onPlaybackSpeedChange={setTtsPlaybackSpeed}
+               adaptiveSpeed={guidedModeActive ? adaptiveRec.playbackSpeed : undefined}
                onChapterComplete={async () => {
                 // AUTO-CONTINUE: Navigate to next chapter when audio finishes
                 if (currentChapter < totalChapters) {
