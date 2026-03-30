@@ -1171,6 +1171,23 @@ export default function Reader() {
         prompt={adaptiveRec.recapPrompt || adaptiveRec.reflectionPrompt || 'Take a moment to reflect on what you\'ve read so far.'}
       />
 
+      {/* ADAPTIVE: Suggest review banner when struggling */}
+      {guidedModeActive && adaptiveRec.suggestReview && readingProgress < 20 && (
+        <motion.div
+          initial={{ opacity: 0, y: -10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="fixed top-16 left-4 right-4 z-30 max-w-md mx-auto"
+        >
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-lg p-3 text-sm text-amber-700 dark:text-amber-300 flex items-center gap-2">
+            <Brain className="h-4 w-4 shrink-0" />
+            <span>Consider reviewing the previous chapter before continuing — your quiz scores suggest some concepts need reinforcement.</span>
+            <Button variant="ghost" size="sm" className="shrink-0 h-7 text-xs" onClick={() => {
+              if (currentChapter > 1) navigate(`/read/${bookId}/${currentChapter - 1}`);
+            }}>Review</Button>
+          </div>
+        </motion.div>
+      )}
+
 
       <AnimatePresence>
         {showReferences && chapter?.chapter_references && (
