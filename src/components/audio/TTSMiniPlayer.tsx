@@ -424,6 +424,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     mediaSession.setPlaybackState('idle');
     mediaSession.deactivate();
     
+    // Clear global audio state so floating player disappears
+    globalAudio.stopAndClear();
+    
     // Reset paused position so next play starts fresh
     pausedAtChunkRef.current = 0;
     
@@ -439,7 +442,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     setTimeout(() => {
       isStoppingRef.current = false;
     }, 50);
-  }, [cleanupBlobUrls, mediaSession]);
+  }, [cleanupBlobUrls, mediaSession, globalAudio]);
   
   // CONTRACT 5 - Rule 5.4: Pause for interaction (Interactive Guard Mode)
   const pauseForInteraction = useCallback(() => {
