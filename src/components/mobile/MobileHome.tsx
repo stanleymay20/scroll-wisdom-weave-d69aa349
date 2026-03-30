@@ -127,10 +127,10 @@ export function MobileHome() {
       {/* Welcome Hero for Mobile */}
       <section className="mb-4 text-center py-3">
         <h1 className="font-display text-xl font-bold text-foreground mb-1">
-          Cognitive Mastery Platform
+          ScrollLibrary
         </h1>
         <p className="text-sm text-muted-foreground">
-          Assess → Master → Certify → Verify
+          Generate · Read · Prove Mastery
         </p>
       </section>
 
