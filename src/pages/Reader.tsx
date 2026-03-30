@@ -823,50 +823,12 @@ export default function Reader() {
               variant="ghost" 
               size="icon"
               onClick={() => {
-                if (showLevelSelector) {
-                  setShowLevelSelector(false);
-                  return;
-                }
-                openExclusive('level');
-                setShowQA(false);
-                setShowQuiz(false);
-                // Voice conversation merged into Ask AI
-              }}
-              className={showLevelSelector ? "text-primary" : ""}
-            >
-              <Brain className="h-5 w-5" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => {
                 setShowTTS(!showTTS);
               }}
               className={showTTS ? "text-primary" : ""}
               title="Toggle Audio Player"
             >
               <Volume2 className="h-5 w-5" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => {
-                if (showReferences) {
-                  setShowReferences(false);
-                  return;
-                }
-                openExclusive('refs');
-                setShowQA(false);
-                setShowQuiz(false);
-                // Voice conversation merged into Ask AI
-              }}
-              className={showReferences ? "text-primary" : ""}
-              title="Citations & References"
-            >
-              <BookMarked className="h-5 w-5" />
-            </Button>
-            <Button variant="ghost" size="icon">
-              <Bookmark className="h-5 w-5" />
             </Button>
             <Button 
               variant="ghost" 
@@ -879,28 +841,63 @@ export default function Reader() {
                 openExclusive('settings');
                 setShowQA(false);
                 setShowQuiz(false);
-                // Voice conversation merged into Ask AI
               }}
             >
               <Settings className="h-5 w-5" />
             </Button>
-            <ReportContentDialog 
-              contentType="chapter" 
-              contentId={chapter?.id || ""} 
-              contentTitle={chapter?.title}
-              trigger={
+            {/* Overflow menu — low-frequency actions */}
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
                 <Button variant="ghost" size="icon">
-                  <Flag className="h-5 w-5" />
+                  <MoreVertical className="h-5 w-5" />
                 </Button>
-              }
-            />
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => navigate("/")}
-            >
-              <Home className="h-5 w-5" />
-            </Button>
+              </DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-48">
+                <DropdownMenuItem onClick={() => {
+                  if (showLevelSelector) {
+                    setShowLevelSelector(false);
+                    return;
+                  }
+                  openExclusive('level');
+                  setShowQA(false);
+                  setShowQuiz(false);
+                }}>
+                  <Brain className="h-4 w-4 mr-2" />
+                  Cognitive Level
+                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => {
+                  if (showReferences) {
+                    setShowReferences(false);
+                    return;
+                  }
+                  openExclusive('refs');
+                  setShowQA(false);
+                  setShowQuiz(false);
+                }}>
+                  <BookMarked className="h-4 w-4 mr-2" />
+                  Citations & References
+                </DropdownMenuItem>
+                <DropdownMenuItem>
+                  <Bookmark className="h-4 w-4 mr-2" />
+                  Bookmark
+                </DropdownMenuItem>
+                <ReportContentDialog 
+                  contentType="chapter" 
+                  contentId={chapter?.id || ""} 
+                  contentTitle={chapter?.title}
+                  trigger={
+                    <DropdownMenuItem onSelect={(e) => e.preventDefault()}>
+                      <Flag className="h-4 w-4 mr-2" />
+                      Report Content
+                    </DropdownMenuItem>
+                  }
+                />
+                <DropdownMenuItem onClick={() => navigate("/")}>
+                  <Home className="h-4 w-4 mr-2" />
+                  Back to Home
+                </DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
           </div>
         </div>
       </header>
