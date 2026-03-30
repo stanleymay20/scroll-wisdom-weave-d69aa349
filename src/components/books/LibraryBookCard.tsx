@@ -250,7 +250,7 @@ export function LibraryBookCard({
             
             {description && (
               <p className="text-sm text-muted-foreground line-clamp-2 flex-1">
-                {description}
+                {stripMarkdownInline(description)}
               </p>
             )}
 

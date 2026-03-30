@@ -136,7 +136,7 @@ export function BookCard({
             </h3>
             {description && (
               <p className="text-sm text-muted-foreground line-clamp-2 flex-1">
-                {description}
+                {stripMarkdownInline(description)}
               </p>
             )}
             <div className="flex items-center justify-between pt-2 mt-auto">
