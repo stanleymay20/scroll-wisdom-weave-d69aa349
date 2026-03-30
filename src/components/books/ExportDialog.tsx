@@ -97,7 +97,6 @@ export function ExportDialog({
   const allowedFormats: ExportFormat[] = (entitlements.isAdmin || entitlements.isProphet)
     ? ["pdf", "epub", "docx", "kdp-pdf"]
     : (TIER_FORMAT_ACCESS[entitlements.tier] || TIER_FORMAT_ACCESS.free);
-    : (TIER_FORMAT_ACCESS[entitlements.tier] || TIER_FORMAT_ACCESS.free);
 
   const [comicValidation, setComicValidation] = useState<ComicValidationResult | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('pdf');
