@@ -1,95 +1,136 @@
 /**
- * Global Audio Context
+ * Global Audio Context — Route-Safe Audio Engine
  * 
- * Provides route-safe audio state that survives navigation.
- * The TTSMiniPlayer reads from this context to restore playback
- * when returning to the Reader page.
- * 
- * STATUS:
- * - ✅ IMPLEMENTED: Persisted playback state across route changes
- * - ✅ IMPLEMENTED: Chapter/book tracking, voice, chunk position
- * - 🔮 FUTURE: Global floating mini-player rendered at App level
+ * Owns the HTMLAudioElement so playback survives route changes.
+ * The TTSMiniPlayer in Reader writes chunks to this engine.
+ * A GlobalAudioPlayer at App level shows a mini bar when away from Reader.
  */
 
-import { createContext, useContext, useState, useCallback, useRef, type ReactNode } from "react";
+import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from "react";
 import { audioPositionManager } from "@/lib/audioPositionPersistence";
+import { supabase } from "@/integrations/supabase/client";
 
-interface AudioState {
-  /** Currently playing book ID */
+export interface GlobalAudioState {
   bookId: string | null;
-  /** Currently playing chapter ID */
   chapterId: string | null;
-  /** Selected TTS voice */
-  voice: string;
-  /** Last known chunk index */
-  chunkIndex: number;
-  /** Whether audio was playing when user navigated away */
-  wasPlaying: boolean;
-  /** Chapter text for potential resume */
+  bookTitle: string | null;
   chapterTitle: string | null;
+  voice: string;
+  chunkIndex: number;
+  totalChunks: number;
+  isPlaying: boolean;
+  isLoading: boolean;
+  progress: number; // 0-100 chunk progress
 }
 
 interface AudioContextValue {
-  /** Current global audio state */
-  audioState: AudioState;
-  /** Save audio state when navigating away from reader */
-  saveAudioState: (state: Partial<AudioState>) => void;
-  /** Clear audio state (on explicit stop or book change) */
-  clearAudioState: () => void;
-  /** Check if there's a resumable session for a given book/chapter */
+  state: GlobalAudioState;
+  /** The shared Audio element — survives route changes */
+  audioRef: React.MutableRefObject<HTMLAudioElement | null>;
+  /** Update state fields */
+  update: (partial: Partial<GlobalAudioState>) => void;
+  /** Pause and persist position */
+  pause: () => void;
+  /** Full stop — reset everything */
+  stopAndClear: () => void;
+  /** Check if there's a resumable session */
   hasResumableSession: (bookId: string, chapterId: string) => boolean;
 }
 
-const defaultState: AudioState = {
+const defaultState: GlobalAudioState = {
   bookId: null,
   chapterId: null,
+  bookTitle: null,
+  chapterTitle: null,
   voice: "alloy",
   chunkIndex: 0,
-  wasPlaying: false,
-  chapterTitle: null,
+  totalChunks: 0,
+  isPlaying: false,
+  isLoading: false,
+  progress: 0,
 };
 
 const AudioCtx = createContext<AudioContextValue>({
-  audioState: defaultState,
-  saveAudioState: () => {},
-  clearAudioState: () => {},
+  state: defaultState,
+  audioRef: { current: null },
+  update: () => {},
+  pause: () => {},
+  stopAndClear: () => {},
   hasResumableSession: () => false,
 });
 
 export function AudioProvider({ children }: { children: ReactNode }) {
-  const [audioState, setAudioState] = useState<AudioState>(defaultState);
-  const stateRef = useRef(audioState);
-  stateRef.current = audioState;
+  const [state, setState] = useState<GlobalAudioState>(defaultState);
+  const stateRef = useRef(state);
+  stateRef.current = state;
+  
+  // Single Audio element that lives for the lifetime of the app
+  const audioRef = useRef<HTMLAudioElement | null>(null);
+  
+  // Create the persistent audio element on mount
+  useEffect(() => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+    return () => {
+      // App unmount — clean up
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
+    };
+  }, []);
 
-  const saveAudioState = useCallback((partial: Partial<AudioState>) => {
-    setAudioState(prev => {
+  const update = useCallback((partial: Partial<GlobalAudioState>) => {
+    setState(prev => {
       const next = { ...prev, ...partial };
-      // Also persist to localStorage for cross-session resume
+      // Persist position when meaningful
       if (next.bookId && next.chapterId && next.chunkIndex > 0) {
         audioPositionManager.savePosition(
-          next.bookId, next.chapterId, next.chunkIndex, 
-          0, next.voice
+          next.bookId, next.chapterId, next.chunkIndex,
+          next.totalChunks > 0 ? Math.round((next.chunkIndex / next.totalChunks) * 100) : 0,
+          next.voice
         );
       }
       return next;
     });
   }, []);
 
-  const clearAudioState = useCallback(() => {
-    setAudioState(defaultState);
+  const pause = useCallback(() => {
+    const s = stateRef.current;
+    if (audioRef.current) {
+      try { audioRef.current.pause(); } catch { /* */ }
+    }
+    setState(prev => ({ ...prev, isPlaying: false }));
+    
+    if (s.bookId && s.chapterId && s.chunkIndex > 0) {
+      audioPositionManager.savePosition(
+        s.bookId, s.chapterId, s.chunkIndex,
+        s.totalChunks > 0 ? Math.round((s.chunkIndex / s.totalChunks) * 100) : 0,
+        s.voice
+      );
+    }
+  }, []);
+
+  const stopAndClear = useCallback(() => {
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      } catch { /* */ }
+    }
+    setState(defaultState);
   }, []);
 
   const hasResumableSession = useCallback((bookId: string, chapterId: string) => {
-    // Check in-memory state first
     if (stateRef.current.bookId === bookId && stateRef.current.chapterId === chapterId && stateRef.current.chunkIndex > 0) {
       return true;
     }
-    // Fall back to localStorage persistence
     return audioPositionManager.hasPosition(bookId, chapterId);
   }, []);
 
   return (
-    <AudioCtx.Provider value={{ audioState, saveAudioState, clearAudioState, hasResumableSession }}>
+    <AudioCtx.Provider value={{ state, audioRef, update, pause, stopAndClear, hasResumableSession }}>
       {children}
     </AudioCtx.Provider>
   );

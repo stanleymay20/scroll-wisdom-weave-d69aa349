@@ -12,6 +12,7 @@ import { PWAInstallPrompt, OfflineIndicator } from "@/components/pwa";
 import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
 import { ErrorBoundary, SectionErrorBoundary } from "@/components/ErrorBoundary";
 import { DiagnosticsPanel } from "@/components/system/DiagnosticsPanel";
+import { GlobalAudioPlayer } from "@/components/audio/GlobalAudioPlayer";
 import { createLogger, setTraceId } from "@/lib/logger";
 import { notifyError } from "@/lib/errorNotifier";
 import { SkeletonPage } from "@/components/ui/page-shell";
@@ -169,6 +170,7 @@ const App = () => (
                 </Routes>
               </Suspense>
               <PWAInstallPrompt />
+              <GlobalAudioPlayer />
               <DiagnosticsPanel />
               <Suspense fallback={null}>
                 <CookieConsent />
