@@ -115,7 +115,7 @@ export function QuizMode({
   const [isComplete, setIsComplete] = useState(false);
   const [masteryDepthScore, setMasteryDepthScore] = useState(0);
   const [stressTestSummary, setStressTestSummary] = useState<any>(null);
-  const [adaptiveDifficulty, setAdaptiveDifficulty] = useState(3);
+  const [adaptiveDifficulty, setAdaptiveDifficulty] = useState(adaptiveDifficultyOverride ?? 3);
   const [wrongAnswers, setWrongAnswers] = useState<MasteryQuestion[]>([]);
   const [graphQuestionCount, setGraphQuestionCount] = useState(0);
   const [entropyScore, setEntropyScore] = useState<EntropyScore | null>(null);
