@@ -205,7 +205,7 @@ export function ExportDialog({
   ];
 
   const hasCover = !!coverImageUrl;
-  const canProceed = hasGeneratedChapters && hasCover && !isComicBlocked && isAuthenticated;
+  const canProceed = hasGeneratedChapters && !isComicBlocked && isAuthenticated;
   const isReady = canProceed && canExport && authorName.trim() && contentValidation.canProceed;
 
   return (
