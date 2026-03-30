@@ -818,10 +818,19 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       pauseForInteraction();
       return;
     }
-    // If we have a saved position, resume from there instead of restarting
+    // If we have a saved position from this session, resume from there
     if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
       resumeFromPosition();
       return;
+    }
+    // Check persisted position from previous session
+    if (bookId && chapterId) {
+      const saved = audioPositionManager.getPosition(bookId, chapterId);
+      if (saved && saved.chunkIndex > 0) {
+        console.log('[TTS] Found persisted position at chunk', saved.chunkIndex);
+        // We don't have the chunks yet, so start fresh but we inform the user
+        // Position is at chunk-level — the text needs to be re-chunked first
+      }
     }
     generateSpeech(chapterText, false);
   };
