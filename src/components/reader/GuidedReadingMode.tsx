@@ -163,7 +163,7 @@ export function GuidedReadingMode({
         <div className="relative">
           <div className="h-1.5 bg-muted rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-scroll-gold to-amber-500"
+              className="h-full bg-gradient-to-r from-primary to-amber-500"
               initial={{ width: 0 }}
               animate={{ width: `${currentProgress}%` }}
               transition={{ duration: 0.5, ease: "easeOut" }}

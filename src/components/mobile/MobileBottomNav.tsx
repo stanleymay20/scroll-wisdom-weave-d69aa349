@@ -118,7 +118,7 @@ function MobileBottomNavInner() {
                     : "text-muted-foreground active:text-foreground"
                 )}
               >
-                <Icon className={cn("h-5 w-5", active && "fill-scroll-gold/20")} />
+                <Icon className={cn("h-5 w-5", active && "fill-primary/20")} />
                 <span className="text-[10px] font-medium">{item.label}</span>
               </Link>
             );
@@ -131,7 +131,7 @@ function MobileBottomNavInner() {
               "relative flex items-center justify-center w-14 h-14 -mt-6 rounded-full shadow-lg transition-all",
               showCreateMenu
                 ? "bg-destructive text-destructive-foreground rotate-45"
-                : "bg-primary text-background shadow-scroll-gold/30"
+                : "bg-primary text-background shadow-primary/30"
             )}
           >
             <Plus className="h-7 w-7 transition-transform" />
@@ -153,7 +153,7 @@ function MobileBottomNavInner() {
                     : "text-muted-foreground active:text-foreground"
                 )}
               >
-                <Icon className={cn("h-5 w-5", active && "fill-scroll-gold/20")} />
+                <Icon className={cn("h-5 w-5", active && "fill-primary/20")} />
                 <span className="text-[10px] font-medium">{item.label}</span>
               </Link>
             );

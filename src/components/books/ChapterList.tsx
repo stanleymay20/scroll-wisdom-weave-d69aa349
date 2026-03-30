@@ -52,7 +52,7 @@ export function ChapterList({
             <span className="text-sm text-muted-foreground">{generationProgress.current} / {generationProgress.total} {t('book.complete')}</span>
           </div>
           <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-            <motion.div className="h-full bg-gradient-to-r from-scroll-gold to-scroll-gold-light" initial={{ width: 0 }} animate={{ width: `${(generationProgress.current / generationProgress.total) * 100}%` }} transition={{ duration: 0.5 }} />
+            <motion.div className="h-full bg-gradient-to-r from-primary to-primary-light" initial={{ width: 0 }} animate={{ width: `${(generationProgress.current / generationProgress.total) * 100}%` }} transition={{ duration: 0.5 }} />
           </div>
           <p className="mt-2 text-xs text-muted-foreground">{t('book.generationNote')}</p>
         </div>

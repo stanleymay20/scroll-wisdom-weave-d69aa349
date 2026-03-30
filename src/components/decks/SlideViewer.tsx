@@ -60,14 +60,14 @@ const layoutIcons: Record<string, typeof BookOpen> = {
 
 // Layout background colors (semantic tokens)
 const layoutStyles: Record<string, string> = {
-  'title-visual': 'from-primary/20 to-scroll-gold/10',
+  'title-visual': 'from-primary/20 to-primary/10',
   'learning-objectives': 'from-blue-500/10 to-cyan-500/10',
   'concept-text': 'from-background to-muted/30',
   'concept-visual': 'from-emerald-500/10 to-teal-500/10',
   'diagram-focus': 'from-purple-500/10 to-pink-500/10',
   'comparison': 'from-orange-500/10 to-amber-500/10',
   'example-walkthrough': 'from-indigo-500/10 to-blue-500/10',
-  'summary-proof': 'from-scroll-gold/20 to-primary/10',
+  'summary-proof': 'from-primary/20 to-primary/10',
 };
 
 // ElevenLabs voice options for premium users

@@ -345,7 +345,7 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
         <div className={cn(
           'p-4 rounded-xl border transition-all cursor-pointer',
           isEligible 
-            ? 'bg-gradient-to-r from-scroll-gold/10 to-primary/10 border-primary/30 hover:border-primary/60' 
+            ? 'bg-gradient-to-r from-primary/10 to-primary/10 border-primary/30 hover:border-primary/60' 
             : 'bg-muted/30 border-border/50 hover:border-border',
           className
         )}>

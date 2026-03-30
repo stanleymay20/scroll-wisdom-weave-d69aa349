@@ -85,7 +85,7 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
 
   if (loading) {
     return (
-      <div className="bg-gradient-to-r from-scroll-gold/10 to-scroll-bronze/10 border border-primary/20 rounded-2xl p-4 md:p-6">
+      <div className="bg-gradient-to-r from-primary/10 to-scroll-bronze/10 border border-primary/20 rounded-2xl p-4 md:p-6">
         <div className="flex items-center gap-2 mb-4">
           <Skeleton className="h-5 w-5 rounded" />
           <Skeleton className="h-5 w-32" />
@@ -105,7 +105,7 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
   const chapterToRead = (recentBook.lastReadChapter || 0) + 1;
 
   return (
-    <div className="bg-gradient-to-r from-scroll-gold/10 to-scroll-bronze/10 border border-primary/20 rounded-2xl p-4 md:p-6 transition-all hover:border-primary/40">
+    <div className="bg-gradient-to-r from-primary/10 to-scroll-bronze/10 border border-primary/20 rounded-2xl p-4 md:p-6 transition-all hover:border-primary/40">
       <div className="flex items-center gap-2 mb-4 text-primary">
         <Clock className="h-4 w-4 md:h-5 md:w-5" />
         <span className="text-sm md:text-base font-medium">Continue Reading</span>
@@ -124,7 +124,7 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
               className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-300"
             />
           ) : (
-            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-scroll-gold/20 to-scroll-bronze/20">
+            <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-primary/20 to-scroll-bronze/20">
               <BookOpen className="h-6 w-6 text-primary/50" />
             </div>
           )}
