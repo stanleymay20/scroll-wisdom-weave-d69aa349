@@ -24,7 +24,7 @@ function CookieConsentInner() {
   useEffect(() => {
     const consent = localStorage.getItem("cookie-consent");
     if (!consent) {
-      const timer = setTimeout(() => setShowBanner(true), 1000);
+      const timer = setTimeout(() => setShowBanner(true), 2500);
       return () => clearTimeout(timer);
     }
   }, []);

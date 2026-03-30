@@ -53,19 +53,8 @@ const Index = () => {
   
   usePagePerformance('Home');
 
-  // Auto-launch after 3 seconds idle (once per session)
-  useEffect(() => {
-    if (demoCompleted) return;
-    const shown = sessionStorage.getItem("sl_demo_shown");
-    if (shown) return;
-
-    const timer = setTimeout(() => {
-      setDemoOpen(true);
-      sessionStorage.setItem("sl_demo_shown", "1");
-    }, 3000);
-
-    return () => clearTimeout(timer);
-  }, [demoCompleted]);
+  // Demo modal is user-triggered only — no auto-popup
+  // Users can start it from the ScrollTriggerBanner or HeroSection CTA
 
   const handleStartDemo = useCallback(() => {
     setDemoOpen(true);

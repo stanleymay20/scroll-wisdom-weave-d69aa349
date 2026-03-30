@@ -48,7 +48,7 @@ const SectionHeader = memo(forwardRef<HTMLDivElement, { title: string; linkTo: s
       <h2 className="text-lg font-display font-semibold text-foreground">{title}</h2>
       <Link 
         to={linkTo} 
-        className="flex items-center gap-1 text-sm text-scroll-gold active:text-scroll-gold-light"
+        className="flex items-center gap-1 text-sm text-primary active:text-primary/80"
       >
         See all
         <ChevronRight className="h-4 w-4" />
@@ -127,10 +127,10 @@ export function MobileHome() {
       {/* Welcome Hero for Mobile */}
       <section className="mb-4 text-center py-3">
         <h1 className="font-display text-xl font-bold text-foreground mb-1">
-          Cognitive Mastery Platform
+          ScrollLibrary
         </h1>
         <p className="text-sm text-muted-foreground">
-          Assess → Master → Certify → Verify
+          Generate · Read · Prove Mastery
         </p>
       </section>
 
@@ -175,7 +175,7 @@ export function MobileHome() {
             <Link
               key={cat}
               to={`/explore?category=${cat.toLowerCase()}`}
-              className="flex-shrink-0 px-4 py-2.5 rounded-full bg-muted/50 text-sm font-medium text-foreground border border-border/50 hover:bg-scroll-gold/10 hover:text-scroll-gold hover:border-scroll-gold/30 active:scale-95 transition-all"
+              className="flex-shrink-0 px-4 py-2.5 rounded-full bg-muted/50 text-sm font-medium text-foreground border border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 active:scale-95 transition-all"
             >
               {cat}
             </Link>

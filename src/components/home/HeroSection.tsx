@@ -12,9 +12,9 @@ const FEATURES = [
 ];
 
 const SOCIAL_PROOF = [
-  { label: "Books Generated", value: "12,000+", icon: BookOpen },
-  { label: "Certificates Issued", value: "3,400+", icon: Award },
-  { label: "Active Learners", value: "8,200+", icon: Users },
+  { label: "Books Generated", value: "—", icon: BookOpen },
+  { label: "Certificates Issued", value: "—", icon: Award },
+  { label: "Active Learners", value: "—", icon: Users },
 ];
 
 interface HeroSectionProps {

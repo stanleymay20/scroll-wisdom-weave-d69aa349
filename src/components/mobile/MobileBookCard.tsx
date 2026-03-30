@@ -59,7 +59,7 @@ export const MobileBookCard = React.forwardRef<HTMLAnchorElement, MobileBookCard
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="gap-1.5 bg-scroll-gold text-background hover:bg-scroll-gold-light shadow-lg"
+                  className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg"
                   onClick={handleResumeReading}
                 >
                   <PlayCircle className="h-4 w-4" />
@@ -71,7 +71,7 @@ export const MobileBookCard = React.forwardRef<HTMLAnchorElement, MobileBookCard
 
           {/* Tag Badge */}
           {tag && (
-            <span className="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-medium rounded-full bg-scroll-gold/90 text-background">
+            <span className="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-medium rounded-full bg-primary/90 text-primary-foreground">
               {tag}
             </span>
           )}
@@ -80,7 +80,7 @@ export const MobileBookCard = React.forwardRef<HTMLAnchorElement, MobileBookCard
           {hasProgress && (
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/30">
               <div 
-                className="h-full bg-scroll-gold transition-all" 
+                className="h-full bg-primary transition-all" 
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
