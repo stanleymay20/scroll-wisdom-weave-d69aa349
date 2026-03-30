@@ -59,7 +59,7 @@ export const MobileBookCard = React.forwardRef<HTMLAnchorElement, MobileBookCard
                 <Button
                   size="sm"
                   variant="secondary"
-                  className="gap-1.5 bg-scroll-gold text-background hover:bg-scroll-gold-light shadow-lg"
+                  className="gap-1.5 bg-primary text-primary-foreground hover:bg-primary/90 shadow-lg"
                   onClick={handleResumeReading}
                 >
                   <PlayCircle className="h-4 w-4" />
