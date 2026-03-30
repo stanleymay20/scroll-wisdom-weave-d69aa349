@@ -46,9 +46,9 @@ export function ChapterList({
       </div>
 
       {isGeneratingAll && (
-        <div className="mb-6 p-4 rounded-xl bg-gradient-card border border-scroll-gold/30">
+        <div className="mb-6 p-4 rounded-xl bg-gradient-card border border-primary/30">
           <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-scroll-gold">{t('book.generatingChapters')}</span>
+            <span className="text-sm font-medium text-primary">{t('book.generatingChapters')}</span>
             <span className="text-sm text-muted-foreground">{generationProgress.current} / {generationProgress.total} {t('book.complete')}</span>
           </div>
           <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
@@ -67,15 +67,15 @@ export function ChapterList({
             const isGenerated = chapter.is_generated;
             return (
               <motion.div key={chapter.id} initial={{ opacity: 0, x: -20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 + index * 0.05 }}>
-                <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-card border border-border/50 hover:border-scroll-gold/50 transition-all duration-300 hover:shadow-lg">
+                <div className="flex items-center justify-between p-4 rounded-xl bg-gradient-card border border-border/50 hover:border-primary/50 transition-all duration-300 hover:shadow-lg">
                   <button
                     onClick={() => isGenerated && onNavigateToChapter(chapter)}
                     className={`flex items-center gap-4 flex-1 text-left ${!isGenerated ? 'cursor-default' : 'group cursor-pointer'}`}
                     disabled={!isGenerated}
                   >
-                    <span className="w-10 h-10 rounded-lg bg-scroll-gold/10 flex items-center justify-center font-display font-bold text-scroll-gold">{chapter.chapter_number}</span>
+                    <span className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center font-display font-bold text-primary">{chapter.chapter_number}</span>
                     <div>
-                      <h3 className={`font-medium text-foreground ${isGenerated ? 'group-hover:text-scroll-gold' : ''} transition-colors`}>{chapter.title}</h3>
+                      <h3 className={`font-medium text-foreground ${isGenerated ? 'group-hover:text-primary' : ''} transition-colors`}>{chapter.title}</h3>
                       <p className="text-sm text-muted-foreground">
                         {isGenerated ? `${(chapter.word_count || 0).toLocaleString()} ${t('book.wordsCount')}` : t('book.contentPending')}
                       </p>
@@ -83,16 +83,16 @@ export function ChapterList({
                   </button>
                   <div className="flex items-center gap-2">
                     {isGenerating ? (
-                      <div className="flex items-center gap-2 text-scroll-gold"><Loader2 className="h-5 w-5 animate-spin" /><span className="text-sm">{t('book.generating')}</span></div>
+                      <div className="flex items-center gap-2 text-primary"><Loader2 className="h-5 w-5 animate-spin" /><span className="text-sm">{t('book.generating')}</span></div>
                     ) : isGenerated ? (
                       <div className="flex items-center gap-2">
                         {isOwner && (
-                          <Button variant="ghost" size="sm" onClick={(e) => onGenerateChapter(chapter, e)} title="Regenerate chapter" className="text-muted-foreground hover:text-scroll-gold">
+                          <Button variant="ghost" size="sm" onClick={(e) => onGenerateChapter(chapter, e)} title="Regenerate chapter" className="text-muted-foreground hover:text-primary">
                             <RefreshCw className="h-4 w-4" />
                           </Button>
                         )}
                         <CheckCircle2 className="h-5 w-5 text-green-500" />
-                        <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-scroll-gold transition-all cursor-pointer" onClick={() => onNavigateToChapter(chapter)} />
+                        <ChevronRight className="h-5 w-5 text-muted-foreground group-hover:text-primary transition-all cursor-pointer" onClick={() => onNavigateToChapter(chapter)} />
                       </div>
                     ) : isOwner ? (
                       <Button variant="gold-outline" size="sm" onClick={(e) => onGenerateChapter(chapter, e)}>

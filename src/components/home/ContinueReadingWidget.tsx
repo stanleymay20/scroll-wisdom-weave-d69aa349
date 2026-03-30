@@ -85,7 +85,7 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
 
   if (loading) {
     return (
-      <div className="bg-gradient-to-r from-scroll-gold/10 to-scroll-bronze/10 border border-scroll-gold/20 rounded-2xl p-4 md:p-6">
+      <div className="bg-gradient-to-r from-scroll-gold/10 to-scroll-bronze/10 border border-primary/20 rounded-2xl p-4 md:p-6">
         <div className="flex items-center gap-2 mb-4">
           <Skeleton className="h-5 w-5 rounded" />
           <Skeleton className="h-5 w-32" />
@@ -105,8 +105,8 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
   const chapterToRead = (recentBook.lastReadChapter || 0) + 1;
 
   return (
-    <div className="bg-gradient-to-r from-scroll-gold/10 to-scroll-bronze/10 border border-scroll-gold/20 rounded-2xl p-4 md:p-6 transition-all hover:border-scroll-gold/40">
-      <div className="flex items-center gap-2 mb-4 text-scroll-gold">
+    <div className="bg-gradient-to-r from-scroll-gold/10 to-scroll-bronze/10 border border-primary/20 rounded-2xl p-4 md:p-6 transition-all hover:border-primary/40">
+      <div className="flex items-center gap-2 mb-4 text-primary">
         <Clock className="h-4 w-4 md:h-5 md:w-5" />
         <span className="text-sm md:text-base font-medium">Continue Reading</span>
       </div>
@@ -125,7 +125,7 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-scroll-gold/20 to-scroll-bronze/20">
-              <BookOpen className="h-6 w-6 text-scroll-gold/50" />
+              <BookOpen className="h-6 w-6 text-primary/50" />
             </div>
           )}
         </div>
@@ -133,7 +133,7 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
         {/* Book Info */}
         <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
           <div>
-            <h3 className="font-semibold text-foreground truncate group-hover:text-scroll-gold transition-colors text-sm md:text-base">
+            <h3 className="font-semibold text-foreground truncate group-hover:text-primary transition-colors text-sm md:text-base">
               {stripMarkdownInline(recentBook.title)}
             </h3>
             <p className="text-xs md:text-sm text-muted-foreground capitalize mt-0.5">
@@ -155,7 +155,7 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
           <Button
             variant="ghost"
             size="icon"
-            className="h-10 w-10 rounded-full bg-scroll-gold/10 hover:bg-scroll-gold/20 text-scroll-gold"
+            className="h-10 w-10 rounded-full bg-primary/10 hover:bg-primary/20 text-primary"
           >
             <ChevronRight className="h-5 w-5" />
           </Button>

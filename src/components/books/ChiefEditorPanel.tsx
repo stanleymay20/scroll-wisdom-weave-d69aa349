@@ -406,7 +406,7 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
         className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <ShieldCheck className="h-5 w-5 text-scroll-gold" />
+          <ShieldCheck className="h-5 w-5 text-primary" />
           <div className="text-left">
             <h3 className="font-medium text-foreground">Chief Editor Review</h3>
             <p className="text-xs text-muted-foreground">
@@ -573,8 +573,8 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
                                     <p className="font-medium text-foreground">{finding.criterion}</p>
                                     <p className="text-muted-foreground mt-0.5">{finding.assessment}</p>
                                     {finding.quote && finding.quote !== "N/A" && (
-                                      <p className="text-muted-foreground mt-1 italic border-l-2 border-scroll-gold/50 pl-2">
-                                        <Quote className="h-3 w-3 inline mr-1 text-scroll-gold" />
+                                      <p className="text-muted-foreground mt-1 italic border-l-2 border-primary/50 pl-2">
+                                        <Quote className="h-3 w-3 inline mr-1 text-primary" />
                                         "{finding.quote.slice(0, 200)}{finding.quote.length > 200 ? '...' : ''}"
                                       </p>
                                     )}
@@ -702,12 +702,12 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
                         onClick={() => setShowEvidence(!showEvidence)}
                         className="flex items-center gap-2 text-sm font-medium w-full hover:text-foreground transition-colors"
                       >
-                        <Quote className="h-4 w-4 text-scroll-gold" />
+                        <Quote className="h-4 w-4 text-primary" />
                         Evidence Citations ({evidenceCitations.length})
                         {showEvidence ? <ChevronUp className="h-3 w-3 ml-auto" /> : <ChevronDown className="h-3 w-3 ml-auto" />}
                       </button>
                       {showEvidence && evidenceCitations.map((e: any, i: number) => (
-                        <div key={i} className="text-xs p-2 rounded bg-muted/30 border-l-2 border-scroll-gold/50">
+                        <div key={i} className="text-xs p-2 rounded bg-muted/30 border-l-2 border-primary/50">
                           <p className="font-medium text-foreground">{e.criterion}</p>
                           <p className="italic text-muted-foreground mt-1">"{e.quote?.slice(0, 300)}{(e.quote?.length || 0) > 300 ? '...' : ''}"</p>
                         </div>
@@ -741,7 +741,7 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
                   {audit.chapter_suggestions?.length > 0 && (
                     <div className="space-y-2">
                       <h4 className="text-sm font-medium flex items-center gap-2">
-                        <Sparkles className="h-4 w-4 text-scroll-gold" />
+                        <Sparkles className="h-4 w-4 text-primary" />
                         Improvement Suggestions ({audit.chapter_suggestions.length} chapters)
                       </h4>
                       {audit.chapter_suggestions.map((cs: any, i: number) => (
@@ -750,7 +750,7 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
                           <ul className="space-y-0.5">
                             {cs.improvements?.map((imp: string, j: number) => (
                               <li key={j} className="text-muted-foreground flex items-start gap-1">
-                                <span className="text-scroll-gold mt-0.5">•</span>
+                                <span className="text-primary mt-0.5">•</span>
                                 <span>{imp}</span>
                               </li>
                             ))}
@@ -823,7 +823,7 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
               {/* Running state */}
               {audit?.status === "running" && (
                 <div className="flex items-center gap-3 p-4 rounded-lg bg-muted/30">
-                  <Loader2 className="h-5 w-5 animate-spin text-scroll-gold" />
+                  <Loader2 className="h-5 w-5 animate-spin text-primary" />
                   <div>
                     <p className="text-sm font-medium">Audit in progress...</p>
                     <p className="text-xs text-muted-foreground">Evaluating {generatedCount} chapters with proportional penalty rules</p>

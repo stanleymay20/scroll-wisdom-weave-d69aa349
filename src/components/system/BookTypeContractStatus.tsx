@@ -120,7 +120,7 @@ export function BookTypeContractStatus({
       <Collapsible open={isOpen} onOpenChange={setIsOpen}>
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            {isLocked && <Lock className="h-4 w-4 text-scroll-gold" />}
+            {isLocked && <Lock className="h-4 w-4 text-primary" />}
             <Shield className={cn(
               "h-4 w-4",
               isValid ? "text-green-500" : hasCriticalViolations ? "text-destructive" : "text-amber-500"

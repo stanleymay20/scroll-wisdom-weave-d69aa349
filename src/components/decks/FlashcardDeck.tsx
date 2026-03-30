@@ -396,7 +396,7 @@ export function FlashcardViewer({ deck, onClose, onSessionComplete, className }:
       {/* Card Content */}
       <div className="flex-1 p-4 space-y-4 overflow-y-auto min-h-[320px]">
         {/* Question */}
-        <div className="p-4 rounded-xl bg-gradient-to-br from-scroll-gold/10 to-muted/30 border border-scroll-gold/20">
+        <div className="p-4 rounded-xl bg-gradient-to-br from-scroll-gold/10 to-muted/30 border border-primary/20">
           <span className="text-[10px] uppercase tracking-wider text-muted-foreground">Question</span>
           <p className="text-base font-medium mt-1 text-foreground leading-relaxed">{currentCard.front}</p>
           {currentCard.category && (

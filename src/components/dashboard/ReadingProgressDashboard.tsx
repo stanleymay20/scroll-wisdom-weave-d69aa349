@@ -230,7 +230,7 @@ export function ReadingProgressDashboard({ userId }: { userId: string }) {
       icon: BookMarked, 
       label: 'Books Started', 
       value: overallStats.totalBooksStarted, 
-      color: 'text-scroll-gold' 
+      color: 'text-primary' 
     },
     { 
       icon: CheckCircle2, 
@@ -308,7 +308,7 @@ export function ReadingProgressDashboard({ userId }: { userId: string }) {
       <Card className="bg-gradient-card border-border/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            <BarChart3 className="h-5 w-5 text-scroll-gold" />
+            <BarChart3 className="h-5 w-5 text-primary" />
             Reading Progress by Book
           </CardTitle>
           <CardDescription>

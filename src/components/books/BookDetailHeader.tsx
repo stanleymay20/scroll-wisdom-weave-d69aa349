@@ -83,7 +83,7 @@ export function BookDetailHeader({
             <img src={book.cover_image_url} alt={`${book.title} book cover`} className="w-full h-full object-cover" loading="lazy" />
           ) : (
             <div className="w-full h-full flex flex-col items-center justify-center gap-4 p-4">
-              <Book className="h-24 w-24 text-scroll-gold/30" />
+              <Book className="h-24 w-24 text-primary/30" />
               <p className="text-sm text-muted-foreground text-center">No cover yet</p>
             </div>
           )}
@@ -129,7 +129,7 @@ export function BookDetailHeader({
       {/* Info */}
       <div className="lg:col-span-2">
         <div className="flex items-center gap-3 mb-4">
-          <span className="inline-block px-3 py-1 text-sm font-medium rounded-full bg-scroll-gold/20 text-scroll-gold border border-scroll-gold/30 capitalize">
+          <span className="inline-block px-3 py-1 text-sm font-medium rounded-full bg-primary/20 text-primary border border-primary/30 capitalize">
             {book.category.replace(/_/g, " ")}
           </span>
           {isOwner && (
@@ -145,9 +145,9 @@ export function BookDetailHeader({
         <p className="text-muted-foreground text-lg leading-relaxed mb-6">{stripMarkdownInline(book.description || t('book.defaultDesc'))}</p>
 
         <div className="flex flex-wrap gap-6 mb-8 text-sm text-muted-foreground">
-          <div className="flex items-center gap-2"><User className="h-4 w-4 text-scroll-gold" /><span>{book.author_ai_agent || "ScrollAuthorGPT"}</span></div>
-          <div className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-scroll-gold" /><span>{chapters.length || book.total_chapters} {t('book.chapters')}</span></div>
-          <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-scroll-gold" /><span>{readingTime} {t('book.minRead')}</span></div>
+          <div className="flex items-center gap-2"><User className="h-4 w-4 text-primary" /><span>{book.author_ai_agent || "ScrollAuthorGPT"}</span></div>
+          <div className="flex items-center gap-2"><BookOpen className="h-4 w-4 text-primary" /><span>{chapters.length || book.total_chapters} {t('book.chapters')}</span></div>
+          <div className="flex items-center gap-2"><Clock className="h-4 w-4 text-primary" /><span>{readingTime} {t('book.minRead')}</span></div>
           {chapters.some(ch => ch.is_generated) && <CodeQualityBadge chapters={chapters} />}
         </div>
 

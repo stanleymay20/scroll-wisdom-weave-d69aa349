@@ -83,8 +83,8 @@ function MobileBottomNavInner() {
                       onClick={() => handleCreateBook(type.id)}
                       className="flex items-center gap-3 p-3 rounded-xl hover:bg-muted transition-colors"
                     >
-                      <div className="w-10 h-10 rounded-full bg-scroll-gold/10 flex items-center justify-center">
-                        <Icon className="h-5 w-5 text-scroll-gold" />
+                      <div className="w-10 h-10 rounded-full bg-primary/10 flex items-center justify-center">
+                        <Icon className="h-5 w-5 text-primary" />
                       </div>
                       <span className="font-medium">{type.label}</span>
                     </button>
@@ -114,7 +114,7 @@ function MobileBottomNavInner() {
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-colors",
                   active 
-                    ? "text-scroll-gold" 
+                    ? "text-primary" 
                     : "text-muted-foreground active:text-foreground"
                 )}
               >
@@ -131,7 +131,7 @@ function MobileBottomNavInner() {
               "relative flex items-center justify-center w-14 h-14 -mt-6 rounded-full shadow-lg transition-all",
               showCreateMenu
                 ? "bg-destructive text-destructive-foreground rotate-45"
-                : "bg-scroll-gold text-background shadow-scroll-gold/30"
+                : "bg-primary text-background shadow-scroll-gold/30"
             )}
           >
             <Plus className="h-7 w-7 transition-transform" />
@@ -149,7 +149,7 @@ function MobileBottomNavInner() {
                 className={cn(
                   "flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-colors",
                   active 
-                    ? "text-scroll-gold" 
+                    ? "text-primary" 
                     : "text-muted-foreground active:text-foreground"
                 )}
               >

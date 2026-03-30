@@ -259,10 +259,10 @@ export function ChapterManagement({
         <CollapsibleTrigger asChild>
           <Button
             variant="outline"
-            className="w-full justify-between border-dashed border-scroll-gold/30 hover:border-scroll-gold/60 hover:bg-scroll-gold/5"
+            className="w-full justify-between border-dashed border-primary/30 hover:border-primary/60 hover:bg-primary/5"
           >
             <span className="flex items-center gap-2">
-              <BookOpen className="h-4 w-4 text-scroll-gold" />
+              <BookOpen className="h-4 w-4 text-primary" />
               <span className="text-sm font-medium">Manage Chapters & Preface</span>
             </span>
             {isExpanded ? (
@@ -285,12 +285,12 @@ export function ChapterManagement({
               <div className="p-4 rounded-xl bg-muted/30 border border-border/50">
                 <div className="flex items-center justify-between mb-3">
                   <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-scroll-gold" />
+                    <FileText className="h-4 w-4 text-primary" />
                     <Label className="text-sm font-medium">Preface / Introduction</Label>
                   </div>
                   <Dialog open={prefaceOpen} onOpenChange={setPrefaceOpen}>
                     <DialogTrigger asChild>
-                      <Button variant="ghost" size="sm" className="text-scroll-gold hover:text-scroll-gold-light">
+                      <Button variant="ghost" size="sm" className="text-primary hover:text-primary-light">
                         {preface ? "Edit Preface" : "Add Preface"}
                       </Button>
                     </DialogTrigger>
@@ -353,7 +353,7 @@ export function ChapterManagement({
                       className="flex items-center gap-3 p-3 rounded-lg bg-background border border-border/50 hover:border-border transition-colors group"
                     >
                       <GripVertical className="h-4 w-4 text-muted-foreground/50 cursor-grab" />
-                      <span className="w-8 h-8 rounded-md bg-scroll-gold/10 flex items-center justify-center text-sm font-medium text-scroll-gold">
+                      <span className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center text-sm font-medium text-primary">
                         {chapter.chapter_number}
                       </span>
                       <div className="flex-1 min-w-0">
