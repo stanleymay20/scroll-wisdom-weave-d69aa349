@@ -34,6 +34,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { useMediaSession } from "@/hooks/useMediaSession";
 import { useAudioReliability, AUDIO_CHUNK_SIZES } from "@/hooks/useAudioReliability";
 import { audioPositionManager } from "@/lib/audioPositionPersistence";
+import { useGlobalAudio } from "@/contexts/AudioContext";
 import { cn } from "@/lib/utils";
 
 // OpenAI TTS voices
