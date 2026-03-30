@@ -8,6 +8,7 @@
  */
 
 import { memo } from "react";
+import { stripMarkdownInline } from "@/lib/stripMarkdownInline";
 import { motion } from "framer-motion";
 import { 
   Book, 
