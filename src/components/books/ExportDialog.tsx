@@ -49,6 +49,14 @@ interface ExportDialogProps {
 
 type ExportFormat = "pdf" | "epub" | "docx" | "kdp-pdf";
 
+// Tier-level format access — mirrors server-side TIER_FORMATS in export-book/index.ts
+const TIER_FORMAT_ACCESS: Record<string, ExportFormat[]> = {
+  free: ["pdf"],
+  student: ["pdf", "docx"],
+  premium: ["pdf", "epub", "docx", "kdp-pdf"],
+  prophet_tier: ["pdf", "epub", "docx", "kdp-pdf"],
+};
+
 const KDP_TRIM_SIZES = [
   { value: '5x8', label: '5" × 8"', desc: 'Small paperback' },
   { value: '5.25x8', label: '5.25" × 8"', desc: 'Compact' },
