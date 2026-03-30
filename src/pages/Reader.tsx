@@ -73,6 +73,8 @@ import { AdaptiveLearningPath } from "@/components/reader/AdaptiveLearningPath";
 import { PresenceAvatars } from "@/components/reader/PresenceAvatars";
 import { useEditorPresence } from "@/hooks/useCollaboration";
 import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
+import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecommendation } from "@/lib/adaptiveLearningEngine";
+import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
 
 interface BookData {
   id: string;
