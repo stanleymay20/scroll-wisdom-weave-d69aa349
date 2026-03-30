@@ -34,6 +34,7 @@ import { useEntitlements } from "@/hooks/useEntitlements";
 import { useMediaSession } from "@/hooks/useMediaSession";
 import { useAudioReliability, AUDIO_CHUNK_SIZES } from "@/hooks/useAudioReliability";
 import { audioPositionManager } from "@/lib/audioPositionPersistence";
+import { useGlobalAudio } from "@/contexts/AudioContext";
 import { cn } from "@/lib/utils";
 
 // OpenAI TTS voices
@@ -150,6 +151,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const autoplayBlockedRef = useRef(false);
   const { toast } = useToast();
   const entitlements = useEntitlements();
+  const { saveAudioState, clearAudioState } = useGlobalAudio();
   
   // CONTRACT 5 - Rule 5.3: Audio reliability tracking
   const audioReliability = useAudioReliability({
@@ -799,6 +801,12 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       if (bookId && chapterId && currentChunk > 0 && chunksRef.current.length > 0) {
         const chunkProgress = Math.round((currentChunk / chunksRef.current.length) * 100);
         audioPositionManager.savePosition(bookId, chapterId, currentChunk, chunkProgress, selectedVoice);
+        // Also save to global context for route-safe state
+        saveAudioState({
+          bookId, chapterId, voice: selectedVoice,
+          chunkIndex: currentChunk, wasPlaying: isPlaying,
+          chapterTitle: title,
+        });
         console.log('[TTS] Saved position on unmount:', currentChunk);
       }
       
@@ -812,7 +820,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       }
       cleanupBlobUrls();
     };
-  }, [cleanupBlobUrls, bookId, chapterId, currentChunk, selectedVoice]);
+  }, [cleanupBlobUrls, bookId, chapterId, currentChunk, selectedVoice, isPlaying, title, saveAudioState]);
 
   // Update volume on active audio
   useEffect(() => {

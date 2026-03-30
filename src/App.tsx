@@ -6,6 +6,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
+import { AudioProvider } from "@/contexts/AudioContext";
 import { useEffect, Suspense, lazy } from "react";
 import { PWAInstallPrompt, OfflineIndicator } from "@/components/pwa";
 import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
@@ -108,6 +109,7 @@ const App = () => (
       <LanguageProvider>
         <SubscriptionProvider>
           <SettingsProvider>
+            <AudioProvider>
             <TooltipProvider>
               <Toaster />
               <Sonner />
@@ -173,6 +175,7 @@ const App = () => (
               </Suspense>
             </BrowserRouter>
           </TooltipProvider>
+            </AudioProvider>
         </SettingsProvider>
       </SubscriptionProvider>
     </LanguageProvider>

@@ -875,6 +875,25 @@ serve(async (req) => {
     if (chaptersError) throw new Error("Failed to fetch chapters");
     if (!chapters || chapters.length === 0) throw new Error("No generated chapters found");
 
+    // GUARD: Reject extremely large books that risk edge function timeout (60s limit)
+    const totalContentSize = chapters.reduce((sum, ch) => sum + (ch.content?.length || 0), 0);
+    if (totalContentSize > 2_000_000) {
+      return new Response(JSON.stringify({ 
+        error: `Book content is too large for export (${Math.round(totalContentSize / 1000)}KB). Try exporting fewer chapters or contact support.` 
+      }), {
+        status: 413,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    if (chapters.length > 80) {
+      return new Response(JSON.stringify({ 
+        error: `Book has ${chapters.length} chapters — export is limited to 80 chapters. Contact support for larger exports.` 
+      }), {
+        status: 413,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     // Auto-repair mismatched [CODE_BLOCK] tags and unclosed backtick fences before export
     for (const chapter of chapters) {
       if (chapter.content) {

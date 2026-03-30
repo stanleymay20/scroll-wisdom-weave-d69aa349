@@ -54,6 +54,10 @@ interface QuizModeProps {
   onClose: () => void;
   isMasteryMode?: boolean;
   bookType?: string;
+  /** Adaptive engine override for Bloom level */
+  adaptiveBloomLevel?: string;
+  /** Adaptive engine override for difficulty (1-5) */
+  adaptiveDifficultyOverride?: number;
   onRecordAttempt?: (
     chapterId: string,
     bloomLevel: BloomLevel,
@@ -97,6 +101,8 @@ export function QuizMode({
   onClose,
   isMasteryMode = false,
   bookType = 'text',
+  adaptiveBloomLevel,
+  adaptiveDifficultyOverride,
   onRecordAttempt,
 }: QuizModeProps) {
   const [questions, setQuestions] = useState<MasteryQuestion[]>([]);
@@ -109,7 +115,7 @@ export function QuizMode({
   const [isComplete, setIsComplete] = useState(false);
   const [masteryDepthScore, setMasteryDepthScore] = useState(0);
   const [stressTestSummary, setStressTestSummary] = useState<any>(null);
-  const [adaptiveDifficulty, setAdaptiveDifficulty] = useState(3);
+  const [adaptiveDifficulty, setAdaptiveDifficulty] = useState(adaptiveDifficultyOverride ?? 3);
   const [wrongAnswers, setWrongAnswers] = useState<MasteryQuestion[]>([]);
   const [graphQuestionCount, setGraphQuestionCount] = useState(0);
   const [entropyScore, setEntropyScore] = useState<EntropyScore | null>(null);
@@ -139,7 +145,7 @@ export function QuizMode({
             createdAt: d.created_at,
           }));
           const rec = computeAdaptiveRecommendation(snapshots, snapshots[snapshots.length - 1].difficulty);
-          setAdaptiveDifficulty(rec.recommendedDifficulty);
+          setAdaptiveDifficulty(adaptiveDifficultyOverride ?? rec.recommendedDifficulty);
         }
       } catch { /* silent */ }
     };
