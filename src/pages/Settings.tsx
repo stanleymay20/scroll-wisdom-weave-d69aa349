@@ -239,7 +239,7 @@ export default function Settings() {
                 <Card className="bg-gradient-card border-border/50">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Crown className="h-5 w-5 text-scroll-gold" />
+                      <Crown className="h-5 w-5 text-primary" />
                       {t('settings.subscriptionBilling')}
                     </CardTitle>
                     <CardDescription>{t('settings.manageYourPlan')}</CardDescription>
@@ -248,7 +248,7 @@ export default function Settings() {
                     <div className="flex items-center justify-between">
                       <div className="space-y-0.5">
                         <Label>{t('settings.currentPlan')}</Label>
-                        <p className="text-lg font-semibold text-scroll-gold">{SUBSCRIPTION_TIERS[tier].name}</p>
+                        <p className="text-lg font-semibold text-primary">{SUBSCRIPTION_TIERS[tier].name}</p>
                       </div>
                       <Button variant="outline" onClick={() => navigate("/pricing")}>
                         {tier === 'free' ? t('common.upgrade') : t('settings.changePlan')}

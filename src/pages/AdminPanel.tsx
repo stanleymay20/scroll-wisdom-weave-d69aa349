@@ -150,7 +150,7 @@ export default function AdminPanel() {
       <div className="min-h-screen flex flex-col">
         <Navbar />
         <main className="flex-1 pt-24 pb-16 flex items-center justify-center">
-          <Loader2 className="h-8 w-8 animate-spin text-scroll-gold" />
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
         </main>
         <Footer />
       </div>
@@ -196,8 +196,8 @@ export default function AdminPanel() {
             >
               <Card className="bg-gradient-card border-border/50">
                 <CardHeader className="text-center">
-                  <div className="mx-auto p-3 rounded-xl bg-scroll-gold/20 w-fit mb-4">
-                    <Key className="h-8 w-8 text-scroll-gold" />
+                  <div className="mx-auto p-3 rounded-xl bg-primary/20 w-fit mb-4">
+                    <Key className="h-8 w-8 text-primary" />
                   </div>
                   <CardTitle className="text-2xl font-display">Claim Admin Access</CardTitle>
                   <CardDescription>
@@ -259,14 +259,14 @@ export default function AdminPanel() {
           >
             {/* Header */}
             <div className="flex items-center gap-4 mb-8">
-              <div className="p-3 rounded-xl bg-scroll-gold/20">
-                <Shield className="h-8 w-8 text-scroll-gold" />
+              <div className="p-3 rounded-xl bg-primary/20">
+                <Shield className="h-8 w-8 text-primary" />
               </div>
               <div>
                 <h1 className="text-3xl font-display font-bold">Admin Panel</h1>
                 <p className="text-muted-foreground">Manage users, roles, and system settings</p>
               </div>
-              <Badge className="ml-auto bg-scroll-gold/20 text-scroll-gold border-scroll-gold/30">
+              <Badge className="ml-auto bg-primary/20 text-primary border-primary/30">
                 <Crown className="h-3 w-3 mr-1" />
                 Admin
               </Badge>
@@ -274,11 +274,11 @@ export default function AdminPanel() {
 
             <Tabs defaultValue="roles" className="space-y-6">
               <TabsList className="bg-muted/50">
-                <TabsTrigger value="roles" className="data-[state=active]:bg-scroll-gold/20">
+                <TabsTrigger value="roles" className="data-[state=active]:bg-primary/20">
                   <Users className="h-4 w-4 mr-2" />
                   User Roles
                 </TabsTrigger>
-                <TabsTrigger value="settings" className="data-[state=active]:bg-scroll-gold/20">
+                <TabsTrigger value="settings" className="data-[state=active]:bg-primary/20">
                   <Shield className="h-4 w-4 mr-2" />
                   Settings
                 </TabsTrigger>
@@ -289,7 +289,7 @@ export default function AdminPanel() {
                 <Card className="bg-gradient-card border-border/50">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
-                      <Users className="h-5 w-5 text-scroll-gold" />
+                      <Users className="h-5 w-5 text-primary" />
                       User Roles
                     </CardTitle>
                     <CardDescription>
@@ -314,10 +314,10 @@ export default function AdminPanel() {
                           >
                             <div className="flex items-center gap-3">
                               <div className={`p-2 rounded-lg ${
-                                role.role === 'admin' ? 'bg-scroll-gold/20' : 'bg-primary/20'
+                                role.role === 'admin' ? 'bg-primary/20' : 'bg-primary/20'
                               }`}>
                                 {role.role === 'admin' ? (
-                                  <Crown className="h-4 w-4 text-scroll-gold" />
+                                  <Crown className="h-4 w-4 text-primary" />
                                 ) : (
                                   <Shield className="h-4 w-4 text-primary" />
                                 )}
@@ -363,9 +363,9 @@ export default function AdminPanel() {
                     </CardDescription>
                   </CardHeader>
                   <CardContent className="space-y-4">
-                    <div className="p-4 rounded-lg bg-scroll-gold/10 border border-scroll-gold/30">
+                    <div className="p-4 rounded-lg bg-primary/10 border border-primary/30">
                       <div className="flex items-center gap-2 mb-2">
-                        <Check className="h-4 w-4 text-scroll-gold" />
+                        <Check className="h-4 w-4 text-primary" />
                         <span className="font-medium">Admin bypass active</span>
                       </div>
                       <p className="text-sm text-muted-foreground">
@@ -375,7 +375,7 @@ export default function AdminPanel() {
                     <div className="grid gap-4">
                       <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                         <span className="text-sm">Your Role</span>
-                        <Badge className="bg-scroll-gold/20 text-scroll-gold">Admin</Badge>
+                        <Badge className="bg-primary/20 text-primary">Admin</Badge>
                       </div>
                       <div className="flex items-center justify-between p-3 rounded-lg bg-muted/30">
                         <span className="text-sm">User ID</span>

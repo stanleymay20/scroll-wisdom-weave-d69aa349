@@ -1635,7 +1635,7 @@ export default function Reader() {
           </Button>
           
           <div className="flex items-center gap-2">
-            <BookOpen className="h-4 w-4 text-scroll-gold" />
+            <BookOpen className="h-4 w-4 text-primary" />
             <span className="text-sm text-muted-foreground">
               {currentChapter} / {totalChapters}
             </span>

@@ -404,7 +404,7 @@ export default function MasteryDashboard() {
             { icon: BarChart3, label: 'Total Attempts', value: progressHistory.length, color: 'text-blue-400' },
             { icon: Flame, label: 'Current Streak', value: `${currentStreak}d`, color: 'text-orange-400' },
             { icon: Repeat, label: 'SRS Due', value: srsStats.due, color: srsStats.due > 0 ? 'text-amber-400' : 'text-green-400' },
-            { icon: Award, label: 'Mastery Achieved', value: progressHistory.filter(p => p.mastery_status === 'mastery').length, color: 'text-scroll-gold' },
+            { icon: Award, label: 'Mastery Achieved', value: progressHistory.filter(p => p.mastery_status === 'mastery').length, color: 'text-primary' },
             { icon: Shield, label: 'Integrity', value: `${integrityScore}%`, color: integrityScore >= 90 ? 'text-green-400' : integrityScore >= 70 ? 'text-amber-400' : 'text-destructive' },
           ].map((stat) => (
             <Card key={stat.label} className="bg-gradient-card border-border/50">
