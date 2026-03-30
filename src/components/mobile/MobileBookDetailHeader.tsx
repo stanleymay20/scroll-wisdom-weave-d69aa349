@@ -8,6 +8,7 @@
  */
 
 import { memo } from "react";
+import { stripMarkdownInline } from "@/lib/stripMarkdownInline";
 import { motion } from "framer-motion";
 import { 
   Book, 
@@ -139,7 +140,7 @@ export const MobileBookDetailHeader = memo(function MobileBookDetailHeader({
       {/* Description */}
       {book.description && (
         <p className="text-sm text-muted-foreground mt-4 line-clamp-3">
-          {book.description}
+          {stripMarkdownInline(book.description)}
         </p>
       )}
 

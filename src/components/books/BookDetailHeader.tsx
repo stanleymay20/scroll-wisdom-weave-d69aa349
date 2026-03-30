@@ -1,4 +1,5 @@
 import { motion } from "framer-motion";
+import { stripMarkdownInline } from "@/lib/stripMarkdownInline";
 import { Book, BookOpen, Clock, User, Play, Bookmark, Loader2, RefreshCw, Palette, Globe, Lock } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -141,7 +142,7 @@ export function BookDetailHeader({
         </div>
         
         <h1 className="font-display text-3xl md:text-4xl lg:text-5xl font-bold mb-4">{book.title}</h1>
-        <p className="text-muted-foreground text-lg leading-relaxed mb-6">{book.description || t('book.defaultDesc')}</p>
+        <p className="text-muted-foreground text-lg leading-relaxed mb-6">{stripMarkdownInline(book.description || t('book.defaultDesc'))}</p>
 
         <div className="flex flex-wrap gap-6 mb-8 text-sm text-muted-foreground">
           <div className="flex items-center gap-2"><User className="h-4 w-4 text-scroll-gold" /><span>{book.author_ai_agent || "ScrollAuthorGPT"}</span></div>

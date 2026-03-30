@@ -254,6 +254,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     });
   }, [onPlayingChange, volume]);
 
+  // Full stop: destroys audio and resets
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
@@ -281,6 +282,34 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       isStoppingRef.current = false;
     }, 50);
   }, [cleanupBlobUrls, onPlayingChange]);
+
+  // True pause: keeps audio element alive, preserves position
+  const pause = useCallback(() => {
+    if (!audioRef.current) return;
+    try {
+      audioRef.current.pause();
+    } catch { /* ignore */ }
+    stopRef.current = true; // Stop the chunk loop from advancing
+    if (isMountedRef.current) {
+      setIsPlaying(false);
+      onPlayingChange?.(false);
+    }
+  }, [onPlayingChange]);
+
+  // Resume: tries to resume the current audio element
+  const resume = useCallback(() => {
+    if (!audioRef.current) return;
+    stopRef.current = false;
+    audioRef.current.play().then(() => {
+      if (isMountedRef.current) {
+        setIsPlaying(true);
+        onPlayingChange?.(true);
+      }
+    }).catch(() => {
+      // If resume fails, user can tap play again to regenerate
+      stopRef.current = true;
+    });
+  }, [onPlayingChange]);
 
   const generateSpeech = useCallback(async () => {
     // Stop any existing playback
@@ -437,12 +466,20 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     if (isLoading) return;
 
     if (isPlaying) {
-      stop();
+      // True pause - don't destroy audio
+      pause();
       return;
     }
 
+    // If audio element exists and has a src, try to resume
+    if (audioRef.current && audioRef.current.src && audioRef.current.src !== '') {
+      resume();
+      return;
+    }
+
+    // Otherwise generate fresh
     generateSpeech();
-  }, [generateSpeech, isLoading, isPlaying, stop]);
+  }, [generateSpeech, isLoading, isPlaying, pause, resume]);
 
   // Render a disabled control when the user doesn't have TTS access (never render nothing)
   if (!canUseTTS && !entitlements.isPaid && !entitlements.isAdmin) {

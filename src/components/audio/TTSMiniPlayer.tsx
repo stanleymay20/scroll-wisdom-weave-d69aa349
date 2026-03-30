@@ -395,6 +395,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     });
   }, [volume, onPlayingChange, onAudioRefChange]);
 
+  // Full stop: destroys playback entirely, resets all state
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
@@ -405,12 +406,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         audioRef.current.pause();
         audioRef.current.src = "";
       } catch { /* ignore */ }
-      // Keep audioRef alive to preserve browser autoplay permission
     }
 
     cleanupBlobUrls();
     mediaSession.setPlaybackState('idle');
     mediaSession.deactivate();
+    
+    // Reset paused position so next play starts fresh
+    pausedAtChunkRef.current = 0;
     
     if (isMountedRef.current) {
       setIsLoading(false);
@@ -421,7 +424,6 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       setError(null);
     }
     
-    // Reset stopping flag after a short delay to allow any pending callbacks
     setTimeout(() => {
       isStoppingRef.current = false;
     }, 50);
@@ -451,17 +453,18 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   
   // CONTRACT 5 - Rule 5.4: Resume from semantic position
   const resumeFromPosition = useCallback(() => {
-    if (chunksRef.current.length === 0 || pausedAtChunkRef.current === 0) {
-      // No previous position, start fresh
+    if (chunksRef.current.length === 0) {
+      // No chunks loaded, start fresh
       return;
     }
     
-    console.log('[TTS] Resuming from chunk', pausedAtChunkRef.current);
+    const resumeChunk = pausedAtChunkRef.current;
+    console.log('[TTS] Resuming from chunk', resumeChunk, 'of', chunksRef.current.length);
     
     // Resume playback from the saved chunk position
-    const remainingChunks = chunksRef.current.slice(pausedAtChunkRef.current);
+    const remainingChunks = chunksRef.current.slice(resumeChunk);
     if (remainingChunks.length > 0) {
-      generateSpeechFromChunks(remainingChunks, pausedAtChunkRef.current);
+      generateSpeechFromChunks(remainingChunks, resumeChunk);
     }
   }, []);
 
@@ -796,10 +799,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const handlePlayChapter = () => {
     if (isLoading) return;
     if (isPlaying) {
-      stop();
-    } else {
-      generateSpeech(chapterText, false);
+      // TRUE PAUSE: pause the audio element and save chunk position for resume
+      pauseForInteraction();
+      return;
     }
+    // If we have a saved position, resume from there instead of restarting
+    if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
+      resumeFromPosition();
+      return;
+    }
+    generateSpeech(chapterText, false);
   };
 
   const handlePlaySelection = () => {
