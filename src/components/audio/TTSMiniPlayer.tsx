@@ -87,7 +87,8 @@ interface TTSMiniPlayerProps {
   onChunkPlaybackInfo?: (info: { chunkIndex: number; chunkWordCounts: number[] }) => void;
   /** Callback when playback speed changes — needed for block-level timestamp alignment */
   onPlaybackSpeedChange?: (speed: number) => void;
-}
+  /** Adaptive learning engine recommended speed (overrides default 1.0) */
+  adaptiveSpeed?: number;
 
 export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(function TTSMiniPlayer({ 
   chapterText, 
