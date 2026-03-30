@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState, memo } from "react";
+import { stripMarkdownInline } from "@/lib/stripMarkdownInline";
 import { Link } from "react-router-dom";
 import { BookOpen, ChevronRight, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
