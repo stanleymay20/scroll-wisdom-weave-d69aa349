@@ -170,6 +170,7 @@ const App = () => (
                 </Routes>
               </Suspense>
               <PWAInstallPrompt />
+              <GlobalAudioPlayer />
               <DiagnosticsPanel />
               <Suspense fallback={null}>
                 <CookieConsent />
