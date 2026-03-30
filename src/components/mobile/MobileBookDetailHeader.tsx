@@ -79,8 +79,8 @@ export const MobileBookDetailHeader = memo(function MobileBookDetailHeader({
               loading="eager"
             />
           ) : (
-            <div className="w-full h-full bg-gradient-to-br from-scroll-indigo/50 to-scroll-indigo-deep/50 flex items-center justify-center">
-              <Book className="h-10 w-10 text-scroll-gold/30" />
+            <div className="w-full h-full bg-gradient-to-br from-muted to-muted/50 flex items-center justify-center">
+              <Book className="h-10 w-10 text-primary/30" />
             </div>
           )}
         </div>
