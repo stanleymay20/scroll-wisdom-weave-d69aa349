@@ -795,18 +795,28 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   }, [autoPlay, chapterText, isPlaying, isLoading]);
 
   // Cleanup on unmount — SAVE position before destroying
+  // Sync playing state to global context so GlobalAudioPlayer knows what's happening
+  useEffect(() => {
+    globalAudio.update({
+      bookId: bookId || null,
+      chapterId: chapterId || null,
+      bookTitle: author,
+      chapterTitle: title,
+      voice: selectedVoice,
+      chunkIndex: currentChunk,
+      totalChunks,
+      isPlaying,
+      isLoading,
+      progress,
+    });
+  }, [isPlaying, isLoading, currentChunk, totalChunks, progress, bookId, chapterId, title, selectedVoice]);
+
+  // Cleanup on unmount — persist position but DON'T destroy audio if still playing
   useEffect(() => {
     return () => {
-      // Persist audio position so user can resume after navigation
       if (bookId && chapterId && currentChunk > 0 && chunksRef.current.length > 0) {
         const chunkProgress = Math.round((currentChunk / chunksRef.current.length) * 100);
         audioPositionManager.savePosition(bookId, chapterId, currentChunk, chunkProgress, selectedVoice);
-        // Also save to global context for route-safe state
-        saveAudioState({
-          bookId, chapterId, voice: selectedVoice,
-          chunkIndex: currentChunk, wasPlaying: isPlaying,
-          chapterTitle: title,
-        });
         console.log('[TTS] Saved position on unmount:', currentChunk);
       }
       
@@ -820,7 +830,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       }
       cleanupBlobUrls();
     };
-  }, [cleanupBlobUrls, bookId, chapterId, currentChunk, selectedVoice, isPlaying, title, saveAudioState]);
+  }, [cleanupBlobUrls, bookId, chapterId, currentChunk, selectedVoice, isPlaying, title]);
 
   // Update volume on active audio
   useEffect(() => {
