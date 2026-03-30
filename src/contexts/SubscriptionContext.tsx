@@ -98,9 +98,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       console.error('Error checking TTS usage:', error);
     }
   }, []);
+
   // Keep userRef in sync with user state (avoids stale closures in checkSubscription)
   useEffect(() => { userRef.current = user; }, [user]);
 
+  const checkSubscription = useCallback(async (force = false) => {
     const now = Date.now();
     if (!force && now - lastFetchRef.current < FETCH_COOLDOWN) {
       return;
