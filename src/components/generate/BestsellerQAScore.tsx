@@ -96,7 +96,7 @@ export function BestsellerQAScore({
             calculatedScore >= 90
               ? "bg-green-500"
               : calculatedScore >= 70
-              ? "bg-scroll-gold"
+              ? "bg-primary"
               : calculatedScore >= 50
               ? "bg-amber-500"
               : "bg-destructive"

@@ -122,15 +122,15 @@ export const MobileBookDetailHeader = memo(function MobileBookDetailHeader({
           {/* Meta */}
           <div className="flex flex-wrap items-center gap-3 text-xs text-muted-foreground mt-2">
             <span className="flex items-center gap-1">
-              <User className="h-3 w-3 text-scroll-gold" />
+              <User className="h-3 w-3 text-primary" />
               {book.author_ai_agent || "ScrollAuthorGPT"}
             </span>
             <span className="flex items-center gap-1">
-              <BookOpen className="h-3 w-3 text-scroll-gold" />
+              <BookOpen className="h-3 w-3 text-primary" />
               {chaptersCount} ch
             </span>
             <span className="flex items-center gap-1">
-              <Clock className="h-3 w-3 text-scroll-gold" />
+              <Clock className="h-3 w-3 text-primary" />
               {readingTime} min
             </span>
           </div>
