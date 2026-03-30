@@ -96,6 +96,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   stopKey,
   title = "Chapter",
   author = "ScrollLibrary",
+  bookId,
+  chapterId,
   onInterrupt,
   onChapterComplete,
   autoContinue = false,
