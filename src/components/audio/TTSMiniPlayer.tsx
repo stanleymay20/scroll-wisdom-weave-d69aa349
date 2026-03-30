@@ -455,8 +455,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       setIsPlaying(false);
     }
     
+    // Persist position for cross-session resume
+    if (bookId && chapterId) {
+      const chunkProgress = chunksRef.current.length > 0 
+        ? Math.round((currentChunk / chunksRef.current.length) * 100) 
+        : 0;
+      audioPositionManager.savePosition(bookId, chapterId, currentChunk, chunkProgress, selectedVoice);
+    }
+    
     console.log('[TTS] Paused for interaction at chunk', currentChunk);
-  }, [isPlaying, currentChunk, mediaSession]);
+  }, [isPlaying, currentChunk, mediaSession, bookId, chapterId, selectedVoice]);
   
   // CONTRACT 5 - Rule 5.4: Resume from semantic position
   const resumeFromPosition = useCallback(() => {
