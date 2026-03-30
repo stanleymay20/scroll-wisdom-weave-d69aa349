@@ -1469,6 +1469,8 @@ export default function Reader() {
           bookTitle={book?.title || ""}
           bookId={bookId || ""}
           chapterId={chapter.id}
+          adaptiveBloomLevel={guidedModeActive ? adaptiveRec.bloomLevel : undefined}
+          adaptiveDifficultyOverride={guidedModeActive ? adaptiveRec.quizDifficulty : undefined}
         />
       )}
 
