@@ -89,6 +89,7 @@ interface TTSMiniPlayerProps {
   onPlaybackSpeedChange?: (speed: number) => void;
   /** Adaptive learning engine recommended speed (overrides default 1.0) */
   adaptiveSpeed?: number;
+}
 
 export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(function TTSMiniPlayer({ 
   chapterText, 
