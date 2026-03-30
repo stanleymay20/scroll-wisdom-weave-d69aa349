@@ -269,6 +269,9 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     let mounted = true;
 
+    // MISSION AUTH-1: Simplified bootstrap — trust onAuthStateChange as primary,
+    // use getSession() only to seed initial state, skip getUser() server call
+    // which was causing spurious logouts on transient failures.
     const bootstrapAuth = async () => {
       try {
         const {
@@ -282,7 +285,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
             if (mounted) setIsLoading(false);
             return;
           }
-
           if (mounted) resetAnonymousState();
           return;
         }
@@ -292,53 +294,16 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           return;
         }
 
-        const { error: userError } = await supabase.auth.getUser();
-        if (userError) {
-          const msg = userError.message?.toLowerCase() || '';
-          
-          // Only treat truly invalid/revoked tokens as hard rejections
-          // "expired" is NOT a rejection — the refresh token can recover it
-          const isHardRejection = (msg.includes('invalid') || msg.includes('not authorized') || msg.includes('session_not_found'))
-            && !msg.includes('expired');
-          
-          if (isHardRejection) {
-            console.warn('JWT hard-rejected by server, clearing session:', userError.message);
-            await supabase.auth.signOut({ scope: 'local' });
-            if (mounted) resetAnonymousState();
-            return;
-          }
-
-          // For expired tokens, attempt an explicit refresh
-          if (msg.includes('expired') || msg.includes('token')) {
-            console.info('Token may be expired, attempting refresh...');
-            const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession();
-            if (refreshError || !refreshData.session) {
-              const refreshMsg = refreshError?.message?.toLowerCase() || '';
-              const isRefreshRejection = refreshMsg.includes('invalid') || refreshMsg.includes('not authorized') || refreshMsg.includes('session_not_found');
-              if (isRefreshRejection) {
-                console.warn('Refresh token also rejected, clearing session:', refreshError?.message);
-                await supabase.auth.signOut({ scope: 'local' });
-                if (mounted) resetAnonymousState();
-                return;
-              }
-              // Transient refresh failure — keep existing session
-              console.warn('Refresh failed transiently, keeping session:', refreshError?.message);
-            } else {
-              // Refresh succeeded — update user
-              if (mounted) setUser(refreshData.session.user);
-            }
-          } else {
-            console.warn('getUser() transient error, keeping session:', userError.message);
-          }
-        }
-
+        // Trust the local session. Supabase's autoRefreshToken will handle
+        // expired access tokens transparently. No getUser() server call needed
+        // at bootstrap — it was the #1 cause of spurious logouts.
         if (mounted) {
           setUser(session.user);
           void checkSubscription(true);
         }
       } catch (error) {
         if (isTransientAuthError(error)) {
-          console.warn('Network error during session validation — keeping existing session');
+          console.warn('Network error during bootstrap — keeping existing session');
         } else {
           console.error('Unexpected bootstrap auth error:', error);
         }
@@ -357,6 +322,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
     void bootstrapAuth();
 
+    // MISSION AUTH-2: onAuthStateChange is the single source of truth for auth events.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (!mounted) return;
 
@@ -366,6 +332,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
 
       if (event === 'TOKEN_REFRESHED' && !session) {
+        // Refresh event without session — check local store before giving up
         setTimeout(async () => {
           const { data } = await supabase.auth.getSession().catch(() => ({ data: { session: null } }));
           if (!mounted) return;
@@ -374,6 +341,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
             setUser((prev) => (prev?.id === data.session?.user?.id ? prev : data.session.user));
             setTimeout(() => void checkSubscription(true), 0);
           } else {
+            // CRITICAL: Do NOT reset user here. Preserve existing state.
             console.warn('TOKEN_REFRESHED yielded no session; preserving current auth state');
             setIsLoading(false);
           }
@@ -382,6 +350,8 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       }
 
       if (!session?.user) {
+        // For INITIAL_SESSION or other events without session: preserve existing user state.
+        // Only setIsLoading(false) so the UI stops showing loading spinner.
         setIsLoading(false);
         return;
       }
@@ -390,12 +360,30 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       setTimeout(() => void checkSubscription(true), 0);
     });
 
+    // MISSION AUTH-2: Proactive session refresh on tab visibility change.
+    // When user returns to the tab, refresh the token to prevent stale-session logouts.
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          if (!mounted) return;
+          if (session?.user) {
+            setUser((prev) => (prev?.id === session.user.id ? prev : session.user));
+          }
+          // Don't reset if no session — autoRefreshToken will handle it
+        }).catch(() => {
+          // Network error on tab restore — do nothing, preserve state
+        });
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+
     const interval = setInterval(() => void checkSubscription(false), 300000);
 
     return () => {
       mounted = false;
       subscription.unsubscribe();
       clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
   }, [checkSubscription, resetAnonymousState]);
 
