@@ -46,6 +46,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
   const resetAnonymousState = useCallback(() => {
     setUser(null);
+    userRef.current = null;
     setTier('free');
     setSubscriptionEnd(null);
     setIsLoading(false);
