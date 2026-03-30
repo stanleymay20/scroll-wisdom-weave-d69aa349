@@ -290,13 +290,22 @@ export function ExportDialog({
                 ? validateContentForExport(chapters, bookType, validateFmt as "pdf" | "epub" | "docx")
                 : { valid: true, issues: [], canProceed: true };
               const formatHasErrors = !formatValidation.canProceed;
+              const isFormatLocked = !allowedFormats.includes(format);
               
               return (
                 <Button
                   key={format}
                   variant="outline"
-                  className={`w-full justify-start h-auto py-2.5 px-3 text-left transition-colors ${formatHasErrors ? 'opacity-40' : 'hover:bg-primary/5 hover:border-primary/30'}`}
+                  className={`w-full justify-start h-auto py-2.5 px-3 text-left transition-colors ${(formatHasErrors || isFormatLocked) ? 'opacity-40' : 'hover:bg-primary/5 hover:border-primary/30'}`}
                   onClick={() => {
+                    if (isFormatLocked) {
+                      toast({
+                        title: "Upgrade Required",
+                        description: `${label} export requires a higher plan. Upgrade to access this format.`,
+                        variant: "destructive",
+                      });
+                      return;
+                    }
                     setSelectedFormat(format);
                     if (!formatHasErrors) {
                       handleExport(format);
@@ -308,23 +317,30 @@ export function ExportDialog({
                       });
                     }
                   }}
-                  disabled={isExporting !== null || !canProceed || !canExport || !authorName.trim()}
+                  disabled={isExporting !== null || !canProceed || !authorName.trim()}
                 >
                   {isExporting === format ? (
                     <Loader2 className="h-4 w-4 mr-2.5 animate-spin flex-shrink-0" />
+                  ) : isFormatLocked ? (
+                    <Lock className="h-4 w-4 mr-2.5 text-muted-foreground flex-shrink-0" />
                   ) : (
                     <Icon className="h-4 w-4 mr-2.5 text-primary flex-shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
                     <span className="text-sm font-medium">{label}</span>
-                    {badge && (
+                    {isFormatLocked && (
+                      <Badge variant="outline" className="ml-1.5 text-[10px] px-1 py-0 text-muted-foreground">
+                        Upgrade
+                      </Badge>
+                    )}
+                    {badge && !isFormatLocked && (
                       <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0">
                         {badge}
                       </Badge>
                     )}
                     <span className="text-xs text-muted-foreground ml-2">{description}</span>
                   </div>
-                  {formatHasErrors && <XCircle className="h-3.5 w-3.5 text-destructive ml-1" />}
+                  {formatHasErrors && !isFormatLocked && <XCircle className="h-3.5 w-3.5 text-destructive ml-1" />}
                 </Button>
               );
             })}

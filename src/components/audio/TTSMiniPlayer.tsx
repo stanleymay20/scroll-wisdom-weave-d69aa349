@@ -792,9 +792,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
   }, [autoPlay, chapterText, isPlaying, isLoading]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount — SAVE position before destroying
   useEffect(() => {
     return () => {
+      // Persist audio position so user can resume after navigation
+      if (bookId && chapterId && currentChunk > 0 && chunksRef.current.length > 0) {
+        const chunkProgress = Math.round((currentChunk / chunksRef.current.length) * 100);
+        audioPositionManager.savePosition(bookId, chapterId, currentChunk, chunkProgress, selectedVoice);
+        console.log('[TTS] Saved position on unmount:', currentChunk);
+      }
+      
       stopRef.current = true;
       isStoppingRef.current = true;
       if (audioRef.current) {
@@ -805,7 +812,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       }
       cleanupBlobUrls();
     };
-  }, [cleanupBlobUrls]);
+  }, [cleanupBlobUrls, bookId, chapterId, currentChunk, selectedVoice]);
 
   // Update volume on active audio
   useEffect(() => {
