@@ -23,10 +23,12 @@ import {
   GraduationCap,
   XCircle,
   Store,
+  Lock,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
 import { useEntitlements } from "@/hooks/useEntitlements";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { validateComicContent, ComicValidationResult } from "@/lib/systemDiagnostics";
 import { validateContentForExport, ExportValidationResult } from "@/lib/exportValidation";
@@ -48,6 +50,14 @@ interface ExportDialogProps {
 }
 
 type ExportFormat = "pdf" | "epub" | "docx" | "kdp-pdf";
+
+// Tier-level format access — mirrors server-side TIER_FORMATS in export-book/index.ts
+const TIER_FORMAT_ACCESS: Record<string, ExportFormat[]> = {
+  free: ["pdf"],
+  student: ["pdf", "docx"],
+  premium: ["pdf", "epub", "docx", "kdp-pdf"],
+  prophet_tier: ["pdf", "epub", "docx", "kdp-pdf"],
+};
 
 const KDP_TRIM_SIZES = [
   { value: '5x8', label: '5" × 8"', desc: 'Small paperback' },
@@ -74,27 +84,20 @@ export function ExportDialog({
   const [authorName, setAuthorName] = useState(defaultAuthorName || "");
   const [isbn, setIsbn] = useState("");
   const [isOpen, setIsOpen] = useState(false);
-  const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [kdpTrimSize, setKdpTrimSize] = useState('6x9');
   const [kdpBleed, setKdpBleed] = useState(false);
   const { toast } = useToast();
   const { t } = useLanguage();
   
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session?.user);
-    };
-    checkAuth();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      setIsAuthenticated(!!session?.user);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-  
   const entitlements = useEntitlements();
-  const hasFullAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent || entitlements.isPaid;
-  const canExport = hasFullAccess || entitlements.canExport || entitlements.canDownload;
+  const { user } = useSubscription();
+  const isAuthenticated = !!user;
+  const canExport = entitlements.canExport || entitlements.canDownload;
+  
+  // Determine which formats this user can actually use
+  const allowedFormats: ExportFormat[] = (entitlements.isAdmin || entitlements.isProphet)
+    ? ["pdf", "epub", "docx", "kdp-pdf"]
+    : (TIER_FORMAT_ACCESS[entitlements.tier] || TIER_FORMAT_ACCESS.free);
 
   const [comicValidation, setComicValidation] = useState<ComicValidationResult | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('pdf');
@@ -133,10 +136,7 @@ export function ExportDialog({
       toast({ title: t('export.noChapters'), description: t('export.noChaptersDesc'), variant: "destructive" });
       return;
     }
-    if (!coverImageUrl) {
-      toast({ title: t('export.coverRequired'), description: t('export.coverRequiredDesc'), variant: "destructive" });
-      return;
-    }
+    // Cover is optional — backend handles gracefully without it
     if (!authorName.trim()) {
       toast({ title: t('export.authorRequired'), description: t('export.authorRequiredDesc'), variant: "destructive" });
       return;
@@ -206,7 +206,7 @@ export function ExportDialog({
   ];
 
   const hasCover = !!coverImageUrl;
-  const canProceed = hasGeneratedChapters && hasCover && !isComicBlocked && isAuthenticated;
+  const canProceed = hasGeneratedChapters && !isComicBlocked && isAuthenticated;
   const isReady = canProceed && canExport && authorName.trim() && contentValidation.canProceed;
 
   return (
@@ -291,13 +291,22 @@ export function ExportDialog({
                 ? validateContentForExport(chapters, bookType, validateFmt as "pdf" | "epub" | "docx")
                 : { valid: true, issues: [], canProceed: true };
               const formatHasErrors = !formatValidation.canProceed;
+              const isFormatLocked = !allowedFormats.includes(format);
               
               return (
                 <Button
                   key={format}
                   variant="outline"
-                  className={`w-full justify-start h-auto py-2.5 px-3 text-left transition-colors ${formatHasErrors ? 'opacity-40' : 'hover:bg-primary/5 hover:border-primary/30'}`}
+                  className={`w-full justify-start h-auto py-2.5 px-3 text-left transition-colors ${(formatHasErrors || isFormatLocked) ? 'opacity-40' : 'hover:bg-primary/5 hover:border-primary/30'}`}
                   onClick={() => {
+                    if (isFormatLocked) {
+                      toast({
+                        title: "Upgrade Required",
+                        description: `${label} export requires a higher plan. Upgrade to access this format.`,
+                        variant: "destructive",
+                      });
+                      return;
+                    }
                     setSelectedFormat(format);
                     if (!formatHasErrors) {
                       handleExport(format);
@@ -309,23 +318,30 @@ export function ExportDialog({
                       });
                     }
                   }}
-                  disabled={isExporting !== null || !canProceed || !canExport || !authorName.trim()}
+                  disabled={isExporting !== null || !canProceed || !authorName.trim()}
                 >
                   {isExporting === format ? (
                     <Loader2 className="h-4 w-4 mr-2.5 animate-spin flex-shrink-0" />
+                  ) : isFormatLocked ? (
+                    <Lock className="h-4 w-4 mr-2.5 text-muted-foreground flex-shrink-0" />
                   ) : (
                     <Icon className="h-4 w-4 mr-2.5 text-primary flex-shrink-0" />
                   )}
                   <div className="flex-1 min-w-0">
                     <span className="text-sm font-medium">{label}</span>
-                    {badge && (
+                    {isFormatLocked && (
+                      <Badge variant="outline" className="ml-1.5 text-[10px] px-1 py-0 text-muted-foreground">
+                        Upgrade
+                      </Badge>
+                    )}
+                    {badge && !isFormatLocked && (
                       <Badge variant="secondary" className="ml-1.5 text-[10px] px-1 py-0">
                         {badge}
                       </Badge>
                     )}
                     <span className="text-xs text-muted-foreground ml-2">{description}</span>
                   </div>
-                  {formatHasErrors && <XCircle className="h-3.5 w-3.5 text-destructive ml-1" />}
+                  {formatHasErrors && !isFormatLocked && <XCircle className="h-3.5 w-3.5 text-destructive ml-1" />}
                 </Button>
               );
             })}

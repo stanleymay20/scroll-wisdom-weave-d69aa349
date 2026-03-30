@@ -792,9 +792,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
   }, [autoPlay, chapterText, isPlaying, isLoading]);
 
-  // Cleanup on unmount
+  // Cleanup on unmount — SAVE position before destroying
   useEffect(() => {
     return () => {
+      // Persist audio position so user can resume after navigation
+      if (bookId && chapterId && currentChunk > 0 && chunksRef.current.length > 0) {
+        const chunkProgress = Math.round((currentChunk / chunksRef.current.length) * 100);
+        audioPositionManager.savePosition(bookId, chapterId, currentChunk, chunkProgress, selectedVoice);
+        console.log('[TTS] Saved position on unmount:', currentChunk);
+      }
+      
       stopRef.current = true;
       isStoppingRef.current = true;
       if (audioRef.current) {
@@ -805,7 +812,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       }
       cleanupBlobUrls();
     };
-  }, [cleanupBlobUrls]);
+  }, [cleanupBlobUrls, bookId, chapterId, currentChunk, selectedVoice]);
 
   // Update volume on active audio
   useEffect(() => {
@@ -826,13 +833,25 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       resumeFromPosition();
       return;
     }
-    // Check persisted position from previous session
+    // Check persisted position from previous session — re-chunk text first, then resume
     if (bookId && chapterId) {
       const saved = audioPositionManager.getPosition(bookId, chapterId);
       if (saved && saved.chunkIndex > 0) {
-        console.log('[TTS] Found persisted position at chunk', saved.chunkIndex);
-        // We don't have the chunks yet, so start fresh but we inform the user
-        // Position is at chunk-level — the text needs to be re-chunked first
+        console.log('[TTS] Found persisted position at chunk', saved.chunkIndex, '— resuming');
+        // Re-chunk the text, set chunks, then resume from saved position
+        const cleaned = sanitizeText(chapterText || '');
+        if (cleaned && cleaned.length >= 20) {
+          const chunks = chunkText(cleaned, 500);
+          chunksRef.current = chunks;
+          setTotalChunks(chunks.length);
+          fullTextLengthRef.current = cleaned.length;
+          if (saved.chunkIndex < chunks.length) {
+            pausedAtChunkRef.current = saved.chunkIndex;
+            if (saved.voice) setSelectedVoice(saved.voice);
+            resumeFromPosition();
+            return;
+          }
+        }
       }
     }
     generateSpeech(chapterText, false);
