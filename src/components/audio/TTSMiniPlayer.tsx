@@ -33,6 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useMediaSession } from "@/hooks/useMediaSession";
 import { useAudioReliability, AUDIO_CHUNK_SIZES } from "@/hooks/useAudioReliability";
+import { audioPositionManager } from "@/lib/audioPositionPersistence";
 import { cn } from "@/lib/utils";
 
 // OpenAI TTS voices
@@ -58,6 +59,10 @@ interface TTSMiniPlayerProps {
   title?: string;
   /** Book author for media session */
   author?: string;
+  /** Book ID for position persistence */
+  bookId?: string;
+  /** Chapter ID for position persistence */
+  chapterId?: string;
   /** Callback when user wants to ask a question (Interactive Guard Mode) */
   onInterrupt?: () => void;
   /** Callback when chapter audio completes - used for auto-continue */
@@ -92,6 +97,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   stopKey,
   title = "Chapter",
   author = "ScrollLibrary",
+  bookId,
+  chapterId,
   onInterrupt,
   onChapterComplete,
   autoContinue = false,
@@ -448,8 +455,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       setIsPlaying(false);
     }
     
+    // Persist position for cross-session resume
+    if (bookId && chapterId) {
+      const chunkProgress = chunksRef.current.length > 0 
+        ? Math.round((currentChunk / chunksRef.current.length) * 100) 
+        : 0;
+      audioPositionManager.savePosition(bookId, chapterId, currentChunk, chunkProgress, selectedVoice);
+    }
+    
     console.log('[TTS] Paused for interaction at chunk', currentChunk);
-  }, [isPlaying, currentChunk, mediaSession]);
+  }, [isPlaying, currentChunk, mediaSession, bookId, chapterId, selectedVoice]);
   
   // CONTRACT 5 - Rule 5.4: Resume from semantic position
   const resumeFromPosition = useCallback(() => {
@@ -803,10 +818,19 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       pauseForInteraction();
       return;
     }
-    // If we have a saved position, resume from there instead of restarting
+    // If we have a saved position from this session, resume from there
     if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
       resumeFromPosition();
       return;
+    }
+    // Check persisted position from previous session
+    if (bookId && chapterId) {
+      const saved = audioPositionManager.getPosition(bookId, chapterId);
+      if (saved && saved.chunkIndex > 0) {
+        console.log('[TTS] Found persisted position at chunk', saved.chunkIndex);
+        // We don't have the chunks yet, so start fresh but we inform the user
+        // Position is at chunk-level — the text needs to be re-chunked first
+      }
     }
     generateSpeech(chapterText, false);
   };

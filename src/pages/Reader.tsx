@@ -1071,6 +1071,8 @@ export default function Reader() {
               stopKey={`${bookId}-${currentChapter}`}
               title={`${book?.title} - ${chapter.title}`}
               author="ScrollLibrary"
+              bookId={bookId}
+              chapterId={chapter.id}
               onClose={() => setShowTTS(false)}
               onInterrupt={() => {
                 setShowVoiceAI(true);
