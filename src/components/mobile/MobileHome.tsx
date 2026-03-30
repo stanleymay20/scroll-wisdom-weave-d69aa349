@@ -175,7 +175,7 @@ export function MobileHome() {
             <Link
               key={cat}
               to={`/explore?category=${cat.toLowerCase()}`}
-              className="flex-shrink-0 px-4 py-2.5 rounded-full bg-muted/50 text-sm font-medium text-foreground border border-border/50 hover:bg-scroll-gold/10 hover:text-scroll-gold hover:border-scroll-gold/30 active:scale-95 transition-all"
+              className="flex-shrink-0 px-4 py-2.5 rounded-full bg-muted/50 text-sm font-medium text-foreground border border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 active:scale-95 transition-all"
             >
               {cat}
             </Link>
