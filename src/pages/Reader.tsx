@@ -696,7 +696,7 @@ export default function Reader() {
       // Handle comic captions (blockquotes)
       if (paragraph.startsWith('>')) {
         return (
-          <div key={index} className="comic-caption text-center text-xl sm:text-2xl font-medium text-foreground my-4 sm:my-6 px-6 sm:px-12 py-4 bg-scroll-gold/10 rounded-xl border border-scroll-gold/30 max-w-md mx-auto">
+          <div key={index} className="comic-caption text-center text-xl sm:text-2xl font-medium text-foreground my-4 sm:my-6 px-6 sm:px-12 py-4 bg-primary/10 rounded-xl border border-primary/30 max-w-md mx-auto">
             {paragraph.replace(/^>\s*/, '')}
           </div>
         );
