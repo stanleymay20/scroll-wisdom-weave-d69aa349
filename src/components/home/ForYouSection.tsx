@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { stripMarkdownInline } from "@/lib/stripMarkdownInline";
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { BookOpen, ArrowRight } from "lucide-react";
