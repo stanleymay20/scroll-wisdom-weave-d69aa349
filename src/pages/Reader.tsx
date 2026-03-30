@@ -1160,7 +1160,17 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* References/Citations Panel - Using DeepResearchPanel */}
+      {/* ADAPTIVE: Reflection/Recap pause overlay */}
+      <ReflectionPause
+        isActive={showReflectionPause && guidedModeActive}
+        onContinue={() => {
+          setShowReflectionPause(false);
+          setReflectionDismissedAt(readingProgress);
+        }}
+        prompt={adaptiveRec.recapPrompt || adaptiveRec.reflectionPrompt || 'Take a moment to reflect on what you\'ve read so far.'}
+      />
+
+
       <AnimatePresence>
         {showReferences && chapter?.chapter_references && (
           <DeepResearchPanel
