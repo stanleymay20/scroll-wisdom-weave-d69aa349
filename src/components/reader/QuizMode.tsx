@@ -145,7 +145,7 @@ export function QuizMode({
             createdAt: d.created_at,
           }));
           const rec = computeAdaptiveRecommendation(snapshots, snapshots[snapshots.length - 1].difficulty);
-          setAdaptiveDifficulty(rec.recommendedDifficulty);
+          setAdaptiveDifficulty(adaptiveDifficultyOverride ?? rec.recommendedDifficulty);
         }
       } catch { /* silent */ }
     };
