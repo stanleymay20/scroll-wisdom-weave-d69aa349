@@ -88,21 +88,17 @@ export function ExportDialog({
   const { toast } = useToast();
   const { t } = useLanguage();
   
-  useEffect(() => {
-    const checkAuth = async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      setIsAuthenticated(!!session?.user);
-    };
-    checkAuth();
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_, session) => {
-      setIsAuthenticated(!!session?.user);
-    });
-    return () => subscription.unsubscribe();
-  }, []);
-  
   const entitlements = useEntitlements();
-  const hasFullAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent || entitlements.isPaid;
-  const canExport = hasFullAccess || entitlements.canExport || entitlements.canDownload;
+  const isAuthenticated = !!entitlements.tier; // If entitlements resolve, user context exists
+  // Use subscription context user instead of redundant auth listener
+  const { user } = useSubscription();
+  const isLoggedIn = !!user;
+  const canExport = entitlements.canExport || entitlements.canDownload;
+  
+  // Determine which formats this user can actually use
+  const allowedFormats: ExportFormat[] = (entitlements.isAdmin || entitlements.isProphet)
+    ? ["pdf", "epub", "docx", "kdp-pdf"]
+    : (TIER_FORMAT_ACCESS[entitlements.tier] || TIER_FORMAT_ACCESS.free);
 
   const [comicValidation, setComicValidation] = useState<ComicValidationResult | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('pdf');
