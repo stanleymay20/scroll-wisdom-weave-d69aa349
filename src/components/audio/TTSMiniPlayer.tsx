@@ -58,6 +58,10 @@ interface TTSMiniPlayerProps {
   title?: string;
   /** Book author for media session */
   author?: string;
+  /** Book ID for position persistence */
+  bookId?: string;
+  /** Chapter ID for position persistence */
+  chapterId?: string;
   /** Callback when user wants to ask a question (Interactive Guard Mode) */
   onInterrupt?: () => void;
   /** Callback when chapter audio completes - used for auto-continue */
