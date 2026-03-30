@@ -1,4 +1,5 @@
 import React from "react";
+import { stripMarkdownInline } from "@/lib/stripMarkdownInline";
 import { Link, useNavigate } from "react-router-dom";
 import { Book, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
