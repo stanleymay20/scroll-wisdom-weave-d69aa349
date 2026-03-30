@@ -109,6 +109,7 @@ const App = () => (
       <LanguageProvider>
         <SubscriptionProvider>
           <SettingsProvider>
+            <AudioProvider>
             <TooltipProvider>
               <Toaster />
               <Sonner />
