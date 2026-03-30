@@ -377,7 +377,7 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
     <div className={cn("rounded-xl border border-border/50 bg-muted/20 p-5", className)}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
-          <Shield className="h-5 w-5 text-scroll-gold" />
+          <Shield className="h-5 w-5 text-primary" />
           <div>
             <h3 className="font-semibold text-foreground">STO Code Audit</h3>
             <p className="text-xs text-muted-foreground">
@@ -460,7 +460,7 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
                   </span>
                   {fixedChapters.size > 0 && (
                     <span className="flex items-center gap-1">
-                      <Wrench className="h-3 w-3 text-scroll-gold" />
+                      <Wrench className="h-3 w-3 text-primary" />
                       {fixedChapters.size} fixed
                     </span>
                   )}
@@ -482,15 +482,15 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
                 open={isExpanded}
                 onOpenChange={() => setExpandedChapter(isExpanded ? null : result.chapterId)}
               >
-                <CollapsibleTrigger className="w-full flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/30 hover:border-scroll-gold/30 transition-colors text-left">
+                <CollapsibleTrigger className="w-full flex items-center justify-between p-3 rounded-lg bg-background/50 border border-border/30 hover:border-primary/30 transition-colors text-left">
                   <div className="flex items-center gap-3">
                     {isExpanded ? <ChevronDown className="h-4 w-4" /> : <ChevronRight className="h-4 w-4" />}
-                    {isFixed ? <Wrench className="h-4 w-4 text-scroll-gold" /> : getRiskIcon(result.result.riskLevel)}
+                    {isFixed ? <Wrench className="h-4 w-4 text-primary" /> : getRiskIcon(result.result.riskLevel)}
                     <span className="text-sm font-medium">
                       Ch {result.chapterNumber}: {result.chapterTitle}
                     </span>
                     {isFixed && (
-                      <Badge variant="outline" className="text-scroll-gold border-scroll-gold/30 text-[10px]">Fixed</Badge>
+                      <Badge variant="outline" className="text-primary border-primary/30 text-[10px]">Fixed</Badge>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
@@ -597,8 +597,8 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
 
                     {/* Overall Recommendations */}
                     {result.result.overallRecommendations?.length > 0 && (
-                      <div className="p-3 rounded-lg bg-scroll-gold/5 border border-scroll-gold/20">
-                        <h4 className="text-xs font-semibold text-scroll-gold mb-2">Senior Engineer Recommendations</h4>
+                      <div className="p-3 rounded-lg bg-primary/5 border border-primary/20">
+                        <h4 className="text-xs font-semibold text-primary mb-2">Senior Engineer Recommendations</h4>
                         <ul className="text-xs space-y-1">
                           {result.result.overallRecommendations.map((rec, ri) => (
                             <li key={ri} className="text-muted-foreground">• {rec}</li>
@@ -621,7 +621,7 @@ export function CodeAuditPanel({ bookId, chapters, className, onChaptersUpdated 
           <br />
           Covers: correctness, PEP8, reproducibility, ML best practices, deployment patterns.
           <br />
-          <span className="text-scroll-gold">Issues found will be auto-fixed in your chapters.</span>
+          <span className="text-primary">Issues found will be auto-fixed in your chapters.</span>
         </p>
       )}
     </div>

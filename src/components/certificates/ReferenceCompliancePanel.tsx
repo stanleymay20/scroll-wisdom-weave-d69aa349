@@ -50,7 +50,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
         className="w-full flex items-center justify-between p-4 hover:bg-muted/30 transition-colors"
       >
         <div className="flex items-center gap-3">
-          <FileCheck className="h-5 w-5 text-scroll-gold" />
+          <FileCheck className="h-5 w-5 text-primary" />
           <div className="text-left">
             <h3 className="font-medium text-foreground">ScrollVerified™ Reference Compliance</h3>
             <p className="text-xs text-muted-foreground">
@@ -103,7 +103,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
               {er && (
                 <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-3">
                   <div className="flex items-center gap-2">
-                    <GitCompareArrows className="h-4 w-4 text-scroll-gold" />
+                    <GitCompareArrows className="h-4 w-4 text-primary" />
                     <span className="text-sm font-medium">Epistemic Coherence</span>
                     <Badge variant="outline" className={cn("text-[10px] border ml-auto", getCoherenceVerdictColor(er.coherenceVerdict))}>
                       {er.coherenceVerdict}
@@ -170,7 +170,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
               {cr && (
                 <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-3">
                   <div className="flex items-center gap-2">
-                    <Scale className="h-4 w-4 text-scroll-gold" />
+                    <Scale className="h-4 w-4 text-primary" />
                     <span className="text-sm font-medium">Claim-Level Justification</span>
                     <Badge variant="outline" className={cn("text-[10px] border ml-auto", getVerdictColor(cr.verdictLabel))}>
                       {cr.verdictLabel}
@@ -243,7 +243,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
               {sr && (
                 <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-3">
                   <div className="flex items-center gap-2">
-                    <Brain className="h-4 w-4 text-scroll-gold" />
+                    <Brain className="h-4 w-4 text-primary" />
                     <span className="text-sm font-medium">Semantic Citation Integrity</span>
                     {sr.ornamentalPct > 5 && (
                       <Badge variant="outline" className="text-[10px] text-amber-500 border-amber-500/30">
@@ -351,7 +351,7 @@ export function ReferenceCompliancePanel({ report, className }: ReferenceComplia
               {report.auditArtifact && (
                 <div className="p-3 rounded-lg bg-muted/30 border border-border/50 space-y-3">
                   <div className="flex items-center gap-2">
-                    <Fingerprint className="h-4 w-4 text-scroll-gold" />
+                    <Fingerprint className="h-4 w-4 text-primary" />
                     <span className="text-sm font-medium">Immutable Audit Artifact</span>
                     <Badge variant="outline" className="text-[10px] border ml-auto">
                       v{report.auditArtifact.schemaVersion}
