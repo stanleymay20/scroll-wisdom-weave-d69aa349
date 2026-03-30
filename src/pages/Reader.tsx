@@ -651,7 +651,7 @@ export default function Reader() {
       // Handle comic page headers
       if (paragraph.startsWith('## Page') || paragraph.match(/^Page\s+\d+/i)) {
         return (
-          <h4 key={index} className="text-xl sm:text-2xl font-display font-bold text-scroll-gold mt-8 sm:mt-12 mb-4 sm:mb-6 text-center">
+          <h4 key={index} className="text-xl sm:text-2xl font-display font-bold text-primary mt-8 sm:mt-12 mb-4 sm:mb-6 text-center">
             {paragraph.replace(/^##\s*/, '')}
           </h4>
         );
