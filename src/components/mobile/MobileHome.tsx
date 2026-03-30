@@ -48,7 +48,7 @@ const SectionHeader = memo(forwardRef<HTMLDivElement, { title: string; linkTo: s
       <h2 className="text-lg font-display font-semibold text-foreground">{title}</h2>
       <Link 
         to={linkTo} 
-        className="flex items-center gap-1 text-sm text-scroll-gold active:text-scroll-gold-light"
+        className="flex items-center gap-1 text-sm text-primary active:text-primary/80"
       >
         See all
         <ChevronRight className="h-4 w-4" />
