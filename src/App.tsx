@@ -175,6 +175,7 @@ const App = () => (
               </Suspense>
             </BrowserRouter>
           </TooltipProvider>
+            </AudioProvider>
         </SettingsProvider>
       </SubscriptionProvider>
     </LanguageProvider>
