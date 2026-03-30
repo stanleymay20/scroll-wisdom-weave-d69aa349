@@ -453,17 +453,18 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   
   // CONTRACT 5 - Rule 5.4: Resume from semantic position
   const resumeFromPosition = useCallback(() => {
-    if (chunksRef.current.length === 0 || pausedAtChunkRef.current === 0) {
-      // No previous position, start fresh
+    if (chunksRef.current.length === 0) {
+      // No chunks loaded, start fresh
       return;
     }
     
-    console.log('[TTS] Resuming from chunk', pausedAtChunkRef.current);
+    const resumeChunk = pausedAtChunkRef.current;
+    console.log('[TTS] Resuming from chunk', resumeChunk, 'of', chunksRef.current.length);
     
     // Resume playback from the saved chunk position
-    const remainingChunks = chunksRef.current.slice(pausedAtChunkRef.current);
+    const remainingChunks = chunksRef.current.slice(resumeChunk);
     if (remainingChunks.length > 0) {
-      generateSpeechFromChunks(remainingChunks, pausedAtChunkRef.current);
+      generateSpeechFromChunks(remainingChunks, resumeChunk);
     }
   }, []);
 
