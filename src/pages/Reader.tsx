@@ -730,7 +730,7 @@ export default function Reader() {
       // Handle Visual: descriptions in comics (show as scene description)
       if (paragraph.match(/^Visual:\s*/i)) {
         return (
-          <div key={index} className="my-4 p-4 bg-muted/20 rounded-lg border-l-4 border-scroll-gold/50 text-sm text-foreground/70 italic">
+          <div key={index} className="my-4 p-4 bg-muted/20 rounded-lg border-l-4 border-primary/50 text-sm text-foreground/70 italic">
             <span className="font-semibold text-foreground/90 not-italic">Scene: </span>
             {paragraph.replace(/^Visual:\s*/i, '')}
           </div>
