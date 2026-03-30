@@ -74,7 +74,7 @@ export function RegenerationIntentDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Wand2 className="h-5 w-5 text-scroll-gold" />
+            <Wand2 className="h-5 w-5 text-primary" />
             Regenerate Chapter
           </DialogTitle>
           <DialogDescription>
