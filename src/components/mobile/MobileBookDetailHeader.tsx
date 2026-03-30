@@ -89,7 +89,7 @@ export const MobileBookDetailHeader = memo(function MobileBookDetailHeader({
         <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
           {/* Category + Visibility */}
           <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-block px-2 py-0.5 text-[10px] font-medium rounded-full bg-scroll-gold/20 text-scroll-gold border border-scroll-gold/30 capitalize">
+            <span className="inline-block px-2 py-0.5 text-[10px] font-medium rounded-full bg-primary/15 text-primary border border-primary/30 capitalize">
               {book.category.replace(/_/g, " ")}
             </span>
             {isOwner && (
