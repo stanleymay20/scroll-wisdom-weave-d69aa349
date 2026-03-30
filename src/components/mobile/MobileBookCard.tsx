@@ -71,7 +71,7 @@ export const MobileBookCard = React.forwardRef<HTMLAnchorElement, MobileBookCard
 
           {/* Tag Badge */}
           {tag && (
-            <span className="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-medium rounded-full bg-scroll-gold/90 text-background">
+            <span className="absolute top-2 left-2 px-2 py-0.5 text-[10px] font-medium rounded-full bg-primary/90 text-primary-foreground">
               {tag}
             </span>
           )}
