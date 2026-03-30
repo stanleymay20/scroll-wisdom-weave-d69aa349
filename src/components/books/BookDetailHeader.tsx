@@ -78,7 +78,7 @@ export function BookDetailHeader({
     >
       {/* Cover */}
       <div className="lg:col-span-1">
-        <div className="aspect-[3/4] relative rounded-xl overflow-hidden bg-gradient-to-br from-scroll-indigo to-scroll-indigo-deep border border-border/50 shadow-card group">
+        <div className="aspect-[3/4] relative rounded-xl overflow-hidden bg-gradient-to-br from-secondary to-secondary border border-border/50 shadow-card group">
           {book.cover_image_url ? (
             <img src={book.cover_image_url} alt={`${book.title} book cover`} className="w-full h-full object-cover" loading="lazy" />
           ) : (

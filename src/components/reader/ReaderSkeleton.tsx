@@ -47,7 +47,7 @@ export function ReaderSkeleton({
   const hasMetadata = chapterTitle || bookTitle;
   
   return (
-    <div className="min-h-screen bg-scroll-indigo-deep overflow-x-hidden">
+    <div className="min-h-screen bg-secondary overflow-x-hidden">
       {/* Header - respects safe area, fixed dimensions */}
       <header 
         className="fixed top-0 left-0 right-0 z-50 bg-background/90 backdrop-blur-xl border-b border-border/50"
