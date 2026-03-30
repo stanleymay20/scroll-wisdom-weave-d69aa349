@@ -118,11 +118,33 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
         }
 
         console.warn('Session lookup failed during subscription check:', getErrorMessageText(sessionError));
-        resetAnonymousState();
+        // Only reset if this is a forced (initial) check. Periodic checks should preserve state.
+        if (force) resetAnonymousState();
+        else setIsLoading(false);
         return;
       }
 
       if (!session?.user) {
+        // CRITICAL FIX: If we already have a user in state, don't reset on periodic checks.
+        // getSession() can return null transiently after background/tab switch before
+        // autoRefreshToken kicks in. Only reset on forced bootstrap when we truly have no session.
+        if (!force) {
+          // Attempt a proactive refresh before giving up
+          const { data: refreshData } = await supabase.auth.refreshSession();
+          if (refreshData?.session?.user) {
+            setUser((prev) => (prev?.id === refreshData.session!.user.id ? prev : refreshData.session!.user));
+            setIsLoading(false);
+            // Continue to subscription check below won't work since we need to re-fetch.
+            // Just return — next interval will pick it up.
+            return;
+          }
+          // If refresh also failed and we have an existing user, preserve state
+          if (user) {
+            console.warn('Periodic check: no session but user exists in state — preserving');
+            setIsLoading(false);
+            return;
+          }
+        }
         resetAnonymousState();
         return;
       }
