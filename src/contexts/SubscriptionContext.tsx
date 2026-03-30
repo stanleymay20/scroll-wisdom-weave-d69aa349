@@ -41,6 +41,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const [ttsMinutesUsed, setTtsMinutesUsed] = useState(0);
 
   const lastFetchRef = useRef<number>(0);
+  const userRef = useRef<User | null>(null);
   const FETCH_COOLDOWN = 30000;
 
   const resetAnonymousState = useCallback(() => {
