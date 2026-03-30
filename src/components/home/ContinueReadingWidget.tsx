@@ -4,6 +4,7 @@
  */
 
 import { useEffect, useState, memo } from "react";
+import { stripMarkdownInline } from "@/lib/stripMarkdownInline";
 import { Link } from "react-router-dom";
 import { BookOpen, ChevronRight, Clock } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
@@ -133,7 +134,7 @@ export const ContinueReadingWidget = memo(function ContinueReadingWidget() {
         <div className="flex-1 min-w-0 flex flex-col justify-between py-1">
           <div>
             <h3 className="font-semibold text-foreground truncate group-hover:text-scroll-gold transition-colors text-sm md:text-base">
-              {recentBook.title}
+              {stripMarkdownInline(recentBook.title)}
             </h3>
             <p className="text-xs md:text-sm text-muted-foreground capitalize mt-0.5">
               {recentBook.category.replace(/_/g, ' ')}

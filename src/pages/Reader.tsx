@@ -73,6 +73,8 @@ import { AdaptiveLearningPath } from "@/components/reader/AdaptiveLearningPath";
 import { PresenceAvatars } from "@/components/reader/PresenceAvatars";
 import { useEditorPresence } from "@/hooks/useCollaboration";
 import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
+import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecommendation } from "@/lib/adaptiveLearningEngine";
+import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
 
 interface BookData {
   id: string;
@@ -233,10 +235,40 @@ export default function Reader() {
   
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
   const [shouldResumeTTS, setShouldResumeTTS] = useState(false);
+  const [showReflectionPause, setShowReflectionPause] = useState(false);
+  const [reflectionDismissedAt, setReflectionDismissedAt] = useState<number>(0);
   
   // AUTO-CONTINUE: Use settings from context
   const autoContinueAudio = settings.tts_auto_continue;
   const [pendingAutoPlay, setPendingAutoPlay] = useState(false);
+
+  // === ADAPTIVE LEARNING ENGINE ===
+  // Compute real-time recommendations from learner state
+  const adaptiveRec: AdaptiveRecommendation = useMemo(() => {
+    const chaptersTotal = book?.total_chapters || 1;
+    const state = defaultLearnerState({
+      chapterProgress: readingProgress,
+      chaptersCompleted: Math.max(0, currentChapter - 1),
+      totalChapters: chaptersTotal,
+      cognitiveLevel,
+      complexityLevel: 'intermediate',
+      studySpeed: 'normal',
+      avgQuizScore: competency.progress?.competencyScore ?? 0,
+      totalAttempts: competency.progress?.competencyCheckPassed ? 1 : 0,
+      timeSpentSeconds: 0,
+    });
+    return computeAdaptiveRecommendation(state);
+  }, [readingProgress, currentChapter, book?.total_chapters, cognitiveLevel, competency.progress]);
+
+  // Show reflection prompt when engine recommends it (once per progress threshold)
+  useEffect(() => {
+    if (adaptiveRec.showReflection && readingProgress >= 95 && reflectionDismissedAt < 95) {
+      setShowReflectionPause(true);
+    }
+    if (adaptiveRec.showRecap && readingProgress >= 48 && readingProgress <= 52 && reflectionDismissedAt < 48) {
+      setShowReflectionPause(true);
+    }
+  }, [adaptiveRec.showReflection, adaptiveRec.showRecap, readingProgress, reflectionDismissedAt]);
   
   // Reset pendingAutoPlay after it's been consumed (when chapter content loads)
   useEffect(() => {
@@ -1086,8 +1118,9 @@ export default function Reader() {
               onAudioRefChange={(el) => { ttsAudioRef.current = el; }}
               onCumulativeTimeChange={(secs) => { ttsCumulativeTimeRef.current = secs; }}
               onEstimatedDurationChange={setTtsEstimatedDuration}
-              onChunkPlaybackInfo={setChunkPlaybackInfo}
-              onPlaybackSpeedChange={setTtsPlaybackSpeed}
+               onChunkPlaybackInfo={setChunkPlaybackInfo}
+               onPlaybackSpeedChange={setTtsPlaybackSpeed}
+               adaptiveSpeed={guidedModeActive ? adaptiveRec.playbackSpeed : undefined}
                onChapterComplete={async () => {
                 // AUTO-CONTINUE: Navigate to next chapter when audio finishes
                 if (currentChapter < totalChapters) {
@@ -1128,7 +1161,17 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* References/Citations Panel - Using DeepResearchPanel */}
+      {/* ADAPTIVE: Reflection/Recap pause overlay */}
+      <ReflectionPause
+        isActive={showReflectionPause && guidedModeActive}
+        onContinue={() => {
+          setShowReflectionPause(false);
+          setReflectionDismissedAt(readingProgress);
+        }}
+        prompt={adaptiveRec.recapPrompt || adaptiveRec.reflectionPrompt || 'Take a moment to reflect on what you\'ve read so far.'}
+      />
+
+
       <AnimatePresence>
         {showReferences && chapter?.chapter_references && (
           <DeepResearchPanel

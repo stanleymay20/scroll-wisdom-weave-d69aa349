@@ -87,6 +87,8 @@ interface TTSMiniPlayerProps {
   onChunkPlaybackInfo?: (info: { chunkIndex: number; chunkWordCounts: number[] }) => void;
   /** Callback when playback speed changes — needed for block-level timestamp alignment */
   onPlaybackSpeedChange?: (speed: number) => void;
+  /** Adaptive learning engine recommended speed (overrides default 1.0) */
+  adaptiveSpeed?: number;
 }
 
 export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(function TTSMiniPlayer({ 
@@ -111,13 +113,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   autoPlay = false,
   onChunkPlaybackInfo,
   onPlaybackSpeedChange,
+  adaptiveSpeed,
 }, ref) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [volume, setVolume] = useState(1);
-  const [playbackSpeed, setPlaybackSpeed] = useState(1.0);
-  const playbackSpeedRef = useRef(1.0);
+  const [playbackSpeed, setPlaybackSpeed] = useState(adaptiveSpeed || 1.0);
+  const playbackSpeedRef = useRef(adaptiveSpeed || 1.0);
   const [selectedVoice, setSelectedVoice] = useState("alloy");
   const [progress, setProgress] = useState(0);
   const [currentChunk, setCurrentChunk] = useState(0);

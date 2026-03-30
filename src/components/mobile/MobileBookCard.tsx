@@ -1,4 +1,5 @@
 import React from "react";
+import { stripMarkdownInline } from "@/lib/stripMarkdownInline";
 import { Link, useNavigate } from "react-router-dom";
 import { Book, PlayCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -88,7 +89,7 @@ export const MobileBookCard = React.forwardRef<HTMLAnchorElement, MobileBookCard
 
         {/* Title */}
         <h3 className="mt-2 text-sm font-medium text-foreground line-clamp-2 leading-tight">
-          {title}
+          {stripMarkdownInline(title)}
         </h3>
       </Link>
     );
