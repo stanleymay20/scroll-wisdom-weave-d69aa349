@@ -80,7 +80,7 @@ export const MobileBookCard = React.forwardRef<HTMLAnchorElement, MobileBookCard
           {hasProgress && (
             <div className="absolute bottom-0 left-0 right-0 h-1 bg-black/30">
               <div 
-                className="h-full bg-scroll-gold transition-all" 
+                className="h-full bg-primary transition-all" 
                 style={{ width: `${progressPercent}%` }}
               />
             </div>
