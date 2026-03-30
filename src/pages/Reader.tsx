@@ -660,7 +660,7 @@ export default function Reader() {
       if (paragraph.match(/^(?:\[PANEL\s*\d+\]|Panel\s+\d+)/i)) {
         return (
           <div key={index} className="text-center my-6">
-            <Badge variant="outline" className="text-sm px-4 py-1 border-scroll-gold/50 text-scroll-gold">
+            <Badge variant="outline" className="text-sm px-4 py-1 border-primary/50 text-primary">
               {paragraph.match(/(?:\[PANEL\s*\d+\]|Panel\s+\d+)/i)?.[0] || paragraph}
             </Badge>
           </div>
