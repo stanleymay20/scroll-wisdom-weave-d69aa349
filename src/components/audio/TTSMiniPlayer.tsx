@@ -395,6 +395,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     });
   }, [volume, onPlayingChange, onAudioRefChange]);
 
+  // Full stop: destroys playback entirely, resets all state
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
@@ -405,12 +406,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         audioRef.current.pause();
         audioRef.current.src = "";
       } catch { /* ignore */ }
-      // Keep audioRef alive to preserve browser autoplay permission
     }
 
     cleanupBlobUrls();
     mediaSession.setPlaybackState('idle');
     mediaSession.deactivate();
+    
+    // Reset paused position so next play starts fresh
+    pausedAtChunkRef.current = 0;
     
     if (isMountedRef.current) {
       setIsLoading(false);
@@ -421,7 +424,6 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       setError(null);
     }
     
-    // Reset stopping flag after a short delay to allow any pending callbacks
     setTimeout(() => {
       isStoppingRef.current = false;
     }, 50);
