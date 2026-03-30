@@ -33,6 +33,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { useMediaSession } from "@/hooks/useMediaSession";
 import { useAudioReliability, AUDIO_CHUNK_SIZES } from "@/hooks/useAudioReliability";
+import { audioPositionManager } from "@/lib/audioPositionPersistence";
 import { cn } from "@/lib/utils";
 
 // OpenAI TTS voices
