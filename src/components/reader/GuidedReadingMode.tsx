@@ -353,9 +353,9 @@ export function SectionLock({
       <motion.div
         animate={{ scale: [1, 1.1, 1] }}
         transition={{ duration: 2, repeat: Infinity }}
-        className="p-4 rounded-full bg-amber-500/20 mb-4"
+        className="p-4 rounded-full bg-accent/20 mb-4"
       >
-        <Lock className="h-6 w-6 text-amber-400" />
+        <Lock className="h-6 w-6 text-accent-foreground" />
       </motion.div>
       <p className="text-sm text-muted-foreground text-center mb-4">{requirementText}</p>
       <Button variant="outline" onClick={onUnlock} size="sm">
