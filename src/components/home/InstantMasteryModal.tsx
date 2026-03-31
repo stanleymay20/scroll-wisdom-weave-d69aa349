@@ -351,7 +351,7 @@ interface InstantMasteryModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export const InstantMasteryModal = React.forwardRef<HTMLDivElement, InstantMasteryModalProps>(function InstantMasteryModal({ open, onOpenChange }, _ref) {
+export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalProps) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>("question");
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
