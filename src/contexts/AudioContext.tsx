@@ -8,11 +8,12 @@
 
 import { createContext, useContext, useState, useCallback, useRef, useEffect, type ReactNode } from "react";
 import { audioPositionManager } from "@/lib/audioPositionPersistence";
-import { supabase } from "@/integrations/supabase/client";
 
 export interface GlobalAudioState {
   bookId: string | null;
   chapterId: string | null;
+  chapterNumber: number | null;
+  readerPath: string | null;
   bookTitle: string | null;
   chapterTitle: string | null;
   voice: string;
@@ -23,6 +24,12 @@ export interface GlobalAudioState {
   progress: number; // 0-100 chunk progress
 }
 
+interface GlobalAudioControls {
+  pause?: () => void;
+  play?: () => void;
+  stop?: () => void;
+}
+
 interface AudioContextValue {
   state: GlobalAudioState;
   /** The shared Audio element — survives route changes */
@@ -31,8 +38,12 @@ interface AudioContextValue {
   update: (partial: Partial<GlobalAudioState>) => void;
   /** Pause and persist position */
   pause: () => void;
+  /** Resume current audio session */
+  play: () => void;
   /** Full stop — reset everything */
   stopAndClear: () => void;
+  /** Register player controls for route-safe mini player handoff */
+  registerControls: (controls: GlobalAudioControls | null) => void;
   /** Check if there's a resumable session */
   hasResumableSession: (bookId: string, chapterId: string) => boolean;
 }
@@ -40,6 +51,8 @@ interface AudioContextValue {
 const defaultState: GlobalAudioState = {
   bookId: null,
   chapterId: null,
+  chapterNumber: null,
+  readerPath: null,
   bookTitle: null,
   chapterTitle: null,
   voice: "alloy",
@@ -55,7 +68,9 @@ const AudioCtx = createContext<AudioContextValue>({
   audioRef: { current: null },
   update: () => {},
   pause: () => {},
+  play: () => {},
   stopAndClear: () => {},
+  registerControls: () => {},
   hasResumableSession: () => false,
 });
 
@@ -63,6 +78,8 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const [state, setState] = useState<GlobalAudioState>(defaultState);
   const stateRef = useRef(state);
   stateRef.current = state;
+  const controlsRef = useRef<GlobalAudioControls | null>(null);
+  const isStoppingRef = useRef(false);
   
   // Single Audio element that lives for the lifetime of the app
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -96,9 +113,14 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const registerControls = useCallback((controls: GlobalAudioControls | null) => {
+    controlsRef.current = controls;
+  }, []);
+
   const pause = useCallback(() => {
     const s = stateRef.current;
-    if (audioRef.current) {
+    controlsRef.current?.pause?.();
+    if (audioRef.current && !controlsRef.current?.pause) {
       try { audioRef.current.pause(); } catch { /* */ }
     }
     setState(prev => ({ ...prev, isPlaying: false }));
@@ -112,7 +134,24 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     }
   }, []);
 
+  const play = useCallback(() => {
+    controlsRef.current?.play?.();
+
+    if (!controlsRef.current?.play && audioRef.current) {
+      audioRef.current.play().catch(() => {
+        /* handled by player UI */
+      });
+    }
+
+    setState(prev => ({ ...prev, isPlaying: true, isLoading: false }));
+  }, []);
+
   const stopAndClear = useCallback(() => {
+    if (isStoppingRef.current) return;
+    isStoppingRef.current = true;
+
+    controlsRef.current?.stop?.();
+
     if (audioRef.current) {
       try {
         audioRef.current.pause();
@@ -120,6 +159,11 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       } catch { /* */ }
     }
     setState(defaultState);
+    controlsRef.current = null;
+
+    queueMicrotask(() => {
+      isStoppingRef.current = false;
+    });
   }, []);
 
   const hasResumableSession = useCallback((bookId: string, chapterId: string) => {
@@ -130,7 +174,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   }, []);
 
   return (
-    <AudioCtx.Provider value={{ state, audioRef, update, pause, stopAndClear, hasResumableSession }}>
+    <AudioCtx.Provider value={{ state, audioRef, update, pause, play, stopAndClear, registerControls, hasResumableSession }}>
       {children}
     </AudioCtx.Provider>
   );
