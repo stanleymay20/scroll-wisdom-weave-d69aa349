@@ -1,7 +1,8 @@
-import { useState, useRef, useEffect, useCallback, forwardRef } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, forwardRef } from "react";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import DOMPurify from "dompurify";
 import {
   MessageCircle,
   Send,
@@ -64,6 +65,34 @@ export function InteractiveQA({
   const isMountedRef = useRef(true);
   const { toast } = useToast();
   const { t } = useLanguage();
+
+  /** Lightweight markdown→HTML for chat bubbles */
+  const renderChatMarkdown = useCallback((text: string): string => {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^\s*[-•]\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
+      .replace(/<\/ul>\s*<ul>/g, '')
+      .replace(/\n{2,}/g, '</p><p>')
+      .replace(/\n/g, '<br/>')
+      .replace(/^(.+)$/s, '<p>$1</p>')
+      .replace(/<p><\/p>/g, '')
+      .replace(/<p>(<h[234]>)/g, '$1')
+      .replace(/(<\/h[234]>)<\/p>/g, '$1')
+      .replace(/<p>(<pre>)/g, '$1')
+      .replace(/(<\/pre>)<\/p>/g, '$1')
+      .replace(/<p>(<ul>)/g, '$1')
+      .replace(/(<\/ul>)<\/p>/g, '$1');
+  }, []);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -314,7 +343,14 @@ export function InteractiveQA({
                       "max-w-[85%] rounded-lg px-3 py-2 text-sm",
                       message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
                     )}>
-                      <p className="whitespace-pre-wrap">{message.content}</p>
+                      {message.role === "assistant" ? (
+                        <div 
+                          className="prose prose-sm dark:prose-invert max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>li]:my-0.5 [&>h1]:text-base [&>h2]:text-sm [&>h3]:text-sm [&>h4]:text-sm"
+                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderChatMarkdown(message.content)) }}
+                        />
+                      ) : (
+                        <p className="whitespace-pre-wrap">{message.content}</p>
+                      )}
                       {message.role === "assistant" && message.audioContent && (
                         <Button variant="ghost" size="sm" className="mt-1 h-6 text-xs gap-1" onClick={() => playAudio(message.audioContent!)}>
                           <Volume2 className="h-3 w-3" /> Replay
