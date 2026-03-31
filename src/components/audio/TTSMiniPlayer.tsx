@@ -264,6 +264,43 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     activeBlobUrlsRef.current = [];
   }, []);
 
+  const resetPlaybackState = useCallback((nextError: string | null = null) => {
+    stopRef.current = true;
+    autoplayBlockedRef.current = false;
+
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.currentTime = 0;
+        audioRef.current.onplay = null;
+        audioRef.current.onended = null;
+        audioRef.current.onpause = null;
+        audioRef.current.onerror = null;
+        audioRef.current.ontimeupdate = null;
+        audioRef.current.onloadedmetadata = null;
+        audioRef.current.removeAttribute("src");
+        audioRef.current.load();
+      } catch {
+        try {
+          audioRef.current.src = "";
+        } catch {
+          /* noop */
+        }
+      }
+    }
+
+    cleanupBlobUrls();
+    mediaSession.setPlaybackState('idle');
+    audioReliability.setState(nextError ? 'error' : 'idle');
+
+    if (isMountedRef.current) {
+      setIsLoading(false);
+      setIsPlaying(false);
+      setProgress(0);
+      setError(nextError);
+    }
+  }, [audioRef, cleanupBlobUrls, mediaSession, audioReliability]);
+
   const base64ToBlobUrl = useCallback((base64: string, mimeType = "audio/mpeg") => {
     // Use data URI for maximum browser compatibility — avoids atob() binary corruption
     return `data:${mimeType};base64,${base64}`;
@@ -437,17 +474,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
-    stopRef.current = true;
-
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-        audioRef.current.src = "";
-      } catch { /* ignore */ }
-    }
-
-    cleanupBlobUrls();
-    mediaSession.setPlaybackState('idle');
+    resetPlaybackState();
     mediaSession.deactivate();
     
     // Clear global audio state so floating player disappears
@@ -457,18 +484,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     pausedAtChunkRef.current = 0;
     
     if (isMountedRef.current) {
-      setIsLoading(false);
-      setIsPlaying(false);
-      setProgress(0);
       setCurrentChunk(0);
       setCurrentPosition(0);
-      setError(null);
     }
     
     setTimeout(() => {
       isStoppingRef.current = false;
     }, 50);
-  }, [cleanupBlobUrls, mediaSession, globalAudio]);
+  }, [resetPlaybackState, mediaSession, globalAudio]);
   
   // CONTRACT 5 - Rule 5.4: Pause for interaction (Interactive Guard Mode)
   const pauseForInteraction = useCallback(() => {
@@ -484,9 +507,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     
     stopRef.current = true;
     mediaSession.setPlaybackState('paused');
+    audioReliability.setState('paused');
     
     if (isMountedRef.current) {
       setIsPlaying(false);
+      setIsLoading(false);
     }
     
     // Persist position for cross-session resume
@@ -498,7 +523,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
     
     console.log('[TTS] Paused for interaction at chunk', currentChunk);
-  }, [isPlaying, currentChunk, mediaSession, bookId, chapterId, selectedVoice]);
+  }, [isPlaying, currentChunk, mediaSession, bookId, chapterId, selectedVoice, audioReliability]);
   
   // CONTRACT 5 - Rule 5.4: Resume from semantic position
   const resumeFromPosition = useCallback(() => {
@@ -522,6 +547,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     stopRef.current = false;
     isStoppingRef.current = false;
     setIsLoading(true);
+    setError(null);
+    audioReliability.setState('loading');
     
     mediaSession.activate();
     mediaSession.setPlaybackState('playing');
@@ -559,24 +586,28 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
         activeBlobUrlsRef.current.push(url);
 
-        if (i === 0 && isMountedRef.current) setIsLoading(false);
+        if (i === 0 && isMountedRef.current) {
+          setIsLoading(false);
+          audioReliability.setState('playing');
+        }
 
         const success = await playUrl(url);
         if (!success) break;
       }
     } catch (err) {
       console.error("[TTS] Resume error:", err);
-      if (isMountedRef.current) {
-        setError(err instanceof Error ? err.message : "TTS failed");
-      }
+      resetPlaybackState(err instanceof Error ? err.message : "TTS failed");
     } finally {
       if (isMountedRef.current) {
         setIsLoading(false);
         setIsPlaying(false);
       }
       mediaSession.setPlaybackState('idle');
+      if (!error && !isMountedRef.current) {
+        audioReliability.setState('idle');
+      }
     }
-  }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession]);
+  }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, error]);
 
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
     // CONTRACT 5.6: Immediate visual feedback - show loading BEFORE stopping
@@ -589,11 +620,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     const unlocked = await unlockAudio();
     if (!unlocked) {
       const message = "Audio playback is blocked on this device until the browser allows sound.";
-      if (isMountedRef.current) {
-        setIsLoading(false);
-        setError(message);
-      }
-      audioReliability.setState('error');
+      resetPlaybackState(message);
       toast({
         title: "Audio couldn't start",
         description: message,
@@ -604,14 +631,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     
     // Stop any existing playback first — but use direct cleanup instead of stop()
     // to avoid the stopRef race condition
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-        audioRef.current.src = "";
-      } catch { /* ignore */ }
-      // Keep audioRef alive to preserve browser autoplay permission
-    }
-    cleanupBlobUrls();
+    resetPlaybackState();
     
     // Ensure clean state — these MUST be false before chunk loop starts
     stopRef.current = false;
@@ -769,6 +789,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
         if (i === 0 && isMountedRef.current) {
           setIsLoading(false);
+          audioReliability.setState('playing');
           mediaSession.setPlaybackState('playing');
         }
 
@@ -776,6 +797,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         
         if (!success) {
           console.log("[TTS] Playback of chunk", i + 1, "was interrupted");
+          if (autoplayBlockedRef.current) {
+            resetPlaybackState("Audio playback is blocked on this device until the browser allows sound.");
+          }
           break;
         }
       }
@@ -788,6 +812,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         if (isMountedRef.current) {
           setError(msg);
           mediaSession.setPlaybackState('idle');
+          audioReliability.setState('error');
           toast({ title: "TTS Error", description: msg, variant: "destructive" });
         }
       }
@@ -806,8 +831,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       }
       mediaSession.setPlaybackState('idle');
       cleanupBlobUrls();
+      if (!stopRef.current && !autoplayBlockedRef.current) {
+        audioReliability.setState('idle');
+      }
     }
-  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability]);
+  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability, resetPlaybackState, audioRef, onCumulativeTimeChange, onEstimatedDurationChange, onAudioRefChange]);
 
   // Stop on stopKey change (page navigation)
   useEffect(() => {
