@@ -74,7 +74,7 @@ const plans: PlanConfig[] = [
       { text: "Up to 6,000 words per chapter", included: true },
       { text: "60 min TTS · 2 hrs voice interaction", included: true },
       { text: "100 AI images per month", included: true },
-      { text: "All exports (PDF, EPUB, DOCX, MOBI)", included: true },
+      { text: "All exports (PDF, EPUB, DOCX, KDP)", included: true },
       { text: "Cinematic video generation", included: true },
       { text: "Commercial publishing rights", included: true },
       { text: "Priority support", included: true },
