@@ -11,11 +11,7 @@ const FEATURES = [
   { icon: Lock, title: "SHA-256 Mastery Record", desc: "Cryptographically verifiable." },
 ];
 
-const SOCIAL_PROOF = [
-  { label: "Books Generated", value: "—", icon: BookOpen },
-  { label: "Certificates Issued", value: "—", icon: Award },
-  { label: "Active Learners", value: "—", icon: Users },
-];
+// Social proof removed — will be restored when real analytics are available
 
 interface HeroSectionProps {
   onStartDemo: () => void;
