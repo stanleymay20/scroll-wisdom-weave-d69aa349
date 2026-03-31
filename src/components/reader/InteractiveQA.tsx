@@ -315,7 +315,14 @@ export function InteractiveQA({
                       "max-w-[85%] rounded-lg px-3 py-2 text-sm",
                       message.role === "user" ? "bg-primary text-primary-foreground" : "bg-muted"
                     )}>
-                      <p className="whitespace-pre-wrap">{message.content}</p>
+                      {message.role === "assistant" ? (
+                        <div 
+                          className="prose prose-sm dark:prose-invert max-w-none [&>p]:my-1 [&>ul]:my-1 [&>ol]:my-1 [&>li]:my-0.5 [&>h1]:text-base [&>h2]:text-sm [&>h3]:text-sm [&>h4]:text-sm"
+                          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderChatMarkdown(message.content)) }}
+                        />
+                      ) : (
+                        <p className="whitespace-pre-wrap">{message.content}</p>
+                      )}
                       {message.role === "assistant" && message.audioContent && (
                         <Button variant="ghost" size="sm" className="mt-1 h-6 text-xs gap-1" onClick={() => playAudio(message.audioContent!)}>
                           <Volume2 className="h-3 w-3" /> Replay
