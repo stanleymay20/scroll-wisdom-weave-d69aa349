@@ -66,6 +66,34 @@ export function InteractiveQA({
   const { toast } = useToast();
   const { t } = useLanguage();
 
+  /** Lightweight markdown→HTML for chat bubbles */
+  const renderChatMarkdown = useCallback((text: string): string => {
+    if (!text) return '';
+    return text
+      .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;')
+      .replace(/```(\w*)\n([\s\S]*?)```/g, '<pre><code>$2</code></pre>')
+      .replace(/`([^`]+)`/g, '<code>$1</code>')
+      .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+      .replace(/\*([^*]+)\*/g, '<em>$1</em>')
+      .replace(/^### (.+)$/gm, '<h4>$1</h4>')
+      .replace(/^## (.+)$/gm, '<h3>$1</h3>')
+      .replace(/^# (.+)$/gm, '<h2>$1</h2>')
+      .replace(/^\s*[-•]\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/^\s*\d+\.\s+(.+)$/gm, '<li>$1</li>')
+      .replace(/(<li>[\s\S]*?<\/li>)/g, '<ul>$1</ul>')
+      .replace(/<\/ul>\s*<ul>/g, '')
+      .replace(/\n{2,}/g, '</p><p>')
+      .replace(/\n/g, '<br/>')
+      .replace(/^(.+)$/s, '<p>$1</p>')
+      .replace(/<p><\/p>/g, '')
+      .replace(/<p>(<h[234]>)/g, '$1')
+      .replace(/(<\/h[234]>)<\/p>/g, '$1')
+      .replace(/<p>(<pre>)/g, '$1')
+      .replace(/(<\/pre>)<\/p>/g, '$1')
+      .replace(/<p>(<ul>)/g, '$1')
+      .replace(/(<\/ul>)<\/p>/g, '$1');
+  }, []);
+
   useEffect(() => {
     isMountedRef.current = true;
     return () => {
