@@ -46,7 +46,7 @@ export function HeroSection({ onStartDemo }: HeroSectionProps) {
               className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-sm text-primary mb-6"
             >
               <Shield className="h-3.5 w-3.5" />
-              Cognitive Mastery Platform
+              AI-Powered Learning Platform
             </motion.div>
 
             {/* Headline */}
