@@ -3,8 +3,6 @@ import { Button } from "@/components/ui/button";
 import { Shield, Brain, Keyboard, Lock, ArrowRight, BookOpen, Award } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import heroCinematicBook from "@/assets/hero-cinematic-book.png";
-import { useLanguage } from "@/contexts/LanguageContext";
-import heroCinematicBook from "@/assets/hero-cinematic-book.png";
 
 const FEATURES = [
   { icon: Brain, title: "Bloom-Weighted Scoring", desc: "Higher-order thinking weighs more." },
