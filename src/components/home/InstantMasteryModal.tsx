@@ -867,4 +867,4 @@ export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalP
       </DialogContent>
     </Dialog>
   );
-});
+}
