@@ -152,8 +152,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const autoplayBlockedRef = useRef(false);
   const { toast } = useToast();
   const entitlements = useEntitlements();
-  const globalAudio = useGlobalAudio();
-  const audioRef = globalAudio.audioRef;
+  const { audioRef, update: updateGlobalAudio, stopAndClear: stopGlobalAudio, registerControls } = useGlobalAudio();
   
   // CONTRACT 5 - Rule 5.3: Audio reliability tracking
   const audioReliability = useAudioReliability({
@@ -371,11 +370,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
       const cleanup = () => {
         audio.onplay = null;
+        audio.onplaying = null;
         audio.onended = null;
         audio.onpause = null;
         audio.onerror = null;
         audio.ontimeupdate = null;
         audio.onloadedmetadata = null;
+        audio.onwaiting = null;
+        audio.oncanplay = null;
       };
       
       // Emit estimated total duration as soon as chunk metadata is available
@@ -393,10 +395,26 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         }
       };
 
-      audio.onplay = () => {
+      const markPlaying = () => {
         // Always apply latest speed when play starts
         audio.playbackRate = playbackSpeedRef.current;
-        if (isMountedRef.current) setIsPlaying(true);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsPlaying(true);
+        }
+      };
+
+      audio.onplay = markPlaying;
+      audio.onplaying = markPlaying;
+      audio.oncanplay = () => {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
+      };
+      audio.onwaiting = () => {
+        if (isMountedRef.current && !stopRef.current) {
+          setIsLoading(true);
+        }
       };
       
       audio.onended = () => {
@@ -437,6 +455,10 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       };
       
       audio.onerror = () => {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsPlaying(false);
+        }
         cleanup();
         safeResolve(false);
       };
@@ -447,8 +469,15 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         }
       };
 
-      audio.src = url;
+      if (audio.src !== url) {
+        audio.src = url;
+      }
+      audio.load();
       audio.play().catch((err) => {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsPlaying(false);
+        }
         cleanup();
         if (err?.name === "NotAllowedError") {
           console.error("[TTS] Play blocked by autoplay policy — requires user gesture");
@@ -478,7 +507,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     mediaSession.deactivate();
     
     // Clear global audio state so floating player disappears
-    globalAudio.stopAndClear();
+    stopGlobalAudio();
     
     // Reset paused position so next play starts fresh
     pausedAtChunkRef.current = 0;
@@ -491,7 +520,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     setTimeout(() => {
       isStoppingRef.current = false;
     }, 50);
-  }, [resetPlaybackState, mediaSession, globalAudio]);
+  }, [resetPlaybackState, mediaSession, stopGlobalAudio]);
   
   // CONTRACT 5 - Rule 5.4: Pause for interaction (Interactive Guard Mode)
   const pauseForInteraction = useCallback(() => {
@@ -603,11 +632,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         setIsPlaying(false);
       }
       mediaSession.setPlaybackState('idle');
-      if (!error && !isMountedRef.current) {
-        audioReliability.setState('idle');
-      }
+      audioReliability.setState('idle');
     }
-  }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, error]);
+  }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState]);
 
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
     // CONTRACT 5.6: Immediate visual feedback - show loading BEFORE stopping
@@ -871,7 +898,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     const [derivedBookTitle, ...chapterParts] = title.split(" - ");
     const derivedChapterTitle = chapterParts.join(" - ") || title;
 
-    globalAudio.update({
+    updateGlobalAudio({
       bookId: bookId || null,
       chapterId: chapterId || null,
       chapterNumber: currentChapter || null,
@@ -885,7 +912,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       isLoading,
       progress,
     });
-  }, [globalAudio, isPlaying, isLoading, currentChunk, totalChunks, progress, bookId, chapterId, currentChapter, title, author, selectedVoice]);
+  }, [updateGlobalAudio, isPlaying, isLoading, currentChunk, totalChunks, progress, bookId, chapterId, currentChapter, title, author, selectedVoice]);
 
   // Cleanup on unmount — persist position but DON'T destroy audio if still playing
   useEffect(() => {
@@ -957,7 +984,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   };
 
   useEffect(() => {
-    globalAudio.registerControls({
+    registerControls({
       pause: pauseForInteraction,
       play: () => {
         if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
@@ -973,9 +1000,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     });
 
     return () => {
-      globalAudio.registerControls(null);
+      registerControls(null);
     };
-  }, [globalAudio, pauseForInteraction, resumeFromPosition, stop, isPlaying, isLoading, generateSpeech, mode, selectedText, chapterText]);
+  }, [registerControls, pauseForInteraction, resumeFromPosition, stop, isPlaying, isLoading, generateSpeech, mode, selectedText, chapterText]);
 
   if (!hasAccess) return null;
 
