@@ -921,6 +921,27 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
   };
 
+  useEffect(() => {
+    globalAudio.registerControls({
+      pause: pauseForInteraction,
+      play: () => {
+        if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
+          resumeFromPosition();
+          return;
+        }
+
+        if (!isPlaying && !isLoading) {
+          generateSpeech(mode === "selection" && selectedText ? selectedText : chapterText, mode === "selection");
+        }
+      },
+      stop,
+    });
+
+    return () => {
+      globalAudio.registerControls(null);
+    };
+  }, [globalAudio, pauseForInteraction, resumeFromPosition, stop, isPlaying, isLoading, generateSpeech, mode, selectedText, chapterText]);
+
   if (!hasAccess) return null;
 
   const hasSelection = selectedText && selectedText.trim().length > 10;
