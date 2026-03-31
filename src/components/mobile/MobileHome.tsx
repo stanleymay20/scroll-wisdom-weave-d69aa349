@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState, useCallback, memo, forwardRef } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, BookOpen } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileBookCard } from "./MobileBookCard";

@@ -1,6 +1,8 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Shield, Brain, Keyboard, Lock, ArrowRight, Users, BookOpen, Award } from "lucide-react";
+import { Shield, Brain, Keyboard, Lock, ArrowRight, BookOpen, Award } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import heroCinematicBook from "@/assets/hero-cinematic-book.png";
 import { useLanguage } from "@/contexts/LanguageContext";
 import heroCinematicBook from "@/assets/hero-cinematic-book.png";
 

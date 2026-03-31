@@ -227,7 +227,7 @@ export function FloatingActions({
           <>
             <Presentation className="h-6 w-6" />
             {/* Badge showing number of tools */}
-            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-primary text-primary-foreground text-[10px] font-bold flex items-center justify-center">
+            <span className="absolute -top-1 -right-1 w-5 h-5 rounded-full bg-accent text-accent-foreground text-[10px] font-bold flex items-center justify-center border-2 border-background">
               {actionCount}
             </span>
           </>

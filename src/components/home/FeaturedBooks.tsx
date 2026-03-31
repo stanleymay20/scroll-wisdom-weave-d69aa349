@@ -76,7 +76,8 @@ export const FeaturedBooks = memo(function FeaturedBooks() {
         }
       } catch (error) {
         console.error("Error fetching featured books:", error);
-        // Keep sample data on error
+      } finally {
+        setIsLoading(false);
       }
     };
 

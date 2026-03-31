@@ -936,14 +936,18 @@ export default function Reader() {
               <label className="text-sm text-muted-foreground mb-2 block">
                 {t('reader.fontSize')}: {fontSize}px
               </label>
-              <input
-                type="range"
-                min="14"
-                max="24"
-                value={fontSize}
-                onChange={(e) => setFontSize(parseInt(e.target.value))}
-                className="w-full"
-              />
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-muted-foreground">A</span>
+                <input
+                  type="range"
+                  min="14"
+                  max="24"
+                  value={fontSize}
+                  onChange={(e) => setFontSize(parseInt(e.target.value))}
+                  className="w-full accent-primary"
+                />
+                <span className="text-lg text-muted-foreground font-bold">A</span>
+              </div>
             </div>
             
             {/* Reading Theme Selection */}
