@@ -94,7 +94,7 @@ const plans: PlanConfig[] = [
       { text: "Cinematic video generation", included: true },
       { text: "Batch generation", included: true },
       { text: "AI research assistant", included: true },
-      { text: "All exports (incl. KPF)", included: true },
+      { text: "All exports (incl. KDP-ready PDF)", included: true },
       { text: "Dedicated support", included: true },
     ],
   },
