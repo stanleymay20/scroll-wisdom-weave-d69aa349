@@ -26,41 +26,7 @@ interface FeaturedBook {
   total_chapters: number | null;
 }
 
-// Sample featured books data - shown instantly while real data loads
-const SAMPLE_BOOKS: FeaturedBook[] = [
-  {
-    id: "sample-1",
-    title: "Introduction to Machine Learning: Concepts & Applications",
-    description: "A structured guide to supervised and unsupervised learning, neural networks, and real-world ML applications.",
-    category: "technology",
-    cover_image_url: null,
-    total_chapters: 12,
-  },
-  {
-    id: "sample-2",
-    title: "Principles of Microeconomics: Markets & Decision-Making",
-    description: "Explore supply and demand, market structures, and consumer behaviour through structured academic content.",
-    category: "economics",
-    cover_image_url: null,
-    total_chapters: 8,
-  },
-  {
-    id: "sample-3",
-    title: "Cognitive Psychology: Memory, Attention & Perception",
-    description: "An evidence-based study of how the mind processes information, with assessment-ready chapter quizzes.",
-    category: "psychology",
-    cover_image_url: null,
-    total_chapters: 10,
-  },
-  {
-    id: "sample-4",
-    title: "Modern African History: Independence to Globalisation",
-    description: "A comprehensive study of post-colonial Africa, covering political, economic, and cultural transformation.",
-    category: "history",
-    cover_image_url: null,
-    total_chapters: 15,
-  },
-];
+// No more hardcoded sample books — show skeleton until real data loads
 
 export const FeaturedBooks = memo(function FeaturedBooks() {
   const navigate = useNavigate();
