@@ -370,11 +370,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
       const cleanup = () => {
         audio.onplay = null;
+        audio.onplaying = null;
         audio.onended = null;
         audio.onpause = null;
         audio.onerror = null;
         audio.ontimeupdate = null;
         audio.onloadedmetadata = null;
+        audio.onwaiting = null;
+        audio.oncanplay = null;
       };
       
       // Emit estimated total duration as soon as chunk metadata is available
@@ -392,10 +395,26 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         }
       };
 
-      audio.onplay = () => {
+      const markPlaying = () => {
         // Always apply latest speed when play starts
         audio.playbackRate = playbackSpeedRef.current;
-        if (isMountedRef.current) setIsPlaying(true);
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsPlaying(true);
+        }
+      };
+
+      audio.onplay = markPlaying;
+      audio.onplaying = markPlaying;
+      audio.oncanplay = () => {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+        }
+      };
+      audio.onwaiting = () => {
+        if (isMountedRef.current && !stopRef.current) {
+          setIsLoading(true);
+        }
       };
       
       audio.onended = () => {
@@ -436,6 +455,10 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       };
       
       audio.onerror = () => {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsPlaying(false);
+        }
         cleanup();
         safeResolve(false);
       };
@@ -446,8 +469,15 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         }
       };
 
-      audio.src = url;
+      if (audio.src !== url) {
+        audio.src = url;
+      }
+      audio.load();
       audio.play().catch((err) => {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsPlaying(false);
+        }
         cleanup();
         if (err?.name === "NotAllowedError") {
           console.error("[TTS] Play blocked by autoplay policy — requires user gesture");
@@ -602,11 +632,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         setIsPlaying(false);
       }
       mediaSession.setPlaybackState('idle');
-      if (!error && !isMountedRef.current) {
-        audioReliability.setState('idle');
-      }
+      audioReliability.setState('idle');
     }
-  }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, error]);
+  }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState]);
 
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
     // CONTRACT 5.6: Immediate visual feedback - show loading BEFORE stopping
