@@ -13,13 +13,24 @@ import { Play, Pause, Square, BookOpen } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
 export function GlobalAudioPlayer() {
-  const { state, pause, stopAndClear } = useGlobalAudio();
+  const { state, pause, play, stopAndClear } = useGlobalAudio();
   const location = useLocation();
   const navigate = useNavigate();
 
+  const navigateToReader = () => {
+    if (state.readerPath) {
+      navigate(state.readerPath);
+      return;
+    }
+
+    if (state.bookId && state.chapterNumber) {
+      navigate(`/read/${state.bookId}/${state.chapterNumber}`);
+    }
+  };
+
   // Only show when there's active/paused audio AND user is NOT on the Reader page
   const isOnReader = location.pathname.startsWith("/read/");
-  const hasActiveAudio = state.bookId && (state.isPlaying || state.chunkIndex > 0);
+  const hasActiveAudio = state.bookId && (state.isPlaying || state.isLoading || state.chunkIndex > 0);
   const shouldShow = hasActiveAudio && !isOnReader;
 
   return (
@@ -30,17 +41,12 @@ export function GlobalAudioPlayer() {
           animate={{ opacity: 1, y: 0 }}
           exit={{ opacity: 0, y: 40 }}
           transition={{ type: "spring", stiffness: 300, damping: 30 }}
-          className="fixed z-50 bottom-4 left-4 right-4 max-w-md mx-auto"
+          className="fixed z-[60] bottom-20 md:bottom-4 left-4 right-4 max-w-md mx-auto"
         >
           <div className="flex items-center gap-3 rounded-xl border border-border/60 bg-background/95 backdrop-blur-md px-4 py-3 shadow-xl">
             {/* Track info */}
             <button
-              onClick={() => {
-                if (state.bookId) {
-                  const chapterNum = state.chapterTitle?.match(/Chapter (\d+)/)?.[1] || "1";
-                  navigate(`/read/${state.bookId}/${chapterNum}`);
-                }
-              }}
+              onClick={navigateToReader}
               className="flex-1 min-w-0 text-left"
             >
               <p className="text-sm font-medium truncate text-foreground">
@@ -58,12 +64,7 @@ export function GlobalAudioPlayer() {
                 variant="ghost"
                 size="icon"
                 className="h-9 w-9 rounded-full"
-                onClick={() => {
-                  if (state.bookId) {
-                    const chapterNum = state.chapterTitle?.match(/Chapter (\d+)/)?.[1] || "1";
-                    navigate(`/read/${state.bookId}/${chapterNum}`);
-                  }
-                }}
+                onClick={navigateToReader}
                 title="Go to reader"
               >
                 <BookOpen className="h-4 w-4" />
@@ -84,14 +85,8 @@ export function GlobalAudioPlayer() {
                   variant="ghost"
                   size="icon"
                   className="h-9 w-9 rounded-full"
-                  onClick={() => {
-                    // Navigate back to reader to resume — the reader handles playback
-                    if (state.bookId) {
-                      const chapterNum = state.chapterTitle?.match(/Chapter (\d+)/)?.[1] || "1";
-                      navigate(`/read/${state.bookId}/${chapterNum}`);
-                    }
-                  }}
-                  title="Resume in reader"
+                  onClick={play}
+                  title="Resume"
                 >
                   <Play className="h-5 w-5" />
                 </Button>
