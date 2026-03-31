@@ -242,11 +242,11 @@ function MobileLibraryContent({
             <p className="text-xs text-muted-foreground">Total</p>
           </div>
           <div className="bg-card rounded-lg p-3 text-center border border-border/50">
-            <p className="text-lg font-bold text-amber-500">{stats.reading}</p>
+            <p className="text-lg font-bold text-primary">{stats.reading}</p>
             <p className="text-xs text-muted-foreground">Reading</p>
           </div>
           <div className="bg-card rounded-lg p-3 text-center border border-border/50">
-            <p className="text-lg font-bold text-green-500">{stats.completed}</p>
+            <p className="text-lg font-bold text-primary">{stats.completed}</p>
             <p className="text-xs text-muted-foreground">Done</p>
           </div>
         </div>
