@@ -152,8 +152,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const autoplayBlockedRef = useRef(false);
   const { toast } = useToast();
   const entitlements = useEntitlements();
-  const globalAudio = useGlobalAudio();
-  const audioRef = globalAudio.audioRef;
+  const { audioRef, update: updateGlobalAudio, stopAndClear: stopGlobalAudio, registerControls } = useGlobalAudio();
   
   // CONTRACT 5 - Rule 5.3: Audio reliability tracking
   const audioReliability = useAudioReliability({
@@ -478,7 +477,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     mediaSession.deactivate();
     
     // Clear global audio state so floating player disappears
-    globalAudio.stopAndClear();
+    stopGlobalAudio();
     
     // Reset paused position so next play starts fresh
     pausedAtChunkRef.current = 0;
@@ -491,7 +490,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     setTimeout(() => {
       isStoppingRef.current = false;
     }, 50);
-  }, [resetPlaybackState, mediaSession, globalAudio]);
+  }, [resetPlaybackState, mediaSession, stopGlobalAudio]);
   
   // CONTRACT 5 - Rule 5.4: Pause for interaction (Interactive Guard Mode)
   const pauseForInteraction = useCallback(() => {
@@ -871,7 +870,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     const [derivedBookTitle, ...chapterParts] = title.split(" - ");
     const derivedChapterTitle = chapterParts.join(" - ") || title;
 
-    globalAudio.update({
+    updateGlobalAudio({
       bookId: bookId || null,
       chapterId: chapterId || null,
       chapterNumber: currentChapter || null,
@@ -885,7 +884,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       isLoading,
       progress,
     });
-  }, [globalAudio, isPlaying, isLoading, currentChunk, totalChunks, progress, bookId, chapterId, currentChapter, title, author, selectedVoice]);
+  }, [updateGlobalAudio, isPlaying, isLoading, currentChunk, totalChunks, progress, bookId, chapterId, currentChapter, title, author, selectedVoice]);
 
   // Cleanup on unmount — persist position but DON'T destroy audio if still playing
   useEffect(() => {
@@ -957,7 +956,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   };
 
   useEffect(() => {
-    globalAudio.registerControls({
+    registerControls({
       pause: pauseForInteraction,
       play: () => {
         if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
@@ -973,9 +972,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     });
 
     return () => {
-      globalAudio.registerControls(null);
+      registerControls(null);
     };
-  }, [globalAudio, pauseForInteraction, resumeFromPosition, stop, isPlaying, isLoading, generateSpeech, mode, selectedText, chapterText]);
+  }, [registerControls, pauseForInteraction, resumeFromPosition, stop, isPlaying, isLoading, generateSpeech, mode, selectedText, chapterText]);
 
   if (!hasAccess) return null;
 
