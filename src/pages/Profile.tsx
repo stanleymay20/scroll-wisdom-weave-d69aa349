@@ -236,6 +236,31 @@ export default function Profile() {
     }
   };
 
+  const fetchUserStats = async (userId: string) => {
+    const [sessionsRes, quizzesRes, streakRes, certsRes] = await Promise.all([
+      supabase.from("reading_sessions").select("duration_seconds").eq("user_id", userId),
+      supabase.from("quiz_attempts").select("score, total_questions").eq("user_id", userId),
+      supabase.from("reading_streaks").select("current_streak").eq("user_id", userId).maybeSingle(),
+      supabase.from("competency_certificates").select("id").eq("user_id", userId),
+    ]);
+
+    const totalMinutes = Math.round(
+      (sessionsRes.data || []).reduce((sum, s) => sum + (s.duration_seconds || 0), 0) / 60
+    );
+    const quizzes = quizzesRes.data || [];
+    const avgScore = quizzes.length > 0
+      ? Math.round(quizzes.reduce((sum, q) => sum + (Number(q.score) || 0), 0) / quizzes.length)
+      : 0;
+
+    setUserStats({
+      totalReadingMinutes: totalMinutes,
+      quizzesTaken: quizzes.length,
+      avgQuizScore: avgScore,
+      readingStreak: streakRes.data?.current_streak || 0,
+      certificatesEarned: (certsRes.data || []).length,
+    });
+  };
+
   const handleSaveProfile = async () => {
     if (!user) return;
     setIsSaving(true);
