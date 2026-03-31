@@ -150,6 +150,7 @@ export function InteractiveQA({
           conversationHistory: messages.slice(-6),
           highlightedText: highlightedText || undefined,
           speakResponse: false,
+          cognitiveLevel,
         },
         headers: authHeaders,
       });
