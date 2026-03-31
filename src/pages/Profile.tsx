@@ -177,7 +177,8 @@ export default function Profile() {
       // Fetch fresh data in parallel
       await Promise.all([
         fetchProfile(user.id),
-        fetchUserBooks(user.id)
+        fetchUserBooks(user.id),
+        fetchUserStats(user.id),
       ]);
       
       if (mounted) setIsLoading(false);
