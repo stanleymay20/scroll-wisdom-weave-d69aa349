@@ -47,6 +47,8 @@ const OPENAI_VOICES = [
   { id: "shimmer", name: "Shimmer" },
 ];
 
+const SILENT_WAV_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+
 interface TTSMiniPlayerProps {
   /** Full chapter text for "Read Chapter" */
   chapterText: string;
@@ -138,7 +140,6 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const fullTextLengthRef = useRef(0);
   const endedChunkCountRef = useRef(0);
 
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const stopRef = useRef(false);
   const isStoppingRef = useRef(false);
   const activeBlobUrlsRef = useRef<string[]>([]);
@@ -152,6 +153,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const { toast } = useToast();
   const entitlements = useEntitlements();
   const globalAudio = useGlobalAudio();
+  const audioRef = globalAudio.audioRef;
   
   // CONTRACT 5 - Rule 5.3: Audio reliability tracking
   const audioReliability = useAudioReliability({
@@ -268,28 +270,43 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   }, []);
 
   // Unlock audio context on user gesture - call this synchronously in click handler
-  const unlockAudio = useCallback(() => {
-    if (audioUnlockedRef.current) return;
-    
-    // Create a persistent audio element on first user interaction
+  const unlockAudio = useCallback(async () => {
+    if (audioUnlockedRef.current) return true;
+
     if (!audioRef.current) {
       const audio = new Audio();
+      audio.preload = "auto";
       audio.volume = volume;
       audioRef.current = audio;
     }
-    
-    // Play silent audio to unlock autoplay
+
     const audio = audioRef.current;
-    audio.src = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
-    audio.play().then(() => {
+    const previousSrc = audio.src;
+    const previousMuted = audio.muted;
+    const previousVolume = audio.volume;
+
+    try {
+      audio.muted = true;
+      audio.volume = 0;
+      audio.src = SILENT_WAV_DATA_URI;
+      await audio.play();
       audio.pause();
+      audio.currentTime = 0;
       audioUnlockedRef.current = true;
+      autoplayBlockedRef.current = false;
       console.log("[TTS] Audio context unlocked");
-    }).catch(() => {
-      // Still mark as attempted
-      audioUnlockedRef.current = true;
-    });
-  }, [volume]);
+      return true;
+    } catch (err) {
+      autoplayBlockedRef.current = true;
+      console.error("[TTS] Failed to unlock audio context:", err);
+      return false;
+    } finally {
+      audio.pause();
+      audio.src = previousSrc || "";
+      audio.muted = previousMuted;
+      audio.volume = previousVolume;
+    }
+  }, [audioRef, volume]);
 
   const playUrl = useCallback((url: string): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -399,13 +416,22 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         if (err?.name === "NotAllowedError") {
           console.error("[TTS] Play blocked by autoplay policy — requires user gesture");
           autoplayBlockedRef.current = true;
+          if (isMountedRef.current) {
+            const message = "Audio was blocked by your browser. Tap play again to allow sound.";
+            setError(message);
+            toast({
+              title: "Playback blocked",
+              description: message,
+              variant: "destructive",
+            });
+          }
         } else if (err?.name !== "AbortError") {
           console.error("[TTS] Play error:", err);
         }
         safeResolve(false);
       });
     });
-  }, [volume, onPlayingChange, onAudioRefChange]);
+  }, [volume, onPlayingChange, onAudioRefChange, toast]);
 
   // Full stop: destroys playback entirely, resets all state
   const stop = useCallback(() => {
@@ -553,14 +579,28 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession]);
 
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
-    // CRITICAL: Unlock audio context immediately on user gesture (before any async work)
-    unlockAudio();
-    
     // CONTRACT 5.6: Immediate visual feedback - show loading BEFORE stopping
     setIsLoading(true);
     setError(null);
     setMode(isSelection ? "selection" : "chapter");
     audioReliability.setState('loading');
+
+    // CRITICAL: Unlock audio on the original user gesture and wait for it
+    const unlocked = await unlockAudio();
+    if (!unlocked) {
+      const message = "Audio playback is blocked on this device until the browser allows sound.";
+      if (isMountedRef.current) {
+        setIsLoading(false);
+        setError(message);
+      }
+      audioReliability.setState('error');
+      toast({
+        title: "Audio couldn't start",
+        description: message,
+        variant: "destructive",
+      });
+      return;
+    }
     
     // Stop any existing playback first — but use direct cleanup instead of stop()
     // to avoid the stopRef race condition
@@ -825,12 +865,6 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       
       stopRef.current = true;
       isStoppingRef.current = true;
-      if (audioRef.current) {
-        try {
-          audioRef.current.pause();
-          audioRef.current.src = "";
-        } catch { /* ignore */ }
-      }
       cleanupBlobUrls();
     };
   }, [cleanupBlobUrls, bookId, chapterId, currentChunk, selectedVoice, isPlaying, title]);
