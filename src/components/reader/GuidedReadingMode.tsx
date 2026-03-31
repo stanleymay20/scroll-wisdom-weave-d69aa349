@@ -311,17 +311,17 @@ export function ReflectionPause({
             className="relative z-10 max-w-lg mx-4 p-8 bg-card rounded-2xl border border-border shadow-2xl text-center"
           >
             <motion.div
-              className="inline-flex p-4 rounded-full bg-purple-500/20 mb-4"
+              className="inline-flex p-4 rounded-full bg-primary/20 mb-4"
               animate={{ scale: [1, 1.05, 1] }}
               transition={{ duration: 2, repeat: Infinity }}
             >
-              <Pause className="h-8 w-8 text-purple-400" />
+              <Pause className="h-8 w-8 text-primary" />
             </motion.div>
             
             <h3 className="text-xl font-display font-bold mb-3">Reflection Pause</h3>
             <p className="text-muted-foreground mb-6">{prompt}</p>
             
-            <Button onClick={onContinue} className="bg-purple-500 hover:bg-purple-600">
+            <Button onClick={onContinue} className="bg-primary hover:bg-primary/90">
               <Eye className="h-4 w-4 mr-2" />
               Continue Reading
             </Button>
