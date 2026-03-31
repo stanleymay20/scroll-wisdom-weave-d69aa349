@@ -150,7 +150,9 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
 
-    controlsRef.current?.stop?.();
+    const controls = controlsRef.current;
+    controlsRef.current = null;
+    controls?.stop?.();
 
     if (audioRef.current) {
       try {
