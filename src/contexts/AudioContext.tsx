@@ -98,6 +98,33 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     };
   }, []);
 
+  const resetSharedAudioElement = useCallback(() => {
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    try {
+      audio.pause();
+      audio.currentTime = 0;
+      audio.onplay = null;
+      audio.onpause = null;
+      audio.onended = null;
+      audio.onerror = null;
+      audio.ontimeupdate = null;
+      audio.onloadedmetadata = null;
+      audio.onwaiting = null;
+      audio.oncanplay = null;
+      audio.oncanplaythrough = null;
+      audio.removeAttribute("src");
+      audio.load();
+    } catch {
+      try {
+        audio.src = "";
+      } catch {
+        /* noop */
+      }
+    }
+  }, []);
+
   const update = useCallback((partial: Partial<GlobalAudioState>) => {
     setState(prev => {
       const next = { ...prev, ...partial };
@@ -120,10 +147,8 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const pause = useCallback(() => {
     const s = stateRef.current;
     controlsRef.current?.pause?.();
-    if (audioRef.current && !controlsRef.current?.pause) {
-      try { audioRef.current.pause(); } catch { /* */ }
-    }
-    setState(prev => ({ ...prev, isPlaying: false }));
+    resetSharedAudioElement();
+    setState(prev => ({ ...prev, isPlaying: false, isLoading: false }));
     
     if (s.bookId && s.chapterId && s.chunkIndex > 0) {
       audioPositionManager.savePosition(
@@ -132,7 +157,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
         s.voice
       );
     }
-  }, []);
+  }, [resetSharedAudioElement]);
 
   const play = useCallback(() => {
     controlsRef.current?.play?.();
@@ -154,19 +179,14 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     controlsRef.current = null;
     controls?.stop?.();
 
-    if (audioRef.current) {
-      try {
-        audioRef.current.pause();
-        audioRef.current.src = "";
-      } catch { /* */ }
-    }
+    resetSharedAudioElement();
     setState(defaultState);
     controlsRef.current = null;
 
     queueMicrotask(() => {
       isStoppingRef.current = false;
     });
-  }, []);
+  }, [resetSharedAudioElement]);
 
   const hasResumableSession = useCallback((bookId: string, chapterId: string) => {
     if (stateRef.current.bookId === bookId && stateRef.current.chapterId === chapterId && stateRef.current.chunkIndex > 0) {
