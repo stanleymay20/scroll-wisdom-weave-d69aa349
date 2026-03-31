@@ -348,32 +348,47 @@ ${isMasteryMode ? 'Include at least 1 Tier 4 integrity-weighted question.' : 'Ti
       ? `\n\nThe user has highlighted this specific text and is asking about it:\n"${highlightedText}"\n`
       : '';
 
+    // Cognitive level depth calibration
+    const COGNITIVE_DEPTH: Record<string, string> = {
+      familiarisation: "The learner is a BEGINNER. Use simple language, short sentences, everyday analogies. Avoid jargon. Define any technical terms. Aim for 1-2 short paragraphs.",
+      functional: "The learner has BASIC understanding. Use clear explanations with practical examples. Light use of terminology is OK if explained. Aim for 2-3 paragraphs.",
+      applied: "The learner can APPLY knowledge. Use concrete examples showing real-world application. Reference related concepts. Connect theory to practice. Aim for 2-3 focused paragraphs.",
+      analytical: "The learner can ANALYZE deeply. Provide nuanced explanations with multiple perspectives. Compare/contrast approaches. Discuss trade-offs, edge cases, and implications. Aim for 3-4 detailed paragraphs.",
+      mastery: "The learner is at EXPERT level. Provide comprehensive analysis with citations to underlying principles. Discuss limitations, open questions, and advanced implications. Challenge assumptions. Aim for 3-4 expert-level paragraphs."
+    };
+
+    const depthInstruction = COGNITIVE_DEPTH[cognitiveLevel] || COGNITIVE_DEPTH.functional;
+
     const messages = [
       {
         role: "system",
-        content: `You are a knowledgeable and helpful reading assistant for ScrollLibrary. You help readers understand the content they are reading.
+        content: `You are an expert reading assistant for ScrollLibrary — an AI-powered learning platform.
 
 CONTEXT:
 - Book: "${bookTitle}"
 - Chapter: "${chapterTitle}"
-- The user is currently reading this chapter and has questions about it.
+- Learner's cognitive level: ${cognitiveLevel}
 ${contextNote}
-YOUR ROLE:
-- Answer questions about the chapter content clearly and helpfully
-- If the answer isn't directly in the text, provide relevant explanations using your knowledge
-- Keep answers concise but thorough (2-4 paragraphs max)
-- Use examples when helpful
-- If asked to explain something simpler, use analogies and everyday language
-- Be encouraging and supportive of the reader's learning journey
+
+COGNITIVE CALIBRATION:
+${depthInstruction}
+
+RESPONSE FORMAT:
+- Start with a direct answer to the question (no preamble like "Great question!")
+- Use **bold** for key terms and concepts
+- Use bullet points or numbered lists when comparing items or listing steps
+- End with a brief "💡 Key takeaway" one-liner when appropriate
+- If the chapter content is relevant, cite specific sections
+
+RULES:
+- Ground answers in the chapter content FIRST, then supplement with broader knowledge
+- Match depth and vocabulary to the learner's cognitive level
+- Never fabricate information — if uncertain, say so
+- For technical content: include code examples or formulas when they clarify the answer
+- For conceptual content: use analogies appropriate to the learner's level
 
 CHAPTER CONTENT:
-${chapterContent}
-
-IMPORTANT:
-- Base your primary answers on the chapter content when possible
-- You can supplement with additional knowledge when the chapter doesn't cover something
-- Never make up false information
-- If you truly don't know something, say so honestly`
+${chapterContent}`
       },
       ...conversationHistory.map((msg: { role: string; content: string }) => ({
         role: msg.role,
