@@ -469,27 +469,52 @@ export default function Profile() {
               <CardTitle className={isMobile ? "text-base" : ""}>{t('profile.stats')}</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className={cn("gap-4", isMobile ? "grid grid-cols-3 gap-2" : "grid sm:grid-cols-3")}>
+              <div className={cn("gap-4", isMobile ? "grid grid-cols-2 gap-3" : "grid sm:grid-cols-3 lg:grid-cols-5")}>
                 <div className={cn("text-center rounded-lg bg-muted/30", isMobile ? "p-3" : "p-4")}>
-                  <BookOpen className={cn("mx-auto mb-2 text-primary", isMobile ? "h-6 w-6" : "h-8 w-8")} />
+                  <BookOpen className={cn("mx-auto mb-2 text-primary", isMobile ? "h-5 w-5" : "h-7 w-7")} />
                   <p className={cn("font-bold text-foreground", isMobile ? "text-lg" : "text-2xl")}>{userBooks.length}</p>
                   <p className={cn("text-muted-foreground", isMobile ? "text-xs" : "text-sm")}>{isMobile ? "Books" : t('profile.booksInLibrary')}</p>
                 </div>
                 <div className={cn("text-center rounded-lg bg-muted/30", isMobile ? "p-3" : "p-4")}>
-                  <Clock className={cn("mx-auto mb-2 text-primary", isMobile ? "h-6 w-6" : "h-8 w-8")} />
-                  <p className={cn("font-bold text-foreground", isMobile ? "text-sm" : "text-2xl")}>
-                    {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : "-"}
+                  <Clock className={cn("mx-auto mb-2 text-primary", isMobile ? "h-5 w-5" : "h-7 w-7")} />
+                  <p className={cn("font-bold text-foreground", isMobile ? "text-lg" : "text-2xl")}>
+                    {userStats.totalReadingMinutes > 60 
+                      ? `${Math.floor(userStats.totalReadingMinutes / 60)}h ${userStats.totalReadingMinutes % 60}m`
+                      : `${userStats.totalReadingMinutes}m`}
                   </p>
-                  <p className={cn("text-muted-foreground", isMobile ? "text-xs" : "text-sm")}>{isMobile ? "Joined" : t('profile.memberSince')}</p>
+                  <p className={cn("text-muted-foreground", isMobile ? "text-xs" : "text-sm")}>{isMobile ? "Reading" : "Reading Time"}</p>
                 </div>
                 <div className={cn("text-center rounded-lg bg-muted/30", isMobile ? "p-3" : "p-4")}>
-                  <Award className={cn("mx-auto mb-2 text-primary", isMobile ? "h-6 w-6" : "h-8 w-8")} />
-                  <p className={cn("font-bold text-foreground capitalize", isMobile ? "text-lg" : "text-2xl")}>
-                    {profile?.plan || "Free"}
-                  </p>
-                  <p className={cn("text-muted-foreground", isMobile ? "text-xs" : "text-sm")}>{isMobile ? "Plan" : t('profile.currentPlan')}</p>
+                  <Award className={cn("mx-auto mb-2 text-primary", isMobile ? "h-5 w-5" : "h-7 w-7")} />
+                  <p className={cn("font-bold text-foreground", isMobile ? "text-lg" : "text-2xl")}>{userStats.quizzesTaken}</p>
+                  <p className={cn("text-muted-foreground", isMobile ? "text-xs" : "text-sm")}>{isMobile ? "Quizzes" : "Quizzes Taken"}</p>
+                </div>
+                <div className={cn("text-center rounded-lg bg-muted/30", isMobile ? "p-3" : "p-4")}>
+                  <Award className={cn("mx-auto mb-2 text-primary", isMobile ? "h-5 w-5" : "h-7 w-7")} />
+                  <p className={cn("font-bold text-foreground", isMobile ? "text-lg" : "text-2xl")}>{userStats.avgQuizScore}%</p>
+                  <p className={cn("text-muted-foreground", isMobile ? "text-xs" : "text-sm")}>{isMobile ? "Avg Score" : "Avg Quiz Score"}</p>
+                </div>
+                <div className={cn("text-center rounded-lg bg-muted/30", isMobile ? "p-3" : "p-4")}>
+                  <Award className={cn("mx-auto mb-2 text-primary", isMobile ? "h-5 w-5" : "h-7 w-7")} />
+                  <p className={cn("font-bold text-foreground", isMobile ? "text-lg" : "text-2xl")}>{userStats.certificatesEarned}</p>
+                  <p className={cn("text-muted-foreground", isMobile ? "text-xs" : "text-sm")}>{isMobile ? "Certs" : "Certificates"}</p>
                 </div>
               </div>
+              <div className={cn("mt-4 flex items-center justify-between rounded-lg bg-muted/30", isMobile ? "p-3" : "p-4")}>
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="border-primary text-primary capitalize">{profile?.plan || "Free"}</Badge>
+                  <span className="text-sm text-muted-foreground">
+                    Member since {profile?.created_at ? new Date(profile.created_at).toLocaleDateString() : "-"}
+                  </span>
+                </div>
+                {userStats.readingStreak > 0 && (
+                  <Badge variant="secondary" className="gap-1">
+                    🔥 {userStats.readingStreak} day streak
+                  </Badge>
+                )}
+              </div>
+            </CardContent>
+          </Card>
             </CardContent>
           </Card>
         </TabsContent>
