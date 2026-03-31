@@ -515,8 +515,6 @@ export default function Profile() {
               </div>
             </CardContent>
           </Card>
-            </CardContent>
-          </Card>
         </TabsContent>
 
         <TabsContent value="books" className="space-y-4">
