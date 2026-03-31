@@ -13,8 +13,7 @@ export type Feature =
   | 'exportPdf'
   | 'exportEpub'
   | 'exportDocx'
-  | 'exportMobi'
-  | 'exportKpf';
+  | 'exportKdpPdf';
 
 interface FeatureAccessResult {
   hasAccess: boolean;
