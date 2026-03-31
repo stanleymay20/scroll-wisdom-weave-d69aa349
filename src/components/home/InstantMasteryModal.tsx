@@ -10,7 +10,7 @@
  * - Session deduplication: no repeated questions within a session
  */
 
-import React, { useState, useEffect, useCallback, useRef, useMemo } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Dialog, DialogContent, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -351,7 +351,7 @@ interface InstantMasteryModalProps {
   onOpenChange: (open: boolean) => void;
 }
 
-export const InstantMasteryModal = React.forwardRef<HTMLDivElement, InstantMasteryModalProps>(function InstantMasteryModal({ open, onOpenChange }, _ref) {
+export function InstantMasteryModal({ open, onOpenChange }: InstantMasteryModalProps) {
   const navigate = useNavigate();
   const [phase, setPhase] = useState<Phase>("question");
   const [selectedAnswer, setSelectedAnswer] = useState<number | null>(null);
@@ -867,4 +867,4 @@ export const InstantMasteryModal = React.forwardRef<HTMLDivElement, InstantMaste
       </DialogContent>
     </Dialog>
   );
-});
+}
