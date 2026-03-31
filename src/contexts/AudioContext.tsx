@@ -89,12 +89,52 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     if (!audioRef.current) {
       audioRef.current = new Audio();
     }
+
+    const audio = audioRef.current;
+    audio.preload = "auto";
+    (audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+
+    const syncPlaying = () => {
+      setState(prev => {
+        const nextIsPlaying = !audio.paused && !audio.ended;
+        if (prev.isPlaying === nextIsPlaying && prev.isLoading === false) return prev;
+        return { ...prev, isPlaying: nextIsPlaying, isLoading: false };
+      });
+    };
+
+    const syncWaiting = () => {
+      setState(prev => {
+        if (prev.isLoading) return prev;
+        return { ...prev, isLoading: true };
+      });
+    };
+
+    const syncStopped = () => {
+      setState(prev => {
+        if (!prev.isPlaying && !prev.isLoading) return prev;
+        return { ...prev, isPlaying: false, isLoading: false };
+      });
+    };
+
+    audio.addEventListener("playing", syncPlaying);
+    audio.addEventListener("canplay", syncPlaying);
+    audio.addEventListener("canplaythrough", syncPlaying);
+    audio.addEventListener("waiting", syncWaiting);
+    audio.addEventListener("pause", syncStopped);
+    audio.addEventListener("ended", syncStopped);
+    audio.addEventListener("error", syncStopped);
+
     return () => {
       // App unmount — clean up
-      if (audioRef.current) {
-        audioRef.current.pause();
-        audioRef.current.src = "";
-      }
+      audio.removeEventListener("playing", syncPlaying);
+      audio.removeEventListener("canplay", syncPlaying);
+      audio.removeEventListener("canplaythrough", syncPlaying);
+      audio.removeEventListener("waiting", syncWaiting);
+      audio.removeEventListener("pause", syncStopped);
+      audio.removeEventListener("ended", syncStopped);
+      audio.removeEventListener("error", syncStopped);
+      audio.pause();
+      audio.src = "";
     };
   }, []);
 
@@ -127,6 +167,10 @@ export function AudioProvider({ children }: { children: ReactNode }) {
 
   const update = useCallback((partial: Partial<GlobalAudioState>) => {
     setState(prev => {
+      const entries = Object.entries(partial) as Array<[keyof GlobalAudioState, GlobalAudioState[keyof GlobalAudioState]]>;
+      const hasChanges = entries.some(([key, value]) => prev[key] !== value);
+      if (!hasChanges) return prev;
+
       const next = { ...prev, ...partial };
       // Persist position when meaningful
       if (next.bookId && next.chapterId && next.chunkIndex > 0) {
