@@ -53,7 +53,7 @@ export const SUBSCRIPTION_TIERS = {
       canGenerateBooks: true,
       maxBooksPerMonth: 30,
       maxWordCount: 6000,
-      exportFormats: ['pdf', 'epub', 'docx', 'mobi'],
+      exportFormats: ['pdf', 'epub', 'docx', 'kdp-pdf'],
       ttsMinutes: 60,
       interactiveVoiceMinutes: 120,
       aiCovers: true,
