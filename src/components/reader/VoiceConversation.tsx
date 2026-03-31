@@ -109,7 +109,33 @@ export function VoiceConversation({
   };
   const voiceLimit = getVoiceLimit();
 
-  // Send a text message to the AI
+  const playAudio = useCallback((base64Audio: string) => {
+    try {
+      if (audioRef.current) {
+        audioRef.current.pause();
+        audioRef.current.src = "";
+      }
+      const audioUrl = `data:audio/mpeg;base64,${base64Audio}`;
+      const audio = new Audio(audioUrl);
+      audio.onplay = () => { if (isMountedRef.current) setIsSpeaking(true); };
+      audio.onended = () => { if (isMountedRef.current) setIsSpeaking(false); };
+      audio.onerror = () => { if (isMountedRef.current) setIsSpeaking(false); };
+      audioRef.current = audio;
+      audio.play().catch(console.error);
+    } catch (error) {
+      console.error("Audio playback error:", error);
+    }
+  }, []);
+
+  const stopAudio = useCallback(() => {
+    if (audioRef.current) {
+      audioRef.current.pause();
+      audioRef.current.src = "";
+      audioRef.current = null;
+    }
+    setIsSpeaking(false);
+  }, []);
+
   const sendTextMessage = useCallback(async (text: string) => {
     if (!text.trim() || isProcessing) return;
     
