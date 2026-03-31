@@ -13,8 +13,7 @@ export type Feature =
   | 'exportPdf'
   | 'exportEpub'
   | 'exportDocx'
-  | 'exportMobi'
-  | 'exportKpf';
+  | 'exportKdpPdf';
 
 interface FeatureAccessResult {
   hasAccess: boolean;
@@ -134,16 +133,15 @@ export function useFeatureAccess() {
           upgradeRequired: 'student'
         };
 
-      case 'exportMobi':
-      case 'exportKpf':
-        // MOBI/KPF require Prophet tier
-        if (entitlements.isProphet) {
+      case 'exportKdpPdf':
+        // KDP-PDF requires Premium tier
+        if (entitlements.isPaid && (tier === 'premium' || tier === 'prophet_tier')) {
           return { hasAccess: true };
         }
         return { 
           hasAccess: false, 
-          reason: `${feature === 'exportMobi' ? 'MOBI' : 'KPF'} export requires Institutional plan`,
-          upgradeRequired: 'prophet_tier'
+          reason: 'KDP PDF export requires Premium plan or higher',
+          upgradeRequired: 'premium'
         };
 
       default:

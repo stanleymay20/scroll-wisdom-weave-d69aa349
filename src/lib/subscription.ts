@@ -11,7 +11,7 @@ export const SUBSCRIPTION_TIERS = {
       canGenerateBooks: true, // 1 book/month for PMF validation
       maxBooksPerMonth: 1,
       maxWordCount: 4000,
-      exportFormats: ['pdf_low'],
+      exportFormats: ['pdf'],
       ttsMinutes: 5, // 5 min free TTS (cost control)
       interactiveVoiceMinutes: 5,
       aiCovers: false,
@@ -53,7 +53,7 @@ export const SUBSCRIPTION_TIERS = {
       canGenerateBooks: true,
       maxBooksPerMonth: 30,
       maxWordCount: 6000,
-      exportFormats: ['pdf', 'epub', 'docx', 'mobi'],
+      exportFormats: ['pdf', 'epub', 'docx', 'kdp-pdf'],
       ttsMinutes: 60,
       interactiveVoiceMinutes: 120,
       aiCovers: true,
@@ -74,7 +74,7 @@ export const SUBSCRIPTION_TIERS = {
       canGenerateBooks: true,
       maxBooksPerMonth: 100,      // Capped for economic sustainability
       maxWordCount: 6000,
-      exportFormats: ['pdf', 'epub', 'docx', 'mobi', 'kpf'],
+      exportFormats: ['pdf', 'epub', 'docx', 'kdp-pdf'],
       ttsMinutes: 300,            // 5 hours/month cap
       interactiveVoiceMinutes: 300,
       aiCovers: true,
