@@ -8,7 +8,7 @@
  */
 
 import { useEffect, useState, useCallback, memo, forwardRef } from "react";
-import { ChevronRight } from "lucide-react";
+import { ChevronRight, BookOpen } from "lucide-react";
 import { Link } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { MobileBookCard } from "./MobileBookCard";
@@ -158,10 +158,11 @@ export function MobileHome() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-12 rounded-xl bg-muted/30 border border-dashed border-border">
-            <p className="text-muted-foreground text-sm">No books yet</p>
-            <p className="text-muted-foreground/60 text-xs mt-1">
-              Tap the + button to create your first book
+          <div className="text-center py-16 rounded-xl bg-muted/20 border border-border/50">
+            <BookOpen className="h-10 w-10 text-primary/30 mx-auto mb-3" />
+            <h3 className="text-base font-semibold text-foreground mb-1">No books yet</h3>
+            <p className="text-muted-foreground text-sm max-w-[200px] mx-auto">
+              Tap the <span className="font-bold text-primary">+</span> button below to create your first book
             </p>
           </div>
         )}

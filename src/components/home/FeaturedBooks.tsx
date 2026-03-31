@@ -26,46 +26,13 @@ interface FeaturedBook {
   total_chapters: number | null;
 }
 
-// Sample featured books data - shown instantly while real data loads
-const SAMPLE_BOOKS: FeaturedBook[] = [
-  {
-    id: "sample-1",
-    title: "Introduction to Machine Learning: Concepts & Applications",
-    description: "A structured guide to supervised and unsupervised learning, neural networks, and real-world ML applications.",
-    category: "technology",
-    cover_image_url: null,
-    total_chapters: 12,
-  },
-  {
-    id: "sample-2",
-    title: "Principles of Microeconomics: Markets & Decision-Making",
-    description: "Explore supply and demand, market structures, and consumer behaviour through structured academic content.",
-    category: "economics",
-    cover_image_url: null,
-    total_chapters: 8,
-  },
-  {
-    id: "sample-3",
-    title: "Cognitive Psychology: Memory, Attention & Perception",
-    description: "An evidence-based study of how the mind processes information, with assessment-ready chapter quizzes.",
-    category: "psychology",
-    cover_image_url: null,
-    total_chapters: 10,
-  },
-  {
-    id: "sample-4",
-    title: "Modern African History: Independence to Globalisation",
-    description: "A comprehensive study of post-colonial Africa, covering political, economic, and cultural transformation.",
-    category: "history",
-    cover_image_url: null,
-    total_chapters: 15,
-  },
-];
+// No more hardcoded sample books — show skeleton until real data loads
 
 export const FeaturedBooks = memo(function FeaturedBooks() {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const [books, setBooks] = useState<FeaturedBook[]>(SAMPLE_BOOKS);
+  const [books, setBooks] = useState<FeaturedBook[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [hasRealData, setHasRealData] = useState(false);
 
   // CONTRACT 5: Cache-first background fetch
@@ -109,7 +76,8 @@ export const FeaturedBooks = memo(function FeaturedBooks() {
         }
       } catch (error) {
         console.error("Error fetching featured books:", error);
-        // Keep sample data on error
+      } finally {
+        setIsLoading(false);
       }
     };
 
@@ -147,21 +115,35 @@ export const FeaturedBooks = memo(function FeaturedBooks() {
           </Button>
         </motion.div>
 
-        {/* Books Grid - renders immediately with sample or cached data */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {books.map((book, index) => (
+        {/* Books Grid */}
+        {isLoading && books.length === 0 ? (
+          <FeaturedBooksSkeleton />
+        ) : books.length === 0 ? (
+          <div className="text-center py-16">
             <BookCard
-              key={book.id}
-              id={book.id}
-              title={book.title}
-              description={book.description || undefined}
-              category={book.category}
-              coverImageUrl={book.cover_image_url || undefined}
-              totalChapters={book.total_chapters || 0}
-              index={index}
+              id="explore"
+              title="Explore the library to discover books"
+              category="general"
+              totalChapters={0}
+              index={0}
             />
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {books.map((book, index) => (
+              <BookCard
+                key={book.id}
+                id={book.id}
+                title={book.title}
+                description={book.description || undefined}
+                category={book.category}
+                coverImageUrl={book.cover_image_url || undefined}
+                totalChapters={book.total_chapters || 0}
+                index={index}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );

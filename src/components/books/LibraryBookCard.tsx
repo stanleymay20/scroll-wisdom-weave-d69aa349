@@ -10,7 +10,8 @@ import {
   Share2, 
   Download,
   Eye,
-  Clock
+  Clock,
+  Loader2
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -316,7 +317,7 @@ export function LibraryBookCard({
             >
               {isRemoving ? (
                 <>
-                  <span className="animate-spin mr-2">⏳</span>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   {t('common.removing') || "Removing..."}
                 </>
               ) : (

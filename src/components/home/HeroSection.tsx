@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { Shield, Brain, Keyboard, Lock, ArrowRight, Users, BookOpen, Award } from "lucide-react";
+import { Shield, Brain, Keyboard, Lock, ArrowRight, BookOpen, Award } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
 import heroCinematicBook from "@/assets/hero-cinematic-book.png";
 
@@ -11,11 +11,7 @@ const FEATURES = [
   { icon: Lock, title: "SHA-256 Mastery Record", desc: "Cryptographically verifiable." },
 ];
 
-const SOCIAL_PROOF = [
-  { label: "Books Generated", value: "—", icon: BookOpen },
-  { label: "Certificates Issued", value: "—", icon: Award },
-  { label: "Active Learners", value: "—", icon: Users },
-];
+// Social proof removed — will be restored when real analytics are available
 
 interface HeroSectionProps {
   onStartDemo: () => void;
@@ -50,7 +46,7 @@ export function HeroSection({ onStartDemo }: HeroSectionProps) {
               className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-sm text-primary mb-6"
             >
               <Shield className="h-3.5 w-3.5" />
-              Cognitive Mastery Platform
+              AI-Powered Learning Platform
             </motion.div>
 
             {/* Headline */}
@@ -92,24 +88,16 @@ export function HeroSection({ onStartDemo }: HeroSectionProps) {
               </Button>
             </motion.div>
 
-            {/* Social Proof Badges */}
+            {/* Trust signals — lightweight, no fake numbers */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.6, delay: 0.3 }}
-              className="flex flex-wrap gap-6"
+              className="flex flex-wrap gap-4 text-xs text-muted-foreground"
             >
-              {SOCIAL_PROOF.map((stat) => (
-                <div key={stat.label} className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <stat.icon className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-foreground">{stat.value}</p>
-                    <p className="text-[11px] text-muted-foreground">{stat.label}</p>
-                  </div>
-                </div>
-              ))}
+              <span className="inline-flex items-center gap-1.5"><Shield className="h-3.5 w-3.5 text-primary" /> Bloom's Taxonomy Scoring</span>
+              <span className="inline-flex items-center gap-1.5"><Award className="h-3.5 w-3.5 text-primary" /> Verifiable Certificates</span>
+              <span className="inline-flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5 text-primary" /> Multi-Format Export</span>
             </motion.div>
           </div>
 
