@@ -125,6 +125,13 @@ export default function Profile() {
   const [userBooks, setUserBooks] = useState<UserBook[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isSaving, setIsSaving] = useState(false);
+  const [userStats, setUserStats] = useState<UserStats>({
+    totalReadingMinutes: 0,
+    quizzesTaken: 0,
+    avgQuizScore: 0,
+    readingStreak: 0,
+    certificatesEarned: 0,
+  });
   const [editedProfile, setEditedProfile] = useState({
     full_name: "",
     bio: "",
