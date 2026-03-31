@@ -840,11 +840,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   // Cleanup on unmount — SAVE position before destroying
   // Sync playing state to global context so GlobalAudioPlayer knows what's happening
   useEffect(() => {
+    const [derivedBookTitle, ...chapterParts] = title.split(" - ");
+    const derivedChapterTitle = chapterParts.join(" - ") || title;
+
     globalAudio.update({
       bookId: bookId || null,
       chapterId: chapterId || null,
-      bookTitle: author,
-      chapterTitle: title,
+      chapterNumber: currentChapter || null,
+      readerPath: bookId && currentChapter ? `/read/${bookId}/${currentChapter}` : null,
+      bookTitle: derivedBookTitle || author,
+      chapterTitle: derivedChapterTitle,
       voice: selectedVoice,
       chunkIndex: currentChunk,
       totalChunks,
@@ -852,7 +857,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       isLoading,
       progress,
     });
-  }, [isPlaying, isLoading, currentChunk, totalChunks, progress, bookId, chapterId, title, selectedVoice]);
+  }, [globalAudio, isPlaying, isLoading, currentChunk, totalChunks, progress, bookId, chapterId, currentChapter, title, author, selectedVoice]);
 
   // Cleanup on unmount — persist position but DON'T destroy audio if still playing
   useEffect(() => {
@@ -863,11 +868,13 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         console.log('[TTS] Saved position on unmount:', currentChunk);
       }
       
-      stopRef.current = true;
-      isStoppingRef.current = true;
+      if (!audioRef.current || audioRef.current.paused) {
+        stopRef.current = true;
+        isStoppingRef.current = true;
+      }
       cleanupBlobUrls();
     };
-  }, [cleanupBlobUrls, bookId, chapterId, currentChunk, selectedVoice, isPlaying, title]);
+  }, [cleanupBlobUrls, bookId, chapterId, currentChunk, selectedVoice, isPlaying, title, audioRef]);
 
   // Update volume on active audio
   useEffect(() => {
@@ -920,6 +927,27 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       generateSpeech(selectedText, true);
     }
   };
+
+  useEffect(() => {
+    globalAudio.registerControls({
+      pause: pauseForInteraction,
+      play: () => {
+        if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
+          resumeFromPosition();
+          return;
+        }
+
+        if (!isPlaying && !isLoading) {
+          generateSpeech(mode === "selection" && selectedText ? selectedText : chapterText, mode === "selection");
+        }
+      },
+      stop,
+    });
+
+    return () => {
+      globalAudio.registerControls(null);
+    };
+  }, [globalAudio, pauseForInteraction, resumeFromPosition, stop, isPlaying, isLoading, generateSpeech, mode, selectedText, chapterText]);
 
   if (!hasAccess) return null;
 
