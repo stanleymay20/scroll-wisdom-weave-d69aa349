@@ -115,21 +115,35 @@ export const FeaturedBooks = memo(function FeaturedBooks() {
           </Button>
         </motion.div>
 
-        {/* Books Grid - renders immediately with sample or cached data */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-          {books.map((book, index) => (
+        {/* Books Grid */}
+        {isLoading && books.length === 0 ? (
+          <FeaturedBooksSkeleton />
+        ) : books.length === 0 ? (
+          <div className="text-center py-16">
             <BookCard
-              key={book.id}
-              id={book.id}
-              title={book.title}
-              description={book.description || undefined}
-              category={book.category}
-              coverImageUrl={book.cover_image_url || undefined}
-              totalChapters={book.total_chapters || 0}
-              index={index}
+              id="explore"
+              title="Explore the library to discover books"
+              category="general"
+              totalChapters={0}
+              index={0}
             />
-          ))}
-        </div>
+          </div>
+        ) : (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+            {books.map((book, index) => (
+              <BookCard
+                key={book.id}
+                id={book.id}
+                title={book.title}
+                description={book.description || undefined}
+                category={book.category}
+                coverImageUrl={book.cover_image_url || undefined}
+                totalChapters={book.total_chapters || 0}
+                index={index}
+              />
+            ))}
+          </div>
+        )}
       </div>
     </section>
   );
