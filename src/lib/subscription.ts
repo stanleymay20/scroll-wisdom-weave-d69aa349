@@ -74,7 +74,7 @@ export const SUBSCRIPTION_TIERS = {
       canGenerateBooks: true,
       maxBooksPerMonth: 100,      // Capped for economic sustainability
       maxWordCount: 6000,
-      exportFormats: ['pdf', 'epub', 'docx', 'mobi', 'kpf'],
+      exportFormats: ['pdf', 'epub', 'docx', 'kdp-pdf'],
       ttsMinutes: 300,            // 5 hours/month cap
       interactiveVoiceMinutes: 300,
       aiCovers: true,
