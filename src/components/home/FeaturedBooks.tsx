@@ -31,7 +31,8 @@ interface FeaturedBook {
 export const FeaturedBooks = memo(function FeaturedBooks() {
   const navigate = useNavigate();
   const { t } = useLanguage();
-  const [books, setBooks] = useState<FeaturedBook[]>(SAMPLE_BOOKS);
+  const [books, setBooks] = useState<FeaturedBook[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
   const [hasRealData, setHasRealData] = useState(false);
 
   // CONTRACT 5: Cache-first background fetch
