@@ -137,6 +137,7 @@ serve(async (req) => {
       bookType = 'text',
       highlightedText,
       speakResponse = false,
+      cognitiveLevel = 'functional',
     } = await req.json();
 
     if (!question || !chapterContent) {
