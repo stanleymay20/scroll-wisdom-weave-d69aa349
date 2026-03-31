@@ -44,6 +44,14 @@ interface UserBook {
   cover_image_url: string | null;
 }
 
+interface UserStats {
+  totalReadingMinutes: number;
+  quizzesTaken: number;
+  avgQuizScore: number;
+  readingStreak: number;
+  certificatesEarned: number;
+}
+
 // Mobile Skeleton component
 function MobileProfileSkeleton() {
   return (
