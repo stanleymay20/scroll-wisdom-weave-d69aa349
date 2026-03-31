@@ -88,24 +88,16 @@ export function HeroSection({ onStartDemo }: HeroSectionProps) {
               </Button>
             </motion.div>
 
-            {/* Social Proof Badges */}
+            {/* Trust signals — lightweight, no fake numbers */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               transition={{ duration: 0.6, delay: 0.3 }}
-              className="flex flex-wrap gap-6"
+              className="flex flex-wrap gap-4 text-xs text-muted-foreground"
             >
-              {SOCIAL_PROOF.map((stat) => (
-                <div key={stat.label} className="flex items-center gap-2">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                    <stat.icon className="h-4 w-4 text-primary" />
-                  </div>
-                  <div>
-                    <p className="text-sm font-bold text-foreground">{stat.value}</p>
-                    <p className="text-[11px] text-muted-foreground">{stat.label}</p>
-                  </div>
-                </div>
-              ))}
+              <span className="inline-flex items-center gap-1.5"><Shield className="h-3.5 w-3.5 text-primary" /> Bloom's Taxonomy Scoring</span>
+              <span className="inline-flex items-center gap-1.5"><Award className="h-3.5 w-3.5 text-primary" /> Verifiable Certificates</span>
+              <span className="inline-flex items-center gap-1.5"><BookOpen className="h-3.5 w-3.5 text-primary" /> Multi-Format Export</span>
             </motion.div>
           </div>
 
