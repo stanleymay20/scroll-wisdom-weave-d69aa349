@@ -867,4 +867,4 @@ export const InstantMasteryModal = React.forwardRef<HTMLDivElement, InstantMaste
       </DialogContent>
     </Dialog>
   );
-}
+});
