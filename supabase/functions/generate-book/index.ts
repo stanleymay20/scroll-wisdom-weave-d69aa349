@@ -263,7 +263,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     // Save book
     const { data: book, error: bookError } = await supabase.from("books").insert({
       title: bookOutline.bookTitle || title,
-      description: bookOutline.bookDescription || description,
+      description: (bookOutline.bookDescription || description) + (transformationPrompt ? `\n\n---\nTRANSFORMATION DIRECTIVE: ${transformationPrompt}` : ''),
       category, total_chapters: effectiveChapters,
       is_published: false, is_featured: false,
       author_ai_agent: resolvedAuthorName,
