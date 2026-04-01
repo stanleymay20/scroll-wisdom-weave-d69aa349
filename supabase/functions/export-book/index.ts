@@ -461,6 +461,7 @@ function parseStyledRuns(text: string): StyledRun[] {
 }
 
 // Draw a styled paragraph in PDF with inline bold/italic support
+// Returns { y, page } so the caller can track page breaks
 function drawStyledParagraph(
   page: any,
   text: string,
@@ -476,7 +477,7 @@ function drawStyledParagraph(
   margin?: number,
   addPageNumberFn?: (page: any, num: number) => void,
   pageNumberRef?: { current: number }
-): number {
+): { y: number; page: any } {
   const runs = parseStyledRuns(sanitizeForPDF(text));
   const lineHeight = fontSize + 4;
   const bottomMargin = (margin || 72) + 30;
@@ -526,7 +527,7 @@ function drawStyledParagraph(
     }
   }
   
-  return currentY - lineHeight; // Return next Y position
+  return { y: currentY - lineHeight, page: currentPage }; // Return next Y position AND current page
 }
 
 // Convert markdown text to WordprocessingML runs with bold/italic
