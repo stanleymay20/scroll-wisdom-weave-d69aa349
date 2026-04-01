@@ -160,7 +160,6 @@ export default function Generate() {
   const [transformationPrompt, setTransformationPrompt] = useState("");
   
   const { toast } = useToast();
-  const [transformationPrompt, setTransformationPrompt] = useState("");
 
 
   // Auto-enable academic mode for academic categories
