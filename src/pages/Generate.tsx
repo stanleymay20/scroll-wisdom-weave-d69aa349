@@ -156,7 +156,9 @@ export default function Generate() {
   const [penName, setPenName] = useState("");
   const [publisherImprint, setPublisherImprint] = useState("");
   
-  const { toast } = useToast();
+  // Transformation/upgrade prompt state
+  const [transformationPrompt, setTransformationPrompt] = useState("");
+
 
   // Auto-enable academic mode for academic categories
   useEffect(() => {
