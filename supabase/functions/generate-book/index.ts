@@ -206,8 +206,13 @@ serve(async (req) => {
     const bestsellerBoost = (bestsellerMode && !isAcademicType && effectiveBookType !== "comic" && effectiveBookType !== "workbook")
       ? "BESTSELLER MODE: Provocative titles, hooks, named principles, transformation promises." : "";
 
+    // Build transformation instructions if provided
+    const transformInstr = transformationPrompt 
+      ? `\n\nTRANSFORMATION DIRECTIVE (apply to every chapter):\n${transformationPrompt}\n` 
+      : "";
+
     // Generate outline via AI
-    const outlinePrompt = `Create a book outline in ${languageName}. Title: "${title}". Description: "${description || "A comprehensive exploration"}". Category: ${category}. Chapters: ${effectiveChapters}. Type: ${effectiveBookType}. ${typeInstr} ${bestsellerBoost} ${refInstr}
+    const outlinePrompt = `Create a book outline in ${languageName}. Title: "${title}". Description: "${description || "A comprehensive exploration"}". Category: ${category}. Chapters: ${effectiveChapters}. Type: ${effectiveBookType}. ${typeInstr} ${bestsellerBoost} ${refInstr}${transformInstr}
 
 For each chapter provide: chapterNumber, title, description (2-3 sentences), keyTopics (4-5 items). All in ${languageName}. Plain text only, no markdown.
 
