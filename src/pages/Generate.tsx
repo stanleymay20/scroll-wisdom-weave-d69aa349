@@ -387,6 +387,8 @@ export default function Generate() {
             vocabulary: styleProfile.vocabulary,
             samplePrompt: styleProfile.samplePrompt,
           } : null,
+          // Transformation/upgrade prompt for book style and positioning
+          transformationPrompt: transformationPrompt.trim() || null,
         },
       });
 
