@@ -1923,7 +1923,9 @@ async function generatePDF(
           y = pageHeight - margin - 30;
         }
         pageNumberRef.current = pageNumber;
-        y = drawStyledParagraph(page, paragraph.trim(), margin + indent, y, effectiveWidth, 11, bodyFonts, rgb(0.1, 0.1, 0.1), pdfDoc, pageWidth, pageHeight, margin, addPageNumber, pageNumberRef);
+        const styledResult = drawStyledParagraph(page, paragraph.trim(), margin + indent, y, effectiveWidth, 11, bodyFonts, rgb(0.1, 0.1, 0.1), pdfDoc, pageWidth, pageHeight, margin, addPageNumber, pageNumberRef);
+        y = styledResult.y;
+        page = styledResult.page;
         pageNumber = pageNumberRef.current;
       } else {
         const lines = wrapText(paragraph.trim(), timesRoman, 11, effectiveWidth);
