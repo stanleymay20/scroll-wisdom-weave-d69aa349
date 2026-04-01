@@ -117,6 +117,7 @@ serve(async (req) => {
       bookType = "text", extendedBookType = null,
       enableReferences = false, academicMode = false, bestsellerMode = true,
       authorMode = "ai", authorDisplayName: rawAuthorName = null, penName: rawPenName = null,
+      transformationPrompt: rawTransformationPrompt = null,
     } = body;
 
     // ── Server-side input validation ──────────────────────
