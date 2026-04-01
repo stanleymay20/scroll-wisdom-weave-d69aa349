@@ -463,10 +463,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         }
       };
 
-      if (audio.src !== url) {
-        audio.src = url;
-      }
-      audio.load();
+      // Set source and play — do NOT call audio.load() separately as it causes
+      // race conditions with the play() promise on some browsers
+      audio.src = url;
       audio.play().catch((err) => {
         if (isMountedRef.current) {
           setIsLoading(false);
