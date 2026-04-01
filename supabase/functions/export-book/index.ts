@@ -461,6 +461,7 @@ function parseStyledRuns(text: string): StyledRun[] {
 }
 
 // Draw a styled paragraph in PDF with inline bold/italic support
+// Returns { y, page } so the caller can track page breaks
 function drawStyledParagraph(
   page: any,
   text: string,
@@ -476,7 +477,7 @@ function drawStyledParagraph(
   margin?: number,
   addPageNumberFn?: (page: any, num: number) => void,
   pageNumberRef?: { current: number }
-): number {
+): { y: number; page: any } {
   const runs = parseStyledRuns(sanitizeForPDF(text));
   const lineHeight = fontSize + 4;
   const bottomMargin = (margin || 72) + 30;
@@ -526,7 +527,7 @@ function drawStyledParagraph(
     }
   }
   
-  return currentY - lineHeight; // Return next Y position
+  return { y: currentY - lineHeight, page: currentPage }; // Return next Y position AND current page
 }
 
 // Convert markdown text to WordprocessingML runs with bold/italic
@@ -1922,7 +1923,9 @@ async function generatePDF(
           y = pageHeight - margin - 30;
         }
         pageNumberRef.current = pageNumber;
-        y = drawStyledParagraph(page, paragraph.trim(), margin + indent, y, effectiveWidth, 11, bodyFonts, rgb(0.1, 0.1, 0.1), pdfDoc, pageWidth, pageHeight, margin, addPageNumber, pageNumberRef);
+        const styledResult = drawStyledParagraph(page, paragraph.trim(), margin + indent, y, effectiveWidth, 11, bodyFonts, rgb(0.1, 0.1, 0.1), pdfDoc, pageWidth, pageHeight, margin, addPageNumber, pageNumberRef);
+        y = styledResult.y;
+        page = styledResult.page;
         pageNumber = pageNumberRef.current;
       } else {
         const lines = wrapText(paragraph.trim(), timesRoman, 11, effectiveWidth);
@@ -2523,7 +2526,9 @@ async function generateKDPPDF(
         const kdpBodyFonts = { regular: timesRoman, bold: timesRomanBold, italic: timesRomanItalic, boldItalic: timesRomanBoldItalic };
         const pageNumberRefKDP = { current: pageNumber };
         const addPageKDP = (pg: any, num: number) => addRunningHeader(pg, num, num % 2 === 1);
-        y = drawStyledParagraph(page, trimmed, leftMargin + indent, y, textWidth - indent, bodySize, kdpBodyFonts, rgb(0, 0, 0), pdfDoc, pageWidth, pageHeight, margins.bottom, addPageKDP, pageNumberRefKDP);
+        const kdpStyledResult = drawStyledParagraph(page, trimmed, leftMargin + indent, y, textWidth - indent, bodySize, kdpBodyFonts, rgb(0, 0, 0), pdfDoc, pageWidth, pageHeight, margins.bottom, addPageKDP, pageNumberRefKDP);
+        y = kdpStyledResult.y;
+        page = kdpStyledResult.page;
         pageNumber = pageNumberRefKDP.current;
       } else {
         const prefix = isBullet ? '\u2022 ' : isNumbered ? (trimmed.match(/^\d+[.)]\s/)?.[0] || '') : '';

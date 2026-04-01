@@ -156,7 +156,11 @@ export default function Generate() {
   const [penName, setPenName] = useState("");
   const [publisherImprint, setPublisherImprint] = useState("");
   
+  // Transformation/upgrade prompt state
+  const [transformationPrompt, setTransformationPrompt] = useState("");
+  
   const { toast } = useToast();
+
 
   // Auto-enable academic mode for academic categories
   useEffect(() => {
@@ -383,6 +387,8 @@ export default function Generate() {
             vocabulary: styleProfile.vocabulary,
             samplePrompt: styleProfile.samplePrompt,
           } : null,
+          // Transformation/upgrade prompt for book style and positioning
+          transformationPrompt: transformationPrompt.trim() || null,
         },
       });
 
@@ -578,7 +584,26 @@ export default function Generate() {
                 />
               </div>
 
-              {/* Category & Chapters */}
+              {/* Transformation / Upgrade Prompt */}
+              <div className="space-y-2">
+                <Label htmlFor="transformationPrompt" className="text-foreground flex items-center gap-2">
+                  <Wand2 className="h-4 w-4 text-primary" />
+                  Transformation Prompt
+                  <span className="text-xs text-muted-foreground font-normal">(optional)</span>
+                </Label>
+                <Textarea
+                  id="transformationPrompt"
+                  placeholder="e.g. Rewrite as a bestselling founder playbook. Use a confident, Paul Graham-style voice. Add hooks, reality checks, and execution playbooks per chapter. Embed consulting/SaaS conversion paths..."
+                  value={transformationPrompt}
+                  onChange={(e) => setTransformationPrompt(e.target.value)}
+                  className="bg-muted/50 border-border/50 focus:border-primary min-h-[80px] text-sm"
+                  disabled={isGenerating}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Guide the AI's writing style, structure, and positioning. The more specific, the better the output.
+                </p>
+              </div>
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label className="text-foreground">{t('generate.category')} *</Label>

@@ -117,6 +117,7 @@ serve(async (req) => {
       bookType = "text", extendedBookType = null,
       enableReferences = false, academicMode = false, bestsellerMode = true,
       authorMode = "ai", authorDisplayName: rawAuthorName = null, penName: rawPenName = null,
+      transformationPrompt: rawTransformationPrompt = null,
     } = body;
 
     // ── Server-side input validation ──────────────────────
@@ -129,6 +130,7 @@ serve(async (req) => {
     const description = sanitize(rawDescription, 2000);
     const authorDisplayName = sanitize(rawAuthorName, 100);
     const penName = sanitize(rawPenName, 100);
+    const transformationPrompt = sanitize(rawTransformationPrompt, 3000);
 
     if (!title || title.length < 1) {
       return new Response(JSON.stringify({ error: "Title is required." }), {
@@ -204,8 +206,13 @@ serve(async (req) => {
     const bestsellerBoost = (bestsellerMode && !isAcademicType && effectiveBookType !== "comic" && effectiveBookType !== "workbook")
       ? "BESTSELLER MODE: Provocative titles, hooks, named principles, transformation promises." : "";
 
+    // Build transformation instructions if provided
+    const transformInstr = transformationPrompt 
+      ? `\n\nTRANSFORMATION DIRECTIVE (apply to every chapter):\n${transformationPrompt}\n` 
+      : "";
+
     // Generate outline via AI
-    const outlinePrompt = `Create a book outline in ${languageName}. Title: "${title}". Description: "${description || "A comprehensive exploration"}". Category: ${category}. Chapters: ${effectiveChapters}. Type: ${effectiveBookType}. ${typeInstr} ${bestsellerBoost} ${refInstr}
+    const outlinePrompt = `Create a book outline in ${languageName}. Title: "${title}". Description: "${description || "A comprehensive exploration"}". Category: ${category}. Chapters: ${effectiveChapters}. Type: ${effectiveBookType}. ${typeInstr} ${bestsellerBoost} ${refInstr}${transformInstr}
 
 For each chapter provide: chapterNumber, title, description (2-3 sentences), keyTopics (4-5 items). All in ${languageName}. Plain text only, no markdown.
 
@@ -256,7 +263,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     // Save book
     const { data: book, error: bookError } = await supabase.from("books").insert({
       title: bookOutline.bookTitle || title,
-      description: bookOutline.bookDescription || description,
+      description: (bookOutline.bookDescription || description) + (transformationPrompt ? `\n\n---\nTRANSFORMATION DIRECTIVE: ${transformationPrompt}` : ''),
       category, total_chapters: effectiveChapters,
       is_published: false, is_featured: false,
       author_ai_agent: resolvedAuthorName,

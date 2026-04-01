@@ -317,17 +317,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
 
     const audio = audioRef.current;
-    const previousSrc = audio.src;
-    const previousMuted = audio.muted;
-    const previousVolume = audio.volume;
 
     try {
-      audio.muted = true;
-      audio.volume = 0;
-      audio.src = SILENT_WAV_DATA_URI;
-      await audio.play();
-      audio.pause();
-      audio.currentTime = 0;
+      // Play a silent WAV to unlock the audio context
+      // CRITICAL: Do NOT reset audio.src afterwards — that re-locks the context
+      const silentAudio = new Audio(SILENT_WAV_DATA_URI);
+      silentAudio.volume = 0;
+      await silentAudio.play();
+      silentAudio.pause();
+      silentAudio.src = "";
+      
       audioUnlockedRef.current = true;
       autoplayBlockedRef.current = false;
       console.log("[TTS] Audio context unlocked");
@@ -336,11 +335,6 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       autoplayBlockedRef.current = true;
       console.error("[TTS] Failed to unlock audio context:", err);
       return false;
-    } finally {
-      audio.pause();
-      audio.src = previousSrc || "";
-      audio.muted = previousMuted;
-      audio.volume = previousVolume;
     }
   }, [audioRef, volume]);
 
@@ -469,10 +463,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         }
       };
 
-      if (audio.src !== url) {
-        audio.src = url;
-      }
-      audio.load();
+      // Set source and play — do NOT call audio.load() separately as it causes
+      // race conditions with the play() promise on some browsers
+      audio.src = url;
       audio.play().catch((err) => {
         if (isMountedRef.current) {
           setIsLoading(false);
