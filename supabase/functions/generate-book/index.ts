@@ -130,6 +130,7 @@ serve(async (req) => {
     const description = sanitize(rawDescription, 2000);
     const authorDisplayName = sanitize(rawAuthorName, 100);
     const penName = sanitize(rawPenName, 100);
+    const transformationPrompt = sanitize(rawTransformationPrompt, 3000);
 
     if (!title || title.length < 1) {
       return new Response(JSON.stringify({ error: "Title is required." }), {
