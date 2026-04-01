@@ -2526,7 +2526,9 @@ async function generateKDPPDF(
         const kdpBodyFonts = { regular: timesRoman, bold: timesRomanBold, italic: timesRomanItalic, boldItalic: timesRomanBoldItalic };
         const pageNumberRefKDP = { current: pageNumber };
         const addPageKDP = (pg: any, num: number) => addRunningHeader(pg, num, num % 2 === 1);
-        y = drawStyledParagraph(page, trimmed, leftMargin + indent, y, textWidth - indent, bodySize, kdpBodyFonts, rgb(0, 0, 0), pdfDoc, pageWidth, pageHeight, margins.bottom, addPageKDP, pageNumberRefKDP);
+        const kdpStyledResult = drawStyledParagraph(page, trimmed, leftMargin + indent, y, textWidth - indent, bodySize, kdpBodyFonts, rgb(0, 0, 0), pdfDoc, pageWidth, pageHeight, margins.bottom, addPageKDP, pageNumberRefKDP);
+        y = kdpStyledResult.y;
+        page = kdpStyledResult.page;
         pageNumber = pageNumberRefKDP.current;
       } else {
         const prefix = isBullet ? '\u2022 ' : isNumbered ? (trimmed.match(/^\d+[.)]\s/)?.[0] || '') : '';
