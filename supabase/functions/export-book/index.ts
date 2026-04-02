@@ -1341,7 +1341,20 @@ async function generatePDF(
     y -= 30;
     
     // Process content with code block, image, table, and HEADING handling
-    const { paragraphs, codeBlocks, structuredBlocks, images, customTables, tables: mdTables, headings } = processMarkdownContent(chapter.content || "");
+    // Strip duplicate chapter title from content start (generated content often repeats it)
+    let chapterContent = chapter.content || "";
+    const titleVariants = [
+      chapter.title,
+      `Chapter ${chapter.chapter_number}: ${chapter.title}`,
+      `Chapter ${chapter.chapter_number}`,
+    ];
+    for (const variant of titleVariants) {
+      // Strip title at start of content (with optional # prefix)
+      const escapedVariant = variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      chapterContent = chapterContent.replace(new RegExp(`^\\s*#{0,6}\\s*${escapedVariant}\\s*\\n+`, 'i'), '');
+    }
+    
+    const { paragraphs, codeBlocks, structuredBlocks, images, customTables, tables: mdTables, headings } = processMarkdownContent(chapterContent);
     
     // SKIP image fetching/embedding in PDF to avoid CPU timeout — use text placeholders instead
     const fetchedImages: Map<number, { bytes: Uint8Array; type: 'png' | 'jpg' }> = new Map();
