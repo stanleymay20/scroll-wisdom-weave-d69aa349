@@ -1840,84 +1840,106 @@ async function generatePDF(
         const tableIndex = parseInt(mdTableMatch[1]);
         const table = mdTables[tableIndex];
         if (table) {
-          // Render markdown table
+          // Render markdown table with dynamic row heights
           y -= 10;
           
-          // Calculate table dimensions
-          const numCols = Math.min(table.headers.length, 6); // Max 6 columns for readability
+          const numCols = Math.min(table.headers.length, 6);
           const colWidth = textWidth / numCols;
-          const rowHeight = 18;
-          const headerHeight = 24;
-          const tableHeight = headerHeight + (table.rows.length * rowHeight) + 30;
+          const cellFontSize = 8;
+          const cellLineHeight = cellFontSize + 3;
+          const cellPadding = 6;
+          const headerHeight = 22;
           
-          if (y - tableHeight < margin + 30) {
+          // Calculate dynamic row heights based on wrapped text
+          const rowHeights: number[] = [];
+          for (const row of table.rows) {
+            let maxLines = 1;
+            for (let colIdx = 0; colIdx < numCols && colIdx < row.length; colIdx++) {
+              const cellText = stripInlineMarkdown((row[colIdx] || '').slice(0, 80));
+              const wrapped = wrapText(cellText, timesRoman, cellFontSize, colWidth - 10);
+              maxLines = Math.max(maxLines, wrapped.length);
+            }
+            rowHeights.push(maxLines * cellLineHeight + cellPadding);
+          }
+          
+          const totalTableHeight = headerHeight + rowHeights.reduce((s, h) => s + h, 0) + 30;
+          
+          // Start table on new page if it won't fit
+          if (y - Math.min(totalTableHeight, 200) < margin + 30) {
             page = pdfDoc.addPage([pageWidth, pageHeight]);
             pageNumber++;
             addPageNumber(page, pageNumber);
             y = pageHeight - margin - 30;
           }
           
-          // Table title (if present)
+          // Table title
           if (table.name && table.name !== 'Table') {
-            page.drawText(sanitizeForPDF(table.name), {
-              x: margin,
-              y,
-              size: 11,
-              font: timesRomanBold,
-              color: rgb(0.1, 0.1, 0.1),
+            page.drawText(sanitizeForPDF(stripInlineMarkdown(table.name)), {
+              x: margin, y, size: 11,
+              font: timesRomanBold, color: rgb(0.1, 0.1, 0.1),
             });
             y -= 20;
           }
           
-          // Draw header background
+          // Header background
           page.drawRectangle({
-            x: margin,
-            y: y - headerHeight + 5,
-            width: textWidth,
-            height: headerHeight,
+            x: margin, y: y - headerHeight + 5,
+            width: textWidth, height: headerHeight,
             color: rgb(0.92, 0.92, 0.92),
           });
           
-          // Draw headers - MUST sanitize for PDF encoding
+          // Header text
           for (let i = 0; i < numCols; i++) {
-            const headerText = sanitizeForPDF((table.headers[i] || '').slice(0, 40));
+            const headerText = sanitizeForPDF(stripInlineMarkdown((table.headers[i] || '').slice(0, 40)));
             page.drawText(headerText, {
-              x: margin + (i * colWidth) + 5,
-              y: y - 12,
-              size: 9,
-              font: timesRomanBold,
-              color: rgb(0.1, 0.1, 0.1),
+              x: margin + (i * colWidth) + 5, y: y - 12,
+              size: 9, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1),
             });
           }
           y -= headerHeight;
           
-          // Draw rows
+          // Rows with dynamic height and text wrapping
           for (let rowIdx = 0; rowIdx < table.rows.length; rowIdx++) {
             const row = table.rows[rowIdx];
+            const rowH = rowHeights[rowIdx];
+            
+            // Page break check
+            if (y - rowH < margin + 30) {
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              addPageNumber(page, pageNumber);
+              y = pageHeight - margin - 30;
+            }
             
             // Alternate row background
             if (rowIdx % 2 === 1) {
               page.drawRectangle({
-                x: margin,
-                y: y - rowHeight + 5,
-                width: textWidth,
-                height: rowHeight,
+                x: margin, y: y - rowH + 5,
+                width: textWidth, height: rowH,
                 color: rgb(0.97, 0.97, 0.97),
               });
             }
             
+            // Draw cell text with wrapping
             for (let colIdx = 0; colIdx < numCols && colIdx < row.length; colIdx++) {
-              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 60));
-              page.drawText(cellText, {
-                x: margin + (colIdx * colWidth) + 5,
-                y: y - 12,
-                size: 9,
-                font: timesRoman,
-                color: rgb(0.2, 0.2, 0.2),
-              });
+              const cellText = sanitizeForPDF(stripInlineMarkdown((row[colIdx] || '').slice(0, 80)));
+              const wrapped = wrapText(cellText, timesRoman, cellFontSize, colWidth - 10);
+              let cellY = y - cellLineHeight;
+              for (const line of wrapped) {
+                page.drawText(line, {
+                  x: margin + (colIdx * colWidth) + 5, y: cellY,
+                  size: cellFontSize, font: timesRoman, color: rgb(0.2, 0.2, 0.2),
+                });
+                cellY -= cellLineHeight;
+              }
             }
-            y -= rowHeight;
-            
+            y -= rowH;
+          }
+          
+          y -= 15;
+          continue;
+        }
+      }
             // Check if we need a new page
             if (y < margin + 30 && rowIdx < table.rows.length - 1) {
               page = pdfDoc.addPage([pageWidth, pageHeight]);
