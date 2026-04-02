@@ -2309,7 +2309,19 @@ async function generateKDPPDF(
 
     if (!chapter.content) continue;
 
-    const processed = processMarkdownContent(chapter.content);
+    // Strip duplicate chapter title from content start (KDP)
+    let kdpChapterContent = chapter.content;
+    const kdpTitleVariants = [
+      chapter.title,
+      `Chapter ${chapter.chapter_number}: ${chapter.title}`,
+      `Chapter ${chapter.chapter_number}`,
+    ];
+    for (const variant of kdpTitleVariants) {
+      const escapedVariant = variant.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      kdpChapterContent = kdpChapterContent.replace(new RegExp(`^\\s*#{0,6}\\s*${escapedVariant}\\s*\\n+`, 'i'), '');
+    }
+
+    const processed = processMarkdownContent(kdpChapterContent);
     for (const para of processed.paragraphs) {
       const trimmed = para.trim();
       if (!trimmed) { y -= lineHeight * 0.4; continue; }
