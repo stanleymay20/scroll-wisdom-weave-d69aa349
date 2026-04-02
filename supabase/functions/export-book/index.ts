@@ -328,7 +328,7 @@ function processMarkdownContent(text: string): {
       if (!rowLine.includes('|')) continue;
       const cells = rowLine.split('|')
         .filter((cell: string, idx: number, arr: string[]) => idx > 0 && idx < arr.length - 1 || cell.trim())
-        .map((cell: string) => cell.trim())
+        .map((cell: string) => stripInlineMarkdown(cell.trim()))
         .filter((cell: string) => cell);
       if (cells.length > 0) {
         rows.push(cells);
