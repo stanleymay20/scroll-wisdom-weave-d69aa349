@@ -657,9 +657,23 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, unlockAudio]);
 
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
-    // Stop any existing playback first — but use direct cleanup instead of stop()
-    // to avoid the stopRef race condition
-    resetPlaybackState();
+    // CRITICAL: Do NOT call resetPlaybackState() here — it calls audio.load()
+    // which revokes the user-gesture unlock on mobile browsers.
+    // Instead, do lightweight cleanup that preserves the audio element state.
+    stopRef.current = true; // signal any running loop to stop
+    autoplayBlockedRef.current = false;
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+        audioRef.current.onplay = null;
+        audioRef.current.onended = null;
+        audioRef.current.onpause = null;
+        audioRef.current.onerror = null;
+        audioRef.current.ontimeupdate = null;
+        audioRef.current.onloadedmetadata = null;
+      } catch { /* noop */ }
+    }
+    cleanupBlobUrls();
 
     // CONTRACT 5.6: Immediate visual feedback - show loading as soon as cleanup finishes
     setIsLoading(true);
