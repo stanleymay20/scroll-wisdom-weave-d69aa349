@@ -264,7 +264,7 @@ function processMarkdownContent(text: string): {
   const headings: HeadingData[] = [];
   
   // First, parse old custom TABLE: format (legacy support)
-  const { tables: customTables, cleanedText: textAfterCustomTables } = parseCustomTableFormat(text);
+  const { tables: customTables, cleanedText: textAfterCustomTables } = parseCustomTableFormat(cleanedInput);
   
   // Extract STRUCTURED code blocks [CODE_BLOCK]...[/CODE_BLOCK] (ChatGPT-level format)
   let processedText = textAfterCustomTables.replace(/\[CODE_BLOCK\]([\s\S]*?)\[\/CODE_BLOCK\]/g, (_, blockContent) => {
