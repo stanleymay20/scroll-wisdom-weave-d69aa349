@@ -252,6 +252,11 @@ function processMarkdownContent(text: string): {
 } {
   if (!text) return { paragraphs: [], codeBlocks: [], structuredBlocks: [], tables: [], customTables: [], images: [], headings: [] };
   
+  // PRE-CLEAN: Strip raw [FIGURE ...] markers that the chapter generator leaves behind
+  let cleanedInput = text.replace(/\[FIGURE[^\]]*\]/gi, '');
+  // Also strip stray [Image not available: ...] or [Image: ...] placeholders
+  cleanedInput = cleanedInput.replace(/\[Image[^\]]*\]/gi, '');
+  
   const codeBlocks: { lang: string; code: string }[] = [];
   const structuredBlocks: StructuredCodeBlockData[] = [];
   const tables: { name: string; headers: string[]; rows: string[][] }[] = [];
