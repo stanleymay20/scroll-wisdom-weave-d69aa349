@@ -1744,89 +1744,89 @@ async function generatePDF(
         const tableIndex = parseInt(customTableMatch[1]);
         const table = customTables[tableIndex];
         if (table) {
-          // Render custom table
           y -= 10;
           
-          // Calculate table dimensions
-          const numCols = table.headers.length;
+          const numCols = Math.min(table.headers.length, 6);
           const colWidth = textWidth / numCols;
-          const rowHeight = 18;
-          const headerHeight = 24;
-          const tableHeight = headerHeight + (table.rows.length * rowHeight) + 30;
+          const cellFontSize = 8;
+          const cellLineHeight = cellFontSize + 3;
+          const cellPadding = 6;
+          const headerHeight = 22;
           
-          if (y - tableHeight < margin + 30) {
+          // Calculate dynamic row heights
+          const rowHeights: number[] = [];
+          for (const row of table.rows) {
+            let maxLines = 1;
+            for (let colIdx = 0; colIdx < numCols && colIdx < row.length; colIdx++) {
+              const cellText = stripInlineMarkdown((row[colIdx] || '').slice(0, 80));
+              const wrapped = wrapText(cellText, timesRoman, cellFontSize, colWidth - 10);
+              maxLines = Math.max(maxLines, wrapped.length);
+            }
+            rowHeights.push(maxLines * cellLineHeight + cellPadding);
+          }
+          
+          const totalTableHeight = headerHeight + rowHeights.reduce((s, h) => s + h, 0) + 30;
+          
+          if (y - Math.min(totalTableHeight, 200) < margin + 30) {
             page = pdfDoc.addPage([pageWidth, pageHeight]);
             pageNumber++;
             addPageNumber(page, pageNumber);
             y = pageHeight - margin - 30;
           }
           
-          // Table title - MUST sanitize for PDF encoding
-          page.drawText(sanitizeForPDF(table.name), {
-            x: margin,
-            y,
-            size: 11,
-            font: timesRomanBold,
-            color: rgb(0.1, 0.1, 0.1),
+          page.drawText(sanitizeForPDF(stripInlineMarkdown(table.name)), {
+            x: margin, y, size: 11,
+            font: timesRomanBold, color: rgb(0.1, 0.1, 0.1),
           });
           y -= 20;
           
-          // Draw header background
           page.drawRectangle({
-            x: margin,
-            y: y - headerHeight + 5,
-            width: textWidth,
-            height: headerHeight,
+            x: margin, y: y - headerHeight + 5,
+            width: textWidth, height: headerHeight,
             color: rgb(0.92, 0.92, 0.92),
           });
           
-          // Draw headers
-          for (let i = 0; i < table.headers.length; i++) {
-            const headerText = sanitizeForPDF(table.headers[i].slice(0, 40)); // Truncate long headers
+          for (let i = 0; i < numCols; i++) {
+            const headerText = sanitizeForPDF(stripInlineMarkdown((table.headers[i] || '').slice(0, 40)));
             page.drawText(headerText, {
-              x: margin + (i * colWidth) + 5,
-              y: y - 12,
-              size: 9,
-              font: timesRomanBold,
-              color: rgb(0.1, 0.1, 0.1),
+              x: margin + (i * colWidth) + 5, y: y - 12,
+              size: 9, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1),
             });
           }
           y -= headerHeight;
           
-          // Draw rows
           for (let rowIdx = 0; rowIdx < table.rows.length; rowIdx++) {
             const row = table.rows[rowIdx];
+            const rowH = rowHeights[rowIdx];
             
-            // Alternate row background
-            if (rowIdx % 2 === 1) {
-              page.drawRectangle({
-                x: margin,
-                y: y - rowHeight + 5,
-                width: textWidth,
-                height: rowHeight,
-                color: rgb(0.97, 0.97, 0.97),
-              });
-            }
-            
-            for (let colIdx = 0; colIdx < row.length && colIdx < numCols; colIdx++) {
-              const cellText = sanitizeForPDF((row[colIdx] || '').slice(0, 60)); // Truncate long values
-              page.drawText(cellText, {
-                x: margin + (colIdx * colWidth) + 5,
-                y: y - 12,
-                size: 9,
-                font: timesRoman,
-                color: rgb(0.2, 0.2, 0.2),
-              });
-            }
-            y -= rowHeight;
-            
-            // Check if we need a new page
-            if (y < margin + 30 && rowIdx < table.rows.length - 1) {
+            if (y - rowH < margin + 30) {
               page = pdfDoc.addPage([pageWidth, pageHeight]);
               pageNumber++;
               addPageNumber(page, pageNumber);
               y = pageHeight - margin - 30;
             }
+            
+            if (rowIdx % 2 === 1) {
+              page.drawRectangle({
+                x: margin, y: y - rowH + 5,
+                width: textWidth, height: rowH,
+                color: rgb(0.97, 0.97, 0.97),
+              });
+            }
+            
+            for (let colIdx = 0; colIdx < row.length && colIdx < numCols; colIdx++) {
+              const cellText = sanitizeForPDF(stripInlineMarkdown((row[colIdx] || '').slice(0, 80)));
+              const wrapped = wrapText(cellText, timesRoman, cellFontSize, colWidth - 10);
+              let cellY = y - cellLineHeight;
+              for (const line of wrapped) {
+                page.drawText(line, {
+                  x: margin + (colIdx * colWidth) + 5, y: cellY,
+                  size: cellFontSize, font: timesRoman, color: rgb(0.2, 0.2, 0.2),
+                });
+                cellY -= cellLineHeight;
+              }
+            }
+            y -= rowH;
           }
           
           y -= 15;
