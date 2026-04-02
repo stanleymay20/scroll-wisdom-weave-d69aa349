@@ -1940,19 +1940,7 @@ async function generatePDF(
           continue;
         }
       }
-            // Check if we need a new page
-            if (y < margin + 30 && rowIdx < table.rows.length - 1) {
-              page = pdfDoc.addPage([pageWidth, pageHeight]);
-              pageNumber++;
-              addPageNumber(page, pageNumber);
-              y = pageHeight - margin - 30;
-            }
-          }
-          
-          y -= 15;
-          continue;
-        }
-      }
+      
       
       // Detect bullet or numbered list items
       const isBullet = /^\u2022\s/.test(paragraph.trim());
