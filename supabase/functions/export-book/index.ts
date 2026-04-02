@@ -318,7 +318,7 @@ function processMarkdownContent(text: string): {
     const headerLine = lines[0];
     const headers = headerLine.split('|')
       .filter((cell: string) => cell.trim())
-      .map((cell: string) => cell.trim());
+      .map((cell: string) => stripInlineMarkdown(cell.trim()));
     
     // Skip separator row (line with ---)
     // Parse data rows
