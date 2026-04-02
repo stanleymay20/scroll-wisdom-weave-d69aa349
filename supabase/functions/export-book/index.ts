@@ -426,6 +426,16 @@ function processMarkdownContent(text: string): {
 }
 
 
+// Strip inline markdown formatting (bold/italic markers) from text — used for table cells & plain rendering
+function stripInlineMarkdown(text: string): string {
+  if (!text) return "";
+  return text
+    .replace(/\*\*\*([^*]+)\*\*\*/g, "$1") // bold+italic
+    .replace(/\*\*([^*]+)\*\*/g, "$1")     // bold
+    .replace(/\*([^*]+)\*/g, "$1")         // italic
+    .replace(/`([^`]+)`/g, "$1");          // inline code
+}
+
 function stripMarkdown(text: string): string {
   if (!text) return "";
   return text
