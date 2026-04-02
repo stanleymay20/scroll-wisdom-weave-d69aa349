@@ -263,6 +263,19 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     activeBlobUrlsRef.current = [];
   }, []);
 
+  const ensureAudioElement = useCallback(() => {
+    if (!audioRef.current) {
+      audioRef.current = new Audio();
+    }
+
+    const audio = audioRef.current;
+    audio.preload = "auto";
+    audio.volume = volume;
+    (audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+
+    return audio;
+  }, [audioRef, volume]);
+
   const resetPlaybackState = useCallback((nextError: string | null = null) => {
     stopRef.current = true;
     autoplayBlockedRef.current = false;
@@ -309,34 +322,35 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const unlockAudio = useCallback(async () => {
     if (audioUnlockedRef.current) return true;
 
-    if (!audioRef.current) {
-      const audio = new Audio();
-      audio.preload = "auto";
-      audio.volume = volume;
-      audioRef.current = audio;
-    }
-
-    const audio = audioRef.current;
+    const audio = ensureAudioElement();
 
     try {
-      // Play a silent WAV to unlock the audio context
-      // CRITICAL: Do NOT reset audio.src afterwards — that re-locks the context
-      const silentAudio = new Audio(SILENT_WAV_DATA_URI);
-      silentAudio.volume = 0;
-      await silentAudio.play();
-      silentAudio.pause();
-      silentAudio.src = "";
+      audio.pause();
+      audio.muted = true;
+      audio.src = SILENT_WAV_DATA_URI;
+      audio.currentTime = 0;
+      await audio.play();
+      audio.pause();
+      audio.currentTime = 0;
+      audio.muted = false;
       
       audioUnlockedRef.current = true;
       autoplayBlockedRef.current = false;
       console.log("[TTS] Audio context unlocked");
       return true;
     } catch (err) {
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+        audio.muted = false;
+      } catch {
+        /* noop */
+      }
       autoplayBlockedRef.current = true;
       console.error("[TTS] Failed to unlock audio context:", err);
       return false;
     }
-  }, [audioRef, volume]);
+  }, [ensureAudioElement]);
 
   const playUrl = useCallback((url: string): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -353,11 +367,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         }
       };
 
-      // Reuse existing audio element if available, or create new
-      const audio = audioRef.current || new Audio();
-      audioRef.current = audio;
-      audio.volume = volume;
+      const audio = ensureAudioElement();
+      audio.muted = false;
       audio.playbackRate = playbackSpeedRef.current;
+
+      try {
+        audio.pause();
+        audio.currentTime = 0;
+      } catch {
+        /* noop */
+      }
       
       // Expose audioRef for external sync (sentence highlighting)
       onAudioRefChange?.(audio);
@@ -490,7 +509,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         safeResolve(false);
       });
     });
-  }, [volume, onPlayingChange, onAudioRefChange, toast]);
+  }, [ensureAudioElement, onPlayingChange, onAudioRefChange, toast]);
 
   // Full stop: destroys playback entirely, resets all state
   const stop = useCallback(() => {
@@ -566,6 +585,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
   // Helper to generate speech from a list of chunks (for resume)
   const generateSpeechFromChunks = useCallback(async (chunks: string[], startIndex: number) => {
+    if (!audioUnlockedRef.current) {
+      const unlocked = await unlockAudio();
+      if (!unlocked) {
+        resetPlaybackState("Audio playback is blocked on this device until the browser allows sound.");
+        return;
+      }
+    }
+
     stopRef.current = false;
     isStoppingRef.current = false;
     setIsLoading(true);
@@ -627,16 +654,20 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       mediaSession.setPlaybackState('idle');
       audioReliability.setState('idle');
     }
-  }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState]);
+  }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, unlockAudio]);
 
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
-    // CONTRACT 5.6: Immediate visual feedback - show loading BEFORE stopping
+    // Stop any existing playback first — but use direct cleanup instead of stop()
+    // to avoid the stopRef race condition
+    resetPlaybackState();
+
+    // CONTRACT 5.6: Immediate visual feedback - show loading as soon as cleanup finishes
     setIsLoading(true);
     setError(null);
     setMode(isSelection ? "selection" : "chapter");
     audioReliability.setState('loading');
 
-    // CRITICAL: Unlock audio on the original user gesture and wait for it
+    // CRITICAL: Unlock the SAME shared audio element on the original user gesture
     const unlocked = await unlockAudio();
     if (!unlocked) {
       const message = "Audio playback is blocked on this device until the browser allows sound.";
@@ -648,10 +679,6 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       });
       return;
     }
-    
-    // Stop any existing playback first — but use direct cleanup instead of stop()
-    // to avoid the stopRef race condition
-    resetPlaybackState();
     
     // Ensure clean state — these MUST be false before chunk loop starts
     stopRef.current = false;
@@ -666,9 +693,6 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     onCumulativeTimeChange?.(0);
     onEstimatedDurationChange?.(0);
     onAudioRefChange?.(null);
-    
-    // Small delay for audio element cleanup
-    await new Promise(resolve => setTimeout(resolve, 80));
     
     const cleaned = sanitizeText(textToRead || '');
     if (!cleaned || cleaned.length < 20) {
