@@ -458,18 +458,43 @@ interface StyledRun {
 
 function parseStyledRuns(text: string): StyledRun[] {
   const runs: StyledRun[] = [];
-  // Match ***bold+italic***, **bold**, *italic*, and plain text
-  const regex = /(\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|\*([^*]+)\*|([^*]+))/g;
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    if (match[2]) {
-      runs.push({ text: match[2], bold: true, italic: true });
-    } else if (match[3]) {
-      runs.push({ text: match[3], bold: true, italic: false });
-    } else if (match[4]) {
-      runs.push({ text: match[4], bold: false, italic: true });
-    } else if (match[5]) {
-      runs.push({ text: match[5], bold: false, italic: false });
+  // Robust parser: handle ***bold+italic***, **bold**, *italic*, lone * as literal text
+  let remaining = text;
+  while (remaining.length > 0) {
+    // Try bold+italic first
+    const biMatch = remaining.match(/^\*\*\*([^*]+)\*\*\*/);
+    if (biMatch) {
+      runs.push({ text: biMatch[1], bold: true, italic: true });
+      remaining = remaining.slice(biMatch[0].length);
+      continue;
+    }
+    // Try bold
+    const bMatch = remaining.match(/^\*\*([^*]+)\*\*/);
+    if (bMatch) {
+      runs.push({ text: bMatch[1], bold: true, italic: false });
+      remaining = remaining.slice(bMatch[0].length);
+      continue;
+    }
+    // Try italic (requires closing *)
+    const iMatch = remaining.match(/^\*([^*]+)\*/);
+    if (iMatch) {
+      runs.push({ text: iMatch[1], bold: false, italic: true });
+      remaining = remaining.slice(iMatch[0].length);
+      continue;
+    }
+    // Consume plain text up to the next * that could start formatting, or to end
+    const nextStar = remaining.indexOf('*', remaining[0] === '*' ? 1 : 0);
+    if (remaining[0] === '*') {
+      // Lone * — treat as literal text, consume it
+      const plainEnd = nextStar > 0 ? nextStar : remaining.length;
+      runs.push({ text: remaining.slice(0, Math.max(1, plainEnd)), bold: false, italic: false });
+      remaining = remaining.slice(Math.max(1, plainEnd));
+    } else if (nextStar > 0) {
+      runs.push({ text: remaining.slice(0, nextStar), bold: false, italic: false });
+      remaining = remaining.slice(nextStar);
+    } else {
+      runs.push({ text: remaining, bold: false, italic: false });
+      remaining = '';
     }
   }
   return runs.length > 0 ? runs : [{ text, bold: false, italic: false }];
