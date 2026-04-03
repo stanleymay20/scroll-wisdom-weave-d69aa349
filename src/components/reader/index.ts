@@ -48,3 +48,7 @@ export type {
 
 // Contract 11 - Computational Evidence (ScrollVerified™)
 export { ComputationalEvidencePanel } from './ComputationalEvidencePanel';
+
+// Enterprise Cognitive Learning v2.0
+export { SocraticTutor } from './SocraticTutor';
+export { ScenarioExercise, ConceptMatcher } from './exercises';
