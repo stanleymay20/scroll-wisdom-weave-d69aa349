@@ -458,18 +458,43 @@ interface StyledRun {
 
 function parseStyledRuns(text: string): StyledRun[] {
   const runs: StyledRun[] = [];
-  // Match ***bold+italic***, **bold**, *italic*, and plain text
-  const regex = /(\*\*\*([^*]+)\*\*\*|\*\*([^*]+)\*\*|\*([^*]+)\*|([^*]+))/g;
-  let match;
-  while ((match = regex.exec(text)) !== null) {
-    if (match[2]) {
-      runs.push({ text: match[2], bold: true, italic: true });
-    } else if (match[3]) {
-      runs.push({ text: match[3], bold: true, italic: false });
-    } else if (match[4]) {
-      runs.push({ text: match[4], bold: false, italic: true });
-    } else if (match[5]) {
-      runs.push({ text: match[5], bold: false, italic: false });
+  // Robust parser: handle ***bold+italic***, **bold**, *italic*, lone * as literal text
+  let remaining = text;
+  while (remaining.length > 0) {
+    // Try bold+italic first
+    const biMatch = remaining.match(/^\*\*\*([^*]+)\*\*\*/);
+    if (biMatch) {
+      runs.push({ text: biMatch[1], bold: true, italic: true });
+      remaining = remaining.slice(biMatch[0].length);
+      continue;
+    }
+    // Try bold
+    const bMatch = remaining.match(/^\*\*([^*]+)\*\*/);
+    if (bMatch) {
+      runs.push({ text: bMatch[1], bold: true, italic: false });
+      remaining = remaining.slice(bMatch[0].length);
+      continue;
+    }
+    // Try italic (requires closing *)
+    const iMatch = remaining.match(/^\*([^*]+)\*/);
+    if (iMatch) {
+      runs.push({ text: iMatch[1], bold: false, italic: true });
+      remaining = remaining.slice(iMatch[0].length);
+      continue;
+    }
+    // Consume plain text up to the next * that could start formatting, or to end
+    const nextStar = remaining.indexOf('*', remaining[0] === '*' ? 1 : 0);
+    if (remaining[0] === '*') {
+      // Lone * — treat as literal text, consume it
+      const plainEnd = nextStar > 0 ? nextStar : remaining.length;
+      runs.push({ text: remaining.slice(0, Math.max(1, plainEnd)), bold: false, italic: false });
+      remaining = remaining.slice(Math.max(1, plainEnd));
+    } else if (nextStar > 0) {
+      runs.push({ text: remaining.slice(0, nextStar), bold: false, italic: false });
+      remaining = remaining.slice(nextStar);
+    } else {
+      runs.push({ text: remaining, bold: false, italic: false });
+      remaining = '';
     }
   }
   return runs.length > 0 ? runs : [{ text, bold: false, italic: false }];
@@ -2355,7 +2380,8 @@ async function generateKDPPDF(
             x: leftMargin, y, size: 7, font: helvetica, color: rgb(0.5, 0.5, 0.5),
           });
           y -= 12;
-          for (const codeLine of block.code.split('\n').slice(0, 25)) {
+          const codeLines = block.code.split('\n');
+          for (let cli = 0; cli < codeLines.length; cli++) {
             if (y < textBottom + 12) {
               addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
               page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -2364,7 +2390,7 @@ async function generateKDPPDF(
               y = textTop - 15;
             }
             page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.96, 0.96, 0.96) });
-            page.drawText(sanitizeForPDF(codeLine.slice(0, 70)), {
+            page.drawText(sanitizeForPDF(codeLines[cli].slice(0, 80)), {
               x: leftMargin, y, size: 8, font: courier, color: rgb(0.15, 0.15, 0.15),
             });
             y -= lineHeight * 0.85;
@@ -2399,7 +2425,8 @@ async function generateKDPPDF(
             });
             y -= 16;
           }
-          for (const codeLine of block.code.split('\n').slice(0, 25)) {
+          const structCodeLines = block.code.split('\n');
+          for (let cli = 0; cli < structCodeLines.length; cli++) {
             if (y < textBottom + 12) {
               addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
               page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -2408,7 +2435,7 @@ async function generateKDPPDF(
               y = textTop - 15;
             }
             page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.12, 0.12, 0.15) });
-            page.drawText(sanitizeForPDF(codeLine.slice(0, 70)), {
+            page.drawText(sanitizeForPDF(structCodeLines[cli].slice(0, 80)), {
               x: leftMargin, y, size: 8, font: courier, color: rgb(0.9, 0.9, 0.9),
             });
             y -= lineHeight * 0.85;
@@ -2417,7 +2444,8 @@ async function generateKDPPDF(
             y -= 4;
             page.drawText("OUTPUT:", { x: leftMargin, y, size: 7, font: helvetica, color: rgb(0.3, 0.7, 0.3) });
             y -= 12;
-            for (const outLine of block.output.split('\n').slice(0, 10)) {
+            const outLines = block.output.split('\n');
+            for (let oli = 0; oli < outLines.length; oli++) {
               if (y < textBottom + 12) {
                 addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
                 page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -2426,7 +2454,7 @@ async function generateKDPPDF(
                 y = textTop - 15;
               }
               page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.08, 0.10, 0.08) });
-              page.drawText(sanitizeForPDF(outLine.slice(0, 70)), {
+              page.drawText(sanitizeForPDF(outLines[oli].slice(0, 80)), {
                 x: leftMargin, y, size: 8, font: courier, color: rgb(0.4, 0.9, 0.4),
               });
               y -= lineHeight * 0.85;
@@ -2619,6 +2647,7 @@ async function generateKDPPDF(
         y = kdpStyledResult.y;
         page = kdpStyledResult.page;
         pageNumber = pageNumberRefKDP.current;
+        leftMargin = getLeftMargin(pageNumber); // Sync margin after potential page break
       } else {
         const prefix = isBullet ? '\u2022 ' : isNumbered ? (trimmed.match(/^\d+[.)]\s/)?.[0] || '') : '';
         const bodyText = trimmed.replace(/^[-\u2022]\s|^\d+[.)]\s/, '');
