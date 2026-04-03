@@ -2425,7 +2425,8 @@ async function generateKDPPDF(
             });
             y -= 16;
           }
-          for (const codeLine of block.code.split('\n').slice(0, 25)) {
+          const structCodeLines = block.code.split('\n');
+          for (let cli = 0; cli < structCodeLines.length; cli++) {
             if (y < textBottom + 12) {
               addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
               page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -2434,7 +2435,7 @@ async function generateKDPPDF(
               y = textTop - 15;
             }
             page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.12, 0.12, 0.15) });
-            page.drawText(sanitizeForPDF(codeLine.slice(0, 70)), {
+            page.drawText(sanitizeForPDF(structCodeLines[cli].slice(0, 80)), {
               x: leftMargin, y, size: 8, font: courier, color: rgb(0.9, 0.9, 0.9),
             });
             y -= lineHeight * 0.85;
