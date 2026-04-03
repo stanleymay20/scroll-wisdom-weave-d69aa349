@@ -2644,6 +2644,7 @@ async function generateKDPPDF(
         y = kdpStyledResult.y;
         page = kdpStyledResult.page;
         pageNumber = pageNumberRefKDP.current;
+        leftMargin = getLeftMargin(pageNumber); // Sync margin after potential page break
       } else {
         const prefix = isBullet ? '\u2022 ' : isNumbered ? (trimmed.match(/^\d+[.)]\s/)?.[0] || '') : '';
         const bodyText = trimmed.replace(/^[-\u2022]\s|^\d+[.)]\s/, '');
