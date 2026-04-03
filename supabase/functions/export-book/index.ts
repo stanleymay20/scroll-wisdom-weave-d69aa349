@@ -2444,7 +2444,8 @@ async function generateKDPPDF(
             y -= 4;
             page.drawText("OUTPUT:", { x: leftMargin, y, size: 7, font: helvetica, color: rgb(0.3, 0.7, 0.3) });
             y -= 12;
-            for (const outLine of block.output.split('\n').slice(0, 10)) {
+            const outLines = block.output.split('\n');
+            for (let oli = 0; oli < outLines.length; oli++) {
               if (y < textBottom + 12) {
                 addRunningHeader(page, pageNumber, pageNumber % 2 === 1);
                 page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -2453,7 +2454,7 @@ async function generateKDPPDF(
                 y = textTop - 15;
               }
               page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.08, 0.10, 0.08) });
-              page.drawText(sanitizeForPDF(outLine.slice(0, 70)), {
+              page.drawText(sanitizeForPDF(outLines[oli].slice(0, 80)), {
                 x: leftMargin, y, size: 8, font: courier, color: rgb(0.4, 0.9, 0.4),
               });
               y -= lineHeight * 0.85;
