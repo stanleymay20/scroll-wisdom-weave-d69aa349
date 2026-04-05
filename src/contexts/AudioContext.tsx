@@ -93,6 +93,8 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     const audio = audioRef.current;
     audio.preload = "auto";
     (audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+    audio.setAttribute("playsinline", "true");
+    audio.setAttribute("webkit-playsinline", "true");
 
     const syncPlaying = () => {
       setState(prev => {
@@ -126,6 +128,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
 
     return () => {
       // App unmount — clean up
+      const currentSrc = audio.currentSrc || audio.src;
       audio.removeEventListener("playing", syncPlaying);
       audio.removeEventListener("canplay", syncPlaying);
       audio.removeEventListener("canplaythrough", syncPlaying);
@@ -134,13 +137,20 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       audio.removeEventListener("ended", syncStopped);
       audio.removeEventListener("error", syncStopped);
       audio.pause();
+      audio.removeAttribute("src");
       audio.src = "";
+
+      if (currentSrc.startsWith("blob:")) {
+        URL.revokeObjectURL(currentSrc);
+      }
     };
   }, []);
 
   const resetSharedAudioElement = useCallback(() => {
     const audio = audioRef.current;
     if (!audio) return;
+
+    const currentSrc = audio.currentSrc || audio.src;
 
     try {
       audio.pause();
@@ -155,13 +165,17 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       audio.oncanplay = null;
       audio.oncanplaythrough = null;
       audio.removeAttribute("src");
-      audio.load();
+      audio.src = "";
     } catch {
       try {
         audio.src = "";
       } catch {
         /* noop */
       }
+    }
+
+    if (currentSrc.startsWith("blob:")) {
+      URL.revokeObjectURL(currentSrc);
     }
   }, []);
 
@@ -191,7 +205,15 @@ export function AudioProvider({ children }: { children: ReactNode }) {
   const pause = useCallback(() => {
     const s = stateRef.current;
     controlsRef.current?.pause?.();
-    resetSharedAudioElement();
+
+    if (audioRef.current) {
+      try {
+        audioRef.current.pause();
+      } catch {
+        /* noop */
+      }
+    }
+
     setState(prev => ({ ...prev, isPlaying: false, isLoading: false }));
     
     if (s.bookId && s.chapterId && s.chunkIndex > 0) {
@@ -201,7 +223,7 @@ export function AudioProvider({ children }: { children: ReactNode }) {
         s.voice
       );
     }
-  }, [resetSharedAudioElement]);
+  }, []);
 
   const play = useCallback(() => {
     controlsRef.current?.play?.();

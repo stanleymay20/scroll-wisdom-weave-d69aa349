@@ -49,6 +49,34 @@ const OPENAI_VOICES = [
 
 const SILENT_WAV_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 
+function base64ToBlob(base64: string, mimeType = "audio/mpeg") {
+  const byteChars = atob(base64);
+  const byteArrays: BlobPart[] = [];
+
+  for (let offset = 0; offset < byteChars.length; offset += 512) {
+    const slice = byteChars.slice(offset, offset + 512);
+    const byteNumbers = new Array(slice.length);
+
+    for (let i = 0; i < slice.length; i++) {
+      byteNumbers[i] = slice.charCodeAt(i);
+    }
+
+    byteArrays.push(new Uint8Array(byteNumbers) as unknown as BlobPart);
+  }
+
+  return new Blob(byteArrays, { type: mimeType });
+}
+
+function revokeObjectUrl(url?: string | null) {
+  if (!url?.startsWith("blob:")) return;
+
+  try {
+    URL.revokeObjectURL(url);
+  } catch {
+    /* noop */
+  }
+}
+
 interface TTSMiniPlayerProps {
   /** Full chapter text for "Read Chapter" */
   chapterText: string;
@@ -259,9 +287,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   }, []);
 
   const cleanupBlobUrls = useCallback(() => {
-    // Data URIs don't need revocation, but clear the array
-    activeBlobUrlsRef.current = [];
-  }, []);
+    const currentSrc = audioRef.current?.currentSrc || audioRef.current?.src || "";
+
+    activeBlobUrlsRef.current.forEach((url) => {
+      if (url !== currentSrc) {
+        revokeObjectUrl(url);
+      }
+    });
+
+    activeBlobUrlsRef.current = currentSrc.startsWith("blob:") ? [currentSrc] : [];
+  }, [audioRef]);
 
   const ensureAudioElement = useCallback(() => {
     if (!audioRef.current) {
@@ -272,6 +307,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     audio.preload = "auto";
     audio.volume = volume;
     (audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+    audio.setAttribute("playsinline", "true");
+    audio.setAttribute("webkit-playsinline", "true");
 
     return audio;
   }, [audioRef, volume]);
@@ -279,6 +316,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const resetPlaybackState = useCallback((nextError: string | null = null) => {
     stopRef.current = true;
     autoplayBlockedRef.current = false;
+    audioUnlockedRef.current = false;
 
     if (audioRef.current) {
       try {
@@ -290,11 +328,15 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         audioRef.current.onerror = null;
         audioRef.current.ontimeupdate = null;
         audioRef.current.onloadedmetadata = null;
+        audioRef.current.onwaiting = null;
+        audioRef.current.oncanplay = null;
         audioRef.current.removeAttribute("src");
-        audioRef.current.load();
+        audioRef.current.src = "";
+        audioRef.current.muted = false;
       } catch {
         try {
           audioRef.current.src = "";
+          audioRef.current.muted = false;
         } catch {
           /* noop */
         }
@@ -314,8 +356,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   }, [audioRef, cleanupBlobUrls, mediaSession, audioReliability]);
 
   const base64ToBlobUrl = useCallback((base64: string, mimeType = "audio/mpeg") => {
-    // Use data URI for maximum browser compatibility — avoids atob() binary corruption
-    return `data:${mimeType};base64,${base64}`;
+    return URL.createObjectURL(base64ToBlob(base64, mimeType));
   }, []);
 
   // Unlock audio context on user gesture - call this synchronously in click handler
@@ -339,6 +380,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       console.log("[TTS] Audio context unlocked");
       return true;
     } catch (err) {
+      audioUnlockedRef.current = false;
       try {
         audio.pause();
         audio.currentTime = 0;
@@ -370,6 +412,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       const audio = ensureAudioElement();
       audio.muted = false;
       audio.playbackRate = playbackSpeedRef.current;
+      const previousSrc = audio.currentSrc || audio.src;
 
       try {
         audio.pause();
@@ -485,6 +528,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       // Set source and play — do NOT call audio.load() separately as it causes
       // race conditions with the play() promise on some browsers
       audio.src = url;
+      if (previousSrc && previousSrc !== url) {
+        revokeObjectUrl(previousSrc);
+        activeBlobUrlsRef.current = activeBlobUrlsRef.current.filter((entry) => entry !== previousSrc);
+      }
+
       audio.play().catch((err) => {
         if (isMountedRef.current) {
           setIsLoading(false);
@@ -493,6 +541,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         cleanup();
         if (err?.name === "NotAllowedError") {
           console.error("[TTS] Play blocked by autoplay policy — requires user gesture");
+          audioUnlockedRef.current = false;
           autoplayBlockedRef.current = true;
           if (isMountedRef.current) {
             const message = "Audio was blocked by your browser. Tap play again to allow sound.";
