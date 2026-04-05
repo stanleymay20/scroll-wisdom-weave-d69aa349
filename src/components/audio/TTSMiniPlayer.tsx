@@ -48,6 +48,32 @@ const OPENAI_VOICES = [
 ];
 
 const SILENT_WAV_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
+const TTS_REQUEST_TIMEOUT_MS = 15000;
+const TTS_PLAYBACK_START_TIMEOUT_MS = 10000;
+
+interface TTSChunkPayload {
+  audioContent: string;
+  contentType?: string;
+  error?: string;
+}
+
+function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
+  return new Promise((resolve, reject) => {
+    const timeoutId = window.setTimeout(() => {
+      reject(new Error(timeoutMessage));
+    }, timeoutMs);
+
+    promise
+      .then((value) => {
+        window.clearTimeout(timeoutId);
+        resolve(value);
+      })
+      .catch((error) => {
+        window.clearTimeout(timeoutId);
+        reject(error);
+      });
+  });
+}
 
 function base64ToBlob(base64: string, mimeType = "audio/mpeg") {
   const byteChars = atob(base64);
@@ -359,6 +385,98 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     return URL.createObjectURL(base64ToBlob(base64, mimeType));
   }, []);
 
+  const requestTTSChunk = useCallback(async (chunk: string): Promise<TTSChunkPayload> => {
+    const body = { text: chunk, voice: selectedVoice, language };
+
+    try {
+      const result = await withTimeout(
+        supabase.functions.invoke("text-to-speech", { body }),
+        TTS_REQUEST_TIMEOUT_MS,
+        "TTS request timed out"
+      );
+
+      if (result.error) {
+        throw new Error(result.error.message || "TTS request failed");
+      }
+
+      if (result.data?.error) {
+        throw new Error(result.data.error);
+      }
+
+      if (!result.data?.audioContent) {
+        throw new Error("No audio content received");
+      }
+
+      return result.data as TTSChunkPayload;
+    } catch (invokeError) {
+      const ttsUrl = import.meta.env.VITE_SUPABASE_URL
+        ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`
+        : null;
+      const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+      if (!ttsUrl || !publishableKey) {
+        throw invokeError instanceof Error ? invokeError : new Error("TTS request failed");
+      }
+
+      console.warn("[TTS] SDK invoke failed, falling back to direct fetch", invokeError);
+
+      const {
+        data: { session },
+      } = await supabase.auth.getSession();
+
+      const response = await withTimeout(
+        fetch(ttsUrl, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            apikey: publishableKey,
+            Authorization: `Bearer ${session?.access_token || publishableKey}`,
+          },
+          body: JSON.stringify(body),
+        }),
+        TTS_REQUEST_TIMEOUT_MS,
+        "TTS fallback request timed out"
+      );
+
+      const data = await response.json().catch(() => null);
+
+      if (!response.ok) {
+        throw new Error(data?.error || `TTS request failed (${response.status})`);
+      }
+
+      if (!data?.audioContent) {
+        throw new Error("No audio content received");
+      }
+
+      return data as TTSChunkPayload;
+    }
+  }, [language, selectedVoice]);
+
+  const fetchChunkAudioUrl = useCallback(async (chunk: string, retries = 2): Promise<string | null> => {
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      if (stopRef.current) return null;
+
+      try {
+        const data = await requestTTSChunk(chunk);
+
+        if (stopRef.current) return null;
+
+        const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
+        activeBlobUrlsRef.current.push(url);
+        return url;
+      } catch (err) {
+        console.error(`[TTS] Chunk fetch error (attempt ${attempt + 1}):`, err);
+
+        if (attempt < retries) {
+          await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+          continue;
+        }
+      }
+    }
+
+    return null;
+  }, [base64ToBlobUrl, requestTTSChunk]);
+
   // Unlock audio context on user gesture - call this synchronously in click handler
   const unlockAudio = useCallback(async () => {
     if (audioUnlockedRef.current) return true;
@@ -413,6 +531,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       audio.muted = false;
       audio.playbackRate = playbackSpeedRef.current;
       const previousSrc = audio.currentSrc || audio.src;
+      let playbackStartTimeoutId: number | null = null;
 
       try {
         audio.pause();
@@ -425,6 +544,10 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       onAudioRefChange?.(audio);
 
       const cleanup = () => {
+        if (playbackStartTimeoutId !== null) {
+          window.clearTimeout(playbackStartTimeoutId);
+          playbackStartTimeoutId = null;
+        }
         audio.onplay = null;
         audio.onplaying = null;
         audio.onended = null;
@@ -532,6 +655,19 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         revokeObjectUrl(previousSrc);
         activeBlobUrlsRef.current = activeBlobUrlsRef.current.filter((entry) => entry !== previousSrc);
       }
+
+      playbackStartTimeoutId = window.setTimeout(() => {
+        if (resolved || stopRef.current) return;
+
+        console.error("[TTS] Audio start timed out");
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsPlaying(false);
+          setError("Audio took too long to start. Tap play to retry.");
+        }
+        cleanup();
+        safeResolve(false);
+      }, TTS_PLAYBACK_START_TIMEOUT_MS);
 
       audio.play().catch((err) => {
         if (isMountedRef.current) {
@@ -672,17 +808,10 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           onChunkPlaybackInfo?.({ chunkIndex: globalIndex, chunkWordCounts });
         }
 
-        const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
-          body: { text: chunks[i], voice: selectedVoice, language },
-        });
+        const url = await fetchChunkAudioUrl(chunks[i], 2);
 
         if (stopRef.current) break;
-        if (invokeError) throw new Error(invokeError.message || "TTS failed");
-        if (data?.error) throw new Error(data.error);
-        if (!data?.audioContent) throw new Error("No audio received");
-
-        const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
-        activeBlobUrlsRef.current.push(url);
+        if (!url) throw new Error("Failed to load audio for this section");
 
         if (i === 0 && isMountedRef.current) {
           setIsLoading(false);
@@ -703,7 +832,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       mediaSession.setPlaybackState('idle');
       audioReliability.setState('idle');
     }
-  }, [selectedVoice, language, base64ToBlobUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, unlockAudio]);
+  }, [fetchChunkAudioUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, unlockAudio]);
 
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
     // CRITICAL: Do NOT call resetPlaybackState() here — it calls audio.load()
@@ -807,60 +936,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     mediaSession.activate();
     mediaSession.setPlaybackState('playing');
 
-    // Prefetch helper with retry logic for network failures
-    const fetchChunkAudio = async (chunk: string, retries = 2): Promise<string | null> => {
-      for (let attempt = 0; attempt <= retries; attempt++) {
-        if (stopRef.current) return null;
-        
-        try {
-          const { data, error: invokeError } = await supabase.functions.invoke("text-to-speech", {
-            body: { text: chunk, voice: selectedVoice, language },
-          });
-          
-          if (stopRef.current) return null;
-          
-          if (invokeError) {
-            console.error(`[TTS] Chunk fetch error (attempt ${attempt + 1}):`, invokeError);
-            if (attempt < retries) {
-              await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-              continue;
-            }
-            return null;
-          }
-          
-          if (data?.error) {
-            console.error(`[TTS] API error:`, data.error);
-            // Don't retry for API errors (e.g., quota exceeded)
-            return null;
-          }
-          
-          if (!data?.audioContent) {
-            console.error("[TTS] No audio content received");
-            if (attempt < retries) {
-              await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-              continue;
-            }
-            return null;
-          }
-          
-          const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
-          activeBlobUrlsRef.current.push(url);
-          return url;
-        } catch (err) {
-          console.error(`[TTS] Network error (attempt ${attempt + 1}):`, err);
-          if (attempt < retries) {
-            await new Promise(r => setTimeout(r, 500 * (attempt + 1)));
-            continue;
-          }
-          return null;
-        }
-      }
-      return null;
-    };
-
     try {
       // Start prefetching first chunk immediately
-      let nextChunkPromise: Promise<string | null> | null = fetchChunkAudio(chunks[0]);
+      let nextChunkPromise: Promise<string | null> | null = fetchChunkAudioUrl(chunks[0]);
       
       for (let i = 0; i < chunks.length; i++) {
         if (stopRef.current) {
@@ -881,7 +959,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           console.log("[TTS] Failed to fetch chunk", i + 1, "- skipping to next");
           // Try to continue with next chunk instead of stopping entirely
           if (i + 1 < chunks.length) {
-            nextChunkPromise = fetchChunkAudio(chunks[i + 1]);
+            nextChunkPromise = fetchChunkAudioUrl(chunks[i + 1]);
             continue;
           }
           break;
@@ -889,7 +967,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
         // Start prefetching NEXT chunk while current plays (gapless playback)
         if (i + 1 < chunks.length) {
-          nextChunkPromise = fetchChunkAudio(chunks[i + 1]);
+          nextChunkPromise = fetchChunkAudioUrl(chunks[i + 1]);
         } else {
           nextChunkPromise = null;
         }
@@ -942,7 +1020,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         audioReliability.setState('idle');
       }
     }
-  }, [sanitizeText, chunkText, cleanupBlobUrls, base64ToBlobUrl, playUrl, selectedVoice, language, toast, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability, resetPlaybackState, audioRef, onCumulativeTimeChange, onEstimatedDurationChange, onAudioRefChange]);
+  }, [sanitizeText, chunkText, cleanupBlobUrls, playUrl, toast, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability, resetPlaybackState, audioRef, onCumulativeTimeChange, onEstimatedDurationChange, onAudioRefChange, fetchChunkAudioUrl]);
 
   // Stop on stopKey change (page navigation)
   useEffect(() => {
