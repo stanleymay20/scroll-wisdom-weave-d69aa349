@@ -59,18 +59,29 @@ serve(async (req) => {
     }
 
     // Step 2: Delete user data from all tables (order matters for foreign keys)
-    const tablesToDelete = [
+    // Tables with user_id column
+    const userIdTables = [
+      "learner_concept_states",
+      "quiz_question_history",
+      "spaced_repetition_cards",
+      "learning_progress",
+      "competency_progress",
+      "competency_profile",
+      "competency_certificates",
+      "reading_sessions",
+      "reading_streaks",
+      "reading_goals",
+      "saved_learning_decks",
+      "saved_decks",
       "highlights",
       "study_notes",
       "quiz_attempts",
       "assessment_integrity_logs",
-      "mastery_attempts",
-      "user_library",
-      "chapters", // Delete chapters first (they reference books)
-      "books",
-      "data_export_requests",
-      "tts_usage",
-      "legal_consents",
+      "bookmarks",
+      "chapter_edit_sessions",
+      "audit_telemetry",
+      "pmf_events",
+      "ai_usage_tracking",
       "user_roles",
       "profiles",
     ];
