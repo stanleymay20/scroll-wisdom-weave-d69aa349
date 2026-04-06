@@ -51,7 +51,7 @@ const SUPPORTED_LANGUAGES = [
 ] as const;
 
 // Enhanced code execution with proper output capture
-function simulateExecution(code: string, language: string): { output: string; error?: string } {
+async function simulateExecution(code: string, language: string): Promise<{ output: string; error?: string }> {
   // For JavaScript - PROPER execution with full console capture
   if (language === 'javascript') {
     try {
