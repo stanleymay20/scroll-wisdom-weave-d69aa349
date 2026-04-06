@@ -91,6 +91,16 @@ export const COGNITIVE_LEVELS: CognitiveLevel[] = [
   }
 ];
 
+export const DEFAULT_COGNITIVE_LEVEL_ID = "functional";
+
+export function getCognitiveLevel(levelId?: string): CognitiveLevel {
+  return (
+    COGNITIVE_LEVELS.find((level) => level.id === levelId) ??
+    COGNITIVE_LEVELS.find((level) => level.id === DEFAULT_COGNITIVE_LEVEL_ID) ??
+    COGNITIVE_LEVELS[0]
+  );
+}
+
 interface CognitiveLevelSelectorProps {
   selectedLevel: string;
   onSelectLevel: (levelId: string) => void;
@@ -114,7 +124,7 @@ export function CognitiveLevelSelector({
     return mins > 0 ? `${hours}h ${mins}m` : `${hours}h`;
   };
 
-  const selectedLevelData = COGNITIVE_LEVELS.find(l => l.id === selectedLevel);
+  const selectedLevelData = getCognitiveLevel(selectedLevel);
 
   return (
     <div className="bg-card/50 backdrop-blur-sm rounded-xl border border-border/50 overflow-hidden">
