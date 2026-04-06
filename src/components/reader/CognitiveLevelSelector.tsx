@@ -261,4 +261,4 @@ export const CognitiveLevelSelector = forwardRef<HTMLDivElement, CognitiveLevelS
       )}
     </div>
   );
-}
+});
