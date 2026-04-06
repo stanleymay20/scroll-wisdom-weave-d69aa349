@@ -191,7 +191,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const [mode, setMode] = useState<"chapter" | "selection">("chapter");
   // Track current position for resume (Interactive Guard Mode - Rule 5.4)
   const [currentPosition, setCurrentPosition] = useState(0);
-  const pausedAtChunkRef = useRef(0);
+  const pausedAtChunkRef = useRef(-1);
+  const pauseRequestedRef = useRef(false);
   // Cumulative playback time across chunks (for sentence sync)
   const cumulativeTimeRef = useRef(0);
   // Track audio-seconds-per-character to estimate total duration accurately
@@ -220,7 +221,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     id: 'tts-mini-player',
     onVisibilityResume: () => {
       // Resume playback when tab becomes visible again
-      if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
+      if (pausedAtChunkRef.current >= 0 && chunksRef.current.length > 0) {
         resumeFromPosition();
       }
     },
@@ -348,9 +349,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
   const resetPlaybackState = useCallback((nextError: string | null = null) => {
     stopRef.current = true;
+    pauseRequestedRef.current = false;
     autoplayBlockedRef.current = false;
     audioUnlockedRef.current = false;
     audioUnlockPromiseRef.current = null;
+    pausedAtChunkRef.current = -1;
 
     if (audioRef.current) {
       try {
@@ -732,8 +735,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       };
       
       audio.onpause = () => {
-        // Only resolve false if user explicitly stopped — NOT on system pauses
-        if (stopRef.current) {
+        // Resolve for explicit pause/stop only — ignore system pauses so the loop can recover
+        if (stopRef.current || pauseRequestedRef.current) {
           cleanup();
           if (isMountedRef.current) {
             setIsPlaying(false);
@@ -815,14 +818,19 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
+    pauseRequestedRef.current = false;
     resetPlaybackState();
     mediaSession.deactivate();
     
     // Clear global audio state so floating player disappears
     stopGlobalAudio();
+
+    if (mode === 'chapter' && bookId && chapterId) {
+      audioPositionManager.clearPosition(bookId, chapterId);
+    }
     
     // Reset paused position so next play starts fresh
-    pausedAtChunkRef.current = 0;
+    pausedAtChunkRef.current = -1;
     
     if (isMountedRef.current) {
       setCurrentChunk(0);
@@ -832,21 +840,23 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     setTimeout(() => {
       isStoppingRef.current = false;
     }, 50);
-  }, [resetPlaybackState, mediaSession, stopGlobalAudio]);
+  }, [resetPlaybackState, mediaSession, stopGlobalAudio, mode, bookId, chapterId]);
   
   // CONTRACT 5 - Rule 5.4: Pause for interaction (Interactive Guard Mode)
   const pauseForInteraction = useCallback(() => {
-    if (!isPlaying) return;
+    if (!isPlaying && !isLoading) return;
     
-    pausedAtChunkRef.current = currentChunk;
+    const pauseChunkIndex = Math.max(0, currentPosition);
+    pausedAtChunkRef.current = pauseChunkIndex;
+    pauseRequestedRef.current = true;
+    stopRef.current = true;
     
     if (audioRef.current) {
       try {
         audioRef.current.pause();
       } catch { /* ignore */ }
     }
-    
-    stopRef.current = true;
+
     mediaSession.setPlaybackState('paused');
     audioReliability.setState('paused');
     
@@ -858,13 +868,13 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     // Persist position for cross-session resume
     if (bookId && chapterId) {
       const chunkProgress = chunksRef.current.length > 0 
-        ? Math.round((currentChunk / chunksRef.current.length) * 100) 
+        ? Math.round(((pauseChunkIndex + 1) / chunksRef.current.length) * 100) 
         : 0;
-      audioPositionManager.savePosition(bookId, chapterId, currentChunk, chunkProgress, selectedVoice);
+      audioPositionManager.savePosition(bookId, chapterId, pauseChunkIndex, chunkProgress, selectedVoice);
     }
     
-    console.log('[TTS] Paused for interaction at chunk', currentChunk);
-  }, [isPlaying, currentChunk, mediaSession, bookId, chapterId, selectedVoice, audioReliability]);
+    console.log('[TTS] Paused for interaction at chunk', pauseChunkIndex + 1);
+  }, [isPlaying, isLoading, currentPosition, mediaSession, bookId, chapterId, selectedVoice, audioReliability, audioRef]);
   
   // CONTRACT 5 - Rule 5.4: Resume from semantic position
   const resumeFromPosition = useCallback(() => {
@@ -874,6 +884,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
     
     const resumeChunk = pausedAtChunkRef.current;
+    if (resumeChunk < 0 || resumeChunk >= chunksRef.current.length) {
+      return;
+    }
+
+    pauseRequestedRef.current = false;
     console.log('[TTS] Resuming from chunk', resumeChunk, 'of', chunksRef.current.length);
     
     // Resume playback from the saved chunk position
@@ -894,10 +909,12 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
 
     stopRef.current = false;
+    pauseRequestedRef.current = false;
     isStoppingRef.current = false;
     setIsLoading(true);
     setError(null);
     audioReliability.setState('loading');
+    let completedPlayback = true;
     
     mediaSession.activate();
     mediaSession.setPlaybackState('playing');
@@ -911,7 +928,10 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
     try {
       for (let i = 0; i < chunks.length; i++) {
-        if (stopRef.current) break;
+        if (stopRef.current) {
+          completedPlayback = false;
+          break;
+        }
 
         const globalIndex = startIndex + i;
         setCurrentChunk(globalIndex + 1);
@@ -925,8 +945,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
         const url = await fetchChunkAudioUrl(chunks[i], 2);
 
-        if (stopRef.current) break;
-        if (!url) throw new Error("Failed to load audio for this section");
+        if (stopRef.current) {
+          completedPlayback = false;
+          break;
+        }
+        if (!url) {
+          completedPlayback = false;
+          throw new Error("Failed to load audio for this section");
+        }
 
         if (i === 0 && isMountedRef.current) {
           setIsLoading(false);
@@ -934,20 +960,46 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         }
 
         const success = await playUrl(url);
-        if (!success) break;
+        if (!success) {
+          completedPlayback = false;
+          break;
+        }
       }
     } catch (err) {
+      completedPlayback = false;
       console.error("[TTS] Resume error:", err);
       resetPlaybackState(err instanceof Error ? err.message : "TTS failed");
     } finally {
+      const wasPaused = pauseRequestedRef.current;
+      const completedChapter = completedPlayback && !stopRef.current && mode === 'chapter';
+
+      if (completedChapter && bookId && chapterId) {
+        audioPositionManager.clearPosition(bookId, chapterId);
+        pausedAtChunkRef.current = -1;
+      }
+
       if (isMountedRef.current) {
         setIsLoading(false);
         setIsPlaying(false);
+        if (!wasPaused) {
+          setProgress(0);
+          setCurrentChunk(0);
+          setCurrentPosition(0);
+        }
+
+        if (completedChapter && autoContinue) {
+          onChapterComplete?.();
+        }
       }
-      mediaSession.setPlaybackState('idle');
-      audioReliability.setState('idle');
+      if (wasPaused) {
+        mediaSession.setPlaybackState('paused');
+        audioReliability.setState('paused');
+      } else {
+        mediaSession.setPlaybackState('idle');
+        audioReliability.setState('idle');
+      }
     }
-  }, [fetchChunkAudioUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, unlockAudio]);
+  }, [fetchChunkAudioUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, unlockAudio, mode, bookId, chapterId, autoContinue, onChapterComplete]);
 
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
     // CRITICAL: Do NOT call resetPlaybackState() here — it calls audio.load()
@@ -989,9 +1041,10 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     
     // Ensure clean state — these MUST be false before chunk loop starts
     stopRef.current = false;
+    pauseRequestedRef.current = false;
     isStoppingRef.current = false;
     autoplayBlockedRef.current = false;
-    pausedAtChunkRef.current = 0;
+    pausedAtChunkRef.current = -1;
     cumulativeTimeRef.current = 0;
     totalAudioSecsRef.current = 0;
     totalAudioCharsRef.current = 0;
@@ -1050,6 +1103,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     // Activate media session for OS controls (Rule 5.3)
     mediaSession.activate();
     mediaSession.setPlaybackState('playing');
+    let completedPlayback = true;
 
     try {
       // Start prefetching first chunk immediately
@@ -1057,6 +1111,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       
       for (let i = 0; i < chunks.length; i++) {
         if (stopRef.current) {
+          completedPlayback = false;
           console.log("[TTS] Playback stopped at chunk", i);
           break;
         }
@@ -1071,6 +1126,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         const currentUrl = await nextChunkPromise;
         
         if (!currentUrl) {
+          completedPlayback = false;
           console.log("[TTS] Failed to fetch chunk", i + 1, "- skipping to next");
           // Try to continue with next chunk instead of stopping entirely
           if (i + 1 < chunks.length) {
@@ -1096,6 +1152,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         const success = await playUrl(currentUrl);
         
         if (!success) {
+          completedPlayback = false;
           console.log("[TTS] Playback of chunk", i + 1, "was interrupted");
           if (autoplayBlockedRef.current) {
             resetPlaybackState("Audio playback is blocked on this device until the browser allows sound.");
@@ -1104,6 +1161,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         }
       }
     } catch (err) {
+      completedPlayback = false;
       if (err instanceof Error && (err.name === "AbortError" || err.message.includes("aborted"))) {
         console.log("[TTS] Playback cancelled");
       } else {
@@ -1117,25 +1175,41 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         }
       }
     } finally {
+      const wasPaused = pauseRequestedRef.current;
+      const completedChapter = completedPlayback && !stopRef.current && mode === 'chapter';
+
+      if (completedChapter && bookId && chapterId) {
+        audioPositionManager.clearPosition(bookId, chapterId);
+        pausedAtChunkRef.current = -1;
+      }
+
       if (isMountedRef.current) {
         setIsLoading(false);
         setIsPlaying(false);
-        setProgress(0);
-        setCurrentChunk(0);
-        
-        // AUTO-CONTINUE: Only if chapter finished naturally (not stopped by user)
-        if (!stopRef.current && mode === 'chapter' && autoContinue) {
+        if (!wasPaused) {
+          setProgress(0);
+          setCurrentChunk(0);
+          setCurrentPosition(0);
+        }
+
+        // AUTO-CONTINUE: Only if chapter finished naturally (not paused/stopped by user)
+        if (completedChapter && autoContinue) {
           console.log("[TTS] Chapter complete - triggering auto-continue");
           onChapterComplete?.();
         }
       }
-      mediaSession.setPlaybackState('idle');
+      if (wasPaused) {
+        mediaSession.setPlaybackState('paused');
+        audioReliability.setState('paused');
+      } else {
+        mediaSession.setPlaybackState('idle');
+      }
       cleanupBlobUrls();
-      if (!stopRef.current && !autoplayBlockedRef.current) {
+      if (!wasPaused && !stopRef.current && !autoplayBlockedRef.current) {
         audioReliability.setState('idle');
       }
     }
-  }, [sanitizeText, chunkText, cleanupBlobUrls, playUrl, toast, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability, resetPlaybackState, audioRef, onCumulativeTimeChange, onEstimatedDurationChange, onAudioRefChange, fetchChunkAudioUrl]);
+  }, [sanitizeText, chunkText, cleanupBlobUrls, playUrl, toast, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability, resetPlaybackState, audioRef, onCumulativeTimeChange, onEstimatedDurationChange, onAudioRefChange, fetchChunkAudioUrl, mode, bookId, chapterId]);
 
   // Stop on stopKey change (page navigation)
   useEffect(() => {
@@ -1190,10 +1264,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   // Cleanup on unmount — persist position but DON'T destroy audio if still playing
   useEffect(() => {
     return () => {
-      if (bookId && chapterId && currentChunk > 0 && chunksRef.current.length > 0) {
-        const chunkProgress = Math.round((currentChunk / chunksRef.current.length) * 100);
-        audioPositionManager.savePosition(bookId, chapterId, currentChunk, chunkProgress, selectedVoice);
-        console.log('[TTS] Saved position on unmount:', currentChunk);
+      if (bookId && chapterId && pausedAtChunkRef.current >= 0 && chunksRef.current.length > 0) {
+        const pausedChunkIndex = pausedAtChunkRef.current;
+        const chunkProgress = Math.round(((pausedChunkIndex + 1) / chunksRef.current.length) * 100);
+        audioPositionManager.savePosition(bookId, chapterId, pausedChunkIndex, chunkProgress, selectedVoice);
+        console.log('[TTS] Saved position on unmount:', pausedChunkIndex + 1);
       }
       
       if (!audioRef.current || audioRef.current.paused) {
@@ -1220,14 +1295,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
     primeAudioFromGesture();
     // If we have a saved position from this session, resume from there
-    if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
+    if (pausedAtChunkRef.current >= 0 && chunksRef.current.length > 0) {
       resumeFromPosition();
       return;
     }
     // Check persisted position from previous session — re-chunk text first, then resume
     if (bookId && chapterId) {
       const saved = audioPositionManager.getPosition(bookId, chapterId);
-      if (saved && saved.chunkIndex > 0) {
+      if (saved && saved.chunkIndex >= 0) {
         console.log('[TTS] Found persisted position at chunk', saved.chunkIndex, '— resuming');
         // Re-chunk the text, set chunks, then resume from saved position
         const cleaned = sanitizeText(chapterText || '');
@@ -1236,7 +1311,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           chunksRef.current = chunks;
           setTotalChunks(chunks.length);
           fullTextLengthRef.current = cleaned.length;
-          if (saved.chunkIndex < chunks.length) {
+          if (saved.chunkIndex >= 0 && saved.chunkIndex < chunks.length) {
             pausedAtChunkRef.current = saved.chunkIndex;
             if (saved.voice) setSelectedVoice(saved.voice);
             resumeFromPosition();
@@ -1263,7 +1338,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       pause: pauseForInteraction,
       play: () => {
         primeAudioFromGesture();
-        if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
+        if (pausedAtChunkRef.current >= 0 && chunksRef.current.length > 0) {
           resumeFromPosition();
           return;
         }
@@ -1501,7 +1576,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
                   setProgress(0);
                   setCurrentChunk(0);
                   setCurrentPosition(0);
-                  pausedAtChunkRef.current = 0;
+                   pausedAtChunkRef.current = -1;
 
                   // Regenerate TTS with new voice after state update
                   if (wasPlaying) {
