@@ -208,6 +208,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const chunksRef = useRef<string[]>([]);
   // Track if audio context is unlocked (user has interacted)
   const audioUnlockedRef = useRef(false);
+  const audioUnlockPromiseRef = useRef<Promise<boolean> | null>(null);
   // Track if playback was blocked by browser autoplay policy
   const autoplayBlockedRef = useRef(false);
   const { toast } = useToast();
@@ -349,6 +350,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     stopRef.current = true;
     autoplayBlockedRef.current = false;
     audioUnlockedRef.current = false;
+    audioUnlockPromiseRef.current = null;
 
     if (audioRef.current) {
       try {
@@ -514,10 +516,23 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   // Unlock audio context on user gesture - call this synchronously in click handler
   const unlockAudio = useCallback(async () => {
     if (audioUnlockedRef.current) return true;
+    if (audioUnlockPromiseRef.current) return audioUnlockPromiseRef.current;
 
     const audio = ensureAudioElement();
 
     const restoreAudioElement = () => {
+      const currentSrc = audio.currentSrc || audio.src || "";
+      const isStillSilentPrime = !currentSrc || currentSrc === SILENT_WAV_DATA_URI;
+
+      if (!isStillSilentPrime) {
+        try {
+          audio.muted = false;
+        } catch {
+          /* noop */
+        }
+        return;
+      }
+
       try {
         audio.pause();
         audio.currentTime = 0;
@@ -531,62 +546,69 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       }
     };
 
-    try {
-      audio.pause();
-      audio.muted = true;
-      if (audio.src !== SILENT_WAV_DATA_URI) {
-        audio.src = SILENT_WAV_DATA_URI;
-      }
-      audio.currentTime = 0;
-      const playAttempt = audio.play();
-      
-      audioUnlockedRef.current = true;
-      autoplayBlockedRef.current = false;
-      console.log("[TTS] Priming shared audio element from user gesture");
+    const unlockPromise = (async () => {
+      try {
+        audio.pause();
+        audio.muted = true;
+        if (audio.src !== SILENT_WAV_DATA_URI) {
+          audio.src = SILENT_WAV_DATA_URI;
+        }
+        audio.currentTime = 0;
+        const playAttempt = audio.play();
 
-      if (!playAttempt || typeof playAttempt.then !== "function") {
-        restoreAudioElement();
-        return true;
-      }
+        console.log("[TTS] Priming shared audio element from user gesture");
 
-      let unlockTimedOut = false;
-      const unlocked = await Promise.race<boolean>([
-        playAttempt
-          .then(() => true)
-          .catch((err) => {
-            if (unlockTimedOut) {
-              console.warn("[TTS] Audio unlock settled after timeout", err);
+        if (!playAttempt || typeof playAttempt.then !== "function") {
+          audioUnlockedRef.current = true;
+          autoplayBlockedRef.current = false;
+          restoreAudioElement();
+          return true;
+        }
+
+        let unlockTimedOut = false;
+        const unlocked = await Promise.race<boolean>([
+          playAttempt
+            .then(() => true)
+            .catch((err) => {
+              if (unlockTimedOut) {
+                console.warn("[TTS] Audio unlock settled after timeout", err);
+                return true;
+              }
+
+              if (err?.name === "NotAllowedError") {
+                console.error("[TTS] Browser blocked audio unlock:", err);
+                return false;
+              }
+
+              console.warn("[TTS] Audio unlock promise rejected after prime; continuing", err);
               return true;
-            }
-
-            if (err?.name === "NotAllowedError") {
-              audioUnlockedRef.current = false;
-              autoplayBlockedRef.current = true;
-              console.error("[TTS] Browser blocked audio unlock:", err);
-              return false;
-            }
-
-            console.warn("[TTS] Audio unlock promise rejected after prime; continuing", err);
-            return true;
+            }),
+          new Promise<boolean>((resolve) => {
+            window.setTimeout(() => {
+              unlockTimedOut = true;
+              console.warn("[TTS] Audio unlock timed out; continuing with primed element");
+              resolve(true);
+            }, AUDIO_UNLOCK_TIMEOUT_MS);
           }),
-        new Promise<boolean>((resolve) => {
-          window.setTimeout(() => {
-            unlockTimedOut = true;
-            console.warn("[TTS] Audio unlock timed out; continuing with primed element");
-            resolve(true);
-          }, AUDIO_UNLOCK_TIMEOUT_MS);
-        }),
-      ]);
+        ]);
 
-      restoreAudioElement();
-      return unlocked;
-    } catch (err) {
-      audioUnlockedRef.current = false;
-      restoreAudioElement();
-      autoplayBlockedRef.current = true;
-      console.error("[TTS] Failed to unlock audio context:", err);
-      return false;
-    }
+        audioUnlockedRef.current = unlocked;
+        autoplayBlockedRef.current = !unlocked;
+        restoreAudioElement();
+        return unlocked;
+      } catch (err) {
+        audioUnlockedRef.current = false;
+        autoplayBlockedRef.current = true;
+        restoreAudioElement();
+        console.error("[TTS] Failed to unlock audio context:", err);
+        return false;
+      } finally {
+        audioUnlockPromiseRef.current = null;
+      }
+    })();
+
+    audioUnlockPromiseRef.current = unlockPromise;
+    return unlockPromise;
   }, [ensureAudioElement]);
 
   const primeAudioFromGesture = useCallback(() => {
