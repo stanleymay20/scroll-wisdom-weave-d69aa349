@@ -77,14 +77,53 @@ function simulateExecution(code: string, language: string): { output: string; er
         logs.push(`ℹ️ ${args.map(a => String(a)).join(' ')}`);
       };
       
-      // Create isolated execution context with common utilities
-      const result = new Function(`
-        "use strict";
-        // Provide common utilities
-        const print = (...args) => console.log(...args);
+      // Execute in sandboxed iframe to prevent XSS
+      const result = await new Promise((resolve, reject) => {
+        const iframe = document.createElement('iframe');
+        iframe.sandbox.add('allow-scripts');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
         
-        ${code}
-      `)();
+        const timeout = setTimeout(() => {
+          document.body.removeChild(iframe);
+          reject(new Error('Execution timed out (5s limit)'));
+        }, 5000);
+        
+        const handler = (event: MessageEvent) => {
+          if (event.source === iframe.contentWindow) {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            document.body.removeChild(iframe);
+            if (event.data?.error) {
+              reject(new Error(event.data.error));
+            } else {
+              resolve(event.data?.logs || []);
+            }
+          }
+        };
+        window.addEventListener('message', handler);
+        
+        const scriptContent = `
+          <script>
+            const logs = [];
+            const originalConsole = console;
+            console.log = (...args) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '));
+            console.warn = (...args) => logs.push('⚠️ ' + args.map(a => String(a)).join(' '));
+            console.error = (...args) => logs.push('❌ ' + args.map(a => String(a)).join(' '));
+            console.info = (...args) => logs.push('ℹ️ ' + args.map(a => String(a)).join(' '));
+            const print = (...args) => console.log(...args);
+            try {
+              "use strict";
+              const result = eval(${JSON.stringify(code)});
+              if (result !== undefined) logs.push('→ ' + (typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result)));
+              parent.postMessage({ logs }, '*');
+            } catch(e) {
+              parent.postMessage({ error: e.name + ': ' + e.message }, '*');
+            }
+          <\/script>
+        `;
+        iframe.srcdoc = scriptContent;
+      }) as string[];
       
       // Restore console
       Object.assign(console, originalConsole);
