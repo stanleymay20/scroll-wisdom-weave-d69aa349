@@ -52,33 +52,10 @@ const SUPPORTED_LANGUAGES = [
 
 // Enhanced code execution with proper output capture
 async function simulateExecution(code: string, language: string): Promise<{ output: string; error?: string }> {
-  // For JavaScript - PROPER execution with full console capture
+  // For JavaScript - Sandboxed iframe execution
   if (language === 'javascript') {
     try {
-      const logs: string[] = [];
-      const originalConsole = {
-        log: console.log,
-        warn: console.warn,
-        error: console.error,
-        info: console.info,
-      };
-      
-      // Capture all console methods
-      console.log = (...args) => {
-        logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '));
-      };
-      console.warn = (...args) => {
-        logs.push(`⚠️ ${args.map(a => String(a)).join(' ')}`);
-      };
-      console.error = (...args) => {
-        logs.push(`❌ ${args.map(a => String(a)).join(' ')}`);
-      };
-      console.info = (...args) => {
-        logs.push(`ℹ️ ${args.map(a => String(a)).join(' ')}`);
-      };
-      
-      // Execute in sandboxed iframe to prevent XSS
-      const result = await new Promise((resolve, reject) => {
+      const logs = await new Promise<string[]>((resolve, reject) => {
         const iframe = document.createElement('iframe');
         iframe.sandbox.add('allow-scripts');
         iframe.style.display = 'none';
@@ -103,35 +80,25 @@ async function simulateExecution(code: string, language: string): Promise<{ outp
         };
         window.addEventListener('message', handler);
         
-        const scriptContent = `
-          <script>
-            const logs = [];
-            const originalConsole = console;
-            console.log = (...args) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '));
-            console.warn = (...args) => logs.push('⚠️ ' + args.map(a => String(a)).join(' '));
-            console.error = (...args) => logs.push('❌ ' + args.map(a => String(a)).join(' '));
-            console.info = (...args) => logs.push('ℹ️ ' + args.map(a => String(a)).join(' '));
-            const print = (...args) => console.log(...args);
-            try {
-              "use strict";
-              const result = eval(${JSON.stringify(code)});
-              if (result !== undefined) logs.push('→ ' + (typeof result === 'object' ? JSON.stringify(result, null, 2) : String(result)));
-              parent.postMessage({ logs }, '*');
-            } catch(e) {
-              parent.postMessage({ error: e.name + ': ' + e.message }, '*');
-            }
-          <\/script>
-        `;
+        const escapedCode = JSON.stringify(code);
+        const scriptContent = `<script>
+const logs = [];
+console.log = (...args) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '));
+console.warn = (...args) => logs.push('⚠️ ' + args.map(a => String(a)).join(' '));
+console.error = (...args) => logs.push('❌ ' + args.map(a => String(a)).join(' '));
+console.info = (...args) => logs.push('ℹ️ ' + args.map(a => String(a)).join(' '));
+const print = (...args) => console.log(...args);
+try {
+  "use strict";
+  const __result = (0, eval)(${escapedCode});
+  if (__result !== undefined) logs.push('→ ' + (typeof __result === 'object' ? JSON.stringify(__result, null, 2) : String(__result)));
+  parent.postMessage({ logs }, '*');
+} catch(e) {
+  parent.postMessage({ error: e.name + ': ' + e.message }, '*');
+}
+<\/script>`;
         iframe.srcdoc = scriptContent;
-      }) as string[];
-      
-      // Restore console
-      Object.assign(console, originalConsole);
-      
-      // Include return value if present
-      if (result !== undefined) {
-        logs.push(`→ ${typeof result === 'object' ? JSON.stringify(result, null, 2) : result}`);
-      }
+      });
       
       return { output: logs.length > 0 ? logs.join('\n') : '✓ Code executed successfully (no output)' };
     } catch (error) {
