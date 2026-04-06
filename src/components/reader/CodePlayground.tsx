@@ -262,20 +262,22 @@ export function CodePlayground({
   const { toast } = useToast();
   const { t } = useLanguage();
 
-  const handleRun = useCallback(() => {
+  const handleRun = useCallback(async () => {
     setIsRunning(true);
     setError(null);
     setOutput(null);
     
-    // Small delay for visual feedback
-    setTimeout(() => {
-      const result = simulateExecution(code, language);
+    try {
+      const result = await simulateExecution(code, language);
       setOutput(result.output);
       if (result.error) {
         setError(result.error);
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Execution failed');
+    } finally {
       setIsRunning(false);
-    }, 300);
+    }
   }, [code, language]);
 
   const handleReset = useCallback(() => {
