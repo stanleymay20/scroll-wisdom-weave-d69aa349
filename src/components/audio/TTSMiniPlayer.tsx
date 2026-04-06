@@ -1051,7 +1051,12 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
   }, [fetchChunkAudioUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, unlockAudio, mode, bookId, chapterId, autoContinue, onChapterComplete]);
 
+  // Keep the ref in sync so resumeFromPosition always calls the latest version
+  generateSpeechFromChunksRef.current = generateSpeechFromChunks;
+
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
+    // Reset transport mode so each new generation attempt tries direct fetch first
+    transportModeRef.current = "direct";
     // CRITICAL: Do NOT call resetPlaybackState() here — it calls audio.load()
     // which revokes the user-gesture unlock on mobile browsers.
     // Instead, do lightweight cleanup that preserves the audio element state.
