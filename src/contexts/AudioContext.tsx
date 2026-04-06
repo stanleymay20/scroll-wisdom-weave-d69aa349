@@ -188,8 +188,9 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       const next = { ...prev, ...partial };
       // Persist position when meaningful
       if (next.bookId && next.chapterId && next.chunkIndex > 0) {
+        const persistedChunkIndex = Math.max(0, next.chunkIndex - 1);
         audioPositionManager.savePosition(
-          next.bookId, next.chapterId, next.chunkIndex,
+          next.bookId, next.chapterId, persistedChunkIndex,
           next.totalChunks > 0 ? Math.round((next.chunkIndex / next.totalChunks) * 100) : 0,
           next.voice
         );
@@ -217,8 +218,9 @@ export function AudioProvider({ children }: { children: ReactNode }) {
     setState(prev => ({ ...prev, isPlaying: false, isLoading: false }));
     
     if (s.bookId && s.chapterId && s.chunkIndex > 0) {
+      const persistedChunkIndex = Math.max(0, s.chunkIndex - 1);
       audioPositionManager.savePosition(
-        s.bookId, s.chapterId, s.chunkIndex,
+        s.bookId, s.chapterId, persistedChunkIndex,
         s.totalChunks > 0 ? Math.round((s.chunkIndex / s.totalChunks) * 100) : 0,
         s.voice
       );

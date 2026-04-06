@@ -207,6 +207,11 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const prevStopKeyRef = useRef<string | number | undefined>(undefined);
   const isMountedRef = useRef(true);
   const chunksRef = useRef<string[]>([]);
+  const sessionMetaRef = useRef({
+    bookId: bookId ?? null,
+    chapterId: chapterId ?? null,
+    voice: selectedVoice,
+  });
   // Track if audio context is unlocked (user has interacted)
   const audioUnlockedRef = useRef(false);
   const audioUnlockPromiseRef = useRef<Promise<boolean> | null>(null);
@@ -259,6 +264,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       isMountedRef.current = false;
     };
   }, []);
+
+  useEffect(() => {
+    sessionMetaRef.current = {
+      bookId: bookId ?? null,
+      chapterId: chapterId ?? null,
+      voice: selectedVoice,
+    };
+  }, [bookId, chapterId, selectedVoice]);
 
   // Report playing state changes for auto-scroll sync
   useEffect(() => {
@@ -1261,23 +1274,26 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     });
   }, [updateGlobalAudio, isPlaying, isLoading, currentChunk, totalChunks, progress, bookId, chapterId, currentChapter, title, author, selectedVoice]);
 
-  // Cleanup on unmount — persist position but DON'T destroy audio if still playing
+  // Cleanup ONLY on actual unmount. Running this on chunk/progress updates was
+  // falsely marking playback as stopped mid-stream and breaking resume.
   useEffect(() => {
     return () => {
-      if (bookId && chapterId && pausedAtChunkRef.current >= 0 && chunksRef.current.length > 0) {
+      const { bookId: activeBookId, chapterId: activeChapterId, voice } = sessionMetaRef.current;
+
+      if (activeBookId && activeChapterId && pausedAtChunkRef.current >= 0 && chunksRef.current.length > 0) {
         const pausedChunkIndex = pausedAtChunkRef.current;
         const chunkProgress = Math.round(((pausedChunkIndex + 1) / chunksRef.current.length) * 100);
-        audioPositionManager.savePosition(bookId, chapterId, pausedChunkIndex, chunkProgress, selectedVoice);
+        audioPositionManager.savePosition(activeBookId, activeChapterId, pausedChunkIndex, chunkProgress, voice);
         console.log('[TTS] Saved position on unmount:', pausedChunkIndex + 1);
       }
-      
+
       if (!audioRef.current || audioRef.current.paused) {
         stopRef.current = true;
         isStoppingRef.current = true;
       }
       cleanupBlobUrls();
     };
-  }, [cleanupBlobUrls, bookId, chapterId, currentChunk, selectedVoice, isPlaying, title, audioRef]);
+  }, [cleanupBlobUrls, audioRef]);
 
   // Update volume on active audio
   useEffect(() => {
