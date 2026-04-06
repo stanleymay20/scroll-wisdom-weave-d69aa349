@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, forwardRef } from "react";
 import { motion } from "framer-motion";
 import { 
   Brain, 
@@ -108,12 +108,12 @@ interface CognitiveLevelSelectorProps {
   onStartReading?: () => void;
 }
 
-export function CognitiveLevelSelector({ 
+export const CognitiveLevelSelector = forwardRef<HTMLDivElement, CognitiveLevelSelectorProps>(function CognitiveLevelSelector({ 
   selectedLevel, 
   onSelectLevel, 
   estimatedReadingTime,
   onStartReading 
-}: CognitiveLevelSelectorProps) {
+}, ref) {
   const [expanded, setExpanded] = useState(false);
 
   const calculateTime = (multiplier: number) => {
@@ -127,7 +127,7 @@ export function CognitiveLevelSelector({
   const selectedLevelData = getCognitiveLevel(selectedLevel);
 
   return (
-    <div className="bg-card/50 backdrop-blur-sm rounded-xl border border-border/50 overflow-hidden">
+    <div ref={ref} className="bg-card/50 backdrop-blur-sm rounded-xl border border-border/50 overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-border/50">
         <div className="flex items-center justify-between">
@@ -261,4 +261,4 @@ export function CognitiveLevelSelector({
       )}
     </div>
   );
-}
+});
