@@ -50,6 +50,8 @@ const OPENAI_VOICES = [
 const SILENT_WAV_DATA_URI = "data:audio/wav;base64,UklGRigAAABXQVZFZm10IBIAAAABAAEARKwAAIhYAQACABAAAABkYXRhAgAAAAEA";
 const TTS_REQUEST_TIMEOUT_MS = 15000;
 const TTS_PLAYBACK_START_TIMEOUT_MS = 10000;
+const SESSION_LOOKUP_TIMEOUT_MS = 1500;
+const AUDIO_UNLOCK_TIMEOUT_MS = 300;
 
 interface TTSChunkPayload {
   audioContent: string;
@@ -417,20 +419,33 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
     if (ttsUrl && publishableKey) {
       try {
-        const {
-          data: { session },
-        } = await supabase.auth.getSession();
+        let session: { access_token?: string } | null = null;
+
+        try {
+          const sessionResult = await withTimeout(
+            supabase.auth.getSession(),
+            SESSION_LOOKUP_TIMEOUT_MS,
+            "Session lookup timed out"
+          );
+          session = sessionResult.data.session ?? null;
+        } catch (sessionError) {
+          console.warn("[TTS] Session lookup failed, continuing without user token", sessionError);
+        }
 
         const headers: Record<string, string> = {
           "Content-Type": "application/json",
           Accept: "application/json",
           apikey: publishableKey,
           "Cache-Control": "no-store",
+          Authorization: `Bearer ${session?.access_token ?? publishableKey}`,
         };
 
-        if (session?.access_token) {
-          headers.Authorization = `Bearer ${session.access_token}`;
-        }
+        console.log("[TTS] Requesting chunk audio", {
+          textLength: chunk.length,
+          hasSession: !!session?.access_token,
+          voice: selectedVoice,
+          language,
+        });
 
         const response = await withTimeout(
           fetch(ttsUrl, {
@@ -502,34 +517,81 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
     const audio = ensureAudioElement();
 
-    try {
-      audio.pause();
-      audio.muted = true;
-      audio.src = SILENT_WAV_DATA_URI;
-      audio.currentTime = 0;
-      await audio.play();
-      audio.pause();
-      audio.currentTime = 0;
-      audio.muted = false;
-      
-      audioUnlockedRef.current = true;
-      autoplayBlockedRef.current = false;
-      console.log("[TTS] Audio context unlocked");
-      return true;
-    } catch (err) {
-      audioUnlockedRef.current = false;
+    const restoreAudioElement = () => {
       try {
         audio.pause();
         audio.currentTime = 0;
         audio.muted = false;
       } catch {
-        /* noop */
+        try {
+          audio.muted = false;
+        } catch {
+          /* noop */
+        }
       }
+    };
+
+    try {
+      audio.pause();
+      audio.muted = true;
+      if (audio.src !== SILENT_WAV_DATA_URI) {
+        audio.src = SILENT_WAV_DATA_URI;
+      }
+      audio.currentTime = 0;
+      const playAttempt = audio.play();
+      
+      audioUnlockedRef.current = true;
+      autoplayBlockedRef.current = false;
+      console.log("[TTS] Priming shared audio element from user gesture");
+
+      if (!playAttempt || typeof playAttempt.then !== "function") {
+        restoreAudioElement();
+        return true;
+      }
+
+      let unlockTimedOut = false;
+      const unlocked = await Promise.race<boolean>([
+        playAttempt
+          .then(() => true)
+          .catch((err) => {
+            if (unlockTimedOut) {
+              console.warn("[TTS] Audio unlock settled after timeout", err);
+              return true;
+            }
+
+            if (err?.name === "NotAllowedError") {
+              audioUnlockedRef.current = false;
+              autoplayBlockedRef.current = true;
+              console.error("[TTS] Browser blocked audio unlock:", err);
+              return false;
+            }
+
+            console.warn("[TTS] Audio unlock promise rejected after prime; continuing", err);
+            return true;
+          }),
+        new Promise<boolean>((resolve) => {
+          window.setTimeout(() => {
+            unlockTimedOut = true;
+            console.warn("[TTS] Audio unlock timed out; continuing with primed element");
+            resolve(true);
+          }, AUDIO_UNLOCK_TIMEOUT_MS);
+        }),
+      ]);
+
+      restoreAudioElement();
+      return unlocked;
+    } catch (err) {
+      audioUnlockedRef.current = false;
+      restoreAudioElement();
       autoplayBlockedRef.current = true;
       console.error("[TTS] Failed to unlock audio context:", err);
       return false;
     }
   }, [ensureAudioElement]);
+
+  const primeAudioFromGesture = useCallback(() => {
+    void unlockAudio();
+  }, [unlockAudio]);
 
   const playUrl = useCallback((url: string): Promise<boolean> => {
     return new Promise((resolve) => {
@@ -1134,6 +1196,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       pauseForInteraction();
       return;
     }
+    primeAudioFromGesture();
     // If we have a saved position from this session, resume from there
     if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
       resumeFromPosition();
@@ -1168,6 +1231,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     if (isPlaying && mode === "selection") {
       stop();
     } else {
+      primeAudioFromGesture();
       generateSpeech(selectedText, true);
     }
   };
@@ -1176,6 +1240,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     registerControls({
       pause: pauseForInteraction,
       play: () => {
+        primeAudioFromGesture();
         if (pausedAtChunkRef.current > 0 && chunksRef.current.length > 0) {
           resumeFromPosition();
           return;
@@ -1191,7 +1256,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     return () => {
       registerControls(null);
     };
-  }, [registerControls, pauseForInteraction, resumeFromPosition, stop, isPlaying, isLoading, generateSpeech, mode, selectedText, chapterText]);
+  }, [registerControls, pauseForInteraction, resumeFromPosition, stop, isPlaying, isLoading, generateSpeech, mode, selectedText, chapterText, primeAudioFromGesture]);
 
   if (!hasAccess) return null;
 
@@ -1214,6 +1279,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           size="sm"
           onClick={() => {
             audioReliability.clearInterruption();
+            primeAudioFromGesture();
             resumeFromPosition();
           }}
           className="h-8 gap-1.5 text-xs border-amber-500/50 text-amber-600 hover:bg-amber-500/10"
