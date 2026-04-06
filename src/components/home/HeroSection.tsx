@@ -84,7 +84,7 @@ export function HeroSection({ onStartDemo }: HeroSectionProps) {
                 <Brain className="h-4 w-4" />
                 Try 20-Second Demo
               </Button>
-              <Button onClick={() => window.location.href = "/generate"} variant="outline" size="lg" className="gap-2">
+              <Button onClick={() => navigate("/generate")} variant="outline" size="lg" className="gap-2">
                 Generate Your First Book
                 <ArrowRight className="h-4 w-4" />
               </Button>

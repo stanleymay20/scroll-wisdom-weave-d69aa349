@@ -158,9 +158,22 @@ function simulateExecution(code: string, language: string): { output: string; er
       for (const match of matches) {
         // Try to evaluate simple expressions
         const content = match[1];
-        if (/^\d+(?:\s*[+\-*/]\s*\d+)*$/.test(content)) {
+          if (/^\d+(?:\s*[+\-*/]\s*\d+)*$/.test(content)) {
           try {
-            outputs.push(String(eval(content)));
+            // Safe arithmetic evaluation without eval
+            const safeResult = content.split(/([+\-*/])/).reduce((acc: number, token: string, i: number, arr: string[]) => {
+              const t = token.trim();
+              if (i === 0) return parseFloat(t);
+              const op = arr[i - 1]?.trim();
+              const num = parseFloat(t);
+              if (isNaN(num)) return acc;
+              if (op === '+') return acc + num;
+              if (op === '-') return acc - num;
+              if (op === '*') return acc * num;
+              if (op === '/') return acc / num;
+              return acc;
+            }, 0);
+            outputs.push(String(safeResult));
           } catch {
             outputs.push(content);
           }
