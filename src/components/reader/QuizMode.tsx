@@ -217,7 +217,7 @@ export function QuizMode({
             chapterTitle,
             bookTitle,
             bookType,
-            bloomLevel: isMasteryMode ? "evaluate" : "analyze",
+            bloomLevel: isMasteryMode ? "evaluate" : (adaptiveBloomLevel || "analyze"),
             questionCount: remainingCount,
             difficulty: adaptiveDifficulty,
             previousQuestionTexts: previousTexts,

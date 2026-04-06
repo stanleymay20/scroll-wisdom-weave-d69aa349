@@ -108,12 +108,12 @@ interface CognitiveLevelSelectorProps {
   onStartReading?: () => void;
 }
 
-export function CognitiveLevelSelector({ 
+export const CognitiveLevelSelector = forwardRef<HTMLDivElement, CognitiveLevelSelectorProps>(function CognitiveLevelSelector({ 
   selectedLevel, 
   onSelectLevel, 
   estimatedReadingTime,
   onStartReading 
-}: CognitiveLevelSelectorProps) {
+}, ref) {
   const [expanded, setExpanded] = useState(false);
 
   const calculateTime = (multiplier: number) => {
