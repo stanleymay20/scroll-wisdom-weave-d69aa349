@@ -108,38 +108,8 @@ export default defineConfig(({ mode }) => ({
           },
 
           // ===== NetworkFirst with short timeout for user-specific data =====
-          {
-            // User profiles - NetworkFirst with fallback
-            urlPattern: /\/rest\/v1\/profiles.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "profiles-cache",
-              networkTimeoutSeconds: 3,
-              expiration: {
-                maxEntries: 10,
-                maxAgeSeconds: 60 * 60, // 1 hour
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
-          {
-            // User library - NetworkFirst with fallback
-            urlPattern: /\/rest\/v1\/user_library.*/i,
-            handler: "NetworkFirst",
-            options: {
-              cacheName: "user-library-cache",
-              networkTimeoutSeconds: 3,
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24, // 24 hours
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
-          },
+          // NOTE: User-specific REST endpoints (profiles, user_library) are NOT cached
+          // to prevent cross-user data leakage in shared devices.
 
           // ===== NetworkFirst for reading content (fresh when online, cached fallback) =====
           {

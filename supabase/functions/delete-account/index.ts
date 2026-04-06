@@ -86,36 +86,35 @@ serve(async (req) => {
       "profiles",
     ];
 
-    for (const table of tablesToDelete) {
-      let query;
-      if (table === "chapters") {
-        // Delete chapters where the book belongs to the user
-        const { data: userBooks } = await adminClient
-          .from("books")
-          .select("id")
-          .eq("creator_id", userId);
-        
-        if (userBooks && userBooks.length > 0) {
-          const bookIds = userBooks.map(b => b.id);
-          const { error } = await adminClient
-            .from("chapters")
-            .delete()
-            .in("book_id", bookIds);
-          if (error) console.error(`[delete-account] Error deleting ${table}:`, error);
-        }
-      } else if (table === "books") {
-        const { error } = await adminClient
-          .from(table)
-          .delete()
-          .eq("creator_id", userId);
-        if (error) console.error(`[delete-account] Error deleting ${table}:`, error);
-      } else {
-        const { error } = await adminClient
-          .from(table)
-          .delete()
-          .eq("user_id", userId);
+    // Delete book-related data first (chapters, citations, audits reference books)
+    const { data: userBooks } = await adminClient
+      .from("books")
+      .select("id")
+      .or(`creator_id.eq.${userId},user_id.eq.${userId}`);
+    
+    if (userBooks && userBooks.length > 0) {
+      const bookIds = userBooks.map(b => b.id);
+      // Delete book-scoped tables
+      const bookScopedTables = [
+        "book_citations", "book_knowledge_graphs", "concept_edges", "concept_nodes",
+        "book_audits", "book_collaborators", "chapters", "content_reports",
+      ];
+      for (const table of bookScopedTables) {
+        const { error } = await adminClient.from(table).delete().in("book_id", bookIds);
         if (error) console.error(`[delete-account] Error deleting ${table}:`, error);
       }
+      // Delete books themselves
+      const { error: booksErr } = await adminClient.from("books").delete().in("id", bookIds);
+      if (booksErr) console.error("[delete-account] Error deleting books:", booksErr);
+    }
+
+    // Delete user_id-scoped tables
+    for (const table of userIdTables) {
+      const { error } = await adminClient
+        .from(table)
+        .delete()
+        .eq("user_id", userId);
+      if (error) console.error(`[delete-account] Error deleting ${table}:`, error);
     }
 
     console.log("[delete-account] User data deleted from all tables");
