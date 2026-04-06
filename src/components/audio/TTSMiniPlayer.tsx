@@ -914,6 +914,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   }, [isPlaying, isLoading, currentPosition, mediaSession, bookId, chapterId, selectedVoice, audioReliability, audioRef]);
   
   // CONTRACT 5 - Rule 5.4: Resume from semantic position
+  // Use a ref to avoid stale closure — generateSpeechFromChunks is defined after this
+  const generateSpeechFromChunksRef = useRef<((chunks: string[], startIndex: number) => void) | null>(null);
+
   const resumeFromPosition = useCallback(() => {
     if (chunksRef.current.length === 0) {
       // No chunks loaded, start fresh
@@ -930,8 +933,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     
     // Resume playback from the saved chunk position
     const remainingChunks = chunksRef.current.slice(resumeChunk);
-    if (remainingChunks.length > 0) {
-      generateSpeechFromChunks(remainingChunks, resumeChunk);
+    if (remainingChunks.length > 0 && generateSpeechFromChunksRef.current) {
+      generateSpeechFromChunksRef.current(remainingChunks, resumeChunk);
     }
   }, []);
 
