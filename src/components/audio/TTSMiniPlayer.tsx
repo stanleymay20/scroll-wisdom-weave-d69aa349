@@ -217,6 +217,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const audioUnlockPromiseRef = useRef<Promise<boolean> | null>(null);
   // Track if playback was blocked by browser autoplay policy
   const autoplayBlockedRef = useRef(false);
+  const transportModeRef = useRef<"direct" | "sdk">("direct");
   const { toast } = useToast();
   const entitlements = useEntitlements();
   const { audioRef, update: updateGlobalAudio, stopAndClear: stopGlobalAudio, registerControls } = useGlobalAudio();
@@ -277,6 +278,20 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   useEffect(() => {
     onPlayingChange?.(isPlaying);
   }, [isPlaying, onPlayingChange]);
+
+  useEffect(() => {
+    if (typeof adaptiveSpeed !== "number" || Number.isNaN(adaptiveSpeed)) return;
+
+    const nextSpeed = Number(Math.min(2, Math.max(0.75, adaptiveSpeed)).toFixed(2));
+
+    setPlaybackSpeed((prev) => (prev === nextSpeed ? prev : nextSpeed));
+    playbackSpeedRef.current = nextSpeed;
+    onPlaybackSpeedChange?.(nextSpeed);
+
+    if (audioRef.current) {
+      audioRef.current.playbackRate = nextSpeed;
+    }
+  }, [adaptiveSpeed, onPlaybackSpeedChange, audioRef]);
 
   const sanitizeText = useCallback((raw: string) => {
     return raw
@@ -435,7 +450,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       : null;
     const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
 
-    if (ttsUrl && publishableKey) {
+    if (transportModeRef.current === "direct" && ttsUrl && publishableKey) {
       try {
         let session: { access_token?: string } | null = null;
 
@@ -487,6 +502,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
         return parsePayload(data);
       } catch (directFetchError) {
+        transportModeRef.current = "sdk";
         console.warn("[TTS] Direct fetch failed, falling back to SDK invoke", directFetchError);
       }
     }
@@ -706,6 +722,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           setIsPlaying(true);
           setError(null);
         }
+        audioReliability.setState('playing');
+        mediaSession.setPlaybackState('playing');
         onPlayingChange?.(true);
       };
 
@@ -716,10 +734,16 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         if (isMountedRef.current) {
           setIsLoading(false);
         }
+        if (!stopRef.current) {
+          audioReliability.setState('playing');
+        }
       };
       audio.onwaiting = () => {
         if (isMountedRef.current && !stopRef.current) {
           setIsLoading(true);
+        }
+        if (!stopRef.current) {
+          audioReliability.setState('buffering');
         }
       };
       
@@ -825,7 +849,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           safeResolve(false);
         });
     });
-  }, [ensureAudioElement, onPlayingChange, onAudioRefChange, toast]);
+  }, [ensureAudioElement, onPlayingChange, onAudioRefChange, toast, audioReliability, mediaSession]);
 
   // Full stop: destroys playback entirely, resets all state
   const stop = useCallback(() => {
@@ -940,6 +964,10 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     }
 
     try {
+      let nextChunkPromise: Promise<string | null> | null = chunks.length > 0
+        ? fetchChunkAudioUrl(chunks[0], 2)
+        : null;
+
       for (let i = 0; i < chunks.length; i++) {
         if (stopRef.current) {
           completedPlayback = false;
@@ -956,7 +984,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           onChunkPlaybackInfo?.({ chunkIndex: globalIndex, chunkWordCounts });
         }
 
-        const url = await fetchChunkAudioUrl(chunks[i], 2);
+        const url = nextChunkPromise ? await nextChunkPromise : null;
 
         if (stopRef.current) {
           completedPlayback = false;
@@ -965,6 +993,12 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         if (!url) {
           completedPlayback = false;
           throw new Error("Failed to load audio for this section");
+        }
+
+        if (i + 1 < chunks.length) {
+          nextChunkPromise = fetchChunkAudioUrl(chunks[i + 1], 2);
+        } else {
+          nextChunkPromise = null;
         }
 
         if (i === 0 && isMountedRef.current) {

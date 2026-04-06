@@ -186,8 +186,19 @@ export function AudioProvider({ children }: { children: ReactNode }) {
       if (!hasChanges) return prev;
 
       const next = { ...prev, ...partial };
-      // Persist position when meaningful
-      if (next.bookId && next.chapterId && next.chunkIndex > 0) {
+      const shouldPersistPosition =
+        !!next.bookId &&
+        !!next.chapterId &&
+        next.chunkIndex > 0 &&
+        (
+          prev.bookId !== next.bookId ||
+          prev.chapterId !== next.chapterId ||
+          prev.chunkIndex !== next.chunkIndex ||
+          prev.voice !== next.voice ||
+          prev.totalChunks !== next.totalChunks
+        );
+
+      if (shouldPersistPosition) {
         const persistedChunkIndex = Math.max(0, next.chunkIndex - 1);
         audioPositionManager.savePosition(
           next.bookId, next.chapterId, persistedChunkIndex,

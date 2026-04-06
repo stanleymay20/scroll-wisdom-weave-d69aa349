@@ -163,6 +163,10 @@ export function computeAdaptiveRecommendation(state: LearnerState): AdaptiveReco
   if (ewmaScore < 50 && totalAttempts > 1) playbackSpeed = Math.min(playbackSpeed, 0.85);
   if (ewmaScore > 85 && totalAttempts > 2) playbackSpeed = Math.max(playbackSpeed, 1.3);
   if (pace === 'too-fast' && ewmaScore < 60) playbackSpeed = Math.min(playbackSpeed, 0.9);
+  if (cognitiveLevel === 'familiarisation') playbackSpeed = Math.max(playbackSpeed, 1.15);
+  if (cognitiveLevel === 'applied') playbackSpeed = Math.min(playbackSpeed, 0.98);
+  if (cognitiveLevel === 'analytical') playbackSpeed = Math.min(playbackSpeed, 0.92);
+  if (cognitiveLevel === 'mastery') playbackSpeed = Math.min(playbackSpeed, 0.85);
 
   // === SOCRATIC CANDIDATE DETECTION ===
   // Learner is stuck if: declining scores, multiple attempts, low mastery
@@ -203,6 +207,7 @@ export function computeAdaptiveRecommendation(state: LearnerState): AdaptiveReco
   let bloomIndex = 1;
   if (complexityLevel === 'beginner') bloomIndex = 0;
   if (complexityLevel === 'advanced') bloomIndex = 3;
+  if (cognitiveLevel === 'familiarisation') bloomIndex = 0;
   if (cognitiveLevel === 'mastery') bloomIndex = Math.max(bloomIndex, 4);
   if (cognitiveLevel === 'analytical') bloomIndex = Math.max(bloomIndex, 3);
   if (cognitiveLevel === 'applied') bloomIndex = Math.max(bloomIndex, 2);
@@ -230,6 +235,8 @@ export function computeAdaptiveRecommendation(state: LearnerState): AdaptiveReco
   let explanationDepth: 'brief' | 'standard' | 'detailed' = 'standard';
   if (complexityLevel === 'beginner' || ewmaScore < 50) explanationDepth = 'detailed';
   if (complexityLevel === 'advanced' && ewmaScore > 80) explanationDepth = 'brief';
+  if (cognitiveLevel === 'familiarisation') explanationDepth = 'brief';
+  if (cognitiveLevel === 'analytical' || cognitiveLevel === 'mastery') explanationDepth = 'detailed';
 
   // === STUDY PLAN ===
   const focusConcepts = weakConceptIds.slice(0, 5);
