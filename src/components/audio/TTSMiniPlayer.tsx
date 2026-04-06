@@ -57,6 +57,10 @@ interface TTSChunkPayload {
   error?: string;
 }
 
+function isLikelyBase64Audio(value: unknown): value is string {
+  return typeof value === "string" && value.length > 128 && /^[A-Za-z0-9+/=\s]+$/.test(value);
+}
+
 function withTimeout<T>(promise: Promise<T>, timeoutMs: number, timeoutMessage: string): Promise<T> {
   return new Promise((resolve, reject) => {
     const timeoutId = window.setTimeout(() => {
@@ -388,68 +392,83 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const requestTTSChunk = useCallback(async (chunk: string): Promise<TTSChunkPayload> => {
     const body = { text: chunk, voice: selectedVoice, language };
 
-    try {
-      const result = await withTimeout(
-        supabase.functions.invoke("text-to-speech", { body }),
-        TTS_REQUEST_TIMEOUT_MS,
-        "TTS request timed out"
-      );
-
-      if (result.error) {
-        throw new Error(result.error.message || "TTS request failed");
+    const parsePayload = (payload: unknown): TTSChunkPayload => {
+      if (!payload || typeof payload !== "object") {
+        throw new Error("Invalid TTS response");
       }
 
-      if (result.data?.error) {
-        throw new Error(result.data.error);
+      const data = payload as TTSChunkPayload;
+
+      if (data.error) {
+        throw new Error(data.error);
       }
 
-      if (!result.data?.audioContent) {
-        throw new Error("No audio content received");
+      if (!isLikelyBase64Audio(data.audioContent)) {
+        throw new Error("Invalid audio content received");
       }
 
-      return result.data as TTSChunkPayload;
-    } catch (invokeError) {
-      const ttsUrl = import.meta.env.VITE_SUPABASE_URL
-        ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`
-        : null;
-      const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+      return data;
+    };
 
-      if (!ttsUrl || !publishableKey) {
-        throw invokeError instanceof Error ? invokeError : new Error("TTS request failed");
+    const ttsUrl = import.meta.env.VITE_SUPABASE_URL
+      ? `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/text-to-speech`
+      : null;
+    const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY;
+
+    if (ttsUrl && publishableKey) {
+      try {
+        const {
+          data: { session },
+        } = await supabase.auth.getSession();
+
+        const headers: Record<string, string> = {
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          apikey: publishableKey,
+          "Cache-Control": "no-store",
+        };
+
+        if (session?.access_token) {
+          headers.Authorization = `Bearer ${session.access_token}`;
+        }
+
+        const response = await withTimeout(
+          fetch(ttsUrl, {
+            method: "POST",
+            headers,
+            body: JSON.stringify(body),
+            cache: "no-store",
+          }),
+          TTS_REQUEST_TIMEOUT_MS,
+          "TTS request timed out"
+        );
+
+        const data = await response.json().catch(() => null);
+
+        if (!response.ok) {
+          const message = data && typeof data === "object" && "error" in data && typeof data.error === "string"
+            ? data.error
+            : `TTS request failed (${response.status})`;
+          throw new Error(message);
+        }
+
+        return parsePayload(data);
+      } catch (directFetchError) {
+        console.warn("[TTS] Direct fetch failed, falling back to SDK invoke", directFetchError);
       }
-
-      console.warn("[TTS] SDK invoke failed, falling back to direct fetch", invokeError);
-
-      const {
-        data: { session },
-      } = await supabase.auth.getSession();
-
-      const response = await withTimeout(
-        fetch(ttsUrl, {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: publishableKey,
-            Authorization: `Bearer ${session?.access_token || publishableKey}`,
-          },
-          body: JSON.stringify(body),
-        }),
-        TTS_REQUEST_TIMEOUT_MS,
-        "TTS fallback request timed out"
-      );
-
-      const data = await response.json().catch(() => null);
-
-      if (!response.ok) {
-        throw new Error(data?.error || `TTS request failed (${response.status})`);
-      }
-
-      if (!data?.audioContent) {
-        throw new Error("No audio content received");
-      }
-
-      return data as TTSChunkPayload;
     }
+
+    const result = await withTimeout(
+      supabase.functions.invoke("text-to-speech", { body }),
+      TTS_REQUEST_TIMEOUT_MS,
+      "TTS request timed out"
+    );
+
+    if (result.error) {
+      throw new Error(result.error.message || "TTS request failed");
+    }
+
+    return parsePayload(result.data);
   }, [language, selectedVoice]);
 
   const fetchChunkAudioUrl = useCallback(async (chunk: string, retries = 2): Promise<string | null> => {
@@ -533,6 +552,13 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       const previousSrc = audio.currentSrc || audio.src;
       let playbackStartTimeoutId: number | null = null;
 
+      const clearPlaybackStartTimeout = () => {
+        if (playbackStartTimeoutId !== null) {
+          window.clearTimeout(playbackStartTimeoutId);
+          playbackStartTimeoutId = null;
+        }
+      };
+
       try {
         audio.pause();
         audio.currentTime = 0;
@@ -544,10 +570,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       onAudioRefChange?.(audio);
 
       const cleanup = () => {
-        if (playbackStartTimeoutId !== null) {
-          window.clearTimeout(playbackStartTimeoutId);
-          playbackStartTimeoutId = null;
-        }
+        clearPlaybackStartTimeout();
         audio.onplay = null;
         audio.onplaying = null;
         audio.onended = null;
@@ -575,17 +598,21 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
       };
 
       const markPlaying = () => {
+        clearPlaybackStartTimeout();
         // Always apply latest speed when play starts
         audio.playbackRate = playbackSpeedRef.current;
         if (isMountedRef.current) {
           setIsLoading(false);
           setIsPlaying(true);
+          setError(null);
         }
+        onPlayingChange?.(true);
       };
 
       audio.onplay = markPlaying;
       audio.onplaying = markPlaying;
       audio.oncanplay = () => {
+        clearPlaybackStartTimeout();
         if (isMountedRef.current) {
           setIsLoading(false);
         }
@@ -669,30 +696,34 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         safeResolve(false);
       }, TTS_PLAYBACK_START_TIMEOUT_MS);
 
-      audio.play().catch((err) => {
-        if (isMountedRef.current) {
-          setIsLoading(false);
-          setIsPlaying(false);
-        }
-        cleanup();
-        if (err?.name === "NotAllowedError") {
-          console.error("[TTS] Play blocked by autoplay policy — requires user gesture");
-          audioUnlockedRef.current = false;
-          autoplayBlockedRef.current = true;
+      audio.play()
+        .then(() => {
+          markPlaying();
+        })
+        .catch((err) => {
           if (isMountedRef.current) {
-            const message = "Audio was blocked by your browser. Tap play again to allow sound.";
-            setError(message);
-            toast({
-              title: "Playback blocked",
-              description: message,
-              variant: "destructive",
-            });
+            setIsLoading(false);
+            setIsPlaying(false);
           }
-        } else if (err?.name !== "AbortError") {
-          console.error("[TTS] Play error:", err);
-        }
-        safeResolve(false);
-      });
+          cleanup();
+          if (err?.name === "NotAllowedError") {
+            console.error("[TTS] Play blocked by autoplay policy — requires user gesture");
+            audioUnlockedRef.current = false;
+            autoplayBlockedRef.current = true;
+            if (isMountedRef.current) {
+              const message = "Audio was blocked by your browser. Tap play again to allow sound.";
+              setError(message);
+              toast({
+                title: "Playback blocked",
+                description: message,
+                variant: "destructive",
+              });
+            }
+          } else if (err?.name !== "AbortError") {
+            console.error("[TTS] Play error:", err);
+          }
+          safeResolve(false);
+        });
     });
   }, [ensureAudioElement, onPlayingChange, onAudioRefChange, toast]);
 

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { encode as base64Encode } from "https://deno.land/std@0.190.0/encoding/base64.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -245,14 +246,7 @@ serve(async (req) => {
     const audioBuffer = await response.arrayBuffer();
     console.log(`[TTS] Received ${audioBuffer.byteLength} bytes`);
 
-    const bytes = new Uint8Array(audioBuffer);
-    let binary = "";
-    const chunkSize = 8192;
-    for (let i = 0; i < bytes.length; i += chunkSize) {
-      const chunk = bytes.slice(i, i + chunkSize);
-      binary += String.fromCharCode.apply(null, Array.from(chunk));
-    }
-    const base64Audio = btoa(binary);
+    const base64Audio = base64Encode(audioBuffer);
 
     // Track usage in tts_usage table (only for authenticated users)
     const estimatedMinutes = Math.ceil(cleanedText.length / 750);
