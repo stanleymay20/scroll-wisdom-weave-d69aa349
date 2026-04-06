@@ -59,52 +59,62 @@ serve(async (req) => {
     }
 
     // Step 2: Delete user data from all tables (order matters for foreign keys)
-    const tablesToDelete = [
+    // Tables with user_id column
+    const userIdTables = [
+      "learner_concept_states",
+      "quiz_question_history",
+      "spaced_repetition_cards",
+      "learning_progress",
+      "competency_progress",
+      "competency_profile",
+      "competency_certificates",
+      "reading_sessions",
+      "reading_streaks",
+      "reading_goals",
+      "saved_learning_decks",
+      "saved_decks",
       "highlights",
       "study_notes",
       "quiz_attempts",
       "assessment_integrity_logs",
-      "mastery_attempts",
-      "user_library",
-      "chapters", // Delete chapters first (they reference books)
-      "books",
-      "data_export_requests",
-      "tts_usage",
-      "legal_consents",
+      "bookmarks",
+      "chapter_edit_sessions",
+      "audit_telemetry",
+      "pmf_events",
+      "ai_usage_tracking",
       "user_roles",
       "profiles",
     ];
 
-    for (const table of tablesToDelete) {
-      let query;
-      if (table === "chapters") {
-        // Delete chapters where the book belongs to the user
-        const { data: userBooks } = await adminClient
-          .from("books")
-          .select("id")
-          .eq("creator_id", userId);
-        
-        if (userBooks && userBooks.length > 0) {
-          const bookIds = userBooks.map(b => b.id);
-          const { error } = await adminClient
-            .from("chapters")
-            .delete()
-            .in("book_id", bookIds);
-          if (error) console.error(`[delete-account] Error deleting ${table}:`, error);
-        }
-      } else if (table === "books") {
-        const { error } = await adminClient
-          .from(table)
-          .delete()
-          .eq("creator_id", userId);
-        if (error) console.error(`[delete-account] Error deleting ${table}:`, error);
-      } else {
-        const { error } = await adminClient
-          .from(table)
-          .delete()
-          .eq("user_id", userId);
+    // Delete book-related data first (chapters, citations, audits reference books)
+    const { data: userBooks } = await adminClient
+      .from("books")
+      .select("id")
+      .or(`creator_id.eq.${userId},user_id.eq.${userId}`);
+    
+    if (userBooks && userBooks.length > 0) {
+      const bookIds = userBooks.map(b => b.id);
+      // Delete book-scoped tables
+      const bookScopedTables = [
+        "book_citations", "book_knowledge_graphs", "concept_edges", "concept_nodes",
+        "book_audits", "book_collaborators", "chapters", "content_reports",
+      ];
+      for (const table of bookScopedTables) {
+        const { error } = await adminClient.from(table).delete().in("book_id", bookIds);
         if (error) console.error(`[delete-account] Error deleting ${table}:`, error);
       }
+      // Delete books themselves
+      const { error: booksErr } = await adminClient.from("books").delete().in("id", bookIds);
+      if (booksErr) console.error("[delete-account] Error deleting books:", booksErr);
+    }
+
+    // Delete user_id-scoped tables
+    for (const table of userIdTables) {
+      const { error } = await adminClient
+        .from(table)
+        .delete()
+        .eq("user_id", userId);
+      if (error) console.error(`[delete-account] Error deleting ${table}:`, error);
     }
 
     console.log("[delete-account] User data deleted from all tables");

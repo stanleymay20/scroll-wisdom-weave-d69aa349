@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Shield, Brain, Keyboard, Lock, ArrowRight, BookOpen, Award } from "lucide-react";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useNavigate } from "react-router-dom";
 import heroCinematicBook from "@/assets/hero-cinematic-book.png";
 
 const FEATURES = [
@@ -18,6 +19,7 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ onStartDemo }: HeroSectionProps) {
+  const navigate = useNavigate();
   const { t } = useLanguage();
 
   return (
@@ -82,7 +84,7 @@ export function HeroSection({ onStartDemo }: HeroSectionProps) {
                 <Brain className="h-4 w-4" />
                 Try 20-Second Demo
               </Button>
-              <Button onClick={() => window.location.href = "/generate"} variant="outline" size="lg" className="gap-2">
+              <Button onClick={() => navigate("/generate")} variant="outline" size="lg" className="gap-2">
                 Generate Your First Book
                 <ArrowRight className="h-4 w-4" />
               </Button>

@@ -51,48 +51,54 @@ const SUPPORTED_LANGUAGES = [
 ] as const;
 
 // Enhanced code execution with proper output capture
-function simulateExecution(code: string, language: string): { output: string; error?: string } {
-  // For JavaScript - PROPER execution with full console capture
+async function simulateExecution(code: string, language: string): Promise<{ output: string; error?: string }> {
+  // For JavaScript - Sandboxed iframe execution
   if (language === 'javascript') {
     try {
-      const logs: string[] = [];
-      const originalConsole = {
-        log: console.log,
-        warn: console.warn,
-        error: console.error,
-        info: console.info,
-      };
-      
-      // Capture all console methods
-      console.log = (...args) => {
-        logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '));
-      };
-      console.warn = (...args) => {
-        logs.push(`⚠️ ${args.map(a => String(a)).join(' ')}`);
-      };
-      console.error = (...args) => {
-        logs.push(`❌ ${args.map(a => String(a)).join(' ')}`);
-      };
-      console.info = (...args) => {
-        logs.push(`ℹ️ ${args.map(a => String(a)).join(' ')}`);
-      };
-      
-      // Create isolated execution context with common utilities
-      const result = new Function(`
-        "use strict";
-        // Provide common utilities
-        const print = (...args) => console.log(...args);
+      const logs = await new Promise<string[]>((resolve, reject) => {
+        const iframe = document.createElement('iframe');
+        iframe.sandbox.add('allow-scripts');
+        iframe.style.display = 'none';
+        document.body.appendChild(iframe);
         
-        ${code}
-      `)();
-      
-      // Restore console
-      Object.assign(console, originalConsole);
-      
-      // Include return value if present
-      if (result !== undefined) {
-        logs.push(`→ ${typeof result === 'object' ? JSON.stringify(result, null, 2) : result}`);
-      }
+        const timeout = setTimeout(() => {
+          document.body.removeChild(iframe);
+          reject(new Error('Execution timed out (5s limit)'));
+        }, 5000);
+        
+        const handler = (event: MessageEvent) => {
+          if (event.source === iframe.contentWindow) {
+            clearTimeout(timeout);
+            window.removeEventListener('message', handler);
+            document.body.removeChild(iframe);
+            if (event.data?.error) {
+              reject(new Error(event.data.error));
+            } else {
+              resolve(event.data?.logs || []);
+            }
+          }
+        };
+        window.addEventListener('message', handler);
+        
+        const escapedCode = JSON.stringify(code);
+        const scriptContent = `<script>
+const logs = [];
+console.log = (...args) => logs.push(args.map(a => typeof a === 'object' ? JSON.stringify(a, null, 2) : String(a)).join(' '));
+console.warn = (...args) => logs.push('⚠️ ' + args.map(a => String(a)).join(' '));
+console.error = (...args) => logs.push('❌ ' + args.map(a => String(a)).join(' '));
+console.info = (...args) => logs.push('ℹ️ ' + args.map(a => String(a)).join(' '));
+const print = (...args) => console.log(...args);
+try {
+  "use strict";
+  const __result = (0, eval)(${escapedCode});
+  if (__result !== undefined) logs.push('→ ' + (typeof __result === 'object' ? JSON.stringify(__result, null, 2) : String(__result)));
+  parent.postMessage({ logs }, '*');
+} catch(e) {
+  parent.postMessage({ error: e.name + ': ' + e.message }, '*');
+}
+<\/script>`;
+        iframe.srcdoc = scriptContent;
+      });
       
       return { output: logs.length > 0 ? logs.join('\n') : '✓ Code executed successfully (no output)' };
     } catch (error) {
@@ -119,9 +125,22 @@ function simulateExecution(code: string, language: string): { output: string; er
       for (const match of matches) {
         // Try to evaluate simple expressions
         const content = match[1];
-        if (/^\d+(?:\s*[+\-*/]\s*\d+)*$/.test(content)) {
+          if (/^\d+(?:\s*[+\-*/]\s*\d+)*$/.test(content)) {
           try {
-            outputs.push(String(eval(content)));
+            // Safe arithmetic evaluation without eval
+            const safeResult = content.split(/([+\-*/])/).reduce((acc: number, token: string, i: number, arr: string[]) => {
+              const t = token.trim();
+              if (i === 0) return parseFloat(t);
+              const op = arr[i - 1]?.trim();
+              const num = parseFloat(t);
+              if (isNaN(num)) return acc;
+              if (op === '+') return acc + num;
+              if (op === '-') return acc - num;
+              if (op === '*') return acc * num;
+              if (op === '/') return acc / num;
+              return acc;
+            }, 0);
+            outputs.push(String(safeResult));
           } catch {
             outputs.push(content);
           }
@@ -210,20 +229,22 @@ export function CodePlayground({
   const { toast } = useToast();
   const { t } = useLanguage();
 
-  const handleRun = useCallback(() => {
+  const handleRun = useCallback(async () => {
     setIsRunning(true);
     setError(null);
     setOutput(null);
     
-    // Small delay for visual feedback
-    setTimeout(() => {
-      const result = simulateExecution(code, language);
+    try {
+      const result = await simulateExecution(code, language);
       setOutput(result.output);
       if (result.error) {
         setError(result.error);
       }
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Execution failed');
+    } finally {
       setIsRunning(false);
-    }, 300);
+    }
   }, [code, language]);
 
   const handleReset = useCallback(() => {
