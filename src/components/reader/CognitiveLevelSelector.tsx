@@ -127,7 +127,7 @@ export const CognitiveLevelSelector = forwardRef<HTMLDivElement, CognitiveLevelS
   const selectedLevelData = getCognitiveLevel(selectedLevel);
 
   return (
-    <div className="bg-card/50 backdrop-blur-sm rounded-xl border border-border/50 overflow-hidden">
+    <div ref={ref} className="bg-card/50 backdrop-blur-sm rounded-xl border border-border/50 overflow-hidden">
       {/* Header */}
       <div className="p-4 border-b border-border/50">
         <div className="flex items-center justify-between">
