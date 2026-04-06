@@ -19,6 +19,7 @@ interface HeroSectionProps {
 }
 
 export function HeroSection({ onStartDemo }: HeroSectionProps) {
+  const navigate = useNavigate();
   const { t } = useLanguage();
 
   return (
