@@ -17,7 +17,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
-import { MobileLayout } from "@/components/mobile";
+import { MobileLayout } from "@/components/layout/MobileLayout";
 import { LibraryBookCard } from "@/components/books/LibraryBookCard";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";

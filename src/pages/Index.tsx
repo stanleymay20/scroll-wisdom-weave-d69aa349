@@ -10,7 +10,8 @@ import { HeroSection } from "@/components/home/HeroSection";
 import { TrustSignals } from "@/components/home/TrustSignals";
 import { Footer } from "@/components/layout/Footer";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
-import { MobileLayout, MobileHome } from "@/components/mobile";
+import { MobileLayout } from "@/components/layout/MobileLayout";
+import { MobileHome } from "@/components/mobile/MobileHome";
 import { usePagePerformance } from "@/lib/performance";
 import { Skeleton } from "@/components/ui/skeleton";
 
