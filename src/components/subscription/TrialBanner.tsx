@@ -1,7 +1,6 @@
-import { forwardRef } from "react";
+import { forwardRef, useState } from "react";
 import { TRIAL_MODE, TRIAL_END_DATE, isTrialActive } from '@/lib/config';
 import { Gift, X, Sparkles } from 'lucide-react';
-import { useState } from 'react';
 import { useLanguage } from '@/contexts/LanguageContext';
 
 export const TrialBanner = forwardRef<HTMLDivElement>(
