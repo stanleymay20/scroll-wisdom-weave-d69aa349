@@ -8,7 +8,7 @@ export const Footer = forwardRef<HTMLElement>(function Footer(_, ref) {
   const { t } = useLanguage();
 
   return (
-    <footer ref={ref} className="border-t border-border/50 bg-background/50 backdrop-blur-sm">
+    <footer ref={ref} className="border-t border-border/50 bg-background/50 backdrop-blur-sm pb-16">
       <div className="container mx-auto px-4 py-12">
         <div className="grid grid-cols-1 md:grid-cols-4 gap-8">
           {/* Brand */}
