@@ -223,8 +223,25 @@ export default function Reader() {
     []
   );
 
-  // Cognitive level and reading progress
-  const [cognitiveLevel, setCognitiveLevel] = useState("functional");
+  // Cognitive level and reading progress — persisted per-book
+  const cognitiveLevelKey = bookId ? `scroll_cognitive_${bookId}` : null;
+  const [cognitiveLevel, setCognitiveLevelRaw] = useState(() => {
+    if (cognitiveLevelKey) {
+      try {
+        const saved = localStorage.getItem(cognitiveLevelKey);
+        if (saved && ["familiarisation", "functional", "applied", "analytical", "mastery"].includes(saved)) {
+          return saved;
+        }
+      } catch { /* noop */ }
+    }
+    return "functional";
+  });
+  const setCognitiveLevel = useCallback((level: string) => {
+    setCognitiveLevelRaw(level);
+    if (cognitiveLevelKey) {
+      try { localStorage.setItem(cognitiveLevelKey, level); } catch { /* noop */ }
+    }
+  }, [cognitiveLevelKey]);
   const [readingProgress, setReadingProgress] = useState(0);
   const [guidedModeActive, setGuidedModeActive] = useState(true);
   const [showQA, setShowQA] = useState(false);
