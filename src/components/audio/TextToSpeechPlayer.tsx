@@ -154,7 +154,11 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   }, []);
 
   const cleanupBlobUrls = useCallback(() => {
-    // Data URIs don't need revocation, but clear the array anyway
+    activeBlobUrlsRef.current.forEach((url) => {
+      if (url.startsWith("blob:")) {
+        try { URL.revokeObjectURL(url); } catch { /* noop */ }
+      }
+    });
     activeBlobUrlsRef.current = [];
   }, []);
 
