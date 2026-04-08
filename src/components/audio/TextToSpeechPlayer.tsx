@@ -87,8 +87,17 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
 
   const base64ToBlobUrl = useCallback((base64: string, mimeType = "audio/mpeg") => {
     try {
-      // Use data URI for maximum browser compatibility - avoids atob() corruption issues
-      return `data:${mimeType};base64,${base64}`;
+      const byteChars = atob(base64);
+      const byteArrays: BlobPart[] = [];
+      for (let offset = 0; offset < byteChars.length; offset += 512) {
+        const slice = byteChars.slice(offset, offset + 512);
+        const byteNumbers = new Array(slice.length);
+        for (let i = 0; i < slice.length; i++) {
+          byteNumbers[i] = slice.charCodeAt(i);
+        }
+        byteArrays.push(new Uint8Array(byteNumbers) as unknown as BlobPart);
+      }
+      return URL.createObjectURL(new Blob(byteArrays, { type: mimeType }));
     } catch (err) {
       console.error("[TTS] Failed to create audio URL:", err);
       throw new Error("Failed to process audio data");
