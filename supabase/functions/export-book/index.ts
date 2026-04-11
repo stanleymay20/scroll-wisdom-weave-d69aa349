@@ -552,6 +552,7 @@ function drawStyledParagraph(
             addPageNumberFn?.(currentPage, pageNumberRef.current);
           }
           currentY = (pageHeight || 792) - (margin || 72) - 30;
+          currentX = x; // Reset X after page break to prevent text starting mid-line
         }
       }
       
@@ -1576,7 +1577,7 @@ async function generatePDF(
               });
             }
             
-            page.drawText(sanitizeForPDF(codeLine.slice(0, 85)), {
+            page.drawText(sanitizeForPDF(codeLine.slice(0, 100)), {
               x: margin,
               y,
               size: 9,
@@ -1664,7 +1665,7 @@ async function generatePDF(
               color: rgb(0.12, 0.12, 0.15),
             });
             
-            page.drawText(sanitizeForPDF(codeLine.slice(0, 85)), {
+            page.drawText(sanitizeForPDF(codeLine.slice(0, 100)), {
               x: margin,
               y,
               size: 9,
@@ -1706,7 +1707,7 @@ async function generatePDF(
                 x: margin - 5, y: y - 3, width: textWidth + 10, height: 14,
                 color: rgb(0.08, 0.10, 0.08),
               });
-              page.drawText(sanitizeForPDF(outLine.slice(0, 85)), {
+              page.drawText(sanitizeForPDF(outLine.slice(0, 100)), {
                 x: margin, y, size: 9, font: courier,
                 color: rgb(0.4, 0.9, 0.4),
               });
@@ -2113,6 +2114,13 @@ async function generatePDF(
     y -= 18;
   }
 
+  // Set PDF metadata for professional publishing
+  pdfDoc.setTitle(book.title);
+  pdfDoc.setAuthor(author);
+  pdfDoc.setSubject(book.category?.replace(/_/g, ' ') || 'Book');
+  pdfDoc.setCreator('ScrollLibrary');
+  pdfDoc.setProducer('ScrollLibrary Export Engine');
+  
   return pdfDoc.save();
 }
 
@@ -2390,7 +2398,7 @@ async function generateKDPPDF(
               y = textTop - 15;
             }
             page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.96, 0.96, 0.96) });
-            page.drawText(sanitizeForPDF(codeLines[cli].slice(0, 80)), {
+            page.drawText(sanitizeForPDF(codeLines[cli].slice(0, 90)), {
               x: leftMargin, y, size: 8, font: courier, color: rgb(0.15, 0.15, 0.15),
             });
             y -= lineHeight * 0.85;
@@ -2435,7 +2443,7 @@ async function generateKDPPDF(
               y = textTop - 15;
             }
             page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.12, 0.12, 0.15) });
-            page.drawText(sanitizeForPDF(structCodeLines[cli].slice(0, 80)), {
+            page.drawText(sanitizeForPDF(structCodeLines[cli].slice(0, 90)), {
               x: leftMargin, y, size: 8, font: courier, color: rgb(0.9, 0.9, 0.9),
             });
             y -= lineHeight * 0.85;
@@ -2454,7 +2462,7 @@ async function generateKDPPDF(
                 y = textTop - 15;
               }
               page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.08, 0.10, 0.08) });
-              page.drawText(sanitizeForPDF(outLines[oli].slice(0, 80)), {
+              page.drawText(sanitizeForPDF(outLines[oli].slice(0, 90)), {
                 x: leftMargin, y, size: 8, font: courier, color: rgb(0.4, 0.9, 0.4),
               });
               y -= lineHeight * 0.85;
@@ -3014,17 +3022,22 @@ async function generateEPUB(
     });
     
     // Convert paragraphs (skip already processed HTML) - with heading support
+    // Convert bullet lists to proper HTML
+    content = content.replace(/^[-]\s+(.*)/gm, '<li>$1</li>');
+    content = content.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>\n$1</ul>');
+    
     const htmlContent = content
       .split(/\n\n+/)
       .map((p: string) => {
         p = p.trim();
         if (!p) return '';
-        if (p.startsWith('<pre>') || p.startsWith('<code>') || p.startsWith('<figure>') || p.startsWith('<p>') || p.startsWith('<table>') || p.startsWith('<div') || p.startsWith('<h')) return p;
+        // Pass through already-processed HTML elements
+        if (/^<(?:pre|code|figure|p|table|div|h[1-6]|ul|ol|li)\b/.test(p)) return p;
         // Skip prose that's clearly table data (Row N: format)
         if (/^Row \d+:/.test(p)) return '';
         
-        // If paragraph contains already-converted HTML tags, pass through as-is
-        if (/<(?:code|strong|em|a|span|br|h[1-6])\b/.test(p)) {
+        // If paragraph contains already-converted HTML tags, wrap without re-escaping
+        if (/<(?:code|strong|em|a|span|br|h[1-6]|sub|sup)\b/.test(p)) {
           return `<p>${p}</p>`;
         }
         
@@ -3102,7 +3115,7 @@ ${htmlContent}
   await zipWriter.add("OEBPS/content.opf", new zip.TextReader(contentOpf));
 
   // Enhanced CSS with structured code block, table, figure, and HEADING styling
-  const css = `body { font-family: Georgia, serif; margin: 2em; line-height: 1.6; }
+  const css = `body { font-family: Georgia, serif; margin: 2em; line-height: 1.7; color: #1a1a1a; }
 h1 { font-size: 1.8em; margin-bottom: 0.5em; margin-top: 1em; font-weight: bold; }
 h2 { font-size: 1.5em; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
 h3 { font-size: 1.3em; margin-top: 1.3em; margin-bottom: 0.4em; font-weight: bold; }
@@ -3110,12 +3123,14 @@ h4 { font-size: 1.15em; margin-top: 1.2em; margin-bottom: 0.3em; font-weight: bo
 h5 { font-size: 1.05em; margin-top: 1em; margin-bottom: 0.3em; font-weight: bold; }
 h6 { font-size: 1em; margin-top: 1em; margin-bottom: 0.3em; font-weight: bold; font-style: italic; }
 p { margin: 0.8em 0; text-align: justify; }
+ul, ol { margin: 0.8em 0; padding-left: 2em; }
+li { margin: 0.3em 0; line-height: 1.6; }
 .cover { text-align: center; }
 .cover img { max-width: 100%; height: auto; }
-pre { background: #1e1e24; color: #e0e0e0; padding: 1em; border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 0.9em; }
-pre.code-content { background: #1e1e24; color: #e0e0e0; margin: 0; border-radius: 0 0 4px 4px; }
-code { font-family: monospace; background: #f0f0f0; padding: 0.2em 0.4em; border-radius: 3px; }
-pre code { background: transparent; padding: 0; }
+pre { background: #1e1e24; color: #e0e0e0; padding: 1em; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.88em; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+pre.code-content { background: #1e1e24; color: #e0e0e0; margin: 0; border-radius: 0 0 6px 6px; }
+code { font-family: 'Courier New', Courier, monospace; background: #f0f0f0; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.92em; }
+pre code { background: transparent; padding: 0; font-size: 1em; }
 .reference { margin: 0.5em 0; padding-left: 2em; text-indent: -2em; font-size: 0.95em; }
 .academic-notice { background: #fff8e1; border-left: 4px solid #ffc107; padding: 1em; margin: 1em 0; font-size: 0.9em; }
 table { border-collapse: collapse; width: 100%; margin: 1.5em 0; page-break-inside: avoid; }
@@ -3127,8 +3142,10 @@ tr:nth-child(odd) { background: #fff; }
 .data-table { font-size: 0.95em; }
 .data-table th { background: #4a90d9; color: white; }
 .data-table tr:nth-child(even) { background: #e6f2ff; }
-figure { margin: 1em 0; text-align: center; }
+figure { margin: 1.5em 0; text-align: center; }
+figure img { max-width: 100%; height: auto; border-radius: 4px; }
 figcaption { font-style: italic; font-size: 0.9em; color: #666; margin-top: 0.5em; }
+blockquote { border-left: 3px solid #ccc; margin: 1em 0; padding: 0.5em 1em; color: #555; font-style: italic; }
 /* Structured Code Block Styles (ChatGPT-level) */
 .structured-code-block { margin: 1.5em 0; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
 .code-header { background: #e8e8ec; padding: 0.6em 1em; border-bottom: 1px solid #ddd; }
