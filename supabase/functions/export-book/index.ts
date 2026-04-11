@@ -1576,7 +1576,7 @@ async function generatePDF(
               });
             }
             
-            page.drawText(sanitizeForPDF(codeLine.slice(0, 85)), {
+            page.drawText(sanitizeForPDF(codeLine.slice(0, 100)), {
               x: margin,
               y,
               size: 9,
@@ -1664,7 +1664,7 @@ async function generatePDF(
               color: rgb(0.12, 0.12, 0.15),
             });
             
-            page.drawText(sanitizeForPDF(codeLine.slice(0, 85)), {
+            page.drawText(sanitizeForPDF(codeLine.slice(0, 100)), {
               x: margin,
               y,
               size: 9,
@@ -1706,7 +1706,7 @@ async function generatePDF(
                 x: margin - 5, y: y - 3, width: textWidth + 10, height: 14,
                 color: rgb(0.08, 0.10, 0.08),
               });
-              page.drawText(sanitizeForPDF(outLine.slice(0, 85)), {
+              page.drawText(sanitizeForPDF(outLine.slice(0, 100)), {
                 x: margin, y, size: 9, font: courier,
                 color: rgb(0.4, 0.9, 0.4),
               });
