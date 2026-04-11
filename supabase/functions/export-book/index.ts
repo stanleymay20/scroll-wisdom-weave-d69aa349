@@ -2390,7 +2390,7 @@ async function generateKDPPDF(
               y = textTop - 15;
             }
             page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.96, 0.96, 0.96) });
-            page.drawText(sanitizeForPDF(codeLines[cli].slice(0, 80)), {
+            page.drawText(sanitizeForPDF(codeLines[cli].slice(0, 90)), {
               x: leftMargin, y, size: 8, font: courier, color: rgb(0.15, 0.15, 0.15),
             });
             y -= lineHeight * 0.85;
@@ -2435,7 +2435,7 @@ async function generateKDPPDF(
               y = textTop - 15;
             }
             page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.12, 0.12, 0.15) });
-            page.drawText(sanitizeForPDF(structCodeLines[cli].slice(0, 80)), {
+            page.drawText(sanitizeForPDF(structCodeLines[cli].slice(0, 90)), {
               x: leftMargin, y, size: 8, font: courier, color: rgb(0.9, 0.9, 0.9),
             });
             y -= lineHeight * 0.85;
@@ -2454,7 +2454,7 @@ async function generateKDPPDF(
                 y = textTop - 15;
               }
               page.drawRectangle({ x: leftMargin - 3, y: y - 3, width: textWidth + 6, height: lineHeight * 0.85, color: rgb(0.08, 0.10, 0.08) });
-              page.drawText(sanitizeForPDF(outLines[oli].slice(0, 80)), {
+              page.drawText(sanitizeForPDF(outLines[oli].slice(0, 90)), {
                 x: leftMargin, y, size: 8, font: courier, color: rgb(0.4, 0.9, 0.4),
               });
               y -= lineHeight * 0.85;
