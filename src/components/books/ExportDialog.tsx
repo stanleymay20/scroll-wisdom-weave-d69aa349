@@ -286,11 +286,7 @@ export function ExportDialog({
           <Label className="text-xs font-medium">{t('export.format')}</Label>
           <div className="grid gap-1.5">
             {formats.map(({ format, label, icon: Icon, description, badge }) => {
-              const validateFmt = format === 'kdp-pdf' ? 'pdf' : format;
-              const formatValidation = chapters.length > 0 
-                ? validateContentForExport(chapters, bookType, validateFmt as "pdf" | "epub" | "docx")
-                : { valid: true, issues: [], canProceed: true };
-              const formatHasErrors = !formatValidation.canProceed;
+              const formatHasErrors = !contentValidation.canProceed;
               const isFormatLocked = !allowedFormats.includes(format);
               
               return (
