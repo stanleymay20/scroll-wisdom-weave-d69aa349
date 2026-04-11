@@ -3014,17 +3014,22 @@ async function generateEPUB(
     });
     
     // Convert paragraphs (skip already processed HTML) - with heading support
+    // Convert bullet lists to proper HTML
+    content = content.replace(/^[-]\s+(.*)/gm, '<li>$1</li>');
+    content = content.replace(/((?:<li>.*<\/li>\n?)+)/g, '<ul>\n$1</ul>');
+    
     const htmlContent = content
       .split(/\n\n+/)
       .map((p: string) => {
         p = p.trim();
         if (!p) return '';
-        if (p.startsWith('<pre>') || p.startsWith('<code>') || p.startsWith('<figure>') || p.startsWith('<p>') || p.startsWith('<table>') || p.startsWith('<div') || p.startsWith('<h')) return p;
+        // Pass through already-processed HTML elements
+        if (/^<(?:pre|code|figure|p|table|div|h[1-6]|ul|ol|li)\b/.test(p)) return p;
         // Skip prose that's clearly table data (Row N: format)
         if (/^Row \d+:/.test(p)) return '';
         
-        // If paragraph contains already-converted HTML tags, pass through as-is
-        if (/<(?:code|strong|em|a|span|br|h[1-6])\b/.test(p)) {
+        // If paragraph contains already-converted HTML tags, wrap without re-escaping
+        if (/<(?:code|strong|em|a|span|br|h[1-6]|sub|sup)\b/.test(p)) {
           return `<p>${p}</p>`;
         }
         
