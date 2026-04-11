@@ -552,6 +552,7 @@ function drawStyledParagraph(
             addPageNumberFn?.(currentPage, pageNumberRef.current);
           }
           currentY = (pageHeight || 792) - (margin || 72) - 30;
+          currentX = x; // Reset X after page break to prevent text starting mid-line
         }
       }
       
