@@ -307,9 +307,10 @@ export function ExportDialog({
                     if (!formatHasErrors) {
                       handleExport(format);
                     } else {
+                      const errorCount = contentValidation.issues.filter(i => i.level === 'error').length;
                       toast({
                         title: "Export Blocked",
-                        description: `Fix ${formatValidation.issues.filter(i => i.level === 'error').length} error(s) before exporting as ${label}.`,
+                        description: `Fix ${errorCount} error(s) before exporting as ${label}.`,
                         variant: "destructive",
                       });
                     }
