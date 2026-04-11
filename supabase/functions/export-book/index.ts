@@ -3108,7 +3108,7 @@ ${htmlContent}
   await zipWriter.add("OEBPS/content.opf", new zip.TextReader(contentOpf));
 
   // Enhanced CSS with structured code block, table, figure, and HEADING styling
-  const css = `body { font-family: Georgia, serif; margin: 2em; line-height: 1.6; }
+  const css = `body { font-family: Georgia, serif; margin: 2em; line-height: 1.7; color: #1a1a1a; }
 h1 { font-size: 1.8em; margin-bottom: 0.5em; margin-top: 1em; font-weight: bold; }
 h2 { font-size: 1.5em; margin-top: 1.5em; margin-bottom: 0.5em; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
 h3 { font-size: 1.3em; margin-top: 1.3em; margin-bottom: 0.4em; font-weight: bold; }
@@ -3116,12 +3116,14 @@ h4 { font-size: 1.15em; margin-top: 1.2em; margin-bottom: 0.3em; font-weight: bo
 h5 { font-size: 1.05em; margin-top: 1em; margin-bottom: 0.3em; font-weight: bold; }
 h6 { font-size: 1em; margin-top: 1em; margin-bottom: 0.3em; font-weight: bold; font-style: italic; }
 p { margin: 0.8em 0; text-align: justify; }
+ul, ol { margin: 0.8em 0; padding-left: 2em; }
+li { margin: 0.3em 0; line-height: 1.6; }
 .cover { text-align: center; }
 .cover img { max-width: 100%; height: auto; }
-pre { background: #1e1e24; color: #e0e0e0; padding: 1em; border-radius: 4px; overflow-x: auto; font-family: monospace; font-size: 0.9em; }
-pre.code-content { background: #1e1e24; color: #e0e0e0; margin: 0; border-radius: 0 0 4px 4px; }
-code { font-family: monospace; background: #f0f0f0; padding: 0.2em 0.4em; border-radius: 3px; }
-pre code { background: transparent; padding: 0; }
+pre { background: #1e1e24; color: #e0e0e0; padding: 1em; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.88em; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+pre.code-content { background: #1e1e24; color: #e0e0e0; margin: 0; border-radius: 0 0 6px 6px; }
+code { font-family: 'Courier New', Courier, monospace; background: #f0f0f0; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.92em; }
+pre code { background: transparent; padding: 0; font-size: 1em; }
 .reference { margin: 0.5em 0; padding-left: 2em; text-indent: -2em; font-size: 0.95em; }
 .academic-notice { background: #fff8e1; border-left: 4px solid #ffc107; padding: 1em; margin: 1em 0; font-size: 0.9em; }
 table { border-collapse: collapse; width: 100%; margin: 1.5em 0; page-break-inside: avoid; }
@@ -3133,8 +3135,10 @@ tr:nth-child(odd) { background: #fff; }
 .data-table { font-size: 0.95em; }
 .data-table th { background: #4a90d9; color: white; }
 .data-table tr:nth-child(even) { background: #e6f2ff; }
-figure { margin: 1em 0; text-align: center; }
+figure { margin: 1.5em 0; text-align: center; }
+figure img { max-width: 100%; height: auto; border-radius: 4px; }
 figcaption { font-style: italic; font-size: 0.9em; color: #666; margin-top: 0.5em; }
+blockquote { border-left: 3px solid #ccc; margin: 1em 0; padding: 0.5em 1em; color: #555; font-style: italic; }
 /* Structured Code Block Styles (ChatGPT-level) */
 .structured-code-block { margin: 1.5em 0; border: 1px solid #ddd; border-radius: 6px; overflow: hidden; }
 .code-header { background: #e8e8ec; padding: 0.6em 1em; border-bottom: 1px solid #ddd; }
