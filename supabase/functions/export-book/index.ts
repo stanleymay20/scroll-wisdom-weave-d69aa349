@@ -2114,6 +2114,13 @@ async function generatePDF(
     y -= 18;
   }
 
+  // Set PDF metadata for professional publishing
+  pdfDoc.setTitle(book.title);
+  pdfDoc.setAuthor(author);
+  pdfDoc.setSubject(book.category?.replace(/_/g, ' ') || 'Book');
+  pdfDoc.setCreator('ScrollLibrary');
+  pdfDoc.setProducer('ScrollLibrary Export Engine');
+  
   return pdfDoc.save();
 }
 
