@@ -1,5 +1,15 @@
 export { GamificationBar } from './GamificationBar';
 export { RewardPopup } from './RewardPopup';
+export { SectionCompleteCard } from './SectionCompleteCard';
+export { ChapterHookScreen } from './ChapterHookScreen';
+export { StreakAlert } from './StreakAlert';
+export { CuriosityGap } from './CuriosityGap';
+export { AICompanion } from './AICompanion';
+export { ProgressiveDisclosure } from './ProgressiveDisclosure';
+export { ReEngagementBanner, saveLastSession } from './ReEngagementBanner';
+export { StuckReaderRescue } from './StuckReaderRescue';
+export { ChapterOneSummary } from './ChapterOneSummary';
+export { RewardPopup } from './RewardPopup';
 export { ChapterHookScreen } from './ChapterHookScreen';
 export { StreakAlert } from './StreakAlert';
 export { CuriosityGap, SectionLock } from './CuriosityGap';
