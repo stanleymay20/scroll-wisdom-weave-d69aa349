@@ -65,6 +65,7 @@ const AuditDashboard = lazy(() => import("./pages/AuditDashboard"));
 const UploadPage = lazy(() => import("./pages/Upload"));
 const MasteryDashboard = lazy(() => import("./pages/MasteryDashboard"));
 const MasteryModel = lazy(() => import("./pages/MasteryModel"));
+const QuickLearn = lazy(() => import("./pages/QuickLearn"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));

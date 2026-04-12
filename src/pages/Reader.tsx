@@ -1755,6 +1755,14 @@ export default function Reader() {
         streakBroken={gamification.streakBroken}
         onDismiss={gamification.dismissStreakBroken}
       />
+      
+      {/* AI Companion — contextual encouragement */}
+      <AICompanion
+        readingProgress={readingProgress}
+        chapterNumber={currentChapter}
+        sectionsCompleted={gamification.state.sectionsCompleted}
+        streakDays={gamification.state.streakCurrent}
+      />
     </div>
   );
 }
