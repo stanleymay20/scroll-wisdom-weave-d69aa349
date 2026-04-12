@@ -46,11 +46,11 @@ function MetricCell({ control, treatment, label }: { control: number; treatment:
         {isNeutral ? (
           <Minus className="h-3 w-3 text-muted-foreground" />
         ) : isPositive ? (
-          <TrendingUp className="h-3 w-3 text-emerald-500" />
+          <TrendingUp className="h-3 w-3 text-primary" />
         ) : (
-          <TrendingDown className="h-3 w-3 text-red-500" />
+          <TrendingDown className="h-3 w-3 text-destructive" />
         )}
-        <span className={`text-xs font-mono ${isNeutral ? 'text-muted-foreground' : isPositive ? 'text-emerald-500' : 'text-red-500'}`}>
+        <span className={`text-xs font-mono ${isNeutral ? 'text-muted-foreground' : isPositive ? 'text-primary' : 'text-destructive'}`}>
           {isPositive ? '+' : ''}{pctDiff}%
         </span>
       </div>
