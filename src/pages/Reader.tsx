@@ -298,11 +298,72 @@ export default function Reader() {
   
   // === INTERRUPTION MANAGER ===
   const interruptionRef = useRef(createInterruptionState());
+  const lastInterruptionTimeRef = useRef(0);
+  
+  // === READER SEGMENTATION ===
+  const readerSegment = useMemo(() => {
+    const profile = loadReaderProfile();
+    return classifyReader(profile);
+  }, []);
+  const interventionConfig = useMemo(() => getInterventionConfig(readerSegment), [readerSegment]);
   
   // === EXPERIMENT FRAMEWORK ===
   const showHookScreen = isFeatureEnabled('hook_screen');
   const showAICompanion = isFeatureEnabled('ai_companion');
   const showGamBar = isFeatureEnabled('visible_gamification_bar');
+  const showCh1Summary = currentChapter === 1 && isFeatureEnabled('ch1_summary_first');
+  const [ch1SummaryDismissed, setCh1SummaryDismissed] = useState(false);
+  
+  // === RESUME ENGINE ===
+  const hasRestoredRef = useRef(false);
+  
+  // Save resume state on scroll (throttled by resume engine)
+  const saveCurrentResumeState = useCallback(() => {
+    if (!bookId) return;
+    const anchor = findCurrentParagraphAnchor(contentRef.current);
+    saveResumeState({
+      bookId,
+      chapterNumber: currentChapter,
+      sectionIndex: 0,
+      lastParagraphAnchor: anchor,
+      scrollOffset: window.scrollY,
+      readingMode: guidedModeActive ? 'guided' : 'default',
+      audioChunkIndex: null,
+      audioVoice: null,
+      readingTheme,
+      fontSize,
+      updatedAt: Date.now(),
+    });
+  }, [bookId, currentChapter, guidedModeActive, readingTheme, fontSize]);
+  
+  // Restore position on mount
+  useEffect(() => {
+    if (!bookId || hasRestoredRef.current || !contentRef.current || !chapter?.content) return;
+    hasRestoredRef.current = true;
+    
+    const saved = getResumeState(bookId, currentChapter);
+    if (saved) {
+      // Use requestAnimationFrame to ensure DOM is painted
+      requestAnimationFrame(() => {
+        restorePosition(contentRef.current, saved);
+      });
+    }
+  }, [bookId, currentChapter, chapter?.content]);
+  
+  // Reset restore flag on chapter change
+  useEffect(() => {
+    hasRestoredRef.current = false;
+  }, [currentChapter]);
+  
+  // Flush resume state on unmount
+  useEffect(() => {
+    return () => flushResumeState();
+  }, []);
+  
+  // Track book opened for segmentation
+  useEffect(() => {
+    if (bookId) recordBookOpened();
+  }, [bookId]);
   
   // === FUNNEL ANALYTICS ===
   // Track chapter_started on mount
