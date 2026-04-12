@@ -1777,10 +1777,10 @@ export default function Reader() {
         </div>
       </footer>
 
-      {/* === GAMIFICATION OVERLAYS === */}
+      {/* === GAMIFICATION OVERLAYS (Interruption-managed) === */}
       
-      {/* Chapter Hook Screen — shown before content */}
-      {chapter && !hookDismissed && (
+      {/* Hook Screen — highest priority */}
+      {showHookScreen && chapter && !hookDismissed && (
         <ChapterHookScreen
           chapterNumber={currentChapter}
           chapterTitle={chapter.title}
@@ -1792,30 +1792,57 @@ export default function Reader() {
         />
       )}
       
-      <RewardPopup
-        reward={gamification.lastReward}
-        onDismiss={gamification.dismissReward}
-        leveledUp={gamification.leveledUp}
-        newLevel={gamification.newLevel}
-        onDismissLevelUp={gamification.dismissLevelUp}
-        achievementReward={gamification.achievementReward}
-        onDismissAchievement={gamification.dismissAchievement}
-        streakMilestone={gamification.streakMilestone}
-        onDismissStreakMilestone={gamification.dismissStreakMilestone}
-      />
+      {/* Streak Recovery — second priority */}
+      {canShow(interruptionRef.current, 'streak_recovery') && (
+        <StreakAlert
+          streakBroken={gamification.streakBroken}
+          onDismiss={gamification.dismissStreakBroken}
+        />
+      )}
       
-      <StreakAlert
-        streakBroken={gamification.streakBroken}
-        onDismiss={gamification.dismissStreakBroken}
-      />
+      {/* Achievement / Level / Reward — only when no higher-priority active */}
+      {canShow(interruptionRef.current, 'reward_popup') && (
+        <RewardPopup
+          reward={gamification.lastReward}
+          onDismiss={gamification.dismissReward}
+          leveledUp={canShow(interruptionRef.current, 'level_milestone') ? gamification.leveledUp : false}
+          newLevel={gamification.newLevel}
+          onDismissLevelUp={gamification.dismissLevelUp}
+          achievementReward={canShow(interruptionRef.current, 'achievement') ? gamification.achievementReward : null}
+          onDismissAchievement={gamification.dismissAchievement}
+          streakMilestone={gamification.streakMilestone}
+          onDismissStreakMilestone={gamification.dismissStreakMilestone}
+        />
+      )}
       
-      <AICompanion
-        readingProgress={readingProgress}
-        chapterNumber={currentChapter}
-        sectionsCompleted={gamification.state.sectionsCompleted}
-        streakDays={gamification.state.streakCurrent}
-        bookTitle={book?.title}
-      />
+      {/* AI Companion — lowest priority, only when nothing else active */}
+      {showAICompanion && canShow(interruptionRef.current, 'ai_companion') && (
+        <AICompanion
+          readingProgress={readingProgress}
+          chapterNumber={currentChapter}
+          sectionsCompleted={gamification.state.sectionsCompleted}
+          streakDays={gamification.state.streakCurrent}
+          bookTitle={book?.title}
+        />
+      )}
+      
+      {/* Stuck Reader Rescue */}
+      {bookId && (
+        <StuckReaderRescue
+          chapterNumber={currentChapter}
+          readingProgress={readingProgress}
+          sectionsCompleted={gamification.state.sectionsCompleted}
+          bookId={bookId}
+          isVisible={hookDismissed && !gamification.streakBroken}
+          onListenInstead={() => setShowTTS(true)}
+          onGuidedMode={() => setGuidedModeActive(true)}
+          onContinue={() => {
+            if (contentRef.current) {
+              contentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
