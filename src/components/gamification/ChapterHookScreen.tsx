@@ -1,12 +1,11 @@
 /**
- * ChapterHookScreen — Hook overlay before chapter content
- * "This idea will change how you see X forever" → "2 min" → "Start Now"
+ * ChapterHookScreen v2 — Emotional hook with progress context + book stats
  */
 
 import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { ArrowRight, Clock, BookOpen, Zap } from "lucide-react";
+import { ArrowRight, Clock, BookOpen, Zap, Trophy } from "lucide-react";
 import { getChapterHook } from "@/lib/gamificationEngine";
 
 interface ChapterHookScreenProps {
@@ -15,13 +14,14 @@ interface ChapterHookScreenProps {
   wordCount: number;
   onStart: () => void;
   bookTitle?: string;
+  totalChapters?: number;
+  userLevel?: number;
 }
 
-export function ChapterHookScreen({ chapterNumber, chapterTitle, wordCount, onStart, bookTitle }: ChapterHookScreenProps) {
+export function ChapterHookScreen({ chapterNumber, chapterTitle, wordCount, onStart, bookTitle, totalChapters, userLevel }: ChapterHookScreenProps) {
   const [show, setShow] = useState(true);
   const [dismissed, setDismissed] = useState(false);
   
-  // Check if already dismissed for this chapter
   const storageKey = `scroll_hook_${chapterNumber}`;
   useEffect(() => {
     try {
@@ -42,6 +42,8 @@ export function ChapterHookScreen({ chapterNumber, chapterTitle, wordCount, onSt
 
   const readingMinutes = Math.max(1, Math.round((wordCount || 500) / 250));
   const hookMessage = getChapterHook(chapterNumber);
+  const chapterXP = 10 + (chapterNumber > 1 ? 50 : 0);
+  const progressPercent = totalChapters ? Math.round(((chapterNumber - 1) / totalChapters) * 100) : 0;
 
   if (dismissed || !show) return null;
 
@@ -59,15 +61,38 @@ export function ChapterHookScreen({ chapterNumber, chapterTitle, wordCount, onSt
           transition={{ delay: 0.1, type: "spring", stiffness: 300, damping: 25 }}
           className="max-w-md w-full text-center"
         >
+          {/* Progress context */}
+          {totalChapters && totalChapters > 1 && (
+            <motion.div
+              initial={{ opacity: 0, width: 0 }}
+              animate={{ opacity: 1, width: "100%" }}
+              transition={{ delay: 0.15 }}
+              className="mb-6"
+            >
+              <div className="flex justify-between text-[10px] text-muted-foreground mb-1">
+                <span>Book progress</span>
+                <span>{progressPercent}%</span>
+              </div>
+              <div className="h-1 bg-muted rounded-full overflow-hidden">
+                <motion.div
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressPercent}%` }}
+                  transition={{ delay: 0.3, duration: 0.8 }}
+                  className="h-full bg-primary rounded-full"
+                />
+              </div>
+            </motion.div>
+          )}
+
           {/* Chapter badge */}
           <motion.div
             initial={{ opacity: 0, scale: 0.5 }}
             animate={{ opacity: 1, scale: 1 }}
             transition={{ delay: 0.2 }}
-            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-6"
+            className="inline-flex items-center gap-2 px-3 py-1.5 rounded-full bg-primary/10 text-primary text-xs font-semibold mb-5"
           >
             <BookOpen className="h-3.5 w-3.5" />
-            Chapter {chapterNumber}
+            Chapter {chapterNumber}{totalChapters ? ` of ${totalChapters}` : ''}
           </motion.div>
 
           {/* Hook message */}
@@ -90,7 +115,7 @@ export function ChapterHookScreen({ chapterNumber, chapterTitle, wordCount, onSt
             {chapterTitle}
           </motion.p>
 
-          {/* Time estimate */}
+          {/* Stats row */}
           <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
@@ -101,10 +126,16 @@ export function ChapterHookScreen({ chapterNumber, chapterTitle, wordCount, onSt
               <Clock className="h-4 w-4" />
               <span>{readingMinutes} min read</span>
             </div>
-            <div className="flex items-center gap-1.5 text-sm text-primary">
+            <div className="flex items-center gap-1.5 text-sm text-primary font-medium">
               <Zap className="h-4 w-4" />
-              <span>+{10 + (chapterNumber > 1 ? 50 : 0)} XP</span>
+              <span>+{chapterXP} XP</span>
             </div>
+            {userLevel && (
+              <div className="flex items-center gap-1.5 text-sm text-muted-foreground">
+                <Trophy className="h-4 w-4" />
+                <span>Lv.{userLevel}</span>
+              </div>
+            )}
           </motion.div>
 
           {/* CTA */}
@@ -121,6 +152,17 @@ export function ChapterHookScreen({ chapterNumber, chapterTitle, wordCount, onSt
               Start Now <ArrowRight className="h-5 w-5" />
             </Button>
           </motion.div>
+
+          {/* Skip option */}
+          <motion.button
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 1 }}
+            onClick={handleStart}
+            className="mt-4 text-xs text-muted-foreground/50 hover:text-muted-foreground transition-colors"
+          >
+            Skip intro
+          </motion.button>
         </motion.div>
       </motion.div>
     </AnimatePresence>

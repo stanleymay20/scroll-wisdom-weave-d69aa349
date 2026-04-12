@@ -1,6 +1,6 @@
 /**
- * useGamification — React hook for the gamification engine
- * Hybrid localStorage + DB sync
+ * useGamification v2 — React hook for the gamification engine
+ * Hybrid localStorage + DB sync with combo, achievements, streak milestones
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
@@ -16,6 +16,8 @@ import {
   getStreakStatus,
   calculateLevel,
   xpProgress,
+  addReadingMinutes,
+  getEarnedAchievements,
 } from '@/lib/gamificationEngine';
 
 interface UseGamificationReturn {
@@ -24,14 +26,21 @@ interface UseGamificationReturn {
   streakStatus: 'active' | 'at_risk' | 'broken' | 'none';
   lastReward: RewardEvent | null;
   leveledUp: boolean;
+  newLevel: number;
   streakBroken: boolean;
+  streakMilestone: number | null;
+  achievementReward: RewardEvent | null;
+  achievements: Array<{ id: string; label: string; earned: boolean }>;
   completeSection: () => void;
   completeChapter: () => void;
   completeBook: () => void;
   completeQuiz: () => void;
+  addMinutes: (mins: number) => void;
   dismissReward: () => void;
   dismissLevelUp: () => void;
   dismissStreakBroken: () => void;
+  dismissAchievement: () => void;
+  dismissStreakMilestone: () => void;
 }
 
 export function useGamification(): UseGamificationReturn {
@@ -39,6 +48,8 @@ export function useGamification(): UseGamificationReturn {
   const [lastReward, setLastReward] = useState<RewardEvent | null>(null);
   const [leveledUp, setLeveledUp] = useState(false);
   const [streakBroken, setStreakBroken] = useState(false);
+  const [streakMilestone, setStreakMilestone] = useState<number | null>(null);
+  const [achievementReward, setAchievementReward] = useState<RewardEvent | null>(null);
   const syncTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
 
   // Load from DB on mount and merge (prefer higher values)
@@ -47,6 +58,7 @@ export function useGamification(): UseGamificationReturn {
       if (!dbState) return;
       setState(prev => {
         const merged: GamificationState = {
+          ...prev,
           xp: Math.max(prev.xp, dbState.xp),
           level: calculateLevel(Math.max(prev.xp, dbState.xp)),
           streakCurrent: Math.max(prev.streakCurrent, dbState.streakCurrent),
@@ -67,10 +79,10 @@ export function useGamification(): UseGamificationReturn {
   // Update streak on mount
   useEffect(() => {
     setState(prev => {
-      const { state: updated, streakBroken: broken, isNewDay } = updateStreak(prev);
+      const { state: updated, streakBroken: broken, isNewDay, streakMilestone: milestone } = updateStreak(prev);
       if (broken) setStreakBroken(true);
+      if (milestone) setStreakMilestone(milestone);
       if (isNewDay) {
-        // Award daily login XP
         const { state: withXP } = awardXP(updated, XP_REWARDS.DAILY_LOGIN, 'daily');
         return withXP;
       }
@@ -86,9 +98,18 @@ export function useGamification(): UseGamificationReturn {
 
   const doAction = useCallback((amount: number, action: 'section' | 'chapter' | 'quiz' | 'book') => {
     setState(prev => {
-      const { state: updated, reward, leveledUp: leveled } = awardXP(prev, amount, action);
-      setLastReward(reward);
-      if (leveled) setLeveledUp(true);
+      const result = awardXP(prev, amount, action);
+      setLastReward(result.reward);
+      if (result.leveledUp) setLeveledUp(true);
+      if (result.achievementReward) setAchievementReward(result.achievementReward);
+      scheduleSync(result.state);
+      return result.state;
+    });
+  }, [scheduleSync]);
+
+  const addMinutes = useCallback((mins: number) => {
+    setState(prev => {
+      const updated = addReadingMinutes(prev, mins);
       scheduleSync(updated);
       return updated;
     });
@@ -97,16 +118,23 @@ export function useGamification(): UseGamificationReturn {
   return {
     state,
     xpProgress: xpProgress(state.xp),
-    streakStatus: getStreakStatus(state) as any,
+    streakStatus: getStreakStatus(state),
     lastReward,
     leveledUp,
+    newLevel: state.level,
     streakBroken,
+    streakMilestone,
+    achievementReward,
+    achievements: getEarnedAchievements(state),
     completeSection: () => doAction(XP_REWARDS.SECTION_COMPLETE, 'section'),
     completeChapter: () => doAction(XP_REWARDS.CHAPTER_COMPLETE, 'chapter'),
     completeBook: () => doAction(XP_REWARDS.BOOK_COMPLETE, 'book'),
     completeQuiz: () => doAction(XP_REWARDS.QUIZ_PASS, 'quiz'),
+    addMinutes,
     dismissReward: () => setLastReward(null),
     dismissLevelUp: () => setLeveledUp(false),
     dismissStreakBroken: () => setStreakBroken(false),
+    dismissAchievement: () => setAchievementReward(null),
+    dismissStreakMilestone: () => setStreakMilestone(null),
   };
 }
