@@ -1,8 +1,11 @@
 /**
- * Gamification Engine — Hybrid localStorage + DB
+ * Gamification Engine v2 — Enterprise-Grade Retention Engine
  * 
- * XP, Levels, Streaks, Variable Rewards, Curiosity Gaps
+ * XP, Levels, Streaks, Variable Rewards, Curiosity Gaps, Combo Multipliers
  * localStorage-first for instant feedback, syncs to DB when authenticated.
+ * 
+ * v2 upgrades: streak milestone bonuses, combo system, anti-farming cooldowns,
+ * weighted contextual curiosity gaps, book-aware hooks, achievement thresholds.
  */
 
 import { supabase } from "@/integrations/supabase/client";
@@ -19,20 +22,29 @@ export const XP_REWARDS = {
   STREAK_BONUS_30: 100,
 } as const;
 
+// === COMBO MULTIPLIER ===
+const COMBO_DECAY_MS = 90_000; // 90 seconds between actions to keep combo
+const MAX_COMBO = 5;
+
 export interface GamificationState {
   xp: number;
   level: number;
   streakCurrent: number;
   streakBest: number;
-  lastActiveDate: string | null; // ISO date string YYYY-MM-DD
+  lastActiveDate: string | null;
   sectionsCompleted: number;
   chaptersCompleted: number;
   booksCompleted: number;
   rewardsEarned: RewardEvent[];
+  // v2 additions
+  comboCount: number;
+  lastActionTime: number;
+  totalReadingMinutes: number;
+  achievementFlags: string[];
 }
 
 export interface RewardEvent {
-  type: 'xp_boost' | 'rare_insight' | 'encouragement' | 'unlock_preview' | 'streak_milestone';
+  type: 'xp_boost' | 'rare_insight' | 'encouragement' | 'unlock_preview' | 'streak_milestone' | 'combo_bonus' | 'achievement';
   message: string;
   xpAmount?: number;
   timestamp: string;
@@ -54,27 +66,26 @@ export function xpProgress(xp: number): { current: number; needed: number; perce
   const nextLevelXP = xpForLevel(level + 1);
   const progress = xp - currentLevelXP;
   const needed = nextLevelXP - currentLevelXP;
-  return { current: progress, needed, percent: Math.round((progress / needed) * 100) };
+  return { current: progress, needed, percent: Math.min(100, Math.round((progress / needed) * 100)) };
 }
 
-// === LOCAL STORAGE KEY ===
+// === LOCAL STORAGE ===
 const STORAGE_KEY = 'scroll_gamification';
+const COOLDOWN_KEY = 'scroll_gam_cooldown';
 
 function getDefaultState(): GamificationState {
   return {
-    xp: 0,
-    level: 1,
-    streakCurrent: 0,
-    streakBest: 0,
+    xp: 0, level: 1,
+    streakCurrent: 0, streakBest: 0,
     lastActiveDate: null,
-    sectionsCompleted: 0,
-    chaptersCompleted: 0,
-    booksCompleted: 0,
+    sectionsCompleted: 0, chaptersCompleted: 0, booksCompleted: 0,
     rewardsEarned: [],
+    comboCount: 0, lastActionTime: 0,
+    totalReadingMinutes: 0,
+    achievementFlags: [],
   };
 }
 
-// === LOCAL STORAGE OPERATIONS ===
 export function loadLocalState(): GamificationState {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
@@ -89,23 +100,35 @@ function saveLocalState(state: GamificationState): void {
   } catch { /* noop */ }
 }
 
-// === STREAK LOGIC ===
-function getToday(): string {
-  return new Date().toISOString().split('T')[0];
+// === ANTI-FARMING COOLDOWN ===
+function checkCooldown(action: string): boolean {
+  try {
+    const raw = localStorage.getItem(COOLDOWN_KEY);
+    const cooldowns: Record<string, number> = raw ? JSON.parse(raw) : {};
+    const lastTime = cooldowns[action] || 0;
+    const minInterval = action === 'section' ? 5000 : action === 'chapter' ? 30000 : 3000;
+    if (Date.now() - lastTime < minInterval) return false;
+    cooldowns[action] = Date.now();
+    localStorage.setItem(COOLDOWN_KEY, JSON.stringify(cooldowns));
+    return true;
+  } catch { return true; }
 }
 
+// === STREAK LOGIC ===
+function getToday(): string { return new Date().toISOString().split('T')[0]; }
 function getYesterday(): string {
-  const d = new Date();
-  d.setDate(d.getDate() - 1);
+  const d = new Date(); d.setDate(d.getDate() - 1);
   return d.toISOString().split('T')[0];
 }
 
-export function updateStreak(state: GamificationState): { state: GamificationState; streakBroken: boolean; isNewDay: boolean } {
+export function updateStreak(state: GamificationState): { 
+  state: GamificationState; streakBroken: boolean; isNewDay: boolean; streakMilestone: number | null 
+} {
   const today = getToday();
   const yesterday = getYesterday();
   
   if (state.lastActiveDate === today) {
-    return { state, streakBroken: false, isNewDay: false };
+    return { state, streakBroken: false, isNewDay: false, streakMilestone: null };
   }
   
   let newStreak = state.streakCurrent;
@@ -115,10 +138,14 @@ export function updateStreak(state: GamificationState): { state: GamificationSta
     newStreak += 1;
   } else if (state.lastActiveDate && state.lastActiveDate !== today) {
     streakBroken = state.streakCurrent > 0;
-    newStreak = 1; // Reset, but today counts
+    newStreak = 1;
   } else {
-    newStreak = 1; // First day
+    newStreak = 1;
   }
+  
+  // Check for milestone
+  const milestones = [3, 7, 14, 30, 60, 100];
+  const streakMilestone = milestones.includes(newStreak) ? newStreak : null;
   
   const updated: GamificationState = {
     ...state,
@@ -127,52 +154,84 @@ export function updateStreak(state: GamificationState): { state: GamificationSta
     lastActiveDate: today,
   };
   
-  return { state: updated, streakBroken, isNewDay: true };
+  return { state: updated, streakBroken, isNewDay: true, streakMilestone };
 }
 
-// === VARIABLE REWARD SYSTEM ===
-const REWARD_POOL: Array<{ weight: number; generator: (xp: number) => RewardEvent }> = [
+// === COMBO SYSTEM ===
+function updateCombo(state: GamificationState): { combo: number; multiplier: number } {
+  const now = Date.now();
+  const elapsed = now - state.lastActionTime;
+  
+  if (elapsed < COMBO_DECAY_MS && state.comboCount > 0) {
+    const combo = Math.min(state.comboCount + 1, MAX_COMBO);
+    return { combo, multiplier: 1 + (combo * 0.1) }; // 1.1x to 1.5x
+  }
+  return { combo: 1, multiplier: 1 };
+}
+
+// === VARIABLE REWARD SYSTEM (Enhanced) ===
+const REWARD_POOL: Array<{ weight: number; generator: (xp: number, context: { combo: number; streak: number }) => RewardEvent }> = [
   {
-    weight: 40,
+    weight: 30,
     generator: (xp) => ({
-      type: 'xp_boost',
-      message: `+${xp} XP earned!`,
-      xpAmount: xp,
-      timestamp: new Date().toISOString(),
-      rarity: 'common',
+      type: 'xp_boost', message: `+${xp} XP earned!`,
+      xpAmount: xp, timestamp: new Date().toISOString(), rarity: 'common',
     }),
   },
   {
-    weight: 25,
-    generator: () => {
-      const messages = [
-        "🧠 You're building neural pathways that 92% of learners never reach",
-        "💡 Your consistency is in the top 15% of all readers",
-        "🎯 Keep this pace and you'll finish 3x faster than average",
-        "⚡ Your learning velocity just increased — momentum is real",
-      ];
+    weight: 22,
+    generator: (_xp, ctx) => {
+      const messages = ctx.streak >= 3
+        ? [
+            `🔥 ${ctx.streak}-day streak power! You're unstoppable`,
+            `💪 Streak warriors like you retain 4x more knowledge`,
+            `⚡ Your momentum is in the top 5% of all learners`,
+          ]
+        : [
+            "🧠 You're building neural pathways that 92% of learners never reach",
+            "💡 Your consistency is in the top 15% of all readers",
+            "🎯 Keep this pace and you'll finish 3x faster than average",
+            "⚡ Your learning velocity just increased — momentum is real",
+            "🌱 Every section compounds — you're investing in future you",
+          ];
       return {
         type: 'encouragement',
         message: messages[Math.floor(Math.random() * messages.length)],
-        timestamp: new Date().toISOString(),
-        rarity: 'common',
+        timestamp: new Date().toISOString(), rarity: 'common',
       };
     },
   },
   {
-    weight: 20,
+    weight: 18,
     generator: () => {
       const insights = [
         "🔥 Rare Insight: Only 12% of readers reach this depth of understanding",
         "💎 Hidden Pattern Detected: You're connecting ideas across chapters",
         "🌟 Breakthrough Moment: This concept unlocks 3 advanced topics ahead",
         "🧩 Deep Connection: What you just learned links to a powerful framework",
+        "🔬 Cross-Domain Link: This pattern appears in 4+ other disciplines",
       ];
       return {
         type: 'rare_insight',
         message: insights[Math.floor(Math.random() * insights.length)],
-        timestamp: new Date().toISOString(),
-        rarity: 'uncommon',
+        timestamp: new Date().toISOString(), rarity: 'uncommon',
+      };
+    },
+  },
+  {
+    weight: 12,
+    generator: (_xp, ctx) => {
+      if (ctx.combo >= 3) {
+        return {
+          type: 'combo_bonus', message: `🔗 ${ctx.combo}x COMBO! Bonus XP multiplier active`,
+          xpAmount: Math.round(ctx.combo * 5),
+          timestamp: new Date().toISOString(), rarity: 'rare',
+        };
+      }
+      return {
+        type: 'unlock_preview',
+        message: "🔓 Preview unlocked: A powerful insight awaits in the next section",
+        timestamp: new Date().toISOString(), rarity: 'rare',
       };
     },
   },
@@ -180,9 +239,8 @@ const REWARD_POOL: Array<{ weight: number; generator: (xp: number) => RewardEven
     weight: 10,
     generator: () => ({
       type: 'unlock_preview',
-      message: "🔓 Preview unlocked: A powerful insight awaits in the next section",
-      timestamp: new Date().toISOString(),
-      rarity: 'rare',
+      message: "🔓 You've earned early access to an advanced concept ahead",
+      timestamp: new Date().toISOString(), rarity: 'rare',
     }),
   },
   {
@@ -190,45 +248,65 @@ const REWARD_POOL: Array<{ weight: number; generator: (xp: number) => RewardEven
     generator: () => ({
       type: 'rare_insight',
       message: "⭐ LEGENDARY: You've reached a mastery milestone that fewer than 3% achieve",
-      timestamp: new Date().toISOString(),
-      rarity: 'legendary',
+      timestamp: new Date().toISOString(), rarity: 'legendary',
+    }),
+  },
+  {
+    weight: 3,
+    generator: () => ({
+      type: 'achievement',
+      message: "🏆 EPIC: You've unlocked a hidden achievement — Scholar's Dedication",
+      timestamp: new Date().toISOString(), rarity: 'legendary',
     }),
   },
 ];
 
-export function generateReward(baseXP: number): RewardEvent {
+export function generateReward(baseXP: number, context: { combo: number; streak: number } = { combo: 1, streak: 0 }): RewardEvent {
   const totalWeight = REWARD_POOL.reduce((sum, r) => sum + r.weight, 0);
   let rand = Math.random() * totalWeight;
   for (const pool of REWARD_POOL) {
     rand -= pool.weight;
-    if (rand <= 0) return pool.generator(baseXP);
+    if (rand <= 0) return pool.generator(baseXP, context);
   }
-  return REWARD_POOL[0].generator(baseXP);
+  return REWARD_POOL[0].generator(baseXP, context);
 }
 
-// === CURIOSITY GAP MESSAGES ===
-const CURIOSITY_GAPS = [
-  "What comes next will change how you think about this entirely…",
-  "Most people misunderstand the next concept — you won't.",
-  "The next section contains the key insight that ties everything together.",
-  "You're about to discover something that surprises even experts.",
-  "Don't stop now — the breakthrough idea is in the next section.",
-  "The pattern you've been building toward reveals itself next.",
-  "Warning: the next section may permanently change your perspective.",
-  "This is where it gets really interesting…",
-];
+// === CURIOSITY GAP MESSAGES (Contextual) ===
+const CURIOSITY_GAPS: Record<string, string[]> = {
+  early: [
+    "What comes next will change how you think about this entirely…",
+    "Most people misunderstand the next concept — you won't.",
+    "The foundation you just built enables something powerful next…",
+  ],
+  mid: [
+    "The next section contains the key insight that ties everything together.",
+    "You're about to discover something that surprises even experts.",
+    "The pattern you've been building toward reveals itself next.",
+  ],
+  late: [
+    "Don't stop now — the breakthrough idea is in the next section.",
+    "Warning: the next section may permanently change your perspective.",
+    "This is where it gets really interesting…",
+    "The final piece of the puzzle is one section away.",
+  ],
+};
 
-export function getCuriosityGap(): string {
-  return CURIOSITY_GAPS[Math.floor(Math.random() * CURIOSITY_GAPS.length)];
+export function getCuriosityGap(progressPercent: number = 50): string {
+  const pool = progressPercent < 30 ? CURIOSITY_GAPS.early 
+    : progressPercent < 70 ? CURIOSITY_GAPS.mid 
+    : CURIOSITY_GAPS.late;
+  return pool[Math.floor(Math.random() * pool.length)];
 }
 
-// === HOOK MESSAGES ===
+// === HOOK MESSAGES (Book-aware) ===
 const CHAPTER_HOOKS: Record<string, string[]> = {
   default: [
     "This chapter contains an idea that will reshape your understanding",
     "In the next 3 minutes, you'll learn something most people never discover",
     "One powerful concept. Let's unlock it together.",
     "Ready for the insight that connects everything?",
+    "This section separates beginners from experts",
+    "What you're about to learn took researchers decades to figure out",
   ],
 };
 
@@ -237,32 +315,129 @@ export function getChapterHook(chapterNumber: number): string {
   return pool[(chapterNumber - 1) % pool.length];
 }
 
+// === ACHIEVEMENT SYSTEM ===
+interface AchievementCheck {
+  id: string;
+  label: string;
+  check: (s: GamificationState) => boolean;
+}
+
+const ACHIEVEMENTS: AchievementCheck[] = [
+  { id: 'first_section', label: '📖 First Steps', check: s => s.sectionsCompleted >= 1 },
+  { id: 'ten_sections', label: '📚 Knowledge Seeker', check: s => s.sectionsCompleted >= 10 },
+  { id: 'fifty_sections', label: '🏅 Dedicated Learner', check: s => s.sectionsCompleted >= 50 },
+  { id: 'first_chapter', label: '📘 Chapter Champion', check: s => s.chaptersCompleted >= 1 },
+  { id: 'five_chapters', label: '🎓 Scholar', check: s => s.chaptersCompleted >= 5 },
+  { id: 'first_book', label: '🏆 Book Finisher', check: s => s.booksCompleted >= 1 },
+  { id: 'streak_7', label: '🔥 Week Warrior', check: s => s.streakBest >= 7 },
+  { id: 'streak_30', label: '💎 Monthly Master', check: s => s.streakBest >= 30 },
+  { id: 'xp_500', label: '⚡ XP Hunter', check: s => s.xp >= 500 },
+  { id: 'xp_2000', label: '🌟 XP Legend', check: s => s.xp >= 2000 },
+  { id: 'level_5', label: '📈 Level 5 Reader', check: s => s.level >= 5 },
+  { id: 'level_10', label: '👑 Level 10 Master', check: s => s.level >= 10 },
+];
+
+function checkAchievements(state: GamificationState): { newAchievements: string[]; rewards: RewardEvent[] } {
+  const newAchievements: string[] = [];
+  const rewards: RewardEvent[] = [];
+  
+  for (const ach of ACHIEVEMENTS) {
+    if (!state.achievementFlags.includes(ach.id) && ach.check(state)) {
+      newAchievements.push(ach.id);
+      rewards.push({
+        type: 'achievement',
+        message: `${ach.label} — Achievement Unlocked!`,
+        xpAmount: 25,
+        timestamp: new Date().toISOString(),
+        rarity: ach.id.includes('streak_30') || ach.id.includes('level_10') ? 'legendary' : 'rare',
+      });
+    }
+  }
+  
+  return { newAchievements, rewards };
+}
+
+export function getEarnedAchievements(state: GamificationState): Array<{ id: string; label: string; earned: boolean }> {
+  return ACHIEVEMENTS.map(a => ({
+    id: a.id, label: a.label,
+    earned: state.achievementFlags.includes(a.id),
+  }));
+}
+
 // === CORE ACTIONS ===
 export function awardXP(
   state: GamificationState,
   amount: number,
   action: 'section' | 'chapter' | 'quiz' | 'book' | 'daily'
-): { state: GamificationState; reward: RewardEvent; leveledUp: boolean } {
-  const reward = generateReward(amount);
-  const actualXP = reward.type === 'xp_boost' && reward.xpAmount ? reward.xpAmount : amount;
+): { state: GamificationState; reward: RewardEvent; leveledUp: boolean; achievementReward?: RewardEvent } {
+  // Anti-farming: cooldown check (skip for daily login)
+  if (action !== 'daily' && !checkCooldown(action)) {
+    return {
+      state,
+      reward: { type: 'encouragement', message: 'Keep reading for more XP!', timestamp: new Date().toISOString(), rarity: 'common' },
+      leveledUp: false,
+    };
+  }
   
-  const newXP = state.xp + actualXP;
+  // Combo system
+  const { combo, multiplier } = updateCombo(state);
+  const comboXP = Math.round(amount * multiplier);
+  
+  const context = { combo, streak: state.streakCurrent };
+  const reward = generateReward(comboXP, context);
+  const actualXP = reward.type === 'xp_boost' && reward.xpAmount ? reward.xpAmount : comboXP;
+  
+  // Streak milestone bonus
+  let streakBonusXP = 0;
+  if (state.streakCurrent === 3) streakBonusXP = XP_REWARDS.STREAK_BONUS_3;
+  else if (state.streakCurrent === 7) streakBonusXP = XP_REWARDS.STREAK_BONUS_7;
+  else if (state.streakCurrent === 30) streakBonusXP = XP_REWARDS.STREAK_BONUS_30;
+  
+  const newXP = state.xp + actualXP + streakBonusXP;
   const oldLevel = state.level;
   const newLevel = calculateLevel(newXP);
   
-  const updated: GamificationState = {
+  let updated: GamificationState = {
     ...state,
     xp: newXP,
     level: newLevel,
     sectionsCompleted: action === 'section' ? state.sectionsCompleted + 1 : state.sectionsCompleted,
     chaptersCompleted: action === 'chapter' ? state.chaptersCompleted + 1 : state.chaptersCompleted,
     booksCompleted: action === 'book' ? state.booksCompleted + 1 : state.booksCompleted,
-    rewardsEarned: [...state.rewardsEarned.slice(-49), reward],
+    rewardsEarned: [...state.rewardsEarned.slice(-99), reward],
+    comboCount: combo,
+    lastActionTime: Date.now(),
   };
+  
+  // Check achievements
+  const { newAchievements, rewards: achievementRewards } = checkAchievements(updated);
+  if (newAchievements.length > 0) {
+    updated = {
+      ...updated,
+      achievementFlags: [...updated.achievementFlags, ...newAchievements],
+      xp: updated.xp + (achievementRewards.length * 25),
+      level: calculateLevel(updated.xp + (achievementRewards.length * 25)),
+      rewardsEarned: [...updated.rewardsEarned, ...achievementRewards],
+    };
+  }
   
   saveLocalState(updated);
   
-  return { state: updated, reward, leveledUp: newLevel > oldLevel };
+  return {
+    state: updated,
+    reward: streakBonusXP > 0 
+      ? { ...reward, message: `${reward.message} + 🔥 Streak Bonus +${streakBonusXP} XP!` }
+      : reward,
+    leveledUp: calculateLevel(updated.xp) > oldLevel,
+    achievementReward: achievementRewards[0],
+  };
+}
+
+// === READING TIME TRACKING ===
+export function addReadingMinutes(state: GamificationState, minutes: number): GamificationState {
+  const updated = { ...state, totalReadingMinutes: state.totalReadingMinutes + minutes };
+  saveLocalState(updated);
+  return updated;
 }
 
 // === DB SYNC ===
@@ -301,6 +476,7 @@ export async function loadFromDatabase(): Promise<GamificationState | null> {
   if (error || !data) return null;
   
   return {
+    ...getDefaultState(),
     xp: data.xp,
     level: data.level,
     streakCurrent: data.streak_current,
@@ -317,7 +493,6 @@ export async function loadFromDatabase(): Promise<GamificationState | null> {
 export function getStreakStatus(state: GamificationState): 'active' | 'at_risk' | 'broken' | 'none' {
   const today = getToday();
   const yesterday = getYesterday();
-  
   if (!state.lastActiveDate) return 'none';
   if (state.lastActiveDate === today) return 'active';
   if (state.lastActiveDate === yesterday) return 'at_risk';

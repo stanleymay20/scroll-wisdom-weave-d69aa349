@@ -1,20 +1,21 @@
 /**
- * QuickLearn — TikTok-style infinite scroll of key insights
- * Feeds curiosity → drives deeper reading
+ * QuickLearn v2 — TikTok-style insight feed with swipe, keyboard nav, touch feedback
+ * Batch-loaded, gesture-enabled, haptic-ready
  */
 
 import { useState, useEffect, useCallback, useRef } from "react";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
   BookOpen, ArrowRight, Bookmark, BookmarkCheck, 
-  Zap, ChevronLeft, Sparkles, RefreshCw 
+  Zap, ChevronLeft, Sparkles, RefreshCw, Share2 
 } from "lucide-react";
 import { useGamification } from "@/hooks/useGamification";
 import { Navbar } from "@/components/layout/Navbar";
+import { Progress } from "@/components/ui/progress";
 
 interface InsightCard {
   id: string;
@@ -25,30 +26,43 @@ interface InsightCard {
   insight: string;
   category: string;
   coverUrl: string | null;
-  saved: boolean;
 }
 
 function extractInsights(content: string): string[] {
   if (!content) return [];
   const lines = content.split('\n');
   const insights: string[] = [];
+  const seen = new Set<string>();
   
   for (const line of lines) {
     const trimmed = line.trim();
-    // Extract key sentences: bold text, blockquotes, or short impactful lines
+    if (!trimmed || trimmed.length < 30) continue;
+    
+    // Blockquotes
     if (trimmed.startsWith('> ')) {
-      insights.push(trimmed.replace(/^>\s*/, '').replace(/\*\*/g, ''));
-    } else if (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length < 200) {
-      insights.push(trimmed.replace(/\*\*/g, ''));
-    } else if (trimmed.length > 40 && trimmed.length < 180 && !trimmed.startsWith('#') && !trimmed.startsWith('-') && !trimmed.startsWith('|')) {
-      // Short impactful sentences
-      if (/[.!?]$/.test(trimmed) && !/^(Figure|Table|Note:|Source:)/i.test(trimmed)) {
-        insights.push(trimmed.replace(/\*\*/g, ''));
+      const clean = trimmed.replace(/^>\s*/, '').replace(/\*\*/g, '').trim();
+      if (clean.length > 30 && clean.length < 200 && !seen.has(clean)) {
+        seen.add(clean); insights.push(clean);
       }
+      continue;
+    }
+    // Bold statements
+    if (trimmed.startsWith('**') && trimmed.endsWith('**') && trimmed.length < 200) {
+      const clean = trimmed.replace(/\*\*/g, '').trim();
+      if (!seen.has(clean)) { seen.add(clean); insights.push(clean); }
+      continue;
+    }
+    // Quality sentences (not headers, lists, tables, figures)
+    if (trimmed.length >= 50 && trimmed.length <= 180 
+      && /[.!?]$/.test(trimmed) 
+      && !/^[#\-|*]/.test(trimmed)
+      && !/^(Figure|Table|Note:|Source:|Image|Example:)/i.test(trimmed)) {
+      const clean = trimmed.replace(/\*\*/g, '').trim();
+      if (!seen.has(clean)) { seen.add(clean); insights.push(clean); }
     }
   }
   
-  return insights.slice(0, 5); // Max 5 per chapter
+  return insights.slice(0, 5);
 }
 
 export default function QuickLearn() {
@@ -56,55 +70,62 @@ export default function QuickLearn() {
   const [loading, setLoading] = useState(true);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [savedIds, setSavedIds] = useState<Set<string>>(new Set());
+  const [direction, setDirection] = useState(0); // -1 prev, 1 next
   const navigate = useNavigate();
   const gamification = useGamification();
-  const containerRef = useRef<HTMLDivElement>(null);
 
-  // Load insights from published books
+  // Batch load insights (single query for books + chapters)
   const loadInsights = useCallback(async () => {
     setLoading(true);
     try {
       const { data: books } = await supabase
         .from('books')
-        .select('id, title, category, cover_image_url, total_chapters')
+        .select('id, title, category, cover_image_url')
         .eq('is_published', true)
-        .limit(10);
+        .order('created_at', { ascending: false })
+        .limit(8);
       
       if (!books?.length) { setLoading(false); return; }
       
+      const bookIds = books.map(b => b.id);
+      const { data: chapters } = await supabase
+        .from('chapters')
+        .select('book_id, chapter_number, title, content')
+        .in('book_id', bookIds)
+        .order('chapter_number')
+        .limit(30);
+      
+      if (!chapters?.length) { setLoading(false); return; }
+      
+      const bookMap = new Map(books.map(b => [b.id, b]));
       const allCards: InsightCard[] = [];
       
-      for (const book of books.slice(0, 5)) {
-        const { data: chapters } = await supabase
-          .from('chapters')
-          .select('chapter_number, title, content')
-          .eq('book_id', book.id)
-          .order('chapter_number')
-          .limit(3);
+      for (const ch of chapters) {
+        const book = bookMap.get(ch.book_id);
+        if (!book) continue;
         
-        if (!chapters) continue;
-        
-        for (const ch of chapters) {
-          const insights = extractInsights(ch.content || '');
-          for (const insight of insights) {
-            allCards.push({
-              id: `${book.id}-${ch.chapter_number}-${allCards.length}`,
-              bookId: book.id,
-              bookTitle: book.title,
-              chapterNumber: ch.chapter_number,
-              chapterTitle: ch.title,
-              insight,
-              category: book.category || 'general',
-              coverUrl: book.cover_image_url,
-              saved: false,
-            });
-          }
+        for (const insight of extractInsights(ch.content || '')) {
+          allCards.push({
+            id: `${ch.book_id}-${ch.chapter_number}-${allCards.length}`,
+            bookId: ch.book_id,
+            bookTitle: book.title,
+            chapterNumber: ch.chapter_number,
+            chapterTitle: ch.title,
+            insight,
+            category: book.category || 'general',
+            coverUrl: book.cover_image_url,
+          });
         }
       }
       
-      // Shuffle for variety
-      const shuffled = allCards.sort(() => Math.random() - 0.5);
-      setCards(shuffled);
+      // Fisher-Yates shuffle
+      for (let i = allCards.length - 1; i > 0; i--) {
+        const j = Math.floor(Math.random() * (i + 1));
+        [allCards[i], allCards[j]] = [allCards[j], allCards[i]];
+      }
+      
+      setCards(allCards);
+      setCurrentIndex(0);
     } catch (err) {
       console.error('[QuickLearn] Load error:', err);
     }
@@ -112,6 +133,38 @@ export default function QuickLearn() {
   }, []);
 
   useEffect(() => { loadInsights(); }, [loadInsights]);
+
+  // Keyboard navigation
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === 'ArrowRight' || e.key === 'ArrowDown') goNext();
+      if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') goPrev();
+    };
+    window.addEventListener('keydown', handler);
+    return () => window.removeEventListener('keydown', handler);
+  });
+
+  const goNext = () => {
+    if (currentIndex < cards.length - 1) {
+      setDirection(1);
+      setCurrentIndex(i => i + 1);
+      gamification.completeSection();
+    }
+  };
+
+  const goPrev = () => {
+    if (currentIndex > 0) {
+      setDirection(-1);
+      setCurrentIndex(i => i - 1);
+    }
+  };
+
+  // Swipe gesture handler
+  const handleDragEnd = (_: MouseEvent | TouchEvent | PointerEvent, info: PanInfo) => {
+    const threshold = 80;
+    if (info.offset.x < -threshold) goNext();
+    else if (info.offset.x > threshold) goPrev();
+  };
 
   const toggleSave = (id: string) => {
     setSavedIds(prev => {
@@ -122,17 +175,19 @@ export default function QuickLearn() {
     });
   };
 
-  const goToChapter = (card: InsightCard) => {
-    navigate(`/read/${card.bookId}/${card.chapterNumber}`);
-  };
-
   const currentCard = cards[currentIndex];
+  const progressPercent = cards.length > 0 ? Math.round(((currentIndex + 1) / cards.length) * 100) : 0;
+
+  const slideVariants = {
+    enter: (d: number) => ({ x: d > 0 ? 300 : -300, opacity: 0, scale: 0.9 }),
+    center: { x: 0, opacity: 1, scale: 1 },
+    exit: (d: number) => ({ x: d > 0 ? -300 : 300, opacity: 0, scale: 0.9 }),
+  };
 
   return (
     <div className="min-h-screen bg-background flex flex-col">
       <Navbar />
       
-      {/* Header */}
       <div className="container mx-auto px-4 pt-20 pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
@@ -144,39 +199,50 @@ export default function QuickLearn() {
                 <Zap className="h-5 w-5 text-primary" />
                 Quick Learn
               </h1>
-              <p className="text-xs text-muted-foreground">Swipe through key insights</p>
+              <p className="text-xs text-muted-foreground">Swipe through key insights · {cards.length} cards</p>
             </div>
           </div>
           <Button variant="ghost" size="icon" onClick={loadInsights} disabled={loading}>
             <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
           </Button>
         </div>
+
+        {/* Progress bar */}
+        {cards.length > 0 && (
+          <div className="mt-3">
+            <Progress value={progressPercent} className="h-1" />
+          </div>
+        )}
       </div>
 
-      {/* Card Stack */}
-      <div 
-        ref={containerRef}
-        className="flex-1 container mx-auto px-4 flex items-center justify-center pb-24"
-      >
+      {/* Card area */}
+      <div className="flex-1 container mx-auto px-4 flex items-center justify-center pb-24 overflow-hidden">
         {loading ? (
           <div className="text-center space-y-3">
             <Sparkles className="h-8 w-8 text-primary/40 mx-auto animate-pulse" />
-            <p className="text-sm text-muted-foreground">Loading insights...</p>
+            <p className="text-sm text-muted-foreground">Curating insights...</p>
           </div>
         ) : cards.length === 0 ? (
           <div className="text-center space-y-3">
             <BookOpen className="h-8 w-8 text-muted-foreground/40 mx-auto" />
             <p className="text-sm text-muted-foreground">No published books with insights yet</p>
+            <Button variant="outline" size="sm" onClick={() => navigate('/explore')}>Browse Books</Button>
           </div>
         ) : currentCard ? (
-          <AnimatePresence mode="wait">
+          <AnimatePresence mode="wait" custom={direction}>
             <motion.div
               key={currentCard.id}
-              initial={{ opacity: 0, x: 60 }}
-              animate={{ opacity: 1, x: 0 }}
-              exit={{ opacity: 0, x: -60 }}
-              transition={{ type: "spring", stiffness: 300, damping: 30 }}
-              className="w-full max-w-md"
+              custom={direction}
+              variants={slideVariants}
+              initial="enter"
+              animate="center"
+              exit="exit"
+              transition={{ type: "spring", stiffness: 350, damping: 30 }}
+              drag="x"
+              dragConstraints={{ left: 0, right: 0 }}
+              dragElastic={0.15}
+              onDragEnd={handleDragEnd}
+              className="w-full max-w-md cursor-grab active:cursor-grabbing touch-pan-y"
             >
               <div className="bg-card border border-border/50 rounded-3xl shadow-2xl overflow-hidden">
                 {/* Book context */}
@@ -200,8 +266,8 @@ export default function QuickLearn() {
                 </div>
                 
                 {/* Insight */}
-                <div className="px-5 py-6">
-                  <p className="text-lg font-medium text-foreground leading-relaxed">
+                <div className="px-5 py-8">
+                  <p className="text-lg font-medium text-foreground leading-relaxed text-center">
                     "{currentCard.insight}"
                   </p>
                 </div>
@@ -224,7 +290,7 @@ export default function QuickLearn() {
                   
                   <Button
                     size="sm"
-                    onClick={() => goToChapter(currentCard)}
+                    onClick={() => navigate(`/read/${currentCard.bookId}/${currentCard.chapterNumber}`)}
                     className="gap-1.5 rounded-full flex-1"
                   >
                     Read Full Chapter <ArrowRight className="h-3.5 w-3.5" />
@@ -232,45 +298,37 @@ export default function QuickLearn() {
                 </div>
               </div>
 
-              {/* Navigation dots */}
-              <div className="flex items-center justify-center gap-3 mt-6">
+              {/* Navigation */}
+              <div className="flex items-center justify-between mt-5 px-2">
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => setCurrentIndex(Math.max(0, currentIndex - 1))}
+                  onClick={goPrev}
                   disabled={currentIndex === 0}
-                  className="text-xs"
+                  className="text-xs gap-1"
                 >
-                  Previous
+                  <ChevronLeft className="h-3.5 w-3.5" /> Prev
                 </Button>
-                <span className="text-xs text-muted-foreground">
+                <span className="text-xs text-muted-foreground tabular-nums">
                   {currentIndex + 1} / {cards.length}
                 </span>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => {
-                    if (currentIndex < cards.length - 1) {
-                      setCurrentIndex(currentIndex + 1);
-                      gamification.completeSection();
-                    }
-                  }}
+                  onClick={goNext}
                   disabled={currentIndex >= cards.length - 1}
-                  className="text-xs"
+                  className="text-xs gap-1"
                 >
-                  Next
+                  Next <ArrowRight className="h-3.5 w-3.5" />
                 </Button>
               </div>
+
+              <p className="text-center text-[10px] text-muted-foreground/50 mt-2">
+                Swipe or use arrow keys
+              </p>
             </motion.div>
           </AnimatePresence>
-        ) : (
-          <div className="text-center">
-            <p className="text-sm text-muted-foreground">You've seen all insights! 🎉</p>
-            <Button variant="outline" className="mt-3" onClick={() => { setCurrentIndex(0); loadInsights(); }}>
-              Refresh
-            </Button>
-          </div>
-        )}
+        ) : null}
       </div>
     </div>
   );
