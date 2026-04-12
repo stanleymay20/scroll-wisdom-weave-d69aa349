@@ -2029,6 +2029,54 @@ export type Database = {
         }
         Relationships: []
       }
+      user_gamification: {
+        Row: {
+          books_completed: number
+          chapters_completed: number
+          created_at: string
+          id: string
+          last_active_date: string | null
+          level: number
+          rewards_earned: Json
+          sections_completed: number
+          streak_best: number
+          streak_current: number
+          updated_at: string
+          user_id: string
+          xp: number
+        }
+        Insert: {
+          books_completed?: number
+          chapters_completed?: number
+          created_at?: string
+          id?: string
+          last_active_date?: string | null
+          level?: number
+          rewards_earned?: Json
+          sections_completed?: number
+          streak_best?: number
+          streak_current?: number
+          updated_at?: string
+          user_id: string
+          xp?: number
+        }
+        Update: {
+          books_completed?: number
+          chapters_completed?: number
+          created_at?: string
+          id?: string
+          last_active_date?: string | null
+          level?: number
+          rewards_earned?: Json
+          sections_completed?: number
+          streak_best?: number
+          streak_current?: number
+          updated_at?: string
+          user_id?: string
+          xp?: number
+        }
+        Relationships: []
+      }
       user_library: {
         Row: {
           book_id: string
