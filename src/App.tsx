@@ -166,11 +166,13 @@ const App = () => (
                   <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
                   <Route path="/dashboard/mastery" element={<ProtectedRoute><MasteryDashboard /></ProtectedRoute>} />
                   <Route path="/docs/mastery-model" element={<MasteryModel />} />
+                  <Route path="/quick-learn" element={<QuickLearn />} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
+              <ReEngagementBanner />
               <PWAInstallPrompt />
               <GlobalAudioPlayer />
               <DiagnosticsPanel />
