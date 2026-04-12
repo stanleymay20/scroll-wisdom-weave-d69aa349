@@ -1709,6 +1709,34 @@ export default function Reader() {
           </Button>
         </div>
       </footer>
+
+      {/* === GAMIFICATION OVERLAYS === */}
+      
+      {/* Chapter Hook Screen — shown before content */}
+      {chapter && !hookDismissed && (
+        <ChapterHookScreen
+          chapterNumber={currentChapter}
+          chapterTitle={chapter.title}
+          wordCount={chapter.word_count || 500}
+          onStart={() => setHookDismissed(true)}
+          bookTitle={book?.title}
+        />
+      )}
+      
+      {/* Reward Popup — variable rewards */}
+      <RewardPopup
+        reward={gamification.lastReward}
+        onDismiss={gamification.dismissReward}
+        leveledUp={gamification.leveledUp}
+        newLevel={gamification.state.level}
+        onDismissLevelUp={gamification.dismissLevelUp}
+      />
+      
+      {/* Streak Alert — loss aversion */}
+      <StreakAlert
+        streakBroken={gamification.streakBroken}
+        onDismiss={gamification.dismissStreakBroken}
+      />
     </div>
   );
 }
