@@ -83,10 +83,13 @@ import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
 import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecommendation } from "@/lib/adaptiveLearningEngine";
 import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
 import { useGamification } from "@/hooks/useGamification";
-import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap, AICompanion, saveLastSession, StuckReaderRescue } from "@/components/gamification";
+import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap, AICompanion, saveLastSession, StuckReaderRescue, ChapterOneSummary } from "@/components/gamification";
 import { trackFunnelEvent, trackChapterExit, resetSessionCounters, incrementSessionSections, getSessionStats } from "@/lib/readingFunnel";
 import { createInterruptionState, activateInterruption, deactivateInterruption, canShow } from "@/lib/interruptionManager";
 import { isFeatureEnabled, type ExperimentId } from "@/lib/experimentFramework";
+import { saveResumeState, getResumeState, findCurrentParagraphAnchor, restorePosition, flushResumeState, type ResumeState } from "@/lib/resumeEngine";
+import { loadReaderProfile, classifyReader, getInterventionConfig, recordBookOpened, recordChapterCompleted, recordBookCompleted } from "@/lib/readerSegmentation";
+import { requestInterruptionSlot, isInDeepFlow } from "@/lib/calmnessRules";
 
 interface BookData {
   id: string;
@@ -295,11 +298,72 @@ export default function Reader() {
   
   // === INTERRUPTION MANAGER ===
   const interruptionRef = useRef(createInterruptionState());
+  const lastInterruptionTimeRef = useRef(0);
+  
+  // === READER SEGMENTATION ===
+  const readerSegment = useMemo(() => {
+    const profile = loadReaderProfile();
+    return classifyReader(profile);
+  }, []);
+  const interventionConfig = useMemo(() => getInterventionConfig(readerSegment), [readerSegment]);
   
   // === EXPERIMENT FRAMEWORK ===
   const showHookScreen = isFeatureEnabled('hook_screen');
   const showAICompanion = isFeatureEnabled('ai_companion');
   const showGamBar = isFeatureEnabled('visible_gamification_bar');
+  const showCh1Summary = currentChapter === 1 && isFeatureEnabled('ch1_summary_first');
+  const [ch1SummaryDismissed, setCh1SummaryDismissed] = useState(false);
+  
+  // === RESUME ENGINE ===
+  const hasRestoredRef = useRef(false);
+  
+  // Save resume state on scroll (throttled by resume engine)
+  const saveCurrentResumeState = useCallback(() => {
+    if (!bookId) return;
+    const anchor = findCurrentParagraphAnchor(contentRef.current);
+    saveResumeState({
+      bookId,
+      chapterNumber: currentChapter,
+      sectionIndex: 0,
+      lastParagraphAnchor: anchor,
+      scrollOffset: window.scrollY,
+      readingMode: guidedModeActive ? 'guided' : 'default',
+      audioChunkIndex: null,
+      audioVoice: null,
+      readingTheme,
+      fontSize,
+      updatedAt: Date.now(),
+    });
+  }, [bookId, currentChapter, guidedModeActive, readingTheme, fontSize]);
+  
+  // Restore position on mount
+  useEffect(() => {
+    if (!bookId || hasRestoredRef.current || !contentRef.current || !chapter?.content) return;
+    hasRestoredRef.current = true;
+    
+    const saved = getResumeState(bookId, currentChapter);
+    if (saved) {
+      // Use requestAnimationFrame to ensure DOM is painted
+      requestAnimationFrame(() => {
+        restorePosition(contentRef.current, saved);
+      });
+    }
+  }, [bookId, currentChapter, chapter?.content]);
+  
+  // Reset restore flag on chapter change
+  useEffect(() => {
+    hasRestoredRef.current = false;
+  }, [currentChapter]);
+  
+  // Flush resume state on unmount
+  useEffect(() => {
+    return () => flushResumeState();
+  }, []);
+  
+  // Track book opened for segmentation
+  useEffect(() => {
+    if (bookId) recordBookOpened();
+  }, [bookId]);
   
   // === FUNNEL ANALYTICS ===
   // Track chapter_started on mount
@@ -331,6 +395,17 @@ export default function Reader() {
       chapterRewardedRef.current = true;
       gamification.completeChapter();
       trackFunnelEvent('chapter_completed', { bookId, chapterNumber: currentChapter });
+      recordChapterCompleted(currentChapter);
+      
+      // Track Ch1 specifically for experiments
+      if (currentChapter === 1) {
+        trackFunnelEvent('chapter_1_completed' as any, { bookId });
+      }
+      // Check if book is complete
+      if (currentChapter === (book?.total_chapters || 0)) {
+        trackFunnelEvent('book_completed', { bookId });
+        recordBookCompleted();
+      }
     }
   }, [readingProgress]); // eslint-disable-line react-hooks/exhaustive-deps
   
@@ -561,8 +636,10 @@ export default function Reader() {
         const finalProgress = isBookComplete ? 100 : overallProgress;
         saveProgress(currentChapter, finalProgress, isBookComplete); // Show toast on completion
       }
+      // Save resume state alongside progress
+      saveCurrentResumeState();
     }, 5000);
-  }, [userId, bookId, book?.total_chapters, currentChapter, saveProgress, quizGating]);
+  }, [userId, bookId, book?.total_chapters, currentChapter, saveProgress, quizGating, saveCurrentResumeState]);
 
   useEffect(() => {
     window.addEventListener("scroll", handleScroll, { passive: true });
@@ -1392,7 +1469,17 @@ export default function Reader() {
             ) : (
               <ContentDisclaimer type="ai" className="mb-6" />
             )}
-            
+
+            {/* Chapter 1 Summary-First (experiment-controlled) */}
+            {showCh1Summary && !ch1SummaryDismissed && chapter?.content && (
+              <ChapterOneSummary
+                chapterTitle={chapter.title}
+                chapterContent={chapter.content}
+                bookTitle={book?.title}
+                wordCount={wordCount}
+                onDismiss={() => setCh1SummaryDismissed(true)}
+              />
+            )}
             {/* Previously in this book - Context for returning readers */}
             {bookId && currentChapter > 1 && (
               <PreviouslyInBookCard
@@ -1817,8 +1904,10 @@ export default function Reader() {
         />
       )}
       
-      {/* AI Companion — lowest priority, only when nothing else active */}
-      {showAICompanion && canShow(interruptionRef.current, 'ai_companion') && (
+      {/* AI Companion — lowest priority, only when nothing else active + calmness budget */}
+      {showAICompanion && canShow(interruptionRef.current, 'ai_companion') && 
+       !isInDeepFlow(readingProgress, elapsedSeconds, lastInterruptionTimeRef.current) &&
+       Math.random() < interventionConfig.aiCompanionFrequency && (
         <AICompanion
           readingProgress={readingProgress}
           chapterNumber={currentChapter}

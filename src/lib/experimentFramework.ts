@@ -10,7 +10,9 @@ export type ExperimentId =
   | 'progressive_disclosure'
   | 'curiosity_gaps'
   | 'ai_companion'
-  | 'visible_gamification_bar';
+  | 'visible_gamification_bar'
+  | 'ch1_summary_first'
+  | 'ch1_guided_start';
 
 export type Variant = 'control' | 'treatment';
 
