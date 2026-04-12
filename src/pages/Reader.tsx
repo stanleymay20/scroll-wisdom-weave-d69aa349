@@ -290,6 +290,11 @@ export default function Reader() {
   const gamification = useGamification();
   const [hookDismissed, setHookDismissed] = useState(false);
   
+  // Reset hook screen on chapter change
+  useEffect(() => {
+    setHookDismissed(false);
+  }, [currentChapter]);
+  
   // Award XP on chapter completion (reading progress reaches 95%+)
   const chapterRewardedRef = useRef(false);
   useEffect(() => {
