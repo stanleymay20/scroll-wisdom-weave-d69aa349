@@ -846,6 +846,13 @@ export default function Reader() {
               onUpdateGoal={updateWeeklyGoal}
               compact
             />
+            {/* Gamification Bar */}
+            <GamificationBar
+              state={gamification.state}
+              xpProgress={gamification.xpProgress}
+              streakStatus={gamification.streakStatus}
+              compact
+            />
           </div>
 
           {/* Collaborative presence */}
