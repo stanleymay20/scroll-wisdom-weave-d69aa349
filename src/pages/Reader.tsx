@@ -83,7 +83,10 @@ import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
 import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecommendation } from "@/lib/adaptiveLearningEngine";
 import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
 import { useGamification } from "@/hooks/useGamification";
-import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap, AICompanion, saveLastSession } from "@/components/gamification";
+import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap, AICompanion, saveLastSession, StuckReaderRescue } from "@/components/gamification";
+import { trackFunnelEvent, trackChapterExit, resetSessionCounters, incrementSessionSections, getSessionStats } from "@/lib/readingFunnel";
+import { createInterruptionState, activateInterruption, deactivateInterruption, canShow } from "@/lib/interruptionManager";
+import { isFeatureEnabled, type ExperimentId } from "@/lib/experimentFramework";
 
 interface BookData {
   id: string;
@@ -290,6 +293,32 @@ export default function Reader() {
   const gamification = useGamification();
   const [hookDismissed, setHookDismissed] = useState(false);
   
+  // === INTERRUPTION MANAGER ===
+  const interruptionRef = useRef(createInterruptionState());
+  
+  // === EXPERIMENT FRAMEWORK ===
+  const showHookScreen = isFeatureEnabled('hook_screen');
+  const showAICompanion = isFeatureEnabled('ai_companion');
+  const showGamBar = isFeatureEnabled('visible_gamification_bar');
+  
+  // === FUNNEL ANALYTICS ===
+  // Track chapter_started on mount
+  useEffect(() => {
+    resetSessionCounters();
+    if (bookId) {
+      trackFunnelEvent('chapter_started', { bookId, chapterNumber: currentChapter });
+    }
+  }, [bookId, currentChapter]);
+  
+  // Track chapter exit on unmount
+  useEffect(() => {
+    return () => {
+      if (bookId) {
+        trackChapterExit(bookId, currentChapter, readingProgress);
+      }
+    };
+  }, [bookId, currentChapter, readingProgress]);
+  
   // Reset hook screen on chapter change
   useEffect(() => {
     setHookDismissed(false);
@@ -301,6 +330,7 @@ export default function Reader() {
     if (readingProgress >= 95 && !chapterRewardedRef.current) {
       chapterRewardedRef.current = true;
       gamification.completeChapter();
+      trackFunnelEvent('chapter_completed', { bookId, chapterNumber: currentChapter });
     }
   }, [readingProgress]); // eslint-disable-line react-hooks/exhaustive-deps
   
@@ -308,6 +338,25 @@ export default function Reader() {
   useEffect(() => {
     chapterRewardedRef.current = false;
   }, [currentChapter]);
+
+  // Update interruption state
+  useEffect(() => {
+    const s = interruptionRef.current;
+    if (!hookDismissed && showHookScreen && chapter) activateInterruption(s, 'hook_screen');
+    else deactivateInterruption(s, 'hook_screen');
+    
+    if (gamification.streakBroken) activateInterruption(s, 'streak_recovery');
+    else deactivateInterruption(s, 'streak_recovery');
+    
+    if (gamification.achievementReward) activateInterruption(s, 'achievement');
+    else deactivateInterruption(s, 'achievement');
+    
+    if (gamification.leveledUp) activateInterruption(s, 'level_milestone');
+    else deactivateInterruption(s, 'level_milestone');
+    
+    if (gamification.lastReward) activateInterruption(s, 'reward_popup');
+    else deactivateInterruption(s, 'reward_popup');
+  }, [hookDismissed, showHookScreen, chapter, gamification.streakBroken, gamification.achievementReward, gamification.leveledUp, gamification.lastReward]);
 
   // Show reflection prompt when engine recommends it (once per progress threshold)
   useEffect(() => {
