@@ -23,8 +23,8 @@ export function GamificationBar({ state, xpProgress, streakStatus, className, co
       {state.streakCurrent > 0 && (
         <div className={cn(
           "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-semibold",
-          streakStatus === 'active' && "bg-orange-500/15 text-orange-600 dark:text-orange-400",
-          streakStatus === 'at_risk' && "bg-amber-500/15 text-amber-600 dark:text-amber-400 animate-pulse",
+          streakStatus === 'active' && "bg-destructive/15 text-destructive",
+          streakStatus === 'at_risk' && "bg-accent/15 text-accent-foreground animate-pulse",
         )}>
           <Flame className="h-3.5 w-3.5" />
           <span>{state.streakCurrent}</span>
@@ -40,10 +40,10 @@ export function GamificationBar({ state, xpProgress, streakStatus, className, co
       {/* XP Progress */}
       {!compact && (
         <div className="flex items-center gap-2 min-w-[80px]">
-          <Zap className="h-3.5 w-3.5 text-amber-500" />
+          <Zap className="h-3.5 w-3.5 text-primary" />
           <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
             <motion.div
-              className="h-full bg-gradient-to-r from-amber-400 to-amber-500 rounded-full"
+              className="h-full bg-primary rounded-full"
               initial={{ width: 0 }}
               animate={{ width: `${xpProgress.percent}%` }}
               transition={{ duration: 0.5, ease: "easeOut" }}
