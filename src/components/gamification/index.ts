@@ -4,3 +4,6 @@ export { ChapterHookScreen } from './ChapterHookScreen';
 export { StreakAlert } from './StreakAlert';
 export { CuriosityGap, SectionLock } from './CuriosityGap';
 export { SectionCompleteCard } from './SectionCompleteCard';
+export { AICompanion } from './AICompanion';
+export { ProgressiveDisclosure } from './ProgressiveDisclosure';
+export { ReEngagementBanner, saveLastSession } from './ReEngagementBanner';

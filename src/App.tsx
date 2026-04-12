@@ -12,6 +12,7 @@ import { PWAInstallPrompt, OfflineIndicator } from "@/components/pwa";
 import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
 import { ErrorBoundary, SectionErrorBoundary } from "@/components/ErrorBoundary";
 import { DiagnosticsPanel } from "@/components/system/DiagnosticsPanel";
+import { ReEngagementBanner } from "@/components/gamification/ReEngagementBanner";
 import { GlobalAudioPlayer } from "@/components/audio/GlobalAudioPlayer";
 import { createLogger, setTraceId } from "@/lib/logger";
 import { notifyError } from "@/lib/errorNotifier";
@@ -65,6 +66,7 @@ const AuditDashboard = lazy(() => import("./pages/AuditDashboard"));
 const UploadPage = lazy(() => import("./pages/Upload"));
 const MasteryDashboard = lazy(() => import("./pages/MasteryDashboard"));
 const MasteryModel = lazy(() => import("./pages/MasteryModel"));
+const QuickLearn = lazy(() => import("./pages/QuickLearn"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
@@ -164,11 +166,13 @@ const App = () => (
                   <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
                   <Route path="/dashboard/mastery" element={<ProtectedRoute><MasteryDashboard /></ProtectedRoute>} />
                   <Route path="/docs/mastery-model" element={<MasteryModel />} />
+                  <Route path="/quick-learn" element={<QuickLearn />} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
+              <ReEngagementBanner />
               <PWAInstallPrompt />
               <GlobalAudioPlayer />
               <DiagnosticsPanel />

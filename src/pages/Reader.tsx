@@ -83,7 +83,7 @@ import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
 import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecommendation } from "@/lib/adaptiveLearningEngine";
 import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
 import { useGamification } from "@/hooks/useGamification";
-import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap } from "@/components/gamification";
+import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap, AICompanion, saveLastSession } from "@/components/gamification";
 
 interface BookData {
   id: string;
@@ -422,6 +422,19 @@ export default function Reader() {
     };
     checkOwnership();
   }, [bookId, userId]);
+
+  // Save last session for re-engagement banner
+  useEffect(() => {
+    if (book && chapter && bookId) {
+      saveLastSession({
+        bookId,
+        bookTitle: book.title,
+        chapterNumber: currentChapter,
+        chapterTitle: chapter.title,
+        progress: readingProgress,
+      });
+    }
+  }, [book, chapter, bookId, currentChapter, readingProgress]);
 
   // Reset reading progress on chapter change
   useEffect(() => {
@@ -1741,6 +1754,14 @@ export default function Reader() {
       <StreakAlert
         streakBroken={gamification.streakBroken}
         onDismiss={gamification.dismissStreakBroken}
+      />
+      
+      {/* AI Companion — contextual encouragement */}
+      <AICompanion
+        readingProgress={readingProgress}
+        chapterNumber={currentChapter}
+        sectionsCompleted={gamification.state.sectionsCompleted}
+        streakDays={gamification.state.streakCurrent}
       />
     </div>
   );
