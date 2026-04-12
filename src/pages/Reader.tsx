@@ -1738,30 +1738,34 @@ export default function Reader() {
           wordCount={chapter.word_count || 500}
           onStart={() => setHookDismissed(true)}
           bookTitle={book?.title}
+          totalChapters={book?.total_chapters || undefined}
+          userLevel={gamification.state.level}
         />
       )}
       
-      {/* Reward Popup — variable rewards */}
       <RewardPopup
         reward={gamification.lastReward}
         onDismiss={gamification.dismissReward}
         leveledUp={gamification.leveledUp}
-        newLevel={gamification.state.level}
+        newLevel={gamification.newLevel}
         onDismissLevelUp={gamification.dismissLevelUp}
+        achievementReward={gamification.achievementReward}
+        onDismissAchievement={gamification.dismissAchievement}
+        streakMilestone={gamification.streakMilestone}
+        onDismissStreakMilestone={gamification.dismissStreakMilestone}
       />
       
-      {/* Streak Alert — loss aversion */}
       <StreakAlert
         streakBroken={gamification.streakBroken}
         onDismiss={gamification.dismissStreakBroken}
       />
       
-      {/* AI Companion — contextual encouragement */}
       <AICompanion
         readingProgress={readingProgress}
         chapterNumber={currentChapter}
         sectionsCompleted={gamification.state.sectionsCompleted}
         streakDays={gamification.state.streakCurrent}
+        bookTitle={book?.title}
       />
     </div>
   );
