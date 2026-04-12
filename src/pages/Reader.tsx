@@ -395,6 +395,17 @@ export default function Reader() {
       chapterRewardedRef.current = true;
       gamification.completeChapter();
       trackFunnelEvent('chapter_completed', { bookId, chapterNumber: currentChapter });
+      recordChapterCompleted(currentChapter);
+      
+      // Track Ch1 specifically for experiments
+      if (currentChapter === 1) {
+        trackFunnelEvent('chapter_1_completed' as any, { bookId });
+      }
+      // Check if book is complete
+      if (currentChapter === (book?.total_chapters || 0)) {
+        trackFunnelEvent('book_completed', { bookId });
+        recordBookCompleted();
+      }
     }
   }, [readingProgress]); // eslint-disable-line react-hooks/exhaustive-deps
   
