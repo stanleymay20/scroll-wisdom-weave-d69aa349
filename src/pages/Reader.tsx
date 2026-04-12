@@ -82,6 +82,8 @@ import { useEditorPresence } from "@/hooks/useCollaboration";
 import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
 import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecommendation } from "@/lib/adaptiveLearningEngine";
 import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
+import { useGamification } from "@/hooks/useGamification";
+import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap } from "@/components/gamification";
 
 interface BookData {
   id: string;
