@@ -9,6 +9,7 @@ import { X, BookOpen, ArrowRight, Flame, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 import { loadLocalState } from "@/lib/gamificationEngine";
+import { trackFunnelEvent } from "@/lib/readingFunnel";
 
 const INACTIVITY_KEY = 'scroll_last_session';
 const BANNER_DISMISSED_KEY = 'scroll_reengagement_dismissed';
@@ -76,6 +77,10 @@ export function ReEngagementBanner() {
   const continueReading = () => {
     if (!session) return;
     dismiss();
+    trackFunnelEvent('resumed_from_banner', {
+      bookId: session.bookId,
+      chapterNumber: session.chapterNumber,
+    });
     navigate(`/read/${session.bookId}/${session.chapterNumber}`);
   };
 

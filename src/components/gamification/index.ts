@@ -7,3 +7,4 @@ export { SectionCompleteCard } from './SectionCompleteCard';
 export { AICompanion } from './AICompanion';
 export { ProgressiveDisclosure } from './ProgressiveDisclosure';
 export { ReEngagementBanner, saveLastSession } from './ReEngagementBanner';
+export { StuckReaderRescue } from './StuckReaderRescue';

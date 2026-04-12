@@ -83,7 +83,10 @@ import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
 import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecommendation } from "@/lib/adaptiveLearningEngine";
 import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
 import { useGamification } from "@/hooks/useGamification";
-import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap, AICompanion, saveLastSession } from "@/components/gamification";
+import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap, AICompanion, saveLastSession, StuckReaderRescue } from "@/components/gamification";
+import { trackFunnelEvent, trackChapterExit, resetSessionCounters, incrementSessionSections, getSessionStats } from "@/lib/readingFunnel";
+import { createInterruptionState, activateInterruption, deactivateInterruption, canShow } from "@/lib/interruptionManager";
+import { isFeatureEnabled, type ExperimentId } from "@/lib/experimentFramework";
 
 interface BookData {
   id: string;
@@ -290,6 +293,32 @@ export default function Reader() {
   const gamification = useGamification();
   const [hookDismissed, setHookDismissed] = useState(false);
   
+  // === INTERRUPTION MANAGER ===
+  const interruptionRef = useRef(createInterruptionState());
+  
+  // === EXPERIMENT FRAMEWORK ===
+  const showHookScreen = isFeatureEnabled('hook_screen');
+  const showAICompanion = isFeatureEnabled('ai_companion');
+  const showGamBar = isFeatureEnabled('visible_gamification_bar');
+  
+  // === FUNNEL ANALYTICS ===
+  // Track chapter_started on mount
+  useEffect(() => {
+    resetSessionCounters();
+    if (bookId) {
+      trackFunnelEvent('chapter_started', { bookId, chapterNumber: currentChapter });
+    }
+  }, [bookId, currentChapter]);
+  
+  // Track chapter exit on unmount
+  useEffect(() => {
+    return () => {
+      if (bookId) {
+        trackChapterExit(bookId, currentChapter, readingProgress);
+      }
+    };
+  }, [bookId, currentChapter, readingProgress]);
+  
   // Reset hook screen on chapter change
   useEffect(() => {
     setHookDismissed(false);
@@ -301,6 +330,7 @@ export default function Reader() {
     if (readingProgress >= 95 && !chapterRewardedRef.current) {
       chapterRewardedRef.current = true;
       gamification.completeChapter();
+      trackFunnelEvent('chapter_completed', { bookId, chapterNumber: currentChapter });
     }
   }, [readingProgress]); // eslint-disable-line react-hooks/exhaustive-deps
   
@@ -308,6 +338,25 @@ export default function Reader() {
   useEffect(() => {
     chapterRewardedRef.current = false;
   }, [currentChapter]);
+
+  // Update interruption state
+  useEffect(() => {
+    const s = interruptionRef.current;
+    if (!hookDismissed && showHookScreen && chapter) activateInterruption(s, 'hook_screen');
+    else deactivateInterruption(s, 'hook_screen');
+    
+    if (gamification.streakBroken) activateInterruption(s, 'streak_recovery');
+    else deactivateInterruption(s, 'streak_recovery');
+    
+    if (gamification.achievementReward) activateInterruption(s, 'achievement');
+    else deactivateInterruption(s, 'achievement');
+    
+    if (gamification.leveledUp) activateInterruption(s, 'level_milestone');
+    else deactivateInterruption(s, 'level_milestone');
+    
+    if (gamification.lastReward) activateInterruption(s, 'reward_popup');
+    else deactivateInterruption(s, 'reward_popup');
+  }, [hookDismissed, showHookScreen, chapter, gamification.streakBroken, gamification.achievementReward, gamification.leveledUp, gamification.lastReward]);
 
   // Show reflection prompt when engine recommends it (once per progress threshold)
   useEffect(() => {
@@ -864,13 +913,15 @@ export default function Reader() {
               onUpdateGoal={updateWeeklyGoal}
               compact
             />
-            {/* Gamification Bar */}
-            <GamificationBar
-              state={gamification.state}
-              xpProgress={gamification.xpProgress}
-              streakStatus={gamification.streakStatus}
-              compact
-            />
+            {/* Gamification Bar — experiment-controlled */}
+            {showGamBar && (
+              <GamificationBar
+                state={gamification.state}
+                xpProgress={gamification.xpProgress}
+                streakStatus={gamification.streakStatus}
+                compact
+              />
+            )}
           </div>
 
           {/* Collaborative presence */}
@@ -1728,10 +1779,10 @@ export default function Reader() {
         </div>
       </footer>
 
-      {/* === GAMIFICATION OVERLAYS === */}
+      {/* === GAMIFICATION OVERLAYS (Interruption-managed) === */}
       
-      {/* Chapter Hook Screen — shown before content */}
-      {chapter && !hookDismissed && (
+      {/* Hook Screen — highest priority */}
+      {showHookScreen && chapter && !hookDismissed && (
         <ChapterHookScreen
           chapterNumber={currentChapter}
           chapterTitle={chapter.title}
@@ -1743,30 +1794,57 @@ export default function Reader() {
         />
       )}
       
-      <RewardPopup
-        reward={gamification.lastReward}
-        onDismiss={gamification.dismissReward}
-        leveledUp={gamification.leveledUp}
-        newLevel={gamification.newLevel}
-        onDismissLevelUp={gamification.dismissLevelUp}
-        achievementReward={gamification.achievementReward}
-        onDismissAchievement={gamification.dismissAchievement}
-        streakMilestone={gamification.streakMilestone}
-        onDismissStreakMilestone={gamification.dismissStreakMilestone}
-      />
+      {/* Streak Recovery — second priority */}
+      {canShow(interruptionRef.current, 'streak_recovery') && (
+        <StreakAlert
+          streakBroken={gamification.streakBroken}
+          onDismiss={gamification.dismissStreakBroken}
+        />
+      )}
       
-      <StreakAlert
-        streakBroken={gamification.streakBroken}
-        onDismiss={gamification.dismissStreakBroken}
-      />
+      {/* Achievement / Level / Reward — only when no higher-priority active */}
+      {canShow(interruptionRef.current, 'reward_popup') && (
+        <RewardPopup
+          reward={gamification.lastReward}
+          onDismiss={gamification.dismissReward}
+          leveledUp={canShow(interruptionRef.current, 'level_milestone') ? gamification.leveledUp : false}
+          newLevel={gamification.newLevel}
+          onDismissLevelUp={gamification.dismissLevelUp}
+          achievementReward={canShow(interruptionRef.current, 'achievement') ? gamification.achievementReward : null}
+          onDismissAchievement={gamification.dismissAchievement}
+          streakMilestone={gamification.streakMilestone}
+          onDismissStreakMilestone={gamification.dismissStreakMilestone}
+        />
+      )}
       
-      <AICompanion
-        readingProgress={readingProgress}
-        chapterNumber={currentChapter}
-        sectionsCompleted={gamification.state.sectionsCompleted}
-        streakDays={gamification.state.streakCurrent}
-        bookTitle={book?.title}
-      />
+      {/* AI Companion — lowest priority, only when nothing else active */}
+      {showAICompanion && canShow(interruptionRef.current, 'ai_companion') && (
+        <AICompanion
+          readingProgress={readingProgress}
+          chapterNumber={currentChapter}
+          sectionsCompleted={gamification.state.sectionsCompleted}
+          streakDays={gamification.state.streakCurrent}
+          bookTitle={book?.title}
+        />
+      )}
+      
+      {/* Stuck Reader Rescue */}
+      {bookId && (
+        <StuckReaderRescue
+          chapterNumber={currentChapter}
+          readingProgress={readingProgress}
+          sectionsCompleted={gamification.state.sectionsCompleted}
+          bookId={bookId}
+          isVisible={hookDismissed && !gamification.streakBroken}
+          onListenInstead={() => setShowTTS(true)}
+          onGuidedMode={() => setGuidedModeActive(true)}
+          onContinue={() => {
+            if (contentRef.current) {
+              contentRef.current.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

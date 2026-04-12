@@ -7,6 +7,7 @@ import { useState, useEffect, useCallback, useRef } from "react";
 import { motion, AnimatePresence, useMotionValue, useTransform, PanInfo } from "framer-motion";
 import { useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
+import { trackFunnelEvent } from "@/lib/readingFunnel";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { 
@@ -290,7 +291,14 @@ export default function QuickLearn() {
                   
                   <Button
                     size="sm"
-                    onClick={() => navigate(`/read/${currentCard.bookId}/${currentCard.chapterNumber}`)}
+                    onClick={() => {
+                      trackFunnelEvent('quicklearn_to_reader_click', {
+                        bookId: currentCard.bookId,
+                        chapterNumber: currentCard.chapterNumber,
+                        sourceCard: currentCard.id,
+                      });
+                      navigate(`/read/${currentCard.bookId}/${currentCard.chapterNumber}`);
+                    }}
                     className="gap-1.5 rounded-full flex-1"
                   >
                     Read Full Chapter <ArrowRight className="h-3.5 w-3.5" />
