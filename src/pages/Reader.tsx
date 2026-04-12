@@ -1469,7 +1469,17 @@ export default function Reader() {
             ) : (
               <ContentDisclaimer type="ai" className="mb-6" />
             )}
-            
+
+            {/* Chapter 1 Summary-First (experiment-controlled) */}
+            {showCh1Summary && !ch1SummaryDismissed && chapter?.content && (
+              <ChapterOneSummary
+                chapterTitle={chapter.title}
+                chapterContent={chapter.content}
+                bookTitle={book?.title}
+                wordCount={wordCount}
+                onDismiss={() => setCh1SummaryDismissed(true)}
+              />
+            )}
             {/* Previously in this book - Context for returning readers */}
             {bookId && currentChapter > 1 && (
               <PreviouslyInBookCard
