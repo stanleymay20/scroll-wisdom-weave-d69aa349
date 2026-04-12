@@ -423,6 +423,19 @@ export default function Reader() {
     checkOwnership();
   }, [bookId, userId]);
 
+  // Save last session for re-engagement banner
+  useEffect(() => {
+    if (book && chapter && bookId) {
+      saveLastSession({
+        bookId,
+        bookTitle: book.title,
+        chapterNumber: currentChapter,
+        chapterTitle: chapter.title,
+        progress: readingProgress,
+      });
+    }
+  }, [book, chapter, bookId, currentChapter, readingProgress]);
+
   // Reset reading progress on chapter change
   useEffect(() => {
     setReadingProgress(0);
