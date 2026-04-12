@@ -228,7 +228,7 @@ export async function loadResumeFromDatabase(bookId: string): Promise<ResumeStat
     if (!user) return null;
 
     const { data } = await supabase
-      .from('pmf_events' as any)
+      .from('pmf_events')
       .select('metadata, created_at')
       .eq('user_id', user.id)
       .eq('event_type', 'resume_state_sync')

@@ -68,7 +68,7 @@ export default function ExperimentReport() {
     try {
       // Fetch all experiment events
       const { data: events } = await supabase
-        .from('pmf_events' as any)
+        .from('pmf_events')
         .select('event_type, metadata, user_id, created_at')
         .in('event_type', ['experiment_assigned', 'experiment_outcome', 'chapter_started', 'chapter_completed', 'book_completed', 'returned_within_24h', 'quicklearn_to_reader_click', 'section_completed', 'first_section_completed', 'chapter_1_completed', 'chapter_2_started'])
         .order('created_at', { ascending: false })
@@ -84,7 +84,7 @@ export default function ExperimentReport() {
       const userVariants = new Map<string, Map<string, string>>(); // experiment → (userId → variant)
       const userEvents = new Map<string, Set<string>>(); // userId → set of event types
 
-      for (const event of events) {
+      for (const event of events as any[]) {
         const meta = event.metadata as any;
         const userId = event.user_id as string;
 
