@@ -83,10 +83,13 @@ import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
 import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecommendation } from "@/lib/adaptiveLearningEngine";
 import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
 import { useGamification } from "@/hooks/useGamification";
-import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap, AICompanion, saveLastSession, StuckReaderRescue } from "@/components/gamification";
+import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap, AICompanion, saveLastSession, StuckReaderRescue, ChapterOneSummary } from "@/components/gamification";
 import { trackFunnelEvent, trackChapterExit, resetSessionCounters, incrementSessionSections, getSessionStats } from "@/lib/readingFunnel";
 import { createInterruptionState, activateInterruption, deactivateInterruption, canShow } from "@/lib/interruptionManager";
 import { isFeatureEnabled, type ExperimentId } from "@/lib/experimentFramework";
+import { saveResumeState, getResumeState, findCurrentParagraphAnchor, restorePosition, flushResumeState, type ResumeState } from "@/lib/resumeEngine";
+import { loadReaderProfile, classifyReader, getInterventionConfig, recordBookOpened, recordChapterCompleted, recordBookCompleted } from "@/lib/readerSegmentation";
+import { requestInterruptionSlot, isInDeepFlow } from "@/lib/calmnessRules";
 
 interface BookData {
   id: string;
