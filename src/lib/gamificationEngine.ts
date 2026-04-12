@@ -309,7 +309,7 @@ export async function loadFromDatabase(): Promise<GamificationState | null> {
     sectionsCompleted: data.sections_completed,
     chaptersCompleted: data.chapters_completed,
     booksCompleted: data.books_completed,
-    rewardsEarned: (data.rewards_earned as RewardEvent[]) || [],
+    rewardsEarned: (data.rewards_earned as unknown as RewardEvent[]) || [],
   };
 }
 
