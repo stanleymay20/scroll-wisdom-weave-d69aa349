@@ -1904,8 +1904,10 @@ export default function Reader() {
         />
       )}
       
-      {/* AI Companion — lowest priority, only when nothing else active */}
-      {showAICompanion && canShow(interruptionRef.current, 'ai_companion') && (
+      {/* AI Companion — lowest priority, only when nothing else active + calmness budget */}
+      {showAICompanion && canShow(interruptionRef.current, 'ai_companion') && 
+       !isInDeepFlow(readingProgress, elapsedSeconds, lastInterruptionTimeRef.current) &&
+       Math.random() < interventionConfig.aiCompanionFrequency && (
         <AICompanion
           readingProgress={readingProgress}
           chapterNumber={currentChapter}
