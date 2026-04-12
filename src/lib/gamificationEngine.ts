@@ -12,14 +12,14 @@ import { supabase } from "@/integrations/supabase/client";
 
 // === XP CONSTANTS ===
 export const XP_REWARDS = {
-  SECTION_COMPLETE: 10,
-  CHAPTER_COMPLETE: 50,
-  QUIZ_PASS: 25,
+  SECTION_COMPLETE: 5,
+  CHAPTER_COMPLETE: 75,
+  QUIZ_PASS: 30,
   DAILY_LOGIN: 5,
-  BOOK_COMPLETE: 200,
-  STREAK_BONUS_3: 15,
-  STREAK_BONUS_7: 30,
-  STREAK_BONUS_30: 100,
+  BOOK_COMPLETE: 500,
+  STREAK_BONUS_3: 10,
+  STREAK_BONUS_7: 25,
+  STREAK_BONUS_30: 75,
 } as const;
 
 // === COMBO MULTIPLIER ===
@@ -183,16 +183,16 @@ const REWARD_POOL: Array<{ weight: number; generator: (xp: number, context: { co
     generator: (_xp, ctx) => {
       const messages = ctx.streak >= 3
         ? [
-            `🔥 ${ctx.streak}-day streak power! You're unstoppable`,
-            `💪 Streak warriors like you retain 4x more knowledge`,
-            `⚡ Your momentum is in the top 5% of all learners`,
+            `🔥 ${ctx.streak}-day streak — your consistency is building real understanding`,
+            `💪 Showing up daily is how deep learning happens`,
+            `⚡ Steady momentum — you're making this a habit`,
           ]
         : [
-            "🧠 You're building neural pathways that 92% of learners never reach",
-            "💡 Your consistency is in the top 15% of all readers",
-            "🎯 Keep this pace and you'll finish 3x faster than average",
-            "⚡ Your learning velocity just increased — momentum is real",
+            "🧠 You're building understanding one section at a time",
+            "💡 Consistent effort is the best learning strategy",
+            "⚡ Your momentum is real — keep going",
             "🌱 Every section compounds — you're investing in future you",
+            "🎯 Steady progress adds up — you're doing great",
           ];
       return {
         type: 'encouragement',
@@ -205,11 +205,11 @@ const REWARD_POOL: Array<{ weight: number; generator: (xp: number, context: { co
     weight: 18,
     generator: () => {
       const insights = [
-        "🔥 Rare Insight: Only 12% of readers reach this depth of understanding",
-        "💎 Hidden Pattern Detected: You're connecting ideas across chapters",
-        "🌟 Breakthrough Moment: This concept unlocks 3 advanced topics ahead",
-        "🧩 Deep Connection: What you just learned links to a powerful framework",
-        "🔬 Cross-Domain Link: This pattern appears in 4+ other disciplines",
+        "💎 You're connecting ideas across chapters — that's real understanding",
+        "🌟 This concept unlocks advanced topics ahead",
+        "🧩 What you just learned links to a powerful framework",
+        "🔬 This pattern appears across multiple disciplines",
+        "💡 You're going deeper than surface level — well done",
       ];
       return {
         type: 'rare_insight',
@@ -247,7 +247,7 @@ const REWARD_POOL: Array<{ weight: number; generator: (xp: number, context: { co
     weight: 5,
     generator: () => ({
       type: 'rare_insight',
-      message: "⭐ LEGENDARY: You've reached a mastery milestone that fewer than 3% achieve",
+      message: "⭐ Mastery milestone reached — your understanding is deepening",
       timestamp: new Date().toISOString(), rarity: 'legendary',
     }),
   },
@@ -255,7 +255,7 @@ const REWARD_POOL: Array<{ weight: number; generator: (xp: number, context: { co
     weight: 3,
     generator: () => ({
       type: 'achievement',
-      message: "🏆 EPIC: You've unlocked a hidden achievement — Scholar's Dedication",
+      message: "🏆 Achievement Unlocked — Scholar's Dedication",
       timestamp: new Date().toISOString(), rarity: 'legendary',
     }),
   },
@@ -274,20 +274,19 @@ export function generateReward(baseXP: number, context: { combo: number; streak:
 // === CURIOSITY GAP MESSAGES (Contextual) ===
 const CURIOSITY_GAPS: Record<string, string[]> = {
   early: [
-    "What comes next will change how you think about this entirely…",
-    "Most people misunderstand the next concept — you won't.",
     "The foundation you just built enables something powerful next…",
+    "The next section builds directly on what you just learned.",
+    "You're setting up the key concepts — keep going.",
   ],
   mid: [
-    "The next section contains the key insight that ties everything together.",
-    "You're about to discover something that surprises even experts.",
+    "The next section ties several ideas together.",
     "The pattern you've been building toward reveals itself next.",
+    "This is where the pieces start fitting together.",
   ],
   late: [
-    "Don't stop now — the breakthrough idea is in the next section.",
-    "Warning: the next section may permanently change your perspective.",
+    "You're close to finishing — the final ideas are just ahead.",
     "This is where it gets really interesting…",
-    "The final piece of the puzzle is one section away.",
+    "The last section brings it all together.",
   ],
 };
 
@@ -301,12 +300,12 @@ export function getCuriosityGap(progressPercent: number = 50): string {
 // === HOOK MESSAGES (Book-aware) ===
 const CHAPTER_HOOKS: Record<string, string[]> = {
   default: [
-    "This chapter contains an idea that will reshape your understanding",
-    "In the next 3 minutes, you'll learn something most people never discover",
-    "One powerful concept. Let's unlock it together.",
-    "Ready for the insight that connects everything?",
-    "This section separates beginners from experts",
-    "What you're about to learn took researchers decades to figure out",
+    "Let's explore the next key idea together",
+    "One concept at a time — here's what's next",
+    "Ready to continue? This chapter builds on what you know",
+    "The next idea connects to what you've already learned",
+    "A short read that adds to your understanding",
+    "Let's pick up where you left off",
   ],
 };
 

@@ -48,10 +48,10 @@ export function StreakAlert({ streakBroken, previousStreak = 0, onDismiss, onSta
             </div>
             
             <p className="text-sm text-muted-foreground mb-1">
-              Start again today — every champion has had to restart.
+              Start again today — one section is all it takes.
             </p>
             <p className="text-xs text-muted-foreground/70 mb-4">
-              The best readers recover quickly. One section is all it takes.
+              Pick up where you left off and rebuild your streak.
             </p>
             
             <Button 

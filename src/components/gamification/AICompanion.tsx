@@ -19,45 +19,38 @@ interface AICompanionProps {
 
 const POOLS: Record<string, string[]> = {
   start: [
-    "You're off to a great start — let's build momentum!",
-    "Most people never start. You already have. 💪",
-    "The first section is always the hardest. You got this.",
-    "Every expert was once a beginner. You're on the path.",
+    "Good start — take your time with this section.",
+    "The first section sets the stage. You're on it. 💪",
+    "Let's build from here, one idea at a time.",
   ],
   momentum: [
-    "You're in the flow now — keep going!",
-    "Most readers stop here. Not you. 🔥",
-    "Your focus is impressive. One more section?",
+    "You're in a good flow — keep going!",
+    "Nice focus. One more section?",
     "You're building real understanding right now.",
-    "This is the kind of deep focus that changes careers.",
   ],
   deep: [
-    "You've gone deeper than 85% of readers. Incredible.",
-    "This is where the real insights live. Stay with it.",
-    "You're connecting ideas across sections — that's mastery.",
-    "The next section reveals the pattern. Keep pushing.",
-    "You're in the top 15% of engagement. Remarkable.",
+    "You've gone deep into this chapter. Stay with it.",
+    "You're connecting ideas across sections — that's where understanding lives.",
+    "The next section builds on what you've learned.",
   ],
   almostDone: [
-    "You're almost there — just one more push!",
-    "The finish line is in sight. Don't stop now. 🏁",
-    "Complete this chapter and you'll remember it forever.",
-    "So close! Your future self will thank you for finishing.",
+    "You're almost there — just a bit more!",
+    "So close to finishing this chapter. Keep going. 🏁",
+    "Your future self will thank you for finishing.",
   ],
   streak: [
-    "🔥 Your streak is making this a habit. Beautiful.",
-    "Consistent readers retain 3x more. You're proving it.",
-    "Day after day — this is how mastery works.",
-    "Your dedication puts you in the top 5% of learners.",
+    "🔥 Your streak is making this a habit.",
+    "Day after day — this is how understanding deepens.",
+    "Consistency matters. You're showing up.",
   ],
   fast: [
-    "⚡ You're reading fast! Make sure you absorb the key ideas.",
-    "Great pace! Consider pausing on the next key concept.",
+    "⚡ You're reading fast — take a moment on key ideas.",
+    "Good pace! Consider pausing on the next key concept.",
   ],
   bookAware: [
     "This chapter of \"{book}\" is building your foundation.",
-    "You're making real progress through \"{book}\"!",
-    "\"{book}\" gets even better from here.",
+    "You're making progress through \"{book}\".",
+    "\"{book}\" gets richer from here.",
   ],
 };
 
