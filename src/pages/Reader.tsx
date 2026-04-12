@@ -82,6 +82,8 @@ import { useEditorPresence } from "@/hooks/useCollaboration";
 import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
 import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecommendation } from "@/lib/adaptiveLearningEngine";
 import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
+import { useGamification } from "@/hooks/useGamification";
+import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap } from "@/components/gamification";
 
 interface BookData {
   id: string;
@@ -283,6 +285,29 @@ export default function Reader() {
     });
     return computeAdaptiveRecommendation(state);
   }, [readingProgress, currentChapter, book?.total_chapters, cognitiveLevel, competency.progress]);
+
+  // === GAMIFICATION ENGINE ===
+  const gamification = useGamification();
+  const [hookDismissed, setHookDismissed] = useState(false);
+  
+  // Reset hook screen on chapter change
+  useEffect(() => {
+    setHookDismissed(false);
+  }, [currentChapter]);
+  
+  // Award XP on chapter completion (reading progress reaches 95%+)
+  const chapterRewardedRef = useRef(false);
+  useEffect(() => {
+    if (readingProgress >= 95 && !chapterRewardedRef.current) {
+      chapterRewardedRef.current = true;
+      gamification.completeChapter();
+    }
+  }, [readingProgress]); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Reset chapter reward tracking on chapter change
+  useEffect(() => {
+    chapterRewardedRef.current = false;
+  }, [currentChapter]);
 
   // Show reflection prompt when engine recommends it (once per progress threshold)
   useEffect(() => {
@@ -824,6 +849,13 @@ export default function Reader() {
               elapsedSeconds={elapsedSeconds}
               weeklyProgress={weeklyProgress}
               onUpdateGoal={updateWeeklyGoal}
+              compact
+            />
+            {/* Gamification Bar */}
+            <GamificationBar
+              state={gamification.state}
+              xpProgress={gamification.xpProgress}
+              streakStatus={gamification.streakStatus}
               compact
             />
           </div>
@@ -1682,6 +1714,34 @@ export default function Reader() {
           </Button>
         </div>
       </footer>
+
+      {/* === GAMIFICATION OVERLAYS === */}
+      
+      {/* Chapter Hook Screen — shown before content */}
+      {chapter && !hookDismissed && (
+        <ChapterHookScreen
+          chapterNumber={currentChapter}
+          chapterTitle={chapter.title}
+          wordCount={chapter.word_count || 500}
+          onStart={() => setHookDismissed(true)}
+          bookTitle={book?.title}
+        />
+      )}
+      
+      {/* Reward Popup — variable rewards */}
+      <RewardPopup
+        reward={gamification.lastReward}
+        onDismiss={gamification.dismissReward}
+        leveledUp={gamification.leveledUp}
+        newLevel={gamification.state.level}
+        onDismissLevelUp={gamification.dismissLevelUp}
+      />
+      
+      {/* Streak Alert — loss aversion */}
+      <StreakAlert
+        streakBroken={gamification.streakBroken}
+        onDismiss={gamification.dismissStreakBroken}
+      />
     </div>
   );
 }
