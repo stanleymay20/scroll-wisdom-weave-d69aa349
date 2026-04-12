@@ -636,8 +636,10 @@ export default function Reader() {
         const finalProgress = isBookComplete ? 100 : overallProgress;
         saveProgress(currentChapter, finalProgress, isBookComplete); // Show toast on completion
       }
+      // Save resume state alongside progress
+      saveCurrentResumeState();
     }, 5000);
-  }, [userId, bookId, book?.total_chapters, currentChapter, saveProgress, quizGating]);
+  }, [userId, bookId, book?.total_chapters, currentChapter, saveProgress, quizGating, saveCurrentResumeState]);
 
   useEffect(() => {
     window.addEventListener("scroll", handleScroll, { passive: true });
