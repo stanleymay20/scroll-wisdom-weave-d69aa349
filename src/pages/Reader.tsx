@@ -286,6 +286,24 @@ export default function Reader() {
     return computeAdaptiveRecommendation(state);
   }, [readingProgress, currentChapter, book?.total_chapters, cognitiveLevel, competency.progress]);
 
+  // === GAMIFICATION ENGINE ===
+  const gamification = useGamification();
+  const [hookDismissed, setHookDismissed] = useState(false);
+  
+  // Award XP on chapter completion (reading progress reaches 95%+)
+  const chapterRewardedRef = useRef(false);
+  useEffect(() => {
+    if (readingProgress >= 95 && !chapterRewardedRef.current) {
+      chapterRewardedRef.current = true;
+      gamification.completeChapter();
+    }
+  }, [readingProgress]); // eslint-disable-line react-hooks/exhaustive-deps
+  
+  // Reset chapter reward tracking on chapter change
+  useEffect(() => {
+    chapterRewardedRef.current = false;
+  }, [currentChapter]);
+
   // Show reflection prompt when engine recommends it (once per progress threshold)
   useEffect(() => {
     if (adaptiveRec.showReflection && readingProgress >= 95 && reflectionDismissedAt < 95) {
