@@ -1966,6 +1966,3 @@ export default function Reader() {
     </div>
   );
 }
-    </div>
-  );
-}
