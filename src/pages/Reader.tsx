@@ -424,7 +424,7 @@ export default function Reader() {
       
       // Track Ch1 specifically for experiments
       if (currentChapter === 1) {
-        trackFunnelEvent('chapter_1_completed' as any, { bookId });
+        trackFunnelEvent('chapter_1_completed', { bookId });
       }
       // Check if book is complete
       if (currentChapter === (book?.total_chapters || 0)) {
