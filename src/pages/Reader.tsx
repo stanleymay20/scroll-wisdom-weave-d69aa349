@@ -301,12 +301,23 @@ export default function Reader() {
   const interruptionRef = useRef(createInterruptionState());
   const lastInterruptionTimeRef = useRef(0);
   
+  // === AI COMPANION VISIBILITY (computed once per milestone, not per render) ===
+  const [aiCompanionAllowed, setAiCompanionAllowed] = useState(true);
+  
+  // === SECTION COMPLETION TRACKER ===
+  const sectionTrackerRef = useRef<SectionCompletionTracker | null>(null);
+  
   // === READER SEGMENTATION ===
   const readerSegment = useMemo(() => {
     const profile = loadReaderProfile();
     return classifyReader(profile);
   }, []);
   const interventionConfig = useMemo(() => getInterventionConfig(readerSegment), [readerSegment]);
+  
+  // Sync streak from gamification into segmentation
+  useEffect(() => {
+    syncStreakFromGamification(gamification.state.streakCurrent);
+  }, [gamification.state.streakCurrent]);
   
   // === EXPERIMENT FRAMEWORK ===
   const showHookScreen = isFeatureEnabled('hook_screen');
