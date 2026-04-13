@@ -458,6 +458,11 @@ export default function Reader() {
     else deactivateInterruption(s, 'reward_popup');
   }, [hookDismissed, showHookScreen, chapter, gamification.streakBroken, gamification.achievementReward, gamification.leveledUp, gamification.lastReward]);
 
+  // AI companion frequency: decide ONCE per chapter, not per render
+  useEffect(() => {
+    setAiCompanionAllowed(Math.random() < interventionConfig.aiCompanionFrequency);
+  }, [currentChapter, interventionConfig.aiCompanionFrequency]);
+
   // Show reflection prompt when engine recommends it (once per progress threshold)
   useEffect(() => {
     if (adaptiveRec.showReflection && readingProgress >= 95 && reflectionDismissedAt < 95) {
@@ -467,7 +472,7 @@ export default function Reader() {
       setShowReflectionPause(true);
     }
   }, [adaptiveRec.showReflection, adaptiveRec.showRecap, readingProgress, reflectionDismissedAt]);
-  
+
   // Reset pendingAutoPlay after it's been consumed (when chapter content loads)
   useEffect(() => {
     if (pendingAutoPlay) {
