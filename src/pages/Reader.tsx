@@ -367,10 +367,20 @@ export default function Reader() {
     hasRestoredRef.current = false;
   }, [currentChapter]);
   
-  // Flush resume state on unmount
+  // Flush resume state on unmount AND save on visibility change
   useEffect(() => {
-    return () => flushResumeState();
-  }, []);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        saveCurrentResumeState();
+        flushResumeState();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      flushResumeState();
+    };
+  }, [saveCurrentResumeState]);
   
   // Track book opened for segmentation
   useEffect(() => {
