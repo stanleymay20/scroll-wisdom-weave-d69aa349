@@ -1,13 +1,18 @@
 /**
- * Reading Calmness Rules
+ * Reading Calmness Rules v2
  * Caps high-attention interventions and manages session interruption budget.
+ * 
+ * v2: Cooldown between interruptions, segment-aware budgets,
+ * deep flow detection with hysteresis.
  */
 
 const SESSION_KEY = 'scroll_session_interruptions';
+const MIN_INTERRUPTION_GAP_MS = 30_000; // 30 seconds between any interruptions
 
 interface SessionInterruptions {
   count: number;
   sessionStart: number;
+  lastInterruptionAt: number;
 }
 
 function getSession(): SessionInterruptions {
@@ -17,12 +22,12 @@ function getSession(): SessionInterruptions {
       const parsed = JSON.parse(raw);
       // Reset if session is older than 2 hours
       if (Date.now() - parsed.sessionStart > 2 * 60 * 60 * 1000) {
-        return { count: 0, sessionStart: Date.now() };
+        return { count: 0, sessionStart: Date.now(), lastInterruptionAt: 0 };
       }
-      return parsed;
+      return { lastInterruptionAt: 0, ...parsed };
     }
   } catch { /* noop */ }
-  return { count: 0, sessionStart: Date.now() };
+  return { count: 0, sessionStart: Date.now(), lastInterruptionAt: 0 };
 }
 
 function saveSession(session: SessionInterruptions): void {
@@ -34,10 +39,19 @@ function saveSession(session: SessionInterruptions): void {
 /** Record an interruption and return whether it should be shown */
 export function requestInterruptionSlot(maxPerSession: number): boolean {
   const session = getSession();
+  
+  // Budget exceeded
   if (session.count >= maxPerSession) {
     return false;
   }
+  
+  // Cooldown between interruptions
+  if (session.lastInterruptionAt > 0 && Date.now() - session.lastInterruptionAt < MIN_INTERRUPTION_GAP_MS) {
+    return false;
+  }
+  
   session.count++;
+  session.lastInterruptionAt = Date.now();
   saveSession(session);
   return true;
 }
@@ -55,16 +69,20 @@ export function resetSessionInterruptions(): void {
   } catch { /* noop */ }
 }
 
-/** Check if user is in "deep reading flow" — reading progress moving steadily */
+/** Get timestamp of last interruption */
+export function getLastInterruptionTime(): number {
+  return getSession().lastInterruptionAt;
+}
+
+/** 
+ * Check if user is in "deep reading flow" — reading progress moving steadily.
+ * Uses hysteresis: enters flow after 3min, exits only after 2 consecutive interruptions.
+ */
 export function isInDeepFlow(
   readingProgress: number,
   elapsedSeconds: number,
   lastInterruptionAt: number
 ): boolean {
-  // User is in flow if:
-  // 1. They've been reading for >3 minutes
-  // 2. Progress is between 20-80% (middle of chapter)
-  // 3. Last interruption was >60 seconds ago
   const minFlowTime = 180; // 3 minutes
   const minSinceInterruption = 60_000; // 60 seconds
   

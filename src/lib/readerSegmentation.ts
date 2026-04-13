@@ -1,6 +1,9 @@
 /**
- * Reader Segmentation — Deterministic, behavior-based segments
+ * Reader Segmentation v2 — Deterministic, behavior-based segments
  * Used to personalize intervention strength.
+ * 
+ * v2: Syncs streak from gamification, tracks first visit date,
+ * uses gamification state as source of truth for completion counts.
  */
 
 export type ReaderSegment =
@@ -19,6 +22,8 @@ export interface ReaderProfile {
   daysSinceFirstVisit: number;
   sessionCount: number;
   stuckVisits: number; // times returned to ch1 without progressing
+  firstVisitDate: number; // timestamp
+  ch1CompletionCount: number; // raw count for rate calculation
 }
 
 /**
@@ -73,7 +78,7 @@ export function getInterventionConfig(segment: ReaderSegment): InterventionConfi
         maxInterruptionsPerSession: 3,
         showSummaryFirst: true,
         defaultGuidedMode: true,
-        showRescuePrompts: false, // don't overwhelm new users
+        showRescuePrompts: false,
         rewardVisibility: 0.8,
         aiCompanionFrequency: 0.6,
       };
@@ -120,11 +125,7 @@ export function getInterventionConfig(segment: ReaderSegment): InterventionConfi
 
 const PROFILE_KEY = 'scroll_reader_profile';
 
-export function loadReaderProfile(): ReaderProfile {
-  try {
-    const raw = localStorage.getItem(PROFILE_KEY);
-    if (raw) return JSON.parse(raw);
-  } catch { /* noop */ }
+function getDefaultProfile(): ReaderProfile {
   return {
     totalBooksOpened: 0,
     booksCompleted: 0,
@@ -134,7 +135,29 @@ export function loadReaderProfile(): ReaderProfile {
     daysSinceFirstVisit: 0,
     sessionCount: 1,
     stuckVisits: 0,
+    firstVisitDate: Date.now(),
+    ch1CompletionCount: 0,
   };
+}
+
+export function loadReaderProfile(): ReaderProfile {
+  try {
+    const raw = localStorage.getItem(PROFILE_KEY);
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      const profile: ReaderProfile = { ...getDefaultProfile(), ...parsed };
+      
+      // Compute daysSinceFirstVisit dynamically
+      if (profile.firstVisitDate) {
+        profile.daysSinceFirstVisit = Math.floor(
+          (Date.now() - profile.firstVisitDate) / (1000 * 60 * 60 * 24)
+        );
+      }
+      
+      return profile;
+    }
+  } catch { /* noop */ }
+  return getDefaultProfile();
 }
 
 export function saveReaderProfile(profile: ReaderProfile): void {
@@ -154,10 +177,10 @@ export function recordChapterCompleted(chapterNumber: number): void {
   const p = loadReaderProfile();
   p.chaptersCompleted++;
   if (chapterNumber === 1) {
-    // Update ch1 completion rate (rolling average)
-    const total = p.totalBooksOpened || 1;
-    const completedCh1s = Math.round(p.ch1CompletionRate * (total - 1)) + 1;
-    p.ch1CompletionRate = completedCh1s / total;
+    p.ch1CompletionCount = (p.ch1CompletionCount || 0) + 1;
+    // Accurate rate: ch1 completions / total books opened (min 1)
+    const total = Math.max(1, p.totalBooksOpened);
+    p.ch1CompletionRate = Math.min(1, p.ch1CompletionCount / total);
   }
   saveReaderProfile(p);
 }
@@ -174,8 +197,17 @@ export function recordStuckVisit(): void {
   saveReaderProfile(p);
 }
 
-export function updateStreakInProfile(streak: number): void {
+/** Sync streak from gamification engine (call on mount) */
+export function syncStreakFromGamification(streak: number): void {
   const p = loadReaderProfile();
-  p.currentStreak = streak;
-  saveReaderProfile(p);
+  if (p.currentStreak !== streak) {
+    p.currentStreak = streak;
+    saveReaderProfile(p);
+  }
+}
+
+/** Get the current segment for display/debugging */
+export function getCurrentSegment(): { segment: ReaderSegment; profile: ReaderProfile } {
+  const profile = loadReaderProfile();
+  return { segment: classifyReader(profile), profile };
 }
