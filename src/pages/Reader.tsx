@@ -84,12 +84,13 @@ import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecomm
 import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
 import { useGamification } from "@/hooks/useGamification";
 import { GamificationBar, RewardPopup, ChapterHookScreen, StreakAlert, CuriosityGap, AICompanion, saveLastSession, StuckReaderRescue, ChapterOneSummary } from "@/components/gamification";
-import { trackFunnelEvent, trackChapterExit, resetSessionCounters, incrementSessionSections, getSessionStats } from "@/lib/readingFunnel";
-import { createInterruptionState, activateInterruption, deactivateInterruption, canShow } from "@/lib/interruptionManager";
+import { trackFunnelEvent, trackChapterExit, trackSectionCompleted, resetSessionCounters, getSessionStats } from "@/lib/readingFunnel";
+import { createInterruptionState, activateInterruption, deactivateInterruption, canShow, isOverBudget } from "@/lib/interruptionManager";
 import { isFeatureEnabled, type ExperimentId } from "@/lib/experimentFramework";
 import { saveResumeState, getResumeState, findCurrentParagraphAnchor, restorePosition, flushResumeState, type ResumeState } from "@/lib/resumeEngine";
-import { loadReaderProfile, classifyReader, getInterventionConfig, recordBookOpened, recordChapterCompleted, recordBookCompleted } from "@/lib/readerSegmentation";
-import { requestInterruptionSlot, isInDeepFlow } from "@/lib/calmnessRules";
+import { loadReaderProfile, classifyReader, getInterventionConfig, recordBookOpened, recordChapterCompleted, recordBookCompleted, syncStreakFromGamification } from "@/lib/readerSegmentation";
+import { requestInterruptionSlot, isInDeepFlow, getLastInterruptionTime } from "@/lib/calmnessRules";
+import { SectionCompletionTracker, type CompletionResult } from "@/lib/sectionCompletion";
 
 interface BookData {
   id: string;
@@ -300,12 +301,23 @@ export default function Reader() {
   const interruptionRef = useRef(createInterruptionState());
   const lastInterruptionTimeRef = useRef(0);
   
+  // === AI COMPANION VISIBILITY (computed once per milestone, not per render) ===
+  const [aiCompanionAllowed, setAiCompanionAllowed] = useState(true);
+  
+  // === SECTION COMPLETION TRACKER ===
+  const sectionTrackerRef = useRef<SectionCompletionTracker | null>(null);
+  
   // === READER SEGMENTATION ===
   const readerSegment = useMemo(() => {
     const profile = loadReaderProfile();
     return classifyReader(profile);
   }, []);
   const interventionConfig = useMemo(() => getInterventionConfig(readerSegment), [readerSegment]);
+  
+  // Sync streak from gamification into segmentation
+  useEffect(() => {
+    syncStreakFromGamification(gamification.state.streakCurrent);
+  }, [gamification.state.streakCurrent]);
   
   // === EXPERIMENT FRAMEWORK ===
   const showHookScreen = isFeatureEnabled('hook_screen');
@@ -355,10 +367,20 @@ export default function Reader() {
     hasRestoredRef.current = false;
   }, [currentChapter]);
   
-  // Flush resume state on unmount
+  // Flush resume state on unmount AND save on visibility change
   useEffect(() => {
-    return () => flushResumeState();
-  }, []);
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') {
+        saveCurrentResumeState();
+        flushResumeState();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      flushResumeState();
+    };
+  }, [saveCurrentResumeState]);
   
   // Track book opened for segmentation
   useEffect(() => {
@@ -374,14 +396,17 @@ export default function Reader() {
     }
   }, [bookId, currentChapter]);
   
-  // Track chapter exit on unmount
+  // Track chapter exit on unmount — use ref to avoid stale closure
+  const readingProgressRef = useRef(readingProgress);
+  readingProgressRef.current = readingProgress;
+  
   useEffect(() => {
     return () => {
       if (bookId) {
-        trackChapterExit(bookId, currentChapter, readingProgress);
+        trackChapterExit(bookId, currentChapter, readingProgressRef.current);
       }
     };
-  }, [bookId, currentChapter, readingProgress]);
+  }, [bookId, currentChapter]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Reset hook screen on chapter change
   useEffect(() => {
@@ -399,7 +424,7 @@ export default function Reader() {
       
       // Track Ch1 specifically for experiments
       if (currentChapter === 1) {
-        trackFunnelEvent('chapter_1_completed' as any, { bookId });
+        trackFunnelEvent('chapter_1_completed', { bookId });
       }
       // Check if book is complete
       if (currentChapter === (book?.total_chapters || 0)) {
@@ -433,6 +458,11 @@ export default function Reader() {
     else deactivateInterruption(s, 'reward_popup');
   }, [hookDismissed, showHookScreen, chapter, gamification.streakBroken, gamification.achievementReward, gamification.leveledUp, gamification.lastReward]);
 
+  // AI companion frequency: decide ONCE per chapter, not per render
+  useEffect(() => {
+    setAiCompanionAllowed(Math.random() < interventionConfig.aiCompanionFrequency);
+  }, [currentChapter, interventionConfig.aiCompanionFrequency]);
+
   // Show reflection prompt when engine recommends it (once per progress threshold)
   useEffect(() => {
     if (adaptiveRec.showReflection && readingProgress >= 95 && reflectionDismissedAt < 95) {
@@ -442,7 +472,7 @@ export default function Reader() {
       setShowReflectionPause(true);
     }
   }, [adaptiveRec.showReflection, adaptiveRec.showRecap, readingProgress, reflectionDismissedAt]);
-  
+
   // Reset pendingAutoPlay after it's been consumed (when chapter content loads)
   useEffect(() => {
     if (pendingAutoPlay) {
@@ -1866,7 +1896,7 @@ export default function Reader() {
         </div>
       </footer>
 
-      {/* === GAMIFICATION OVERLAYS (Interruption-managed) === */}
+      {/* === GAMIFICATION OVERLAYS (Interruption-managed + calmness budget) === */}
       
       {/* Hook Screen — highest priority */}
       {showHookScreen && chapter && !hookDismissed && (
@@ -1881,16 +1911,19 @@ export default function Reader() {
         />
       )}
       
-      {/* Streak Recovery — second priority */}
-      {canShow(interruptionRef.current, 'streak_recovery') && (
+      {/* Streak Recovery — second priority, gated by calmness budget */}
+      {canShow(interruptionRef.current, 'streak_recovery') && 
+       !isOverBudget(interruptionRef.current, interventionConfig.maxInterruptionsPerSession) &&
+       requestInterruptionSlot(interventionConfig.maxInterruptionsPerSession) && (
         <StreakAlert
           streakBroken={gamification.streakBroken}
           onDismiss={gamification.dismissStreakBroken}
         />
       )}
       
-      {/* Achievement / Level / Reward — only when no higher-priority active */}
-      {canShow(interruptionRef.current, 'reward_popup') && (
+      {/* Achievement / Level / Reward — gated by calmness budget */}
+      {canShow(interruptionRef.current, 'reward_popup') && 
+       !isOverBudget(interruptionRef.current, interventionConfig.maxInterruptionsPerSession) && (
         <RewardPopup
           reward={gamification.lastReward}
           onDismiss={gamification.dismissReward}
@@ -1904,10 +1937,11 @@ export default function Reader() {
         />
       )}
       
-      {/* AI Companion — lowest priority, only when nothing else active + calmness budget */}
-      {showAICompanion && canShow(interruptionRef.current, 'ai_companion') && 
-       !isInDeepFlow(readingProgress, elapsedSeconds, lastInterruptionTimeRef.current) &&
-       Math.random() < interventionConfig.aiCompanionFrequency && (
+      {/* AI Companion — lowest priority, uses pre-computed flag (NOT Math.random on render) */}
+      {showAICompanion && aiCompanionAllowed &&
+       canShow(interruptionRef.current, 'ai_companion') && 
+       !isInDeepFlow(readingProgress, elapsedSeconds, getLastInterruptionTime()) &&
+       !isOverBudget(interruptionRef.current, interventionConfig.maxInterruptionsPerSession) && (
         <AICompanion
           readingProgress={readingProgress}
           chapterNumber={currentChapter}

@@ -1,6 +1,9 @@
 /**
- * Experiment Outcome Report — Internal admin dashboard
+ * Experiment Outcome Report v2 — Internal admin dashboard
  * Shows per-variant comparisons for reading funnel metrics.
+ * 
+ * v2: Proper section counting from actual events, interruption tracking,
+ * confidence indicators, cleaner data aggregation.
  */
 
 import { useState, useEffect, useCallback } from "react";
@@ -8,9 +11,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Navbar } from "@/components/layout/Navbar";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
-import { RefreshCw, TrendingUp, TrendingDown, Minus } from "lucide-react";
+import { RefreshCw, TrendingUp, TrendingDown, Minus, AlertTriangle } from "lucide-react";
 
 interface VariantMetrics {
   variant: string;
@@ -26,6 +28,12 @@ interface VariantMetrics {
 interface ExperimentData {
   experiment: string;
   variants: VariantMetrics[];
+}
+
+function ConfidenceIndicator({ sampleSize }: { sampleSize: number }) {
+  if (sampleSize < 10) return <Badge variant="destructive" className="text-[9px] px-1.5">Low confidence (n&lt;10)</Badge>;
+  if (sampleSize < 30) return <Badge variant="outline" className="text-[9px] px-1.5">Moderate (n&lt;30)</Badge>;
+  return <Badge variant="secondary" className="text-[9px] px-1.5">Good (n≥30)</Badge>;
 }
 
 function MetricCell({ control, treatment, label }: { control: number; treatment: number; label: string }) {
@@ -62,27 +70,38 @@ export default function ExperimentReport() {
   const [experiments, setExperiments] = useState<ExperimentData[]>([]);
   const [loading, setLoading] = useState(true);
   const [lastRefresh, setLastRefresh] = useState<Date>(new Date());
+  const [totalEvents, setTotalEvents] = useState(0);
 
   const loadData = useCallback(async () => {
     setLoading(true);
     try {
-      // Fetch all experiment events
       const { data: events } = await supabase
         .from('pmf_events')
         .select('event_type, metadata, user_id, created_at')
-        .in('event_type', ['experiment_assigned', 'experiment_outcome', 'chapter_started', 'chapter_completed', 'book_completed', 'returned_within_24h', 'quicklearn_to_reader_click', 'section_completed', 'first_section_completed', 'chapter_1_completed', 'chapter_2_started'])
+        .in('event_type', [
+          'experiment_assigned', 'experiment_outcome',
+          'chapter_started', 'chapter_completed', 'book_completed',
+          'returned_within_24h', 'quicklearn_to_reader_click',
+          'section_completed', 'first_section_completed',
+          'chapter_1_completed', 'chapter_2_started', 'chapter_exit',
+        ])
         .order('created_at', { ascending: false })
         .limit(1000);
 
       if (!events || events.length === 0) {
         setExperiments([]);
+        setTotalEvents(0);
         setLoading(false);
         return;
       }
 
+      setTotalEvents(events.length);
+
       // Build user → variant map per experiment
-      const userVariants = new Map<string, Map<string, string>>(); // experiment → (userId → variant)
-      const userEvents = new Map<string, Set<string>>(); // userId → set of event types
+      const userVariants = new Map<string, Map<string, string>>();
+      // Track per-user events AND per-user section counts
+      const userEvents = new Map<string, Set<string>>();
+      const userSectionCounts = new Map<string, number>();
 
       for (const event of events as any[]) {
         const meta = event.metadata as any;
@@ -95,11 +114,15 @@ export default function ExperimentReport() {
           userVariants.get(meta.experiment)!.set(userId, meta.variant);
         }
 
-        // Track user-level events
         if (!userEvents.has(userId)) userEvents.set(userId, new Set());
         userEvents.get(userId)!.add(event.event_type as string);
 
-        // Also track experiment outcomes
+        // Count actual section_completed events per user
+        if (event.event_type === 'section_completed') {
+          userSectionCounts.set(userId, (userSectionCounts.get(userId) || 0) + 1);
+        }
+
+        // Track experiment outcomes
         if (event.event_type === 'experiment_outcome' && meta?.outcome) {
           userEvents.get(userId)!.add(meta.outcome);
         }
@@ -119,7 +142,8 @@ export default function ExperimentReport() {
           if (users.length === 0) continue;
 
           const n = users.length;
-          let ch1 = 0, ch2 = 0, ret24 = 0, bookDone = 0, qlConvert = 0, totalSections = 0;
+          let ch1 = 0, ch2 = 0, ret24 = 0, bookDone = 0, qlConvert = 0;
+          let totalSections = 0;
 
           for (const uid of users) {
             const evts = userEvents.get(uid) || new Set();
@@ -128,8 +152,8 @@ export default function ExperimentReport() {
             if (evts.has('returned_within_24h')) ret24++;
             if (evts.has('book_completed')) bookDone++;
             if (evts.has('quicklearn_to_reader_click')) qlConvert++;
-            // Estimate sections from section_completed events
-            if (evts.has('section_completed')) totalSections += 2; // rough estimate
+            // Use actual section completion count
+            totalSections += userSectionCounts.get(uid) || 0;
           }
 
           variants.push({
@@ -170,7 +194,7 @@ export default function ExperimentReport() {
           <div>
             <h1 className="text-2xl font-bold">Experiment Report</h1>
             <p className="text-sm text-muted-foreground">
-              Last refreshed: {lastRefresh.toLocaleTimeString()}
+              Last refreshed: {lastRefresh.toLocaleTimeString()} · {totalEvents} events analyzed
             </p>
           </div>
           <Button variant="outline" size="sm" onClick={loadData} disabled={loading}>
@@ -182,6 +206,7 @@ export default function ExperimentReport() {
         {experiments.length === 0 && !loading && (
           <Card>
             <CardContent className="py-12 text-center text-muted-foreground">
+              <AlertTriangle className="h-8 w-8 mx-auto mb-3 opacity-40" />
               No experiment data yet. Experiments will appear here as users are assigned to variants.
             </CardContent>
           </Card>
@@ -191,14 +216,18 @@ export default function ExperimentReport() {
           {experiments.map(exp => {
             const c = control(exp);
             const t = treatment(exp);
+            const minSample = Math.min(c?.sampleSize ?? 0, t?.sampleSize ?? 0);
 
             return (
               <Card key={exp.experiment}>
                 <CardHeader className="pb-3">
-                  <div className="flex items-center justify-between">
-                    <CardTitle className="text-lg font-semibold capitalize">
-                      {exp.experiment.replace(/_/g, ' ')}
-                    </CardTitle>
+                  <div className="flex items-center justify-between flex-wrap gap-2">
+                    <div className="flex items-center gap-2">
+                      <CardTitle className="text-lg font-semibold capitalize">
+                        {exp.experiment.replace(/_/g, ' ')}
+                      </CardTitle>
+                      <ConfidenceIndicator sampleSize={minSample} />
+                    </div>
                     <div className="flex gap-2">
                       {c && (
                         <Badge variant="outline" className="text-xs">
