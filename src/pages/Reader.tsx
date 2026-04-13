@@ -1891,7 +1891,7 @@ export default function Reader() {
         </div>
       </footer>
 
-      {/* === GAMIFICATION OVERLAYS (Interruption-managed) === */}
+      {/* === GAMIFICATION OVERLAYS (Interruption-managed + calmness budget) === */}
       
       {/* Hook Screen — highest priority */}
       {showHookScreen && chapter && !hookDismissed && (
@@ -1906,16 +1906,19 @@ export default function Reader() {
         />
       )}
       
-      {/* Streak Recovery — second priority */}
-      {canShow(interruptionRef.current, 'streak_recovery') && (
+      {/* Streak Recovery — second priority, gated by calmness budget */}
+      {canShow(interruptionRef.current, 'streak_recovery') && 
+       !isOverBudget(interruptionRef.current, interventionConfig.maxInterruptionsPerSession) &&
+       requestInterruptionSlot(interventionConfig.maxInterruptionsPerSession) && (
         <StreakAlert
           streakBroken={gamification.streakBroken}
           onDismiss={gamification.dismissStreakBroken}
         />
       )}
       
-      {/* Achievement / Level / Reward — only when no higher-priority active */}
-      {canShow(interruptionRef.current, 'reward_popup') && (
+      {/* Achievement / Level / Reward — gated by calmness budget */}
+      {canShow(interruptionRef.current, 'reward_popup') && 
+       !isOverBudget(interruptionRef.current, interventionConfig.maxInterruptionsPerSession) && (
         <RewardPopup
           reward={gamification.lastReward}
           onDismiss={gamification.dismissReward}
@@ -1929,10 +1932,11 @@ export default function Reader() {
         />
       )}
       
-      {/* AI Companion — lowest priority, only when nothing else active + calmness budget */}
-      {showAICompanion && canShow(interruptionRef.current, 'ai_companion') && 
-       !isInDeepFlow(readingProgress, elapsedSeconds, lastInterruptionTimeRef.current) &&
-       Math.random() < interventionConfig.aiCompanionFrequency && (
+      {/* AI Companion — lowest priority, uses pre-computed flag (NOT Math.random on render) */}
+      {showAICompanion && aiCompanionAllowed &&
+       canShow(interruptionRef.current, 'ai_companion') && 
+       !isInDeepFlow(readingProgress, elapsedSeconds, getLastInterruptionTime()) &&
+       !isOverBudget(interruptionRef.current, interventionConfig.maxInterruptionsPerSession) && (
         <AICompanion
           readingProgress={readingProgress}
           chapterNumber={currentChapter}
@@ -1959,6 +1963,9 @@ export default function Reader() {
           }}
         />
       )}
+    </div>
+  );
+}
     </div>
   );
 }
