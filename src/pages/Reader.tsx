@@ -396,14 +396,17 @@ export default function Reader() {
     }
   }, [bookId, currentChapter]);
   
-  // Track chapter exit on unmount
+  // Track chapter exit on unmount — use ref to avoid stale closure
+  const readingProgressRef = useRef(readingProgress);
+  readingProgressRef.current = readingProgress;
+  
   useEffect(() => {
     return () => {
       if (bookId) {
-        trackChapterExit(bookId, currentChapter, readingProgress);
+        trackChapterExit(bookId, currentChapter, readingProgressRef.current);
       }
     };
-  }, [bookId, currentChapter, readingProgress]);
+  }, [bookId, currentChapter]); // eslint-disable-line react-hooks/exhaustive-deps
   
   // Reset hook screen on chapter change
   useEffect(() => {
