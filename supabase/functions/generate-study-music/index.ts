@@ -82,6 +82,18 @@ serve(async (req) => {
         .update({ status: "error" })
         .eq("track_key", trackKey);
 
+      // Handle payment/plan errors gracefully
+      if (response.status === 402 || errText.includes("paid_plan_required") || errText.includes("limited_access")) {
+        return new Response(JSON.stringify({ 
+          error: "PLAN_REQUIRED", 
+          message: "Music generation requires an upgraded ElevenLabs plan. Please upgrade at elevenlabs.io/pricing.",
+          fallback: true 
+        }), {
+          status: 200,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       return new Response(JSON.stringify({ error: "Music generation failed", details: errText }), {
         status: 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
