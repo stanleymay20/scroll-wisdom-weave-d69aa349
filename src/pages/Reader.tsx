@@ -308,6 +308,8 @@ export default function Reader() {
   
   // === SECTION COMPLETION TRACKER ===
   const sectionTrackerRef = useRef<SectionCompletionTracker | null>(null);
+  const sectionObserverRef = useRef<IntersectionObserver | null>(null);
+  const [sectionsCompletedCount, setSectionsCompletedCount] = useState(0);
   
   // === READER SEGMENTATION ===
   const readerSegment = useMemo(() => {
