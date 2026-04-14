@@ -233,10 +233,19 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
     // Same track — toggle play/pause
     if (activeTrackId === track.id) {
       if (isPlaying) {
-        audioRef.current?.pause();
+        if (usingFallback) {
+          proceduralRef.current?.stop();
+        } else {
+          audioRef.current?.pause();
+        }
         setIsPlaying(false);
       } else {
-        audioRef.current?.play().catch(() => {});
+        if (usingFallback) {
+          const session = startProceduralMusic(track.id, (isMuted ? 0 : volume) / 100);
+          proceduralRef.current = session;
+        } else {
+          audioRef.current?.play().catch(() => {});
+        }
         setIsPlaying(true);
       }
       return;
@@ -247,15 +256,35 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
       audioRef.current.pause();
       audioRef.current.src = "";
     }
+    proceduralRef.current?.stop();
 
     setActiveTrackId(track.id);
     setIsLoading(track.id);
     setIsPlaying(false);
+    setUsingFallback(false);
 
     const url = await fetchOrGenerateTrack(track);
     setIsLoading(null);
 
     if (!url) return;
+
+    // Use Web Audio procedural fallback
+    if (url === "FALLBACK") {
+      try {
+        const session = startProceduralMusic(track.id, (isMuted ? 0 : volume) / 100);
+        proceduralRef.current = session;
+        setUsingFallback(true);
+        setIsPlaying(true);
+        toast.info("Playing synthesized study music", {
+          description: "Upgrade ElevenLabs for AI-generated tracks",
+          duration: 3000,
+        });
+      } catch (err) {
+        console.error("[StudyMusic] Procedural fallback error:", err);
+        setActiveTrackId(null);
+      }
+      return;
+    }
 
     const audio = new Audio(url);
     audio.loop = true;
@@ -275,7 +304,7 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
 
     audioRef.current = audio;
     audio.load();
-  }, [activeTrackId, isPlaying, fetchOrGenerateTrack, isMuted, volume]);
+  }, [activeTrackId, isPlaying, usingFallback, fetchOrGenerateTrack, isMuted, volume]);
 
   const stopMusic = useCallback(() => {
     if (audioRef.current) {
@@ -283,6 +312,8 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
       audioRef.current.src = "";
       audioRef.current = null;
     }
+    proceduralRef.current?.stop();
+    proceduralRef.current = null;
     setActiveTrackId(null);
     setIsPlaying(false);
   }, []);
