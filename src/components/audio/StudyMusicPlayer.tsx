@@ -4,6 +4,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
+import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { Badge } from "@/components/ui/badge";
@@ -205,6 +206,16 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
       }
 
       const data = await response.json();
+      
+      // Handle plan-required / fallback errors
+      if (data.error === "PLAN_REQUIRED" || data.fallback) {
+        toast.error("Study music requires an upgraded ElevenLabs plan", {
+          description: "Please upgrade at elevenlabs.io/pricing to enable AI music generation.",
+          duration: 6000,
+        });
+        return null;
+      }
+
       if (data.url) {
         trackUrlCache.current.set(track.id, data.url);
         return data.url;
