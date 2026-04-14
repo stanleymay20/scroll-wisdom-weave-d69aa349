@@ -391,6 +391,61 @@ export default function Reader() {
     if (bookId) recordBookOpened();
   }, [bookId]);
   
+  // === SECTION COMPLETION TRACKER INITIALIZATION ===
+  // Wire up IntersectionObserver-based section tracking using multi-signal heuristic
+  useEffect(() => {
+    if (!contentRef.current || !chapter?.content) return;
+
+    // Parse sections from content (split by headings)
+    const headingRegex = /^#{1,3}\s+.+$/gm;
+    const sections = chapter.content.split(headingRegex);
+    const wordCounts = sections.map(s => s.split(/\s+/).filter(Boolean).length);
+    
+    // Create tracker with completion callback
+    const tracker = new SectionCompletionTracker(wordCounts, (index, result) => {
+      setSectionsCompletedCount(prev => prev + 1);
+      gamification.completeSection();
+      trackSectionCompleted(bookId || '', currentChapter, index, result.reason);
+      console.log(`[SectionTracker] Section ${index} complete: ${result.reason} (${result.confidence})`);
+    });
+    
+    sectionTrackerRef.current = tracker;
+
+    // Find all section-level elements in rendered DOM
+    const container = contentRef.current;
+    const sectionEls = container.querySelectorAll('[data-sentence-index]');
+    
+    // Clean up old observer
+    sectionObserverRef.current?.disconnect();
+    
+    // Create IntersectionObserver for section visibility
+    const observer = new IntersectionObserver(
+      (entries) => {
+        for (const entry of entries) {
+          const idx = parseInt((entry.target as HTMLElement).getAttribute('data-sentence-index') || '0');
+          if (entry.isIntersecting) {
+            tracker.onSectionVisible(idx);
+          } else {
+            tracker.onSectionHidden(idx);
+            // If element exited viewport downward, user scrolled past it
+            if (entry.boundingClientRect.top < 0) {
+              tracker.onReachedEnd(idx);
+            }
+          }
+        }
+      },
+      { threshold: [0, 0.5, 1.0] }
+    );
+    
+    sectionEls.forEach(el => observer.observe(el));
+    sectionObserverRef.current = observer;
+
+    return () => {
+      observer.disconnect();
+      tracker.destroy();
+    };
+  }, [chapter?.content, bookId, currentChapter]); // eslint-disable-line react-hooks/exhaustive-deps
+
   // === FUNNEL ANALYTICS ===
   // Track chapter_started on mount
   useEffect(() => {
