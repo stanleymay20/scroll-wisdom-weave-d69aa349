@@ -23,7 +23,7 @@ serve(async (req) => {
 
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-    const elevenlabsKey = Deno.env.get("ELEVENLABS_API_KEY");
+    const elevenlabsKey = Deno.env.get("ELEVENLABS_API_KEY_1") || Deno.env.get("ELEVENLABS_API_KEY");
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
     // Check if track already exists in storage
