@@ -521,6 +521,10 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
   }, [volume, isMuted]);
 
   const stopAllNodes = useCallback(() => {
+    // Clear music pattern timers
+    _activeTimers.forEach((t) => window.clearInterval(t));
+    _activeTimers.length = 0;
+
     nodesRef.current.forEach((node) => {
       try {
         if (node instanceof AudioBufferSourceNode || node instanceof OscillatorNode) {
