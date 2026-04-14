@@ -316,6 +316,7 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
     proceduralRef.current = null;
     setActiveTrackId(null);
     setIsPlaying(false);
+    setUsingFallback(false);
   }, []);
 
   const toggleMute = useCallback(() => {
