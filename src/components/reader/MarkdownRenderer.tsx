@@ -821,8 +821,12 @@ export const markdownStyles = `
   background: hsl(220 15% 13%);
   border-radius: 0.5rem;
   margin: 1rem 0;
-  overflow: hidden;
+  overflow: visible;
   border: 1px solid hsl(var(--border) / 0.3);
+}
+
+.markdown-content .code-block pre {
+  -webkit-overflow-scrolling: touch;
 }
 
 .markdown-content .code-block .code-lang {

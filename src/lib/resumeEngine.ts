@@ -115,7 +115,10 @@ export function clearResumeState(bookId: string, chapterNumber: number): void {
 export function findCurrentParagraphAnchor(contentRef: HTMLElement | null): string | null {
   if (!contentRef) return null;
 
-  const paragraphs = contentRef.querySelectorAll('[data-paragraph-id], h2, h3, p');
+  // Query both semantic HTML tags AND MarkdownRenderer's CSS-class-based elements
+  const paragraphs = contentRef.querySelectorAll(
+    '[data-paragraph-id], [data-sentence-index], h2, h3, p, .md-p, .md-h2, .md-h3'
+  );
   const viewportMid = window.innerHeight / 2;
 
   let bestEl: Element | null = null;
@@ -132,9 +135,12 @@ export function findCurrentParagraphAnchor(contentRef: HTMLElement | null): stri
 
   if (!bestEl) return null;
 
-  // Prefer data-paragraph-id, fallback to textContent hash
+  // Prefer data-paragraph-id, then data-sentence-index, fallback to textContent
   const pid = (bestEl as HTMLElement).getAttribute('data-paragraph-id');
   if (pid) return pid;
+  
+  const sentIdx = (bestEl as HTMLElement).getAttribute('data-sentence-index');
+  if (sentIdx) return `sentence:${sentIdx}`;
 
   const text = (bestEl as HTMLElement).textContent?.trim().slice(0, 80) || null;
   return text ? `text:${text}` : null;
@@ -145,7 +151,7 @@ export function scrollToAnchor(contentRef: HTMLElement | null, anchor: string): 
   if (!contentRef || !anchor) return false;
 
   // Try data-paragraph-id first
-  if (!anchor.startsWith('text:')) {
+  if (!anchor.startsWith('text:') && !anchor.startsWith('sentence:')) {
     const el = contentRef.querySelector(`[data-paragraph-id="${anchor}"]`);
     if (el) {
       el.scrollIntoView({ behavior: 'instant', block: 'center' });
@@ -153,12 +159,22 @@ export function scrollToAnchor(contentRef: HTMLElement | null, anchor: string): 
     }
   }
 
-  // Fallback: match by text prefix
+  // Try data-sentence-index
+  if (anchor.startsWith('sentence:')) {
+    const idx = anchor.slice(9);
+    const el = contentRef.querySelector(`[data-sentence-index="${idx}"]`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'instant', block: 'center' });
+      return true;
+    }
+  }
+
+  // Fallback: match by text prefix — search both semantic and class-based elements
   const searchText = anchor.startsWith('text:') ? anchor.slice(5) : anchor;
-  const elements = contentRef.querySelectorAll('h2, h3, p');
+  const elements = contentRef.querySelectorAll('h2, h3, p, .md-p, .md-h2, .md-h3, [data-sentence-index]');
   for (const el of elements) {
     const text = (el as HTMLElement).textContent?.trim() || '';
-    if (text.startsWith(searchText.slice(0, 60))) {
+    if (text.length > 5 && text.startsWith(searchText.slice(0, 60))) {
       el.scrollIntoView({ behavior: 'instant', block: 'center' });
       return true;
     }
