@@ -1947,6 +1947,13 @@ export default function Reader() {
           <Button
             variant="ghost"
             onClick={async () => {
+              // Explicit action: mark all sections as complete via tracker
+              if (sectionTrackerRef.current) {
+                const totalSections = chapter?.content?.split(/^#{1,3}\s+.+$/gm).length || 1;
+                for (let i = 0; i < totalSections; i++) {
+                  sectionTrackerRef.current.onExplicitAction(i);
+                }
+              }
               // Save progress before navigating (mark current chapter as complete)
               if (userId && book?.total_chapters) {
                 const overallProgress = (currentChapter / book.total_chapters) * 100;
