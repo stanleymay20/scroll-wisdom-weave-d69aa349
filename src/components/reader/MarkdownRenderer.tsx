@@ -288,11 +288,17 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!inCodeBlock && /^```([\w+#.\-]*)$/.test(trimmed)) {
+        // Opening fence: ```lang, ``` lang, ```"lang", ````lang, etc.
+        // Allow optional spaces and quotes around language tag
+        const openMatch = !inCodeBlock && trimmed.match(/^`{3,}\s*["']?\s*([\w+#.\-]*)\s*["']?\s*$/);
+        // Closing fence: ``` or ```` or more backticks (with optional trailing spaces)
+        const isClosingFence = inCodeBlock && /^`{3,}\s*$/.test(trimmed);
+        
+        if (openMatch) {
           inCodeBlock = true;
-          codeLang = trimmed.replace(/^```/, '').toLowerCase();
+          codeLang = (openMatch[1] || '').toLowerCase();
           codeLines = [];
-        } else if (inCodeBlock && trimmed === '```') {
+        } else if (isClosingFence) {
           protectedCodeBlocks.push({ lang: codeLang, code: codeLines.join('\n') });
           result.push(`___FENCED_CODE_${protectedCodeBlocks.length - 1}___`);
           inCodeBlock = false;

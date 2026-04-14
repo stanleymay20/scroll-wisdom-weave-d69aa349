@@ -721,6 +721,9 @@
   margin: 0;
   padding: 2.5rem 1rem 1rem;
   overflow-x: auto;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .markdown-content .code-block code {
