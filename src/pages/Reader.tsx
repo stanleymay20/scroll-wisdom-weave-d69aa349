@@ -1694,6 +1694,9 @@ export default function Reader() {
             setShowChapterVideo(false);
             setShowKnowledgeGraph(true);
           }}
+          onStudyMusicClick={() => {
+            setShowStudyMusic(prev => !prev);
+          }}
         />
       )}
 
