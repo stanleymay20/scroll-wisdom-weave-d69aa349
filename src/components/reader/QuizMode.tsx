@@ -418,9 +418,9 @@ export function QuizMode({
         exit={{ opacity: 0 }}
         className="fixed inset-0 z-[70] bg-background/95 backdrop-blur-sm flex items-center justify-center p-4"
       >
-        <Card className="w-full max-w-2xl max-h-[90vh] overflow-hidden">
+        <Card className="w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden">
           {/* Header */}
-          <div className="flex items-center justify-between p-4 border-b border-border">
+          <div className="flex-none flex items-center justify-between p-4 border-b border-border">
             <div className="flex items-center gap-2">
               <div className="p-2 rounded-lg bg-primary/10">
                 <Brain className="h-5 w-5 text-primary" />
@@ -447,7 +447,7 @@ export function QuizMode({
             </div>
           </div>
 
-          <ScrollArea className="p-4 max-h-[calc(90vh-140px)]">
+          <ScrollArea className="flex-1 min-h-0 p-4">
             {/* Initial State */}
             {questions.length === 0 && !isLoading && (
               <div className="text-center py-12">
@@ -677,7 +677,7 @@ export function QuizMode({
 
           {/* Footer */}
           {currentQuestion && !isComplete && (
-            <div className="p-4 border-t border-border flex justify-between items-center">
+            <div className="flex-none p-4 border-t border-border flex justify-between items-center">
               <div className="text-sm text-muted-foreground">
                 Score: {score}/{currentIndex + (showResult ? 1 : 0)}
               </div>

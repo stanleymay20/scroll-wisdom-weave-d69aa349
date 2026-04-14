@@ -288,9 +288,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
 
       for (const line of lines) {
         const trimmed = line.trim();
-        if (!inCodeBlock && /^```(\w*)$/.test(trimmed)) {
+        if (!inCodeBlock && /^```([\w+#.\-]*)$/.test(trimmed)) {
           inCodeBlock = true;
-          codeLang = trimmed.replace(/^```/, '');
+          codeLang = trimmed.replace(/^```/, '').toLowerCase();
           codeLines = [];
         } else if (inCodeBlock && trimmed === '```') {
           protectedCodeBlocks.push({ lang: codeLang, code: codeLines.join('\n') });

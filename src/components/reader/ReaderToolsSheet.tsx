@@ -28,6 +28,7 @@ import {
   Video,
   X,
   Brain,
+  Music,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { FEATURES } from "@/lib/config";
@@ -59,6 +60,7 @@ interface ReaderToolsSheetProps {
   onFlashcardsClick: () => void;
   onVideoClick?: () => void;
   onKnowledgeGraphClick?: () => void;
+  onStudyMusicClick?: () => void;
 }
 
 export function ReaderToolsSheet({
@@ -77,6 +79,7 @@ export function ReaderToolsSheet({
   onFlashcardsClick,
   onVideoClick,
   onKnowledgeGraphClick,
+  onStudyMusicClick,
 }: ReaderToolsSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
 
@@ -154,6 +157,12 @@ export function ReaderToolsSheet({
       onClick: onKnowledgeGraphClick || (() => {}),
       hidden: !FEATURES.enableKnowledgeGraph,
       variant: "primary",
+    },
+    {
+      id: "study-music",
+      label: "Study Music",
+      icon: <Music className="h-5 w-5" />,
+      onClick: onStudyMusicClick || (() => {}),
     },
   ];
 

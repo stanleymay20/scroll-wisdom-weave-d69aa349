@@ -63,6 +63,7 @@ import { PreviouslyInBookCard, ReadingSessionTimer, DirectTextEditor } from "@/c
 import { ReaderToolsSheet } from "@/components/reader/ReaderToolsSheet";
 import { ChapterVideoGenerator } from "@/components/reader/ChapterVideoGenerator";
 import { FlashcardGenerator } from "@/components/decks/FlashcardGenerator";
+import { StudyMusicPlayer } from "@/components/audio/StudyMusicPlayer";
 import { LearningDeckGenerator } from "@/components/decks/LearningDeckGenerator";
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
@@ -265,6 +266,7 @@ export default function Reader() {
   const [showFlashcardDialog, setShowFlashcardDialog] = useState(false);
   const [showLearningDeckDialog, setShowLearningDeckDialog] = useState(false);
   const [showKnowledgeGraph, setShowKnowledgeGraph] = useState(false);
+  const [showStudyMusic, setShowStudyMusic] = useState(false);
   
   // CONTRACT 5 - Rule 5.4: Track if TTS should resume after voice conversation
   const [shouldResumeTTS, setShouldResumeTTS] = useState(false);
@@ -1694,6 +1696,9 @@ export default function Reader() {
             setShowChapterVideo(false);
             setShowKnowledgeGraph(true);
           }}
+          onStudyMusicClick={() => {
+            setShowStudyMusic(prev => !prev);
+          }}
         />
       )}
 
@@ -1835,6 +1840,13 @@ export default function Reader() {
         />
       )}
 
+
+      {/* Study Music Player */}
+      {showStudyMusic && (
+        <div className="fixed bottom-20 left-4 z-[55]" style={{ bottom: "calc(env(safe-area-inset-bottom) + 5rem)" }}>
+          <StudyMusicPlayer />
+        </div>
+      )}
 
       {/* CONTRACT 5.2: Navigation Footer with HARD safe area inset - NEVER overlaps home indicator */}
       <footer 
