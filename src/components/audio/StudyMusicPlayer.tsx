@@ -160,9 +160,11 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
 
   // Sync volume
   useEffect(() => {
+    const v = (isMuted ? 0 : volume) / 100;
     if (audioRef.current) {
-      audioRef.current.volume = (isMuted ? 0 : volume) / 100;
+      audioRef.current.volume = v;
     }
+    proceduralRef.current?.setVolume(v);
   }, [volume, isMuted]);
 
   const fetchOrGenerateTrack = useCallback(async (track: MusicTrack): Promise<string | null> => {
