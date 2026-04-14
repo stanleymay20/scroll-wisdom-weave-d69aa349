@@ -1,6 +1,6 @@
 /**
- * Study Music Player — Ambient sound mixer for focused reading
- * Plays royalty-free ambient loops (rain, jazz piano, lo-fi, nature, etc.)
+ * Study Music Player — Web Audio API ambient sound generator
+ * Generates ambient sounds client-side (no external URLs needed)
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
@@ -24,69 +24,214 @@ interface AmbientTrack {
   id: string;
   label: string;
   emoji: string;
-  /** Free ambient audio URL — uses freesound.org embeddable previews */
-  url: string;
+  generator: (ctx: AudioContext, gain: GainNode) => AudioNode[];
   category: "nature" | "music" | "ambient";
 }
 
-// Curated royalty-free ambient sounds hosted on reliable CDNs
+// --- Web Audio generators ---
+
+function createWhiteNoise(ctx: AudioContext, gain: GainNode): AudioNode[] {
+  const bufferSize = ctx.sampleRate * 2;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = Math.random() * 2 - 1;
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  source.connect(gain);
+  source.start();
+  return [source];
+}
+
+function createBrownNoise(ctx: AudioContext, gain: GainNode): AudioNode[] {
+  // Brown noise = accumulated white noise, sounds like rainfall/wind
+  const bufferSize = ctx.sampleRate * 2;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < bufferSize; i++) {
+    const white = Math.random() * 2 - 1;
+    last = (last + 0.02 * white) / 1.02;
+    data[i] = last * 3.5;
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  // Low-pass for deeper rain sound
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 800;
+  source.connect(lp);
+  lp.connect(gain);
+  source.start();
+  return [source, lp];
+}
+
+function createOceanWaves(ctx: AudioContext, gain: GainNode): AudioNode[] {
+  // Brown noise + slow LFO on filter = wave-like surges
+  const bufferSize = ctx.sampleRate * 4;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < bufferSize; i++) {
+    last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
+    data[i] = last * 3.5;
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 400;
+
+  const lfo = ctx.createOscillator();
+  lfo.type = "sine";
+  lfo.frequency.value = 0.08; // slow wave cycle
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 300;
+  lfo.connect(lfoGain);
+  lfoGain.connect(lp.frequency);
+  lfo.start();
+
+  source.connect(lp);
+  lp.connect(gain);
+  source.start();
+  return [source, lp, lfo, lfoGain];
+}
+
+function createForest(ctx: AudioContext, gain: GainNode): AudioNode[] {
+  // Pink noise (filtered) + chirp oscillators
+  const bufferSize = ctx.sampleRate * 2;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+  for (let i = 0; i < bufferSize; i++) {
+    const white = Math.random() * 2 - 1;
+    b0 = 0.99886 * b0 + white * 0.0555179;
+    b1 = 0.99332 * b1 + white * 0.0750759;
+    b2 = 0.96900 * b2 + white * 0.1538520;
+    b3 = 0.86650 * b3 + white * 0.3104856;
+    b4 = 0.55000 * b4 + white * 0.5329522;
+    b5 = -0.7616 * b5 - white * 0.0168980;
+    data[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + white * 0.5362) * 0.11;
+    b6 = white * 0.115926;
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 2000;
+  bp.Q.value = 0.5;
+  source.connect(bp);
+  bp.connect(gain);
+  source.start();
+  return [source, bp];
+}
+
+function createFireplace(ctx: AudioContext, gain: GainNode): AudioNode[] {
+  // Crackling: brown noise with bandpass + random crackle bursts
+  const bufferSize = ctx.sampleRate * 3;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  let last = 0;
+  for (let i = 0; i < bufferSize; i++) {
+    last = (last + 0.02 * (Math.random() * 2 - 1)) / 1.02;
+    // Add random crackle spikes
+    const crackle = Math.random() > 0.997 ? (Math.random() * 0.8 - 0.4) : 0;
+    data[i] = last * 2.5 + crackle;
+  }
+  const source = ctx.createBufferSource();
+  source.buffer = buffer;
+  source.loop = true;
+  const bp = ctx.createBiquadFilter();
+  bp.type = "bandpass";
+  bp.frequency.value = 600;
+  bp.Q.value = 1.2;
+  source.connect(bp);
+  bp.connect(gain);
+  source.start();
+  return [source, bp];
+}
+
+function createDrone(ctx: AudioContext, gain: GainNode, baseFreq: number, label: string): AudioNode[] {
+  // Warm pad: two detuned oscillators + slow vibrato
+  const osc1 = ctx.createOscillator();
+  osc1.type = "sine";
+  osc1.frequency.value = baseFreq;
+
+  const osc2 = ctx.createOscillator();
+  osc2.type = "sine";
+  osc2.frequency.value = baseFreq * 1.502; // fifth
+
+  const osc3 = ctx.createOscillator();
+  osc3.type = "sine";
+  osc3.frequency.value = baseFreq * 2.0; // octave
+
+  const mixGain = ctx.createGain();
+  mixGain.gain.value = 0.3;
+
+  // Slow vibrato
+  const lfo = ctx.createOscillator();
+  lfo.type = "sine";
+  lfo.frequency.value = 0.15;
+  const lfoGain = ctx.createGain();
+  lfoGain.gain.value = 2;
+  lfo.connect(lfoGain);
+  lfoGain.connect(osc1.frequency);
+  lfoGain.connect(osc2.frequency);
+
+  osc1.connect(mixGain);
+  osc2.connect(mixGain);
+  osc3.connect(mixGain);
+  mixGain.connect(gain);
+
+  osc1.start();
+  osc2.start();
+  osc3.start();
+  lfo.start();
+
+  return [osc1, osc2, osc3, lfo, lfoGain, mixGain];
+}
+
+function createPianoAmbient(ctx: AudioContext, gain: GainNode): AudioNode[] {
+  return createDrone(ctx, gain, 130.81, "piano"); // C3
+}
+
+function createJazzAmbient(ctx: AudioContext, gain: GainNode): AudioNode[] {
+  return createDrone(ctx, gain, 174.61, "jazz"); // F3 jazz feel
+}
+
+function createLofiDrone(ctx: AudioContext, gain: GainNode): AudioNode[] {
+  // Lo-fi: warm filtered drone + subtle noise
+  const nodes = createDrone(ctx, gain, 98.0, "lofi"); // G2
+  // Add subtle filtered noise
+  const bufferSize = ctx.sampleRate * 2;
+  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+  const data = buffer.getChannelData(0);
+  for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.03;
+  const noise = ctx.createBufferSource();
+  noise.buffer = buffer;
+  noise.loop = true;
+  const lp = ctx.createBiquadFilter();
+  lp.type = "lowpass";
+  lp.frequency.value = 300;
+  noise.connect(lp);
+  lp.connect(gain);
+  noise.start();
+  return [...nodes, noise, lp];
+}
+
 const AMBIENT_TRACKS: AmbientTrack[] = [
-  {
-    id: "rain",
-    label: "Rainfall",
-    emoji: "🌧️",
-    url: "https://cdn.pixabay.com/audio/2022/05/13/audio_257112671f.mp3",
-    category: "nature",
-  },
-  {
-    id: "forest",
-    label: "Forest",
-    emoji: "🌲",
-    url: "https://cdn.pixabay.com/audio/2022/08/31/audio_419263e0b1.mp3",
-    category: "nature",
-  },
-  {
-    id: "ocean",
-    label: "Ocean Waves",
-    emoji: "🌊",
-    url: "https://cdn.pixabay.com/audio/2022/06/07/audio_1a6b1a72cd.mp3",
-    category: "nature",
-  },
-  {
-    id: "fireplace",
-    label: "Fireplace",
-    emoji: "🔥",
-    url: "https://cdn.pixabay.com/audio/2024/11/05/audio_4956b4edd1.mp3",
-    category: "ambient",
-  },
-  {
-    id: "lofi",
-    label: "Lo-Fi Beats",
-    emoji: "🎵",
-    url: "https://cdn.pixabay.com/audio/2023/07/19/audio_e1b3b29361.mp3",
-    category: "music",
-  },
-  {
-    id: "piano",
-    label: "Soft Piano",
-    emoji: "🎹",
-    url: "https://cdn.pixabay.com/audio/2023/09/04/audio_4ef21e6738.mp3",
-    category: "music",
-  },
-  {
-    id: "jazz",
-    label: "Jazz Café",
-    emoji: "🎷",
-    url: "https://cdn.pixabay.com/audio/2024/09/10/audio_6e56242c3a.mp3",
-    category: "music",
-  },
-  {
-    id: "whitenoise",
-    label: "White Noise",
-    emoji: "📻",
-    url: "https://cdn.pixabay.com/audio/2022/03/24/audio_4b68be5d33.mp3",
-    category: "ambient",
-  },
+  { id: "rain", label: "Rainfall", emoji: "🌧️", generator: createBrownNoise, category: "nature" },
+  { id: "forest", label: "Forest", emoji: "🌲", generator: createForest, category: "nature" },
+  { id: "ocean", label: "Ocean Waves", emoji: "🌊", generator: createOceanWaves, category: "nature" },
+  { id: "fireplace", label: "Fireplace", emoji: "🔥", generator: createFireplace, category: "ambient" },
+  { id: "lofi", label: "Lo-Fi Beats", emoji: "🎵", generator: createLofiDrone, category: "music" },
+  { id: "piano", label: "Soft Piano", emoji: "🎹", generator: createPianoAmbient, category: "music" },
+  { id: "jazz", label: "Jazz Café", emoji: "🎷", generator: createJazzAmbient, category: "music" },
+  { id: "whitenoise", label: "White Noise", emoji: "📻", generator: createWhiteNoise, category: "ambient" },
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -106,75 +251,88 @@ export function StudyMusicPlayer({ className }: StudyMusicPlayerProps) {
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(30);
   const [isMuted, setIsMuted] = useState(false);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
   const prevVolumeRef = useRef(30);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+  const gainRef = useRef<GainNode | null>(null);
+  const nodesRef = useRef<AudioNode[]>([]);
 
-  // Create audio element on mount
+  const getOrCreateCtx = useCallback(() => {
+    if (!audioCtxRef.current || audioCtxRef.current.state === "closed") {
+      const ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
+      const gain = ctx.createGain();
+      gain.gain.value = (isMuted ? 0 : volume) / 100;
+      gain.connect(ctx.destination);
+      audioCtxRef.current = ctx;
+      gainRef.current = gain;
+    }
+    return { ctx: audioCtxRef.current, gain: gainRef.current! };
+  }, []);
+
+  // Cleanup on unmount
   useEffect(() => {
-    const audio = new Audio();
-    audio.loop = true;
-    audio.volume = volume / 100;
-    audio.preload = "none";
-    audioRef.current = audio;
-
-    const handlePlay = () => setIsPlaying(true);
-    const handlePause = () => setIsPlaying(false);
-    const handleError = () => {
-      setIsPlaying(false);
-      console.warn("[StudyMusic] Audio failed to load");
-    };
-
-    audio.addEventListener("play", handlePlay);
-    audio.addEventListener("pause", handlePause);
-    audio.addEventListener("error", handleError);
-
     return () => {
-      audio.removeEventListener("play", handlePlay);
-      audio.removeEventListener("pause", handlePause);
-      audio.removeEventListener("error", handleError);
-      audio.pause();
-      audio.src = "";
+      stopAllNodes();
+      audioCtxRef.current?.close().catch(() => {});
     };
   }, []);
 
   // Sync volume
   useEffect(() => {
-    if (audioRef.current) {
-      audioRef.current.volume = isMuted ? 0 : volume / 100;
+    if (gainRef.current) {
+      gainRef.current.gain.value = (isMuted ? 0 : volume) / 100;
     }
   }, [volume, isMuted]);
 
-  const selectTrack = useCallback((track: AmbientTrack) => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  const stopAllNodes = useCallback(() => {
+    nodesRef.current.forEach((node) => {
+      try {
+        if (node instanceof AudioBufferSourceNode || node instanceof OscillatorNode) {
+          node.stop();
+        }
+        node.disconnect();
+      } catch {}
+    });
+    nodesRef.current = [];
+  }, []);
 
-    if (activeTrackId === track.id) {
-      // Toggle play/pause
-      if (isPlaying) {
-        audio.pause();
-      } else {
-        audio.play().catch(() => {});
-      }
+  const selectTrack = useCallback((track: AmbientTrack) => {
+    if (activeTrackId === track.id && isPlaying) {
+      // Pause: suspend audio context
+      audioCtxRef.current?.suspend();
+      setIsPlaying(false);
+      return;
+    }
+
+    if (activeTrackId === track.id && !isPlaying) {
+      // Resume
+      audioCtxRef.current?.resume();
+      setIsPlaying(true);
       return;
     }
 
     // Switch track
-    audio.pause();
-    audio.src = track.url;
-    audio.load();
+    stopAllNodes();
+    const { ctx, gain } = getOrCreateCtx();
+    gain.gain.value = (isMuted ? 0 : volume) / 100;
+
+    if (ctx.state === "suspended") {
+      ctx.resume();
+    }
+
+    const nodes = track.generator(ctx, gain);
+    nodesRef.current = nodes;
     setActiveTrackId(track.id);
-    audio.play().catch(() => {});
-  }, [activeTrackId, isPlaying]);
+    setIsPlaying(true);
+  }, [activeTrackId, isPlaying, stopAllNodes, getOrCreateCtx, isMuted, volume]);
 
   const stopMusic = useCallback(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.pause();
-    audio.currentTime = 0;
-    audio.src = "";
+    stopAllNodes();
+    audioCtxRef.current?.close().catch(() => {});
+    audioCtxRef.current = null;
+    gainRef.current = null;
     setActiveTrackId(null);
     setIsPlaying(false);
-  }, []);
+  }, [stopAllNodes]);
 
   const toggleMute = useCallback(() => {
     if (isMuted) {
@@ -188,7 +346,6 @@ export function StudyMusicPlayer({ className }: StudyMusicPlayerProps) {
 
   const activeTrack = AMBIENT_TRACKS.find((t) => t.id === activeTrackId);
 
-  // Group tracks by category
   const grouped = AMBIENT_TRACKS.reduce((acc, track) => {
     if (!acc[track.category]) acc[track.category] = [];
     acc[track.category].push(track);
@@ -261,7 +418,7 @@ export function StudyMusicPlayer({ className }: StudyMusicPlayerProps) {
           </div>
         </div>
 
-        {/* Controls — always visible when track active */}
+        {/* Controls */}
         {activeTrack && (
           <div className="flex items-center gap-3 px-3 py-2 border-b border-border/30">
             <Button
