@@ -154,6 +154,7 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
         audioRef.current.pause();
         audioRef.current.src = "";
       }
+      proceduralRef.current?.stop();
     };
   }, []);
 
