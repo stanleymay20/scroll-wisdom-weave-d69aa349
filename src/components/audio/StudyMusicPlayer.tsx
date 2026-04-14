@@ -143,6 +143,8 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
   const [isMuted, setIsMuted] = useState(false);
   const prevVolumeRef = useRef(40);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const proceduralRef = useRef<ProceduralMusicSession | null>(null);
+  const [usingFallback, setUsingFallback] = useState(false);
   const trackUrlCache = useRef<Map<string, string>>(new Map());
 
   // Cleanup on unmount
