@@ -242,11 +242,13 @@ const CATEGORY_LABELS: Record<string, string> = {
 
 interface StudyMusicPlayerProps {
   className?: string;
+  /** Auto-expand track list on mount (e.g. when opened from tools sheet) */
+  autoExpand?: boolean;
 }
 
-export function StudyMusicPlayer({ className }: StudyMusicPlayerProps) {
-  const [isOpen, setIsOpen] = useState(false);
-  const [isExpanded, setIsExpanded] = useState(false);
+export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPlayerProps) {
+  const [isOpen, setIsOpen] = useState(autoExpand);
+  const [isExpanded, setIsExpanded] = useState(autoExpand);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
   const [isPlaying, setIsPlaying] = useState(false);
   const [volume, setVolume] = useState(30);
