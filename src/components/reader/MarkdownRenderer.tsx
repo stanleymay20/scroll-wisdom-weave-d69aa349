@@ -306,7 +306,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           codeLines = [];
         } else if (isClosingFence) {
           protectedCodeBlocks.push({ lang: codeLang, code: codeLines.join('\n') });
-          result.push(`___FENCED_CODE_${protectedCodeBlocks.length - 1}___`);
+          result.push(`\x02FENCED_CODE_${protectedCodeBlocks.length - 1}\x03`);
           inCodeBlock = false;
         } else if (inCodeBlock) {
           codeLines.push(line);
@@ -317,7 +317,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       // If unclosed fence, flush remaining lines as code block
       if (inCodeBlock && codeLines.length > 0) {
         protectedCodeBlocks.push({ lang: codeLang, code: codeLines.join('\n') });
-        result.push(`___FENCED_CODE_${protectedCodeBlocks.length - 1}___`);
+        result.push(`\x02FENCED_CODE_${protectedCodeBlocks.length - 1}\x03`);
       }
       html = result.join('\n');
     }
@@ -380,7 +380,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/___EVIDENCE_BLOCK_(\d+)___/g, '<!--EVIDENCE_BLOCK_$1-->');
     html = html.replace(/___FIGURE_MARKER_(\d+)___/g, '<!--FIGURE_MARKER_$1-->');
 
-    // NOTE: Fenced code block placeholders (___FENCED_CODE_N___) are restored
+    // NOTE: Fenced code block placeholders (\x02FENCED_CODE_N\x03) are restored
     // AFTER paragraph splitting to prevent \n\n inside <pre> from being split.
     
     // Inline code (`code`)
@@ -464,7 +464,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     
     // NOW restore protected fenced code blocks — AFTER paragraph splitting
     // so that \n\n inside code doesn't get broken into separate <div>s.
-    html = html.replace(/___FENCED_CODE_(\d+)___/g, (_, idxStr) => {
+    html = html.replace(/\x02FENCED_CODE_(\d+)\x03/g, (_, idxStr) => {
       const idx = parseInt(idxStr);
       const block = protectedCodeBlocks[idx];
       if (!block) return '';
