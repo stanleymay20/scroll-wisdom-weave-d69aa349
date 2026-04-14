@@ -1912,6 +1912,42 @@ export type Database = {
           },
         ]
       }
+      study_music_tracks: {
+        Row: {
+          created_at: string | null
+          duration_seconds: number | null
+          id: string
+          label: string
+          prompt: string
+          status: string | null
+          storage_path: string | null
+          track_key: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          duration_seconds?: number | null
+          id?: string
+          label: string
+          prompt: string
+          status?: string | null
+          storage_path?: string | null
+          track_key: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          duration_seconds?: number | null
+          id?: string
+          label?: string
+          prompt?: string
+          status?: string | null
+          storage_path?: string | null
+          track_key?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       study_notes: {
         Row: {
           book_id: string | null
