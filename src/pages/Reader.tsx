@@ -1900,8 +1900,8 @@ export default function Reader() {
 
       {/* Study Music Player */}
       {showStudyMusic && (
-        <div className="fixed bottom-20 left-4 z-[55]" style={{ bottom: "calc(env(safe-area-inset-bottom) + 5rem)" }}>
-          <StudyMusicPlayer />
+        <div className="fixed left-4 z-[55]" style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }}>
+          <StudyMusicPlayer autoExpand />
         </div>
       )}
 
