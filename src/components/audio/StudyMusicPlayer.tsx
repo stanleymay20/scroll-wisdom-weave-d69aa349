@@ -155,72 +155,307 @@ function createFireplace(ctx: AudioContext, gain: GainNode): AudioNode[] {
   return [source, bp];
 }
 
-function createDrone(ctx: AudioContext, gain: GainNode, baseFreq: number, label: string): AudioNode[] {
-  // Warm pad: two detuned oscillators + slow vibrato
-  const osc1 = ctx.createOscillator();
-  osc1.type = "sine";
-  osc1.frequency.value = baseFreq;
+// --- Musical helper: schedule repeating note patterns ---
 
-  const osc2 = ctx.createOscillator();
-  osc2.type = "sine";
-  osc2.frequency.value = baseFreq * 1.502; // fifth
+function scheduleArpeggio(
+  ctx: AudioContext,
+  gain: GainNode,
+  frequencies: number[],
+  noteDuration: number,
+  noteGap: number,
+  waveType: OscillatorType,
+  loopDuration: number,
+  noteVolume: number = 0.15,
+  attack: number = 0.02,
+  release: number = 0.3,
+): { nodes: AudioNode[]; timers: number[] } {
+  const nodes: AudioNode[] = [];
+  const timers: number[] = [];
+  const totalCycle = loopDuration;
 
-  const osc3 = ctx.createOscillator();
-  osc3.type = "sine";
-  osc3.frequency.value = baseFreq * 2.0; // octave
+  function playPattern() {
+    const now = ctx.currentTime;
+    frequencies.forEach((freq, i) => {
+      const startTime = now + i * (noteDuration + noteGap);
+      const osc = ctx.createOscillator();
+      osc.type = waveType;
+      osc.frequency.value = freq;
 
-  const mixGain = ctx.createGain();
-  mixGain.gain.value = 0.3;
+      const env = ctx.createGain();
+      env.gain.setValueAtTime(0, startTime);
+      env.gain.linearRampToValueAtTime(noteVolume, startTime + attack);
+      env.gain.setValueAtTime(noteVolume, startTime + noteDuration - release);
+      env.gain.linearRampToValueAtTime(0, startTime + noteDuration);
 
-  // Slow vibrato
-  const lfo = ctx.createOscillator();
-  lfo.type = "sine";
-  lfo.frequency.value = 0.15;
-  const lfoGain = ctx.createGain();
-  lfoGain.gain.value = 2;
-  lfo.connect(lfoGain);
-  lfoGain.connect(osc1.frequency);
-  lfoGain.connect(osc2.frequency);
+      osc.connect(env);
+      env.connect(gain);
+      osc.start(startTime);
+      osc.stop(startTime + noteDuration + 0.05);
+      nodes.push(osc, env);
+    });
+  }
 
-  osc1.connect(mixGain);
-  osc2.connect(mixGain);
-  osc3.connect(mixGain);
-  mixGain.connect(gain);
+  playPattern();
+  const timer = window.setInterval(playPattern, totalCycle * 1000);
+  timers.push(timer);
 
-  osc1.start();
-  osc2.start();
-  osc3.start();
-  lfo.start();
-
-  return [osc1, osc2, osc3, lfo, lfoGain, mixGain];
+  return { nodes, timers };
 }
 
+// Store interval timers so we can clean them up
+const _activeTimers: number[] = [];
+
 function createPianoAmbient(ctx: AudioContext, gain: GainNode): AudioNode[] {
-  return createDrone(ctx, gain, 130.81, "piano"); // C3
+  // Gentle piano arpeggios — C major → Am → F → G progression
+  const chords = [
+    [261.63, 329.63, 392.00, 523.25],  // C major (C4 E4 G4 C5)
+    [220.00, 261.63, 329.63, 440.00],  // A minor (A3 C4 E4 A4)
+    [174.61, 220.00, 261.63, 349.23],  // F major (F3 A3 C4 F4)
+    [196.00, 246.94, 293.66, 392.00],  // G major (G3 B3 D4 G4)
+  ];
+
+  const allNodes: AudioNode[] = [];
+  const noteDur = 0.8;
+  const noteGap = 0.15;
+  const chordDur = (noteDur + noteGap) * 4;
+  const fullCycle = chordDur * chords.length;
+
+  // Warm reverb-like effect
+  const convGain = ctx.createGain();
+  convGain.gain.value = 0.6;
+  convGain.connect(gain);
+
+  // Soft pad underneath
+  const padOsc = ctx.createOscillator();
+  padOsc.type = "sine";
+  padOsc.frequency.value = 130.81; // C3
+  const padGain = ctx.createGain();
+  padGain.gain.value = 0.04;
+  padOsc.connect(padGain);
+  padGain.connect(gain);
+  padOsc.start();
+  allNodes.push(padOsc, padGain);
+
+  function playFullProgression() {
+    const now = ctx.currentTime;
+    chords.forEach((chord, ci) => {
+      chord.forEach((freq, ni) => {
+        const startTime = now + ci * chordDur + ni * (noteDur + noteGap);
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+
+        // Add slight detune for warmth
+        const osc2 = ctx.createOscillator();
+        osc2.type = "sine";
+        osc2.frequency.value = freq * 1.002;
+
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, startTime);
+        env.gain.linearRampToValueAtTime(0.12, startTime + 0.03);
+        env.gain.exponentialRampToValueAtTime(0.06, startTime + 0.2);
+        env.gain.linearRampToValueAtTime(0, startTime + noteDur);
+
+        osc.connect(env);
+        osc2.connect(env);
+        env.connect(convGain);
+        osc.start(startTime);
+        osc.stop(startTime + noteDur + 0.1);
+        osc2.start(startTime);
+        osc2.stop(startTime + noteDur + 0.1);
+      });
+    });
+  }
+
+  playFullProgression();
+  const timer = window.setInterval(playFullProgression, fullCycle * 1000);
+  _activeTimers.push(timer);
+
+  allNodes.push(convGain);
+  return allNodes;
 }
 
 function createJazzAmbient(ctx: AudioContext, gain: GainNode): AudioNode[] {
-  return createDrone(ctx, gain, 174.61, "jazz"); // F3 jazz feel
+  // Jazz: Cmaj7 → Dm7 → Em7 → A7 with swing rhythm
+  const chords = [
+    [261.63, 329.63, 392.00, 493.88],  // Cmaj7
+    [293.66, 349.23, 440.00, 523.25],  // Dm7
+    [329.63, 392.00, 493.88, 587.33],  // Em7
+    [220.00, 277.18, 329.63, 415.30],  // A7
+  ];
+
+  const allNodes: AudioNode[] = [];
+  const noteDur = 0.55;
+  const swingGap = 0.2;
+  const chordDur = (noteDur + swingGap) * 4;
+  const fullCycle = chordDur * chords.length;
+
+  // Walking bass line
+  const bassNotes = [130.81, 146.83, 164.81, 110.00];
+  const bassGain = ctx.createGain();
+  bassGain.gain.value = 0.5;
+  const bassFilter = ctx.createBiquadFilter();
+  bassFilter.type = "lowpass";
+  bassFilter.frequency.value = 400;
+  bassGain.connect(bassFilter);
+  bassFilter.connect(gain);
+  allNodes.push(bassGain, bassFilter);
+
+  function playJazzPattern() {
+    const now = ctx.currentTime;
+    chords.forEach((chord, ci) => {
+      // Chord voicing — play notes together with slight strum
+      chord.forEach((freq, ni) => {
+        const startTime = now + ci * chordDur + ni * 0.04; // slight strum
+        const osc = ctx.createOscillator();
+        osc.type = "triangle";
+        osc.frequency.value = freq;
+
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, startTime);
+        env.gain.linearRampToValueAtTime(0.08, startTime + 0.02);
+        env.gain.exponentialRampToValueAtTime(0.03, startTime + 0.3);
+        env.gain.linearRampToValueAtTime(0, startTime + chordDur - 0.1);
+
+        osc.connect(env);
+        env.connect(gain);
+        osc.start(startTime);
+        osc.stop(startTime + chordDur);
+      });
+
+      // Walking bass — 4 notes per chord
+      for (let beat = 0; beat < 4; beat++) {
+        const bassFreq = bassNotes[ci] * (beat % 2 === 0 ? 1 : 1.5); // root and fifth
+        const startTime = now + ci * chordDur + beat * (noteDur + swingGap);
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = bassFreq;
+
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, startTime);
+        env.gain.linearRampToValueAtTime(0.15, startTime + 0.01);
+        env.gain.exponentialRampToValueAtTime(0.02, startTime + noteDur * 0.8);
+        env.gain.linearRampToValueAtTime(0, startTime + noteDur);
+
+        osc.connect(env);
+        env.connect(bassGain);
+        osc.start(startTime);
+        osc.stop(startTime + noteDur + 0.05);
+      }
+    });
+  }
+
+  playJazzPattern();
+  const timer = window.setInterval(playJazzPattern, fullCycle * 1000);
+  _activeTimers.push(timer);
+
+  return allNodes;
 }
 
 function createLofiDrone(ctx: AudioContext, gain: GainNode): AudioNode[] {
-  // Lo-fi: warm filtered drone + subtle noise
-  const nodes = createDrone(ctx, gain, 98.0, "lofi"); // G2
-  // Add subtle filtered noise
-  const bufferSize = ctx.sampleRate * 2;
-  const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
-  const data = buffer.getChannelData(0);
-  for (let i = 0; i < bufferSize; i++) data[i] = (Math.random() * 2 - 1) * 0.03;
-  const noise = ctx.createBufferSource();
-  noise.buffer = buffer;
-  noise.loop = true;
-  const lp = ctx.createBiquadFilter();
-  lp.type = "lowpass";
-  lp.frequency.value = 300;
-  noise.connect(lp);
-  lp.connect(gain);
-  noise.start();
-  return [...nodes, noise, lp];
+  // Lo-fi hip hop: mellow Rhodes chords + vinyl crackle + slow beat
+  const chords = [
+    [220.00, 261.63, 329.63],  // Am (A3 C4 E4)
+    [196.00, 246.94, 293.66],  // G (G3 B3 D4)
+    [174.61, 220.00, 277.18],  // F (F3 A3 C#4) — Fmaj
+    [164.81, 207.65, 261.63],  // E (E3 G#3 C4) — E7
+  ];
+
+  const allNodes: AudioNode[] = [];
+  const chordDur = 2.4;
+  const fullCycle = chordDur * chords.length;
+
+  // Lo-pass filter for warmth
+  const warmFilter = ctx.createBiquadFilter();
+  warmFilter.type = "lowpass";
+  warmFilter.frequency.value = 1200;
+  warmFilter.Q.value = 0.7;
+  warmFilter.connect(gain);
+  allNodes.push(warmFilter);
+
+  // Vinyl crackle noise
+  const crackleSize = ctx.sampleRate * 4;
+  const crackleBuf = ctx.createBuffer(1, crackleSize, ctx.sampleRate);
+  const crackleData = crackleBuf.getChannelData(0);
+  for (let i = 0; i < crackleSize; i++) {
+    crackleData[i] = Math.random() > 0.993 ? (Math.random() * 0.15 - 0.075) : (Math.random() * 0.004 - 0.002);
+  }
+  const crackle = ctx.createBufferSource();
+  crackle.buffer = crackleBuf;
+  crackle.loop = true;
+  const crackleGain = ctx.createGain();
+  crackleGain.gain.value = 0.8;
+  const crackleFilter = ctx.createBiquadFilter();
+  crackleFilter.type = "highpass";
+  crackleFilter.frequency.value = 1000;
+  crackle.connect(crackleFilter);
+  crackleFilter.connect(crackleGain);
+  crackleGain.connect(gain);
+  crackle.start();
+  allNodes.push(crackle, crackleGain, crackleFilter);
+
+  // Simple kick-like beat
+  function playBeat(time: number) {
+    const kickOsc = ctx.createOscillator();
+    kickOsc.type = "sine";
+    kickOsc.frequency.setValueAtTime(150, time);
+    kickOsc.frequency.exponentialRampToValueAtTime(40, time + 0.12);
+    const kickEnv = ctx.createGain();
+    kickEnv.gain.setValueAtTime(0.18, time);
+    kickEnv.gain.exponentialRampToValueAtTime(0.001, time + 0.3);
+    kickOsc.connect(kickEnv);
+    kickEnv.connect(gain);
+    kickOsc.start(time);
+    kickOsc.stop(time + 0.35);
+  }
+
+  function playChordProgression() {
+    const now = ctx.currentTime;
+    chords.forEach((chord, ci) => {
+      const chordStart = now + ci * chordDur;
+
+      // Rhodes-like chord
+      chord.forEach((freq) => {
+        const osc = ctx.createOscillator();
+        osc.type = "sine";
+        osc.frequency.value = freq;
+
+        const osc2 = ctx.createOscillator();
+        osc2.type = "triangle";
+        osc2.frequency.value = freq * 2.01; // slight harmonic
+
+        const env = ctx.createGain();
+        env.gain.setValueAtTime(0, chordStart);
+        env.gain.linearRampToValueAtTime(0.09, chordStart + 0.05);
+        env.gain.setValueAtTime(0.07, chordStart + 0.3);
+        env.gain.linearRampToValueAtTime(0, chordStart + chordDur - 0.1);
+
+        const harmEnv = ctx.createGain();
+        harmEnv.gain.setValueAtTime(0, chordStart);
+        harmEnv.gain.linearRampToValueAtTime(0.025, chordStart + 0.02);
+        harmEnv.gain.linearRampToValueAtTime(0, chordStart + 0.6);
+
+        osc.connect(env);
+        osc2.connect(harmEnv);
+        env.connect(warmFilter);
+        harmEnv.connect(warmFilter);
+        osc.start(chordStart);
+        osc.stop(chordStart + chordDur + 0.1);
+        osc2.start(chordStart);
+        osc2.stop(chordStart + chordDur + 0.1);
+      });
+
+      // 2 kicks per chord (beats 1 and 3)
+      playBeat(chordStart);
+      playBeat(chordStart + chordDur / 2);
+    });
+  }
+
+  playChordProgression();
+  const timer = window.setInterval(playChordProgression, fullCycle * 1000);
+  _activeTimers.push(timer);
+
+  return allNodes;
 }
 
 const AMBIENT_TRACKS: AmbientTrack[] = [
