@@ -731,6 +731,9 @@
   font-size: 0.85rem;
   line-height: 1.6;
   color: #c9d1d9 !important;
+  white-space: pre;
+  word-break: normal;
+  display: block;
 }
 
 /* Force light syntax highlighting colors on dark code background */
