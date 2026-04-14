@@ -405,7 +405,7 @@ export default function Reader() {
     const tracker = new SectionCompletionTracker(wordCounts, (index, result) => {
       setSectionsCompletedCount(prev => prev + 1);
       gamification.completeSection();
-      trackSectionCompleted(bookId || '', currentChapter, index, result.reason);
+      trackSectionCompleted(bookId || '', currentChapter, index, result.reason, result.confidence);
       console.log(`[SectionTracker] Section ${index} complete: ${result.reason} (${result.confidence})`);
     });
     
