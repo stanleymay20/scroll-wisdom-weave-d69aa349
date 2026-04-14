@@ -213,13 +213,9 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
 
       const data = await response.json();
       
-      // Handle plan-required / fallback errors
+      // Handle plan-required / fallback errors — use Web Audio fallback
       if (data.error === "PLAN_REQUIRED" || data.fallback) {
-        toast.error("Study music requires an upgraded ElevenLabs plan", {
-          description: "Please upgrade at elevenlabs.io/pricing to enable AI music generation.",
-          duration: 6000,
-        });
-        return null;
+        return "FALLBACK";
       }
 
       if (data.url) {
