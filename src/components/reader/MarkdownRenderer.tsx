@@ -276,6 +276,12 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     
     let html = cleanedText;
 
+    // CRITICAL: Clean up corrupted fenced code placeholders baked into saved content
+    // by previous renderer versions that used single-underscore placeholders.
+    // Pattern: _FENCED_CODE_N_ or __FENCED_CODE_N__ (1 or 2 underscores) — these are
+    // NOT valid code blocks, they're orphaned placeholders from buggy saves.
+    html = html.replace(/_{1,3}FENCED_CODE_\d+_{1,3}/g, '');
+
     // CRITICAL: Protect fenced code blocks BEFORE any newline normalization.
     // Uses line-by-line parsing instead of regex to handle all fence patterns reliably.
     const protectedCodeBlocks: { lang: string; code: string }[] = [];

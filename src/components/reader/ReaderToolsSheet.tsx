@@ -195,15 +195,15 @@ export function ReaderToolsSheet({
 
       {/* Bottom Sheet */}
       <Sheet open={isOpen} onOpenChange={setIsOpen}>
-        <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 max-h-[60vh]">
-          <SheetHeader className="pb-4">
+        <SheetContent side="bottom" className="rounded-t-2xl px-4 pb-8 max-h-[70vh] flex flex-col">
+          <SheetHeader className="pb-4 flex-none">
             <SheetTitle className="text-base font-semibold">Reader Tools</SheetTitle>
             <SheetDescription className="text-xs text-muted-foreground">
               AI-powered study tools for this chapter
             </SheetDescription>
           </SheetHeader>
 
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 overflow-y-auto flex-1 min-h-0 pb-2">
             {visibleTools.map((tool) => (
               <button
                 key={tool.id}
