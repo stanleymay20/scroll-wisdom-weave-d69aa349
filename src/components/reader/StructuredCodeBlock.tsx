@@ -275,12 +275,12 @@ export function parseStructuredCodeBlock(text: string): StructuredCodeBlockData 
   const rawCodeField = extractMultilineField('code');
   if (rawCodeField) {
     code = rawCodeField
-      .replace(/^```\w*\n?/gm, '')  // opening fences
-      .replace(/^```\s*$/gm, '')     // closing fences
+      .replace(/^`{3,}\s*["']?\s*\w*\s*["']?\s*\n?/gm, '')  // opening fences (flexible)
+      .replace(/^`{3,}\s*$/gm, '')     // closing fences
       .trim();
   }
   if (!code) {
-    const codeMatch = content.match(/code:\s*\n```\w*\n([\s\S]*?)```/);
+    const codeMatch = content.match(/code:\s*\n`{3,}\s*\w*\n([\s\S]*?)`{3,}/);
     code = codeMatch?.[1]?.trim() || '';
   }
 

@@ -721,6 +721,9 @@
   margin: 0;
   padding: 2.5rem 1rem 1rem;
   overflow-x: auto;
+  white-space: pre;
+  word-break: normal;
+  overflow-wrap: normal;
 }
 
 .markdown-content .code-block code {
@@ -728,6 +731,9 @@
   font-size: 0.85rem;
   line-height: 1.6;
   color: #c9d1d9 !important;
+  white-space: pre;
+  word-break: normal;
+  display: block;
 }
 
 /* Force light syntax highlighting colors on dark code background */
