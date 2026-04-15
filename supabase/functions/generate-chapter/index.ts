@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs, parseRawFigureMarkers, summarizeFigureSpecs, VISUAL_DENSITY } from "../_shared/visual-intelligence.ts";
+import { checkRateLimit, errorResponse, ErrorCode } from "../_shared/error-codes.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
