@@ -64,6 +64,49 @@ interface StructuredCodeBlockProps {
  * - Explanation section
  * - Common mistake warning
  */
+// Detect if output text is a markdown table (has | delimiters and header separator)
+function isMarkdownTable(text: string): boolean {
+  const lines = text.trim().split('\n').filter(l => l.trim());
+  if (lines.length < 2) return false;
+  // Check if at least 2 lines have pipe characters and there's a separator row
+  const hasPipes = lines.filter(l => l.includes('|')).length >= 2;
+  const hasSeparator = lines.some(l => /^\s*\|?[\s\-:|]+\|[\s\-:|]+\|?\s*$/.test(l));
+  return hasPipes && hasSeparator;
+}
+
+// Render markdown table as proper HTML table elements
+function renderMarkdownTable(text: string): React.ReactNode {
+  const lines = text.trim().split('\n').filter(l => l.trim());
+  const parseLine = (line: string): string[] =>
+    line.split('|').map(cell => cell.trim()).filter((_, i, arr) => i > 0 && i < arr.length);
+  
+  const isSeparator = (line: string) => /^\s*\|?[\s\-:|]+\|[\s\-:|]+\|?\s*$/.test(line);
+  
+  const headerCells = parseLine(lines[0]);
+  const dataRows = lines.slice(1).filter(l => !isSeparator(l)).map(parseLine);
+  
+  return (
+    <>
+      <thead>
+        <tr className="border-b border-green-500/30">
+          {headerCells.map((cell, i) => (
+            <th key={i} className="px-3 py-1.5 text-left text-green-300 font-semibold">{cell}</th>
+          ))}
+        </tr>
+      </thead>
+      <tbody>
+        {dataRows.map((row, ri) => (
+          <tr key={ri} className="border-b border-green-500/10">
+            {row.map((cell, ci) => (
+              <td key={ci} className="px-3 py-1">{cell}</td>
+            ))}
+          </tr>
+        ))}
+      </tbody>
+    </>
+  );
+}
+
 export function StructuredCodeBlock({ data, className = "" }: StructuredCodeBlockProps) {
   const [copied, setCopied] = useState(false);
   const [showDetails, setShowDetails] = useState(true);
@@ -172,9 +215,17 @@ export function StructuredCodeBlock({ data, className = "" }: StructuredCodeBloc
             <Terminal size={14} className="text-green-500" />
             <span className="text-xs font-medium text-muted-foreground uppercase tracking-wide">Output</span>
           </div>
-          <pre className="px-4 py-3 text-sm font-mono bg-[hsl(220,15%,10%)] text-green-400 overflow-x-auto">
-            {data.output.trim()}
-          </pre>
+          {isMarkdownTable(data.output) ? (
+            <div className="px-4 py-3 overflow-x-auto bg-[hsl(220,15%,10%)]">
+              <table className="w-full text-sm font-mono text-green-400">
+                {renderMarkdownTable(data.output)}
+              </table>
+            </div>
+          ) : (
+            <pre className="px-4 py-3 text-sm font-mono bg-[hsl(220,15%,10%)] text-green-400 overflow-x-auto whitespace-pre-wrap">
+              {data.output.trim()}
+            </pre>
+          )}
         </div>
       )}
 
