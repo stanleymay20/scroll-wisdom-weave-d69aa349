@@ -281,8 +281,15 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     // These are NOT valid code blocks, they're orphaned placeholders from buggy saves.
     html = html.replace(/_{1,3}FENCED_CODE_\d+_{1,3}/g, '');
     // Also strip bold/italic-mangled versions: <strong><em>FENCED_CODE_0</em></strong> etc.
-    html = html.replace(/<\/?(?:strong|em)>/g, (m) => m); // no-op, but next line handles rendered text
     html = html.replace(/(?:<\/?(?:strong|em)>)*FENCED_CODE_\d+(?:<\/?(?:strong|em)>)*/g, '');
+    
+    // Clean up AI-generated malformed code patterns:
+    // 1. "CODE EXAMPLE (Python):" text-based format → should not appear
+    html = html.replace(/^(?:CODE\s+EXAMPLE|Code\s+Example)\s*\([^)]+\)\s*:?\s*$/gm, '');
+    // 2. "Output:" / "Expected Output:" headers that float outside code blocks
+    // (keep them if they're inside structured blocks — handled separately)
+    // 3. Orphaned language tags like "python" or "javascript" on their own line after a code block
+    html = html.replace(/^(?:python|javascript|typescript|java|bash|sql|cpp|go|rust)\s*$/gm, '');
 
     // CRITICAL: Protect fenced code blocks BEFORE any newline normalization.
     // Uses line-by-line parsing instead of regex to handle all fence patterns reliably.
