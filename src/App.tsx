@@ -71,6 +71,7 @@ const ExperimentReport = lazy(() => import("./pages/ExperimentReport"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
+const OnboardingDialog = lazy(() => import("./components/onboarding/OnboardingDialog").then(m => ({ default: m.OnboardingDialog })));
 
 const logger = createLogger('App');
 
@@ -180,6 +181,7 @@ const App = () => (
               <DiagnosticsPanel />
               <Suspense fallback={null}>
                 <CookieConsent />
+                <OnboardingDialog />
               </Suspense>
             </BrowserRouter>
           </TooltipProvider>
