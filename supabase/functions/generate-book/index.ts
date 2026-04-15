@@ -105,9 +105,15 @@ serve(async (req) => {
     const currentCount = profile?.last_book_date === today ? (profile?.daily_book_count || 0) : 0;
 
     if (!isAdmin && currentCount >= limits.booksPerDay) {
-      return new Response(JSON.stringify({
-        error: `Daily book limit reached (${limits.booksPerDay}/day for ${userPlan}). Upgrade for more.`,
-      }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      return errorResponse(ErrorCode.DAILY_LIMIT_REACHED, `Daily book limit reached (${limits.booksPerDay}/day for ${userPlan}). Upgrade for more.`, corsHeaders);
+    }
+
+    // Rate limiting: max 5 book generations per hour per user
+    if (!isAdmin) {
+      const rl = checkRateLimit(`gen-book:${user.id}`, 5, 60 * 60 * 1000);
+      if (!rl.allowed) {
+        return errorResponse(ErrorCode.RATE_LIMITED, 'Too many book generations. Please wait before creating another.', corsHeaders, { retryAfterMs: rl.retryAfterMs });
+      }
     }
 
     // Parse request body
@@ -133,9 +139,7 @@ serve(async (req) => {
     const transformationPrompt = sanitize(rawTransformationPrompt, 3000);
 
     if (!title || title.length < 1) {
-      return new Response(JSON.stringify({ error: "Title is required." }), {
-        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+      return errorResponse(ErrorCode.GENERATION_INVALID_INPUT, "Title is required.", corsHeaders);
     }
 
     if (!category || typeof category !== 'string' || category.length > 50) {
@@ -279,6 +283,19 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
 
     console.log(`[GENERATE-BOOK] Book ${book.id.slice(0, 8)}... saved`);
 
+    // Create generation job for progress tracking
+    const { data: genJob } = await supabase.from("generation_jobs").insert({
+      user_id: user.id,
+      book_id: book.id,
+      status: 'generating',
+      current_chapter: 0,
+      total_chapters: effectiveChapters,
+      metadata: { bookType: effectiveBookType, model: generationModel, language },
+    }).select('id').single();
+
+    const jobId = genJob?.id;
+    console.log(`[GENERATE-BOOK] Job ${jobId?.slice(0, 8)}... created`);
+
     // Save chapters
     const chaptersToInsert = bookOutline.chapters.map((ch: any) => ({
       book_id: book.id,
@@ -291,7 +308,18 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     const { error: chaptersError } = await supabase.from("chapters").insert(chaptersToInsert);
     if (chaptersError) {
       console.error("[GENERATE-BOOK] Chapters error:", chaptersError);
+      // Mark job as failed
+      if (jobId) await supabase.from("generation_jobs").update({ status: 'failed', error_code: 'GENERATION_FAILED', error_message: chaptersError.message }).eq("id", jobId);
       throw new Error(`Failed to save chapters: ${chaptersError.message}`);
+    }
+
+    // Mark job as completed (outline phase done - chapters will be generated individually)
+    if (jobId) {
+      await supabase.from("generation_jobs").update({
+        status: 'completed',
+        current_chapter: effectiveChapters,
+        completed_at: new Date().toISOString(),
+      }).eq("id", jobId);
     }
 
     // Add to library
@@ -309,13 +337,12 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
 
     return new Response(JSON.stringify({
       success: true, message: "Book created successfully",
-      bookId: book.id, outline: bookOutline,
+      bookId: book.id, jobId, outline: bookOutline,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {
     console.error("[GENERATE-BOOK] Error:", error);
-    return new Response(JSON.stringify({
-      error: error instanceof Error ? error.message : "Unknown error",
-    }), { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    const msg = error instanceof Error ? error.message : "Unknown error";
+    return errorResponse(ErrorCode.GENERATION_FAILED, msg, corsHeaders);
   }
 });
