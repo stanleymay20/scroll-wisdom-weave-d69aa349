@@ -3515,8 +3515,19 @@ ${summaries}
     
     const ACADEMIC_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'economics', 'finance', 'governance', 'history', 'philosophy'];
     
-    // STEM categories that SHOULD have code blocks
-    const STEM_CODE_CATEGORIES = ['technology', 'science', 'engineering', 'programming', 'computer_science', 'data_science', 'mathematics', 'statistics'];
+    // ===========================================
+    // PIPELINE CLASSIFICATION v2.0 — THREE-TIER ROUTING
+    // ===========================================
+    // CODE-STEM: Programming, CS, data science → Python/JS code blocks mandatory
+    // MATH-STEM: Mathematics, physics, chemistry, calculus → Equations/proofs, NO programming code
+    // NON-STEM:  Everything else → Prose, frameworks, case studies, NO code
+    // ===========================================
+    
+    // CODE-STEM: Categories where executable programming code IS the content
+    const CODE_STEM_CATEGORIES = ['technology', 'engineering', 'programming', 'computer_science', 'data_science', 'software', 'web_development', 'cybersecurity', 'devops'];
+    
+    // MATH-STEM: Categories where EQUATIONS and PROOFS are the content, NOT programming
+    const MATH_STEM_CATEGORIES = ['mathematics', 'calculus', 'algebra', 'geometry', 'trigonometry', 'statistics', 'physics', 'chemistry', 'biology', 'science'];
     
     // NON-STEM categories that should NEVER have code blocks
     const NON_STEM_CATEGORIES = [
@@ -3527,6 +3538,10 @@ ${summaries}
       'economics', 'finance', 'wealth', 'investing', 'personal_development',
       'self_help', 'self-help', 'personal development', 'religion', 'spirituality',
       'health', 'wellness', 'communication', 'writing', 'journalism',
+      'non_fiction', 'nonfiction', 'general', 'language', 'languages', 'literature',
+      'cooking', 'travel', 'music', 'sports', 'fitness', 'parenting', 'relationships',
+      'biography', 'memoir', 'true_crime', 'nature', 'environment', 'culture',
+      'design', 'architecture', 'photography', 'film', 'media', 'politics',
     ];
     
     const isAcademicPipeline = 
@@ -3536,18 +3551,32 @@ ${summaries}
       (effectiveBookType === 'professional' && ACADEMIC_CATEGORIES.includes(category?.toLowerCase())) ||
       academicMode === true;
     
-    // Determine if this academic book should use STEM (code-heavy) or NON-STEM (prose) pipeline
+    // Determine pipeline: CODE-STEM vs MATH-STEM vs NON-STEM
     const categoryLower = (category || '').toLowerCase();
     const titleLower = (bookTitle || '').toLowerCase();
     
-    const isStemAcademic = STEM_CODE_CATEGORIES.some(cat => 
+    // CODE-STEM: Only when the content is explicitly about programming/coding
+    const isCodeStemAcademic = CODE_STEM_CATEGORIES.some(cat => 
       categoryLower.includes(cat) || titleLower.includes(cat)
-    ) || !!titleLower.match(/python|javascript|java\b|c\+\+|programming|coding|software|algorithm|data\s*science|machine\s*learning|neural|deep\s*learning|api|database|sql|devops|cloud\s*computing|cyber/i);
+    ) || !!titleLower.match(/python|javascript|java\b|c\+\+|c#|programming|coding|software|algorithm|data\s*science|machine\s*learning|neural|deep\s*learning|api|database|sql|devops|cloud\s*computing|cyber|web\s*dev|react|node\.?js|typescript|rust\b|golang/i);
     
-    const isNonStemAcademic = !isStemAcademic && (
-      NON_STEM_CATEGORIES.some(cat => categoryLower.includes(cat)) ||
-      !!titleLower.match(/career|business|leadership|management|marketing|strategy|psychology|history|philosophy|sociology|education|law|economics|finance|wealth|entrepreneur|organization|human\s*resource|communication|political|humanities/i)
+    // MATH-STEM: Mathematics, physics, chemistry — uses equations/proofs, NOT code
+    const isMathStemAcademic = !isCodeStemAcademic && (
+      MATH_STEM_CATEGORIES.some(cat => categoryLower.includes(cat) || titleLower.includes(cat)) ||
+      !!titleLower.match(/calculus|algebra|geometry|trigonometry|differential|integral|linear\s*algebra|number\s*theory|topology|discrete\s*math|probability|statistical\s*method|physics|quantum|thermodynamic|mechanics|chemistry|organic\s*chem|biochem|biology|anatomy|physiology|genetics/i)
     );
+    
+    // NON-STEM: Everything that's not CODE-STEM or MATH-STEM
+    // IMPORTANT: Default to NON-STEM if category is unrecognized (safe fallthrough)
+    const isNonStemAcademic = !isCodeStemAcademic && !isMathStemAcademic && (
+      NON_STEM_CATEGORIES.some(cat => categoryLower.includes(cat)) ||
+      !!titleLower.match(/career|business|leadership|management|marketing|strategy|psychology|history|philosophy|sociology|education|law|economics|finance|wealth|entrepreneur|organization|human\s*resource|communication|political|humanities|language|german|french|spanish|arabic|chinese|japanese|korean|literature|novel|poetry|essay|culture|art\b|design|music|film|media/i) ||
+      // SAFE DEFAULT: If not explicitly CODE-STEM or MATH-STEM, treat as NON-STEM
+      (!isCodeStemAcademic && !isMathStemAcademic)
+    );
+    
+    // Legacy alias for backward compatibility in routing below
+    const isStemAcademic = isCodeStemAcademic;
     
     if (isAcademicPipeline && isNonStemAcademic && researchResult && researchResult.references.length > 0) {
       // NON-STEM ACADEMIC PIPELINE — references, case studies, NO code
