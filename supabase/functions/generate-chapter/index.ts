@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs, parseRawFigureMarkers, summarizeFigureSpecs, VISUAL_DENSITY } from "../_shared/visual-intelligence.ts";
+import { checkRateLimit, errorResponse, ErrorCode } from "../_shared/error-codes.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -2470,6 +2471,12 @@ serve(async (req) => {
     const forceModel = (requestBody?.forceModel as string | null) || null;
 
     console.log(`[GENERATE-CHAPTER] User: ${user.id.slice(0, 8)}...`);
+
+    // Rate limiting: max 30 chapter generations per hour per user
+    const rl = checkRateLimit(`gen-chapter:${user.id}`, 30, 60 * 60 * 1000);
+    if (!rl.allowed) {
+      return errorResponse(ErrorCode.RATE_LIMITED, 'Too many chapter generations. Please wait before generating more.', corsHeaders, { retryAfterMs: rl.retryAfterMs });
+    }
 
     // Check admin status
     const { data: userRoles } = await supabase

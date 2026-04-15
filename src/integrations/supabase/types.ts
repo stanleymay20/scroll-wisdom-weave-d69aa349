@@ -1101,6 +1101,62 @@ export type Database = {
         }
         Relationships: []
       }
+      generation_jobs: {
+        Row: {
+          book_id: string | null
+          completed_at: string | null
+          created_at: string
+          current_chapter: number
+          error_code: string | null
+          error_message: string | null
+          id: string
+          metadata: Json | null
+          started_at: string
+          status: string
+          total_chapters: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          book_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          current_chapter?: number
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          started_at?: string
+          status?: string
+          total_chapters?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string | null
+          completed_at?: string | null
+          created_at?: string
+          current_chapter?: number
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          metadata?: Json | null
+          started_at?: string
+          status?: string
+          total_chapters?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "generation_jobs_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       highlights: {
         Row: {
           book_id: string
