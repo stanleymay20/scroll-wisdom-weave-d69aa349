@@ -243,17 +243,22 @@ print("Hello")
 \`\`\`
 
 CODE FORMATTING RULES (HARD REQUIREMENTS):
-1. ALWAYS use proper indentation (4 spaces for Python, 2-4 for others)
-2. ALWAYS include blank lines between logical sections
-3. Include explanatory comments within code
-4. Each statement on its own line - NO cramming multiple statements
+1. ALWAYS specify the language tag on EVERY code fence (e.g., \`\`\`python, \`\`\`javascript, \`\`\`sql, \`\`\`bash)
+2. ❌ NEVER use unlabeled code fences (\`\`\` without a language) — ALWAYS add the language
+3. ALWAYS use proper indentation (4 spaces for Python, 2-4 for others)
+4. ALWAYS include blank lines between logical sections
+5. Include explanatory comments within code
+6. Each statement on its own line - NO cramming multiple statements
+7. Code output MUST be in a separate section, NOT inside the code fence
 
 ❌ FORBIDDEN CODE FORMATS:
+- Unlabeled code fences (\`\`\` without language tag)
 - "CODE EXAMPLE (Python):" text-based format
 - Single-line cramped code without proper breaks
 - Code without language specification
 - Code inside tables
 - Missing indentation
+- Placeholder code (pass, TODO, your_code_here, NotImplementedError)
 
 ===========================================
 TEXT FORMATTING (MANDATORY MARKDOWN):
