@@ -339,8 +339,16 @@ export function parseStructuredCodeBlock(text: string): StructuredCodeBlockData 
   const outputField = extractMultilineField('output');
   let output = outputField;
   if (!output) {
-    const outputMatch = content.match(/output:\s*\n([\s\S]*?)(?=^(?:explanation|common_mistake):|$)/mi);
-    output = outputMatch?.[1]?.trim();
+    // Fallback: capture everything from output: until next known field or [/CODE_BLOCK]
+    // Use a greedy approach anchored to next field headers to avoid $-at-end-of-line truncation
+    const outputMatch = content.match(/output:\s*\n([\s\S]*?)(?=\n\s*(?:explanation|common_mistake)\s*:|\[\/?CODE_BLOCK\])/i);
+    if (!outputMatch) {
+      // Last-resort: capture to end of content
+      const lastResort = content.match(/output:\s*\n([\s\S]+)/i);
+      output = lastResort?.[1]?.trim();
+    } else {
+      output = outputMatch?.[1]?.trim();
+    }
   }
   // Strip any accidental code fences wrapping the output
   if (output) {
