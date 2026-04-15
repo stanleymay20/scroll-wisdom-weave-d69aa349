@@ -4077,9 +4077,9 @@ References
 
 BEGIN WRITING THE COMPLETE ACADEMIC/TECHNICAL CHAPTER:`;
 
-    } else if (isAcademicPipeline) {
-      // Academic mode but no research results - still use technical pipeline
-      console.log("[GENERATE-CHAPTER] Using ACADEMIC/TECHNICAL pipeline (no sources available)");
+    } else if (isAcademicPipeline && isCodeStemAcademic) {
+      // CODE-STEM ACADEMIC: Programming/CS topics without research — code-heavy pipeline
+      console.log("[GENERATE-CHAPTER] Using CODE-STEM ACADEMIC pipeline (no sources available)");
       
       systemPrompt = `You are ScrollLibrary — ACADEMIC/TECHNICAL PIPELINE.
 
@@ -4136,7 +4136,7 @@ Core Concepts
 
 Implementation Examples
 
-[Code examples with proper formatting if applicable]
+[Code examples with proper formatting]
 
 Exercises
 
@@ -4161,6 +4161,101 @@ REQUIREMENTS:
 ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts - do NOT repeat basic introductions' : ''}
 
 BEGIN WRITING THE ACADEMIC/TECHNICAL CHAPTER:`;
+
+    } else if (isAcademicPipeline) {
+      // SAFE FALLTHROUGH: All remaining academic books default to NON-STEM prose pipeline
+      // This prevents unclassified categories from getting code blocks
+      console.log(`[GENERATE-CHAPTER] Using NON-STEM ACADEMIC fallthrough (safe default, no code) for category: ${category}`);
+      
+      const { PROFESSIONAL_ACADEMIC_PIPELINE: PROF_ACADEMIC } = await import("../_shared/master-prompt.ts");
+      
+      systemPrompt = `You are ScrollLibrary — NON-STEM ACADEMIC PIPELINE (DEFAULT).
+
+${BORN_QUALITY_CONTRACT}
+
+GENERATOR IDENTITY: University Professor · Research Scholar · Subject-Matter Expert
+
+You are writing a university-grade textbook for ${category.replace(/_/g, " ")}.
+Your output must pass institutional quality review.
+
+CRITICAL: This is NOT a programming or technical manual.
+❌ DO NOT include ANY code blocks, code examples, or programming content.
+❌ DO NOT use code fencing of any kind.
+
+Instead, use:
+✅ Theoretical frameworks and models
+✅ Case studies with real-world examples
+✅ Research-backed analysis with citations
+✅ Comparative tables using markdown pipe format
+✅ Discussion questions and reflection exercises
+
+${PROF_ACADEMIC}
+
+${MASTER_FORMATTING_CONTRACT}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.
+
+ABSOLUTE RULE: If ANY code block appears → OUTPUT IS INVALID.`;
+
+      chapterPrompt = `${previousChaptersContext}Write a NON-STEM ACADEMIC Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+NON-STEM ACADEMIC STRUCTURE (MANDATORY):
+
+### Learning Objectives
+
+By the end of this chapter, you will be able to:
+1. [Bloom's-aligned objective]
+2. [Specific objective]
+3. [Specific objective]
+
+### Introduction
+
+[Academic overview${chapterNumber > 1 ? ' - Reference prior chapter' : ''}]
+
+### Theoretical Foundations
+
+[Key theories, models, and foundational concepts with citations]
+
+### Research & Evidence
+
+[Research findings, statistics, empirical data — NOT code]
+
+### Practical Applications
+
+[Case studies, frameworks, decision tools — use TABLES not code]
+
+### Critical Analysis
+
+[Limitations, debates, alternative views]
+
+### Key Takeaways
+
+[Summary points]
+
+### Discussion Questions & Exercises
+
+1. [Discussion question]
+2. [Case study exercise]
+3. [Reflection prompt]
+
+### References
+
+[APA 7th formatted references - include real, verifiable sources]
+
+REQUIREMENTS:
+- Approximately ${targetWords} words
+- Use proper Markdown: ## for headings, **bold** for key terms, pipe-syntax tables
+- ❌ NO code blocks or programming examples
+- ✅ Academic tone with proper in-text citations
+- ✅ Include References section with 8+ verifiable sources
+${chapterNumber > 1 ? '- BUILD upon previous chapter concepts' : ''}
+
+BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
 
     } else if (effectiveBookType === 'illustrated' || effectiveBookType === 'children') {
       // ===========================================
