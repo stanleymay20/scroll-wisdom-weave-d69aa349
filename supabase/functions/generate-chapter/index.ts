@@ -5059,6 +5059,9 @@ DO NOT:
 - Remove or modify [FIGURE X: ...] markers
 - Over-polish — leave some natural roughness
 - Smooth every transition — some abruptness is human
+${shouldStripCode ? `- ❌ DO NOT add any programming code blocks (\`\`\`python, \`\`\`javascript, etc.)
+- ❌ DO NOT add [CODE_BLOCK] tags or executable code
+- Use equations, tables, prose, and frameworks instead of code` : ''}
 
 Return ONLY the improved chapter text. No preamble.` },
               { role: "user", content: finalContent.slice(0, 25000) }
