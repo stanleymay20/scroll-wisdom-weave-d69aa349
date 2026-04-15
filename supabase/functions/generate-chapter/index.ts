@@ -3515,8 +3515,19 @@ ${summaries}
     
     const ACADEMIC_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'economics', 'finance', 'governance', 'history', 'philosophy'];
     
-    // STEM categories that SHOULD have code blocks
-    const STEM_CODE_CATEGORIES = ['technology', 'science', 'engineering', 'programming', 'computer_science', 'data_science', 'mathematics', 'statistics'];
+    // ===========================================
+    // PIPELINE CLASSIFICATION v2.0 — THREE-TIER ROUTING
+    // ===========================================
+    // CODE-STEM: Programming, CS, data science → Python/JS code blocks mandatory
+    // MATH-STEM: Mathematics, physics, chemistry, calculus → Equations/proofs, NO programming code
+    // NON-STEM:  Everything else → Prose, frameworks, case studies, NO code
+    // ===========================================
+    
+    // CODE-STEM: Categories where executable programming code IS the content
+    const CODE_STEM_CATEGORIES = ['technology', 'engineering', 'programming', 'computer_science', 'data_science', 'software', 'web_development', 'cybersecurity', 'devops'];
+    
+    // MATH-STEM: Categories where EQUATIONS and PROOFS are the content, NOT programming
+    const MATH_STEM_CATEGORIES = ['mathematics', 'calculus', 'algebra', 'geometry', 'trigonometry', 'statistics', 'physics', 'chemistry', 'biology', 'science'];
     
     // NON-STEM categories that should NEVER have code blocks
     const NON_STEM_CATEGORIES = [
@@ -3527,6 +3538,10 @@ ${summaries}
       'economics', 'finance', 'wealth', 'investing', 'personal_development',
       'self_help', 'self-help', 'personal development', 'religion', 'spirituality',
       'health', 'wellness', 'communication', 'writing', 'journalism',
+      'non_fiction', 'nonfiction', 'general', 'language', 'languages', 'literature',
+      'cooking', 'travel', 'music', 'sports', 'fitness', 'parenting', 'relationships',
+      'biography', 'memoir', 'true_crime', 'nature', 'environment', 'culture',
+      'design', 'architecture', 'photography', 'film', 'media', 'politics',
     ];
     
     const isAcademicPipeline = 
@@ -3536,20 +3551,169 @@ ${summaries}
       (effectiveBookType === 'professional' && ACADEMIC_CATEGORIES.includes(category?.toLowerCase())) ||
       academicMode === true;
     
-    // Determine if this academic book should use STEM (code-heavy) or NON-STEM (prose) pipeline
+    // Determine pipeline: CODE-STEM vs MATH-STEM vs NON-STEM
     const categoryLower = (category || '').toLowerCase();
     const titleLower = (bookTitle || '').toLowerCase();
     
-    const isStemAcademic = STEM_CODE_CATEGORIES.some(cat => 
+    // CODE-STEM: Only when the content is explicitly about programming/coding
+    const isCodeStemAcademic = CODE_STEM_CATEGORIES.some(cat => 
       categoryLower.includes(cat) || titleLower.includes(cat)
-    ) || !!titleLower.match(/python|javascript|java\b|c\+\+|programming|coding|software|algorithm|data\s*science|machine\s*learning|neural|deep\s*learning|api|database|sql|devops|cloud\s*computing|cyber/i);
+    ) || !!titleLower.match(/python|javascript|java\b|c\+\+|c#|programming|coding|software|algorithm|data\s*science|machine\s*learning|neural|deep\s*learning|api|database|sql|devops|cloud\s*computing|cyber|web\s*dev|react|node\.?js|typescript|rust\b|golang/i);
     
-    const isNonStemAcademic = !isStemAcademic && (
-      NON_STEM_CATEGORIES.some(cat => categoryLower.includes(cat)) ||
-      !!titleLower.match(/career|business|leadership|management|marketing|strategy|psychology|history|philosophy|sociology|education|law|economics|finance|wealth|entrepreneur|organization|human\s*resource|communication|political|humanities/i)
+    // MATH-STEM: Mathematics, physics, chemistry — uses equations/proofs, NOT code
+    const isMathStemAcademic = !isCodeStemAcademic && (
+      MATH_STEM_CATEGORIES.some(cat => categoryLower.includes(cat) || titleLower.includes(cat)) ||
+      !!titleLower.match(/calculus|algebra|geometry|trigonometry|differential|integral|linear\s*algebra|number\s*theory|topology|discrete\s*math|probability|statistical\s*method|physics|quantum|thermodynamic|mechanics|chemistry|organic\s*chem|biochem|biology|anatomy|physiology|genetics/i)
     );
     
-    if (isAcademicPipeline && isNonStemAcademic && researchResult && researchResult.references.length > 0) {
+    // NON-STEM: Everything that's not CODE-STEM or MATH-STEM
+    // IMPORTANT: Default to NON-STEM if category is unrecognized (safe fallthrough)
+    const isNonStemAcademic = !isCodeStemAcademic && !isMathStemAcademic && (
+      NON_STEM_CATEGORIES.some(cat => categoryLower.includes(cat)) ||
+      !!titleLower.match(/career|business|leadership|management|marketing|strategy|psychology|history|philosophy|sociology|education|law|economics|finance|wealth|entrepreneur|organization|human\s*resource|communication|political|humanities|language|german|french|spanish|arabic|chinese|japanese|korean|literature|novel|poetry|essay|culture|art\b|design|music|film|media/i) ||
+      // SAFE DEFAULT: If not explicitly CODE-STEM or MATH-STEM, treat as NON-STEM
+      (!isCodeStemAcademic && !isMathStemAcademic)
+    );
+    
+    // Legacy alias for backward compatibility in routing below
+    const isStemAcademic = isCodeStemAcademic;
+    
+    if (isAcademicPipeline && isMathStemAcademic) {
+      // ===========================================
+      // MATH-STEM PIPELINE — Equations, proofs, derivations, NO programming code
+      // For: Calculus, Physics, Chemistry, Statistics, Linear Algebra, etc.
+      // ===========================================
+      console.log(`[GENERATE-CHAPTER] Using MATH-STEM pipeline (equations/proofs, no code) for category: ${category}`);
+      
+      systemPrompt = `You are ScrollLibrary — MATHEMATICAL/SCIENTIFIC ACADEMIC PIPELINE.
+
+${BORN_QUALITY_CONTRACT}
+
+===========================================
+GENERATOR IDENTITY: University Professor · Mathematician · Scientist
+===========================================
+
+You are writing a university-grade textbook for ${category.replace(/_/g, " ")}.
+This is a MATHEMATICAL/SCIENTIFIC discipline. Content should be rigorous, proof-based, and equation-heavy.
+
+===========================================
+CRITICAL: USE EQUATIONS, NOT PROGRAMMING CODE
+===========================================
+
+❌ ABSOLUTELY NO Python code blocks
+❌ ABSOLUTELY NO JavaScript, Java, or any programming language
+❌ NO \`\`\`python or \`\`\`javascript blocks
+❌ NO [CODE_BLOCK] tags
+❌ NO "import numpy" or "import matplotlib"
+❌ NO executable code of any kind
+
+✅ USE LaTeX-style mathematical notation inline: $f(x) = x^2$
+✅ USE display equations: $$\\int_a^b f(x)\\,dx = F(b) - F(a)$$
+✅ USE step-by-step algebraic derivations
+✅ USE formal proofs (Theorem → Proof → QED format)
+✅ USE worked examples with complete solutions
+✅ USE diagrams described as [FIGURE X: description]
+✅ USE comparison tables (markdown pipe format)
+
+===========================================
+MANDATORY CHAPTER STRUCTURE (MATH/SCIENCE ACADEMIC):
+===========================================
+
+1. LEARNING OBJECTIVES (3-5 Bloom's-aligned)
+2. PREREQUISITE REVIEW (brief, connecting to prior chapters)
+3. DEFINITIONS AND THEOREMS (formally stated)
+4. DERIVATIONS AND PROOFS (step-by-step with justification)
+5. WORKED EXAMPLES (3-5, increasing difficulty, fully solved)
+6. KEY FORMULAS SUMMARY (table format)
+7. PRACTICE EXERCISES (Easy → Medium → Hard)
+8. APPLICATIONS (real-world problems using the mathematics)
+9. SUMMARY AND KEY TAKEAWAYS
+
+===========================================
+CONTENT STANDARDS:
+===========================================
+
+- Every theorem must be formally stated before proof
+- Every derivation must show EVERY intermediate step
+- Worked examples must show the complete solution process
+- Exercises must have clear answers or solution hints
+- Use proper mathematical notation throughout
+- Define all symbols before using them
+
+${MASTER_FORMATTING_CONTRACT}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.
+CATEGORY: ${category}
+
+If ANY programming code block appears → OUTPUT IS INVALID.
+Teach through EQUATIONS, PROOFS, and WORKED EXAMPLES.`;
+
+      chapterPrompt = `${previousChaptersContext}Write a MATHEMATICAL/SCIENTIFIC Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+REQUIREMENTS:
+1. Write approximately ${targetWords} words in ${languageName}
+2. Use mathematical notation: $inline$ and $$display$$ format
+3. Include step-by-step derivations and proofs
+4. Provide 3-5 fully solved worked examples
+5. Include a Key Formulas table (markdown pipe format)
+6. Include graduated exercises (Easy → Medium → Hard) at chapter end
+7. ❌ ABSOLUTELY NO programming code (no Python, no JavaScript, no code blocks)
+8. ✅ Use equations, proofs, derivations, and worked examples instead
+${chapterNumber > 1 ? '9. BUILD upon previous chapter concepts - do NOT repeat basics' : ''}
+
+MANDATORY STRUCTURE:
+
+### Learning Objectives
+
+By the end of this chapter, you will be able to:
+1. [Specific mathematical/scientific objective]
+2. [Specific objective]
+3. [Specific objective]
+
+### Definitions and Theorems
+
+[Formally state key definitions and theorems]
+
+### Derivations
+
+[Step-by-step mathematical derivations with every intermediate step shown]
+
+### Worked Examples
+
+**Example 1:** [Complete solution]
+**Example 2:** [Complete solution]
+**Example 3:** [Complete solution]
+
+### Key Formulas
+
+| Formula | Description | When to Use |
+|---------|-------------|-------------|
+| $formula$ | Description | Context |
+
+### Practice Exercises
+
+1. [Easy - direct application]
+2. [Medium - requires combining concepts]
+3. [Hard - requires creative problem-solving]
+
+### Applications
+
+[Real-world applications of the mathematical/scientific concepts]
+
+### Summary
+
+[Key takeaways]
+
+REMEMBER: Use EQUATIONS and PROOFS, NOT programming code.
+
+BEGIN WRITING THE MATHEMATICAL/SCIENTIFIC CHAPTER:`;
+
+    } else if (isAcademicPipeline && isNonStemAcademic && researchResult && researchResult.references.length > 0) {
       // NON-STEM ACADEMIC PIPELINE — references, case studies, NO code
       console.log("[GENERATE-CHAPTER] Using NON-STEM ACADEMIC pipeline (references, no code)");
       
@@ -3913,9 +4077,9 @@ References
 
 BEGIN WRITING THE COMPLETE ACADEMIC/TECHNICAL CHAPTER:`;
 
-    } else if (isAcademicPipeline) {
-      // Academic mode but no research results - still use technical pipeline
-      console.log("[GENERATE-CHAPTER] Using ACADEMIC/TECHNICAL pipeline (no sources available)");
+    } else if (isAcademicPipeline && isCodeStemAcademic) {
+      // CODE-STEM ACADEMIC: Programming/CS topics without research — code-heavy pipeline
+      console.log("[GENERATE-CHAPTER] Using CODE-STEM ACADEMIC pipeline (no sources available)");
       
       systemPrompt = `You are ScrollLibrary — ACADEMIC/TECHNICAL PIPELINE.
 
@@ -3972,7 +4136,7 @@ Core Concepts
 
 Implementation Examples
 
-[Code examples with proper formatting if applicable]
+[Code examples with proper formatting]
 
 Exercises
 
@@ -3997,6 +4161,101 @@ REQUIREMENTS:
 ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts - do NOT repeat basic introductions' : ''}
 
 BEGIN WRITING THE ACADEMIC/TECHNICAL CHAPTER:`;
+
+    } else if (isAcademicPipeline) {
+      // SAFE FALLTHROUGH: All remaining academic books default to NON-STEM prose pipeline
+      // This prevents unclassified categories from getting code blocks
+      console.log(`[GENERATE-CHAPTER] Using NON-STEM ACADEMIC fallthrough (safe default, no code) for category: ${category}`);
+      
+      const { PROFESSIONAL_ACADEMIC_PIPELINE: PROF_ACADEMIC } = await import("../_shared/master-prompt.ts");
+      
+      systemPrompt = `You are ScrollLibrary — NON-STEM ACADEMIC PIPELINE (DEFAULT).
+
+${BORN_QUALITY_CONTRACT}
+
+GENERATOR IDENTITY: University Professor · Research Scholar · Subject-Matter Expert
+
+You are writing a university-grade textbook for ${category.replace(/_/g, " ")}.
+Your output must pass institutional quality review.
+
+CRITICAL: This is NOT a programming or technical manual.
+❌ DO NOT include ANY code blocks, code examples, or programming content.
+❌ DO NOT use code fencing of any kind.
+
+Instead, use:
+✅ Theoretical frameworks and models
+✅ Case studies with real-world examples
+✅ Research-backed analysis with citations
+✅ Comparative tables using markdown pipe format
+✅ Discussion questions and reflection exercises
+
+${PROF_ACADEMIC}
+
+${MASTER_FORMATTING_CONTRACT}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.
+
+ABSOLUTE RULE: If ANY code block appears → OUTPUT IS INVALID.`;
+
+      chapterPrompt = `${previousChaptersContext}Write a NON-STEM ACADEMIC Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+NON-STEM ACADEMIC STRUCTURE (MANDATORY):
+
+### Learning Objectives
+
+By the end of this chapter, you will be able to:
+1. [Bloom's-aligned objective]
+2. [Specific objective]
+3. [Specific objective]
+
+### Introduction
+
+[Academic overview${chapterNumber > 1 ? ' - Reference prior chapter' : ''}]
+
+### Theoretical Foundations
+
+[Key theories, models, and foundational concepts with citations]
+
+### Research & Evidence
+
+[Research findings, statistics, empirical data — NOT code]
+
+### Practical Applications
+
+[Case studies, frameworks, decision tools — use TABLES not code]
+
+### Critical Analysis
+
+[Limitations, debates, alternative views]
+
+### Key Takeaways
+
+[Summary points]
+
+### Discussion Questions & Exercises
+
+1. [Discussion question]
+2. [Case study exercise]
+3. [Reflection prompt]
+
+### References
+
+[APA 7th formatted references - include real, verifiable sources]
+
+REQUIREMENTS:
+- Approximately ${targetWords} words
+- Use proper Markdown: ## for headings, **bold** for key terms, pipe-syntax tables
+- ❌ NO code blocks or programming examples
+- ✅ Academic tone with proper in-text citations
+- ✅ Include References section with 8+ verifiable sources
+${chapterNumber > 1 ? '- BUILD upon previous chapter concepts' : ''}
+
+BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
 
     } else if (effectiveBookType === 'illustrated' || effectiveBookType === 'children') {
       // ===========================================
@@ -4826,7 +5085,45 @@ Return ONLY the improved chapter text. No preamble.` },
     }
 
     // ===========================================
-    // INSTITUTIONAL AI DISCLOSURE — ALL NON-ACADEMIC PIPELINES
+    // POST-GENERATION CODE SANITIZER (SAFETY NET)
+    // Strips programming code blocks from non-code-STEM pipelines
+    // This catches any AI model drift that ignores the "no code" instruction
+    // ===========================================
+    const PIPELINES_THAT_FORBID_CODE = ['bestseller', 'text', 'professional', 'reference', 'children', 'illustrated'];
+    const shouldStripCode = (
+      // Non-code book types
+      PIPELINES_THAT_FORBID_CODE.includes(effectiveBookType) ||
+      // Academic but non-code-STEM (math-stem uses equations, non-stem uses prose)
+      (isAcademicPipeline && !isCodeStemAcademic) ||
+      // MATH-STEM: equations yes, Python no
+      isMathStemAcademic
+    ) && !isCodeStemAcademic; // Never strip from code-STEM
+
+    if (shouldStripCode && finalContent) {
+      const codeBlockRegex = /```(?:python|javascript|typescript|java|csharp|cpp|go|rust|ruby|php|swift|kotlin|sql|bash|sh|shell|dart|scala|r)\b[\s\S]*?```/gi;
+      const codeBlockMatches = finalContent.match(codeBlockRegex);
+      
+      if (codeBlockMatches && codeBlockMatches.length > 0) {
+        console.warn(`[GENERATE-CHAPTER] ⚠️ CODE SANITIZER: Stripping ${codeBlockMatches.length} code block(s) from ${effectiveBookType}/${category} pipeline`);
+        
+        // Replace code blocks with a note about what was there
+        finalContent = finalContent.replace(codeBlockRegex, (match) => {
+          // Extract the language from the opening fence
+          const langMatch = match.match(/```(\w+)/);
+          const lang = langMatch ? langMatch[1] : 'code';
+          return `> *[Technical ${lang} example removed — this content type uses equations, frameworks, and scholarly analysis instead of programming code.]*`;
+        });
+        
+        // Also strip [CODE_BLOCK] structured blocks
+        finalContent = finalContent.replace(/\[CODE_BLOCK\][\s\S]*?\[\/CODE_BLOCK\]/g, 
+          '> *[Technical code example removed — this content type uses equations, frameworks, and scholarly analysis instead of programming code.]*'
+        );
+        
+        // Strip orphaned [EVIDENCE_BLOCK] markers from non-code pipelines
+        finalContent = finalContent.replace(/\[EVIDENCE_BLOCK\][\s\S]*?\[\/EVIDENCE_BLOCK\]/g, '');
+      }
+    }
+
     // Phase 3 audit finding: bestseller/text/professional/reference pipelines
     // had no AI disclosure, which is a credibility and institutional risk.
     // ===========================================
