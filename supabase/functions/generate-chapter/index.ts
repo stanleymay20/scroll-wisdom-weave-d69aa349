@@ -5100,27 +5100,65 @@ Return ONLY the improved chapter text. No preamble.` },
     ) && !isCodeStemAcademic; // Never strip from code-STEM
 
     if (shouldStripCode && finalContent) {
-      const codeBlockRegex = /```(?:python|javascript|typescript|java|csharp|cpp|go|rust|ruby|php|swift|kotlin|sql|bash|sh|shell|dart|scala|r)\b[\s\S]*?```/gi;
-      const codeBlockMatches = finalContent.match(codeBlockRegex);
+      // PHASE 1: Strip LABELED code blocks (```python, ```javascript, etc.)
+      const labeledCodeBlockRegex = /```(?:python|javascript|typescript|java|csharp|cs|cpp|c\+\+|c|go|golang|rust|ruby|rb|php|swift|kotlin|sql|bash|sh|shell|dart|scala|r|elixir|haskell|perl|lua|matlab|octave|fortran|assembly|asm|powershell|ps1|groovy|clojure|erlang|f#|fsharp|vb|vbnet|objective-c|objc|lisp|scheme|prolog|cobol)\b[\s\S]*?```/gi;
+      const labeledMatches = finalContent.match(labeledCodeBlockRegex);
       
-      if (codeBlockMatches && codeBlockMatches.length > 0) {
-        console.warn(`[GENERATE-CHAPTER] ⚠️ CODE SANITIZER: Stripping ${codeBlockMatches.length} code block(s) from ${effectiveBookType}/${category} pipeline`);
-        
-        // Replace code blocks with a note about what was there
-        finalContent = finalContent.replace(codeBlockRegex, (match) => {
-          // Extract the language from the opening fence
+      // PHASE 2: Strip UNLABELED code blocks that contain programming patterns
+      // These are ``` blocks without a language tag but containing obvious code
+      const unlabeledCodeBlockRegex = /```\s*\n([\s\S]*?)```/g;
+      
+      let strippedCount = 0;
+      
+      // Strip labeled code blocks
+      if (labeledMatches && labeledMatches.length > 0) {
+        strippedCount += labeledMatches.length;
+        finalContent = finalContent.replace(labeledCodeBlockRegex, (match) => {
           const langMatch = match.match(/```(\w+)/);
           const lang = langMatch ? langMatch[1] : 'code';
           return `> *[Technical ${lang} example removed — this content type uses equations, frameworks, and scholarly analysis instead of programming code.]*`;
         });
-        
-        // Also strip [CODE_BLOCK] structured blocks
+      }
+      
+      // Strip unlabeled code blocks that contain programming indicators
+      const CODE_INDICATORS = /(?:^|\n)\s*(?:import\s+\w|from\s+\w+\s+import|def\s+\w+\(|class\s+\w+|function\s+\w+|const\s+\w+|let\s+\w+|var\s+\w+|print\s*\(|console\.log|System\.out|return\s+|for\s+\w+\s+in\s|while\s*\(|if\s*\(.*\)\s*{|#include|using\s+namespace|public\s+static|SELECT\s+\w|INSERT\s+INTO|CREATE\s+TABLE|pip\s+install|npm\s+install|sudo\s+|chmod\s+|curl\s+|wget\s+|\$\s*\w+\s*=|>>>\s)/i;
+      
+      finalContent = finalContent.replace(unlabeledCodeBlockRegex, (match, codeContent) => {
+        if (CODE_INDICATORS.test(codeContent)) {
+          strippedCount++;
+          return `> *[Technical code example removed — this content type uses equations, frameworks, and scholarly analysis instead of programming code.]*`;
+        }
+        // Keep non-code content in fences (e.g., math notation, plain text examples)
+        return match;
+      });
+      
+      // PHASE 3: Strip [CODE_BLOCK] structured blocks
+      const structuredBlockMatches = finalContent.match(/\[CODE_BLOCK\][\s\S]*?\[\/CODE_BLOCK\]/g);
+      if (structuredBlockMatches) {
+        strippedCount += structuredBlockMatches.length;
         finalContent = finalContent.replace(/\[CODE_BLOCK\][\s\S]*?\[\/CODE_BLOCK\]/g, 
           '> *[Technical code example removed — this content type uses equations, frameworks, and scholarly analysis instead of programming code.]*'
         );
-        
-        // Strip orphaned [EVIDENCE_BLOCK] markers from non-code pipelines
-        finalContent = finalContent.replace(/\[EVIDENCE_BLOCK\][\s\S]*?\[\/EVIDENCE_BLOCK\]/g, '');
+      }
+      
+      // PHASE 4: Strip orphaned [EVIDENCE_BLOCK] markers from non-code pipelines
+      finalContent = finalContent.replace(/\[EVIDENCE_BLOCK\][\s\S]*?\[\/EVIDENCE_BLOCK\]/g, '');
+      
+      // PHASE 5: Strip inline code patterns that look like programming (e.g., `import numpy`)
+      // but preserve legitimate inline code like `$f(x)$` or `key term`
+      const INLINE_CODE_PROGRAMMING = /`(?:import\s+\w|from\s+\w+\s+import|def\s+\w+\(|print\s*\(|console\.log|System\.out|numpy|pandas|matplotlib|tensorflow|sklearn|pip\s+install|npm\s+install)[^`]*`/gi;
+      const inlineMatches = finalContent.match(INLINE_CODE_PROGRAMMING);
+      if (inlineMatches) {
+        strippedCount += inlineMatches.length;
+        finalContent = finalContent.replace(INLINE_CODE_PROGRAMMING, (match) => {
+          // Extract just the concept name if possible
+          const conceptMatch = match.match(/`(?:import\s+)?(\w+)/);
+          return conceptMatch ? `**${conceptMatch[1]}**` : '';
+        });
+      }
+      
+      if (strippedCount > 0) {
+        console.warn(`[GENERATE-CHAPTER] ⚠️ CODE SANITIZER: Stripped ${strippedCount} code element(s) from ${effectiveBookType}/${category} pipeline`);
       }
     }
 
