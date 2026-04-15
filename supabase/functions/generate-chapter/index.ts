@@ -4980,6 +4980,10 @@ STRICT RULES:
 - Preserve tone according to the book type: "${effectiveBookType}".
 - Never end abruptly — the final paragraph must synthesize clearly.
 - Preserve all [FIGURE X: ...] markers exactly as they appear.
+${shouldStripCode ? `- ❌ ABSOLUTELY DO NOT add any programming code blocks (\`\`\`python, \`\`\`javascript, etc.)
+- ❌ DO NOT add [CODE_BLOCK] tags
+- ❌ DO NOT add import statements, function definitions, or executable code
+- ✅ Use equations ($...$), tables, prose, and frameworks instead` : ''}
 
 Return ONLY the improved chapter text.
 
