@@ -83,6 +83,44 @@ function resolveRenderModeClient(visualType: string): RenderMode {
   return 'ai_image';
 }
 
+// Auto-detect programming language from code content for unlabeled fences
+function autoDetectLanguage(code: string): string {
+  if (!code || code.trim().length < 10) return 'text';
+  const c = code.trim();
+  // Python patterns
+  if (/(?:^|\n)\s*(?:import\s+\w|from\s+\w+\s+import|def\s+\w+\(|class\s+\w+.*:|print\s*\(|if\s+__name__\s*==)/.test(c)) return 'python';
+  // JavaScript/TypeScript
+  if (/(?:^|\n)\s*(?:const\s+\w+|let\s+\w+|var\s+\w+|function\s+\w+|import\s+{|export\s+(?:default|const|function)|=>)/.test(c)) return 'javascript';
+  // Java
+  if (/(?:^|\n)\s*(?:public\s+(?:static\s+)?(?:void|int|String|class)|System\.out\.print|@Override)/.test(c)) return 'java';
+  // SQL
+  if (/(?:^|\n)\s*(?:SELECT\s+|INSERT\s+INTO|CREATE\s+TABLE|ALTER\s+TABLE|UPDATE\s+\w+\s+SET|DELETE\s+FROM)/i.test(c)) return 'sql';
+  // Bash/Shell
+  if (/(?:^|\n)\s*(?:#!\s*\/bin\/(?:ba)?sh|pip\s+install|npm\s+install|sudo\s+|chmod\s+|curl\s+|wget\s+|echo\s+|export\s+\w+=|\$\s+)/.test(c)) return 'bash';
+  // C/C++
+  if (/(?:^|\n)\s*(?:#include\s*<|int\s+main\s*\(|using\s+namespace\s+std|std::)/.test(c)) return 'cpp';
+  // Go
+  if (/(?:^|\n)\s*(?:package\s+main|func\s+\w+|fmt\.Print)/.test(c)) return 'go';
+  // Rust
+  if (/(?:^|\n)\s*(?:fn\s+main|let\s+mut|impl\s+\w+|use\s+std::)/.test(c)) return 'rust';
+  // HTML/XML
+  if (/(?:^|\n)\s*<(?:html|div|body|head|!DOCTYPE)/i.test(c)) return 'html';
+  // JSON
+  if (/^\s*[{[]/.test(c) && /[}\]]\s*$/.test(c)) return 'json';
+  // YAML
+  if (/^---\s*\n/.test(c) || /(?:^|\n)\w+:\s+\w/.test(c) && !/[;{}()]/.test(c)) return 'yaml';
+  // R
+  if (/(?:^|\n)\s*(?:library\s*\(|data\.frame|ggplot\s*\(|<-\s)/.test(c)) return 'r';
+  // Kotlin
+  if (/(?:^|\n)\s*(?:fun\s+\w+|val\s+\w+|var\s+\w+|class\s+\w+|println\s*\()/.test(c) && !/System\.out/.test(c)) return 'kotlin';
+  // Ruby
+  if (/(?:^|\n)\s*(?:require\s+['"]|puts\s+|def\s+\w+\s*$|end\s*$)/m.test(c)) return 'ruby';
+  // PHP
+  if (/(?:^|\n)\s*(?:<\?php|\$\w+\s*=|echo\s+|function\s+\w+.*\{)/.test(c)) return 'php';
+  // Fallback: if it has common code patterns, call it text
+  return 'text';
+}
+
 interface MarkdownRendererProps {
   content: string;
   className?: string;
@@ -314,7 +352,13 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           codeLang = (openMatch[1] || '').toLowerCase();
           codeLines = [];
         } else if (isClosingFence) {
-          protectedCodeBlocks.push({ lang: codeLang, code: codeLines.join('\n') });
+          // AUTO-DETECT language for unlabeled fences
+          let finalLang = codeLang;
+          if (!finalLang) {
+            const codeStr = codeLines.join('\n');
+            finalLang = autoDetectLanguage(codeStr);
+          }
+          protectedCodeBlocks.push({ lang: finalLang, code: codeLines.join('\n') });
           result.push(`\x02FENCED_CODE_${protectedCodeBlocks.length - 1}\x03`);
           inCodeBlock = false;
         } else if (inCodeBlock) {
@@ -325,7 +369,11 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       }
       // If unclosed fence, flush remaining lines as code block
       if (inCodeBlock && codeLines.length > 0) {
-        protectedCodeBlocks.push({ lang: codeLang, code: codeLines.join('\n') });
+        let finalLang = codeLang;
+        if (!finalLang) {
+          finalLang = autoDetectLanguage(codeLines.join('\n'));
+        }
+        protectedCodeBlocks.push({ lang: finalLang, code: codeLines.join('\n') });
         result.push(`\x02FENCED_CODE_${protectedCodeBlocks.length - 1}\x03`);
       }
       html = result.join('\n');
