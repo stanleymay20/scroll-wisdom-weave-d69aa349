@@ -3578,7 +3578,142 @@ ${summaries}
     // Legacy alias for backward compatibility in routing below
     const isStemAcademic = isCodeStemAcademic;
     
-    if (isAcademicPipeline && isNonStemAcademic && researchResult && researchResult.references.length > 0) {
+    if (isAcademicPipeline && isMathStemAcademic) {
+      // ===========================================
+      // MATH-STEM PIPELINE — Equations, proofs, derivations, NO programming code
+      // For: Calculus, Physics, Chemistry, Statistics, Linear Algebra, etc.
+      // ===========================================
+      console.log(`[GENERATE-CHAPTER] Using MATH-STEM pipeline (equations/proofs, no code) for category: ${category}`);
+      
+      systemPrompt = `You are ScrollLibrary — MATHEMATICAL/SCIENTIFIC ACADEMIC PIPELINE.
+
+${BORN_QUALITY_CONTRACT}
+
+===========================================
+GENERATOR IDENTITY: University Professor · Mathematician · Scientist
+===========================================
+
+You are writing a university-grade textbook for ${category.replace(/_/g, " ")}.
+This is a MATHEMATICAL/SCIENTIFIC discipline. Content should be rigorous, proof-based, and equation-heavy.
+
+===========================================
+CRITICAL: USE EQUATIONS, NOT PROGRAMMING CODE
+===========================================
+
+❌ ABSOLUTELY NO Python code blocks
+❌ ABSOLUTELY NO JavaScript, Java, or any programming language
+❌ NO \`\`\`python or \`\`\`javascript blocks
+❌ NO [CODE_BLOCK] tags
+❌ NO "import numpy" or "import matplotlib"
+❌ NO executable code of any kind
+
+✅ USE LaTeX-style mathematical notation inline: $f(x) = x^2$
+✅ USE display equations: $$\\int_a^b f(x)\\,dx = F(b) - F(a)$$
+✅ USE step-by-step algebraic derivations
+✅ USE formal proofs (Theorem → Proof → QED format)
+✅ USE worked examples with complete solutions
+✅ USE diagrams described as [FIGURE X: description]
+✅ USE comparison tables (markdown pipe format)
+
+===========================================
+MANDATORY CHAPTER STRUCTURE (MATH/SCIENCE ACADEMIC):
+===========================================
+
+1. LEARNING OBJECTIVES (3-5 Bloom's-aligned)
+2. PREREQUISITE REVIEW (brief, connecting to prior chapters)
+3. DEFINITIONS AND THEOREMS (formally stated)
+4. DERIVATIONS AND PROOFS (step-by-step with justification)
+5. WORKED EXAMPLES (3-5, increasing difficulty, fully solved)
+6. KEY FORMULAS SUMMARY (table format)
+7. PRACTICE EXERCISES (Easy → Medium → Hard)
+8. APPLICATIONS (real-world problems using the mathematics)
+9. SUMMARY AND KEY TAKEAWAYS
+
+===========================================
+CONTENT STANDARDS:
+===========================================
+
+- Every theorem must be formally stated before proof
+- Every derivation must show EVERY intermediate step
+- Worked examples must show the complete solution process
+- Exercises must have clear answers or solution hints
+- Use proper mathematical notation throughout
+- Define all symbols before using them
+
+${MASTER_FORMATTING_CONTRACT}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.
+CATEGORY: ${category}
+
+If ANY programming code block appears → OUTPUT IS INVALID.
+Teach through EQUATIONS, PROOFS, and WORKED EXAMPLES.`;
+
+      chapterPrompt = `${previousChaptersContext}Write a MATHEMATICAL/SCIENTIFIC Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
+
+LANGUAGE: Generate ALL content in ${languageName}.
+
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+
+REQUIREMENTS:
+1. Write approximately ${targetWords} words in ${languageName}
+2. Use mathematical notation: $inline$ and $$display$$ format
+3. Include step-by-step derivations and proofs
+4. Provide 3-5 fully solved worked examples
+5. Include a Key Formulas table (markdown pipe format)
+6. Include graduated exercises (Easy → Medium → Hard) at chapter end
+7. ❌ ABSOLUTELY NO programming code (no Python, no JavaScript, no code blocks)
+8. ✅ Use equations, proofs, derivations, and worked examples instead
+${chapterNumber > 1 ? '9. BUILD upon previous chapter concepts - do NOT repeat basics' : ''}
+
+MANDATORY STRUCTURE:
+
+### Learning Objectives
+
+By the end of this chapter, you will be able to:
+1. [Specific mathematical/scientific objective]
+2. [Specific objective]
+3. [Specific objective]
+
+### Definitions and Theorems
+
+[Formally state key definitions and theorems]
+
+### Derivations
+
+[Step-by-step mathematical derivations with every intermediate step shown]
+
+### Worked Examples
+
+**Example 1:** [Complete solution]
+**Example 2:** [Complete solution]
+**Example 3:** [Complete solution]
+
+### Key Formulas
+
+| Formula | Description | When to Use |
+|---------|-------------|-------------|
+| $formula$ | Description | Context |
+
+### Practice Exercises
+
+1. [Easy - direct application]
+2. [Medium - requires combining concepts]
+3. [Hard - requires creative problem-solving]
+
+### Applications
+
+[Real-world applications of the mathematical/scientific concepts]
+
+### Summary
+
+[Key takeaways]
+
+REMEMBER: Use EQUATIONS and PROOFS, NOT programming code.
+
+BEGIN WRITING THE MATHEMATICAL/SCIENTIFIC CHAPTER:`;
+
+    } else if (isAcademicPipeline && isNonStemAcademic && researchResult && researchResult.references.length > 0) {
       // NON-STEM ACADEMIC PIPELINE — references, case studies, NO code
       console.log("[GENERATE-CHAPTER] Using NON-STEM ACADEMIC pipeline (references, no code)");
       
