@@ -5092,10 +5092,56 @@ Return ONLY the improved chapter text. No preamble.` },
     }
 
     // ===========================================
-    // POST-GENERATION CODE SANITIZER (SAFETY NET)
-    // Strips programming code blocks from non-code-STEM pipelines
-    // This catches any AI model drift that ignores the "no code" instruction
+    // POST-GENERATION CODE QUALITY FIXER
+    // 1. Auto-labels unlabeled code fences with detected language
+    // 2. Fixes broken [CODE_BLOCK] formatting
+    // 3. Strips code from non-code pipelines (safety net)
     // ===========================================
+    
+    // PHASE 0: Auto-label unlabeled code fences (applies to ALL pipelines)
+    // Detects ``` without language tag and adds the correct language
+    if (finalContent) {
+      const autoDetectLang = (code: string): string => {
+        if (!code || code.trim().length < 10) return '';
+        const c = code.trim();
+        if (/(?:^|\n)\s*(?:import\s+\w|from\s+\w+\s+import|def\s+\w+\(|class\s+\w+.*:|print\s*\(|if\s+__name__)/.test(c)) return 'python';
+        if (/(?:^|\n)\s*(?:const\s+\w+|let\s+\w+|var\s+\w+|function\s+\w+|import\s+{|export\s+|=>)/.test(c)) return 'javascript';
+        if (/(?:^|\n)\s*(?:public\s+(?:static\s+)?(?:void|int|String|class)|System\.out|@Override)/.test(c)) return 'java';
+        if (/(?:^|\n)\s*(?:SELECT\s+|INSERT\s+INTO|CREATE\s+TABLE|ALTER\s+TABLE|UPDATE\s+\w+\s+SET)/i.test(c)) return 'sql';
+        if (/(?:^|\n)\s*(?:#!\s*\/bin\/|pip\s+install|npm\s+install|sudo\s+|chmod\s+|curl\s+|echo\s+)/.test(c)) return 'bash';
+        if (/(?:^|\n)\s*(?:#include\s*<|int\s+main\s*\(|using\s+namespace)/.test(c)) return 'cpp';
+        if (/(?:^|\n)\s*(?:package\s+main|func\s+\w+|fmt\.Print)/.test(c)) return 'go';
+        if (/(?:^|\n)\s*(?:fn\s+main|let\s+mut|impl\s+\w+|use\s+std::)/.test(c)) return 'rust';
+        if (/(?:^|\n)\s*(?:library\s*\(|data\.frame|ggplot|<-\s)/.test(c)) return 'r';
+        return '';
+      };
+      
+      // Fix unlabeled fences: ```\n...code...\n``` → ```python\n...code...\n```
+      finalContent = finalContent.replace(/```\s*\n([\s\S]*?)```/g, (match, code) => {
+        // Already has a language tag? Check the full match
+        if (/^```\w/m.test(match)) return match;
+        const lang = autoDetectLang(code);
+        if (lang) {
+          return '```' + lang + '\n' + code + '```';
+        }
+        return match;
+      });
+      
+      // Fix [CODE_BLOCK] blocks that have unlabeled inner fences
+      finalContent = finalContent.replace(/(\[CODE_BLOCK\][\s\S]*?code:\s*\n)```\s*\n/g, (match, prefix) => {
+        // Check if the CODE_BLOCK has a language: field
+        const langMatch = prefix.match(/language:\s*(\w+)/i);
+        const lang = langMatch ? langMatch[1] : 'python';
+        return prefix + '```' + lang + '\n';
+      });
+      
+      // Fix structured blocks with output/explanation fields that leak outside code fences
+      // Pattern: ```\noutput:\n... → should be outside the fence
+      finalContent = finalContent.replace(/```\s*\n\s*(output|explanation|common_mistake):/gi, (match, field) => {
+        return '```\n\n' + field + ':';
+      });
+    }
+
     const PIPELINES_THAT_FORBID_CODE = ['bestseller', 'text', 'professional', 'reference', 'children', 'illustrated'];
     const shouldStripCode = (
       // Non-code book types
