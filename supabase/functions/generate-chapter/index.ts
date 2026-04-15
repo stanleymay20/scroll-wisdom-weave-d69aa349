@@ -5085,7 +5085,45 @@ Return ONLY the improved chapter text. No preamble.` },
     }
 
     // ===========================================
-    // INSTITUTIONAL AI DISCLOSURE — ALL NON-ACADEMIC PIPELINES
+    // POST-GENERATION CODE SANITIZER (SAFETY NET)
+    // Strips programming code blocks from non-code-STEM pipelines
+    // This catches any AI model drift that ignores the "no code" instruction
+    // ===========================================
+    const PIPELINES_THAT_FORBID_CODE = ['bestseller', 'text', 'professional', 'reference', 'children', 'illustrated'];
+    const shouldStripCode = (
+      // Non-code book types
+      PIPELINES_THAT_FORBID_CODE.includes(effectiveBookType) ||
+      // Academic but non-code-STEM (math-stem uses equations, non-stem uses prose)
+      (isAcademicPipeline && !isCodeStemAcademic) ||
+      // MATH-STEM: equations yes, Python no
+      isMathStemAcademic
+    ) && !isCodeStemAcademic; // Never strip from code-STEM
+
+    if (shouldStripCode && finalContent) {
+      const codeBlockRegex = /```(?:python|javascript|typescript|java|csharp|cpp|go|rust|ruby|php|swift|kotlin|sql|bash|sh|shell|dart|scala|r)\b[\s\S]*?```/gi;
+      const codeBlockMatches = finalContent.match(codeBlockRegex);
+      
+      if (codeBlockMatches && codeBlockMatches.length > 0) {
+        console.warn(`[GENERATE-CHAPTER] ⚠️ CODE SANITIZER: Stripping ${codeBlockMatches.length} code block(s) from ${effectiveBookType}/${category} pipeline`);
+        
+        // Replace code blocks with a note about what was there
+        finalContent = finalContent.replace(codeBlockRegex, (match) => {
+          // Extract the language from the opening fence
+          const langMatch = match.match(/```(\w+)/);
+          const lang = langMatch ? langMatch[1] : 'code';
+          return `> *[Technical ${lang} example removed — this content type uses equations, frameworks, and scholarly analysis instead of programming code.]*`;
+        });
+        
+        // Also strip [CODE_BLOCK] structured blocks
+        finalContent = finalContent.replace(/\[CODE_BLOCK\][\s\S]*?\[\/CODE_BLOCK\]/g, 
+          '> *[Technical code example removed — this content type uses equations, frameworks, and scholarly analysis instead of programming code.]*'
+        );
+        
+        // Strip orphaned [EVIDENCE_BLOCK] markers from non-code pipelines
+        finalContent = finalContent.replace(/\[EVIDENCE_BLOCK\][\s\S]*?\[\/EVIDENCE_BLOCK\]/g, '');
+      }
+    }
+
     // Phase 3 audit finding: bestseller/text/professional/reference pipelines
     // had no AI disclosure, which is a credibility and institutional risk.
     // ===========================================
