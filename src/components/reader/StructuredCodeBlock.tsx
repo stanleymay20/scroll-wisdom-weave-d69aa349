@@ -284,8 +284,17 @@ export function parseStructuredCodeBlock(text: string): StructuredCodeBlockData 
     code = codeMatch?.[1]?.trim() || '';
   }
 
-  const outputMatch = content.match(/output:\s*\n([\s\S]*?)(?=^(?:explanation|common_mistake):|$)/mi);
-  const output = outputMatch?.[1]?.trim();
+  // Extract output field — support both single-line and multi-line output
+  const outputField = extractMultilineField('output');
+  let output = outputField;
+  if (!output) {
+    const outputMatch = content.match(/output:\s*\n([\s\S]*?)(?=^(?:explanation|common_mistake):|$)/mi);
+    output = outputMatch?.[1]?.trim();
+  }
+  // Strip any accidental code fences wrapping the output
+  if (output) {
+    output = output.replace(/^`{3,}\s*\w*\s*\n?/gm, '').replace(/^`{3,}\s*$/gm, '').trim();
+  }
 
   return {
     language: extractField('language') || 'text',
