@@ -2472,6 +2472,12 @@ serve(async (req) => {
 
     console.log(`[GENERATE-CHAPTER] User: ${user.id.slice(0, 8)}...`);
 
+    // Rate limiting: max 30 chapter generations per hour per user
+    const rl = checkRateLimit(`gen-chapter:${user.id}`, 30, 60 * 60 * 1000);
+    if (!rl.allowed) {
+      return errorResponse(ErrorCode.RATE_LIMITED, 'Too many chapter generations. Please wait before generating more.', corsHeaders, { retryAfterMs: rl.retryAfterMs });
+    }
+
     // Check admin status
     const { data: userRoles } = await supabase
       .from("user_roles")
