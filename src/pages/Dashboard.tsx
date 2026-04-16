@@ -17,7 +17,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { apiCache } from "@/lib/cache";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
-import { ReadingProgressDashboard } from "@/components/dashboard";
+import { ReadingProgressDashboard, NextActionCard } from "@/components/dashboard";
 
 interface DashboardStats {
   totalBooks: number;
@@ -236,6 +236,9 @@ export default function Dashboard() {
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
+                {/* PHASE 2: Next Best Action — drives daily return & closes learning loop */}
+                {user?.id && <NextActionCard userId={user.id} />}
+
                 {/* Stats Grid */}
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
                   {statCards.map((stat, index) => (

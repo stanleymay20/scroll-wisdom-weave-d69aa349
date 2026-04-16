@@ -77,6 +77,7 @@ import { cn } from "@/lib/utils";
 import { useQuizGating } from "@/hooks/useQuizGating";
 import { useCompetencyProgress } from "@/hooks/useCompetencyProgress";
 import { CompetencyLearningPanel } from "@/components/reader/CompetencyLearningPanel";
+import { PostChapterCTA } from "@/components/reader/PostChapterCTA";
 import { AdaptiveLearningPath } from "@/components/reader/AdaptiveLearningPath";
 import { PresenceAvatars } from "@/components/reader/PresenceAvatars";
 import { useEditorPresence } from "@/hooks/useCollaboration";
@@ -1673,6 +1674,32 @@ export default function Reader() {
                   isSaving={competency.isSaving}
                 />
               </div>
+            )}
+
+            {/* PHASE 2: Post-chapter learning loop CTA — soft prompt at 95%+ */}
+            {readingProgress >= 95 && chapter && book && !showQuiz && !showFlashcardDialog && (
+              <PostChapterCTA
+                chapterTitle={chapter.title}
+                chapterNumber={currentChapter}
+                totalChapters={book.total_chapters || 1}
+                onTakeQuiz={() => {
+                  closeTopPanels();
+                  setShowQuiz(true);
+                  trackFunnelEvent('post_chapter_cta_quiz', { bookId, chapterNumber: currentChapter });
+                }}
+                onCreateFlashcards={() => {
+                  setShowFlashcardDialog(true);
+                  trackFunnelEvent('post_chapter_cta_flashcards', { bookId, chapterNumber: currentChapter });
+                }}
+                onContinue={() => {
+                  trackFunnelEvent('post_chapter_cta_continue', { bookId, chapterNumber: currentChapter });
+                  if (currentChapter < (book.total_chapters || 1)) {
+                    navigate(`/read/${bookId}/${currentChapter + 1}`);
+                  } else {
+                    navigate(`/book/${bookId}/certificate`);
+                  }
+                }}
+              />
             )}
           </motion.div>
         </article>
