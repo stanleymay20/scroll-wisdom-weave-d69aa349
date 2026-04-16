@@ -11,8 +11,13 @@
 export { useIsAdmin } from '@/hooks/useAdmin';
 export { useFeatureAccess } from '@/hooks/useFeatureAccess';
 export { useEntitlements } from '@/hooks/useEntitlements';
+export { useOrganization } from '@/hooks/useOrganization';
 export { AdminRoute } from '@/components/AdminRoute';
 export { ProtectedRoute } from '@/components/ProtectedRoute';
+
+// ─── Audit & Compliance ──────────────────────────────────
+export { logAudit } from '@/lib/auditLog';
+export { AuditLogViewer } from '@/components/admin/AuditLogViewer';
 
 // ─── Collaboration ───────────────────────────────────────
 export { CollaborationPanel } from '@/components/books/CollaborationPanel';
