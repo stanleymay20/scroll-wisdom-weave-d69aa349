@@ -1,8 +1,7 @@
 /**
  * Organizations — user-facing org management (create, switch, view members)
  */
-import { useState } from "react";
-import { Helmet } from "react-helmet-async";
+import { useEffect, useState } from "react";
 import { useOrganization } from "@/hooks/useOrganization";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -19,6 +18,10 @@ export default function Organizations() {
   const [name, setName] = useState("");
   const [slug, setSlug] = useState("");
   const [creating, setCreating] = useState(false);
+
+  useEffect(() => {
+    document.title = "Organizations — ScrollLibrary";
+  }, []);
 
   const handleCreate = async () => {
     if (!name.trim() || !slug.trim()) {
