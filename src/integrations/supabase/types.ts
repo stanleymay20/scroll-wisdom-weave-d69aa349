@@ -95,6 +95,56 @@ export type Database = {
           },
         ]
       }
+      audit_log: {
+        Row: {
+          actor_id: string | null
+          created_at: string
+          event_type: string
+          id: string
+          ip_address: string | null
+          metadata: Json
+          organization_id: string | null
+          resource_id: string | null
+          resource_type: string | null
+          severity: string
+          user_agent: string | null
+        }
+        Insert: {
+          actor_id?: string | null
+          created_at?: string
+          event_type: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          organization_id?: string | null
+          resource_id?: string | null
+          resource_type?: string | null
+          severity?: string
+          user_agent?: string | null
+        }
+        Update: {
+          actor_id?: string | null
+          created_at?: string
+          event_type?: string
+          id?: string
+          ip_address?: string | null
+          metadata?: Json
+          organization_id?: string | null
+          resource_id?: string | null
+          resource_type?: string | null
+          severity?: string
+          user_agent?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "audit_log_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       audit_telemetry: {
         Row: {
           audit_id: string
@@ -445,6 +495,7 @@ export type Database = {
           is_featured: boolean | null
           is_published: boolean | null
           language: string | null
+          organization_id: string | null
           source_document_name: string | null
           source_document_url: string | null
           source_type: string | null
@@ -467,6 +518,7 @@ export type Database = {
           is_featured?: boolean | null
           is_published?: boolean | null
           language?: string | null
+          organization_id?: string | null
           source_document_name?: string | null
           source_document_url?: string | null
           source_type?: string | null
@@ -489,6 +541,7 @@ export type Database = {
           is_featured?: boolean | null
           is_published?: boolean | null
           language?: string | null
+          organization_id?: string | null
           source_document_name?: string | null
           source_document_url?: string | null
           source_type?: string | null
@@ -498,7 +551,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "books_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       chapter_edit_sessions: {
         Row: {
@@ -1402,6 +1463,77 @@ export type Database = {
           },
         ]
       }
+      organization_members: {
+        Row: {
+          id: string
+          invited_by: string | null
+          joined_at: string
+          organization_id: string
+          role: string
+          user_id: string
+        }
+        Insert: {
+          id?: string
+          invited_by?: string | null
+          joined_at?: string
+          organization_id: string
+          role?: string
+          user_id: string
+        }
+        Update: {
+          id?: string
+          invited_by?: string | null
+          joined_at?: string
+          organization_id?: string
+          role?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "organization_members_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      organizations: {
+        Row: {
+          created_at: string
+          created_by: string
+          id: string
+          metadata: Json
+          name: string
+          plan: string
+          slug: string
+          updated_at: string
+          verbose_audit: boolean
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          id?: string
+          metadata?: Json
+          name: string
+          plan?: string
+          slug: string
+          updated_at?: string
+          verbose_audit?: boolean
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          id?: string
+          metadata?: Json
+          name?: string
+          plan?: string
+          slug?: string
+          updated_at?: string
+          verbose_audit?: boolean
+        }
+        Relationships: []
+      }
       pmf_events: {
         Row: {
           created_at: string
@@ -2248,6 +2380,26 @@ export type Database = {
           _integrity_score?: number
           _user_id: string
           _violation_type?: string
+        }
+        Returns: string
+      }
+      is_org_admin: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
+      is_org_member: {
+        Args: { _org_id: string; _user_id: string }
+        Returns: boolean
+      }
+      log_audit_event: {
+        Args: {
+          _actor_id?: string
+          _event_type: string
+          _metadata?: Json
+          _organization_id?: string
+          _resource_id?: string
+          _resource_type?: string
+          _severity?: string
         }
         Returns: string
       }
