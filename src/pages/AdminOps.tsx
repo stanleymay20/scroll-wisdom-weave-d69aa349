@@ -88,15 +88,12 @@ export default function AdminOps() {
   };
 
   useEffect(() => {
+    document.title = "Admin Ops Console — ScrollLibrary";
     load();
   }, []);
 
   return (
     <div className="container mx-auto py-8 px-4 max-w-7xl">
-      <Helmet>
-        <title>Admin Ops Console — ScrollLibrary</title>
-        <meta name="description" content="Enterprise operations console: audit log, generation jobs, organizations, and platform health." />
-      </Helmet>
 
       <div className="flex items-center justify-between mb-6">
         <div>
