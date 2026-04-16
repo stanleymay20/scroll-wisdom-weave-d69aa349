@@ -23,7 +23,10 @@ export type FunnelEventType =
   | 'stuck_reader_rescue'
   | 'chapter_1_completed'
   | 'chapter_2_started'
-  | 'first_section_completed';
+  | 'first_section_completed'
+  | 'post_chapter_cta_quiz'
+  | 'post_chapter_cta_flashcards'
+  | 'post_chapter_cta_continue';
 
 interface FunnelEventMeta {
   bookId?: string;
