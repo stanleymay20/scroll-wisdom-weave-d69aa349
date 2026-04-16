@@ -70,15 +70,15 @@ export function NextActionCard({ userId }: NextActionCardProps) {
 
         // Priority 2: Resume in-progress book
         const { data: library } = await supabase
-          .from("user_library" as any)
-          .select("book_id, last_read_chapter, progress_percent")
+          .from("user_library")
+          .select("book_id, last_read_chapter, progress_percent, updated_at")
           .eq("user_id", userId)
           .gt("progress_percent", 0)
           .lt("progress_percent", 100)
-          .order("updated_at" as any, { ascending: false })
+          .order("updated_at", { ascending: false })
           .limit(1);
 
-        const inProgress = library?.[0] as any;
+        const inProgress = library?.[0];
         if (mounted && inProgress?.book_id) {
           const { data: book } = await supabase
             .from("books")
