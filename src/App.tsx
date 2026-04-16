@@ -68,6 +68,8 @@ const MasteryDashboard = lazy(() => import("./pages/MasteryDashboard"));
 const MasteryModel = lazy(() => import("./pages/MasteryModel"));
 const QuickLearn = lazy(() => import("./pages/QuickLearn"));
 const ExperimentReport = lazy(() => import("./pages/ExperimentReport"));
+const AdminOps = lazy(() => import("./pages/AdminOps"));
+const Organizations = lazy(() => import("./pages/Organizations"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
@@ -170,6 +172,8 @@ const App = () => (
                   <Route path="/docs/mastery-model" element={<MasteryModel />} />
                   <Route path="/quick-learn" element={<QuickLearn />} />
                   <Route path="/experiments" element={<AdminRoute><ExperimentReport /></AdminRoute>} />
+                  <Route path="/admin/ops" element={<AdminRoute><AdminOps /></AdminRoute>} />
+                  <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
