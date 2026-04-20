@@ -253,8 +253,8 @@ function ClaimInspector({
       <div className="rounded-md bg-muted/40 p-3 text-sm">
         <div className="mb-1 flex items-center gap-2">
           <Badge variant="outline">Chapter {claim.chapter}</Badge>
-          {claim.sourceIds.length === 0 && (
-            <Badge variant="outline" className="border-amber-500 text-amber-600">
+            {claim.sourceIds.length === 0 && (
+            <Badge variant="outline" className="border-destructive/40 text-destructive">
               Unverified
             </Badge>
           )}
@@ -327,9 +327,9 @@ function StatBadge({
     tone === 'primary'
       ? 'bg-primary/10 text-primary'
       : tone === 'warning'
-      ? 'bg-amber-500/10 text-amber-700 dark:text-amber-400'
+      ? 'bg-destructive/10 text-destructive'
       : tone === 'success'
-      ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400'
+      ? 'bg-primary/10 text-primary'
       : 'bg-muted text-muted-foreground';
   return (
     <div className={cn('rounded-md px-3 py-1.5 text-xs font-medium', cls)}>
