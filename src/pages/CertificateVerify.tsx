@@ -32,6 +32,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { Logo } from '@/components/brand';
 import { CERTIFICATE_ISSUER, getIssuerSignature } from '@/lib/certificateAuthority';
 import { TrustBadgeGroup } from '@/components/certificates';
+import { CertificateQR } from '@/components/certificates/CertificateQR';
 import { toast } from 'sonner';
 import { 
   validateProvenance, 
@@ -688,34 +689,24 @@ export default function CertificateVerify() {
                 <Separator />
                 <div className="space-y-3">
                   <p className="text-xs text-muted-foreground uppercase tracking-wider">Export & Share</p>
-                  <div className="flex flex-wrap gap-2">
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={exportAsJSON}
-                      className="gap-2"
-                    >
-                      <FileJson className="h-4 w-4" />
-                      Export JSON
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={exportAsPDF}
-                      className="gap-2"
-                    >
-                      <FileText className="h-4 w-4" />
-                      Print PDF
-                    </Button>
-                    <Button 
-                      variant="outline" 
-                      size="sm" 
-                      onClick={shareCertificate}
-                      className="gap-2"
-                    >
-                      <Share2 className="h-4 w-4" />
-                      Share
-                    </Button>
+                <div className="flex items-start gap-4 flex-wrap">
+                    <div className="flex flex-wrap gap-2 flex-1 min-w-[200px]">
+                      <Button variant="outline" size="sm" onClick={exportAsJSON} className="gap-2">
+                        <FileJson className="h-4 w-4" />
+                        Export JSON
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={exportAsPDF} className="gap-2">
+                        <FileText className="h-4 w-4" />
+                        Print PDF
+                      </Button>
+                      <Button variant="outline" size="sm" onClick={shareCertificate} className="gap-2">
+                        <Share2 className="h-4 w-4" />
+                        Share
+                      </Button>
+                    </div>
+                    {certificateNumber && (
+                      <CertificateQR certificateNumber={certificateNumber} size={112} />
+                    )}
                   </div>
                   <p className="text-xs text-muted-foreground">
                     Export for records or share with employers. JSON format is machine-readable.

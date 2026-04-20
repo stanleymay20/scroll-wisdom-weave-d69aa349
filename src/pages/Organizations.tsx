@@ -9,8 +9,9 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger, DialogFooter } from "@/components/ui/dialog";
-import { Building2, Plus, Check } from "lucide-react";
+import { Building2, Plus, Check, BarChart3 } from "lucide-react";
 import { toast } from "@/hooks/use-toast";
+import { Link } from "react-router-dom";
 
 export default function Organizations() {
   const { memberships, activeOrgId, setActiveOrgId, createOrganization, isLoading } = useOrganization();
@@ -125,8 +126,15 @@ export default function Organizations() {
                     </CardTitle>
                     <CardDescription className="font-mono text-xs">@{m.organization.slug}</CardDescription>
                   </div>
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Badge variant="secondary">{m.role}</Badge>
+                    {(m.role === "owner" || m.role === "admin") && isActive && (
+                      <Button asChild variant="outline" size="sm">
+                        <Link to="/organizations/analytics">
+                          <BarChart3 className="h-3.5 w-3.5 mr-1" /> Analytics
+                        </Link>
+                      </Button>
+                    )}
                     {!isActive && (
                       <Button variant="outline" size="sm" onClick={() => setActiveOrgId(m.organization_id)}>
                         Switch to
