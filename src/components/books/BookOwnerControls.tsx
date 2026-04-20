@@ -1,5 +1,6 @@
 import { useState } from "react";
-import { Loader2, Trash2, Archive } from "lucide-react";
+import { Link } from "react-router-dom";
+import { Loader2, Trash2, Archive, Network } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -9,6 +10,7 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { ChapterManagement } from "@/components/books";
+import { ScormExportDialog } from "@/components/export/ScormExportDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 
 interface BookData {
@@ -101,6 +103,23 @@ export function BookOwnerControls({
           onCheckedChange={onTogglePublish}
           disabled={isUpdatingPublish}
         />
+      </div>
+
+      {/* Distribution & Insights */}
+      <div className="p-4 rounded-xl bg-muted/30 border border-border/50 mt-4">
+        <Label className="text-foreground font-medium">Distribution & insights</Label>
+        <p className="text-sm text-muted-foreground mt-1 mb-3">
+          Export to your LMS or inspect how concepts, claims, and sources connect.
+        </p>
+        <div className={`flex ${isMobile ? "flex-col gap-2" : "flex-wrap gap-2"}`}>
+          <ScormExportDialog book={book} />
+          <Button asChild variant="outline" size="sm">
+            <Link to={`/book/${book.id}/citation-graph`}>
+              <Network className="h-4 w-4 mr-2" />
+              Citation graph
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Book Type */}

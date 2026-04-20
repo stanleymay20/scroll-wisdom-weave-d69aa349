@@ -12,6 +12,15 @@ export { ReferenceCompliancePanel } from '@/components/certificates/ReferenceCom
 export type { ReferenceVerificationMetrics } from '@/lib/referenceVerification';
 export type { EpistemicCoherenceReport } from '@/lib/epistemicCoherence';
 
+// ─── Citation Graph (Atlas) ──────────────────────────────
+export { buildCitationGraph } from '@/lib/citationGraph';
+export type { CitationGraph, ClaimRecord, GraphNode, GraphEdge } from '@/lib/citationGraph';
+
+// ─── LMS Distribution ────────────────────────────────────
+export { ScormExportDialog } from '@/components/export/ScormExportDialog';
+export { buildScormPackage, suggestedFilename as scormFilename } from '@/lib/scormExport';
+export type { ScormBook, ScormChapter, ScormCertificate } from '@/lib/scormExport';
+
 // ─── Provenance & Ownership ──────────────────────────────
 export { default as bookProvenance } from '@/lib/contract12-provenance';
 export { BookProvenancePanel } from '@/components/certificates/BookProvenancePanel';
