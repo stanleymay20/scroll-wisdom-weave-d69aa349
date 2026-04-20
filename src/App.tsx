@@ -72,6 +72,7 @@ const AdminOps = lazy(() => import("./pages/AdminOps"));
 const Organizations = lazy(() => import("./pages/Organizations"));
 const OrgAnalytics = lazy(() => import("./pages/OrgAnalytics"));
 const VerifyLookup = lazy(() => import("./pages/VerifyLookup"));
+const CitationGraph = lazy(() => import("./pages/CitationGraph"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
@@ -178,6 +179,7 @@ const App = () => (
                   <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
                   <Route path="/organizations/analytics" element={<ProtectedRoute><OrgAnalytics /></ProtectedRoute>} />
                   <Route path="/verify-certificate" element={<VerifyLookup />} />
+                  <Route path="/book/:bookId/citation-graph" element={<ProtectedRoute><CitationGraph /></ProtectedRoute>} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />

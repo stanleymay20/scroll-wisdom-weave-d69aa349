@@ -218,7 +218,7 @@ export default function CitationGraphPage() {
                             {c.sourceIds.length > 0 ? (
                               <CheckCircle2 className="h-3.5 w-3.5 text-primary" />
                             ) : (
-                              <AlertTriangle className="h-3.5 w-3.5 text-amber-500" />
+                              <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
                             )}
                           </div>
                           <div className="line-clamp-2 text-muted-foreground">{c.text}</div>
