@@ -329,6 +329,13 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
     teardown();
     setActiveTrackId(null);
     setIsPlaying(false);
+    // Clear lock-screen metadata
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      } catch { /* noop */ }
+    }
   }, [teardown]);
 
   const toggleMute = useCallback(() => {
@@ -342,6 +349,54 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
   }, [isMuted, volume]);
 
   const activeTrack = STUDY_TRACKS.find((t) => t.id === activeTrackId);
+
+  // ── Media Session API: lock-screen + hardware media key controls ──
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    if (!activeTrack) {
+      try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      } catch { /* noop */ }
+      return;
+    }
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: activeTrack.label,
+        artist: 'ScrollLibrary · Study Music',
+        album: CATEGORY_LABELS[activeTrack.category] ?? 'Focus',
+      });
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+
+      navigator.mediaSession.setActionHandler('play', () => { void togglePlayback(); });
+      navigator.mediaSession.setActionHandler('pause', () => { void togglePlayback(); });
+      navigator.mediaSession.setActionHandler('stop', () => { stopMusic(); });
+      // Skip = next/previous track in the curated list
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        const idx = STUDY_TRACKS.findIndex(t => t.id === activeTrack.id);
+        const next = STUDY_TRACKS[(idx + 1) % STUDY_TRACKS.length];
+        void selectTrack(next);
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        const idx = STUDY_TRACKS.findIndex(t => t.id === activeTrack.id);
+        const prev = STUDY_TRACKS[(idx - 1 + STUDY_TRACKS.length) % STUDY_TRACKS.length];
+        void selectTrack(prev);
+      });
+    } catch (err) {
+      console.warn('[StudyMusic] MediaSession setup failed:', err);
+    }
+
+    return () => {
+      try {
+        navigator.mediaSession.setActionHandler('play', null);
+        navigator.mediaSession.setActionHandler('pause', null);
+        navigator.mediaSession.setActionHandler('stop', null);
+        navigator.mediaSession.setActionHandler('nexttrack', null);
+        navigator.mediaSession.setActionHandler('previoustrack', null);
+      } catch { /* noop */ }
+    };
+  }, [activeTrack, isPlaying, togglePlayback, stopMusic, selectTrack]);
 
   const grouped = CATEGORY_ORDER.reduce((acc, cat) => {
     const tracks = STUDY_TRACKS.filter((t) => t.category === cat);
