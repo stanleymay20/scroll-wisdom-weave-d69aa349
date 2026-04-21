@@ -424,11 +424,14 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
   return (
     <AnimatePresence>
       <motion.div
+        key="study-music-panel"
         initial={{ opacity: 0, y: 8, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.96 }}
         className={cn(
-          "bg-card border border-border rounded-xl shadow-lg overflow-hidden w-72",
+          "bg-card border border-border rounded-xl shadow-lg overflow-hidden",
+          // Mobile: nearly full width, capped. Desktop: fixed 18rem.
+          "w-[min(22rem,calc(100vw-2rem))] sm:w-72",
           className
         )}
       >
