@@ -38,7 +38,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { startProceduralMusic, type ProceduralMusicSession } from "@/lib/proceduralMusic";
-import { useIsMobile } from "@/hooks/use-mobile";
+
 
 interface MusicTrack {
   id: string;
@@ -91,7 +91,6 @@ interface StudyMusicPlayerProps {
 type PlayMode = "stream" | "procedural";
 
 export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPlayerProps) {
-  const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(autoExpand);
   const [isExpanded, setIsExpanded] = useState(autoExpand);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
