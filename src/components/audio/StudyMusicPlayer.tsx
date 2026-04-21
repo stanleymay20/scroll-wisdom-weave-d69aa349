@@ -49,24 +49,24 @@ interface MusicTrack {
 }
 
 const STUDY_TRACKS: MusicTrack[] = [
-  // Classical Masters (real MP3s uploaded)
+  // Classical Masters
   { id: "bach-cello-suite",      label: "Bach Cello Suite",   emoji: "🎻", category: "classical" },
   { id: "debussy-clair-de-lune", label: "Clair de Lune",      emoji: "🌙", category: "classical" },
   { id: "symphony-adagio",       label: "Adagios",            emoji: "🎼", category: "classical" },
   { id: "vivaldi-seasons",       label: "Four Seasons",       emoji: "🍂", category: "classical" },
-  // Reserved (MP3 coming) — use procedural fallback meanwhile
-  { id: "beethoven-moonlight",   label: "Moonlight Sonata",   emoji: "🎹", category: "classical", proceduralOnly: true },
-  { id: "chopin-nocturne",       label: "Nocturne",           emoji: "✨", category: "classical", proceduralOnly: true },
+  { id: "beethoven-moonlight",   label: "Moonlight Sonata",   emoji: "🎹", category: "classical" },
+  { id: "chopin-nocturne",       label: "Nocturne",           emoji: "✨", category: "classical" },
 
-  // Focus & Study (reserved — MP3 coming)
-  { id: "ambient-focus", label: "Deep Focus",  emoji: "🧠", category: "focus", proceduralOnly: true },
-  { id: "lofi-study",    label: "Lo-Fi Study", emoji: "📚", category: "focus", proceduralOnly: true },
+  // Focus & Study
+  { id: "ambient-focus", label: "Deep Focus",     emoji: "🧠", category: "focus" },
+  { id: "lofi-study",    label: "Lo-Fi Study",    emoji: "📚", category: "focus" },
+  { id: "christian-study", label: "Christian Study", emoji: "✝️", category: "focus" },
 
-  // Ambient & Jazz (real MP3s uploaded)
+  // Ambient & Jazz
   { id: "jazz-cafe",       label: "Jazz Café",   emoji: "🎷", category: "ambient" },
   { id: "spa-meditation",  label: "Zen Garden",  emoji: "🧘", category: "ambient" },
 
-  // Nature & Piano (real MP3s uploaded)
+  // Nature & Piano
   { id: "rain-piano",            label: "Rainy Day Piano", emoji: "🌧️", category: "nature" },
   { id: "forest-morning",        label: "Forest Morning",  emoji: "🌲", category: "nature" },
   { id: "rainy-forest-pomodoro", label: "Rainy Forest",    emoji: "🌿", category: "nature" },
