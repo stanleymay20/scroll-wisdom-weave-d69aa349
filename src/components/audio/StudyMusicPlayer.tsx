@@ -447,11 +447,31 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
             )}
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Always-visible play/pause in header when a track is active */}
+            {activeTrack && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-primary"
+                onClick={() => { void togglePlayback(); }}
+                disabled={isLoading === activeTrack.id}
+                aria-label={isPlaying ? "Pause" : "Play"}
+              >
+                {isLoading === activeTrack.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isPlaying ? (
+                  <Pause className="h-4 w-4" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-8 w-8"
               onClick={() => setIsExpanded(!isExpanded)}
+              aria-label={isExpanded ? "Collapse" : "Expand"}
             >
               {isExpanded ? (
                 <ChevronDown className="h-3.5 w-3.5" />
@@ -462,11 +482,12 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-8 w-8"
               onClick={() => {
                 stopMusic();
                 setIsOpen(false);
               }}
+              aria-label="Close"
             >
               <X className="h-3.5 w-3.5" />
             </Button>
