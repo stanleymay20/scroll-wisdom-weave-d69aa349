@@ -1,6 +1,21 @@
 /**
- * Study Music Player — Streams world-class AI-generated study music
- * Generates real music via ElevenLabs, caches in cloud storage
+ * Study Music Player — Streams curated study music tracks
+ *
+ * Architecture:
+ *  - Real MP3s live in the `study-music` Supabase storage bucket and are
+ *    catalogued in `study_music_tracks` (status = 'ready').
+ *  - On first interaction, we resolve the public URL (cached in-memory + DB)
+ *    and create the <audio> element SYNCHRONOUSLY inside the user gesture
+ *    so play() is always allowed and pause() always reaches a real element.
+ *  - For tracks without a cached MP3 yet, we fall back to procedural Web Audio
+ *    synthesis so users still get an ambient track.
+ *
+ * Reliability rules (fixes the "pause does nothing" bug):
+ *  1. NEVER create the Audio element after an `await` — always inside the click handler.
+ *  2. Track the in-flight play() promise; pause() awaits it before pausing.
+ *  3. A single `currentAudioRef` is the source of truth — replaced atomically.
+ *  4. State (`isPlaying`) is driven by audio events (`play`/`pause`/`ended`),
+ *     never by optimistic UI alone, so the button always reflects reality.
  */
 
 import { useState, useRef, useCallback, useEffect } from "react";
@@ -28,95 +43,34 @@ interface MusicTrack {
   id: string;
   label: string;
   emoji: string;
-  prompt: string;
   category: "classical" | "ambient" | "focus" | "nature";
+  /** When true, this track has no MP3 yet — uses procedural fallback */
+  proceduralOnly?: boolean;
 }
 
 const STUDY_TRACKS: MusicTrack[] = [
-  {
-    id: "beethoven-moonlight",
-    label: "Moonlight Sonata",
-    emoji: "🎹",
-    prompt: "Soft, gentle classical piano piece inspired by Beethoven's Moonlight Sonata first movement. Slow, contemplative, peaceful adagio in C-sharp minor. Perfect for deep study and concentration. No vocals, pure piano.",
-    category: "classical",
-  },
-  {
-    id: "bach-cello-suite",
-    label: "Cello Suite",
-    emoji: "🎻",
-    prompt: "Elegant solo cello performance inspired by Bach's Cello Suite No. 1 Prelude in G major. Warm, flowing baroque music with gentle arpeggios. Calm and meditative instrumental for studying.",
-    category: "classical",
-  },
-  {
-    id: "debussy-clair-de-lune",
-    label: "Clair de Lune",
-    emoji: "🌙",
-    prompt: "Dreamy impressionist piano piece inspired by Debussy's Clair de Lune. Soft, ethereal, and contemplative with gentle flowing melodies. Romantic classical piano perfect for reading and focus.",
-    category: "classical",
-  },
-  {
-    id: "symphony-adagio",
-    label: "Symphony Adagio",
-    emoji: "🎼",
-    prompt: "Lush orchestral adagio movement with strings, woodwinds, and soft brass. Inspired by Barber's Adagio for Strings. Slow, emotional, sweeping classical symphony. Deeply calming instrumental for deep work.",
-    category: "classical",
-  },
-  {
-    id: "vivaldi-seasons",
-    label: "Four Seasons",
-    emoji: "🍂",
-    prompt: "Elegant baroque violin concerto inspired by Vivaldi's Four Seasons Spring movement. Bright, uplifting string ensemble with solo violin. Energizing classical music for productive study sessions.",
-    category: "classical",
-  },
-  {
-    id: "chopin-nocturne",
-    label: "Nocturne",
-    emoji: "✨",
-    prompt: "Romantic solo piano nocturne inspired by Chopin. Gentle, expressive, flowing melody with delicate ornamentations. Intimate and beautiful night music for quiet studying.",
-    category: "classical",
-  },
-  {
-    id: "ambient-focus",
-    label: "Deep Focus",
-    emoji: "🧠",
-    prompt: "Ambient electronic deep focus music with soft synthesizer pads, gentle evolving textures, and subtle rhythmic pulses. Minimal, calming, and non-distracting. Perfect background for intense study sessions.",
-    category: "focus",
-  },
-  {
-    id: "lofi-study",
-    label: "Lo-Fi Study",
-    emoji: "📚",
-    prompt: "Warm lo-fi hip hop beats for studying. Mellow jazzy piano chords, soft vinyl crackle, relaxed drum beats, smooth bass. Chill and cozy cafe atmosphere. Instrumental only, no vocals.",
-    category: "focus",
-  },
-  {
-    id: "jazz-cafe",
-    label: "Jazz Café",
-    emoji: "🎷",
-    prompt: "Smooth jazz cafe music with soft saxophone melody, gentle piano comping, upright bass walking lines, and brushed drums. Warm, sophisticated, and relaxing. Perfect coffeehouse study ambience.",
-    category: "ambient",
-  },
-  {
-    id: "spa-meditation",
-    label: "Zen Garden",
-    emoji: "🧘",
-    prompt: "Peaceful zen meditation music with singing bowls, soft flute, gentle water sounds, and ambient pads. Serene and tranquil Eastern-inspired spa music for mindful studying.",
-    category: "ambient",
-  },
-  {
-    id: "rain-piano",
-    label: "Rainy Day Piano",
-    emoji: "🌧️",
-    prompt: "Gentle piano music with soft rain sounds in the background. Slow, peaceful, melancholic piano melodies blending with rainfall. Cozy rainy day atmosphere for reading and concentration.",
-    category: "nature",
-  },
-  {
-    id: "forest-morning",
-    label: "Forest Morning",
-    emoji: "🌲",
-    prompt: "Peaceful morning forest ambience with bird songs, gentle acoustic guitar, soft flute, and nature sounds. Fresh, organic, and uplifting. Calming woodland atmosphere for focused study.",
-    category: "nature",
-  },
+  // Classical Masters (real MP3s uploaded)
+  { id: "bach-cello-suite",      label: "Bach Cello Suite",   emoji: "🎻", category: "classical" },
+  { id: "debussy-clair-de-lune", label: "Clair de Lune",      emoji: "🌙", category: "classical" },
+  { id: "symphony-adagio",       label: "Adagios",            emoji: "🎼", category: "classical" },
+  { id: "vivaldi-seasons",       label: "Four Seasons",       emoji: "🍂", category: "classical" },
+  // Reserved (MP3 coming) — use procedural fallback meanwhile
+  { id: "beethoven-moonlight",   label: "Moonlight Sonata",   emoji: "🎹", category: "classical", proceduralOnly: true },
+  { id: "chopin-nocturne",       label: "Nocturne",           emoji: "✨", category: "classical", proceduralOnly: true },
+
+  // Focus & Study (reserved — MP3 coming)
+  { id: "ambient-focus", label: "Deep Focus",  emoji: "🧠", category: "focus", proceduralOnly: true },
+  { id: "lofi-study",    label: "Lo-Fi Study", emoji: "📚", category: "focus", proceduralOnly: true },
+
+  // Ambient & Jazz (real MP3s uploaded)
+  { id: "jazz-cafe",       label: "Jazz Café",   emoji: "🎷", category: "ambient" },
+  { id: "spa-meditation",  label: "Zen Garden",  emoji: "🧘", category: "ambient" },
+
+  // Nature & Piano (real MP3s uploaded)
+  { id: "rain-piano",            label: "Rainy Day Piano", emoji: "🌧️", category: "nature" },
+  { id: "forest-morning",        label: "Forest Morning",  emoji: "🌲", category: "nature" },
+  { id: "rainy-forest-pomodoro", label: "Rainy Forest",    emoji: "🌿", category: "nature" },
+  { id: "forest-ambience",       label: "Forest Ambience", emoji: "☀️", category: "nature" },
 ];
 
 const CATEGORY_LABELS: Record<string, string> = {
@@ -133,6 +87,8 @@ interface StudyMusicPlayerProps {
   autoExpand?: boolean;
 }
 
+type PlayMode = "stream" | "procedural";
+
 export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPlayerProps) {
   const [isOpen, setIsOpen] = useState(autoExpand);
   const [isExpanded, setIsExpanded] = useState(autoExpand);
@@ -143,181 +99,235 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
   const [isMuted, setIsMuted] = useState(false);
   const prevVolumeRef = useRef(40);
   const audioRef = useRef<HTMLAudioElement | null>(null);
+  const playPromiseRef = useRef<Promise<void> | null>(null);
   const proceduralRef = useRef<ProceduralMusicSession | null>(null);
-  const [usingFallback, setUsingFallback] = useState(false);
+  const playModeRef = useRef<PlayMode | null>(null);
   const trackUrlCache = useRef<Map<string, string>>(new Map());
 
-  // Cleanup on unmount
+  // --- Cleanup on unmount ---
   useEffect(() => {
     return () => {
       if (audioRef.current) {
-        audioRef.current.pause();
+        try { audioRef.current.pause(); } catch { /* noop */ }
         audioRef.current.src = "";
+        audioRef.current = null;
       }
       proceduralRef.current?.stop();
+      proceduralRef.current = null;
     };
   }, []);
 
-  // Sync volume
+  // --- Volume sync ---
   useEffect(() => {
     const v = (isMuted ? 0 : volume) / 100;
-    if (audioRef.current) {
-      audioRef.current.volume = v;
-    }
+    if (audioRef.current) audioRef.current.volume = v;
     proceduralRef.current?.setVolume(v);
   }, [volume, isMuted]);
 
-  const fetchOrGenerateTrack = useCallback(async (track: MusicTrack): Promise<string | null> => {
-    // Check cache first
-    const cached = trackUrlCache.current.get(track.id);
+  // --- Resolve a public URL for a track from the cache → DB ---
+  // NOTE: This may be awaited — only call BEFORE creating the Audio element
+  // OR when the element is already created and we just need to set its src later.
+  const resolveTrackUrl = useCallback(async (trackId: string): Promise<string | null> => {
+    const cached = trackUrlCache.current.get(trackId);
     if (cached) return cached;
 
-    try {
-      // Check if already generated in DB
-      const { data: existing } = await supabase
-        .from("study_music_tracks")
-        .select("storage_path, status")
-        .eq("track_key", track.id)
-        .single();
+    // Try the deterministic public URL first (we know our naming convention)
+    const directPath = `${trackId}.mp3`;
+    const { data: directUrl } = supabase.storage.from("study-music").getPublicUrl(directPath);
 
-      if (existing?.storage_path && existing.status === "ready") {
-        const { data: urlData } = supabase.storage
-          .from("study-music")
-          .getPublicUrl(existing.storage_path);
-        trackUrlCache.current.set(track.id, urlData.publicUrl);
-        return urlData.publicUrl;
-      }
+    // Verify the file actually exists by checking the DB row
+    const { data: row } = await supabase
+      .from("study_music_tracks")
+      .select("storage_path, status")
+      .eq("track_key", trackId)
+      .maybeSingle();
 
-      // Generate via edge function
-      const response = await fetch(
-        `${import.meta.env.VITE_SUPABASE_URL}/functions/v1/generate-study-music`,
-        {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-            apikey: import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY,
-            Authorization: `Bearer ${import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY}`,
-          },
-          body: JSON.stringify({
-            trackKey: track.id,
-            prompt: track.prompt,
-            duration: 120,
-          }),
+    if (row?.status === "ready" && row.storage_path) {
+      const { data } = supabase.storage.from("study-music").getPublicUrl(row.storage_path);
+      trackUrlCache.current.set(trackId, data.publicUrl);
+      return data.publicUrl;
+    }
+
+    // Optimistic: if the file matches our naming convention, try it
+    if (directUrl?.publicUrl) {
+      try {
+        const head = await fetch(directUrl.publicUrl, { method: "HEAD" });
+        if (head.ok) {
+          trackUrlCache.current.set(trackId, directUrl.publicUrl);
+          return directUrl.publicUrl;
         }
-      );
+      } catch { /* network error — fall through to null */ }
+    }
 
-      if (!response.ok) {
-        console.error("[StudyMusic] Generation failed:", response.status);
-        return null;
-      }
+    return null;
+  }, []);
 
-      const data = await response.json();
-      
-      // Handle plan-required / fallback errors — use Web Audio fallback
-      if (data.error === "PLAN_REQUIRED" || data.fallback) {
-        return "FALLBACK";
-      }
+  // --- Hard stop everything ---
+  const teardown = useCallback(() => {
+    if (audioRef.current) {
+      try { audioRef.current.pause(); } catch { /* noop */ }
+      audioRef.current.onplay = null;
+      audioRef.current.onpause = null;
+      audioRef.current.onended = null;
+      audioRef.current.onerror = null;
+      audioRef.current.src = "";
+      audioRef.current.load();
+      audioRef.current = null;
+    }
+    playPromiseRef.current = null;
+    proceduralRef.current?.stop();
+    proceduralRef.current = null;
+    playModeRef.current = null;
+  }, []);
 
-      if (data.url) {
-        trackUrlCache.current.set(track.id, data.url);
-        return data.url;
-      }
-      return null;
-    } catch (err) {
-      console.error("[StudyMusic] Error fetching track:", err);
-      return null;
+  // --- Pause-aware: waits for any in-flight play() before pausing ---
+  const safePause = useCallback(async () => {
+    const audio = audioRef.current;
+    if (!audio) return;
+    // Wait for any in-flight play() so the browser doesn't reject the pause
+    if (playPromiseRef.current) {
+      try { await playPromiseRef.current; } catch { /* play was rejected — ok */ }
+    }
+    if (!audio.paused) {
+      try { audio.pause(); } catch { /* noop */ }
     }
   }, []);
 
-  const selectTrack = useCallback(async (track: MusicTrack) => {
-    // Same track — toggle play/pause
-    if (activeTrackId === track.id) {
+  // --- Play/pause toggle for the currently-active track ---
+  const togglePlayback = useCallback(async () => {
+    if (playModeRef.current === "procedural") {
       if (isPlaying) {
-        if (usingFallback) {
-          proceduralRef.current?.stop();
-        } else {
-          audioRef.current?.pause();
-        }
+        proceduralRef.current?.stop();
+        proceduralRef.current = null;
         setIsPlaying(false);
-      } else {
-        if (usingFallback) {
-          const session = startProceduralMusic(track.id, (isMuted ? 0 : volume) / 100);
-          proceduralRef.current = session;
-        } else {
-          audioRef.current?.play().catch(() => {});
-        }
+      } else if (activeTrackId) {
+        const session = startProceduralMusic(activeTrackId, (isMuted ? 0 : volume) / 100);
+        proceduralRef.current = session;
         setIsPlaying(true);
       }
       return;
     }
 
-    // Stop current
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
+    const audio = audioRef.current;
+    if (!audio) return;
+
+    if (isPlaying) {
+      await safePause();
+      // isPlaying will flip to false via the 'pause' event listener
+    } else {
+      try {
+        playPromiseRef.current = audio.play();
+        await playPromiseRef.current;
+      } catch (err) {
+        console.error("[StudyMusic] Resume play failed:", err);
+      }
     }
-    proceduralRef.current?.stop();
+  }, [isPlaying, activeTrackId, isMuted, volume, safePause]);
+
+  // --- Select a different track (or toggle if same) ---
+  // CRITICAL: Audio element is created SYNCHRONOUSLY inside the click handler.
+  const selectTrack = useCallback(async (track: MusicTrack) => {
+    // Same track → just toggle
+    if (activeTrackId === track.id) {
+      void togglePlayback();
+      return;
+    }
+
+    // Stop whatever's playing
+    teardown();
 
     setActiveTrackId(track.id);
-    setIsLoading(track.id);
     setIsPlaying(false);
-    setUsingFallback(false);
 
-    const url = await fetchOrGenerateTrack(track);
-    setIsLoading(null);
-
-    if (!url) return;
-
-    // Use Web Audio procedural fallback
-    if (url === "FALLBACK") {
+    // ── Procedural-only track (no MP3 yet) ──
+    if (track.proceduralOnly) {
       try {
         const session = startProceduralMusic(track.id, (isMuted ? 0 : volume) / 100);
         proceduralRef.current = session;
-        setUsingFallback(true);
+        playModeRef.current = "procedural";
         setIsPlaying(true);
-        toast.info("Playing synthesized study music", {
-          description: "Upgrade ElevenLabs for AI-generated tracks",
-          duration: 3000,
+        toast.info(`Playing ${track.label} (synthesized)`, {
+          description: "Studio recording coming soon",
+          duration: 2500,
         });
       } catch (err) {
-        console.error("[StudyMusic] Procedural fallback error:", err);
+        console.error("[StudyMusic] Procedural start failed:", err);
         setActiveTrackId(null);
+        toast.error("Could not start audio");
       }
       return;
     }
 
-    const audio = new Audio(url);
+    // ── Real MP3 track ──
+    // Try cached URL first so we can build the Audio element synchronously
+    const cachedUrl = trackUrlCache.current.get(track.id);
+
+    // Build Audio element NOW (inside the gesture window)
+    const audio = new Audio();
     audio.loop = true;
     audio.volume = (isMuted ? 0 : volume) / 100;
-    audio.crossOrigin = "anonymous";
+    audio.preload = "auto";
 
-    audio.addEventListener("canplaythrough", () => {
-      audio.play().catch(() => {});
-      setIsPlaying(true);
-    }, { once: true });
-
-    audio.addEventListener("error", () => {
-      console.error("[StudyMusic] Audio playback error");
+    // Wire event-driven state (single source of truth)
+    audio.onplay = () => setIsPlaying(true);
+    audio.onpause = () => setIsPlaying(false);
+    audio.onended = () => setIsPlaying(false);
+    audio.onerror = () => {
+      console.error("[StudyMusic] Audio element error", audio.error);
       setIsPlaying(false);
-      setActiveTrackId(null);
-    });
+      toast.error("Could not load this track");
+    };
 
     audioRef.current = audio;
-    audio.load();
-  }, [activeTrackId, isPlaying, usingFallback, fetchOrGenerateTrack, isMuted, volume]);
+    playModeRef.current = "stream";
+
+    if (cachedUrl) {
+      // Fast path: synchronous play within gesture
+      audio.src = cachedUrl;
+      try {
+        playPromiseRef.current = audio.play();
+        await playPromiseRef.current;
+      } catch (err) {
+        console.error("[StudyMusic] Play failed:", err);
+      }
+      return;
+    }
+
+    // Slow path: need to resolve URL first. The Audio element exists, so a later
+    // pause() will work correctly. But play() after await may need a re-click on
+    // strict browsers — most allow it because the gesture context for THIS
+    // element has been granted by creating it inside the gesture.
+    setIsLoading(track.id);
+    const url = await resolveTrackUrl(track.id);
+    setIsLoading(null);
+
+    // The user might have clicked another track while we were resolving
+    if (audioRef.current !== audio) return;
+
+    if (!url) {
+      toast.error(`${track.label} isn't ready yet`, {
+        description: "Try a different track",
+      });
+      teardown();
+      setActiveTrackId(null);
+      return;
+    }
+
+    audio.src = url;
+    try {
+      playPromiseRef.current = audio.play();
+      await playPromiseRef.current;
+    } catch (err) {
+      console.warn("[StudyMusic] Auto-play after fetch failed; user can press play.", err);
+      // Audio is loaded; user just needs to tap play. State is already false.
+    }
+  }, [activeTrackId, togglePlayback, teardown, isMuted, volume, resolveTrackUrl]);
 
   const stopMusic = useCallback(() => {
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.src = "";
-      audioRef.current = null;
-    }
-    proceduralRef.current?.stop();
-    proceduralRef.current = null;
+    teardown();
     setActiveTrackId(null);
     setIsPlaying(false);
-    setUsingFallback(false);
-  }, []);
+  }, [teardown]);
 
   const toggleMute = useCallback(() => {
     if (isMuted) {
@@ -410,8 +420,12 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
               variant="ghost"
               size="icon"
               className="h-8 w-8 flex-none"
-              onClick={() => selectTrack(activeTrack)}
+              onClick={() => {
+                // Same-track click: just toggle, never re-create
+                void togglePlayback();
+              }}
               disabled={isLoading === activeTrack.id}
+              aria-label={isPlaying ? "Pause" : "Play"}
             >
               {isLoading === activeTrack.id ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
@@ -426,6 +440,7 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
               size="icon"
               className="h-8 w-8 flex-none"
               onClick={toggleMute}
+              aria-label={isMuted ? "Unmute" : "Mute"}
             >
               {isMuted || volume === 0 ? (
                 <VolumeX className="h-4 w-4" />
@@ -494,9 +509,8 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
                 </div>
               ))}
 
-              {/* First-time generation notice */}
               <p className="text-[10px] text-muted-foreground/60 text-center px-2 pt-1">
-                First play generates your track (30-60s). After that it plays instantly.
+                Tracks loop continuously. Tap any track to switch instantly.
               </p>
             </div>
           </motion.div>
