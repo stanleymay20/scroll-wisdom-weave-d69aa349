@@ -91,6 +91,7 @@ interface StudyMusicPlayerProps {
 type PlayMode = "stream" | "procedural";
 
 export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPlayerProps) {
+  const isMobile = useIsMobile();
   const [isOpen, setIsOpen] = useState(autoExpand);
   const [isExpanded, setIsExpanded] = useState(autoExpand);
   const [activeTrackId, setActiveTrackId] = useState<string | null>(null);
