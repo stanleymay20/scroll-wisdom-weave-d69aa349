@@ -38,6 +38,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { startProceduralMusic, type ProceduralMusicSession } from "@/lib/proceduralMusic";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface MusicTrack {
   id: string;
