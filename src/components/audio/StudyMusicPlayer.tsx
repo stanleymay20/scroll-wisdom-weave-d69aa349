@@ -39,6 +39,7 @@ import { cn } from "@/lib/utils";
 import { supabase } from "@/integrations/supabase/client";
 import { startProceduralMusic, type ProceduralMusicSession } from "@/lib/proceduralMusic";
 
+
 interface MusicTrack {
   id: string;
   label: string;
@@ -327,6 +328,13 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
     teardown();
     setActiveTrackId(null);
     setIsPlaying(false);
+    // Clear lock-screen metadata
+    if ('mediaSession' in navigator) {
+      try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      } catch { /* noop */ }
+    }
   }, [teardown]);
 
   const toggleMute = useCallback(() => {
@@ -340,6 +348,54 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
   }, [isMuted, volume]);
 
   const activeTrack = STUDY_TRACKS.find((t) => t.id === activeTrackId);
+
+  // ── Media Session API: lock-screen + hardware media key controls ──
+  useEffect(() => {
+    if (!('mediaSession' in navigator)) return;
+    if (!activeTrack) {
+      try {
+        navigator.mediaSession.metadata = null;
+        navigator.mediaSession.playbackState = 'none';
+      } catch { /* noop */ }
+      return;
+    }
+
+    try {
+      navigator.mediaSession.metadata = new MediaMetadata({
+        title: activeTrack.label,
+        artist: 'ScrollLibrary · Study Music',
+        album: CATEGORY_LABELS[activeTrack.category] ?? 'Focus',
+      });
+      navigator.mediaSession.playbackState = isPlaying ? 'playing' : 'paused';
+
+      navigator.mediaSession.setActionHandler('play', () => { void togglePlayback(); });
+      navigator.mediaSession.setActionHandler('pause', () => { void togglePlayback(); });
+      navigator.mediaSession.setActionHandler('stop', () => { stopMusic(); });
+      // Skip = next/previous track in the curated list
+      navigator.mediaSession.setActionHandler('nexttrack', () => {
+        const idx = STUDY_TRACKS.findIndex(t => t.id === activeTrack.id);
+        const next = STUDY_TRACKS[(idx + 1) % STUDY_TRACKS.length];
+        void selectTrack(next);
+      });
+      navigator.mediaSession.setActionHandler('previoustrack', () => {
+        const idx = STUDY_TRACKS.findIndex(t => t.id === activeTrack.id);
+        const prev = STUDY_TRACKS[(idx - 1 + STUDY_TRACKS.length) % STUDY_TRACKS.length];
+        void selectTrack(prev);
+      });
+    } catch (err) {
+      console.warn('[StudyMusic] MediaSession setup failed:', err);
+    }
+
+    return () => {
+      try {
+        navigator.mediaSession.setActionHandler('play', null);
+        navigator.mediaSession.setActionHandler('pause', null);
+        navigator.mediaSession.setActionHandler('stop', null);
+        navigator.mediaSession.setActionHandler('nexttrack', null);
+        navigator.mediaSession.setActionHandler('previoustrack', null);
+      } catch { /* noop */ }
+    };
+  }, [activeTrack, isPlaying, togglePlayback, stopMusic, selectTrack]);
 
   const grouped = CATEGORY_ORDER.reduce((acc, cat) => {
     const tracks = STUDY_TRACKS.filter((t) => t.category === cat);
@@ -367,11 +423,14 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
   return (
     <AnimatePresence>
       <motion.div
+        key="study-music-panel"
         initial={{ opacity: 0, y: 8, scale: 0.96 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         exit={{ opacity: 0, y: 8, scale: 0.96 }}
         className={cn(
-          "bg-card border border-border rounded-xl shadow-lg overflow-hidden w-72",
+          "bg-card border border-border rounded-xl shadow-lg overflow-hidden",
+          // Mobile: nearly full width, capped. Desktop: fixed 18rem.
+          "w-[min(22rem,calc(100vw-2rem))] sm:w-72",
           className
         )}
       >
@@ -387,11 +446,31 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
             )}
           </div>
           <div className="flex items-center gap-1 flex-shrink-0">
+            {/* Always-visible play/pause in header when a track is active */}
+            {activeTrack && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-primary"
+                onClick={() => { void togglePlayback(); }}
+                disabled={isLoading === activeTrack.id}
+                aria-label={isPlaying ? "Pause" : "Play"}
+              >
+                {isLoading === activeTrack.id ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : isPlaying ? (
+                  <Pause className="h-4 w-4" />
+                ) : (
+                  <Play className="h-4 w-4" />
+                )}
+              </Button>
+            )}
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-8 w-8"
               onClick={() => setIsExpanded(!isExpanded)}
+              aria-label={isExpanded ? "Collapse" : "Expand"}
             >
               {isExpanded ? (
                 <ChevronDown className="h-3.5 w-3.5" />
@@ -402,11 +481,12 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
             <Button
               variant="ghost"
               size="icon"
-              className="h-7 w-7"
+              className="h-8 w-8"
               onClick={() => {
                 stopMusic();
                 setIsOpen(false);
               }}
+              aria-label="Close"
             >
               <X className="h-3.5 w-3.5" />
             </Button>
