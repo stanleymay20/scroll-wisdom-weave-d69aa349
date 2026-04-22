@@ -10,9 +10,9 @@ import { createLogger } from '@/lib/logger';
 import {
   type SRSCard,
   type ReviewQuality,
-  calculateNextReview,
   getSRSStats,
 } from '@/lib/spacedRepetition';
+import { reviewFsrs, qualityToFsrsRating } from '@/lib/fsrs';
 
 const logger = createLogger('useSpacedRepetition');
 
@@ -72,15 +72,27 @@ export function useSpacedRepetition({ userId, bookId }: UseSpacedRepetitionOptio
     const card = cards.find(c => c.id === cardId);
     if (!card) return;
 
-    const result = calculateNextReview(
-      quality, card.easeFactor, card.intervalDays, card.repetitions, card.bloomLevel
+    // FSRS-5: difficulty stored in ease_factor, stability in interval_days.
+    const elapsedMs = card.lastReviewedAt
+      ? Date.now() - new Date(card.lastReviewedAt).getTime()
+      : 0;
+    const elapsedDays = Math.max(0, elapsedMs / 86_400_000);
+
+    const result = reviewFsrs(
+      {
+        difficulty: card.easeFactor,
+        stability: card.intervalDays,
+        repetitions: card.repetitions,
+      },
+      qualityToFsrsRating(quality),
+      elapsedDays,
     );
 
     const isCorrect = quality >= 3;
     const updates = {
-      ease_factor: result.newEaseFactor,
-      interval_days: result.newInterval,
-      repetitions: result.newRepetitions,
+      ease_factor: result.difficulty,
+      interval_days: Math.max(1, Math.round(result.stability)),
+      repetitions: result.repetitions,
       next_review_at: result.nextReviewAt.toISOString(),
       last_reviewed_at: new Date().toISOString(),
       total_reviews: card.totalReviews + 1,
@@ -97,9 +109,9 @@ export function useSpacedRepetition({ userId, bookId }: UseSpacedRepetitionOptio
 
     setCards(prev => prev.map(c => c.id === cardId ? {
       ...c,
-      easeFactor: result.newEaseFactor,
-      intervalDays: result.newInterval,
-      repetitions: result.newRepetitions,
+      easeFactor: result.difficulty,
+      intervalDays: Math.max(1, Math.round(result.stability)),
+      repetitions: result.repetitions,
       nextReviewAt: result.nextReviewAt.toISOString(),
       lastReviewedAt: new Date().toISOString(),
       totalReviews: c.totalReviews + 1,
