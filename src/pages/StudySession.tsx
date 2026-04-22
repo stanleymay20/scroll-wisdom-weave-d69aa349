@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Brain, Sparkles, Loader2 } from 'lucide-react';
-import { useAuth } from '@/hooks/useAuth';
+import { supabase } from '@/integrations/supabase/client';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
@@ -41,8 +41,9 @@ const PHASE_LABELS: Record<SessionPhase, string> = {
 };
 
 export default function StudySession() {
-  const { user, loading: authLoading } = useAuth();
   const navigate = useNavigate();
+  const [userId, setUserId] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
   const [plan, setPlan] = useState<SessionPlan | null>(null);
   const [phase, setPhase] = useState<SessionPhase>('intro');
@@ -57,19 +58,24 @@ export default function StudySession() {
   const [report, setReport] = useState<SessionReportT | null>(null);
 
   useEffect(() => {
-    if (!user?.id) return;
     let mounted = true;
-    buildSessionPlan(user.id).then((p) => {
-      if (mounted) setPlan(p);
+    supabase.auth.getUser().then(({ data }) => {
+      if (!mounted) return;
+      const uid = data.user?.id ?? null;
+      setUserId(uid);
+      setAuthLoading(false);
+      if (!uid) {
+        navigate('/auth', { state: { redirectTo: '/study' } });
+        return;
+      }
+      buildSessionPlan(uid).then((p) => {
+        if (mounted) setPlan(p);
+      });
     });
     return () => {
       mounted = false;
     };
-  }, [user?.id]);
-
-  useEffect(() => {
-    if (!authLoading && !user) navigate('/auth');
-  }, [authLoading, user, navigate]);
+  }, [navigate]);
 
   // Skip warm-up if no due cards; skip focus/retrieval if no book
   const advance = (from: SessionPhase) => {
@@ -87,15 +93,15 @@ export default function StudySession() {
 
   // When entering "report", compute the summary
   useEffect(() => {
-    if (phase !== 'report' || !user?.id) return;
-    computeSessionReport(user.id, sessionStart, {
+    if (phase !== 'report' || !userId) return;
+    computeSessionReport(userId, sessionStart, {
       cardsReviewed,
       focusMinutes,
       retrievalScore,
       reflectionScore,
       weakConceptsTouched,
     }).then(setReport);
-  }, [phase, user?.id, sessionStart, cardsReviewed, focusMinutes, retrievalScore, reflectionScore, weakConceptsTouched]);
+  }, [phase, userId, sessionStart, cardsReviewed, focusMinutes, retrievalScore, reflectionScore, weakConceptsTouched]);
 
   const progress = useMemo(() => {
     const i = PHASES.indexOf(phase);
@@ -104,7 +110,7 @@ export default function StudySession() {
 
   if (authLoading || !plan) {
     return (
-      <PageShell>
+      <PageShell pageName="study">
         <div className="flex items-center justify-center py-24">
           <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
         </div>
@@ -113,7 +119,7 @@ export default function StudySession() {
   }
 
   return (
-    <PageShell>
+    <PageShell pageName="study">
       <div className="max-w-2xl mx-auto px-4 sm:px-6 py-8 sm:py-12 space-y-6">
         {/* Header */}
         <div className="space-y-3">
@@ -139,9 +145,9 @@ export default function StudySession() {
               <IntroPhase plan={plan} onStart={() => advance('intro')} />
             )}
 
-            {phase === 'warmup' && user?.id && (
+            {phase === 'warmup' && userId && (
               <SessionWarmup
-                userId={user.id}
+                userId={userId}
                 bookId={plan.bookId}
                 targetCount={plan.warmupTargetCards}
                 onComplete={(n) => {
