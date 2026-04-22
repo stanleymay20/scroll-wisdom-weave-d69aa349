@@ -45,7 +45,7 @@ export function NextActionCard({ userId }: NextActionCardProps) {
       try {
         const now = new Date().toISOString();
 
-        // Priority 1: SRS reviews due
+        // Priority 1: SRS reviews due → route to Deep Study Mode (the daily ritual)
         const { data: dueCards } = await supabase
           .from("spaced_repetition_cards")
           .select("id, book_id")
@@ -54,15 +54,14 @@ export function NextActionCard({ userId }: NextActionCardProps) {
           .limit(50);
 
         if (mounted && dueCards && dueCards.length > 0) {
-          const firstBookId = dueCards[0].book_id;
           setAction({
             type: "review",
-            title: `${dueCards.length} ${dueCards.length === 1 ? "card" : "cards"} ready for review`,
-            subtitle: "5 minutes of review locks in long-term memory",
-            cta: "Start review",
-            href: firstBookId ? `/book/${firstBookId}` : "/dashboard/mastery",
+            title: `Deep Study Session ready · ${dueCards.length} ${dueCards.length === 1 ? "card" : "cards"} due`,
+            subtitle: "Warm-up · focus · retrieval · reflection — your daily brain workout",
+            cta: "Start session",
+            href: "/study",
             icon: Brain,
-            badge: "Due now",
+            badge: "Today",
           });
           setLoading(false);
           return;
@@ -88,10 +87,10 @@ export function NextActionCard({ userId }: NextActionCardProps) {
 
           setAction({
             type: "resume",
-            title: book?.title ? `Continue "${book.title}"` : "Continue reading",
-            subtitle: `${Math.round(inProgress.progress_percent)}% complete · keep your streak going`,
-            cta: "Resume",
-            href: `/read/${inProgress.book_id}/${inProgress.last_read_chapter || 1}`,
+            title: book?.title ? `Deep Study: "${book.title}"` : "Start today's Deep Study session",
+            subtitle: `${Math.round(inProgress.progress_percent)}% complete · 25-min ritual to lock it in`,
+            cta: "Begin session",
+            href: "/study",
             icon: BookOpen,
             badge: "In progress",
           });
