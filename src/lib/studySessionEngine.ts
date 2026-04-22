@@ -167,10 +167,9 @@ export async function computeSessionReport(
     retrievalScore: number; // 0..1
     reflectionScore: number | null; // 1..5 or null
     weakConceptsTouched: number;
+    weakConceptIds?: string[];
   },
 ): Promise<SessionReport> {
-  // Mastery delta is approximated locally to keep the report instant —
-  // the underlying tables update asynchronously through quiz/SRS flows.
   const masteryDelta =
     Math.round(
       payload.cardsReviewed * 4 +
@@ -179,6 +178,65 @@ export async function computeSessionReport(
         (payload.reflectionScore ? payload.reflectionScore * 3 : 0),
     );
 
+  // ── Adaptive Deep Study v2: write back to competency_profile & concept states
+  try {
+    // Bump competency_profile by retrieval performance + reflection quality
+    const bump = Math.round(payload.retrievalScore * 8 + (payload.reflectionScore || 0) * 2);
+    if (bump > 0) {
+      const { data: existing } = await supabase
+        .from('competency_profile')
+        .select('*')
+        .eq('user_id', userId)
+        .maybeSingle();
+      const cur = (existing as any) || {};
+      await supabase.from('competency_profile').upsert(
+        {
+          user_id: userId,
+          domain: cur.domain || 'general',
+          remember_score: clamp((Number(cur.remember_score) || 0) + bump * 0.4),
+          understand_score: clamp((Number(cur.understand_score) || 0) + bump * 0.6),
+          apply_score: clamp((Number(cur.apply_score) || 0) + bump * 0.8),
+          analyze_score: clamp((Number(cur.analyze_score) || 0) + bump * 0.6),
+          evaluate_score: clamp((Number(cur.evaluate_score) || 0) + bump * 0.5),
+          create_score: clamp((Number(cur.create_score) || 0) + bump * 0.3),
+          total_attempts: (Number(cur.total_attempts) || 0) + 1,
+          growth_trend: payload.retrievalScore >= 0.7 ? 'improving' : 'stable',
+          last_updated: new Date().toISOString(),
+        } as any,
+        { onConflict: 'user_id' },
+      );
+    }
+
+    // Strengthen weak concepts the learner just touched
+    if (payload.weakConceptIds?.length) {
+      const nowIso = new Date().toISOString();
+      for (const conceptId of payload.weakConceptIds) {
+        const { data: state } = await supabase
+          .from('learner_concept_states')
+          .select('*')
+          .eq('user_id', userId)
+          .eq('concept_node_id', conceptId)
+          .maybeSingle();
+        const prevMastery = Number((state as any)?.mastery_score) || 0;
+        const newMastery = Math.min(1, prevMastery + payload.retrievalScore * 0.12);
+        await supabase.from('learner_concept_states').upsert(
+          {
+            user_id: userId,
+            concept_node_id: conceptId,
+            mastery_score: newMastery,
+            familiarity_score: Math.min(1, (Number((state as any)?.familiarity_score) || 0) + 0.1),
+            times_reviewed: (Number((state as any)?.times_reviewed) || 0) + 1,
+            last_seen_at: nowIso,
+            last_assessed_at: nowIso,
+          } as any,
+          { onConflict: 'user_id,concept_node_id' },
+        );
+      }
+    }
+  } catch {
+    // Writebacks are best-effort — never block the report
+  }
+
   return {
     cardsReviewed: payload.cardsReviewed,
     conceptsStrengthened: payload.weakConceptsTouched,
@@ -186,4 +244,8 @@ export async function computeSessionReport(
     masteryDelta,
     reflectionScore: payload.reflectionScore,
   };
+}
+
+function clamp(v: number): number {
+  return Math.max(0, Math.min(100, Math.round(v)));
 }
