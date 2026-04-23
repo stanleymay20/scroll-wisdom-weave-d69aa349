@@ -411,10 +411,22 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       } else {
         console.error("[TTS Client] Error:", err);
         const errorMessage = err instanceof Error ? err.message : "Failed to generate speech";
-        if (isMountedRef.current) {
+
+        // First, try to surface this as a usage gate (audio limit, plan, AI quota)
+        const errLike = err as unknown;
+        const ctx = (errLike && typeof errLike === "object" && "context" in (errLike as Record<string, unknown>))
+          ? (errLike as { context?: unknown }).context
+          : errLike;
+        const gate = parseGateError(ctx ?? errLike, tier);
+        if (!gate.allowed && gate.upgradeRequired) {
+          if (isMountedRef.current) {
+            setError("Audio unavailable on your plan");
+            usageGate.trigger(gate);
+          }
+        } else if (isMountedRef.current) {
           setError(errorMessage);
           toast({
-            title: "TTS Failed",
+            title: "Audio unavailable",
             description: errorMessage,
             variant: "destructive",
           });
