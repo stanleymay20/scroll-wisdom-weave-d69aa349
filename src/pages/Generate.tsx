@@ -162,7 +162,7 @@ export default function Generate() {
   const [transformationPrompt, setTransformationPrompt] = useState("");
   
   const { toast } = useToast();
-
+  const usageGate = useUsageGate();
 
   // Auto-enable academic mode for academic categories
   useEffect(() => {
@@ -424,14 +424,21 @@ export default function Generate() {
     } catch (error: any) {
       // Clear any pending progress timers
       progressTimers.forEach(clearTimeout);
-      
+
       console.error("Generation error:", error);
       setGenerationProgress((prev) => [...prev, "❌ Generation failed"]);
-      toast({
-        title: t('generate.failed'),
-        description: error.message || t('generate.failedDesc'),
-        variant: "destructive",
-      });
+
+      // Try to surface as a usage gate first (book limit, AI quota, plan, etc.)
+      const gate = parseGateError(error?.context ?? error, tier);
+      if (!gate.allowed && gate.upgradeRequired) {
+        usageGate.trigger(gate);
+      } else {
+        toast({
+          title: t('generate.failed'),
+          description: error.message || t('generate.failedDesc'),
+          variant: "destructive",
+        });
+      }
     } finally {
       setIsGenerating(false);
     }
