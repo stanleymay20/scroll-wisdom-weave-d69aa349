@@ -7,6 +7,9 @@ import { Volume2, VolumeX, Play, Pause, Settings, Loader2, Square, AlertCircle, 
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEntitlements } from "@/hooks/useEntitlements";
+import { UsageGateModal, useUsageGate } from "@/components/subscription/UsageGateModal";
+import { parseGateError } from "@/lib/usageGate";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 
 interface TextToSpeechPlayerProps {
   text: string;
@@ -35,6 +38,8 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   const [progress, setProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
+  const usageGate = useUsageGate();
+  const { tier } = useSubscription();
 
   // Use centralized entitlements - SINGLE SOURCE OF TRUTH
   const entitlements = useEntitlements();
