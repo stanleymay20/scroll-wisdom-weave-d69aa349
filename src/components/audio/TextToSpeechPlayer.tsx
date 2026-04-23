@@ -632,5 +632,12 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         </PopoverContent>
       </Popover>
     </div>
+    <UsageGateModal
+      open={usageGate.open}
+      onOpenChange={(o) => { if (!o) usageGate.close(); }}
+      result={usageGate.result}
+      source="reader-tts"
+    />
+    </>
   );
 }
