@@ -46,6 +46,8 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { sanitizeForDisplay, VALIDATION_LIMITS } from "@/lib/validation";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { cn } from "@/lib/utils";
+import { UsageGateModal, useUsageGate } from "@/components/subscription/UsageGateModal";
+import { parseGateError } from "@/lib/usageGate";
 
 const CATEGORIES = [
   { value: "science", labelKey: "categories.science" },
