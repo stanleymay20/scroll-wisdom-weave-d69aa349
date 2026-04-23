@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -63,9 +64,20 @@ serve(async (req) => {
     const quota = imageQuotas[userPlan] ?? 0;
 
     if (quota === 0) {
-      return new Response(JSON.stringify({ error: "AI image generation requires a paid plan" }), {
-        status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      const denial = gateDenied("FEATURE_NOT_IN_PLAN", {
+        message: "AI image generation requires a paid plan.",
+        currentPlan: userPlan,
+        usage: { aiRequestsUsed: 0, aiRequestsLimit: 0 },
       });
+      await recordGateEvent(supabase, {
+        user_id: user.id,
+        feature: "image_gen",
+        reason: denial.reason,
+        allowed: false,
+        plan: userPlan,
+        usage_snapshot: denial.usage as Record<string, unknown>,
+      });
+      return gateResponse(denial, corsHeaders);
     }
 
     if (quota > 0) {
@@ -78,9 +90,20 @@ serve(async (req) => {
         .eq("month", currentMonth);
 
       if ((count ?? 0) >= quota) {
-        return new Response(JSON.stringify({ error: `Monthly AI image limit reached (${quota}). Upgrade for more.` }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        const denial = gateDenied("MONTHLY_LIMIT_REACHED", {
+          message: `Monthly AI image limit reached (${quota}). Upgrade for more.`,
+          currentPlan: userPlan,
+          usage: { aiRequestsUsed: count ?? 0, aiRequestsLimit: quota },
         });
+        await recordGateEvent(supabase, {
+          user_id: user.id,
+          feature: "image_gen",
+          reason: denial.reason,
+          allowed: false,
+          plan: userPlan,
+          usage_snapshot: denial.usage as Record<string, unknown>,
+        });
+        return gateResponse(denial, corsHeaders);
       }
     }
 
