@@ -252,8 +252,17 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     if (!outlineResponse.ok) {
       const status = outlineResponse.status;
       console.error("[GENERATE-BOOK] AI error:", status);
-      if (status === 429) return new Response(JSON.stringify({ error: "Rate limited, try again later." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (status === 402) return new Response(JSON.stringify({ error: "Payment required." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (status === 429) {
+        return gateResponse(gateDenied("RATE_LIMITED", { currentPlan: userPlan }), corsHeaders);
+      }
+      if (status === 402) {
+        const gate = gateDenied("AI_QUOTA_EXHAUSTED", { currentPlan: userPlan });
+        await recordGateEvent(supabase, {
+          user_id: user.id, feature: "generate_book", reason: gate.reason, allowed: false,
+          plan: userPlan, usage_snapshot: { upstream_status: 402 },
+        });
+        return gateResponse(gate, corsHeaders);
+      }
       throw new Error("Failed to generate outline");
     }
 

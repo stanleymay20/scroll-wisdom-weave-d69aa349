@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { encode as base64Encode } from "https://deno.land/std@0.190.0/encoding/base64.ts";
+import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -104,12 +105,16 @@ serve(async (req) => {
 
       if (!isAdmin && monthlyLimit > 0 && currentUsage >= monthlyLimit) {
         console.log(`[TTS] Monthly limit reached: ${currentUsage}/${monthlyLimit} min (${userPlan})`);
-        return new Response(JSON.stringify({
-          error: `Monthly TTS limit reached (${monthlyLimit} min for ${userPlan} plan). Upgrade for more.`,
-        }), {
-          status: 403,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        const gate = gateDenied("AUDIO_LIMIT_REACHED", {
+          message: `Your audio listening minutes are exhausted (${monthlyLimit} min for ${userPlan}). Upgrade to keep listening.`,
+          currentPlan: userPlan,
+          usage: { audioMinutesUsed: currentUsage, audioMinutesLimit: monthlyLimit },
         });
+        await recordGateEvent(supabase, {
+          user_id: userId, feature: "tts", reason: gate.reason, allowed: false,
+          plan: userPlan, usage_snapshot: { used: currentUsage, limit: monthlyLimit },
+        });
+        return gateResponse(gate, corsHeaders);
       }
     }
 
