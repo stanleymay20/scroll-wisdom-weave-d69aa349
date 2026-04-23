@@ -7,6 +7,9 @@ import { Volume2, VolumeX, Play, Pause, Settings, Loader2, Square, AlertCircle, 
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEntitlements } from "@/hooks/useEntitlements";
+import { UsageGateModal, useUsageGate } from "@/components/subscription/UsageGateModal";
+import { parseGateError } from "@/lib/usageGate";
+import { useSubscription } from "@/contexts/SubscriptionContext";
 
 interface TextToSpeechPlayerProps {
   text: string;
@@ -35,6 +38,8 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   const [progress, setProgress] = useState(0);
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
+  const usageGate = useUsageGate();
+  const { tier } = useSubscription();
 
   // Use centralized entitlements - SINGLE SOURCE OF TRUTH
   const entitlements = useEntitlements();
@@ -406,10 +411,22 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       } else {
         console.error("[TTS Client] Error:", err);
         const errorMessage = err instanceof Error ? err.message : "Failed to generate speech";
-        if (isMountedRef.current) {
+
+        // First, try to surface this as a usage gate (audio limit, plan, AI quota)
+        const errLike = err as unknown;
+        const ctx = (errLike && typeof errLike === "object" && "context" in (errLike as Record<string, unknown>))
+          ? (errLike as { context?: unknown }).context
+          : errLike;
+        const gate = parseGateError(ctx ?? errLike, tier);
+        if (!gate.allowed && gate.upgradeRequired) {
+          if (isMountedRef.current) {
+            setError("Audio unavailable on your plan");
+            usageGate.trigger(gate);
+          }
+        } else if (isMountedRef.current) {
           setError(errorMessage);
           toast({
-            title: "TTS Failed",
+            title: "Audio unavailable",
             description: errorMessage,
             variant: "destructive",
           });
@@ -497,16 +514,25 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   // Render a disabled control when the user doesn't have TTS access (never render nothing)
   if (!canUseTTS && !entitlements.isPaid && !entitlements.isAdmin) {
     return (
-      <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-2 border border-border/50 opacity-75">
-        <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Upgrade to enable audio">
-          <Lock className="h-4 w-4" />
-        </Button>
-        <p className="text-xs text-muted-foreground">Audio playback is unavailable on your plan.</p>
-      </div>
+      <>
+        <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-2 border border-border/50 opacity-75">
+          <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Upgrade to enable audio">
+            <Lock className="h-4 w-4" />
+          </Button>
+          <p className="text-xs text-muted-foreground">Audio playback is unavailable on your plan.</p>
+        </div>
+        <UsageGateModal
+          open={usageGate.open}
+          onOpenChange={(o) => { if (!o) usageGate.close(); }}
+          result={usageGate.result}
+          source="reader-tts"
+        />
+      </>
     );
   }
 
   return (
+    <>
     <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-2 border border-border/50">
       {/* Play/Pause Button */}
       <Button
@@ -606,5 +632,12 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         </PopoverContent>
       </Popover>
     </div>
+    <UsageGateModal
+      open={usageGate.open}
+      onOpenChange={(o) => { if (!o) usageGate.close(); }}
+      result={usageGate.result}
+      source="reader-tts"
+    />
+    </>
   );
 }

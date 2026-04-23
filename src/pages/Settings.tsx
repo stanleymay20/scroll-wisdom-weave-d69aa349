@@ -21,6 +21,7 @@ import {
   Info, ExternalLink, FileText, CheckCircle, Monitor
 } from "lucide-react";
 import { StorageManager } from "@/components/pwa/StorageManager";
+import { UsageInsightsPanel } from "@/components/subscription/UsageInsightsPanel";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
@@ -293,6 +294,9 @@ export default function Settings() {
                     )}
                   </CardContent>
                 </Card>
+
+                {/* Authoritative server-side usage snapshot */}
+                <UsageInsightsPanel />
               </TabsContent>
 
               {/* Storage Tab */}

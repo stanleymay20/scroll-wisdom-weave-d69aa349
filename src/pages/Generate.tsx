@@ -1000,9 +1000,19 @@ export default function Generate() {
       </main>
   );
 
-  return isMobile ? (
-    <MobileLayout>{Main}</MobileLayout>
-  ) : (
-    <DesktopGenerateWrapper>{Main}</DesktopGenerateWrapper>
+  return (
+    <>
+      {isMobile ? (
+        <MobileLayout>{Main}</MobileLayout>
+      ) : (
+        <DesktopGenerateWrapper>{Main}</DesktopGenerateWrapper>
+      )}
+      <UsageGateModal
+        open={usageGate.open}
+        onOpenChange={(o) => { if (!o) usageGate.close(); }}
+        result={usageGate.result}
+        source="generate-book"
+      />
+    </>
   );
 }
