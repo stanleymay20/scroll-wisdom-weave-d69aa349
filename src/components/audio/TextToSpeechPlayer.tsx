@@ -385,6 +385,27 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         if (stopRef.current || isStoppingRef.current) break;
 
         if (invokeError) throw new Error(invokeError.message || "Failed to invoke TTS function");
+
+        // Provider quota exhausted / down → fall back to browser SpeechSynthesis
+        if (data?.fallback === true) {
+          console.warn("[TTS Client] Provider unavailable, using browser SpeechSynthesis fallback", data?.reason);
+          if (i === 0 && isMountedRef.current) {
+            setIsLoading(false);
+            toast({
+              title: "Using device voice",
+              description: "Premium voice is temporarily unavailable. Playing with your device's built-in voice.",
+            });
+          }
+          const ok = await speakWithBrowser(chunk, language, () => stopRef.current || isStoppingRef.current);
+          if (!ok) {
+            throw new Error("Your device does not support speech synthesis.");
+          }
+          if (i < chunks.length - 1 && !stopRef.current) {
+            await new Promise((r) => setTimeout(r, 50));
+          }
+          continue;
+        }
+
         if (data?.error) throw new Error(data.error);
         if (!data?.audioContent) throw new Error("No audio content received from server");
 
