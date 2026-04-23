@@ -286,6 +286,13 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       audioRef.current = null;
     }
 
+    // Cancel any in-flight browser SpeechSynthesis fallback
+    try {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    } catch { /* ignore */ }
+
     cleanupBlobUrls();
 
     if (isMountedRef.current) {
