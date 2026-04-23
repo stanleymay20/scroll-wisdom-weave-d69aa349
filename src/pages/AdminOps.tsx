@@ -140,6 +140,39 @@ export default function AdminOps() {
         )}
       </div>
 
+      {/* User breakdown - sourced authoritatively via SECURITY DEFINER RPC */}
+      {metrics && (
+        <Card className="mb-6">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-sm">User breakdown</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 text-sm">
+              <div className="rounded-md bg-muted/40 p-3">
+                <div className="text-xs text-muted-foreground">Active subscribers</div>
+                <div className="text-xl font-semibold">{metrics.active_subscribers ?? 0}</div>
+              </div>
+              <div className="rounded-md bg-muted/40 p-3">
+                <div className="text-xs text-muted-foreground">Trial</div>
+                <div className="text-xl font-semibold">{metrics.trial_users ?? 0}</div>
+              </div>
+              <div className="rounded-md bg-muted/40 p-3">
+                <div className="text-xs text-muted-foreground">Free</div>
+                <div className="text-xl font-semibold">{metrics.free_users ?? 0}</div>
+              </div>
+              <div className="rounded-md bg-muted/40 p-3">
+                <div className="text-xs text-muted-foreground">Active 7d</div>
+                <div className="text-xl font-semibold">{metrics.active_7d ?? 0}</div>
+              </div>
+              <div className="rounded-md bg-muted/40 p-3">
+                <div className="text-xs text-muted-foreground">Active 30d</div>
+                <div className="text-xl font-semibold">{metrics.active_30d ?? 0}</div>
+              </div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       <Tabs defaultValue="audit" className="space-y-4">
         <TabsList>
           <TabsTrigger value="audit">Audit Log</TabsTrigger>
