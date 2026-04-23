@@ -521,6 +521,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     playUrl,
     sanitizeTextForTTS,
     selectedVoice,
+    speakWithBrowser,
     text,
     toast,
     stop,
