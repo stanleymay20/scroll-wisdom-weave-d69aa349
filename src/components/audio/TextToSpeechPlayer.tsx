@@ -286,6 +286,13 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       audioRef.current = null;
     }
 
+    // Cancel any in-flight browser SpeechSynthesis fallback
+    try {
+      if (typeof window !== "undefined" && "speechSynthesis" in window) {
+        window.speechSynthesis.cancel();
+      }
+    } catch { /* ignore */ }
+
     cleanupBlobUrls();
 
     if (isMountedRef.current) {
@@ -328,6 +335,49 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       stopRef.current = true;
     });
   }, [onPlayingChange]);
+
+  // Browser SpeechSynthesis fallback (used when premium provider is unavailable / out of quota)
+  const speakWithBrowser = useCallback(
+    (chunk: string, lang: string, isCancelled: () => boolean): Promise<boolean> => {
+      return new Promise((resolve) => {
+        if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+          resolve(false);
+          return;
+        }
+        try {
+          const synth = window.speechSynthesis;
+          synth.cancel();
+          const utterance = new SpeechSynthesisUtterance(chunk);
+          utterance.lang = lang || "en-US";
+          utterance.volume = volume;
+          utterance.rate = 1;
+          utterance.pitch = 1;
+          utterance.onend = () => resolve(true);
+          utterance.onerror = () => resolve(false);
+          if (isMountedRef.current) {
+            setIsPlaying(true);
+            onPlayingChange?.(true);
+          }
+          synth.speak(utterance);
+          // Poll for cancellation
+          const interval = setInterval(() => {
+            if (isCancelled()) {
+              try { synth.cancel(); } catch { /* ignore */ }
+              clearInterval(interval);
+              resolve(true);
+            }
+            if (!synth.speaking) {
+              clearInterval(interval);
+            }
+          }, 200);
+        } catch (e) {
+          console.error("[TTS Client] Browser speech synthesis error", e);
+          resolve(false);
+        }
+      });
+    },
+    [onPlayingChange, volume],
+  );
 
   const generateSpeech = useCallback(async () => {
     // Stop any existing playback
@@ -385,6 +435,27 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         if (stopRef.current || isStoppingRef.current) break;
 
         if (invokeError) throw new Error(invokeError.message || "Failed to invoke TTS function");
+
+        // Provider quota exhausted / down → fall back to browser SpeechSynthesis
+        if (data?.fallback === true) {
+          console.warn("[TTS Client] Provider unavailable, using browser SpeechSynthesis fallback", data?.reason);
+          if (i === 0 && isMountedRef.current) {
+            setIsLoading(false);
+            toast({
+              title: "Using device voice",
+              description: "Premium voice is temporarily unavailable. Playing with your device's built-in voice.",
+            });
+          }
+          const ok = await speakWithBrowser(chunk, language, () => stopRef.current || isStoppingRef.current);
+          if (!ok) {
+            throw new Error("Your device does not support speech synthesis.");
+          }
+          if (i < chunks.length - 1 && !stopRef.current) {
+            await new Promise((r) => setTimeout(r, 50));
+          }
+          continue;
+        }
+
         if (data?.error) throw new Error(data.error);
         if (!data?.audioContent) throw new Error("No audio content received from server");
 
@@ -450,6 +521,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     playUrl,
     sanitizeTextForTTS,
     selectedVoice,
+    speakWithBrowser,
     text,
     toast,
     stop,

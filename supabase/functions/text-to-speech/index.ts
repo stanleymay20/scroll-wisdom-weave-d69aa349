@@ -241,6 +241,39 @@ serve(async (req) => {
     }
 
     if (!response || !response.ok) {
+      // Detect provider quota exhaustion / billing issues — these are NOT user faults.
+      // Return 200 with a fallback signal so the client can use the browser's
+      // SpeechSynthesis API instead of crashing on a non-2xx response.
+      const isQuotaExhausted =
+        /quota|insufficient|billing|credits/i.test(lastError || "") ||
+        response?.status === 402;
+      const isProviderDown =
+        response?.status === 503 || response?.status === 500 || !response;
+
+      if (isQuotaExhausted || isProviderDown) {
+        if (userId) {
+          await recordGateEvent(supabase, {
+            user_id: userId,
+            feature: "tts",
+            reason: isQuotaExhausted ? "SERVICE_UNAVAILABLE" : "SERVICE_UNAVAILABLE",
+            allowed: false,
+            plan: userPlan,
+            usage_snapshot: { providerStatus: response?.status ?? 0, lastError },
+          });
+        }
+        return new Response(
+          JSON.stringify({
+            success: false,
+            fallback: true,
+            reason: isQuotaExhausted ? "PROVIDER_QUOTA_EXHAUSTED" : "PROVIDER_UNAVAILABLE",
+            error: isQuotaExhausted
+              ? "Premium voice is temporarily unavailable. Using your device voice."
+              : "Premium voice is temporarily unavailable. Using your device voice.",
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
       return new Response(
         JSON.stringify({ error: lastError || "TTS service unavailable." }),
         { status: 503, headers: { ...corsHeaders, "Content-Type": "application/json" } },

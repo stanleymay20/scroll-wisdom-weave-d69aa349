@@ -432,7 +432,15 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         throw new Error("Invalid TTS response");
       }
 
-      const data = payload as TTSChunkPayload;
+      const data = payload as TTSChunkPayload & { fallback?: boolean; reason?: string };
+
+      // Provider out of credits / temporarily down → mark for browser fallback
+      if (data.fallback === true) {
+        const err = new Error("PROVIDER_FALLBACK") as Error & { fallback: true; reason?: string };
+        err.fallback = true;
+        err.reason = data.reason;
+        throw err;
+      }
 
       if (data.error) {
         throw new Error(data.error);
