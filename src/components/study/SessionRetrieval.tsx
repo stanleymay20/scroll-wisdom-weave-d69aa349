@@ -12,7 +12,7 @@ import { Progress } from '@/components/ui/progress';
 
 interface SessionRetrievalProps {
   weakConcepts: Array<{ id: string; label: string; mastery: number }>;
-  onComplete: (result: { score: number; conceptsTouched: number }) => void;
+  onComplete: (result: { score: number; conceptsTouched: number; touchedConceptIds: string[] }) => void;
 }
 
 const PROMPTS = [
@@ -38,7 +38,15 @@ export function SessionRetrieval({ weakConcepts, onComplete }: SessionRetrievalP
     const next = [...scores, score];
     if (index + 1 >= total) {
       const avg = next.reduce((a, b) => a + b, 0) / next.length;
-      onComplete({ score: avg, conceptsTouched: next.length });
+      // Collect unique real concept IDs that the learner actually engaged with
+      const touchedConceptIds = Array.from(
+        new Set(
+          Array.from({ length: total }, (_, i) => queue[i % queue.length]?.id).filter(
+            (id): id is string => !!id && !id.startsWith('gen-'),
+          ),
+        ),
+      );
+      onComplete({ score: avg, conceptsTouched: next.length, touchedConceptIds });
     } else {
       setScores(next);
       setIndex(index + 1);
