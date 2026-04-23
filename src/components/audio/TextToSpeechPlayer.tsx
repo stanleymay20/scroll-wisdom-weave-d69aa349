@@ -336,6 +336,49 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     });
   }, [onPlayingChange]);
 
+  // Browser SpeechSynthesis fallback (used when premium provider is unavailable / out of quota)
+  const speakWithBrowser = useCallback(
+    (chunk: string, lang: string, isCancelled: () => boolean): Promise<boolean> => {
+      return new Promise((resolve) => {
+        if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+          resolve(false);
+          return;
+        }
+        try {
+          const synth = window.speechSynthesis;
+          synth.cancel();
+          const utterance = new SpeechSynthesisUtterance(chunk);
+          utterance.lang = lang || "en-US";
+          utterance.volume = volume;
+          utterance.rate = 1;
+          utterance.pitch = 1;
+          utterance.onend = () => resolve(true);
+          utterance.onerror = () => resolve(false);
+          if (isMountedRef.current) {
+            setIsPlaying(true);
+            onPlayingChange?.(true);
+          }
+          synth.speak(utterance);
+          // Poll for cancellation
+          const interval = setInterval(() => {
+            if (isCancelled()) {
+              try { synth.cancel(); } catch { /* ignore */ }
+              clearInterval(interval);
+              resolve(true);
+            }
+            if (!synth.speaking) {
+              clearInterval(interval);
+            }
+          }, 200);
+        } catch (e) {
+          console.error("[TTS Client] Browser speech synthesis error", e);
+          resolve(false);
+        }
+      });
+    },
+    [onPlayingChange, volume],
+  );
+
   const generateSpeech = useCallback(async () => {
     // Stop any existing playback
     stop();
