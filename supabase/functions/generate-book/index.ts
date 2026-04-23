@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
 import { ErrorCode, errorResponse, checkRateLimit } from "../_shared/error-codes.ts";
+import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -106,14 +107,27 @@ serve(async (req) => {
     const currentCount = profile?.last_book_date === today ? (profile?.daily_book_count || 0) : 0;
 
     if (!isAdmin && currentCount >= limits.booksPerDay) {
-      return errorResponse(ErrorCode.DAILY_LIMIT_REACHED, `Daily book limit reached (${limits.booksPerDay}/day for ${userPlan}). Upgrade for more.`, corsHeaders);
+      const gate = gateDenied("BOOK_LIMIT_REACHED", {
+        message: `You've reached your ${userPlan === 'free' ? 'monthly' : 'daily'} book generation limit (${limits.booksPerDay} for ${userPlan}). Upgrade to keep creating.`,
+        currentPlan: userPlan,
+        usage: { booksGenerated: currentCount, booksLimit: limits.booksPerDay },
+      });
+      await recordGateEvent(supabase, {
+        user_id: user.id, feature: "generate_book", reason: gate.reason, allowed: false,
+        plan: userPlan, usage_snapshot: { used: currentCount, limit: limits.booksPerDay },
+      });
+      return gateResponse(gate, corsHeaders);
     }
 
     // Rate limiting: max 5 book generations per hour per user
     if (!isAdmin) {
       const rl = checkRateLimit(`gen-book:${user.id}`, 5, 60 * 60 * 1000);
       if (!rl.allowed) {
-        return errorResponse(ErrorCode.RATE_LIMITED, 'Too many book generations. Please wait before creating another.', corsHeaders, { retryAfterMs: rl.retryAfterMs });
+        const gate = gateDenied("RATE_LIMITED", {
+          message: 'Too many book generations. Please wait before creating another.',
+          currentPlan: userPlan,
+        });
+        return gateResponse(gate, corsHeaders);
       }
     }
 
@@ -238,8 +252,17 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     if (!outlineResponse.ok) {
       const status = outlineResponse.status;
       console.error("[GENERATE-BOOK] AI error:", status);
-      if (status === 429) return new Response(JSON.stringify({ error: "Rate limited, try again later." }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      if (status === 402) return new Response(JSON.stringify({ error: "Payment required." }), { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      if (status === 429) {
+        return gateResponse(gateDenied("RATE_LIMITED", { currentPlan: userPlan }), corsHeaders);
+      }
+      if (status === 402) {
+        const gate = gateDenied("AI_QUOTA_EXHAUSTED", { currentPlan: userPlan });
+        await recordGateEvent(supabase, {
+          user_id: user.id, feature: "generate_book", reason: gate.reason, allowed: false,
+          plan: userPlan, usage_snapshot: { upstream_status: 402 },
+        });
+        return gateResponse(gate, corsHeaders);
+      }
       throw new Error("Failed to generate outline");
     }
 

@@ -2253,6 +2253,39 @@ export type Database = {
         }
         Relationships: []
       }
+      usage_gate_events: {
+        Row: {
+          allowed: boolean
+          created_at: string
+          feature: string
+          id: string
+          plan: string | null
+          reason: string
+          usage_snapshot: Json
+          user_id: string
+        }
+        Insert: {
+          allowed: boolean
+          created_at?: string
+          feature: string
+          id?: string
+          plan?: string | null
+          reason: string
+          usage_snapshot?: Json
+          user_id: string
+        }
+        Update: {
+          allowed?: boolean
+          created_at?: string
+          feature?: string
+          id?: string
+          plan?: string | null
+          reason?: string
+          usage_snapshot?: Json
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_gamification: {
         Row: {
           books_completed: number
@@ -2365,6 +2398,8 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      get_admin_user_metrics: { Args: never; Returns: Json }
+      get_user_usage_snapshot: { Args: { _user_id: string }; Returns: Json }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
