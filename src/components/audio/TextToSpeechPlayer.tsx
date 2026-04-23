@@ -514,16 +514,25 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   // Render a disabled control when the user doesn't have TTS access (never render nothing)
   if (!canUseTTS && !entitlements.isPaid && !entitlements.isAdmin) {
     return (
-      <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-2 border border-border/50 opacity-75">
-        <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Upgrade to enable audio">
-          <Lock className="h-4 w-4" />
-        </Button>
-        <p className="text-xs text-muted-foreground">Audio playback is unavailable on your plan.</p>
-      </div>
+      <>
+        <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-2 border border-border/50 opacity-75">
+          <Button variant="ghost" size="icon" className="h-8 w-8" disabled title="Upgrade to enable audio">
+            <Lock className="h-4 w-4" />
+          </Button>
+          <p className="text-xs text-muted-foreground">Audio playback is unavailable on your plan.</p>
+        </div>
+        <UsageGateModal
+          open={usageGate.open}
+          onOpenChange={(o) => { if (!o) usageGate.close(); }}
+          result={usageGate.result}
+          source="reader-tts"
+        />
+      </>
     );
   }
 
   return (
+    <>
     <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-2 border border-border/50">
       {/* Play/Pause Button */}
       <Button
