@@ -78,6 +78,7 @@ import { useQuizGating } from "@/hooks/useQuizGating";
 import { useCompetencyProgress } from "@/hooks/useCompetencyProgress";
 import { CompetencyLearningPanel } from "@/components/reader/CompetencyLearningPanel";
 import { PostChapterCTA } from "@/components/reader/PostChapterCTA";
+import { SocraticTutorPulse } from "@/components/reader/SocraticTutorPulse";
 import { AdaptiveLearningPath } from "@/components/reader/AdaptiveLearningPath";
 import { PresenceAvatars } from "@/components/reader/PresenceAvatars";
 import { useEditorPresence } from "@/hooks/useCollaboration";
@@ -1674,6 +1675,18 @@ export default function Reader() {
                   isSaving={competency.isSaving}
                 />
               </div>
+            )}
+
+            {/* Always-on Socratic Tutor — calm time-triggered question after sustained reading */}
+            {bookId && chapter && book && (
+              <SocraticTutorPulse
+                bookId={bookId}
+                chapterId={chapter.id}
+                chapterTitle={chapter.title}
+                bookTitle={book.title}
+                chapterContent={chapter.content || ''}
+                intervalMinutes={8}
+              />
             )}
 
             {/* PHASE 2: Post-chapter learning loop CTA — soft prompt at 95%+ */}

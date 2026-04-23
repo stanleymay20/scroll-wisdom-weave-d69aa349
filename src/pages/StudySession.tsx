@@ -54,6 +54,7 @@ export default function StudySession() {
   const [focusMinutes, setFocusMinutes] = useState(0);
   const [retrievalScore, setRetrievalScore] = useState(0);
   const [weakConceptsTouched, setWeakConceptsTouched] = useState(0);
+  const [weakConceptIds, setWeakConceptIds] = useState<string[]>([]);
   const [reflectionScore, setReflectionScore] = useState<number | null>(null);
   const [report, setReport] = useState<SessionReportT | null>(null);
 
@@ -100,8 +101,9 @@ export default function StudySession() {
       retrievalScore,
       reflectionScore,
       weakConceptsTouched,
+      weakConceptIds,
     }).then(setReport);
-  }, [phase, userId, sessionStart, cardsReviewed, focusMinutes, retrievalScore, reflectionScore, weakConceptsTouched]);
+  }, [phase, userId, sessionStart, cardsReviewed, focusMinutes, retrievalScore, reflectionScore, weakConceptsTouched, weakConceptIds]);
 
   const progress = useMemo(() => {
     const i = PHASES.indexOf(phase);
@@ -173,9 +175,10 @@ export default function StudySession() {
             {phase === 'retrieval' && (
               <SessionRetrieval
                 weakConcepts={plan.weakConcepts}
-                onComplete={({ score, conceptsTouched }) => {
+                onComplete={({ score, conceptsTouched, touchedConceptIds }) => {
                   setRetrievalScore(score);
                   setWeakConceptsTouched(conceptsTouched);
+                  setWeakConceptIds(touchedConceptIds);
                   advance('retrieval');
                 }}
               />
