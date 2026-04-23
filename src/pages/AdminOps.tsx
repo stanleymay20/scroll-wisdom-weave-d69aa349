@@ -50,8 +50,18 @@ function StatCard({ label, value, icon: Icon }: { label: string; value: string |
   );
 }
 
+interface AdminMetrics {
+  total_users?: number;
+  active_subscribers?: number;
+  free_users?: number;
+  trial_users?: number;
+  active_7d?: number;
+  active_30d?: number;
+}
+
 export default function AdminOps() {
   const [stats, setStats] = useState({ users: 0, orgs: 0, activeJobs: 0, auditEvents24h: 0 });
+  const [metrics, setMetrics] = useState<AdminMetrics | null>(null);
   const [jobs, setJobs] = useState<JobRow[]>([]);
   const [orgs, setOrgs] = useState<OrgRow[]>([]);
   const [loading, setLoading] = useState(true);
@@ -59,25 +69,34 @@ export default function AdminOps() {
   const load = async () => {
     setLoading(true);
     const since = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const [{ count: userCount }, { data: orgData, count: orgCount }, { data: jobData }, { count: auditCount }] =
-      await Promise.all([
-        supabase.from("profiles").select("*", { count: "exact", head: true }),
-        supabase
-          .from("organizations")
-          .select("*", { count: "exact" })
-          .order("created_at", { ascending: false })
-          .limit(20),
-        supabase
-          .from("generation_jobs")
-          .select("*")
-          .order("started_at", { ascending: false })
-          .limit(25),
-        supabase.from("audit_log").select("*", { count: "exact", head: true }).gte("created_at", since),
-      ]);
+    const [
+      { data: orgData, count: orgCount },
+      { data: jobData },
+      { count: auditCount },
+      metricsRes,
+    ] = await Promise.all([
+      supabase
+        .from("organizations")
+        .select("*", { count: "exact" })
+        .order("created_at", { ascending: false })
+        .limit(20),
+      supabase
+        .from("generation_jobs")
+        .select("*")
+        .order("started_at", { ascending: false })
+        .limit(25),
+      supabase.from("audit_log").select("*", { count: "exact", head: true }).gte("created_at", since),
+      supabase.functions.invoke("admin-metrics"),
+    ]);
+
+    const adminMetrics = (metricsRes?.data && typeof metricsRes.data === "object")
+      ? (metricsRes.data as AdminMetrics)
+      : null;
+    setMetrics(adminMetrics);
 
     const activeJobs = (jobData || []).filter((j) => j.status === "running" || j.status === "pending").length;
     setStats({
-      users: userCount ?? 0,
+      users: adminMetrics?.total_users ?? 0,
       orgs: orgCount ?? 0,
       activeJobs,
       auditEvents24h: auditCount ?? 0,
