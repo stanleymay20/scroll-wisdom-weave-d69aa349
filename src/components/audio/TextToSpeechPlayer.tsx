@@ -8,8 +8,10 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { UsageGateModal, useUsageGate } from "@/components/subscription/UsageGateModal";
-import { parseGateError } from "@/lib/usageGate";
+import { HighDemandModal } from "@/components/subscription/HighDemandModal";
+import { parseGateError, denied as deniedGate } from "@/lib/usageGate";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { SUBSCRIPTION_TIERS } from "@/lib/subscription";
 
 interface TextToSpeechPlayerProps {
   text: string;
