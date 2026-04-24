@@ -284,6 +284,12 @@ export const CognitiveLevelSelector = forwardRef<HTMLDivElement, CognitiveLevelS
           </div>
         </div>
       )}
+      <UsageGateModal
+        open={modal.open}
+        onOpenChange={(o) => { if (!o) modal.close(); }}
+        result={modal.result}
+        source="cognitive-level-selector"
+      />
     </div>
   );
 });
