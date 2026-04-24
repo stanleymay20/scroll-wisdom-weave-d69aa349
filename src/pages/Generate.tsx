@@ -48,6 +48,7 @@ import { MobileLayout } from "@/components/layout/MobileLayout";
 import { cn } from "@/lib/utils";
 import { UsageGateModal, useUsageGate } from "@/components/subscription/UsageGateModal";
 import { parseGateError } from "@/lib/usageGate";
+import { useAccessGate } from "@/hooks/useAccessGate";
 
 const CATEGORIES = [
   { value: "science", labelKey: "categories.science" },
@@ -163,7 +164,7 @@ export default function Generate() {
   
   const { toast } = useToast();
   const usageGate = useUsageGate();
-
+  const accessGate = useAccessGate();
   // Auto-enable academic mode for academic categories
   useEffect(() => {
     if (category && isAcademicCategory(category) && extendedBookType === "text") {
@@ -233,6 +234,21 @@ export default function Generate() {
         variant: "default",
       });
       return;
+    }
+
+    // ── Central USER-limit pre-flight (book generation) ──
+    // Blocks at the cap, soft-warns when approaching it. The server still
+    // re-validates — this is fast UX, not security.
+    const access = accessGate.check("generate_book", { source: "generate-page" });
+    if (!access.allowed) {
+      usageGate.trigger(access);
+      return;
+    }
+    if (access.warning) {
+      toast({
+        title: "Heads up",
+        description: access.warning,
+      });
     }
 
     // ── Input validation & sanitization ──
