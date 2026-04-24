@@ -1624,13 +1624,19 @@ export default function Reader() {
                 {renderContent()}
               </div>
 
-              {/* "Follow Audio" button when user scrolls away */}
+              {/* "Follow Audio" button when user scrolls away
+                  Stack above TTS player when both are visible. */}
               {audioSync.isUserScrolledAway && isTTSPlaying && audioSync.isSyncEnabled && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40"
+                  className="fixed left-1/2 -translate-x-1/2 z-40"
+                  style={{
+                    bottom: showTTS
+                      ? "calc(env(safe-area-inset-bottom) + 9rem)"
+                      : "calc(env(safe-area-inset-bottom) + 6rem)",
+                  }}
                 >
                   <Button
                     size="sm"
@@ -1718,10 +1724,10 @@ export default function Reader() {
         </article>
       </main>
 
-      {/* CONTRACT 5.2: Floating Cognitive Level Indicator - respects safe areas & auto-hides */}
-      {/* FIXED: z-20 to stay below action buttons but above content */}
+      {/* CONTRACT 5.2: Floating Cognitive Level Indicator
+          MOBILE UX: Hide when TTS player is visible to keep ONE primary floating element. */}
       <AnimatePresence>
-        {guidedModeActive && !showLevelSelector && !showQA && (
+        {guidedModeActive && !showLevelSelector && !showQA && !showTTS && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1742,7 +1748,8 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* Single "Tools" FAB → Bottom Sheet with all reader actions */}
+      {/* Single "Tools" FAB → Bottom Sheet with all reader actions
+          MOBILE UX: When TTS player is visible, raise the FAB so it never overlaps audio controls. */}
       {chapter?.content && !showQA && !showQuiz && (
         <ReaderToolsSheet
           isQuizUnlocked={quizGating.isQuizUnlocked}
@@ -1750,6 +1757,11 @@ export default function Reader() {
           hasCodeContent={hasCodeContent(chapter.content)}
           hasComicContent={false}
           isBookOwner={isBookOwner}
+          bottomOffset={
+            showTTS
+              ? "calc(env(safe-area-inset-bottom) + 9rem)"
+              : "calc(env(safe-area-inset-bottom) + 5rem)"
+          }
           onVoiceClick={() => {
             closeTopPanels();
             setShowQuiz(false);
@@ -1938,11 +1950,15 @@ export default function Reader() {
       )}
 
 
-      {/* Study Music Player */}
+      {/* Study Music Player — stack above TTS player when both are open. */}
       {showStudyMusic && (
         <div
           className="fixed left-4 right-4 sm:right-auto z-[55] flex justify-center sm:block"
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }}
+          style={{
+            bottom: showTTS
+              ? "calc(env(safe-area-inset-bottom) + 13rem)"
+              : "calc(env(safe-area-inset-bottom) + 5.5rem)",
+          }}
         >
           <StudyMusicPlayer autoExpand />
         </div>

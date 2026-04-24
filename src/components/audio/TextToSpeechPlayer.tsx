@@ -55,6 +55,38 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   const isMountedRef = useRef(true);
   const wasPlayingBeforeInterruptRef = useRef(false);
   const currentChunkIndexRef = useRef(0);
+  // Cumulative seconds across previously-completed chunks (for stable elapsed display)
+  const cumulativeSecondsRef = useRef(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // PERSISTENT audio element — created ONCE and reused across renders / chunks.
+  // Recreating Audio on every render causes:
+  //   - Resets to 0:00 on every UI update
+  //   - Loss of iOS user-gesture unlock (audio stops playing)
+  //   - Re-buffer flicker between chunks
+  useEffect(() => {
+    if (!audioRef.current) {
+      const audio = new Audio();
+      audio.preload = "auto";
+      (audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+      audio.setAttribute("playsinline", "true");
+      audio.setAttribute("webkit-playsinline", "true");
+      audioRef.current = audio;
+    }
+    return () => {
+      // App-level cleanup only on full unmount
+      const a = audioRef.current;
+      if (a) {
+        try {
+          a.pause();
+          a.removeAttribute("src");
+          a.src = "";
+        } catch { /* noop */ }
+      }
+      audioRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Track mounted state
   useEffect(() => {
@@ -174,14 +206,15 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         return;
       }
 
-      const audio = new Audio();
-      audioRef.current = audio;
+      // Reuse the persistent audio element — DO NOT recreate per chunk
+      const audio = audioRef.current;
+      if (!audio) {
+        resolve(false);
+        return;
+      }
+
       audio.volume = volume;
-      
-      // Set audio attributes for better mobile behavior
-      audio.preload = 'auto';
-      
-      // Track if we've already resolved to prevent double-resolve
+
       let resolved = false;
       const safeResolve = (value: boolean) => {
         if (!resolved) {
@@ -199,6 +232,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         audio.onstalled = null;
         audio.onwaiting = null;
         audio.oncanplaythrough = null;
+        audio.onloadedmetadata = null;
       };
 
       audio.onplay = () => {
@@ -210,18 +244,23 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       };
 
       audio.onended = () => {
+        // Accumulate this chunk's duration for stable elapsed time
+        if (audio.duration && !isNaN(audio.duration)) {
+          cumulativeSecondsRef.current += audio.duration;
+          if (isMountedRef.current) {
+            setElapsedSeconds(cumulativeSecondsRef.current);
+          }
+        }
         cleanup();
         safeResolve(true);
       };
 
       audio.onpause = () => {
-        // Only handle as stop if we explicitly requested stop
         if (stopRef.current || isStoppingRef.current) {
           cleanup();
           safeResolve(false);
         }
-        // Otherwise this is an external pause (visibility change, etc.)
-        // Don't auto-resume as it can cause loops on mobile
+        // Otherwise: external pause (visibility, system) — keep audio alive
       };
 
       audio.onerror = (e) => {
@@ -229,34 +268,37 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         cleanup();
         safeResolve(false);
       };
-      
-      audio.onstalled = () => {
-        console.log("[TTS] Audio stalled - waiting for data");
-      };
-      
-      audio.onwaiting = () => {
-        console.log("[TTS] Audio waiting for data");
-      };
+
+      audio.onstalled = () => console.log("[TTS] Audio stalled");
+      audio.onwaiting = () => console.log("[TTS] Audio waiting");
 
       audio.ontimeupdate = () => {
         if (audio.duration && isMountedRef.current && !resolved) {
           setProgress((audio.currentTime / audio.duration) * 100);
+          // Live elapsed = previously-completed chunks + current chunk position
+          setElapsedSeconds(cumulativeSecondsRef.current + audio.currentTime);
         }
       };
 
-      // Better error handling for mobile - use canplaythrough
       audio.oncanplaythrough = () => {
         console.log("[TTS] Audio ready to play");
       };
 
-      audio.src = url;
-      
-      // Use a play promise with proper error handling
+      // Only the src changes — element stays alive (preserves iOS unlock)
+      try {
+        audio.src = url;
+      } catch (err) {
+        console.error("[TTS] Failed to set src", err);
+        cleanup();
+        safeResolve(false);
+        return;
+      }
+
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            console.log("[TTS] Playback started successfully");
+            console.log("[TTS] Playback started");
           })
           .catch((err) => {
             cleanup();
@@ -272,18 +314,20 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     });
   }, [onPlayingChange, volume]);
 
-  // Full stop: destroys audio and resets
+  // Full stop: pauses and clears src on the persistent element (does NOT destroy it)
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
     stopRef.current = true;
 
-    if (audioRef.current) {
+    const audio = audioRef.current;
+    if (audio) {
       try {
-        audioRef.current.pause();
-        audioRef.current.src = "";
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.src = "";
+        audio.currentTime = 0;
       } catch { /* ignore */ }
-      audioRef.current = null;
     }
 
     // Cancel any in-flight browser SpeechSynthesis fallback
@@ -294,11 +338,13 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     } catch { /* ignore */ }
 
     cleanupBlobUrls();
+    cumulativeSecondsRef.current = 0;
 
     if (isMountedRef.current) {
       setIsLoading(false);
       setIsPlaying(false);
       setProgress(0);
+      setElapsedSeconds(0);
       setError(null);
       onPlayingChange?.(false);
     }
@@ -398,10 +444,12 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     // Reset state for new playback
     stopRef.current = false;
     isStoppingRef.current = false;
+    cumulativeSecondsRef.current = 0;
 
     setError(null);
     setIsLoading(true);
     setProgress(0);
+    setElapsedSeconds(0);
 
     cleanupBlobUrls();
 
@@ -644,14 +692,19 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         </div>
       )}
 
-      {/* Progress */}
+      {/* Progress + elapsed time */}
       {(isPlaying || progress > 0) && !error && (
-        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden max-w-24">
-          <div 
-            className="h-full bg-primary transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+        <>
+          <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden max-w-24">
+            <div
+              className="h-full bg-primary transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="text-xs tabular-nums text-muted-foreground min-w-[2.5rem] text-right">
+            {Math.floor(elapsedSeconds / 60)}:{String(Math.floor(elapsedSeconds % 60)).padStart(2, "0")}
+          </span>
+        </>
       )}
 
       {/* Settings Popover */}
