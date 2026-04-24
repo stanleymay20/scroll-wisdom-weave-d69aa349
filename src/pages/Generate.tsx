@@ -164,7 +164,7 @@ export default function Generate() {
   
   const { toast } = useToast();
   const usageGate = useUsageGate();
-
+  const accessGate = useAccessGate();
   // Auto-enable academic mode for academic categories
   useEffect(() => {
     if (category && isAcademicCategory(category) && extendedBookType === "text") {
