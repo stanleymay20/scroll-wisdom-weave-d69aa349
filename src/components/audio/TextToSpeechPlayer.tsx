@@ -438,6 +438,21 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   );
 
   const generateSpeech = useCallback(async () => {
+    // ── Pre-flight USER limit check (no silent failures) ──────────────
+    // Free / Student / Premium / Prophet all have monthly minute caps.
+    // Admin and unlimited plans bypass this check.
+    if (!isUnlimited && remainingMinutes <= 0) {
+      const gate = deniedGate("AUDIO_LIMIT_REACHED", {
+        currentPlan: tier,
+        usage: {
+          audioMinutesUsed: ttsMinutesUsed,
+          audioMinutesLimit: planTTSLimit,
+        },
+      });
+      usageGate.trigger(gate);
+      return;
+    }
+
     // Stop any existing playback
     stop();
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -451,6 +466,22 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         variant: "destructive",
       });
       return;
+    }
+
+    // ── Pre-limit warning: < 2 minutes left, only once per session ─────
+    if (
+      !isUnlimited &&
+      remainingMinutes > 0 &&
+      remainingMinutes <= 2 &&
+      !lowBalanceWarnedRef.current
+    ) {
+      lowBalanceWarnedRef.current = true;
+      toast({
+        title: `Only ${remainingMinutes} ${remainingMinutes === 1 ? "minute" : "minutes"} left`,
+        description: tier === "free"
+          ? "You're nearly out of free audio this month. Upgrade for more listening time."
+          : "You're nearly out of audio minutes for this billing cycle.",
+      });
     }
 
     // Reset state for new playback
