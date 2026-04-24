@@ -444,10 +444,12 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     // Reset state for new playback
     stopRef.current = false;
     isStoppingRef.current = false;
+    cumulativeSecondsRef.current = 0;
 
     setError(null);
     setIsLoading(true);
     setProgress(0);
+    setElapsedSeconds(0);
 
     cleanupBlobUrls();
 
