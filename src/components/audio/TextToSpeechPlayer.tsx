@@ -527,24 +527,23 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
 
         if (invokeError) throw new Error(invokeError.message || "Failed to invoke TTS function");
 
-        // Provider quota exhausted / down → fall back to browser SpeechSynthesis
+        // System exhaustion (provider quota / outage) — show "high demand" UX,
+        // do NOT blame the user, do NOT count usage. Offer Retry / Continue.
         if (data?.fallback === true) {
-          console.warn("[TTS Client] Provider unavailable, using browser SpeechSynthesis fallback", data?.reason);
-          if (i === 0 && isMountedRef.current) {
+          console.warn("[TTS Client] Provider unavailable", data?.reason);
+          if (isMountedRef.current) {
             setIsLoading(false);
-            toast({
-              title: "Using device voice",
-              description: "Premium voice is temporarily unavailable. Playing with your device's built-in voice.",
-            });
+            setIsPlaying(false);
+            onPlayingChange?.(false);
+            setHighDemandReason(
+              data?.reason === "PROVIDER_QUOTA_EXHAUSTED"
+                ? "Our premium voice provider is at capacity."
+                : "Our premium voice provider is briefly unavailable.",
+            );
+            setHighDemandOpen(true);
           }
-          const ok = await speakWithBrowser(chunk, language, () => stopRef.current || isStoppingRef.current);
-          if (!ok) {
-            throw new Error("Your device does not support speech synthesis.");
-          }
-          if (i < chunks.length - 1 && !stopRef.current) {
-            await new Promise((r) => setTimeout(r, 50));
-          }
-          continue;
+          // Stop the chunk loop — user decides Retry or Continue Reading.
+          break;
         }
 
         if (data?.error) throw new Error(data.error);
