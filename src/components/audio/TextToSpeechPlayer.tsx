@@ -827,6 +827,13 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       result={usageGate.result}
       source="reader-tts"
     />
+    <HighDemandModal
+      open={highDemandOpen}
+      onOpenChange={setHighDemandOpen}
+      reason={highDemandReason}
+      onRetry={() => generateSpeech()}
+      onContinueReading={stop}
+    />
     </>
   );
 }
