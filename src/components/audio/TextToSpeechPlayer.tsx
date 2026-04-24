@@ -206,14 +206,15 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         return;
       }
 
-      const audio = new Audio();
-      audioRef.current = audio;
+      // Reuse the persistent audio element — DO NOT recreate per chunk
+      const audio = audioRef.current;
+      if (!audio) {
+        resolve(false);
+        return;
+      }
+
       audio.volume = volume;
-      
-      // Set audio attributes for better mobile behavior
-      audio.preload = 'auto';
-      
-      // Track if we've already resolved to prevent double-resolve
+
       let resolved = false;
       const safeResolve = (value: boolean) => {
         if (!resolved) {
@@ -231,6 +232,7 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         audio.onstalled = null;
         audio.onwaiting = null;
         audio.oncanplaythrough = null;
+        audio.onloadedmetadata = null;
       };
 
       audio.onplay = () => {
@@ -242,18 +244,23 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       };
 
       audio.onended = () => {
+        // Accumulate this chunk's duration for stable elapsed time
+        if (audio.duration && !isNaN(audio.duration)) {
+          cumulativeSecondsRef.current += audio.duration;
+          if (isMountedRef.current) {
+            setElapsedSeconds(cumulativeSecondsRef.current);
+          }
+        }
         cleanup();
         safeResolve(true);
       };
 
       audio.onpause = () => {
-        // Only handle as stop if we explicitly requested stop
         if (stopRef.current || isStoppingRef.current) {
           cleanup();
           safeResolve(false);
         }
-        // Otherwise this is an external pause (visibility change, etc.)
-        // Don't auto-resume as it can cause loops on mobile
+        // Otherwise: external pause (visibility, system) — keep audio alive
       };
 
       audio.onerror = (e) => {
@@ -261,34 +268,37 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         cleanup();
         safeResolve(false);
       };
-      
-      audio.onstalled = () => {
-        console.log("[TTS] Audio stalled - waiting for data");
-      };
-      
-      audio.onwaiting = () => {
-        console.log("[TTS] Audio waiting for data");
-      };
+
+      audio.onstalled = () => console.log("[TTS] Audio stalled");
+      audio.onwaiting = () => console.log("[TTS] Audio waiting");
 
       audio.ontimeupdate = () => {
         if (audio.duration && isMountedRef.current && !resolved) {
           setProgress((audio.currentTime / audio.duration) * 100);
+          // Live elapsed = previously-completed chunks + current chunk position
+          setElapsedSeconds(cumulativeSecondsRef.current + audio.currentTime);
         }
       };
 
-      // Better error handling for mobile - use canplaythrough
       audio.oncanplaythrough = () => {
         console.log("[TTS] Audio ready to play");
       };
 
-      audio.src = url;
-      
-      // Use a play promise with proper error handling
+      // Only the src changes — element stays alive (preserves iOS unlock)
+      try {
+        audio.src = url;
+      } catch (err) {
+        console.error("[TTS] Failed to set src", err);
+        cleanup();
+        safeResolve(false);
+        return;
+      }
+
       const playPromise = audio.play();
       if (playPromise !== undefined) {
         playPromise
           .then(() => {
-            console.log("[TTS] Playback started successfully");
+            console.log("[TTS] Playback started");
           })
           .catch((err) => {
             cleanup();
@@ -304,18 +314,20 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     });
   }, [onPlayingChange, volume]);
 
-  // Full stop: destroys audio and resets
+  // Full stop: pauses and clears src on the persistent element (does NOT destroy it)
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
     stopRef.current = true;
 
-    if (audioRef.current) {
+    const audio = audioRef.current;
+    if (audio) {
       try {
-        audioRef.current.pause();
-        audioRef.current.src = "";
+        audio.pause();
+        audio.removeAttribute("src");
+        audio.src = "";
+        audio.currentTime = 0;
       } catch { /* ignore */ }
-      audioRef.current = null;
     }
 
     // Cancel any in-flight browser SpeechSynthesis fallback
@@ -326,11 +338,13 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     } catch { /* ignore */ }
 
     cleanupBlobUrls();
+    cumulativeSecondsRef.current = 0;
 
     if (isMountedRef.current) {
       setIsLoading(false);
       setIsPlaying(false);
       setProgress(0);
+      setElapsedSeconds(0);
       setError(null);
       onPlayingChange?.(false);
     }
