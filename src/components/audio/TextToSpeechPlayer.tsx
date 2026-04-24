@@ -692,14 +692,19 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         </div>
       )}
 
-      {/* Progress */}
+      {/* Progress + elapsed time */}
       {(isPlaying || progress > 0) && !error && (
-        <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden max-w-24">
-          <div 
-            className="h-full bg-primary transition-all duration-300"
-            style={{ width: `${progress}%` }}
-          />
-        </div>
+        <>
+          <div className="flex-1 h-1 bg-muted rounded-full overflow-hidden max-w-24">
+            <div
+              className="h-full bg-primary transition-all duration-300"
+              style={{ width: `${progress}%` }}
+            />
+          </div>
+          <span className="text-xs tabular-nums text-muted-foreground min-w-[2.5rem] text-right">
+            {Math.floor(elapsedSeconds / 60)}:{String(Math.floor(elapsedSeconds % 60)).padStart(2, "0")}
+          </span>
+        </>
       )}
 
       {/* Settings Popover */}
