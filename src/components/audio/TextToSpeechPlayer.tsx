@@ -41,14 +41,24 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const usageGate = useUsageGate();
-  const { tier } = useSubscription();
+  const { tier, ttsMinutesUsed, updateTTSUsage } = useSubscription();
+  const [highDemandOpen, setHighDemandOpen] = useState(false);
+  const [highDemandReason, setHighDemandReason] = useState<string | undefined>(undefined);
+  const lowBalanceWarnedRef = useRef(false);
 
   // Use centralized entitlements - SINGLE SOURCE OF TRUTH
   const entitlements = useEntitlements();
-  
+
   // FAIL-OPEN: Admin, Prophet, Premium, Student, or any paid user has TTS access
   const hasFullAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent || entitlements.isPaid;
   const canUseTTS = hasFullAccess || entitlements.canUseTTS;
+
+  // Soft limit (minutes) for current plan. -1 / 0 means unlimited / disabled.
+  const planTTSLimit = SUBSCRIPTION_TIERS[tier]?.features?.ttsMinutes ?? 0;
+  const isUnlimited = entitlements.isAdmin || planTTSLimit < 0;
+  const remainingMinutes = isUnlimited
+    ? Infinity
+    : Math.max(0, planTTSLimit - (ttsMinutesUsed ?? 0));
 
   const stopRef = useRef(false);
   const isStoppingRef = useRef(false);
