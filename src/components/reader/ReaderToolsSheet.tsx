@@ -61,6 +61,8 @@ interface ReaderToolsSheetProps {
   onVideoClick?: () => void;
   onKnowledgeGraphClick?: () => void;
   onStudyMusicClick?: () => void;
+  /** Bottom offset for the FAB so it can stack above other floating elements (TTS player, etc.). Defaults to "calc(env(safe-area-inset-bottom) + 5rem)". */
+  bottomOffset?: string;
 }
 
 export function ReaderToolsSheet({
@@ -80,6 +82,7 @@ export function ReaderToolsSheet({
   onVideoClick,
   onKnowledgeGraphClick,
   onStudyMusicClick,
+  bottomOffset,
 }: ReaderToolsSheetProps) {
   const [isOpen, setIsOpen] = useState(false);
 
