@@ -1624,13 +1624,19 @@ export default function Reader() {
                 {renderContent()}
               </div>
 
-              {/* "Follow Audio" button when user scrolls away */}
+              {/* "Follow Audio" button when user scrolls away
+                  Stack above TTS player when both are visible. */}
               {audioSync.isUserScrolledAway && isTTSPlaying && audioSync.isSyncEnabled && (
                 <motion.div
                   initial={{ opacity: 0, y: 10 }}
                   animate={{ opacity: 1, y: 0 }}
                   exit={{ opacity: 0, y: 10 }}
-                  className="fixed bottom-24 left-1/2 -translate-x-1/2 z-40"
+                  className="fixed left-1/2 -translate-x-1/2 z-40"
+                  style={{
+                    bottom: showTTS
+                      ? "calc(env(safe-area-inset-bottom) + 9rem)"
+                      : "calc(env(safe-area-inset-bottom) + 6rem)",
+                  }}
                 >
                   <Button
                     size="sm"
