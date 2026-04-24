@@ -185,7 +185,7 @@ export function ReaderToolsSheet({
         onClick={() => setIsOpen(true)}
         className="fixed z-[60] w-12 h-12 rounded-full bg-primary/90 text-primary-foreground shadow-lg flex items-center justify-center backdrop-blur-sm hover:bg-primary transition-colors"
         style={{
-          bottom: "calc(env(safe-area-inset-bottom) + 5rem)",
+          bottom: bottomOffset ?? "calc(env(safe-area-inset-bottom) + 5rem)",
           right: "max(1rem, env(safe-area-inset-right))",
         }}
         whileTap={{ scale: 0.9 }}
