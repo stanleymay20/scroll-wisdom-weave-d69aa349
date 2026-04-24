@@ -8,10 +8,13 @@ import {
   Trophy,
   Clock,
   CheckCircle2,
-  ChevronRight
+  ChevronRight,
+  Lock
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+import { useAccessGate } from "@/hooks/useAccessGate";
+import { UsageGateModal } from "@/components/subscription/UsageGateModal";
 
 export interface CognitiveLevel {
   id: string;
