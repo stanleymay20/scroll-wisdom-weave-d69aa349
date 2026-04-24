@@ -55,6 +55,38 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   const isMountedRef = useRef(true);
   const wasPlayingBeforeInterruptRef = useRef(false);
   const currentChunkIndexRef = useRef(0);
+  // Cumulative seconds across previously-completed chunks (for stable elapsed display)
+  const cumulativeSecondsRef = useRef(0);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+
+  // PERSISTENT audio element — created ONCE and reused across renders / chunks.
+  // Recreating Audio on every render causes:
+  //   - Resets to 0:00 on every UI update
+  //   - Loss of iOS user-gesture unlock (audio stops playing)
+  //   - Re-buffer flicker between chunks
+  useEffect(() => {
+    if (!audioRef.current) {
+      const audio = new Audio();
+      audio.preload = "auto";
+      (audio as HTMLAudioElement & { playsInline?: boolean }).playsInline = true;
+      audio.setAttribute("playsinline", "true");
+      audio.setAttribute("webkit-playsinline", "true");
+      audioRef.current = audio;
+    }
+    return () => {
+      // App-level cleanup only on full unmount
+      const a = audioRef.current;
+      if (a) {
+        try {
+          a.pause();
+          a.removeAttribute("src");
+          a.src = "";
+        } catch { /* noop */ }
+      }
+      audioRef.current = null;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Track mounted state
   useEffect(() => {
