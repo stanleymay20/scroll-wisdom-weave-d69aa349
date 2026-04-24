@@ -614,15 +614,22 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     base64ToBlobUrl,
     chunkText,
     cleanupBlobUrls,
+    isUnlimited,
     language,
     onPlayingChange,
+    planTTSLimit,
     playUrl,
+    remainingMinutes,
     sanitizeTextForTTS,
     selectedVoice,
     speakWithBrowser,
     text,
+    tier,
     toast,
     stop,
+    ttsMinutesUsed,
+    updateTTSUsage,
+    usageGate,
   ]);
 
   // Stop audio when changing pages
