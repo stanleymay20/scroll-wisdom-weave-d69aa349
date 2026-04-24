@@ -1950,11 +1950,15 @@ export default function Reader() {
       )}
 
 
-      {/* Study Music Player */}
+      {/* Study Music Player — stack above TTS player when both are open. */}
       {showStudyMusic && (
         <div
           className="fixed left-4 right-4 sm:right-auto z-[55] flex justify-center sm:block"
-          style={{ bottom: "calc(env(safe-area-inset-bottom) + 5.5rem)" }}
+          style={{
+            bottom: showTTS
+              ? "calc(env(safe-area-inset-bottom) + 13rem)"
+              : "calc(env(safe-area-inset-bottom) + 5.5rem)",
+          }}
         >
           <StudyMusicPlayer autoExpand />
         </div>
