@@ -1718,10 +1718,10 @@ export default function Reader() {
         </article>
       </main>
 
-      {/* CONTRACT 5.2: Floating Cognitive Level Indicator - respects safe areas & auto-hides */}
-      {/* FIXED: z-20 to stay below action buttons but above content */}
+      {/* CONTRACT 5.2: Floating Cognitive Level Indicator
+          MOBILE UX: Hide when TTS player is visible to keep ONE primary floating element. */}
       <AnimatePresence>
-        {guidedModeActive && !showLevelSelector && !showQA && (
+        {guidedModeActive && !showLevelSelector && !showQA && !showTTS && (
           <motion.div 
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
@@ -1742,7 +1742,8 @@ export default function Reader() {
         )}
       </AnimatePresence>
 
-      {/* Single "Tools" FAB → Bottom Sheet with all reader actions */}
+      {/* Single "Tools" FAB → Bottom Sheet with all reader actions
+          MOBILE UX: When TTS player is visible, raise the FAB so it never overlaps audio controls. */}
       {chapter?.content && !showQA && !showQuiz && (
         <ReaderToolsSheet
           isQuizUnlocked={quizGating.isQuizUnlocked}
@@ -1750,6 +1751,11 @@ export default function Reader() {
           hasCodeContent={hasCodeContent(chapter.content)}
           hasComicContent={false}
           isBookOwner={isBookOwner}
+          bottomOffset={
+            showTTS
+              ? "calc(env(safe-area-inset-bottom) + 9rem)"
+              : "calc(env(safe-area-inset-bottom) + 5rem)"
+          }
           onVoiceClick={() => {
             closeTopPanels();
             setShowQuiz(false);
