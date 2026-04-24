@@ -8,8 +8,10 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { UsageGateModal, useUsageGate } from "@/components/subscription/UsageGateModal";
-import { parseGateError } from "@/lib/usageGate";
+import { HighDemandModal } from "@/components/subscription/HighDemandModal";
+import { parseGateError, denied as deniedGate } from "@/lib/usageGate";
 import { useSubscription } from "@/contexts/SubscriptionContext";
+import { SUBSCRIPTION_TIERS } from "@/lib/subscription";
 
 interface TextToSpeechPlayerProps {
   text: string;
@@ -39,14 +41,24 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   const audioRef = useRef<HTMLAudioElement | null>(null);
   const { toast } = useToast();
   const usageGate = useUsageGate();
-  const { tier } = useSubscription();
+  const { tier, ttsMinutesUsed, updateTTSUsage } = useSubscription();
+  const [highDemandOpen, setHighDemandOpen] = useState(false);
+  const [highDemandReason, setHighDemandReason] = useState<string | undefined>(undefined);
+  const lowBalanceWarnedRef = useRef(false);
 
   // Use centralized entitlements - SINGLE SOURCE OF TRUTH
   const entitlements = useEntitlements();
-  
+
   // FAIL-OPEN: Admin, Prophet, Premium, Student, or any paid user has TTS access
   const hasFullAccess = entitlements.isAdmin || entitlements.isProphet || entitlements.isPremium || entitlements.isScrollStudent || entitlements.isPaid;
   const canUseTTS = hasFullAccess || entitlements.canUseTTS;
+
+  // Soft limit (minutes) for current plan. -1 / 0 means unlimited / disabled.
+  const planTTSLimit = SUBSCRIPTION_TIERS[tier]?.features?.ttsMinutes ?? 0;
+  const isUnlimited = entitlements.isAdmin || planTTSLimit < 0;
+  const remainingMinutes = isUnlimited
+    ? Infinity
+    : Math.max(0, planTTSLimit - (ttsMinutesUsed ?? 0));
 
   const stopRef = useRef(false);
   const isStoppingRef = useRef(false);
@@ -426,6 +438,21 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
   );
 
   const generateSpeech = useCallback(async () => {
+    // ── Pre-flight USER limit check (no silent failures) ──────────────
+    // Free / Student / Premium / Prophet all have monthly minute caps.
+    // Admin and unlimited plans bypass this check.
+    if (!isUnlimited && remainingMinutes <= 0) {
+      const gate = deniedGate("AUDIO_LIMIT_REACHED", {
+        currentPlan: tier,
+        usage: {
+          audioMinutesUsed: ttsMinutesUsed,
+          audioMinutesLimit: planTTSLimit,
+        },
+      });
+      usageGate.trigger(gate);
+      return;
+    }
+
     // Stop any existing playback
     stop();
     await new Promise(resolve => setTimeout(resolve, 100));
@@ -439,6 +466,22 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         variant: "destructive",
       });
       return;
+    }
+
+    // ── Pre-limit warning: < 2 minutes left, only once per session ─────
+    if (
+      !isUnlimited &&
+      remainingMinutes > 0 &&
+      remainingMinutes <= 2 &&
+      !lowBalanceWarnedRef.current
+    ) {
+      lowBalanceWarnedRef.current = true;
+      toast({
+        title: `Only ${remainingMinutes} ${remainingMinutes === 1 ? "minute" : "minutes"} left`,
+        description: tier === "free"
+          ? "You're nearly out of free audio this month. Upgrade for more listening time."
+          : "You're nearly out of audio minutes for this billing cycle.",
+      });
     }
 
     // Reset state for new playback
@@ -484,24 +527,23 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
 
         if (invokeError) throw new Error(invokeError.message || "Failed to invoke TTS function");
 
-        // Provider quota exhausted / down → fall back to browser SpeechSynthesis
+        // System exhaustion (provider quota / outage) — show "high demand" UX,
+        // do NOT blame the user, do NOT count usage. Offer Retry / Continue.
         if (data?.fallback === true) {
-          console.warn("[TTS Client] Provider unavailable, using browser SpeechSynthesis fallback", data?.reason);
-          if (i === 0 && isMountedRef.current) {
+          console.warn("[TTS Client] Provider unavailable", data?.reason);
+          if (isMountedRef.current) {
             setIsLoading(false);
-            toast({
-              title: "Using device voice",
-              description: "Premium voice is temporarily unavailable. Playing with your device's built-in voice.",
-            });
+            setIsPlaying(false);
+            onPlayingChange?.(false);
+            setHighDemandReason(
+              data?.reason === "PROVIDER_QUOTA_EXHAUSTED"
+                ? "Our premium voice provider is at capacity."
+                : "Our premium voice provider is briefly unavailable.",
+            );
+            setHighDemandOpen(true);
           }
-          const ok = await speakWithBrowser(chunk, language, () => stopRef.current || isStoppingRef.current);
-          if (!ok) {
-            throw new Error("Your device does not support speech synthesis.");
-          }
-          if (i < chunks.length - 1 && !stopRef.current) {
-            await new Promise((r) => setTimeout(r, 50));
-          }
-          continue;
+          // Stop the chunk loop — user decides Retry or Continue Reading.
+          break;
         }
 
         if (data?.error) throw new Error(data.error);
@@ -509,6 +551,14 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
 
         const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
         activeBlobUrlsRef.current.push(url);
+
+        // Mirror server-side usage increment into client context for live UI.
+        const minutesThisChunk = Number(data?.minutesUsed ?? 0);
+        if (minutesThisChunk > 0) {
+          // Fire-and-forget: server is already source of truth; this just
+          // refreshes the SubscriptionContext so remainingMinutes updates live.
+          void updateTTSUsage(minutesThisChunk).catch(() => { /* non-fatal */ });
+        }
 
         // First audio should start ASAP
         if (i === 0 && isMountedRef.current) setIsLoading(false);
@@ -564,15 +614,22 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
     base64ToBlobUrl,
     chunkText,
     cleanupBlobUrls,
+    isUnlimited,
     language,
     onPlayingChange,
+    planTTSLimit,
     playUrl,
+    remainingMinutes,
     sanitizeTextForTTS,
     selectedVoice,
     speakWithBrowser,
     text,
+    tier,
     toast,
     stop,
+    ttsMinutesUsed,
+    updateTTSUsage,
+    usageGate,
   ]);
 
   // Stop audio when changing pages
@@ -646,6 +703,13 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
           onOpenChange={(o) => { if (!o) usageGate.close(); }}
           result={usageGate.result}
           source="reader-tts"
+        />
+        <HighDemandModal
+          open={highDemandOpen}
+          onOpenChange={setHighDemandOpen}
+          reason={highDemandReason}
+          onRetry={() => generateSpeech()}
+          onContinueReading={stop}
         />
       </>
     );
@@ -762,6 +826,13 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
       onOpenChange={(o) => { if (!o) usageGate.close(); }}
       result={usageGate.result}
       source="reader-tts"
+    />
+    <HighDemandModal
+      open={highDemandOpen}
+      onOpenChange={setHighDemandOpen}
+      reason={highDemandReason}
+      onRetry={() => generateSpeech()}
+      onContinueReading={stop}
     />
     </>
   );
