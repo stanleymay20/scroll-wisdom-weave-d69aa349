@@ -552,6 +552,14 @@ export function TextToSpeechPlayer({ text, language = "en", onPlayingChange, sto
         const url = base64ToBlobUrl(data.audioContent, data.contentType || "audio/mpeg");
         activeBlobUrlsRef.current.push(url);
 
+        // Mirror server-side usage increment into client context for live UI.
+        const minutesThisChunk = Number(data?.minutesUsed ?? 0);
+        if (minutesThisChunk > 0) {
+          // Fire-and-forget: server is already source of truth; this just
+          // refreshes the SubscriptionContext so remainingMinutes updates live.
+          void updateTTSUsage(minutesThisChunk).catch(() => { /* non-fatal */ });
+        }
+
         // First audio should start ASAP
         if (i === 0 && isMountedRef.current) setIsLoading(false);
 
