@@ -236,6 +236,21 @@ export default function Generate() {
       return;
     }
 
+    // ── Central USER-limit pre-flight (book generation) ──
+    // Blocks at the cap, soft-warns when approaching it. The server still
+    // re-validates — this is fast UX, not security.
+    const access = accessGate.check("generate_book", { source: "generate-page" });
+    if (!access.allowed) {
+      usageGate.trigger(access);
+      return;
+    }
+    if (access.warning) {
+      toast({
+        title: "Heads up",
+        description: access.warning,
+      });
+    }
+
     // ── Input validation & sanitization ──
     const sanitizedTitle = sanitizeForDisplay(title);
     const sanitizedDescription = sanitizeForDisplay(description);
