@@ -27,14 +27,15 @@ import {
 } from "@/lib/checkAccess";
 
 export function useAccessGate() {
-  const { user, tier, isAdmin } = useSubscription();
+  const { user, tier } = useSubscription();
   const { snapshot, refresh: refreshUsage } = useUsageSnapshot();
   const modal = useUsageGate();
 
   const accessUser = useMemo<AccessUser | null>(() => {
     if (!user) return null;
-    return { id: user.id, tier, isAdmin };
-  }, [user, tier, isAdmin]);
+    // Admin bypass is enforced server-side; client treats all users uniformly.
+    return { id: user.id, tier };
+  }, [user, tier]);
 
   const baseUsage = useMemo<AccessUsageInput>(() => ({
     booksThisMonth: snapshot?.booksThisMonth ?? 0,
