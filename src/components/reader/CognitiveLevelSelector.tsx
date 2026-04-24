@@ -176,6 +176,8 @@ export const CognitiveLevelSelector = forwardRef<HTMLDivElement, CognitiveLevelS
           {COGNITIVE_LEVELS.map((level, index) => {
             const Icon = level.icon;
             const isSelected = selectedLevel === level.id;
+            const isAdvanced = ADVANCED_LEVEL_IDS.has(level.id);
+            const isLocked = isAdvanced && !check("learning_mode_advanced").allowed;
             
             return (
               <motion.button
@@ -183,13 +185,14 @@ export const CognitiveLevelSelector = forwardRef<HTMLDivElement, CognitiveLevelS
                 initial={{ opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: index * 0.05 }}
-                onClick={() => onSelectLevel(level.id)}
+                onClick={() => handleSelectLevel(level.id)}
                 className={cn(
                   "w-full p-3 rounded-lg text-left transition-all",
                   "border hover:border-primary/50",
                   isSelected 
                     ? "bg-primary/10 border-primary/50" 
-                    : "bg-muted/30 border-border/50"
+                    : "bg-muted/30 border-border/50",
+                  isLocked && "opacity-80"
                 )}
               >
                 <div className="flex items-center justify-between">
@@ -205,6 +208,11 @@ export const CognitiveLevelSelector = forwardRef<HTMLDivElement, CognitiveLevelS
                         <span className="font-medium text-sm">{level.name}</span>
                         {isSelected && (
                           <CheckCircle2 className="h-4 w-4 text-primary" />
+                        )}
+                        {isLocked && (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-primary/15 px-2 py-0.5 text-[10px] font-medium text-primary">
+                            <Lock className="h-3 w-3" /> Premium
+                          </span>
                         )}
                       </div>
                       {expanded && (
