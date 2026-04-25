@@ -149,6 +149,8 @@ export default function Reader() {
     isOnline,
     resumePosition,
     userId,
+    error: readerError,
+    refresh: refreshReaderData,
   } = useReaderData({ bookId, chapterNumber: currentChapter });
   
   // Local override for chapter content after direct edits (avoids mutating state)
