@@ -34,6 +34,8 @@ import {
   BookMarked,
   Palette,
   MoreVertical,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import {
   DropdownMenu,
