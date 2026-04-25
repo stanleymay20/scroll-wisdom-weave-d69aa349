@@ -19,6 +19,7 @@ import { notifyError } from "@/lib/errorNotifier";
 import { SkeletonPage } from "@/components/ui/page-shell";
 import { InlineSplash } from "@/components/brand";
 import { initContract5 } from "@/lib/contract5";
+import { installChunkReloadGuard } from "@/lib/chunkReloadGuard";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 
@@ -106,10 +107,13 @@ function AppInitializer() {
   useEffect(() => {
     // Initialize trace ID for session correlation
     setTraceId();
-    
+
+    // Auto-reload on stale lazy-chunk import failures (after deploys)
+    installChunkReloadGuard();
+
     // CONTRACT 5: Initialize performance monitoring
     initContract5();
-    
+
     logger.info('Application initialized');
   }, []);
   return null;
@@ -130,6 +134,8 @@ const App = () => (
             <PWAUpdateNotification />
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               {/* PERFORMANCE: Use InlineSplash for branded visual feedback during lazy load */}
+              {/* Inner ErrorBoundary keeps page crashes from killing the whole shell */}
+              <ErrorBoundary context="Routes">
               <Suspense fallback={<InlineSplash />}>
                 <Routes>
                   {/* Critical routes - eager loaded */}
@@ -191,6 +197,7 @@ const App = () => (
                   <Route path="*" element={<NotFound />} />
                 </Routes>
               </Suspense>
+              </ErrorBoundary>
               <ReEngagementBanner />
               <PWAInstallPrompt />
               <GlobalAudioPlayer />
