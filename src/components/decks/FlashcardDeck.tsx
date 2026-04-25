@@ -240,8 +240,8 @@ export function FlashcardViewer({ deck, onClose, onSessionComplete, className }:
             <span className="font-semibold">Session Complete</span>
           </div>
           {onClose && (
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-4 w-4" />
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close session">
+              <X className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
         </div>
@@ -362,15 +362,15 @@ export function FlashcardViewer({ deck, onClose, onSessionComplete, className }:
         </div>
         <div className="flex items-center gap-1">
           <Button variant="ghost" size="icon" onClick={shuffleCards}
-            className={cn(shuffled && 'text-primary')} title="Shuffle">
-            <Shuffle className="h-4 w-4" />
+            className={cn(shuffled && 'text-primary')} aria-label="Shuffle cards" title="Shuffle">
+            <Shuffle className="h-4 w-4" aria-hidden="true" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={resetDeck} title="Reset">
-            <RotateCcw className="h-4 w-4" />
+          <Button variant="ghost" size="icon" onClick={resetDeck} aria-label="Reset deck" title="Reset">
+            <RotateCcw className="h-4 w-4" aria-hidden="true" />
           </Button>
           {onClose && (
-            <Button variant="ghost" size="icon" onClick={onClose}>
-              <X className="h-4 w-4" />
+            <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close deck">
+              <X className="h-4 w-4" aria-hidden="true" />
             </Button>
           )}
         </div>

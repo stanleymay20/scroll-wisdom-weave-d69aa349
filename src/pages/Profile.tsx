@@ -555,8 +555,8 @@ export default function Profile() {
                           {book.category.replace(/_/g, " ")}
                         </p>
                       </div>
-                      <Button variant="ghost" size="icon" className={isMobile ? "h-8 w-8" : ""}>
-                        <Download className={isMobile ? "h-3 w-3" : "h-4 w-4"} />
+                      <Button variant="ghost" size="icon" className={isMobile ? "h-8 w-8" : ""} aria-label={`Download ${book.title}`}>
+                        <Download className={isMobile ? "h-3 w-3" : "h-4 w-4"} aria-hidden="true" />
                       </Button>
                     </div>
                   ))}

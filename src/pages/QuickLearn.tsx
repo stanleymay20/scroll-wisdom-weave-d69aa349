@@ -192,19 +192,19 @@ export default function QuickLearn() {
       <div className="container mx-auto px-4 pt-20 pb-4">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-3">
-            <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-              <ChevronLeft className="h-5 w-5" />
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Go back">
+              <ChevronLeft className="h-5 w-5" aria-hidden="true" />
             </Button>
             <div>
               <h1 className="text-xl font-bold flex items-center gap-2">
-                <Zap className="h-5 w-5 text-primary" />
+                <Zap className="h-5 w-5 text-primary" aria-hidden="true" />
                 Quick Learn
               </h1>
               <p className="text-xs text-muted-foreground">Swipe through key insights · {cards.length} cards</p>
             </div>
           </div>
-          <Button variant="ghost" size="icon" onClick={loadInsights} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} />
+          <Button variant="ghost" size="icon" onClick={loadInsights} disabled={loading} aria-label="Refresh insights">
+            <RefreshCw className={`h-4 w-4 ${loading ? 'animate-spin' : ''}`} aria-hidden="true" />
           </Button>
         </div>
 

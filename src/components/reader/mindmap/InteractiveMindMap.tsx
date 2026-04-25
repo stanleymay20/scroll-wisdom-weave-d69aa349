@@ -174,14 +174,14 @@ export function InteractiveMindMap({
     <div ref={containerRef} className={cn("relative w-full bg-muted/10 rounded-xl border border-border/50 overflow-hidden select-none", className)} style={{ minHeight: 350 }}>
       {/* Zoom controls */}
       <div className="absolute top-2 right-2 z-10 flex flex-col gap-1">
-        <Button variant="outline" size="icon" className="h-7 w-7 bg-background/80 backdrop-blur-sm" onClick={zoomIn}>
-          <ZoomIn className="h-3.5 w-3.5" />
+        <Button variant="outline" size="icon" className="h-7 w-7 bg-background/80 backdrop-blur-sm" onClick={zoomIn} aria-label="Zoom in">
+          <ZoomIn className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
-        <Button variant="outline" size="icon" className="h-7 w-7 bg-background/80 backdrop-blur-sm" onClick={zoomOut}>
-          <ZoomOut className="h-3.5 w-3.5" />
+        <Button variant="outline" size="icon" className="h-7 w-7 bg-background/80 backdrop-blur-sm" onClick={zoomOut} aria-label="Zoom out">
+          <ZoomOut className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
-        <Button variant="outline" size="icon" className="h-7 w-7 bg-background/80 backdrop-blur-sm" onClick={resetView}>
-          <Maximize2 className="h-3.5 w-3.5" />
+        <Button variant="outline" size="icon" className="h-7 w-7 bg-background/80 backdrop-blur-sm" onClick={resetView} aria-label="Reset view">
+          <Maximize2 className="h-3.5 w-3.5" aria-hidden="true" />
         </Button>
       </div>
 

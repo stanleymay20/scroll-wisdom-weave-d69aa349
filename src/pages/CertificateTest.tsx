@@ -107,8 +107,8 @@ export default function CertificateTest() {
         <div className="container max-w-6xl mx-auto px-4 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-4">
-              <Button variant="ghost" size="icon" onClick={() => navigate('/')}>
-                <ArrowLeft className="h-5 w-5" />
+              <Button variant="ghost" size="icon" onClick={() => navigate('/')} aria-label="Back to home">
+                <ArrowLeft className="h-5 w-5" aria-hidden="true" />
               </Button>
               <div>
                 <h1 className="text-xl font-bold">Certificate Test Page</h1>
