@@ -108,8 +108,8 @@ export function CollaborationPanel({ bookId, userId }: CollaborationPanelProps) 
                   <SelectItem value="commenter">Commenter</SelectItem>
                 </SelectContent>
               </Select>
-              <Button onClick={handleInvite} disabled={!email.trim() || sending} size="icon">
-                <UserPlus className="h-4 w-4" />
+              <Button onClick={handleInvite} disabled={!email.trim() || sending} size="icon" aria-label="Send invite">
+                <UserPlus className="h-4 w-4" aria-hidden="true" />
               </Button>
             </div>
           )}
@@ -196,8 +196,8 @@ function CollaboratorRow({
               <SelectItem value="commenter">Commenter</SelectItem>
             </SelectContent>
           </Select>
-          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRemove}>
-            <Trash2 className="h-3 w-3 text-destructive" />
+          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onRemove} aria-label={`Remove ${collab.invited_email || "collaborator"}`}>
+            <Trash2 className="h-3 w-3 text-destructive" aria-hidden="true" />
           </Button>
         </>
       )}
