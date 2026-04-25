@@ -166,8 +166,8 @@ const SavedDecksTab = forwardRef<HTMLDivElement, SavedDecksTabProps>(({
 
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
-                    <Button variant="ghost" size="icon" title="Delete deck">
-                      <Trash2 className="h-4 w-4 text-destructive" />
+                    <Button variant="ghost" size="icon" aria-label="Delete deck" title="Delete deck">
+                      <Trash2 className="h-4 w-4 text-destructive" aria-hidden="true" />
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>

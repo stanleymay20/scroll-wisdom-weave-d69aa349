@@ -492,8 +492,8 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
               {isFullscreen ? <Minimize2 className="h-4 w-4" /> : <Maximize2 className="h-4 w-4" />}
             </Button>
             {onClose && (
-              <Button variant="ghost" size="icon" onClick={onClose}>
-                <X className="h-4 w-4" />
+              <Button variant="ghost" size="icon" onClick={onClose} aria-label="Close slides">
+                <X className="h-4 w-4" aria-hidden="true" />
               </Button>
             )}
           </div>
