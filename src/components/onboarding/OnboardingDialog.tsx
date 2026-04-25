@@ -6,7 +6,8 @@
  */
 
 import { useState, useEffect } from 'react';
-import { Dialog, DialogContent } from '@/components/ui/dialog';
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
+import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Button } from '@/components/ui/button';
 import { BookOpen, Brain, GraduationCap, ArrowRight, Sparkles } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
@@ -85,6 +86,10 @@ export function OnboardingDialog() {
   return (
     <Dialog open={open} onOpenChange={(v) => { if (!v) handleComplete(); setOpen(v); }}>
       <DialogContent className="sm:max-w-md">
+        <VisuallyHidden>
+          <DialogTitle>{currentStep.title}</DialogTitle>
+          <DialogDescription>{currentStep.description}</DialogDescription>
+        </VisuallyHidden>
         <div className="flex flex-col items-center text-center space-y-6 py-4">
           {/* Step indicator */}
           <div className="flex items-center gap-2">
