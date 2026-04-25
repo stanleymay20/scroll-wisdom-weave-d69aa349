@@ -1171,8 +1171,8 @@ export default function Reader() {
             {/* Overflow menu — low-frequency actions */}
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon">
-                  <MoreVertical className="h-5 w-5" />
+                <Button variant="ghost" size="icon" aria-label="More options">
+                  <MoreVertical className="h-5 w-5" aria-hidden="true" />
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
@@ -1250,8 +1250,8 @@ export default function Reader() {
         >
           <div className="flex items-center justify-between mb-4">
             <span className="font-medium">{t('reader.settings')}</span>
-            <Button variant="ghost" size="icon" onClick={() => setShowSettings(false)}>
-              <X className="h-4 w-4" />
+            <Button variant="ghost" size="icon" onClick={() => setShowSettings(false)} aria-label="Close settings">
+              <X className="h-4 w-4" aria-hidden="true" />
             </Button>
           </div>
           <div className="space-y-4">

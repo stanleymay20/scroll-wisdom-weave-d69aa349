@@ -142,8 +142,8 @@ export default function AuditDashboard() {
   return (
     <div className="container mx-auto p-6 space-y-6 max-w-6xl">
       <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-5 w-5" />
+        <Button variant="ghost" size="icon" onClick={() => navigate(-1)} aria-label="Go back">
+          <ArrowLeft className="h-5 w-5" aria-hidden="true" />
         </Button>
         <div>
           <h1 className="text-2xl font-bold">Audit Quality Dashboard</h1>
