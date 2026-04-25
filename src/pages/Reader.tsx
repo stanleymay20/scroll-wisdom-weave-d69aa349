@@ -34,6 +34,8 @@ import {
   BookMarked,
   Palette,
   MoreVertical,
+  AlertCircle,
+  RefreshCw,
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -149,6 +151,8 @@ export default function Reader() {
     isOnline,
     resumePosition,
     userId,
+    error: readerError,
+    refresh: refreshReaderData,
   } = useReaderData({ bookId, chapterNumber: currentChapter });
   
   // Local override for chapter content after direct edits (avoids mutating state)
@@ -824,6 +828,44 @@ export default function Reader() {
            content.includes('```') || 
            /\bdef\s+\w+\s*\(|\bfunction\s+\w+\s*\(|\bclass\s+\w+/.test(content);
   };
+
+  // Render error state when load fails and no cache fallback is available
+  if (loadState === 'error') {
+    const isNotFound = (readerError || '').toLowerCase().includes('not found');
+    return (
+      <div className="min-h-screen flex items-center justify-center px-4 bg-background">
+        <div className="max-w-md w-full text-center space-y-6 py-12">
+          <div className="inline-flex items-center justify-center w-16 h-16 rounded-full bg-destructive/10">
+            <AlertCircle className="h-8 w-8 text-destructive" aria-hidden="true" />
+          </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl font-display font-semibold">
+              {isNotFound ? 'Chapter unavailable' : 'Could not load chapter'}
+            </h1>
+            <p className="text-sm text-muted-foreground">
+              {readerError || 'Something went wrong while loading this chapter. Please try again.'}
+            </p>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-3 justify-center">
+            {!isNotFound && (
+              <Button onClick={() => refreshReaderData()} variant="default">
+                <RefreshCw className="h-4 w-4 mr-2" aria-hidden="true" />
+                Try again
+              </Button>
+            )}
+            <Button onClick={() => navigate(bookId ? `/book/${bookId}` : '/library')} variant="outline">
+              <ChevronLeft className="h-4 w-4 mr-2" aria-hidden="true" />
+              Back to book
+            </Button>
+            <Button onClick={() => navigate('/library')} variant="ghost">
+              <Home className="h-4 w-4 mr-2" aria-hidden="true" />
+              Library
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // CONTRACT 5B-3: Show skeleton with cached data for instant render
   if (loadState === 'skeleton' || loadState === 'offline-empty') {

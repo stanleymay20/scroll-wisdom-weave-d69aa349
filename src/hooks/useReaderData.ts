@@ -208,8 +208,9 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
         .single();
 
       if (bookError) {
-        if (!chapter) {
+        if (!chapter && mountedRef.current) {
           setError('Book not found');
+          setLoadState('error');
         }
         return;
       }
@@ -227,8 +228,9 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
         .single();
 
       if (chapterError) {
-        if (!chapter) {
+        if (!chapter && mountedRef.current) {
           setError('Chapter not found');
+          setLoadState('error');
         }
         return;
       }
@@ -287,6 +289,7 @@ export function useReaderData({ bookId, chapterNumber }: UseReaderDataOptions): 
       logger.error('Error fetching reader data:', err);
       if (!chapter && mountedRef.current) {
         setError('Failed to load chapter');
+        setLoadState('error');
       }
     }
   }, [bookId, chapterNumber, chapter, previewContent, resumePosition]);

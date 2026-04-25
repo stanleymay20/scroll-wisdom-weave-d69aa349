@@ -97,7 +97,8 @@ export type ReaderLoadState =
   | 'hydrating'          // Have cache, fetching fresh
   | 'ready'              // Fully loaded
   | 'offline-with-cache' // Offline but have cached data
-  | 'offline-empty';     // Offline with no cache
+  | 'offline-empty'      // Offline with no cache
+  | 'error';             // Network/data error with no cache fallback
 
 /**
  * Initialize IndexedDB for chapter cache

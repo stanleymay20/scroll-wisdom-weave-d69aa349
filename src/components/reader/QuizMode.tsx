@@ -402,6 +402,11 @@ export function QuizMode({
         }
       } catch (err) {
         console.error("Failed to save quiz result:", err);
+        toast({
+          title: "Couldn't save your result",
+          description: "Your score is shown below, but we couldn't record it. Check your connection and try retaking the quiz.",
+          variant: "destructive",
+        });
       }
     }
   };
