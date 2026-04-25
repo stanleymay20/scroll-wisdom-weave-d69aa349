@@ -163,14 +163,14 @@ export function VideoPlayerControls({
         <div className="flex items-center gap-1">
           {/* Left: playback controls */}
           <div className="flex items-center gap-0.5">
-            <Button variant="ghost" size="icon" onClick={onPrevScene} className="text-white hover:bg-white/10 h-8 w-8">
-              <SkipBack className="h-4 w-4" />
+            <Button variant="ghost" size="icon" onClick={onPrevScene} aria-label="Previous scene" className="text-white hover:bg-white/10 h-8 w-8">
+              <SkipBack className="h-4 w-4" aria-hidden="true" />
             </Button>
-            <Button variant="ghost" size="icon" onClick={onTogglePlay} className="text-white hover:bg-white/10 h-9 w-9">
-              {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5 ml-0.5" />}
+            <Button variant="ghost" size="icon" onClick={onTogglePlay} aria-label={isPlaying ? "Pause" : "Play"} className="text-white hover:bg-white/10 h-9 w-9">
+              {isPlaying ? <Pause className="h-5 w-5" aria-hidden="true" /> : <Play className="h-5 w-5 ml-0.5" aria-hidden="true" />}
             </Button>
-            <Button variant="ghost" size="icon" onClick={onNextScene} className="text-white hover:bg-white/10 h-8 w-8">
-              <SkipForward className="h-4 w-4" />
+            <Button variant="ghost" size="icon" onClick={onNextScene} aria-label="Next scene" className="text-white hover:bg-white/10 h-8 w-8">
+              <SkipForward className="h-4 w-4" aria-hidden="true" />
             </Button>
 
             {/* Volume */}
@@ -179,8 +179,8 @@ export function VideoPlayerControls({
               onMouseEnter={() => setShowVolume(true)}
               onMouseLeave={() => setShowVolume(false)}
             >
-              <Button variant="ghost" size="icon" onClick={onToggleMute} className="text-white hover:bg-white/10 h-8 w-8">
-                <VolumeIcon className="h-4 w-4" />
+              <Button variant="ghost" size="icon" onClick={onToggleMute} aria-label={isMuted ? "Unmute" : "Mute"} className="text-white hover:bg-white/10 h-8 w-8">
+                <VolumeIcon className="h-4 w-4" aria-hidden="true" />
               </Button>
               <div className={cn(
                 "overflow-hidden transition-all duration-200",
@@ -223,12 +223,12 @@ export function VideoPlayerControls({
             )}
           </Button>
 
-          <Button variant="ghost" size="icon" onClick={onReset} className="text-white hover:bg-white/10 h-7 w-7">
-            <RotateCcw className="h-3.5 w-3.5" />
+          <Button variant="ghost" size="icon" onClick={onReset} aria-label="Restart from beginning" className="text-white hover:bg-white/10 h-7 w-7">
+            <RotateCcw className="h-3.5 w-3.5" aria-hidden="true" />
           </Button>
 
-          <Button variant="ghost" size="icon" onClick={onToggleFullscreen} className="text-white hover:bg-white/10 h-7 w-7">
-            {isFullscreen ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+          <Button variant="ghost" size="icon" onClick={onToggleFullscreen} aria-label={isFullscreen ? "Exit fullscreen" : "Enter fullscreen"} className="text-white hover:bg-white/10 h-7 w-7">
+            {isFullscreen ? <Minimize className="h-4 w-4" aria-hidden="true" /> : <Maximize className="h-4 w-4" aria-hidden="true" />}
           </Button>
         </div>
       </div>
