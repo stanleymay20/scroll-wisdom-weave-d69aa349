@@ -85,6 +85,17 @@ const OnboardingDialog = lazy(() => import("./components/onboarding/OnboardingDi
 
 const logger = createLogger('App');
 
+/**
+ * Wrap a route element in a recovery-enabled error boundary.
+ * Isolates per-page crashes (including dynamic-import failures) so the
+ * app shell, audio player, and navigation stay responsive.
+ */
+const withRecovery = (name: string, node: React.ReactNode): React.ReactElement => (
+  <ErrorBoundaryWithRecovery context={`Route:${name}`} maxRetries={2}>
+    {node}
+  </ErrorBoundaryWithRecovery>
+);
+
 // Configure QueryClient with enterprise settings
 const queryClient = new QueryClient({
   defaultOptions: {
