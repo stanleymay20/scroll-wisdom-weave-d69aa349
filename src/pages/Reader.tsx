@@ -55,8 +55,8 @@ import { GuidedReadingMode, CognitiveLevelIndicator } from "@/components/reader/
 const DeepResearchPanel = lazy(() => import("@/components/academic/DeepResearchPanel").then(m => ({ default: m.DeepResearchPanel })));
 import { AcademicModeIndicator } from "@/components/academic/AcademicModeIndicator";
 import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
-import { InteractiveQA } from "@/components/reader/InteractiveQA";
-import { VoiceConversation } from "@/components/reader/VoiceConversation";
+const InteractiveQA = lazy(() => import("@/components/reader/InteractiveQA").then(m => ({ default: m.InteractiveQA })));
+const VoiceConversation = lazy(() => import("@/components/reader/VoiceConversation").then(m => ({ default: m.VoiceConversation })));
 import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode } from "@/components/reader/QuizMode";
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
