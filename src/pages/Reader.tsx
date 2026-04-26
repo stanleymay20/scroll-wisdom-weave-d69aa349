@@ -1997,6 +1997,7 @@ export default function Reader() {
           bookId={bookId}
         />
       )}
+      </Suspense>
 
 
       {/* Study Music Player — stack above TTS player when both are open. */}
