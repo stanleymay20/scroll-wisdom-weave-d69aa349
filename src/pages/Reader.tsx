@@ -51,7 +51,8 @@ import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
 import { CognitiveLevelSelector, COGNITIVE_LEVELS } from "@/components/reader/CognitiveLevelSelector";
 import { GuidedReadingMode, CognitiveLevelIndicator } from "@/components/reader/GuidedReadingMode";
-import { DeepResearchPanel } from "@/components/academic/DeepResearchPanel";
+// Heavy panels lazy-loaded on demand to keep Reader entry chunk small
+const DeepResearchPanel = lazy(() => import("@/components/academic/DeepResearchPanel").then(m => ({ default: m.DeepResearchPanel })));
 import { AcademicModeIndicator } from "@/components/academic/AcademicModeIndicator";
 import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
 import { InteractiveQA } from "@/components/reader/InteractiveQA";
