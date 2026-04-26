@@ -429,8 +429,9 @@ export default function Profile() {
                   <Input
                     id="fullName"
                     value={editedProfile.full_name}
-                    onChange={(e) => setEditedProfile(p => ({ ...p, full_name: e.target.value }))}
+                    onChange={(e) => setEditedProfile(p => ({ ...p, full_name: e.target.value.slice(0, 100) }))}
                     className="bg-muted/50 border-border/50"
+                    maxLength={100}
                   />
                 </div>
                 <div className="space-y-2">
@@ -438,9 +439,10 @@ export default function Profile() {
                   <Input
                     id="country"
                     value={editedProfile.country}
-                    onChange={(e) => setEditedProfile(p => ({ ...p, country: e.target.value }))}
+                    onChange={(e) => setEditedProfile(p => ({ ...p, country: e.target.value.slice(0, 80) }))}
                     className="bg-muted/50 border-border/50"
                     placeholder="e.g., United States"
+                    maxLength={80}
                   />
                 </div>
               </div>
@@ -449,9 +451,10 @@ export default function Profile() {
                 <Textarea
                   id="bio"
                   value={editedProfile.bio}
-                  onChange={(e) => setEditedProfile(p => ({ ...p, bio: e.target.value }))}
+                  onChange={(e) => setEditedProfile(p => ({ ...p, bio: e.target.value.slice(0, 500) }))}
                   className={cn("bg-muted/50 border-border/50", isMobile ? "min-h-[80px]" : "min-h-[100px]")}
                   placeholder={t('profile.bioPlaceholder')}
+                  maxLength={500}
                 />
               </div>
               <Button onClick={handleSaveProfile} disabled={isSaving} className={isMobile ? "w-full" : ""}>
