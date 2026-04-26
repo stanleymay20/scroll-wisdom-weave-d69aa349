@@ -234,27 +234,28 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
     const safeNewPassword = normalizePassword(newPassword);
 
     // Pre-flight client-side validation (server-side via Supabase still applies)
+    const failValidation = (msg: string) => {
+      setIsLoading(false);
+      setAuthError(msg);
+    };
     if (mode === "login" || mode === "signup" || mode === "magic-link" || mode === "forgot-password") {
       const emailCheck = validateInput(emailSchema, safeEmail);
-      if (!emailCheck.success) {
-        setIsLoading(false);
-        setAuthError(emailCheck.errors[0] ?? "Please enter a valid email address.");
+      if (emailCheck.success === false) {
+        failValidation(emailCheck.errors[0] ?? "Please enter a valid email address.");
         return;
       }
     }
     if (mode === "login" || mode === "signup") {
       const pwCheck = validateInput(passwordSchema, safePassword);
-      if (!pwCheck.success) {
-        setIsLoading(false);
-        setAuthError(pwCheck.errors[0] ?? "Password is invalid.");
+      if (pwCheck.success === false) {
+        failValidation(pwCheck.errors[0] ?? "Password is invalid.");
         return;
       }
     }
     if (mode === "reset-password") {
       const pwCheck = validateInput(passwordSchema, safeNewPassword);
-      if (!pwCheck.success) {
-        setIsLoading(false);
-        setAuthError(pwCheck.errors[0] ?? "Password is invalid.");
+      if (pwCheck.success === false) {
+        failValidation(pwCheck.errors[0] ?? "Password is invalid.");
         return;
       }
     }
