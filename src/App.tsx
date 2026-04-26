@@ -7,10 +7,11 @@ import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { AudioProvider } from "@/contexts/AudioContext";
-import { useEffect, Suspense, lazy } from "react";
+import React, { useEffect, Suspense, lazy } from "react";
 import { PWAInstallPrompt, OfflineIndicator } from "@/components/pwa";
 import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
 import { ErrorBoundary, SectionErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorBoundaryWithRecovery } from "@/components/ErrorBoundaryWithRecovery";
 import { DiagnosticsPanel } from "@/components/system/DiagnosticsPanel";
 import { ReEngagementBanner } from "@/components/gamification/ReEngagementBanner";
 import { GlobalAudioPlayer } from "@/components/audio/GlobalAudioPlayer";
@@ -84,6 +85,17 @@ const OnboardingDialog = lazy(() => import("./components/onboarding/OnboardingDi
 
 const logger = createLogger('App');
 
+/**
+ * Wrap a route element in a recovery-enabled error boundary.
+ * Isolates per-page crashes (including dynamic-import failures) so the
+ * app shell, audio player, and navigation stay responsive.
+ */
+const withRecovery = (name: string, node: React.ReactNode): React.ReactElement => (
+  <ErrorBoundaryWithRecovery context={`Route:${name}`} maxRetries={2}>
+    {node}
+  </ErrorBoundaryWithRecovery>
+);
+
 // Configure QueryClient with enterprise settings
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -144,8 +156,8 @@ const App = () => (
                   
                   {/* Feature routes - lazy loaded */}
                   <Route path="/explore" element={<Explore />} />
-                  <Route path="/generate" element={<ProtectedRoute><Generate /></ProtectedRoute>} />
-                  <Route path="/library" element={<ProtectedRoute><Library /></ProtectedRoute>} />
+                  <Route path="/generate" element={withRecovery('Generate', <ProtectedRoute><Generate /></ProtectedRoute>)} />
+                  <Route path="/library" element={withRecovery('Library', <ProtectedRoute><Library /></ProtectedRoute>)} />
                   <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                   <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                   <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
@@ -161,9 +173,9 @@ const App = () => (
                   <Route path="/install" element={<Install />} />
                   <Route path="/pwa-test" element={<PWATest />} />
                   <Route path="/diagnostics" element={<AdminRoute><Diagnostics /></AdminRoute>} />
-                  <Route path="/book/:id" element={<BookDetail />} />
-                  <Route path="/book/:bookId/certificate" element={<CertificateStatus />} />
-                  <Route path="/read/:bookId/:chapterId" element={<Reader />} />
+                  <Route path="/book/:id" element={withRecovery('BookDetail', <BookDetail />)} />
+                  <Route path="/book/:bookId/certificate" element={withRecovery('CertificateStatus', <CertificateStatus />)} />
+                  <Route path="/read/:bookId/:chapterId" element={withRecovery('Reader', <Reader />)} />
                   <Route path="/certificate/:certificateNumber" element={<CertificateVerify />} />
                   <Route path="/verify" element={<OrganizationVerify />} />
                   <Route path="/docs/verification" element={<VerificationDocs />} />
@@ -179,18 +191,18 @@ const App = () => (
                   <Route path="/admin-recovery" element={<ProtectedRoute><AdminRecovery /></ProtectedRoute>} />
                   <Route path="/pmf" element={<AdminRoute><PMFDashboard /></AdminRoute>} />
                   <Route path="/audit-dashboard" element={<AdminRoute><AuditDashboard /></AdminRoute>} />
-                  <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
-                  <Route path="/dashboard/mastery" element={<ProtectedRoute><MasteryDashboard /></ProtectedRoute>} />
+                  <Route path="/upload" element={withRecovery('Upload', <ProtectedRoute><UploadPage /></ProtectedRoute>)} />
+                  <Route path="/dashboard/mastery" element={withRecovery('MasteryDashboard', <ProtectedRoute><MasteryDashboard /></ProtectedRoute>)} />
                   <Route path="/docs/mastery-model" element={<MasteryModel />} />
-                  <Route path="/quick-learn" element={<QuickLearn />} />
+                  <Route path="/quick-learn" element={withRecovery('QuickLearn', <QuickLearn />)} />
                   <Route path="/experiments" element={<AdminRoute><ExperimentReport /></AdminRoute>} />
                   <Route path="/admin/ops" element={<AdminRoute><AdminOps /></AdminRoute>} />
                   <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
                   <Route path="/organizations/analytics" element={<ProtectedRoute><OrgAnalytics /></ProtectedRoute>} />
                   <Route path="/verify-certificate" element={<VerifyLookup />} />
-                  <Route path="/book/:bookId/citation-graph" element={<ProtectedRoute><CitationGraph /></ProtectedRoute>} />
-                  <Route path="/study" element={<ProtectedRoute><StudySession /></ProtectedRoute>} />
-                  <Route path="/cognition" element={<ProtectedRoute><Cognition /></ProtectedRoute>} />
+                  <Route path="/book/:bookId/citation-graph" element={withRecovery('CitationGraph', <ProtectedRoute><CitationGraph /></ProtectedRoute>)} />
+                  <Route path="/study" element={withRecovery('StudySession', <ProtectedRoute><StudySession /></ProtectedRoute>)} />
+                  <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />
                   <Route path="/account/data-export" element={<ProtectedRoute><DataExport /></ProtectedRoute>} />
                   
                   {/* 404 - eager loaded */}
