@@ -263,14 +263,20 @@ export default function Profile() {
 
   const handleSaveProfile = async () => {
     if (!user) return;
+
+    // Defence-in-depth field validation (RLS still enforces ownership)
+    const trimmedName = (editedProfile.full_name || "").trim().slice(0, 100);
+    const trimmedBio = (editedProfile.bio || "").trim().slice(0, 500);
+    const trimmedCountry = (editedProfile.country || "").trim().slice(0, 80);
+
     setIsSaving(true);
 
     const { error } = await supabase
       .from("profiles")
       .update({
-        full_name: editedProfile.full_name,
-        bio: editedProfile.bio,
-        country: editedProfile.country,
+        full_name: trimmedName,
+        bio: trimmedBio,
+        country: trimmedCountry,
         updated_at: new Date().toISOString(),
       })
       .or(`user_id.eq.${user.id},id.eq.${user.id}`);
