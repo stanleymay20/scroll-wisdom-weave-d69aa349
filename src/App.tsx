@@ -156,8 +156,8 @@ const App = () => (
                   
                   {/* Feature routes - lazy loaded */}
                   <Route path="/explore" element={<Explore />} />
-                  <Route path="/generate" element={<ProtectedRoute><Generate /></ProtectedRoute>} />
-                  <Route path="/library" element={<ProtectedRoute><Library /></ProtectedRoute>} />
+                  <Route path="/generate" element={withRecovery('Generate', <ProtectedRoute><Generate /></ProtectedRoute>)} />
+                  <Route path="/library" element={withRecovery('Library', <ProtectedRoute><Library /></ProtectedRoute>)} />
                   <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
                   <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
                   <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
