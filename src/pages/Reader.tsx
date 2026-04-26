@@ -1523,6 +1523,10 @@ export default function Reader() {
       )}
 
 
+      {/* Lazy-loaded heavy panels — keeps Reader entry chunk small.
+          Each panel only mounts when its show* flag is true, so Suspense
+          fallback is null (panels are off-screen until requested). */}
+      <Suspense fallback={null}>
       <AnimatePresence>
         {showReferences && chapter?.chapter_references && (
           <DeepResearchPanel
