@@ -163,10 +163,14 @@ export function ReportContentDialog({
               <Textarea
                 id="description"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION))}
                 placeholder={t('report.detailsPlaceholder')}
                 className="min-h-[80px] bg-muted/50 border-border/50"
+                maxLength={MAX_DESCRIPTION}
               />
+              <p className="text-xs text-muted-foreground text-right" aria-live="polite">
+                {description.length}/{MAX_DESCRIPTION}
+              </p>
             </div>
           </div>
         )}
