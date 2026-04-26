@@ -1997,7 +1997,6 @@ export default function Reader() {
           bookId={bookId}
         />
       )}
-      </Suspense>
 
 
       {/* Study Music Player — stack above TTS player when both are open. */}
@@ -2013,6 +2012,7 @@ export default function Reader() {
           <StudyMusicPlayer autoExpand />
         </div>
       )}
+      </Suspense>
 
       {/* CONTRACT 5.2: Navigation Footer with HARD safe area inset - NEVER overlaps home indicator */}
       <footer 
