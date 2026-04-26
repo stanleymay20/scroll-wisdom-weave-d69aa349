@@ -9,6 +9,17 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+const MAX_DESCRIPTION = 1000;
+const ALLOWED_REASONS = new Set([
+  "hate_speech",
+  "explicit",
+  "copyright",
+  "misinformation",
+  "violence",
+  "spam",
+  "other",
+]);
+
 interface ReportContentDialogProps {
   contentType: "book" | "chapter" | "comment";
   contentId: string;
