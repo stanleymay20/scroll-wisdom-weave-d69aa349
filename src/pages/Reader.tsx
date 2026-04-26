@@ -17,6 +17,7 @@
 
 import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { useParams, useNavigate } from "react-router-dom";
+import { lazy, Suspense } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -50,23 +51,25 @@ import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { ContentDisclaimer } from "@/components/legal/ContentDisclaimer";
 import { CognitiveLevelSelector, COGNITIVE_LEVELS } from "@/components/reader/CognitiveLevelSelector";
 import { GuidedReadingMode, CognitiveLevelIndicator } from "@/components/reader/GuidedReadingMode";
-import { DeepResearchPanel } from "@/components/academic/DeepResearchPanel";
+// Heavy panels lazy-loaded on demand to keep Reader entry chunk small
+const DeepResearchPanel = lazy(() => import("@/components/academic/DeepResearchPanel").then(m => ({ default: m.DeepResearchPanel })));
 import { AcademicModeIndicator } from "@/components/academic/AcademicModeIndicator";
 import { AcademicDisclaimer } from "@/components/academic/AcademicDisclaimer";
-import { InteractiveQA } from "@/components/reader/InteractiveQA";
-import { VoiceConversation } from "@/components/reader/VoiceConversation";
+const InteractiveQA = lazy(() => import("@/components/reader/InteractiveQA").then(m => ({ default: m.InteractiveQA })));
+const VoiceConversation = lazy(() => import("@/components/reader/VoiceConversation").then(m => ({ default: m.VoiceConversation })));
 import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode } from "@/components/reader/QuizMode";
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
-import { CodePlayground } from "@/components/reader/CodePlayground";
+const CodePlayground = lazy(() => import("@/components/reader/CodePlayground").then(m => ({ default: m.CodePlayground })));
 
-import { PreviouslyInBookCard, ReadingSessionTimer, DirectTextEditor } from "@/components/reader";
+import { PreviouslyInBookCard, ReadingSessionTimer } from "@/components/reader";
 import { ReaderToolsSheet } from "@/components/reader/ReaderToolsSheet";
-import { ChapterVideoGenerator } from "@/components/reader/ChapterVideoGenerator";
-import { FlashcardGenerator } from "@/components/decks/FlashcardGenerator";
-import { StudyMusicPlayer } from "@/components/audio/StudyMusicPlayer";
-import { LearningDeckGenerator } from "@/components/decks/LearningDeckGenerator";
+const DirectTextEditor = lazy(() => import("@/components/reader/DirectTextEditor").then(m => ({ default: m.DirectTextEditor })));
+const ChapterVideoGenerator = lazy(() => import("@/components/reader/ChapterVideoGenerator").then(m => ({ default: m.ChapterVideoGenerator })));
+const FlashcardGenerator = lazy(() => import("@/components/decks/FlashcardGenerator").then(m => ({ default: m.FlashcardGenerator })));
+const StudyMusicPlayer = lazy(() => import("@/components/audio/StudyMusicPlayer").then(m => ({ default: m.StudyMusicPlayer })));
+const LearningDeckGenerator = lazy(() => import("@/components/decks/LearningDeckGenerator").then(m => ({ default: m.LearningDeckGenerator })));
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSettings } from "@/contexts/SettingsContext";
@@ -84,7 +87,7 @@ import { SocraticTutorPulse } from "@/components/reader/SocraticTutorPulse";
 import { AdaptiveLearningPath } from "@/components/reader/AdaptiveLearningPath";
 import { PresenceAvatars } from "@/components/reader/PresenceAvatars";
 import { useEditorPresence } from "@/hooks/useCollaboration";
-import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
+const KnowledgeGraphPanel = lazy(() => import("@/components/reader/KnowledgeGraphPanel").then(m => ({ default: m.KnowledgeGraphPanel })));
 import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecommendation } from "@/lib/adaptiveLearningEngine";
 import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
 import { useGamification } from "@/hooks/useGamification";
@@ -1520,6 +1523,10 @@ export default function Reader() {
       )}
 
 
+      {/* Lazy-loaded heavy panels — keeps Reader entry chunk small.
+          Each panel only mounts when its show* flag is true, so Suspense
+          fallback is null (panels are off-screen until requested). */}
+      <Suspense fallback={null}>
       <AnimatePresence>
         {showReferences && chapter?.chapter_references && (
           <DeepResearchPanel
@@ -2005,6 +2012,7 @@ export default function Reader() {
           <StudyMusicPlayer autoExpand />
         </div>
       )}
+      </Suspense>
 
       {/* CONTRACT 5.2: Navigation Footer with HARD safe area inset - NEVER overlaps home indicator */}
       <footer 
