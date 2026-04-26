@@ -19,6 +19,7 @@ import {
   signUpFallback,
   withTransientRetry,
 } from "@/lib/authResilience";
+import { emailSchema, passwordSchema, validateInput } from "@/lib/validation";
 
 
 type AuthMode = "login" | "signup" | "forgot-password" | "magic-link" | "reset-password";
@@ -231,6 +232,33 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
     const safeEmail = normalizeEmail(email);
     const safePassword = normalizePassword(password);
     const safeNewPassword = normalizePassword(newPassword);
+
+    // Pre-flight client-side validation (server-side via Supabase still applies)
+    const failValidation = (msg: string) => {
+      setIsLoading(false);
+      setAuthError(msg);
+    };
+    if (mode === "login" || mode === "signup" || mode === "magic-link" || mode === "forgot-password") {
+      const emailCheck = validateInput(emailSchema, safeEmail);
+      if (emailCheck.success === false) {
+        failValidation(emailCheck.errors[0] ?? "Please enter a valid email address.");
+        return;
+      }
+    }
+    if (mode === "login" || mode === "signup") {
+      const pwCheck = validateInput(passwordSchema, safePassword);
+      if (pwCheck.success === false) {
+        failValidation(pwCheck.errors[0] ?? "Password is invalid.");
+        return;
+      }
+    }
+    if (mode === "reset-password") {
+      const pwCheck = validateInput(passwordSchema, safeNewPassword);
+      if (pwCheck.success === false) {
+        failValidation(pwCheck.errors[0] ?? "Password is invalid.");
+        return;
+      }
+    }
 
     try {
       if (mode === "login") {

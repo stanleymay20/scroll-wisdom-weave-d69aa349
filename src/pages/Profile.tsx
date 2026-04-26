@@ -263,14 +263,20 @@ export default function Profile() {
 
   const handleSaveProfile = async () => {
     if (!user) return;
+
+    // Defence-in-depth field validation (RLS still enforces ownership)
+    const trimmedName = (editedProfile.full_name || "").trim().slice(0, 100);
+    const trimmedBio = (editedProfile.bio || "").trim().slice(0, 500);
+    const trimmedCountry = (editedProfile.country || "").trim().slice(0, 80);
+
     setIsSaving(true);
 
     const { error } = await supabase
       .from("profiles")
       .update({
-        full_name: editedProfile.full_name,
-        bio: editedProfile.bio,
-        country: editedProfile.country,
+        full_name: trimmedName,
+        bio: trimmedBio,
+        country: trimmedCountry,
         updated_at: new Date().toISOString(),
       })
       .or(`user_id.eq.${user.id},id.eq.${user.id}`);
@@ -423,8 +429,9 @@ export default function Profile() {
                   <Input
                     id="fullName"
                     value={editedProfile.full_name}
-                    onChange={(e) => setEditedProfile(p => ({ ...p, full_name: e.target.value }))}
+                    onChange={(e) => setEditedProfile(p => ({ ...p, full_name: e.target.value.slice(0, 100) }))}
                     className="bg-muted/50 border-border/50"
+                    maxLength={100}
                   />
                 </div>
                 <div className="space-y-2">
@@ -432,9 +439,10 @@ export default function Profile() {
                   <Input
                     id="country"
                     value={editedProfile.country}
-                    onChange={(e) => setEditedProfile(p => ({ ...p, country: e.target.value }))}
+                    onChange={(e) => setEditedProfile(p => ({ ...p, country: e.target.value.slice(0, 80) }))}
                     className="bg-muted/50 border-border/50"
                     placeholder="e.g., United States"
+                    maxLength={80}
                   />
                 </div>
               </div>
@@ -443,9 +451,10 @@ export default function Profile() {
                 <Textarea
                   id="bio"
                   value={editedProfile.bio}
-                  onChange={(e) => setEditedProfile(p => ({ ...p, bio: e.target.value }))}
+                  onChange={(e) => setEditedProfile(p => ({ ...p, bio: e.target.value.slice(0, 500) }))}
                   className={cn("bg-muted/50 border-border/50", isMobile ? "min-h-[80px]" : "min-h-[100px]")}
                   placeholder={t('profile.bioPlaceholder')}
+                  maxLength={500}
                 />
               </div>
               <Button onClick={handleSaveProfile} disabled={isSaving} className={isMobile ? "w-full" : ""}>

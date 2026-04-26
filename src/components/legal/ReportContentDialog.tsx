@@ -9,6 +9,17 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+const MAX_DESCRIPTION = 1000;
+const ALLOWED_REASONS = new Set([
+  "hate_speech",
+  "explicit",
+  "copyright",
+  "misinformation",
+  "violence",
+  "spam",
+  "other",
+]);
+
 interface ReportContentDialogProps {
   contentType: "book" | "chapter" | "comment";
   contentId: string;
@@ -50,6 +61,17 @@ export function ReportContentDialog({
       return;
     }
 
+    // Defence-in-depth validation (RLS + DB constraints are the source of truth)
+    if (!ALLOWED_REASONS.has(reason)) {
+      toast({
+        title: t('report.selectReason'),
+        description: t('report.selectReasonDesc'),
+        variant: "destructive",
+      });
+      return;
+    }
+    const safeDescription = description.trim().slice(0, MAX_DESCRIPTION) || null;
+
     setIsSubmitting(true);
 
     try {
@@ -62,7 +84,7 @@ export function ReportContentDialog({
           content_type: contentType,
           content_id: contentId,
           reason,
-          description: description || null,
+          description: safeDescription,
         });
 
       if (error) throw error;
@@ -141,10 +163,14 @@ export function ReportContentDialog({
               <Textarea
                 id="description"
                 value={description}
-                onChange={(e) => setDescription(e.target.value)}
+                onChange={(e) => setDescription(e.target.value.slice(0, MAX_DESCRIPTION))}
                 placeholder={t('report.detailsPlaceholder')}
                 className="min-h-[80px] bg-muted/50 border-border/50"
+                maxLength={MAX_DESCRIPTION}
               />
+              <p className="text-xs text-muted-foreground text-right" aria-live="polite">
+                {description.length}/{MAX_DESCRIPTION}
+              </p>
             </div>
           </div>
         )}
