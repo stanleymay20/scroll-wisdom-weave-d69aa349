@@ -200,9 +200,9 @@ const App = () => (
                   <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
                   <Route path="/organizations/analytics" element={<ProtectedRoute><OrgAnalytics /></ProtectedRoute>} />
                   <Route path="/verify-certificate" element={<VerifyLookup />} />
-                  <Route path="/book/:bookId/citation-graph" element={<ProtectedRoute><CitationGraph /></ProtectedRoute>} />
-                  <Route path="/study" element={<ProtectedRoute><StudySession /></ProtectedRoute>} />
-                  <Route path="/cognition" element={<ProtectedRoute><Cognition /></ProtectedRoute>} />
+                  <Route path="/book/:bookId/citation-graph" element={withRecovery('CitationGraph', <ProtectedRoute><CitationGraph /></ProtectedRoute>)} />
+                  <Route path="/study" element={withRecovery('StudySession', <ProtectedRoute><StudySession /></ProtectedRoute>)} />
+                  <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />
                   <Route path="/account/data-export" element={<ProtectedRoute><DataExport /></ProtectedRoute>} />
                   
                   {/* 404 - eager loaded */}
