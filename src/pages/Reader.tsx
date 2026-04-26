@@ -63,12 +63,13 @@ import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 const CodePlayground = lazy(() => import("@/components/reader/CodePlayground").then(m => ({ default: m.CodePlayground })));
 
-import { PreviouslyInBookCard, ReadingSessionTimer, DirectTextEditor } from "@/components/reader";
+import { PreviouslyInBookCard, ReadingSessionTimer } from "@/components/reader";
 import { ReaderToolsSheet } from "@/components/reader/ReaderToolsSheet";
-import { ChapterVideoGenerator } from "@/components/reader/ChapterVideoGenerator";
-import { FlashcardGenerator } from "@/components/decks/FlashcardGenerator";
-import { StudyMusicPlayer } from "@/components/audio/StudyMusicPlayer";
-import { LearningDeckGenerator } from "@/components/decks/LearningDeckGenerator";
+const DirectTextEditor = lazy(() => import("@/components/reader/DirectTextEditor").then(m => ({ default: m.DirectTextEditor })));
+const ChapterVideoGenerator = lazy(() => import("@/components/reader/ChapterVideoGenerator").then(m => ({ default: m.ChapterVideoGenerator })));
+const FlashcardGenerator = lazy(() => import("@/components/decks/FlashcardGenerator").then(m => ({ default: m.FlashcardGenerator })));
+const StudyMusicPlayer = lazy(() => import("@/components/audio/StudyMusicPlayer").then(m => ({ default: m.StudyMusicPlayer })));
+const LearningDeckGenerator = lazy(() => import("@/components/decks/LearningDeckGenerator").then(m => ({ default: m.LearningDeckGenerator })));
 import { CitationStyle, AcademicSource } from "@/lib/citations";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useSettings } from "@/contexts/SettingsContext";
