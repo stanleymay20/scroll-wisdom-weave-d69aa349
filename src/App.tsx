@@ -11,6 +11,7 @@ import { useEffect, Suspense, lazy } from "react";
 import { PWAInstallPrompt, OfflineIndicator } from "@/components/pwa";
 import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
 import { ErrorBoundary, SectionErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorBoundaryWithRecovery } from "@/components/ErrorBoundaryWithRecovery";
 import { DiagnosticsPanel } from "@/components/system/DiagnosticsPanel";
 import { ReEngagementBanner } from "@/components/gamification/ReEngagementBanner";
 import { GlobalAudioPlayer } from "@/components/audio/GlobalAudioPlayer";
