@@ -61,7 +61,7 @@ import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode } from "@/components/reader/QuizMode";
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
-import { CodePlayground } from "@/components/reader/CodePlayground";
+const CodePlayground = lazy(() => import("@/components/reader/CodePlayground").then(m => ({ default: m.CodePlayground })));
 
 import { PreviouslyInBookCard, ReadingSessionTimer, DirectTextEditor } from "@/components/reader";
 import { ReaderToolsSheet } from "@/components/reader/ReaderToolsSheet";
