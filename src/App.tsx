@@ -191,10 +191,10 @@ const App = () => (
                   <Route path="/admin-recovery" element={<ProtectedRoute><AdminRecovery /></ProtectedRoute>} />
                   <Route path="/pmf" element={<AdminRoute><PMFDashboard /></AdminRoute>} />
                   <Route path="/audit-dashboard" element={<AdminRoute><AuditDashboard /></AdminRoute>} />
-                  <Route path="/upload" element={<ProtectedRoute><UploadPage /></ProtectedRoute>} />
-                  <Route path="/dashboard/mastery" element={<ProtectedRoute><MasteryDashboard /></ProtectedRoute>} />
+                  <Route path="/upload" element={withRecovery('Upload', <ProtectedRoute><UploadPage /></ProtectedRoute>)} />
+                  <Route path="/dashboard/mastery" element={withRecovery('MasteryDashboard', <ProtectedRoute><MasteryDashboard /></ProtectedRoute>)} />
                   <Route path="/docs/mastery-model" element={<MasteryModel />} />
-                  <Route path="/quick-learn" element={<QuickLearn />} />
+                  <Route path="/quick-learn" element={withRecovery('QuickLearn', <QuickLearn />)} />
                   <Route path="/experiments" element={<AdminRoute><ExperimentReport /></AdminRoute>} />
                   <Route path="/admin/ops" element={<AdminRoute><AdminOps /></AdminRoute>} />
                   <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
