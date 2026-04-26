@@ -19,6 +19,7 @@ import {
   signUpFallback,
   withTransientRetry,
 } from "@/lib/authResilience";
+import { emailSchema, passwordSchema, validateInput } from "@/lib/validation";
 
 
 type AuthMode = "login" | "signup" | "forgot-password" | "magic-link" | "reset-password";
