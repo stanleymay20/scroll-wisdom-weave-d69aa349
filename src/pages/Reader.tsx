@@ -87,7 +87,7 @@ import { SocraticTutorPulse } from "@/components/reader/SocraticTutorPulse";
 import { AdaptiveLearningPath } from "@/components/reader/AdaptiveLearningPath";
 import { PresenceAvatars } from "@/components/reader/PresenceAvatars";
 import { useEditorPresence } from "@/hooks/useCollaboration";
-import { KnowledgeGraphPanel } from "@/components/reader/KnowledgeGraphPanel";
+const KnowledgeGraphPanel = lazy(() => import("@/components/reader/KnowledgeGraphPanel").then(m => ({ default: m.KnowledgeGraphPanel })));
 import { computeAdaptiveRecommendation, defaultLearnerState, type AdaptiveRecommendation } from "@/lib/adaptiveLearningEngine";
 import { ReflectionPause } from "@/components/reader/GuidedReadingMode";
 import { useGamification } from "@/hooks/useGamification";
