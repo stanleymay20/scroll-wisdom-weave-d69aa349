@@ -61,6 +61,17 @@ export function ReportContentDialog({
       return;
     }
 
+    // Defence-in-depth validation (RLS + DB constraints are the source of truth)
+    if (!ALLOWED_REASONS.has(reason)) {
+      toast({
+        title: t('report.selectReason'),
+        description: t('report.selectReasonDesc'),
+        variant: "destructive",
+      });
+      return;
+    }
+    const safeDescription = description.trim().slice(0, MAX_DESCRIPTION) || null;
+
     setIsSubmitting(true);
 
     try {
@@ -73,7 +84,7 @@ export function ReportContentDialog({
           content_type: contentType,
           content_id: contentId,
           reason,
-          description: description || null,
+          description: safeDescription,
         });
 
       if (error) throw error;
