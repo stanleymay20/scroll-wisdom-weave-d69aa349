@@ -1,47 +1,96 @@
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+import {
+  preflight,
+  json,
+  serverError,
+  requireUser,
+  validateBody,
+  enforceRateLimit,
+  z,
+} from "../_shared/http.ts";
+
+const BodySchema = z.object({
+  url: z.string().min(4).max(2048),
+});
+
+// Block private / link-local / metadata IP ranges to prevent SSRF
+// against the Supabase platform or other internal services.
+const PRIVATE_HOSTS = [
+  /^localhost$/i,
+  /^127\./,
+  /^10\./,
+  /^192\.168\./,
+  /^169\.254\./, // link-local + metadata
+  /^172\.(1[6-9]|2[0-9]|3[0-1])\./,
+  /^0\./,
+  /^::1$/,
+  /^fc00:/i,
+  /^fd00:/i,
+];
+
+function isUnsafeUrl(raw: string): { ok: false; reason: string } | { ok: true; url: URL } {
+  let formatted = raw.trim();
+  if (!formatted.startsWith("http://") && !formatted.startsWith("https://")) {
+    formatted = `https://${formatted}`;
+  }
+  let parsed: URL;
+  try {
+    parsed = new URL(formatted);
+  } catch {
+    return { ok: false, reason: "Invalid URL" };
+  }
+  if (parsed.protocol !== "http:" && parsed.protocol !== "https:") {
+    return { ok: false, reason: "Only http(s) URLs are allowed" };
+  }
+  const host = parsed.hostname;
+  if (PRIVATE_HOSTS.some((re) => re.test(host))) {
+    return { ok: false, reason: "Private or loopback hosts are blocked" };
+  }
+  return { ok: true, url: parsed };
+}
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const pre = preflight(req);
+  if (pre) return pre;
 
   try {
-    const { url } = await req.json();
+    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-    if (!url) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'URL is required' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
+
+    // Limit external scrapes to prevent abuse / runaway costs.
+    const limited = enforceRateLimit({
+      name: "firecrawl-scrape",
+      key: auth.userId,
+      limit: 30,
+      windowSec: 60,
+    });
+    if (limited) return limited;
+
+    const body = await validateBody(req, BodySchema);
+    if (body instanceof Response) return body;
+
+    const check = isUnsafeUrl(body.url);
+    if (!check.ok) {
+      return json({ success: false, error: check.reason, code: "unsafe_url" }, 400);
     }
 
-    const apiKey = Deno.env.get('FIRECRAWL_API_KEY');
+    const apiKey = Deno.env.get("FIRECRAWL_API_KEY");
     if (!apiKey) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Firecrawl not configured' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return json({ success: false, error: "Firecrawl not configured" }, 500);
     }
 
-    let formattedUrl = url.trim();
-    if (!formattedUrl.startsWith('http://') && !formattedUrl.startsWith('https://')) {
-      formattedUrl = `https://${formattedUrl}`;
-    }
+    console.log("[firecrawl-scrape] scraping", { userId: auth.userId, host: check.url.hostname });
 
-    console.log('Scraping URL:', formattedUrl);
-
-    const response = await fetch('https://api.firecrawl.dev/v1/scrape', {
-      method: 'POST',
+    const response = await fetch("https://api.firecrawl.dev/v1/scrape", {
+      method: "POST",
       headers: {
-        'Authorization': `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
+        "Authorization": `Bearer ${apiKey}`,
+        "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        url: formattedUrl,
-        formats: ['markdown'],
+        url: check.url.toString(),
+        formats: ["markdown"],
         onlyMainContent: true,
       }),
     });
@@ -49,25 +98,19 @@ Deno.serve(async (req) => {
     const data = await response.json();
 
     if (!response.ok) {
-      console.error('Firecrawl API error:', data);
-      return new Response(
-        JSON.stringify({ success: false, error: data.error || `Request failed with status ${response.status}` }),
-        { status: response.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      console.error("[firecrawl-scrape] api error", { status: response.status });
+      return json(
+        { success: false, error: data?.error || `Request failed with status ${response.status}` },
+        response.status >= 400 && response.status < 600 ? response.status : 502,
       );
     }
 
-    const markdown = data?.data?.markdown || data?.markdown || '';
-    const title = data?.data?.metadata?.title || data?.metadata?.title || '';
+    const markdown = data?.data?.markdown || data?.markdown || "";
+    const title = data?.data?.metadata?.title || data?.metadata?.title || "";
 
-    return new Response(
-      JSON.stringify({ success: true, markdown, title }),
-      { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
-  } catch (error) {
-    console.error('Error scraping:', error);
-    return new Response(
-      JSON.stringify({ success: false, error: error instanceof Error ? error.message : 'Failed to scrape' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    return json({ success: true, markdown, title });
+  } catch (err) {
+    console.error("[firecrawl-scrape] unexpected error", err);
+    return serverError(err);
   }
 });
