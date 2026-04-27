@@ -124,7 +124,7 @@ serve(async (req) => {
       length: body.content.length,
     });
 
-    const result = analyzeContent(body.content, body.title);
+    const result = analyzeContent(body.content, body.title ?? "");
 
     if (result.flagged && body.contentId) {
       try {
