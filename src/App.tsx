@@ -21,6 +21,8 @@ import { SkeletonPage } from "@/components/ui/page-shell";
 import { InlineSplash } from "@/components/brand";
 import { initContract5 } from "@/lib/contract5";
 import { installChunkReloadGuard } from "@/lib/chunkReloadGuard";
+import { initObservability } from "@/lib/observability";
+import { RouteTelemetry } from "@/components/observability/RouteTelemetry";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 
@@ -126,6 +128,9 @@ function AppInitializer() {
     // CONTRACT 5: Initialize performance monitoring
     initContract5();
 
+    // PHASE 7: Initialize observability (Web Vitals, analytics sink, long-task warnings)
+    initObservability();
+
     logger.info('Application initialized');
   }, []);
   return null;
@@ -145,6 +150,8 @@ const App = () => (
             <OfflineIndicator />
             <PWAUpdateNotification />
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+              {/* PHASE 7: Per-navigation telemetry (logs route changes + dwell time) */}
+              <RouteTelemetry />
               {/* PERFORMANCE: Use InlineSplash for branded visual feedback during lazy load */}
               {/* Inner ErrorBoundary keeps page crashes from killing the whole shell */}
               <ErrorBoundary context="Routes">
