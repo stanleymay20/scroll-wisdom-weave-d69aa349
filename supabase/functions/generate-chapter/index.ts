@@ -2036,7 +2036,7 @@ function getFieldSpecificInstructions(category: string): string {
   return instructions[category.toLowerCase()] || instructions.default;
 }
 
-function buildAcademicSystemPrompt(language: string, category: string, citationStyle: string): string {
+function buildAcademicSystemPrompt(language: string, category: string, citationStyle: string, chapterNumber: number = 1, targetWords: number = 3000): string {
   return `You are ScrollLibrary — ACADEMIC/SCHOLARLY PIPELINE.
 
 GENERATOR IDENTITY: University Lecturer · Research Scholar · Technical Author
@@ -2605,7 +2605,7 @@ serve(async (req) => {
         .eq("id", chapter.book_id)
         .single();
 
-      bookDetails = book;
+      bookDetails = book as typeof bookDetails;
 
       if (book && book.creator_id !== user.id && !isAdmin) {
         return new Response(JSON.stringify({ error: "Not authorized" }), {
@@ -4310,7 +4310,7 @@ BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
       // Detect if this illustrated book is academic
       const ILLUSTRATED_ACADEMIC_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'economics', 'finance', 'governance', 'history', 'philosophy'];
       const isIllustratedAcademic = !isChildrens && (
-        academicMode === true ||
+        Boolean(academicMode) ||
         ILLUSTRATED_ACADEMIC_CATEGORIES.includes(category?.toLowerCase())
       );
       
