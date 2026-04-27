@@ -24,6 +24,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Logo } from '@/components/brand';
 import { cn } from '@/lib/utils';
 
+import { SEO } from "@/components/SEO";
 // Current schema version - increment on breaking changes
 const SCHEMA_VERSION = '7.0';
 const LAST_UPDATED = '2026-01-17';
@@ -33,6 +34,11 @@ export default function VerificationDocs() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
+      <SEO
+        title="Certificate Verification | ScrollLibrary"
+        description="Public verification documentation for ScrollLibrary mastery certificates. APIs, hash format, and how employers can verify any credential."
+        canonical="/docs/verification"
+      />
       {/* Header */}
       <header className="border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">

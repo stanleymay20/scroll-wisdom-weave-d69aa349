@@ -20,6 +20,7 @@ import {
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
+import { SEO } from "@/components/SEO";
 const handlePrint = () => {
   window.print();
 };
@@ -27,6 +28,11 @@ const handlePrint = () => {
 export default function InstitutionalReadiness() {
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title="Institutional Readiness | ScrollLibrary"
+        description="Enterprise-grade learning infrastructure: SCORM 1.2 export, organization analytics, audit trails, and SAML SSO support for institutions."
+        canonical="/docs/institutional-readiness"
+      />
       <Navbar />
       
       <main className="container mx-auto px-4 py-16 max-w-4xl">

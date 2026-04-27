@@ -4,6 +4,7 @@ import { motion } from "framer-motion";
 import { Home, ArrowLeft, Search } from "lucide-react";
 import { Button } from "@/components/ui/button";
 
+import { SEO } from "@/components/SEO";
 // UUID v4 pattern
 const UUID_REGEX = /^\/([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})\/?$/i;
 
@@ -24,6 +25,11 @@ const NotFound = () => {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-background">
+      <SEO
+        title="Page Not Found | ScrollLibrary"
+        description="The page you're looking for doesn't exist or has been moved."
+        noindex
+      />
       <motion.div
         initial={{ opacity: 0, y: 20 }}
         animate={{ opacity: 1, y: 0 }}

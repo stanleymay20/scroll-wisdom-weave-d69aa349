@@ -36,6 +36,7 @@ import { apiCache } from "@/lib/cache";
 import { usePagePerformance } from "@/lib/performance";
 import { markFirstContent, markInteractive } from "@/lib/contract5";
 
+import { SEO } from "@/components/SEO";
 const CATEGORIES = [
   "all",
   "technology",
@@ -74,6 +75,11 @@ function BookGridSkeleton({ count = 8, mobile = false }: { count?: number; mobil
   if (mobile) {
     return (
       <div className="grid grid-cols-2 gap-4">
+      <SEO
+        title="Explore Public Books | ScrollLibrary"
+        description="Browse AI-generated learning books published by the ScrollLibrary community across hundreds of subjects."
+        canonical="/explore"
+      />
         {Array.from({ length: count }).map((_, i) => (
           <div key={i} className="space-y-2">
             <Skeleton className="aspect-[3/4] rounded-xl" />

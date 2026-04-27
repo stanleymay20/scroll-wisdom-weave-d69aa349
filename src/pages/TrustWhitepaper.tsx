@@ -6,6 +6,7 @@ import { FileText, Download, ExternalLink, Shield, CheckCircle, AlertTriangle, X
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 
+import { SEO } from "@/components/SEO";
 const WHITEPAPER_VERSION = "2.0";
 const PUBLICATION_DATE = "February 2026";
 
@@ -16,6 +17,11 @@ export default function TrustWhitepaper() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title="Trust Whitepaper | ScrollLibrary"
+        description="How ScrollLibrary delivers verifiable, anti-gaming AI learning. Architecture, integrity controls, and audit standards behind every certificate."
+        canonical="/docs/trust-whitepaper"
+      />
       <Navbar />
       
       <main className="container mx-auto px-4 py-8 pt-24 max-w-4xl print:pt-0 print:max-w-none">

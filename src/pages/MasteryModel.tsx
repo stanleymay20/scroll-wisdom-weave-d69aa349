@@ -15,9 +15,15 @@ import {
 } from "lucide-react";
 import { MASTERY_THRESHOLDS, ANTI_GAMING, BLOOM_WEIGHTS, BLOOM_DISTRIBUTION_REQUIREMENTS, INSTITUTIONAL_MODE } from "@/lib/masteryEngine";
 
+import { SEO } from "@/components/SEO";
 export default function MasteryModel() {
   return (
     <div className="min-h-screen flex flex-col">
+      <SEO
+        title="Mastery Model Whitepaper | ScrollLibrary"
+        description="The cognitive science behind ScrollLibrary's 5-layer Cognitive Assimilation System and adaptive remediation engine."
+        canonical="/docs/mastery-model"
+      />
       <Navbar />
       <main className="flex-1 pt-24 pb-16 container mx-auto px-4 max-w-4xl">
         <div className="space-y-8">

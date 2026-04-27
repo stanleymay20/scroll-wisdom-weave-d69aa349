@@ -13,6 +13,7 @@ import { SUBSCRIPTION_TIERS, SubscriptionTier } from "@/lib/subscription";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 
+import { SEO } from "@/components/SEO";
 interface PlanConfig {
   name: string;
   description: string;
@@ -191,6 +192,11 @@ export default function Pricing() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SEO
+        title="Pricing | ScrollLibrary"
+        description="Simple plans for learners, students, and institutions. Generate AI-powered books, earn verified mastery certificates, and access institutional reporting."
+        canonical="/pricing"
+      />
       <Navbar />
       
       <main className="flex-1 pt-24 pb-16">

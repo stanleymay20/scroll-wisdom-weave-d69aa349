@@ -2,6 +2,7 @@ import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
 import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
+import { SEO } from "@/components/SEO";
 import { 
   Book, Brain, Sparkles, Users, Globe, Award,
   Target, Lightbulb, Shield, GraduationCap, AlertTriangle,
@@ -41,6 +42,11 @@ export default function About() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SEO
+        title="About ScrollLibrary | AI Cognitive Mastery Platform"
+        description="Learn how ScrollLibrary uses Bloom-weighted AI assessments and cryptographic mastery records to certify what you actually understand."
+        canonical="/about"
+      />
       <Navbar />
       
       <main className="flex-1 pt-24 pb-16">
