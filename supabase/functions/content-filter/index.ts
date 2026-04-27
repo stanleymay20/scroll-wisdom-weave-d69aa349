@@ -1,12 +1,22 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import {
+  preflight,
+  json,
+  serverError,
+  requireUser,
+  validateBody,
+  enforceRateLimit,
+  serviceClient,
+  z,
+} from "../_shared/http.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+const BodySchema = z.object({
+  content: z.string().min(1).max(200_000),
+  title: z.string().max(500).optional().default(""),
+  contentType: z.string().max(64).optional().default("unknown"),
+  contentId: z.string().uuid().optional(),
+});
 
-// Harmful content patterns (basic implementation - production would use ML)
 const harmfulPatterns = {
   hate_speech: [
     /\b(hate|kill|murder)\s+(all\s+)?(jews|muslims|christians|blacks|whites|gays|women|men)\b/gi,
@@ -28,7 +38,6 @@ const harmfulPatterns = {
   ],
 };
 
-// Content categories requiring disclaimers
 const disclaimerCategories = {
   medical: [/\b(diagnosis|treatment|medication|prescription|surgery|disease|illness)\b/gi],
   legal: [/\b(legal\s+advice|lawsuit|litigation|court|attorney|lawyer)\b/gi],
@@ -44,8 +53,8 @@ interface ContentFilterResult {
   autoReject: boolean;
 }
 
-function analyzeContent(text: string, title: string = ""): ContentFilterResult {
-  const combinedText = `${title} ${text}`.toLowerCase();
+function analyzeContent(text: string, title: string): ContentFilterResult {
+  const combined = `${title} ${text}`.toLowerCase();
   const result: ContentFilterResult = {
     approved: true,
     flagged: false,
@@ -55,13 +64,11 @@ function analyzeContent(text: string, title: string = ""): ContentFilterResult {
     autoReject: false,
   };
 
-  // Check for harmful content
   for (const [category, patterns] of Object.entries(harmfulPatterns)) {
     for (const pattern of patterns) {
-      if (pattern.test(combinedText)) {
+      if (pattern.test(combined)) {
         result.flagged = true;
         result.reasons.push(category);
-        
         if (category === "hate_speech" || category === "explicit") {
           result.severity = "critical";
           result.autoReject = true;
@@ -74,79 +81,69 @@ function analyzeContent(text: string, title: string = ""): ContentFilterResult {
     }
   }
 
-  // Check for disclaimer-requiring content
   for (const [category, patterns] of Object.entries(disclaimerCategories)) {
     for (const pattern of patterns) {
-      if (pattern.test(combinedText)) {
+      if (pattern.test(combined)) {
         result.disclaimersNeeded.push(category);
         break;
       }
     }
   }
 
-  // Set approved status
   result.approved = !result.autoReject;
-
-  // If flagged but not auto-rejected, mark for review
   if (result.flagged && !result.autoReject) {
     result.severity = result.severity === "low" ? "medium" : result.severity;
   }
-
   return result;
 }
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const pre = preflight(req);
+  if (pre) return pre;
 
   try {
-    const { content, title, contentType, contentId, userId } = await req.json();
+    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-    if (!content) {
-      return new Response(
-        JSON.stringify({ error: "Content is required" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
 
-    console.log(`Filtering content: ${title || "untitled"} (${contentType})`);
+    const limited = enforceRateLimit({
+      name: "content-filter",
+      key: auth.userId,
+      limit: 60,
+      windowSec: 60,
+    });
+    if (limited) return limited;
 
-    const result = analyzeContent(content, title);
+    const body = await validateBody(req, BodySchema);
+    if (body instanceof Response) return body;
 
-    // If flagged, add to moderation queue
-    if (result.flagged && contentId) {
-      const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-      const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    console.log("[content-filter] analyzing", {
+      userId: auth.userId,
+      contentType: body.contentType,
+      length: body.content.length,
+    });
 
-      if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
-        const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    const result = analyzeContent(body.content, body.title ?? "");
 
-        await supabase.from("moderation_queue").insert({
-          content_type: contentType || "unknown",
-          content_id: contentId,
+    if (result.flagged && body.contentId) {
+      try {
+        const admin = serviceClient();
+        await admin.from("moderation_queue").insert({
+          content_type: body.contentType,
+          content_id: body.contentId,
           flagged_reason: result.reasons.join(", "),
-          auto_flagged: true,
           severity: result.severity,
           status: result.autoReject ? "auto_rejected" : "pending",
         });
-
-        console.log(`Content added to moderation queue: ${contentId}`);
+      } catch (qerr) {
+        console.error("[content-filter] moderation queue insert failed", qerr);
       }
     }
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        result,
-      }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
-  } catch (error) {
-    console.error("Content filter error:", error);
-    return new Response(
-      JSON.stringify({ error: error instanceof Error ? error.message : "Unknown error" }),
-      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-    );
+    return json({ success: true, result });
+  } catch (err) {
+    console.error("[content-filter] error", err);
+    return serverError(err);
   }
 });

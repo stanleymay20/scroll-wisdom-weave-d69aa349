@@ -1,28 +1,46 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import {
+  preflight,
+  json,
+  serverError,
+  requireUser,
+  validateBody,
+  enforceRateLimit,
+  z,
+} from "../_shared/http.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
+const BodySchema = z.object({
+  question: z.string().min(1).max(4000),
+  answer: z.string().min(1).max(8000),
+  chapterTitle: z.string().max(500).optional().default("Unknown"),
+  bookTitle: z.string().max(500).optional().default("Unknown"),
+});
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const pre = preflight(req);
+  if (pre) return pre;
 
   try {
-    const { question, answer, chapterTitle, bookTitle } = await req.json();
+    if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
 
-    if (!question || !answer) {
-      return new Response(JSON.stringify({ error: "Missing question or answer" }), {
-        status: 400,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
+
+    // Each grading call is an AI request — cap to prevent runaway billing.
+    const limited = enforceRateLimit({
+      name: "grade-think-answer",
+      key: auth.userId,
+      limit: 30,
+      windowSec: 60,
+    });
+    if (limited) return limited;
+
+    const body = await validateBody(req, BodySchema);
+    if (body instanceof Response) return body;
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
-      throw new Error("LOVABLE_API_KEY not configured");
+      return serverError(new Error("LOVABLE_API_KEY not configured"), "ai_misconfigured");
     }
 
     const systemPrompt = `You are a strict academic grader for ScrollLibrary. Grade the student's answer to a knowledge question.
@@ -41,7 +59,7 @@ RULES:
 - Short answers can still score 5 if they are precise and complete
 - Empty or gibberish answers always get 1
 
-Context: Book "${bookTitle || 'Unknown'}", Chapter "${chapterTitle || 'Unknown'}"
+Context: Book "${body.bookTitle}", Chapter "${body.chapterTitle}"
 
 Respond ONLY with valid JSON:
 {
@@ -60,43 +78,41 @@ Respond ONLY with valid JSON:
         model: "google/gemini-2.5-flash-lite",
         messages: [
           { role: "system", content: systemPrompt },
-          { role: "user", content: `Question: ${question}\n\nStudent's Answer: ${answer}` },
+          { role: "user", content: `Question: ${body.question}\n\nStudent's Answer: ${body.answer}` },
         ],
         temperature: 0.3,
         max_tokens: 200,
       }),
     });
 
+    if (response.status === 402) {
+      return json({ error: "AI credits exhausted", code: "credits_exhausted" }, 402);
+    }
+    if (response.status === 429) {
+      return json({ error: "AI provider rate-limited", code: "ai_rate_limited" }, 429);
+    }
     if (!response.ok) {
       const errText = await response.text();
-      console.error("[GRADE] AI API error:", errText);
-      throw new Error("AI grading failed");
+      console.error("[grade-think-answer] AI error", { status: response.status, errText });
+      return serverError(new Error("AI grading failed"), "ai_failed");
     }
 
     const data = await response.json();
-    const content = data.choices?.[0]?.message?.content || "";
+    const content: string = data.choices?.[0]?.message?.content || "";
 
-    // Parse JSON from response
-    const jsonMatch = content.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) {
-      throw new Error("Failed to parse AI response");
-    }
+    const match = content.match(/\{[\s\S]*\}/);
+    if (!match) return serverError(new Error("Failed to parse AI response"), "ai_parse_failed");
 
-    const result = JSON.parse(jsonMatch[0]);
-    const grade = Math.max(1, Math.min(5, Math.round(Number(result.grade) || 1)));
+    const parsed = JSON.parse(match[0]);
+    const grade = Math.max(1, Math.min(5, Math.round(Number(parsed.grade) || 1)));
 
-    return new Response(JSON.stringify({
+    return json({
       grade,
-      feedback: result.feedback || "No feedback available",
-      bloomLevel: result.bloomLevel || "remember",
-    }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
+      feedback: String(parsed.feedback || "No feedback available"),
+      bloomLevel: String(parsed.bloomLevel || "remember"),
     });
   } catch (err) {
-    console.error("[GRADE] Error:", err);
-    return new Response(JSON.stringify({ error: err.message || "Grading failed" }), {
-      status: 500,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
+    console.error("[grade-think-answer] error", err);
+    return serverError(err);
   }
 });

@@ -1,129 +1,97 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import {
+  preflight,
+  json,
+  forbidden,
+  serverError,
+  requireUser,
+  validateBody,
+  enforceRateLimit,
+  serviceClient,
+  z,
+} from "../_shared/http.ts";
 
-const corsHeaders = {
-  "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
-};
-
-const logStep = (step: string, details?: any) => {
-  const detailsStr = details ? ` - ${JSON.stringify(details)}` : '';
-  console.log(`[CLAIM-ADMIN] ${step}${detailsStr}`);
-};
+const ClaimSchema = z.object({
+  code: z.string().min(8).max(256),
+});
 
 serve(async (req) => {
-  if (req.method === "OPTIONS") {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const pre = preflight(req);
+  if (pre) return pre;
 
   try {
-    logStep("Function started");
+    if (req.method !== "POST") {
+      return json({ error: "Method not allowed" }, 405);
+    }
 
-    const supabaseUrl = Deno.env.get("SUPABASE_URL");
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const adminClaimCode = Deno.env.get("ADMIN_CLAIM_CODE");
-
-    if (!supabaseUrl || !supabaseServiceKey) {
-      throw new Error("Supabase configuration missing");
-    }
-
-    // If no claim code is set, provide instruction
     if (!adminClaimCode) {
-      logStep("No ADMIN_CLAIM_CODE set");
-      return new Response(
-        JSON.stringify({ 
+      return json(
+        {
           error: "Admin claim not configured. Set ADMIN_CLAIM_CODE secret first.",
-          instructions: "Add ADMIN_CLAIM_CODE secret in your backend settings."
-        }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 400 }
+          code: "not_configured",
+        },
+        400,
       );
     }
 
-    const { code } = await req.json();
-    logStep("Received claim request");
+    // Authenticate before parsing body to keep brute-force surface small.
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
 
-    if (code !== adminClaimCode) {
-      logStep("Invalid claim code provided");
-      return new Response(
-        JSON.stringify({ error: "Invalid claim code" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 403 }
-      );
-    }
-
-    // Get authenticated user with manual JWT validation
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader?.startsWith("Bearer ")) {
-      return new Response(
-        JSON.stringify({ error: "Not authenticated" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 }
-      );
-    }
-
-    const supabase = createClient(supabaseUrl, supabaseServiceKey, {
-      auth: { persistSession: false },
+    // Aggressive per-user limit — claim attempts should be rare.
+    const limited = enforceRateLimit({
+      name: "claim-admin",
+      key: auth.userId,
+      limit: 5,
+      windowSec: 600,
     });
+    if (limited) return limited;
 
-    const token = authHeader.replace("Bearer ", "");
-    
-    // Use getClaims for JWT validation
-    const { data: claimsData, error: claimsError } = await supabase.auth.getClaims(token);
-    if (claimsError || !claimsData?.claims) {
-      logStep("JWT validation failed", { error: claimsError?.message });
-      return new Response(
-        JSON.stringify({ error: "Invalid session" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 401 }
-      );
-    }
-    
-    // Also get user data for email logging
-    const { data: userData, error: userError } = await supabase.auth.getUser(token);
-    
-    if (userError || !userData.user) {
-      logStep("User fetch failed", { error: userError?.message });
+    const body = await validateBody(req, ClaimSchema);
+    if (body instanceof Response) return body;
+
+    // Constant-time comparison to defeat timing attacks.
+    if (!safeEqual(body.code, adminClaimCode)) {
+      console.warn("[claim-admin] invalid code attempt", { userId: auth.userId });
+      return forbidden("Invalid claim code");
     }
 
-    const userId = claimsData.claims.sub as string;
-    logStep("User authenticated", { userId, email: userData?.user?.email });
+    const admin = serviceClient();
 
-    // Check if user already has admin role
-    const { data: existingRole } = await supabase
+    const { data: existing } = await admin
       .from("user_roles")
       .select("id")
-      .eq("user_id", userId)
+      .eq("user_id", auth.userId)
       .eq("role", "admin")
       .maybeSingle();
 
-    if (existingRole) {
-      logStep("User already admin");
-      return new Response(
-        JSON.stringify({ success: true, message: "Already admin" }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-      );
+    if (existing) {
+      return json({ success: true, message: "Already admin" });
     }
 
-    // Insert admin role
-    const { error: insertError } = await supabase
+    const { error: insertError } = await admin
       .from("user_roles")
-      .insert({ user_id: userId, role: "admin" });
+      .insert({ user_id: auth.userId, role: "admin" });
 
     if (insertError) {
-      logStep("Failed to insert admin role", { error: insertError.message });
-      throw new Error(`Failed to grant admin: ${insertError.message}`);
+      console.error("[claim-admin] insert failed", insertError);
+      return serverError(new Error("Failed to grant admin"));
     }
 
-    logStep("Admin role granted successfully", { userId });
-
-    return new Response(
-      JSON.stringify({ success: true, message: "Admin access granted" }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200 }
-    );
-
-  } catch (error) {
-    const errorMessage = error instanceof Error ? error.message : String(error);
-    logStep("ERROR", { message: errorMessage });
-    return new Response(
-      JSON.stringify({ error: errorMessage }),
-      { headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 500 }
-    );
+    console.log("[claim-admin] admin granted", { userId: auth.userId });
+    return json({ success: true, message: "Admin access granted" });
+  } catch (err) {
+    console.error("[claim-admin] unexpected error", err);
+    return serverError(err);
   }
 });
+
+function safeEqual(a: string, b: string): boolean {
+  if (a.length !== b.length) return false;
+  let mismatch = 0;
+  for (let i = 0; i < a.length; i++) {
+    mismatch |= a.charCodeAt(i) ^ b.charCodeAt(i);
+  }
+  return mismatch === 0;
+}
