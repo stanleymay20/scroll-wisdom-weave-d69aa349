@@ -28,6 +28,7 @@ export type BookPipelineType =
   | 'comic'         // Comic / Graphic Novel
   | 'children'      // Children's Book
   | 'reference'     // Reference / Handbook
+  | 'devotional'    // Devotional / Spiritual
   | 'text';         // Standard Text (legacy)
 
 export const BOOK_TYPE_ROUTER = `

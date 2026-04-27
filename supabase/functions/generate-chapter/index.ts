@@ -2036,7 +2036,7 @@ function getFieldSpecificInstructions(category: string): string {
   return instructions[category.toLowerCase()] || instructions.default;
 }
 
-function buildAcademicSystemPrompt(language: string, category: string, citationStyle: string): string {
+function buildAcademicSystemPrompt(language: string, category: string, citationStyle: string, chapterNumber: number = 1, targetWords: number = 3000): string {
   return `You are ScrollLibrary — ACADEMIC/SCHOLARLY PIPELINE.
 
 GENERATOR IDENTITY: University Lecturer · Research Scholar · Technical Author
@@ -2605,7 +2605,7 @@ serve(async (req) => {
         .eq("id", chapter.book_id)
         .single();
 
-      bookDetails = book;
+      bookDetails = book as typeof bookDetails;
 
       if (book && book.creator_id !== user.id && !isAdmin) {
         return new Response(JSON.stringify({ error: "Not authorized" }), {
@@ -4310,7 +4310,7 @@ BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
       // Detect if this illustrated book is academic
       const ILLUSTRATED_ACADEMIC_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'economics', 'finance', 'governance', 'history', 'philosophy'];
       const isIllustratedAcademic = !isChildrens && (
-        academicMode === true ||
+        Boolean(academicMode) ||
         ILLUSTRATED_ACADEMIC_CATEGORIES.includes(category?.toLowerCase())
       );
       
@@ -4909,6 +4909,14 @@ BEGIN:`;
     const STRESS_TEST_EXEMPT_TYPES = ['comic', 'workbook', 'children'];
     const shouldStressTest = !STRESS_TEST_EXEMPT_TYPES.includes(effectiveBookType) && !editIntent && finalContent.length > 1500;
 
+    // Hoisted: needed by stress-test and compression passes (used in template strings below)
+    const PIPELINES_THAT_FORBID_CODE = ['bestseller', 'text', 'professional', 'reference', 'children', 'illustrated'];
+    const shouldStripCode = (
+      PIPELINES_THAT_FORBID_CODE.includes(effectiveBookType) ||
+      (isAcademicPipeline && !isCodeStemAcademic) ||
+      isMathStemAcademic
+    ) && !isCodeStemAcademic;
+
     if (shouldStressTest) {
       try {
         console.log(`[GENERATE-CHAPTER] Phase 3.5: Intellectual Stress-Test starting (${finalContent.length} chars)...`);
@@ -5154,15 +5162,7 @@ Return ONLY the improved chapter text. No preamble.` },
       });
     }
 
-    const PIPELINES_THAT_FORBID_CODE = ['bestseller', 'text', 'professional', 'reference', 'children', 'illustrated'];
-    const shouldStripCode = (
-      // Non-code book types
-      PIPELINES_THAT_FORBID_CODE.includes(effectiveBookType) ||
-      // Academic but non-code-STEM (math-stem uses equations, non-stem uses prose)
-      (isAcademicPipeline && !isCodeStemAcademic) ||
-      // MATH-STEM: equations yes, Python no
-      isMathStemAcademic
-    ) && !isCodeStemAcademic; // Never strip from code-STEM
+    // shouldStripCode + PIPELINES_THAT_FORBID_CODE hoisted above (near line 4910)
 
     if (shouldStripCode && finalContent) {
       // PHASE 1: Strip LABELED code blocks (```python, ```javascript, etc.)
@@ -5361,7 +5361,7 @@ Return ONLY the improved chapter text. No preamble.` },
 
 ## References
 
-${researchResult.references.map((ref, idx) => {
+${(researchResult?.references ?? []).map((ref, idx) => {
   switch (citationStyle) {
     case 'APA':
       return `${ref.author} (${ref.year}). *${ref.title}*.${ref.journal ? ` ${ref.journal}.` : ''}${ref.doi ? ` https://doi.org/${ref.doi}` : ref.url ? ` ${ref.url}` : ''}`;
@@ -5381,7 +5381,7 @@ ${researchResult.references.map((ref, idx) => {
 
       // Validate academic output
       const academicValidation = validateAcademicRequirements(
-        finalContent, researchResult.references, category, citationStyle
+        finalContent, researchResult?.references ?? [], category, citationStyle
       );
       
       if (academicValidation.blocked && !isAdmin) {
