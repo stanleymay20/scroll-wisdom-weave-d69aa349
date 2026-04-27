@@ -134,8 +134,9 @@ export function gateResponse(
 /**
  * Best-effort write to public.usage_gate_events. Never throws.
  */
+// deno-lint-ignore no-explicit-any
 export async function recordGateEvent(
-  supabase: { from: (t: string) => { insert: (row: unknown) => Promise<{ error: unknown }> } },
+  supabase: any,
   payload: {
     user_id: string;
     feature: string;
