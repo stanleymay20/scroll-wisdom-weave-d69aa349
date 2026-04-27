@@ -20,10 +20,8 @@ describe("validation", () => {
     });
 
     it("returns empty string for non-string input", () => {
-      // @ts-expect-error testing runtime safety
-      expect(sanitizeString(null)).toBe("");
-      // @ts-expect-error testing runtime safety
-      expect(sanitizeString(undefined)).toBe("");
+      expect(sanitizeString(null as unknown as string)).toBe("");
+      expect(sanitizeString(undefined as unknown as string)).toBe("");
     });
 
     it("encodes ampersands first to avoid double-encoding", () => {
