@@ -18,6 +18,7 @@ import {
 import { Link } from "react-router-dom";
 import { motion } from "framer-motion";
 
+import { SEO } from "@/components/SEO";
 export default function HowCertificationWorks() {
   const steps = [
     {
@@ -52,6 +53,11 @@ export default function HowCertificationWorks() {
 
   return (
     <div className="min-h-screen bg-background">
+      <SEO
+        title="How ScrollLibrary Certification Works"
+        description="Inside the 9-gate certification loop: Bloom-taxonomy assessments, anti-gaming integrity scoring, and SHA-256 cryptographic verification."
+        canonical="/docs/how-certification-works"
+      />
       <Navbar />
       
       <main className="container mx-auto px-4 py-16">

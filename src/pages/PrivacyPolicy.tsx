@@ -3,9 +3,15 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { Shield, Lock, Database, Globe, Mail, Phone, Trash2, Clock, Users } from "lucide-react";
 
+import { SEO } from "@/components/SEO";
 export default function PrivacyPolicy() {
   return (
     <div className="min-h-screen flex flex-col">
+      <SEO
+        title="Privacy Policy | ScrollLibrary"
+        description="How ScrollLibrary collects, uses, and protects your data. GDPR-compliant policy for learners and institutions."
+        canonical="/privacy"
+      />
       <Navbar />
       
       <main className="flex-1 pt-24 pb-16">

@@ -1,3 +1,34 @@
+# Robots policy for ScrollLibrary
+# Production canonical: https://scrolllibrary.org
+
+User-agent: *
+Allow: /
+# Block admin / private surfaces
+Disallow: /admin
+Disallow: /admin/*
+Disallow: /moderation
+Disallow: /diagnostics
+Disallow: /health-check
+Disallow: /pmf
+Disallow: /audit-dashboard
+Disallow: /experiments
+Disallow: /launch-checklist
+Disallow: /admin-recovery
+Disallow: /account/
+Disallow: /delete-account
+Disallow: /settings
+Disallow: /profile
+Disallow: /dashboard
+Disallow: /dashboard/*
+Disallow: /generate
+Disallow: /upload
+Disallow: /study
+Disallow: /cognition
+Disallow: /quick-learn
+Disallow: /pwa-test
+Disallow: /certificate-test
+
+# Allow major crawlers full access to public content
 User-agent: Googlebot
 Allow: /
 
@@ -10,5 +41,4 @@ Allow: /
 User-agent: facebookexternalhit
 Allow: /
 
-User-agent: *
-Allow: /
+Sitemap: https://scrolllibrary.org/sitemap.xml

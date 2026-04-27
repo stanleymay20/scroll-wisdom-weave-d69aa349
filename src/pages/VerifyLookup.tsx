@@ -11,6 +11,7 @@ import { Shield, Search, CheckCircle2, FileSearch } from "lucide-react";
 import { Logo } from "@/components/brand";
 import { Link } from "react-router-dom";
 
+import { SEO } from "@/components/SEO";
 export default function VerifyLookup() {
   const [number, setNumber] = useState("");
   const navigate = useNavigate();
@@ -30,6 +31,11 @@ export default function VerifyLookup() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-background to-muted/30">
+      <SEO
+        title="Verify a Certificate | ScrollLibrary"
+        description="Enter a ScrollLibrary certificate number to instantly verify its authenticity, mastery level, and issuing learner."
+        canonical="/verify-certificate"
+      />
       <header className="border-b bg-background/95 backdrop-blur">
         <div className="container mx-auto px-4 py-4 flex items-center justify-between">
           <Link to="/" className="flex items-center gap-2">

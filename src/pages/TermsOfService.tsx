@@ -3,9 +3,15 @@ import { Navbar } from "@/components/layout/Navbar";
 import { Footer } from "@/components/layout/Footer";
 import { FileText, Scale, BookOpen, AlertTriangle, Copyright } from "lucide-react";
 
+import { SEO } from "@/components/SEO";
 export default function TermsOfService() {
   return (
     <div className="min-h-screen flex flex-col">
+      <SEO
+        title="Terms of Service | ScrollLibrary"
+        description="The terms governing your use of ScrollLibrary's AI-powered learning and mastery certification platform."
+        canonical="/terms"
+      />
       <Navbar />
       
       <main className="flex-1 pt-24 pb-16">

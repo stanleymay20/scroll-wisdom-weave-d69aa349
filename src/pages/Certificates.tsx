@@ -13,6 +13,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 
+import { SEO } from "@/components/SEO";
 interface Certificate {
   id: string;
   certificate_number: string;
@@ -81,6 +82,11 @@ export default function Certificates() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SEO
+        title="My Certificates | ScrollLibrary"
+        description="Your earned ScrollLibrary mastery certificates with verification links and cognitive level breakdowns."
+        noindex
+      />
       <Navbar />
       <main className="flex-1 pt-20 pb-16">
         <div className="container mx-auto px-4 max-w-4xl">

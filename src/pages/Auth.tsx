@@ -22,6 +22,7 @@ import {
 import { emailSchema, passwordSchema, validateInput } from "@/lib/validation";
 
 
+import { SEO } from "@/components/SEO";
 type AuthMode = "login" | "signup" | "forgot-password" | "magic-link" | "reset-password";
 
 type AuthSessionLike = {
@@ -410,6 +411,12 @@ const Auth = forwardRef<HTMLDivElement>(function Auth(_, ref) {
 
   return (
     <div className="min-h-screen flex items-center justify-center p-4 bg-background">
+      <SEO
+        title="Sign in | ScrollLibrary"
+        description="Sign in to ScrollLibrary to generate books, earn verified mastery certificates, and track your cognitive growth."
+        canonical="/auth"
+        noindex
+      />
       <div className="absolute inset-0 bg-hero-pattern opacity-20" />
       <div className="absolute top-1/4 left-1/4 w-64 h-64 sm:w-96 sm:h-96 bg-primary/5 rounded-full blur-3xl" />
       <div className="absolute bottom-1/4 right-1/4 w-48 h-48 sm:w-80 sm:h-80 bg-accent/5 rounded-full blur-3xl" />

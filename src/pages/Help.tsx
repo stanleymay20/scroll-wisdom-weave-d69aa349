@@ -10,6 +10,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 
+import { SEO } from "@/components/SEO";
 interface FAQ {
   id: string;
   question: string;
@@ -85,6 +86,11 @@ export default function Help() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SEO
+        title="Help Center | ScrollLibrary"
+        description="Answers to common questions about generating books, earning certificates, billing, and institutional features."
+        canonical="/help"
+      />
       <Navbar />
       
       <main className="flex-1 pt-24 pb-16">

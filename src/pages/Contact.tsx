@@ -14,6 +14,7 @@ import {
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 
+import { SEO } from "@/components/SEO";
 // Validation schema for contact form
 const contactSchema = z.object({
   name: z.string()
@@ -123,6 +124,11 @@ export default function Contact() {
 
   return (
     <div className="min-h-screen flex flex-col">
+      <SEO
+        title="Contact Us | ScrollLibrary"
+        description="Reach the ScrollLibrary team for support, partnerships, institutional inquiries, or feedback."
+        canonical="/contact"
+      />
       <Navbar />
       
       <main className="flex-1 pt-24 pb-16">
