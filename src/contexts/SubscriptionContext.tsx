@@ -290,12 +290,39 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
             if (mounted) setIsLoading(false);
             return;
           }
-          if (mounted) resetAnonymousState();
+          // Non-transient error — try refresh before resetting
+          const { data: refreshData } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null } }));
+          if (mounted) {
+            if (refreshData?.session?.user) {
+              setUser(refreshData.session.user);
+              void checkSubscription(true);
+            } else {
+              resetAnonymousState();
+            }
+          }
           return;
         }
 
         if (!session?.user) {
-          if (mounted) resetAnonymousState();
+          // No session locally — try a refresh in case only the access token expired.
+          // The refresh token persists in localStorage and can recover the session.
+          const { data: refreshData, error: refreshError } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null }, error: null as any }));
+
+          if (refreshError && isTransientAuthError(refreshError)) {
+            // Network blip during refresh — keep loading state false but DO NOT log out.
+            console.warn('Transient refresh error at bootstrap; preserving auth state');
+            if (mounted) setIsLoading(false);
+            return;
+          }
+
+          if (mounted) {
+            if (refreshData?.session?.user) {
+              setUser(refreshData.session.user);
+              void checkSubscription(true);
+            } else {
+              resetAnonymousState();
+            }
+          }
           return;
         }
 
