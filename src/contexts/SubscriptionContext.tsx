@@ -396,12 +396,19 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     // When user returns to the tab, refresh the token to prevent stale-session logouts.
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible') {
-        supabase.auth.getSession().then(({ data: { session } }) => {
+        supabase.auth.getSession().then(async ({ data: { session } }) => {
           if (!mounted) return;
           if (session?.user) {
             setUser((prev) => (prev?.id === session.user.id ? prev : session.user));
+            return;
           }
-          // Don't reset if no session — autoRefreshToken will handle it
+          // No session in memory — proactively refresh before assuming logout.
+          const { data: refreshData } = await supabase.auth.refreshSession().catch(() => ({ data: { session: null } }));
+          if (!mounted) return;
+          if (refreshData?.session?.user) {
+            setUser((prev) => (prev?.id === refreshData.session!.user.id ? prev : refreshData.session!.user));
+          }
+          // If refresh also failed, do nothing — preserve existing state.
         }).catch(() => {
           // Network error on tab restore — do nothing, preserve state
         });
