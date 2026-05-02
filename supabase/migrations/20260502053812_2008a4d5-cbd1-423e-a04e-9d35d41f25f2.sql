@@ -1,0 +1,2 @@
+ALTER TABLE public.books ADD COLUMN IF NOT EXISTS source_content_hash TEXT;
+CREATE INDEX IF NOT EXISTS idx_books_user_source_hash ON public.books (user_id, source_content_hash) WHERE source_content_hash IS NOT NULL;
