@@ -496,6 +496,7 @@ export type Database = {
           is_published: boolean | null
           language: string | null
           organization_id: string | null
+          source_content_hash: string | null
           source_document_name: string | null
           source_document_url: string | null
           source_type: string | null
@@ -519,6 +520,7 @@ export type Database = {
           is_published?: boolean | null
           language?: string | null
           organization_id?: string | null
+          source_content_hash?: string | null
           source_document_name?: string | null
           source_document_url?: string | null
           source_type?: string | null
@@ -542,6 +544,7 @@ export type Database = {
           is_published?: boolean | null
           language?: string | null
           organization_id?: string | null
+          source_content_hash?: string | null
           source_document_name?: string | null
           source_document_url?: string | null
           source_type?: string | null

@@ -12,55 +12,87 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+import { corsHeaders, preflight, requireUser, enforceRateLimit, json as httpJson } from '../_shared/http.ts';
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const pre = preflight(req);
+  if (pre) return pre;
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return jsonRes({ error: 'Unauthorized' }, 401);
+    if (req.method !== 'POST') {
+      return jsonRes({ error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' }, 405);
     }
+
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
+    const userId = auth.userId;
+
+    // Per-user rate limit: 10 uploads / 10 min — protects AI gateway and DB.
+    const limited = enforceRateLimit({
+      name: 'process-document',
+      key: userId,
+      limit: 10,
+      windowSec: 600,
+    });
+    if (limited) return limited;
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    
-    // Auth: use getClaims for fast JWT validation
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: authError } = await userClient.auth.getClaims(token);
-    if (authError || !claimsData?.claims?.sub) {
-      console.error('[process-document] Auth failed:', authError?.message);
-      return jsonRes({ error: 'Unauthorized' }, 401);
+
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonRes({ error: 'Invalid JSON body', code: 'VALIDATION_ERROR' }, 400);
     }
-    const userId = claimsData.claims.sub as string;
+    const { documentText, documentName, sourceType, category, language } = body ?? {};
 
-    const body = await req.json();
-    const { documentText, documentName, sourceType, category, language } = body;
-
-    if (!documentText || documentText.trim().length < 200) {
-      return jsonRes({ error: 'Document must contain at least 200 characters of text.' }, 400);
+    // Strict server-side validation (defence in depth — never trust the client)
+    if (typeof documentText !== 'string' || documentText.trim().length < 200) {
+      return jsonRes(
+        { error: 'Document must contain at least 200 characters of text.', code: 'VALIDATION_ERROR' },
+        400,
+      );
     }
-
-    if (documentText.length > 2000000) {
-      return jsonRes({ error: 'Document exceeds maximum size (approx. 2M characters).' }, 400);
+    if (documentText.length > 2_000_000) {
+      return jsonRes(
+        { error: 'Document exceeds maximum size (approx. 2M characters).', code: 'VALIDATION_ERROR' },
+        400,
+      );
     }
+    if (documentName && (typeof documentName !== 'string' || documentName.length > 500)) {
+      return jsonRes({ error: 'Invalid document name.', code: 'VALIDATION_ERROR' }, 400);
+    }
+    const allowedSourceTypes = ['uploaded', 'pasted', 'url'];
+    const safeSourceType = allowedSourceTypes.includes(sourceType) ? sourceType : 'uploaded';
+    const safeLanguage = typeof language === 'string' && /^[a-z]{2}(-[A-Z]{2})?$/.test(language) ? language : 'en';
 
-    console.log(`[process-document] Processing for user ${userId.slice(0, 8)}..., source: ${sourceType}, length: ${documentText.length}`);
+    console.log(`[process-document] Processing for user ${userId.slice(0, 8)}..., source: ${safeSourceType}, length: ${documentText.length}`);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
-      return jsonRes({ error: 'AI service not configured' }, 500);
+      return jsonRes({ error: 'AI service not configured', code: 'SERVICE_UNAVAILABLE' }, 500);
+    }
+
+    // Dedup: hash the input text + user; reject identical re-uploads within 24h.
+    const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
+    const contentHash = await sha256(`${userId}|${documentText.length}|${documentText.slice(0, 4000)}|${documentText.slice(-2000)}`);
+    const { data: dupBook } = await adminSupabase
+      .from('books')
+      .select('id, title, created_at')
+      .eq('user_id', userId)
+      .eq('source_content_hash', contentHash)
+      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .maybeSingle();
+    if (dupBook?.id) {
+      console.log(`[process-document] Duplicate upload detected, returning existing book ${dupBook.id}`);
+      return jsonRes({
+        success: true,
+        bookId: dupBook.id,
+        title: dupBook.title,
+        chaptersCreated: 0,
+        deduplicated: true,
+      }, 200);
     }
 
     // Step 0: Normalize PDF text — insert newlines before chapter/part markers
@@ -127,7 +159,14 @@ Return ONLY valid JSON:
     if (!analysisResponse.ok) {
       const errText = await analysisResponse.text();
       console.error('[process-document] Analysis API error:', analysisResponse.status, errText.slice(0, 300));
-      return jsonRes({ error: 'Failed to analyze document' }, 500);
+      // Surface AI-credit exhaustion / rate limits clearly.
+      if (analysisResponse.status === 402) {
+        return jsonRes({ error: 'AI credits exhausted. Please add credits or try again later.', code: 'AI_CREDITS_EXHAUSTED' }, 402);
+      }
+      if (analysisResponse.status === 429) {
+        return jsonRes({ error: 'AI service is busy. Please try again in a minute.', code: 'RATE_LIMITED' }, 429);
+      }
+      return jsonRes({ error: 'Failed to analyze document', code: 'GENERATION_FAILED' }, 502);
     }
 
     const analysisData = await analysisResponse.json();
@@ -165,44 +204,54 @@ Return ONLY valid JSON:
 
     console.log(`[process-document] AI returned ${analysis.chapters?.length || 0} chapters: "${analysis.title}"`);
 
-    // Step 4: Create book and chapters
-    const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Step 4: Create book and chapters (adminSupabase already created above)
+    const isPdfUpload = safeSourceType === 'uploaded' && typeof documentName === 'string' && documentName.toLowerCase().endsWith('.pdf');
+    const computedBookType = isPdfUpload ? 'uploaded_pdf' : (safeSourceType === 'url' ? 'web_article' : 'text');
+
+    const bookInsert: Record<string, unknown> = {
+      title: (analysis.title || documentName || 'Untitled Document').toString().slice(0, 500),
+      description: (analysis.description || `Learning material from: ${documentName ?? 'document'}`).toString().slice(0, 2000),
+      category: (category || analysis.category || 'general').toString().slice(0, 100),
+      user_id: userId,
+      creator_id: userId,
+      total_chapters: detectedChapters.length,
+      book_type: computedBookType,
+      academic_level: analysis.academic_level || 'intermediate',
+      language: safeLanguage,
+      source_type: safeSourceType,
+      source_document_name: documentName ?? null,
+      source_content_hash: contentHash,
+      is_published: false,
+    };
 
     const { data: book, error: bookError } = await adminSupabase
       .from('books')
-      .insert({
-        title: analysis.title || documentName || 'Untitled Document',
-        description: analysis.description || `Learning material from: ${documentName}`,
-        category: category || analysis.category || 'general',
-        user_id: userId,
-        creator_id: userId,
-        total_chapters: detectedChapters.length,
-        book_type: 'text',
-        academic_level: analysis.academic_level || 'intermediate',
-        language: language || 'en',
-        source_type: sourceType || 'uploaded',
-        source_document_name: documentName,
-        is_published: false,
-      })
+      .insert(bookInsert)
       .select('id')
       .single();
 
     if (bookError) {
       console.error('[process-document] Book creation error:', bookError);
-      return jsonRes({ error: 'Failed to create book record' }, 500);
+      // If the column source_content_hash doesn't exist yet, retry without it.
+      if (/source_content_hash/.test(bookError.message ?? '')) {
+        delete bookInsert.source_content_hash;
+        const retry = await adminSupabase.from('books').insert(bookInsert).select('id').single();
+        if (retry.error) {
+          return jsonRes({ error: 'Failed to create book record', code: 'CONFLICT' }, 500);
+        }
+        (book as any) = retry.data;
+      } else {
+        return jsonRes({ error: 'Failed to create book record', code: 'CONFLICT' }, 500);
+      }
     }
 
-    // Build chapter inserts using detected boundaries + AI metadata
-    // PDF uploads: preserve original content untouched, store AI metadata separately
-    // Text/URL uploads: enrich content with learning scaffolding
-    const isPdfUpload = sourceType === 'uploaded' && documentName?.toLowerCase().endsWith('.pdf');
-    console.log(`[process-document] Source type: ${sourceType}, isPdfUpload: ${isPdfUpload}`);
+    console.log(`[process-document] Source type: ${safeSourceType}, isPdfUpload: ${isPdfUpload}`);
 
     const chapterInserts = [];
     for (let i = 0; i < detectedChapters.length; i++) {
       const detected = detectedChapters[i];
-      const aiMeta = analysis.chapters?.[i] || { 
-        key_concepts: [], learning_objectives: [], terminology: [], summary: '' 
+      const aiMeta = analysis.chapters?.[i] || {
+        key_concepts: [], learning_objectives: [], terminology: [], summary: ''
       };
 
       const chapterMetadata = {
@@ -212,13 +261,12 @@ Return ONLY valid JSON:
         summary: aiMeta.summary || '',
       };
 
-      // PDF: keep original content as-is; Text/URL: enrich with pedagogical structure
-      const chapterContent = isPdfUpload 
-        ? detected.content 
+      const chapterContent = isPdfUpload
+        ? detected.content
         : buildEnrichedChapter(detected.title, aiMeta, detected.content);
 
       chapterInserts.push({
-        book_id: book.id,
+        book_id: (book as any).id,
         chapter_number: i + 1,
         title: detected.title,
         content: chapterContent,
@@ -235,29 +283,29 @@ Return ONLY valid JSON:
 
     if (chaptersError) {
       console.error('[process-document] Chapters insert error:', chaptersError);
-      await adminSupabase.from('books').delete().eq('id', book.id);
-      return jsonRes({ error: 'Failed to create chapters' }, 500);
+      await adminSupabase.from('books').delete().eq('id', (book as any).id);
+      return jsonRes({ error: 'Failed to create chapters', code: 'GENERATION_PARTIAL' }, 500);
     }
 
     await adminSupabase.from('user_library').insert({
       user_id: userId,
-      book_id: book.id,
+      book_id: (book as any).id,
       progress_percent: 0,
       last_read_chapter: 0,
     });
 
-    console.log(`[process-document] Success: Book ${book.id} with ${detectedChapters.length} chapters`);
+    console.log(`[process-document] Success: Book ${(book as any).id} with ${detectedChapters.length} chapters`);
 
     return jsonRes({
       success: true,
-      bookId: book.id,
+      bookId: (book as any).id,
       title: analysis.title,
       chaptersCreated: detectedChapters.length,
     }, 200);
 
   } catch (error) {
     console.error('[process-document] Unexpected error:', error);
-    return jsonRes({ error: 'Internal server error' }, 500);
+    return jsonRes({ error: 'Internal server error', code: 'UNKNOWN' }, 500);
   }
 });
 
@@ -661,4 +709,12 @@ function jsonRes(body: unknown, status: number) {
     status,
     headers: { ...corsHeaders, 'Content-Type': 'application/json' },
   });
+}
+
+async function sha256(input: string): Promise<string> {
+  const buf = new TextEncoder().encode(input);
+  const hash = await crypto.subtle.digest('SHA-256', buf);
+  return Array.from(new Uint8Array(hash))
+    .map((b) => b.toString(16).padStart(2, '0'))
+    .join('');
 }
