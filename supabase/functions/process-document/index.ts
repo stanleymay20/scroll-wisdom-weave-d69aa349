@@ -12,49 +12,60 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-
-const corsHeaders = {
-  'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
-};
+import { corsHeaders, preflight, requireUser, enforceRateLimit, json as httpJson } from '../_shared/http.ts';
 
 Deno.serve(async (req) => {
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  const pre = preflight(req);
+  if (pre) return pre;
 
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return jsonRes({ error: 'Unauthorized' }, 401);
+    if (req.method !== 'POST') {
+      return jsonRes({ error: 'Method not allowed', code: 'METHOD_NOT_ALLOWED' }, 405);
     }
+
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
+    const userId = auth.userId;
+
+    // Per-user rate limit: 10 uploads / 10 min — protects AI gateway and DB.
+    const limited = enforceRateLimit({
+      name: 'process-document',
+      key: userId,
+      limit: 10,
+      windowSec: 600,
+    });
+    if (limited) return limited;
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabaseAnonKey = Deno.env.get('SUPABASE_ANON_KEY')!;
-    
-    // Auth: use getClaims for fast JWT validation
-    const userClient = createClient(supabaseUrl, supabaseAnonKey, {
-      global: { headers: { Authorization: authHeader } },
-    });
-    const token = authHeader.replace('Bearer ', '');
-    const { data: claimsData, error: authError } = await userClient.auth.getClaims(token);
-    if (authError || !claimsData?.claims?.sub) {
-      console.error('[process-document] Auth failed:', authError?.message);
-      return jsonRes({ error: 'Unauthorized' }, 401);
-    }
-    const userId = claimsData.claims.sub as string;
 
-    const body = await req.json();
-    const { documentText, documentName, sourceType, category, language } = body;
-
-    if (!documentText || documentText.trim().length < 200) {
-      return jsonRes({ error: 'Document must contain at least 200 characters of text.' }, 400);
+    let body: any;
+    try {
+      body = await req.json();
+    } catch {
+      return jsonRes({ error: 'Invalid JSON body', code: 'VALIDATION_ERROR' }, 400);
     }
+    const { documentText, documentName, sourceType, category, language } = body ?? {};
 
-    if (documentText.length > 2000000) {
-      return jsonRes({ error: 'Document exceeds maximum size (approx. 2M characters).' }, 400);
+    // Strict server-side validation (defence in depth — never trust the client)
+    if (typeof documentText !== 'string' || documentText.trim().length < 200) {
+      return jsonRes(
+        { error: 'Document must contain at least 200 characters of text.', code: 'VALIDATION_ERROR' },
+        400,
+      );
     }
+    if (documentText.length > 2_000_000) {
+      return jsonRes(
+        { error: 'Document exceeds maximum size (approx. 2M characters).', code: 'VALIDATION_ERROR' },
+        400,
+      );
+    }
+    if (documentName && (typeof documentName !== 'string' || documentName.length > 500)) {
+      return jsonRes({ error: 'Invalid document name.', code: 'VALIDATION_ERROR' }, 400);
+    }
+    const allowedSourceTypes = ['uploaded', 'pasted', 'url'];
+    const safeSourceType = allowedSourceTypes.includes(sourceType) ? sourceType : 'uploaded';
+    const safeLanguage = typeof language === 'string' && /^[a-z]{2}(-[A-Z]{2})?$/.test(language) ? language : 'en';
 
     console.log(`[process-document] Processing for user ${userId.slice(0, 8)}..., source: ${sourceType}, length: ${documentText.length}`);
 
