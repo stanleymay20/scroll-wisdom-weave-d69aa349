@@ -159,7 +159,14 @@ Return ONLY valid JSON:
     if (!analysisResponse.ok) {
       const errText = await analysisResponse.text();
       console.error('[process-document] Analysis API error:', analysisResponse.status, errText.slice(0, 300));
-      return jsonRes({ error: 'Failed to analyze document' }, 500);
+      // Surface AI-credit exhaustion / rate limits clearly.
+      if (analysisResponse.status === 402) {
+        return jsonRes({ error: 'AI credits exhausted. Please add credits or try again later.', code: 'AI_CREDITS_EXHAUSTED' }, 402);
+      }
+      if (analysisResponse.status === 429) {
+        return jsonRes({ error: 'AI service is busy. Please try again in a minute.', code: 'RATE_LIMITED' }, 429);
+      }
+      return jsonRes({ error: 'Failed to analyze document', code: 'GENERATION_FAILED' }, 502);
     }
 
     const analysisData = await analysisResponse.json();
