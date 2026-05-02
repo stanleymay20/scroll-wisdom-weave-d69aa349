@@ -204,44 +204,54 @@ Return ONLY valid JSON:
 
     console.log(`[process-document] AI returned ${analysis.chapters?.length || 0} chapters: "${analysis.title}"`);
 
-    // Step 4: Create book and chapters
-    const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
+    // Step 4: Create book and chapters (adminSupabase already created above)
+    const isPdfUpload = safeSourceType === 'uploaded' && typeof documentName === 'string' && documentName.toLowerCase().endsWith('.pdf');
+    const computedBookType = isPdfUpload ? 'uploaded_pdf' : (safeSourceType === 'url' ? 'web_article' : 'text');
+
+    const bookInsert: Record<string, unknown> = {
+      title: (analysis.title || documentName || 'Untitled Document').toString().slice(0, 500),
+      description: (analysis.description || `Learning material from: ${documentName ?? 'document'}`).toString().slice(0, 2000),
+      category: (category || analysis.category || 'general').toString().slice(0, 100),
+      user_id: userId,
+      creator_id: userId,
+      total_chapters: detectedChapters.length,
+      book_type: computedBookType,
+      academic_level: analysis.academic_level || 'intermediate',
+      language: safeLanguage,
+      source_type: safeSourceType,
+      source_document_name: documentName ?? null,
+      source_content_hash: contentHash,
+      is_published: false,
+    };
 
     const { data: book, error: bookError } = await adminSupabase
       .from('books')
-      .insert({
-        title: analysis.title || documentName || 'Untitled Document',
-        description: analysis.description || `Learning material from: ${documentName}`,
-        category: category || analysis.category || 'general',
-        user_id: userId,
-        creator_id: userId,
-        total_chapters: detectedChapters.length,
-        book_type: 'text',
-        academic_level: analysis.academic_level || 'intermediate',
-        language: language || 'en',
-        source_type: sourceType || 'uploaded',
-        source_document_name: documentName,
-        is_published: false,
-      })
+      .insert(bookInsert)
       .select('id')
       .single();
 
     if (bookError) {
       console.error('[process-document] Book creation error:', bookError);
-      return jsonRes({ error: 'Failed to create book record' }, 500);
+      // If the column source_content_hash doesn't exist yet, retry without it.
+      if (/source_content_hash/.test(bookError.message ?? '')) {
+        delete bookInsert.source_content_hash;
+        const retry = await adminSupabase.from('books').insert(bookInsert).select('id').single();
+        if (retry.error) {
+          return jsonRes({ error: 'Failed to create book record', code: 'CONFLICT' }, 500);
+        }
+        (book as any) = retry.data;
+      } else {
+        return jsonRes({ error: 'Failed to create book record', code: 'CONFLICT' }, 500);
+      }
     }
 
-    // Build chapter inserts using detected boundaries + AI metadata
-    // PDF uploads: preserve original content untouched, store AI metadata separately
-    // Text/URL uploads: enrich content with learning scaffolding
-    const isPdfUpload = sourceType === 'uploaded' && documentName?.toLowerCase().endsWith('.pdf');
-    console.log(`[process-document] Source type: ${sourceType}, isPdfUpload: ${isPdfUpload}`);
+    console.log(`[process-document] Source type: ${safeSourceType}, isPdfUpload: ${isPdfUpload}`);
 
     const chapterInserts = [];
     for (let i = 0; i < detectedChapters.length; i++) {
       const detected = detectedChapters[i];
-      const aiMeta = analysis.chapters?.[i] || { 
-        key_concepts: [], learning_objectives: [], terminology: [], summary: '' 
+      const aiMeta = analysis.chapters?.[i] || {
+        key_concepts: [], learning_objectives: [], terminology: [], summary: ''
       };
 
       const chapterMetadata = {
@@ -251,13 +261,12 @@ Return ONLY valid JSON:
         summary: aiMeta.summary || '',
       };
 
-      // PDF: keep original content as-is; Text/URL: enrich with pedagogical structure
-      const chapterContent = isPdfUpload 
-        ? detected.content 
+      const chapterContent = isPdfUpload
+        ? detected.content
         : buildEnrichedChapter(detected.title, aiMeta, detected.content);
 
       chapterInserts.push({
-        book_id: book.id,
+        book_id: (book as any).id,
         chapter_number: i + 1,
         title: detected.title,
         content: chapterContent,
@@ -274,29 +283,29 @@ Return ONLY valid JSON:
 
     if (chaptersError) {
       console.error('[process-document] Chapters insert error:', chaptersError);
-      await adminSupabase.from('books').delete().eq('id', book.id);
-      return jsonRes({ error: 'Failed to create chapters' }, 500);
+      await adminSupabase.from('books').delete().eq('id', (book as any).id);
+      return jsonRes({ error: 'Failed to create chapters', code: 'GENERATION_PARTIAL' }, 500);
     }
 
     await adminSupabase.from('user_library').insert({
       user_id: userId,
-      book_id: book.id,
+      book_id: (book as any).id,
       progress_percent: 0,
       last_read_chapter: 0,
     });
 
-    console.log(`[process-document] Success: Book ${book.id} with ${detectedChapters.length} chapters`);
+    console.log(`[process-document] Success: Book ${(book as any).id} with ${detectedChapters.length} chapters`);
 
     return jsonRes({
       success: true,
-      bookId: book.id,
+      bookId: (book as any).id,
       title: analysis.title,
       chaptersCreated: detectedChapters.length,
     }, 200);
 
   } catch (error) {
     console.error('[process-document] Unexpected error:', error);
-    return jsonRes({ error: 'Internal server error' }, 500);
+    return jsonRes({ error: 'Internal server error', code: 'UNKNOWN' }, 500);
   }
 });
 
