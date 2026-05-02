@@ -67,11 +67,32 @@ Deno.serve(async (req) => {
     const safeSourceType = allowedSourceTypes.includes(sourceType) ? sourceType : 'uploaded';
     const safeLanguage = typeof language === 'string' && /^[a-z]{2}(-[A-Z]{2})?$/.test(language) ? language : 'en';
 
-    console.log(`[process-document] Processing for user ${userId.slice(0, 8)}..., source: ${sourceType}, length: ${documentText.length}`);
+    console.log(`[process-document] Processing for user ${userId.slice(0, 8)}..., source: ${safeSourceType}, length: ${documentText.length}`);
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
-      return jsonRes({ error: 'AI service not configured' }, 500);
+      return jsonRes({ error: 'AI service not configured', code: 'SERVICE_UNAVAILABLE' }, 500);
+    }
+
+    // Dedup: hash the input text + user; reject identical re-uploads within 24h.
+    const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
+    const contentHash = await sha256(`${userId}|${documentText.length}|${documentText.slice(0, 4000)}|${documentText.slice(-2000)}`);
+    const { data: dupBook } = await adminSupabase
+      .from('books')
+      .select('id, title, created_at')
+      .eq('user_id', userId)
+      .eq('source_content_hash', contentHash)
+      .gte('created_at', new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString())
+      .maybeSingle();
+    if (dupBook?.id) {
+      console.log(`[process-document] Duplicate upload detected, returning existing book ${dupBook.id}`);
+      return jsonRes({
+        success: true,
+        bookId: dupBook.id,
+        title: dupBook.title,
+        chaptersCreated: 0,
+        deduplicated: true,
+      }, 200);
     }
 
     // Step 0: Normalize PDF text — insert newlines before chapter/part markers
