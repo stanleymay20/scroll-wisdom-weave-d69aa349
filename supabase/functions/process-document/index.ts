@@ -271,7 +271,10 @@ Return ONLY valid JSON:
         : buildEnrichedChapter(detected.title, aiMeta, detected.content);
 
       const safeContent = stripNul(chapterContent);
-      const safeTitle = stripNul(detected.title);
+      // Prefer AI-cleaned title; fall back to detected title if AI returned junk.
+      const aiTitle = typeof aiMeta.title === 'string' ? aiMeta.title.trim() : '';
+      const candidateTitle = aiTitle && aiTitle.length >= 3 && aiTitle.length <= 120 ? aiTitle : detected.title;
+      const safeTitle = stripNul(candidateTitle).replace(/\s+/g, ' ').slice(0, 200) || `Chapter ${i + 1}`;
 
       chapterInserts.push({
         book_id: (book as any).id,
