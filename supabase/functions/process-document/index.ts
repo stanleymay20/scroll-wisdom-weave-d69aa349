@@ -247,6 +247,9 @@ Return ONLY valid JSON:
 
     console.log(`[process-document] Source type: ${safeSourceType}, isPdfUpload: ${isPdfUpload}`);
 
+    // Postgres text columns reject \u0000 (NUL). Strip them and other control chars.
+    const stripNul = (s: string) => (typeof s === 'string' ? s.replace(/\u0000/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') : s);
+
     const chapterInserts = [];
     for (let i = 0; i < detectedChapters.length; i++) {
       const detected = detectedChapters[i];
@@ -265,13 +268,16 @@ Return ONLY valid JSON:
         ? detected.content
         : buildEnrichedChapter(detected.title, aiMeta, detected.content);
 
+      const safeContent = stripNul(chapterContent);
+      const safeTitle = stripNul(detected.title);
+
       chapterInserts.push({
         book_id: (book as any).id,
         chapter_number: i + 1,
-        title: detected.title,
-        content: chapterContent,
+        title: safeTitle,
+        content: safeContent,
         is_generated: !isPdfUpload,
-        word_count: chapterContent.split(/\s+/).length,
+        word_count: safeContent.split(/\s+/).length,
         academic_mode: true,
         research_metadata: chapterMetadata,
       });
