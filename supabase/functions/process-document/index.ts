@@ -247,6 +247,9 @@ Return ONLY valid JSON:
 
     console.log(`[process-document] Source type: ${safeSourceType}, isPdfUpload: ${isPdfUpload}`);
 
+    // Postgres text columns reject \u0000 (NUL). Strip them and other control chars.
+    const stripNul = (s: string) => (typeof s === 'string' ? s.replace(/\u0000/g, '').replace(/[\x00-\x08\x0B\x0C\x0E-\x1F]/g, '') : s);
+
     const chapterInserts = [];
     for (let i = 0; i < detectedChapters.length; i++) {
       const detected = detectedChapters[i];
