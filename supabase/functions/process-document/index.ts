@@ -268,13 +268,16 @@ Return ONLY valid JSON:
         ? detected.content
         : buildEnrichedChapter(detected.title, aiMeta, detected.content);
 
+      const safeContent = stripNul(chapterContent);
+      const safeTitle = stripNul(detected.title);
+
       chapterInserts.push({
         book_id: (book as any).id,
         chapter_number: i + 1,
-        title: detected.title,
-        content: chapterContent,
+        title: safeTitle,
+        content: safeContent,
         is_generated: !isPdfUpload,
-        word_count: chapterContent.split(/\s+/).length,
+        word_count: safeContent.split(/\s+/).length,
         academic_mode: true,
         research_metadata: chapterMetadata,
       });
