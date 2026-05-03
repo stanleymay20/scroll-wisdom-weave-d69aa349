@@ -54,7 +54,7 @@ type ExportFormat = "pdf" | "epub" | "docx" | "kdp-pdf";
 // Tier-level format access — mirrors server-side TIER_FORMATS in export-book/index.ts
 const TIER_FORMAT_ACCESS: Record<string, ExportFormat[]> = {
   free: ["pdf"],
-  student: ["pdf", "docx"],
+  student: ["pdf", "epub", "docx"],
   premium: ["pdf", "epub", "docx", "kdp-pdf"],
   prophet_tier: ["pdf", "epub", "docx", "kdp-pdf"],
 };
