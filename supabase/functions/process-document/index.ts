@@ -539,22 +539,41 @@ function extractCleanTitle(rawLine: string): string {
   // Remove "Chapter N" / "CHAPTER N" / "Part I" prefix
   let title = rawLine.replace(/^(?:Chapter|CHAPTER)\s+\d+\s*[.:]?\s*/i, '');
   title = title.replace(/^(?:Part|PART)\s+(?:[IVXLCDM]+|\d+)\s*[.:]?\s*/i, '');
-  
-  // If the remaining text has double-spaces (PDF artifact), take only the first segment
-  // "Data Engineering Described  If you work in data" -> "Data Engineering Described"
+
+  // PDF artifact: double-space marks heading→body boundary
   const doubleSpaceParts = title.split(/\s{2,}/);
   if (doubleSpaceParts.length >= 2 && doubleSpaceParts[0].length >= 5) {
     title = doubleSpaceParts[0];
   }
-  
+
+  // PDF artifact: heading runs into prose. Cut at the first lowercase-led
+  // sentence-starter ("If you", "In this", "The following", etc.) once we have
+  // at least 2 title words. Headings are typically Title-Case.
+  const words = title.split(/\s+/);
+  if (words.length > 6) {
+    const sentenceStarters = new Set([
+      'If', 'In', 'The', 'When', 'While', 'For', 'This', 'These', 'A', 'An',
+      'It', 'We', 'You', 'They', 'As', 'After', 'Before', 'Although', 'However',
+    ]);
+    for (let i = 2; i < words.length; i++) {
+      if (sentenceStarters.has(words[i]) && i + 1 < words.length && /^[a-z]/.test(words[i + 1] ?? '')) {
+        title = words.slice(0, i).join(' ');
+        break;
+      }
+    }
+  }
+
+  // Hard cap at 12 words (headings are short)
+  const finalWords = title.split(/\s+/);
+  if (finalWords.length > 12) title = finalWords.slice(0, 12).join(' ');
+
   // Clean trailing punctuation artifacts
   title = title.replace(/[,;:\s]+$/, '').trim();
-  
-  // If title is still empty, use the raw line
+
   if (!title || title.length < 3) {
     title = rawLine.replace(/\s{2,}/g, ' ').trim();
   }
-  
+
   return title.replace(/\s+/g, ' ');
 }
 
