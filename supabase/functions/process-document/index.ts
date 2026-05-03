@@ -124,12 +124,14 @@ Your job:
 1. Extract a clear TITLE for the book (the actual book title, not a description)
 2. Write a concise DESCRIPTION (2-3 sentences about what the book covers)
 3. Identify the CATEGORY (one of: technology, science, medicine, law, economics, finance, governance, history, philosophy, theology, self_help, business, general)
-4. For each chapter provided, extract: key_concepts (3-5), learning_objectives (2-3 measurable), terminology (3-5 terms with definitions), summary (2-3 sentences)
+4. For each chapter provided, extract:
+   - title: a CLEAN, human-readable chapter title (max 8 words). The provided titles may contain PDF extraction artifacts (run-on words, leading "CHAPTER N", body text bleed). Rewrite the title cleanly based on the chapter content — do NOT echo artifacts. Strip leading "Chapter N:" prefixes. Capitalize as Title Case.
+   - key_concepts (3-5), learning_objectives (2-3 measurable), terminology (3-5 terms with definitions), summary (2-3 sentences)
 
-IMPORTANT: 
-- Keep the exact chapter titles and order as provided
-- Do NOT merge or skip chapters
-- The title must be the actual book title, not "Document Analysis" or similar
+IMPORTANT:
+- Preserve the chapter ORDER and COUNT exactly as provided. One output chapter per input chapter.
+- Do NOT merge or skip chapters.
+- The book title must be the actual book title (e.g. "The Hundred-Page Machine Learning Book"), not a description.
 
 Return ONLY valid JSON:
 {
@@ -139,7 +141,7 @@ Return ONLY valid JSON:
   "academic_level": "beginner|intermediate|advanced",
   "chapters": [
     {
-      "title": "exact chapter title as provided",
+      "title": "Clean chapter title",
       "key_concepts": ["..."],
       "learning_objectives": ["..."],
       "terminology": [{"term": "...", "definition": "..."}],
