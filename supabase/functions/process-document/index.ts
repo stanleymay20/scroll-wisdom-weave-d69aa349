@@ -124,12 +124,14 @@ Your job:
 1. Extract a clear TITLE for the book (the actual book title, not a description)
 2. Write a concise DESCRIPTION (2-3 sentences about what the book covers)
 3. Identify the CATEGORY (one of: technology, science, medicine, law, economics, finance, governance, history, philosophy, theology, self_help, business, general)
-4. For each chapter provided, extract: key_concepts (3-5), learning_objectives (2-3 measurable), terminology (3-5 terms with definitions), summary (2-3 sentences)
+4. For each chapter provided, extract:
+   - title: a CLEAN, human-readable chapter title (max 8 words). The provided titles may contain PDF extraction artifacts (run-on words, leading "CHAPTER N", body text bleed). Rewrite the title cleanly based on the chapter content — do NOT echo artifacts. Strip leading "Chapter N:" prefixes. Capitalize as Title Case.
+   - key_concepts (3-5), learning_objectives (2-3 measurable), terminology (3-5 terms with definitions), summary (2-3 sentences)
 
-IMPORTANT: 
-- Keep the exact chapter titles and order as provided
-- Do NOT merge or skip chapters
-- The title must be the actual book title, not "Document Analysis" or similar
+IMPORTANT:
+- Preserve the chapter ORDER and COUNT exactly as provided. One output chapter per input chapter.
+- Do NOT merge or skip chapters.
+- The book title must be the actual book title (e.g. "The Hundred-Page Machine Learning Book"), not a description.
 
 Return ONLY valid JSON:
 {
@@ -139,7 +141,7 @@ Return ONLY valid JSON:
   "academic_level": "beginner|intermediate|advanced",
   "chapters": [
     {
-      "title": "exact chapter title as provided",
+      "title": "Clean chapter title",
       "key_concepts": ["..."],
       "learning_objectives": ["..."],
       "terminology": [{"term": "...", "definition": "..."}],
@@ -208,6 +210,10 @@ Return ONLY valid JSON:
     const isPdfUpload = safeSourceType === 'uploaded' && typeof documentName === 'string' && documentName.toLowerCase().endsWith('.pdf');
     const computedBookType = isPdfUpload ? 'uploaded_pdf' : (safeSourceType === 'url' ? 'web_article' : 'text');
 
+    const sourceUrl = safeSourceType === 'url' && typeof documentName === 'string' && /^https?:\/\//i.test(documentName)
+      ? documentName
+      : null;
+
     const bookInsert: Record<string, unknown> = {
       title: (analysis.title || documentName || 'Untitled Document').toString().slice(0, 500),
       description: (analysis.description || `Learning material from: ${documentName ?? 'document'}`).toString().slice(0, 2000),
@@ -220,6 +226,7 @@ Return ONLY valid JSON:
       language: safeLanguage,
       source_type: safeSourceType,
       source_document_name: documentName ?? null,
+      source_document_url: sourceUrl,
       source_content_hash: contentHash,
       is_published: false,
     };
@@ -269,7 +276,10 @@ Return ONLY valid JSON:
         : buildEnrichedChapter(detected.title, aiMeta, detected.content);
 
       const safeContent = stripNul(chapterContent);
-      const safeTitle = stripNul(detected.title);
+      // Prefer AI-cleaned title; fall back to detected title if AI returned junk.
+      const aiTitle = typeof aiMeta.title === 'string' ? aiMeta.title.trim() : '';
+      const candidateTitle = aiTitle && aiTitle.length >= 3 && aiTitle.length <= 120 ? aiTitle : detected.title;
+      const safeTitle = stripNul(candidateTitle).replace(/\s+/g, ' ').slice(0, 200) || `Chapter ${i + 1}`;
 
       chapterInserts.push({
         book_id: (book as any).id,
@@ -299,6 +309,25 @@ Return ONLY valid JSON:
       progress_percent: 0,
       last_read_chapter: 0,
     });
+
+    // Auto-save the original source as a citation on the new book so users can
+    // cite the URL/document/text from any chapter. Best-effort — don't fail the
+    // whole upload if this insert errors.
+    try {
+      const citationText = safeSourceType === 'url'
+        ? `Web source: ${documentName}`
+        : safeSourceType === 'pasted'
+          ? `Pasted text (${documentText.length.toLocaleString()} chars)`
+          : `Uploaded document: ${documentName ?? 'document'}`;
+      await adminSupabase.from('book_citations').insert({
+        book_id: (book as any).id,
+        citation_text: citationText.slice(0, 1000),
+        source_url: sourceUrl,
+        citation_type: 'source',
+      });
+    } catch (citErr) {
+      console.warn('[process-document] Source citation insert failed (non-fatal):', citErr);
+    }
 
     console.log(`[process-document] Success: Book ${(book as any).id} with ${detectedChapters.length} chapters`);
 
@@ -534,22 +563,41 @@ function extractCleanTitle(rawLine: string): string {
   // Remove "Chapter N" / "CHAPTER N" / "Part I" prefix
   let title = rawLine.replace(/^(?:Chapter|CHAPTER)\s+\d+\s*[.:]?\s*/i, '');
   title = title.replace(/^(?:Part|PART)\s+(?:[IVXLCDM]+|\d+)\s*[.:]?\s*/i, '');
-  
-  // If the remaining text has double-spaces (PDF artifact), take only the first segment
-  // "Data Engineering Described  If you work in data" -> "Data Engineering Described"
+
+  // PDF artifact: double-space marks heading→body boundary
   const doubleSpaceParts = title.split(/\s{2,}/);
   if (doubleSpaceParts.length >= 2 && doubleSpaceParts[0].length >= 5) {
     title = doubleSpaceParts[0];
   }
-  
+
+  // PDF artifact: heading runs into prose. Cut at the first lowercase-led
+  // sentence-starter ("If you", "In this", "The following", etc.) once we have
+  // at least 2 title words. Headings are typically Title-Case.
+  const words = title.split(/\s+/);
+  if (words.length > 6) {
+    const sentenceStarters = new Set([
+      'If', 'In', 'The', 'When', 'While', 'For', 'This', 'These', 'A', 'An',
+      'It', 'We', 'You', 'They', 'As', 'After', 'Before', 'Although', 'However',
+    ]);
+    for (let i = 2; i < words.length; i++) {
+      if (sentenceStarters.has(words[i]) && i + 1 < words.length && /^[a-z]/.test(words[i + 1] ?? '')) {
+        title = words.slice(0, i).join(' ');
+        break;
+      }
+    }
+  }
+
+  // Hard cap at 12 words (headings are short)
+  const finalWords = title.split(/\s+/);
+  if (finalWords.length > 12) title = finalWords.slice(0, 12).join(' ');
+
   // Clean trailing punctuation artifacts
   title = title.replace(/[,;:\s]+$/, '').trim();
-  
-  // If title is still empty, use the raw line
+
   if (!title || title.length < 3) {
     title = rawLine.replace(/\s{2,}/g, ' ').trim();
   }
-  
+
   return title.replace(/\s+/g, ' ');
 }
 
