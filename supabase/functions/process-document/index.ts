@@ -210,6 +210,10 @@ Return ONLY valid JSON:
     const isPdfUpload = safeSourceType === 'uploaded' && typeof documentName === 'string' && documentName.toLowerCase().endsWith('.pdf');
     const computedBookType = isPdfUpload ? 'uploaded_pdf' : (safeSourceType === 'url' ? 'web_article' : 'text');
 
+    const sourceUrl = safeSourceType === 'url' && typeof documentName === 'string' && /^https?:\/\//i.test(documentName)
+      ? documentName
+      : null;
+
     const bookInsert: Record<string, unknown> = {
       title: (analysis.title || documentName || 'Untitled Document').toString().slice(0, 500),
       description: (analysis.description || `Learning material from: ${documentName ?? 'document'}`).toString().slice(0, 2000),
@@ -222,6 +226,7 @@ Return ONLY valid JSON:
       language: safeLanguage,
       source_type: safeSourceType,
       source_document_name: documentName ?? null,
+      source_document_url: sourceUrl,
       source_content_hash: contentHash,
       is_published: false,
     };
