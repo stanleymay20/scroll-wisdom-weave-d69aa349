@@ -310,6 +310,25 @@ Return ONLY valid JSON:
       last_read_chapter: 0,
     });
 
+    // Auto-save the original source as a citation on the new book so users can
+    // cite the URL/document/text from any chapter. Best-effort — don't fail the
+    // whole upload if this insert errors.
+    try {
+      const citationText = safeSourceType === 'url'
+        ? `Web source: ${documentName}`
+        : safeSourceType === 'pasted'
+          ? `Pasted text (${documentText.length.toLocaleString()} chars)`
+          : `Uploaded document: ${documentName ?? 'document'}`;
+      await adminSupabase.from('book_citations').insert({
+        book_id: (book as any).id,
+        citation_text: citationText.slice(0, 1000),
+        source_url: sourceUrl,
+        citation_type: 'source',
+      });
+    } catch (citErr) {
+      console.warn('[process-document] Source citation insert failed (non-fatal):', citErr);
+    }
+
     console.log(`[process-document] Success: Book ${(book as any).id} with ${detectedChapters.length} chapters`);
 
     return jsonRes({
