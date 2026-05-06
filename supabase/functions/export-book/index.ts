@@ -1055,7 +1055,7 @@ serve(async (req) => {
 
     switch (format) {
       case "pdf": {
-        const pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography);
+        const pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
         content = uint8ArrayToBase64(pdfBytes);
         contentType = "application/pdf";
         filename = `${sanitizeFilename(book.title)}.pdf`;
@@ -1066,7 +1066,7 @@ serve(async (req) => {
       case "kdp-pdf": {
         const trimSize = KDP_TRIM_SIZES[kdpTrimSize || '6x9'] || KDP_TRIM_SIZES['6x9'];
         const useBleed = kdpBleed === true;
-        const pdfBytes = await generateKDPPDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, trimSize, useBleed);
+        const pdfBytes = await generateKDPPDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, trimSize, useBleed, exportContext);
         content = uint8ArrayToBase64(pdfBytes);
         contentType = "application/pdf";
         filename = `${sanitizeFilename(book.title)}_KDP.pdf`;
@@ -1075,7 +1075,7 @@ serve(async (req) => {
       }
       
       case "epub": {
-        const epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography);
+        const epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
         content = uint8ArrayToBase64(new Uint8Array(epubBytes));
         contentType = "application/epub+zip";
         filename = `${sanitizeFilename(book.title)}.epub`;
@@ -1084,7 +1084,7 @@ serve(async (req) => {
       }
       
       case "docx": {
-        const docxBytes = await generateDOCX(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography);
+        const docxBytes = await generateDOCX(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
         content = uint8ArrayToBase64(new Uint8Array(docxBytes));
         contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         filename = `${sanitizeFilename(book.title)}.docx`;
