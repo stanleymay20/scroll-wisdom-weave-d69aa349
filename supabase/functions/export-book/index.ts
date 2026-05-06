@@ -27,6 +27,26 @@ const TIER_FORMATS = {
   prophet_tier: ["pdf", "epub", "docx", "kdp-pdf"],
 };
 
+// Authorship & disclosure context resolved per-export
+interface ExportContext {
+  pub: {
+    transparency_mode: 'invisible' | 'assisted' | 'transparent';
+    show_scrolllibrary_branding: boolean;
+    show_ai_assistance_notice: boolean;
+    show_powered_by: boolean;
+    publisher_name: string | null;
+    publisher_imprint: string | null;
+    sanitize_metadata: boolean;
+    confidential_mode: boolean;
+  };
+  showAINotice: boolean;
+  showAILongDisclosure: boolean;
+  showBranding: boolean;
+  showPoweredBy: boolean;
+  effectivePublisher: string;
+  sanitizeMeta: boolean;
+}
+
 // All formats available during trial
 const ALL_FORMATS = ["pdf", "epub", "docx", "kdp-pdf"];
 
@@ -865,7 +885,7 @@ serve(async (req) => {
       ? ALL_FORMATS 
       : (TIER_FORMATS[userPlan as keyof typeof TIER_FORMATS] || TIER_FORMATS.free);
 
-    const { bookId, format, authorName, isbn, isAcademicMode, academicMode, citationStyle, kdpTrimSize, kdpBleed } = await req.json();
+    const { bookId, format, authorName, isbn, isAcademicMode, academicMode, citationStyle, kdpTrimSize, kdpBleed, publishingSettings: publishingSettingsOverride } = await req.json();
     
     // Support both param names (client sends isAcademicMode, legacy sends academicMode)
     const resolvedAcademicMode = isAcademicMode || academicMode || false;
@@ -997,6 +1017,40 @@ serve(async (req) => {
     const isISBN = isbn && isValidISBN(isbn);
     const year = new Date().getFullYear();
 
+    // ===== AUTHORSHIP & DISCLOSURE SETTINGS =====
+    // Default: invisible mode (no AI/ScrollLibrary references anywhere in export).
+    // Per-export overrides take precedence over book-level saved settings.
+    const DEFAULT_PUB_SETTINGS = {
+      transparency_mode: 'invisible' as 'invisible' | 'assisted' | 'transparent',
+      show_scrolllibrary_branding: false,
+      show_ai_assistance_notice: false,
+      show_powered_by: false,
+      publisher_name: null as string | null,
+      publisher_imprint: null as string | null,
+      sanitize_metadata: true,
+      confidential_mode: false,
+    };
+    const pub = {
+      ...DEFAULT_PUB_SETTINGS,
+      ...(book.publishing_settings || {}),
+      ...(publishingSettingsOverride || {}),
+    };
+    // Confidential mode forces invisible + sanitize + no branding.
+    if (pub.confidential_mode) {
+      pub.transparency_mode = 'invisible';
+      pub.sanitize_metadata = true;
+      pub.show_scrolllibrary_branding = false;
+      pub.show_ai_assistance_notice = false;
+      pub.show_powered_by = false;
+    }
+    const showAINotice = pub.transparency_mode !== 'invisible' && pub.show_ai_assistance_notice;
+    const showAILongDisclosure = pub.transparency_mode === 'transparent';
+    const showBranding = !pub.confidential_mode && pub.show_scrolllibrary_branding;
+    const showPoweredBy = !pub.confidential_mode && pub.show_powered_by;
+    const effectivePublisher = pub.publisher_name || (showBranding ? 'ScrollLibrary' : finalAuthorName);
+    const sanitizeMeta = pub.sanitize_metadata;
+    const exportContext = { pub, showAINotice, showAILongDisclosure, showBranding, showPoweredBy, effectivePublisher, sanitizeMeta };
+
     // Generate bibliography for ALL books (from chapter refs + book_citations table)
     let bibliography = generateBibliography(chapters, effectiveCitationStyle);
     
@@ -1021,7 +1075,7 @@ serve(async (req) => {
 
     switch (format) {
       case "pdf": {
-        const pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography);
+        const pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
         content = uint8ArrayToBase64(pdfBytes);
         contentType = "application/pdf";
         filename = `${sanitizeFilename(book.title)}.pdf`;
@@ -1032,7 +1086,7 @@ serve(async (req) => {
       case "kdp-pdf": {
         const trimSize = KDP_TRIM_SIZES[kdpTrimSize || '6x9'] || KDP_TRIM_SIZES['6x9'];
         const useBleed = kdpBleed === true;
-        const pdfBytes = await generateKDPPDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, trimSize, useBleed);
+        const pdfBytes = await generateKDPPDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, trimSize, useBleed, exportContext);
         content = uint8ArrayToBase64(pdfBytes);
         contentType = "application/pdf";
         filename = `${sanitizeFilename(book.title)}_KDP.pdf`;
@@ -1041,7 +1095,7 @@ serve(async (req) => {
       }
       
       case "epub": {
-        const epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography);
+        const epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
         content = uint8ArrayToBase64(new Uint8Array(epubBytes));
         contentType = "application/epub+zip";
         filename = `${sanitizeFilename(book.title)}.epub`;
@@ -1050,7 +1104,7 @@ serve(async (req) => {
       }
       
       case "docx": {
-        const docxBytes = await generateDOCX(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography);
+        const docxBytes = await generateDOCX(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
         content = uint8ArrayToBase64(new Uint8Array(docxBytes));
         contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         filename = `${sanitizeFilename(book.title)}.docx`;
@@ -1088,7 +1142,8 @@ async function generatePDF(
   coverImageBytes: Uint8Array | null,
   isAcademic: boolean,
   citationStyle: string,
-  bibliography: string[]
+  bibliography: string[],
+  ctx: ExportContext,
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
@@ -1234,30 +1289,42 @@ async function generatePDF(
     });
   }
   
-  page.drawText(`Created with ScrollLibrary - AI-Assisted Content`, {
-    x: margin,
-    y: margin + 50,
-    size: 10,
-    font: helvetica,
-    color: rgb(0.5, 0.5, 0.5),
-  });
+  if (ctx.showPoweredBy || ctx.showBranding) {
+    page.drawText(ctx.showBranding ? `Created with ScrollLibrary` : `Powered by ScrollLibrary`, {
+      x: margin,
+      y: margin + 50,
+      size: 10,
+      font: helvetica,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+  }
 
   // Copyright Page
   page = pdfDoc.addPage([pageWidth, pageHeight]);
   pageNumber++;
   y = margin + 200;
   
-  const copyrightText = [
+  const copyrightText: string[] = [
     `Copyright ${year} ${author}. All rights reserved.`,
     "",
     isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`,
     isISBN ? "" : "(Internal identifier - not an ISBN)",
-    "",
-    "This work was created with AI assistance under the full authorship",
-    "and ownership of the author. The author retains all commercial rights.",
-    "",
-    `Created with ScrollLibrary`,
   ];
+  if (ctx.pub.publisher_name) {
+    copyrightText.push("", `Published by ${ctx.pub.publisher_name}${ctx.pub.publisher_imprint ? ` — ${ctx.pub.publisher_imprint}` : ''}`);
+  }
+  if (ctx.showAINotice) {
+    copyrightText.push("", "This work was developed with editorial and AI-assisted tooling");
+    copyrightText.push("under full authorship ownership by the author.");
+  }
+  if (ctx.showAILongDisclosure) {
+    copyrightText.push("", "AI Collaboration Disclosure: portions of this work were drafted,");
+    copyrightText.push("refined, or edited with AI assistance via ScrollLibrary. The author");
+    copyrightText.push("retains intellectual ownership and final editorial control.");
+  }
+  if (ctx.showBranding) {
+    copyrightText.push("", `Created with ScrollLibrary`);
+  }
   
   // Add academic disclaimer if needed
   if (isAcademic) {
@@ -2118,8 +2185,13 @@ async function generatePDF(
   pdfDoc.setTitle(book.title);
   pdfDoc.setAuthor(author);
   pdfDoc.setSubject(book.category?.replace(/_/g, ' ') || 'Book');
-  pdfDoc.setCreator('ScrollLibrary');
-  pdfDoc.setProducer('ScrollLibrary Export Engine');
+  if (ctx.sanitizeMeta) {
+    pdfDoc.setCreator(ctx.pub.publisher_name || author);
+    pdfDoc.setProducer(ctx.pub.publisher_name || author);
+  } else {
+    pdfDoc.setCreator(ctx.showBranding ? 'ScrollLibrary' : (ctx.pub.publisher_name || author));
+    pdfDoc.setProducer(ctx.showBranding ? 'ScrollLibrary Export Engine' : (ctx.pub.publisher_name || author));
+  }
   
   return pdfDoc.save();
 }
@@ -2171,6 +2243,7 @@ async function generateKDPPDF(
   bibliography: string[],
   trimSize: { width: number; height: number; name: string },
   useBleed: boolean,
+  ctx: ExportContext,
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
@@ -2248,20 +2321,27 @@ async function generateKDPPDF(
   page = pdfDoc.addPage([pageWidth, pageHeight]);
   pageNumber++;
   y = pageHeight * 0.45;
-  const copyrightLines = [
+  const copyrightLines: string[] = [
     `Copyright \u00A9 ${year} ${author}`,
     'All rights reserved.',
     '',
     isISBN ? `ISBN: ${identifier}` : `Reference: ${identifier}`,
     '',
     `Trim Size: ${trimSize.name}`,
-    '',
-    'This book was created with AI assistance via ScrollLibrary.',
-    'The author retains full ownership and commercial rights.',
-    '',
-    'No part of this publication may be reproduced, distributed,',
-    'or transmitted in any form without prior written permission.',
   ];
+  if (ctx.pub.publisher_name) {
+    copyrightLines.push('', `Published by ${ctx.pub.publisher_name}${ctx.pub.publisher_imprint ? ` — ${ctx.pub.publisher_imprint}` : ''}`);
+  }
+  if (ctx.showAINotice) {
+    copyrightLines.push('', 'This work was developed with editorial and AI-assisted tooling',
+      'under full authorship ownership by the author.');
+  }
+  if (ctx.showAILongDisclosure) {
+    copyrightLines.push('', 'AI Collaboration Disclosure: portions of this work were drafted,',
+      'refined, or edited with AI assistance via ScrollLibrary.');
+  }
+  copyrightLines.push('', 'No part of this publication may be reproduced, distributed,',
+    'or transmitted in any form without prior written permission.');
   for (const line of copyrightLines) {
     page.drawText(sanitizeForPDF(line), {
       x: getLeftMargin(pageNumber), y, size: 9, font: timesRoman, color: rgb(0.3, 0.3, 0.3),
@@ -2727,12 +2807,18 @@ async function generateKDPPDF(
     }
   }
 
-  // Set PDF metadata
+  // Set PDF metadata (sanitized by default for publisher-clean exports)
   pdfDoc.setTitle(book.title);
   pdfDoc.setAuthor(author);
-  pdfDoc.setSubject(`KDP-ready | Trim: ${trimSize.name}`);
-  pdfDoc.setCreator('ScrollLibrary');
-  pdfDoc.setProducer('ScrollLibrary KDP Export');
+  if (ctx.sanitizeMeta) {
+    pdfDoc.setSubject(book.category?.replace(/_/g, ' ') || 'Book');
+    pdfDoc.setCreator(ctx.pub.publisher_name || author);
+    pdfDoc.setProducer(ctx.pub.publisher_name || author);
+  } else {
+    pdfDoc.setSubject(`KDP-ready | Trim: ${trimSize.name}`);
+    pdfDoc.setCreator(ctx.showBranding ? 'ScrollLibrary' : (ctx.pub.publisher_name || author));
+    pdfDoc.setProducer(ctx.showBranding ? 'ScrollLibrary KDP Export' : (ctx.pub.publisher_name || author));
+  }
 
   return pdfDoc.save();
 }
@@ -2765,7 +2851,8 @@ async function generateEPUB(
   coverImageBytes: Uint8Array | null,
   isAcademic: boolean,
   citationStyle: string,
-  bibliography: string[]
+  bibliography: string[],
+  ctx: ExportContext,
 ): Promise<ArrayBuffer> {
   const blobWriter = new zip.BlobWriter("application/epub+zip");
   const zipWriter = new zip.ZipWriter(blobWriter);
@@ -3085,7 +3172,7 @@ ${htmlContent}
     <dc:title>${escapeXml(book.title)}</dc:title>
     <dc:creator>${escapeXml(author)}</dc:creator>
     <dc:language>${book.language || 'en'}</dc:language>
-    <dc:publisher>ScrollLibrary</dc:publisher>
+    <dc:publisher>${escapeXml(ctx.pub.publisher_name || (ctx.showBranding ? 'ScrollLibrary' : author))}</dc:publisher>
     <dc:date>${year}</dc:date>
     <meta property="dcterms:modified">${new Date().toISOString().split('.')[0]}Z</meta>
     ${hasCover ? '<meta name="cover" content="cover-image"/>' : ''}
@@ -3198,7 +3285,9 @@ ${isAcademic ? `<p><em>[Academic Content - ${citationStyle} Citations]</em></p>`
 <hr/>
 <p>© ${year} ${escapeXml(author)}. All rights reserved.</p>
 <p>${isISBN ? `ISBN: ${identifier}` : `SPC: ${identifier}`}</p>
-<p>Created with ScrollLibrary - AI-Assisted Content</p>`;
+${ctx.pub.publisher_name ? `<p>Published by ${escapeXml(ctx.pub.publisher_name)}${ctx.pub.publisher_imprint ? ` — ${escapeXml(ctx.pub.publisher_imprint)}` : ''}</p>` : ''}
+${ctx.showAINotice ? `<p><em>This work was developed with editorial and AI-assisted tooling under full authorship ownership by the author.</em></p>` : ''}
+${ctx.showBranding ? `<p>Created with ScrollLibrary</p>` : (ctx.showPoweredBy ? `<p>Powered by ScrollLibrary</p>` : '')}`;
 
   if (isAcademic) {
     titleContent += `
@@ -3213,15 +3302,17 @@ All references in this document are retrieved from verifiable academic databases
 </html>`;
   await zipWriter.add("OEBPS/title.xhtml", new zip.TextReader(titleContent));
 
-  // Dedication Page
+  // Dedication Page (blank by default; AI disclosure only when transparent)
+  const dedicationInner = ctx.showAILongDisclosure
+    ? `<p>This book was developed with AI assistance via ScrollLibrary.</p><p>The author retains full ownership and commercial rights.</p>`
+    : '';
   const dedicationXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>About This Book</title><link rel="stylesheet" href="style.css"/></head>
 <body>
 <div style="text-align: center; margin-top: 40%; font-style: italic;">
-<p>This book was created with AI assistance via ScrollLibrary.</p>
-<p>The author retains full ownership and commercial rights.</p>
+${dedicationInner}
 </div>
 </body>
 </html>`;
@@ -3286,7 +3377,8 @@ async function generateDOCX(
   coverImageBytes: Uint8Array | null,
   isAcademic: boolean,
   citationStyle: string,
-  bibliography: string[]
+  bibliography: string[],
+  ctx: ExportContext,
 ): Promise<ArrayBuffer> {
   const blobWriter = new zip.BlobWriter("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   const zipWriter = new zip.ZipWriter(blobWriter);
@@ -3624,8 +3716,18 @@ async function generateDOCX(
   documentContent += `
 <w:p><w:r><w:t></w:t></w:r></w:p>
 <w:p><w:r><w:t>© ${year} ${escapeXml(author)}. All rights reserved.</w:t></w:r></w:p>
-<w:p><w:r><w:t>${isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`}</w:t></w:r></w:p>
-<w:p><w:r><w:t>Created with ScrollLibrary - AI-Assisted Content</w:t></w:r></w:p>`;
+<w:p><w:r><w:t>${isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`}</w:t></w:r></w:p>`;
+  if (ctx.pub.publisher_name) {
+    documentContent += `<w:p><w:r><w:t>Published by ${escapeXml(ctx.pub.publisher_name)}${ctx.pub.publisher_imprint ? ` — ${escapeXml(ctx.pub.publisher_imprint)}` : ''}</w:t></w:r></w:p>`;
+  }
+  if (ctx.showAINotice) {
+    documentContent += `<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>This work was developed with editorial and AI-assisted tooling under full authorship ownership by the author.</w:t></w:r></w:p>`;
+  }
+  if (ctx.showBranding) {
+    documentContent += `<w:p><w:r><w:t>Created with ScrollLibrary</w:t></w:r></w:p>`;
+  } else if (ctx.showPoweredBy) {
+    documentContent += `<w:p><w:r><w:t>Powered by ScrollLibrary</w:t></w:r></w:p>`;
+  }
 
   // Academic notice
   if (isAcademic) {
@@ -3639,15 +3741,15 @@ async function generateDOCX(
 
   documentContent += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
 
-  // Dedication Page
-  documentContent += `
+  // Dedication Page (only when transparent mode requests AI disclosure)
+  if (ctx.showAILongDisclosure) {
+    documentContent += `
 <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
 <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
-<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
-<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
-<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>This book was created with AI assistance via ScrollLibrary.</w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>This book was developed with AI assistance via ScrollLibrary.</w:t></w:r></w:p>
 <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>The author retains full ownership and commercial rights.</w:t></w:r></w:p>
 <w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+  }
 
   // Chapters with embedded images and tables
   let docPicId = 2;

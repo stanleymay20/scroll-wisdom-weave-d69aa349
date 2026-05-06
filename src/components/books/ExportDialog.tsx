@@ -24,6 +24,11 @@ import {
   XCircle,
   Store,
   Lock,
+  EyeOff,
+  Eye,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -86,6 +91,17 @@ export function ExportDialog({
   const [isOpen, setIsOpen] = useState(false);
   const [kdpTrimSize, setKdpTrimSize] = useState('6x9');
   const [kdpBleed, setKdpBleed] = useState(false);
+  // Authorship & disclosure
+  type TransparencyMode = 'invisible' | 'assisted' | 'transparent';
+  const [transparencyMode, setTransparencyMode] = useState<TransparencyMode>('invisible');
+  const [showBranding, setShowBranding] = useState(false);
+  const [showPoweredBy, setShowPoweredBy] = useState(false);
+  const [confidentialMode, setConfidentialMode] = useState(false);
+  const [publisherName, setPublisherName] = useState('');
+  const [publisherImprint, setPublisherImprint] = useState('');
+  const [sanitizeMetadata, setSanitizeMetadata] = useState(true);
+  const [authorshipExpanded, setAuthorshipExpanded] = useState(false);
+  const [savingAuthorship, setSavingAuthorship] = useState(false);
   const { toast } = useToast();
   const { t } = useLanguage();
   
@@ -127,6 +143,56 @@ export function ExportDialog({
     }
   }, [defaultAuthorName]);
 
+  // Load saved publishing_settings when dialog opens
+  useEffect(() => {
+    if (!isOpen || !bookId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('books')
+        .select('publishing_settings')
+        .eq('id', bookId)
+        .maybeSingle();
+      if (cancelled || !data?.publishing_settings) return;
+      const s: any = data.publishing_settings;
+      setTransparencyMode((s.transparency_mode as TransparencyMode) || 'invisible');
+      setShowBranding(!!s.show_scrolllibrary_branding);
+      setShowPoweredBy(!!s.show_powered_by);
+      setConfidentialMode(!!s.confidential_mode);
+      setPublisherName(s.publisher_name || '');
+      setPublisherImprint(s.publisher_imprint || '');
+      setSanitizeMetadata(s.sanitize_metadata !== false);
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen, bookId]);
+
+  const buildPublishingSettings = () => ({
+    transparency_mode: transparencyMode,
+    show_scrolllibrary_branding: !confidentialMode && showBranding,
+    show_ai_assistance_notice: transparencyMode !== 'invisible',
+    show_powered_by: !confidentialMode && showPoweredBy,
+    publisher_name: publisherName.trim() || null,
+    publisher_imprint: publisherImprint.trim() || null,
+    sanitize_metadata: confidentialMode ? true : sanitizeMetadata,
+    confidential_mode: confidentialMode,
+  });
+
+  const saveAuthorshipSettings = async () => {
+    setSavingAuthorship(true);
+    try {
+      const { error } = await supabase
+        .from('books')
+        .update({ publishing_settings: buildPublishingSettings() } as any)
+        .eq('id', bookId);
+      if (error) throw error;
+      toast({ title: 'Saved', description: 'Authorship & disclosure settings saved.' });
+    } catch (e) {
+      toast({ title: 'Save failed', description: e instanceof Error ? e.message : 'Could not save', variant: 'destructive' });
+    } finally {
+      setSavingAuthorship(false);
+    }
+  };
+
   const handleExport = async (format: ExportFormat) => {
     if (!isAuthenticated) {
       toast({ title: "Authentication Required", description: "Please sign in to export your book.", variant: "destructive" });
@@ -154,6 +220,7 @@ export function ExportDialog({
         isbn: isbn.trim() || undefined,
         isAcademicMode,
         citationStyle,
+        publishingSettings: buildPublishingSettings(),
       };
 
       // Add KDP-specific params
@@ -280,6 +347,122 @@ export function ExportDialog({
             </span>
           </div>
         )}
+
+        {/* Authorship & Disclosure */}
+        <div className="rounded-lg border border-border/40 bg-muted/20">
+          <button
+            type="button"
+            onClick={() => setAuthorshipExpanded(v => !v)}
+            className="w-full flex items-center justify-between p-3 text-left"
+          >
+            <div className="flex items-center gap-2">
+              {transparencyMode === 'invisible' ? (
+                <EyeOff className="h-4 w-4 text-primary" />
+              ) : transparencyMode === 'transparent' ? (
+                <Eye className="h-4 w-4 text-primary" />
+              ) : (
+                <Sparkles className="h-4 w-4 text-primary" />
+              )}
+              <div>
+                <p className="text-xs font-semibold">Authorship & Disclosure</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {confidentialMode
+                    ? 'Confidential — fully sanitized, no AI/branding'
+                    : transparencyMode === 'invisible'
+                    ? 'Invisible — no AI references, publisher-clean'
+                    : transparencyMode === 'assisted'
+                    ? 'Assisted — single line on copyright page'
+                    : 'Transparent — full AI collaboration disclosure'}
+                </p>
+              </div>
+            </div>
+            {authorshipExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+
+          {authorshipExpanded && (
+            <div className="px-3 pb-3 space-y-3 border-t border-border/40 pt-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Transparency mode</Label>
+                <Select value={transparencyMode} onValueChange={(v) => setTransparencyMode(v as TransparencyMode)} disabled={confidentialMode}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="invisible">
+                      <span className="font-medium">Invisible</span>
+                      <span className="text-muted-foreground ml-2">— no AI references anywhere</span>
+                    </SelectItem>
+                    <SelectItem value="assisted">
+                      <span className="font-medium">Assisted writing</span>
+                      <span className="text-muted-foreground ml-2">— single line on copyright page</span>
+                    </SelectItem>
+                    <SelectItem value="transparent">
+                      <span className="font-medium">Transparent collaboration</span>
+                      <span className="text-muted-foreground ml-2">— full AI disclosure</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Publisher (optional)</Label>
+                  <Input
+                    value={publisherName}
+                    onChange={(e) => setPublisherName(e.target.value)}
+                    placeholder="e.g. Acme Press"
+                    className="h-8 text-xs text-foreground caret-foreground"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Imprint (optional)</Label>
+                  <Input
+                    value={publisherImprint}
+                    onChange={(e) => setPublisherImprint(e.target.value)}
+                    placeholder="e.g. Trade Books"
+                    className="h-8 text-xs text-foreground caret-foreground"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs">Show "Created with ScrollLibrary"</Label>
+                  <p className="text-[10px] text-muted-foreground">Visible branding on title/copyright pages</p>
+                </div>
+                <Switch checked={showBranding} onCheckedChange={setShowBranding} disabled={confidentialMode} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs">Show "Powered by ScrollLibrary"</Label>
+                  <p className="text-[10px] text-muted-foreground">Subtle footer line</p>
+                </div>
+                <Switch checked={showPoweredBy} onCheckedChange={setShowPoweredBy} disabled={confidentialMode} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs">Sanitize file metadata</Label>
+                  <p className="text-[10px] text-muted-foreground">Removes generator/producer fingerprints</p>
+                </div>
+                <Switch checked={sanitizeMetadata} onCheckedChange={setSanitizeMetadata} disabled={confidentialMode} />
+              </div>
+              <div className="flex items-center justify-between rounded-md bg-background p-2">
+                <div>
+                  <Label className="text-xs flex items-center gap-1.5"><Shield className="h-3.5 w-3.5 text-primary" /> Confidential / Ghostwriting mode</Label>
+                  <p className="text-[10px] text-muted-foreground">Forces invisible + sanitized + no branding</p>
+                </div>
+                <Switch checked={confidentialMode} onCheckedChange={setConfidentialMode} />
+              </div>
+
+              <div className="flex justify-end">
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={saveAuthorshipSettings} disabled={savingAuthorship}>
+                  {savingAuthorship ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                  Save as default for this book
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
 
         {/* Format buttons */}
         <div className="space-y-2">
