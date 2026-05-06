@@ -2226,6 +2226,7 @@ async function generateKDPPDF(
   bibliography: string[],
   trimSize: { width: number; height: number; name: string },
   useBleed: boolean,
+  ctx: ExportContext,
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
