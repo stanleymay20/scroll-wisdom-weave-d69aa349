@@ -91,6 +91,17 @@ export function ExportDialog({
   const [isOpen, setIsOpen] = useState(false);
   const [kdpTrimSize, setKdpTrimSize] = useState('6x9');
   const [kdpBleed, setKdpBleed] = useState(false);
+  // Authorship & disclosure
+  type TransparencyMode = 'invisible' | 'assisted' | 'transparent';
+  const [transparencyMode, setTransparencyMode] = useState<TransparencyMode>('invisible');
+  const [showBranding, setShowBranding] = useState(false);
+  const [showPoweredBy, setShowPoweredBy] = useState(false);
+  const [confidentialMode, setConfidentialMode] = useState(false);
+  const [publisherName, setPublisherName] = useState('');
+  const [publisherImprint, setPublisherImprint] = useState('');
+  const [sanitizeMetadata, setSanitizeMetadata] = useState(true);
+  const [authorshipExpanded, setAuthorshipExpanded] = useState(false);
+  const [savingAuthorship, setSavingAuthorship] = useState(false);
   const { toast } = useToast();
   const { t } = useLanguage();
   
