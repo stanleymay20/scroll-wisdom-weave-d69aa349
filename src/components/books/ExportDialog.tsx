@@ -348,6 +348,122 @@ export function ExportDialog({
           </div>
         )}
 
+        {/* Authorship & Disclosure */}
+        <div className="rounded-lg border border-border/40 bg-muted/20">
+          <button
+            type="button"
+            onClick={() => setAuthorshipExpanded(v => !v)}
+            className="w-full flex items-center justify-between p-3 text-left"
+          >
+            <div className="flex items-center gap-2">
+              {transparencyMode === 'invisible' ? (
+                <EyeOff className="h-4 w-4 text-primary" />
+              ) : transparencyMode === 'transparent' ? (
+                <Eye className="h-4 w-4 text-primary" />
+              ) : (
+                <Sparkles className="h-4 w-4 text-primary" />
+              )}
+              <div>
+                <p className="text-xs font-semibold">Authorship & Disclosure</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {confidentialMode
+                    ? 'Confidential — fully sanitized, no AI/branding'
+                    : transparencyMode === 'invisible'
+                    ? 'Invisible — no AI references, publisher-clean'
+                    : transparencyMode === 'assisted'
+                    ? 'Assisted — single line on copyright page'
+                    : 'Transparent — full AI collaboration disclosure'}
+                </p>
+              </div>
+            </div>
+            {authorshipExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+          </button>
+
+          {authorshipExpanded && (
+            <div className="px-3 pb-3 space-y-3 border-t border-border/40 pt-3">
+              <div className="space-y-1.5">
+                <Label className="text-xs font-medium">Transparency mode</Label>
+                <Select value={transparencyMode} onValueChange={(v) => setTransparencyMode(v as TransparencyMode)} disabled={confidentialMode}>
+                  <SelectTrigger className="h-9 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="invisible">
+                      <span className="font-medium">Invisible</span>
+                      <span className="text-muted-foreground ml-2">— no AI references anywhere</span>
+                    </SelectItem>
+                    <SelectItem value="assisted">
+                      <span className="font-medium">Assisted writing</span>
+                      <span className="text-muted-foreground ml-2">— single line on copyright page</span>
+                    </SelectItem>
+                    <SelectItem value="transparent">
+                      <span className="font-medium">Transparent collaboration</span>
+                      <span className="text-muted-foreground ml-2">— full AI disclosure</span>
+                    </SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Publisher (optional)</Label>
+                  <Input
+                    value={publisherName}
+                    onChange={(e) => setPublisherName(e.target.value)}
+                    placeholder="e.g. Acme Press"
+                    className="h-8 text-xs text-foreground caret-foreground"
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-[10px] text-muted-foreground">Imprint (optional)</Label>
+                  <Input
+                    value={publisherImprint}
+                    onChange={(e) => setPublisherImprint(e.target.value)}
+                    placeholder="e.g. Trade Books"
+                    className="h-8 text-xs text-foreground caret-foreground"
+                  />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs">Show "Created with ScrollLibrary"</Label>
+                  <p className="text-[10px] text-muted-foreground">Visible branding on title/copyright pages</p>
+                </div>
+                <Switch checked={showBranding} onCheckedChange={setShowBranding} disabled={confidentialMode} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs">Show "Powered by ScrollLibrary"</Label>
+                  <p className="text-[10px] text-muted-foreground">Subtle footer line</p>
+                </div>
+                <Switch checked={showPoweredBy} onCheckedChange={setShowPoweredBy} disabled={confidentialMode} />
+              </div>
+              <div className="flex items-center justify-between">
+                <div>
+                  <Label className="text-xs">Sanitize file metadata</Label>
+                  <p className="text-[10px] text-muted-foreground">Removes generator/producer fingerprints</p>
+                </div>
+                <Switch checked={sanitizeMetadata} onCheckedChange={setSanitizeMetadata} disabled={confidentialMode} />
+              </div>
+              <div className="flex items-center justify-between rounded-md bg-background p-2">
+                <div>
+                  <Label className="text-xs flex items-center gap-1.5"><Shield className="h-3.5 w-3.5 text-primary" /> Confidential / Ghostwriting mode</Label>
+                  <p className="text-[10px] text-muted-foreground">Forces invisible + sanitized + no branding</p>
+                </div>
+                <Switch checked={confidentialMode} onCheckedChange={setConfidentialMode} />
+              </div>
+
+              <div className="flex justify-end">
+                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={saveAuthorshipSettings} disabled={savingAuthorship}>
+                  {savingAuthorship ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
+                  Save as default for this book
+                </Button>
+              </div>
+            </div>
+          )}
+        </div>
+
         {/* Format buttons */}
         <div className="space-y-2">
           <Label className="text-xs font-medium">{t('export.format')}</Label>
