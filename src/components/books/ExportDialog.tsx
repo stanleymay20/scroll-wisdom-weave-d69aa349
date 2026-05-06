@@ -24,6 +24,11 @@ import {
   XCircle,
   Store,
   Lock,
+  EyeOff,
+  Eye,
+  Sparkles,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
