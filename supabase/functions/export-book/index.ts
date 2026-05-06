@@ -2807,12 +2807,18 @@ async function generateKDPPDF(
     }
   }
 
-  // Set PDF metadata
+  // Set PDF metadata (sanitized by default for publisher-clean exports)
   pdfDoc.setTitle(book.title);
   pdfDoc.setAuthor(author);
-  pdfDoc.setSubject(`KDP-ready | Trim: ${trimSize.name}`);
-  pdfDoc.setCreator('ScrollLibrary');
-  pdfDoc.setProducer('ScrollLibrary KDP Export');
+  if (ctx.sanitizeMeta) {
+    pdfDoc.setSubject(book.category?.replace(/_/g, ' ') || 'Book');
+    pdfDoc.setCreator(ctx.pub.publisher_name || author);
+    pdfDoc.setProducer(ctx.pub.publisher_name || author);
+  } else {
+    pdfDoc.setSubject(`KDP-ready | Trim: ${trimSize.name}`);
+    pdfDoc.setCreator(ctx.showBranding ? 'ScrollLibrary' : (ctx.pub.publisher_name || author));
+    pdfDoc.setProducer(ctx.showBranding ? 'ScrollLibrary KDP Export' : (ctx.pub.publisher_name || author));
+  }
 
   return pdfDoc.save();
 }
