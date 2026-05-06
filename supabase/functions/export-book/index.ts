@@ -2821,7 +2821,8 @@ async function generateEPUB(
   coverImageBytes: Uint8Array | null,
   isAcademic: boolean,
   citationStyle: string,
-  bibliography: string[]
+  bibliography: string[],
+  ctx: ExportContext,
 ): Promise<ArrayBuffer> {
   const blobWriter = new zip.BlobWriter("application/epub+zip");
   const zipWriter = new zip.ZipWriter(blobWriter);
