@@ -220,6 +220,7 @@ export function ExportDialog({
         isbn: isbn.trim() || undefined,
         isAcademicMode,
         citationStyle,
+        publishingSettings: buildPublishingSettings(),
       };
 
       // Add KDP-specific params
