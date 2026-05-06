@@ -2321,20 +2321,27 @@ async function generateKDPPDF(
   page = pdfDoc.addPage([pageWidth, pageHeight]);
   pageNumber++;
   y = pageHeight * 0.45;
-  const copyrightLines = [
+  const copyrightLines: string[] = [
     `Copyright \u00A9 ${year} ${author}`,
     'All rights reserved.',
     '',
     isISBN ? `ISBN: ${identifier}` : `Reference: ${identifier}`,
     '',
     `Trim Size: ${trimSize.name}`,
-    '',
-    'This book was created with AI assistance via ScrollLibrary.',
-    'The author retains full ownership and commercial rights.',
-    '',
-    'No part of this publication may be reproduced, distributed,',
-    'or transmitted in any form without prior written permission.',
   ];
+  if (ctx.pub.publisher_name) {
+    copyrightLines.push('', `Published by ${ctx.pub.publisher_name}${ctx.pub.publisher_imprint ? ` — ${ctx.pub.publisher_imprint}` : ''}`);
+  }
+  if (ctx.showAINotice) {
+    copyrightLines.push('', 'This work was developed with editorial and AI-assisted tooling',
+      'under full authorship ownership by the author.');
+  }
+  if (ctx.showAILongDisclosure) {
+    copyrightLines.push('', 'AI Collaboration Disclosure: portions of this work were drafted,',
+      'refined, or edited with AI assistance via ScrollLibrary.');
+  }
+  copyrightLines.push('', 'No part of this publication may be reproduced, distributed,',
+    'or transmitted in any form without prior written permission.');
   for (const line of copyrightLines) {
     page.drawText(sanitizeForPDF(line), {
       x: getLeftMargin(pageNumber), y, size: 9, font: timesRoman, color: rgb(0.3, 0.3, 0.3),
