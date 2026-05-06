@@ -3343,7 +3343,8 @@ async function generateDOCX(
   coverImageBytes: Uint8Array | null,
   isAcademic: boolean,
   citationStyle: string,
-  bibliography: string[]
+  bibliography: string[],
+  ctx: ExportContext,
 ): Promise<ArrayBuffer> {
   const blobWriter = new zip.BlobWriter("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
   const zipWriter = new zip.ZipWriter(blobWriter);
