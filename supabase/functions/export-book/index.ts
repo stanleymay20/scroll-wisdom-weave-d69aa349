@@ -3172,7 +3172,7 @@ ${htmlContent}
     <dc:title>${escapeXml(book.title)}</dc:title>
     <dc:creator>${escapeXml(author)}</dc:creator>
     <dc:language>${book.language || 'en'}</dc:language>
-    <dc:publisher>ScrollLibrary</dc:publisher>
+    <dc:publisher>${escapeXml(ctx.pub.publisher_name || (ctx.showBranding ? 'ScrollLibrary' : author))}</dc:publisher>
     <dc:date>${year}</dc:date>
     <meta property="dcterms:modified">${new Date().toISOString().split('.')[0]}Z</meta>
     ${hasCover ? '<meta name="cover" content="cover-image"/>' : ''}
