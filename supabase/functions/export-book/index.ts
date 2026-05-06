@@ -997,6 +997,40 @@ serve(async (req) => {
     const isISBN = isbn && isValidISBN(isbn);
     const year = new Date().getFullYear();
 
+    // ===== AUTHORSHIP & DISCLOSURE SETTINGS =====
+    // Default: invisible mode (no AI/ScrollLibrary references anywhere in export).
+    // Per-export overrides take precedence over book-level saved settings.
+    const DEFAULT_PUB_SETTINGS = {
+      transparency_mode: 'invisible' as 'invisible' | 'assisted' | 'transparent',
+      show_scrolllibrary_branding: false,
+      show_ai_assistance_notice: false,
+      show_powered_by: false,
+      publisher_name: null as string | null,
+      publisher_imprint: null as string | null,
+      sanitize_metadata: true,
+      confidential_mode: false,
+    };
+    const pub = {
+      ...DEFAULT_PUB_SETTINGS,
+      ...(book.publishing_settings || {}),
+      ...(publishingSettingsOverride || {}),
+    };
+    // Confidential mode forces invisible + sanitize + no branding.
+    if (pub.confidential_mode) {
+      pub.transparency_mode = 'invisible';
+      pub.sanitize_metadata = true;
+      pub.show_scrolllibrary_branding = false;
+      pub.show_ai_assistance_notice = false;
+      pub.show_powered_by = false;
+    }
+    const showAINotice = pub.transparency_mode !== 'invisible' && pub.show_ai_assistance_notice;
+    const showAILongDisclosure = pub.transparency_mode === 'transparent';
+    const showBranding = !pub.confidential_mode && pub.show_scrolllibrary_branding;
+    const showPoweredBy = !pub.confidential_mode && pub.show_powered_by;
+    const effectivePublisher = pub.publisher_name || (showBranding ? 'ScrollLibrary' : finalAuthorName);
+    const sanitizeMeta = pub.sanitize_metadata;
+    const exportContext = { pub, showAINotice, showAILongDisclosure, showBranding, showPoweredBy, effectivePublisher, sanitizeMeta };
+
     // Generate bibliography for ALL books (from chapter refs + book_citations table)
     let bibliography = generateBibliography(chapters, effectiveCitationStyle);
     
