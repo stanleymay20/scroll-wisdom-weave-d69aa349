@@ -699,6 +699,51 @@ export type Database = {
           },
         ]
       }
+      citation_flags: {
+        Row: {
+          book_id: string
+          chapter_id: string | null
+          claim_text: string
+          created_at: string
+          flag_type: string
+          id: string
+          resolved_citation_id: string | null
+          severity: string
+          status: string
+          suggested_sources: Json
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          chapter_id?: string | null
+          claim_text: string
+          created_at?: string
+          flag_type?: string
+          id?: string
+          resolved_citation_id?: string | null
+          severity?: string
+          status?: string
+          suggested_sources?: Json
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          chapter_id?: string | null
+          claim_text?: string
+          created_at?: string
+          flag_type?: string
+          id?: string
+          resolved_citation_id?: string | null
+          severity?: string
+          status?: string
+          suggested_sources?: Json
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       competency_certificates: {
         Row: {
           ai_evaluation_summary: string | null
@@ -1275,6 +1320,45 @@ export type Database = {
           },
         ]
       }
+      humanization_passes: {
+        Row: {
+          after_stats: Json
+          authenticity_delta: number | null
+          before_stats: Json
+          book_id: string
+          chapter_id: string | null
+          created_at: string
+          id: string
+          pattern_flags: Json
+          status: string
+          user_id: string
+        }
+        Insert: {
+          after_stats?: Json
+          authenticity_delta?: number | null
+          before_stats?: Json
+          book_id: string
+          chapter_id?: string | null
+          created_at?: string
+          id?: string
+          pattern_flags?: Json
+          status?: string
+          user_id: string
+        }
+        Update: {
+          after_stats?: Json
+          authenticity_delta?: number | null
+          before_stats?: Json
+          book_id?: string
+          chapter_id?: string | null
+          created_at?: string
+          id?: string
+          pattern_flags?: Json
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       learner_concept_states: {
         Row: {
           application_confidence: number
@@ -1663,6 +1747,66 @@ export type Database = {
         }
         Relationships: []
       }
+      publishing_audits: {
+        Row: {
+          book_id: string
+          certification_tier: string | null
+          citation_confidence_score: number | null
+          commercial_score: number | null
+          created_at: string
+          engagement_score: number | null
+          findings: Json
+          formatting_score: number | null
+          human_authenticity_score: number | null
+          id: string
+          layer: string
+          metadata: Json
+          publish_readiness_score: number | null
+          status: string
+          strategic_depth_score: number | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          certification_tier?: string | null
+          citation_confidence_score?: number | null
+          commercial_score?: number | null
+          created_at?: string
+          engagement_score?: number | null
+          findings?: Json
+          formatting_score?: number | null
+          human_authenticity_score?: number | null
+          id?: string
+          layer?: string
+          metadata?: Json
+          publish_readiness_score?: number | null
+          status?: string
+          strategic_depth_score?: number | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          certification_tier?: string | null
+          citation_confidence_score?: number | null
+          commercial_score?: number | null
+          created_at?: string
+          engagement_score?: number | null
+          findings?: Json
+          formatting_score?: number | null
+          human_authenticity_score?: number | null
+          id?: string
+          layer?: string
+          metadata?: Json
+          publish_readiness_score?: number | null
+          status?: string
+          strategic_depth_score?: number | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       publishing_certificates: {
         Row: {
           book_id: string
@@ -1715,6 +1859,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      publishing_readiness_snapshots: {
+        Row: {
+          audit_id: string | null
+          book_id: string
+          certification_tier: string | null
+          created_at: string
+          id: string
+          notes: string | null
+          scores: Json
+          user_id: string
+        }
+        Insert: {
+          audit_id?: string | null
+          book_id: string
+          certification_tier?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          scores?: Json
+          user_id: string
+        }
+        Update: {
+          audit_id?: string | null
+          book_id?: string
+          certification_tier?: string | null
+          created_at?: string
+          id?: string
+          notes?: string | null
+          scores?: Json
+          user_id?: string
+        }
+        Relationships: []
       }
       quiz_attempts: {
         Row: {

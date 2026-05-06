@@ -78,6 +78,7 @@ const OrgAnalytics = lazy(() => import("./pages/OrgAnalytics"));
 const VerifyLookup = lazy(() => import("./pages/VerifyLookup"));
 const CitationGraph = lazy(() => import("./pages/CitationGraph"));
 const StudySession = lazy(() => import("./pages/StudySession"));
+const PublishingCommandCenter = lazy(() => import("./pages/PublishingCommandCenter"));
 const Cognition = lazy(() => import("./pages/Cognition"));
 const DataExport = lazy(() => import("./pages/DataExport"));
 
@@ -211,6 +212,7 @@ const App = () => (
                   <Route path="/study" element={withRecovery('StudySession', <ProtectedRoute><StudySession /></ProtectedRoute>)} />
                   <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />
                   <Route path="/account/data-export" element={<ProtectedRoute><DataExport /></ProtectedRoute>} />
+                  <Route path="/book/:bookId/publishing" element={withRecovery('PublishingCommandCenter', <ProtectedRoute><PublishingCommandCenter /></ProtectedRoute>)} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
