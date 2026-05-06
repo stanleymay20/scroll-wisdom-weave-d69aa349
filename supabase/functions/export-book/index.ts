@@ -2185,8 +2185,13 @@ async function generatePDF(
   pdfDoc.setTitle(book.title);
   pdfDoc.setAuthor(author);
   pdfDoc.setSubject(book.category?.replace(/_/g, ' ') || 'Book');
-  pdfDoc.setCreator('ScrollLibrary');
-  pdfDoc.setProducer('ScrollLibrary Export Engine');
+  if (ctx.sanitizeMeta) {
+    pdfDoc.setCreator(ctx.pub.publisher_name || author);
+    pdfDoc.setProducer(ctx.pub.publisher_name || author);
+  } else {
+    pdfDoc.setCreator(ctx.showBranding ? 'ScrollLibrary' : (ctx.pub.publisher_name || author));
+    pdfDoc.setProducer(ctx.showBranding ? 'ScrollLibrary Export Engine' : (ctx.pub.publisher_name || author));
+  }
   
   return pdfDoc.save();
 }
