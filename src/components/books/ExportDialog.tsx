@@ -143,6 +143,56 @@ export function ExportDialog({
     }
   }, [defaultAuthorName]);
 
+  // Load saved publishing_settings when dialog opens
+  useEffect(() => {
+    if (!isOpen || !bookId) return;
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('books')
+        .select('publishing_settings')
+        .eq('id', bookId)
+        .maybeSingle();
+      if (cancelled || !data?.publishing_settings) return;
+      const s: any = data.publishing_settings;
+      setTransparencyMode((s.transparency_mode as TransparencyMode) || 'invisible');
+      setShowBranding(!!s.show_scrolllibrary_branding);
+      setShowPoweredBy(!!s.show_powered_by);
+      setConfidentialMode(!!s.confidential_mode);
+      setPublisherName(s.publisher_name || '');
+      setPublisherImprint(s.publisher_imprint || '');
+      setSanitizeMetadata(s.sanitize_metadata !== false);
+    })();
+    return () => { cancelled = true; };
+  }, [isOpen, bookId]);
+
+  const buildPublishingSettings = () => ({
+    transparency_mode: transparencyMode,
+    show_scrolllibrary_branding: !confidentialMode && showBranding,
+    show_ai_assistance_notice: transparencyMode !== 'invisible',
+    show_powered_by: !confidentialMode && showPoweredBy,
+    publisher_name: publisherName.trim() || null,
+    publisher_imprint: publisherImprint.trim() || null,
+    sanitize_metadata: confidentialMode ? true : sanitizeMetadata,
+    confidential_mode: confidentialMode,
+  });
+
+  const saveAuthorshipSettings = async () => {
+    setSavingAuthorship(true);
+    try {
+      const { error } = await supabase
+        .from('books')
+        .update({ publishing_settings: buildPublishingSettings() } as any)
+        .eq('id', bookId);
+      if (error) throw error;
+      toast({ title: 'Saved', description: 'Authorship & disclosure settings saved.' });
+    } catch (e) {
+      toast({ title: 'Save failed', description: e instanceof Error ? e.message : 'Could not save', variant: 'destructive' });
+    } finally {
+      setSavingAuthorship(false);
+    }
+  };
+
   const handleExport = async (format: ExportFormat) => {
     if (!isAuthenticated) {
       toast({ title: "Authentication Required", description: "Please sign in to export your book.", variant: "destructive" });
