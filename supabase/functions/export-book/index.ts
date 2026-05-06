@@ -1289,30 +1289,42 @@ async function generatePDF(
     });
   }
   
-  page.drawText(`Created with ScrollLibrary - AI-Assisted Content`, {
-    x: margin,
-    y: margin + 50,
-    size: 10,
-    font: helvetica,
-    color: rgb(0.5, 0.5, 0.5),
-  });
+  if (ctx.showPoweredBy || ctx.showBranding) {
+    page.drawText(ctx.showBranding ? `Created with ScrollLibrary` : `Powered by ScrollLibrary`, {
+      x: margin,
+      y: margin + 50,
+      size: 10,
+      font: helvetica,
+      color: rgb(0.5, 0.5, 0.5),
+    });
+  }
 
   // Copyright Page
   page = pdfDoc.addPage([pageWidth, pageHeight]);
   pageNumber++;
   y = margin + 200;
   
-  const copyrightText = [
+  const copyrightText: string[] = [
     `Copyright ${year} ${author}. All rights reserved.`,
     "",
     isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`,
     isISBN ? "" : "(Internal identifier - not an ISBN)",
-    "",
-    "This work was created with AI assistance under the full authorship",
-    "and ownership of the author. The author retains all commercial rights.",
-    "",
-    `Created with ScrollLibrary`,
   ];
+  if (ctx.pub.publisher_name) {
+    copyrightText.push("", `Published by ${ctx.pub.publisher_name}${ctx.pub.publisher_imprint ? ` — ${ctx.pub.publisher_imprint}` : ''}`);
+  }
+  if (ctx.showAINotice) {
+    copyrightText.push("", "This work was developed with editorial and AI-assisted tooling");
+    copyrightText.push("under full authorship ownership by the author.");
+  }
+  if (ctx.showAILongDisclosure) {
+    copyrightText.push("", "AI Collaboration Disclosure: portions of this work were drafted,");
+    copyrightText.push("refined, or edited with AI assistance via ScrollLibrary. The author");
+    copyrightText.push("retains intellectual ownership and final editorial control.");
+  }
+  if (ctx.showBranding) {
+    copyrightText.push("", `Created with ScrollLibrary`);
+  }
   
   // Add academic disclaimer if needed
   if (isAcademic) {
