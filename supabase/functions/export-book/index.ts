@@ -3716,8 +3716,18 @@ async function generateDOCX(
   documentContent += `
 <w:p><w:r><w:t></w:t></w:r></w:p>
 <w:p><w:r><w:t>© ${year} ${escapeXml(author)}. All rights reserved.</w:t></w:r></w:p>
-<w:p><w:r><w:t>${isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`}</w:t></w:r></w:p>
-<w:p><w:r><w:t>Created with ScrollLibrary - AI-Assisted Content</w:t></w:r></w:p>`;
+<w:p><w:r><w:t>${isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`}</w:t></w:r></w:p>`;
+  if (ctx.pub.publisher_name) {
+    documentContent += `<w:p><w:r><w:t>Published by ${escapeXml(ctx.pub.publisher_name)}${ctx.pub.publisher_imprint ? ` — ${escapeXml(ctx.pub.publisher_imprint)}` : ''}</w:t></w:r></w:p>`;
+  }
+  if (ctx.showAINotice) {
+    documentContent += `<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>This work was developed with editorial and AI-assisted tooling under full authorship ownership by the author.</w:t></w:r></w:p>`;
+  }
+  if (ctx.showBranding) {
+    documentContent += `<w:p><w:r><w:t>Created with ScrollLibrary</w:t></w:r></w:p>`;
+  } else if (ctx.showPoweredBy) {
+    documentContent += `<w:p><w:r><w:t>Powered by ScrollLibrary</w:t></w:r></w:p>`;
+  }
 
   // Academic notice
   if (isAcademic) {
@@ -3731,15 +3741,15 @@ async function generateDOCX(
 
   documentContent += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
 
-  // Dedication Page
-  documentContent += `
+  // Dedication Page (only when transparent mode requests AI disclosure)
+  if (ctx.showAILongDisclosure) {
+    documentContent += `
 <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
 <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
-<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
-<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:t></w:t></w:r></w:p>
-<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>This book was created with AI assistance via ScrollLibrary.</w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>This book was developed with AI assistance via ScrollLibrary.</w:t></w:r></w:p>
 <w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>The author retains full ownership and commercial rights.</w:t></w:r></w:p>
 <w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+  }
 
   // Chapters with embedded images and tables
   let docPicId = 2;
