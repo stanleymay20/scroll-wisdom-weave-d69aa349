@@ -865,7 +865,7 @@ serve(async (req) => {
       ? ALL_FORMATS 
       : (TIER_FORMATS[userPlan as keyof typeof TIER_FORMATS] || TIER_FORMATS.free);
 
-    const { bookId, format, authorName, isbn, isAcademicMode, academicMode, citationStyle, kdpTrimSize, kdpBleed } = await req.json();
+    const { bookId, format, authorName, isbn, isAcademicMode, academicMode, citationStyle, kdpTrimSize, kdpBleed, publishingSettings: publishingSettingsOverride } = await req.json();
     
     // Support both param names (client sends isAcademicMode, legacy sends academicMode)
     const resolvedAcademicMode = isAcademicMode || academicMode || false;
