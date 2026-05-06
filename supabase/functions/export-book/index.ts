@@ -27,6 +27,26 @@ const TIER_FORMATS = {
   prophet_tier: ["pdf", "epub", "docx", "kdp-pdf"],
 };
 
+// Authorship & disclosure context resolved per-export
+interface ExportContext {
+  pub: {
+    transparency_mode: 'invisible' | 'assisted' | 'transparent';
+    show_scrolllibrary_branding: boolean;
+    show_ai_assistance_notice: boolean;
+    show_powered_by: boolean;
+    publisher_name: string | null;
+    publisher_imprint: string | null;
+    sanitize_metadata: boolean;
+    confidential_mode: boolean;
+  };
+  showAINotice: boolean;
+  showAILongDisclosure: boolean;
+  showBranding: boolean;
+  showPoweredBy: boolean;
+  effectivePublisher: string;
+  sanitizeMeta: boolean;
+}
+
 // All formats available during trial
 const ALL_FORMATS = ["pdf", "epub", "docx", "kdp-pdf"];
 
