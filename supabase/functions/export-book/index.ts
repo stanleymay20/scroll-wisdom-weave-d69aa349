@@ -3285,7 +3285,9 @@ ${isAcademic ? `<p><em>[Academic Content - ${citationStyle} Citations]</em></p>`
 <hr/>
 <p>© ${year} ${escapeXml(author)}. All rights reserved.</p>
 <p>${isISBN ? `ISBN: ${identifier}` : `SPC: ${identifier}`}</p>
-<p>Created with ScrollLibrary - AI-Assisted Content</p>`;
+${ctx.pub.publisher_name ? `<p>Published by ${escapeXml(ctx.pub.publisher_name)}${ctx.pub.publisher_imprint ? ` — ${escapeXml(ctx.pub.publisher_imprint)}` : ''}</p>` : ''}
+${ctx.showAINotice ? `<p><em>This work was developed with editorial and AI-assisted tooling under full authorship ownership by the author.</em></p>` : ''}
+${ctx.showBranding ? `<p>Created with ScrollLibrary</p>` : (ctx.showPoweredBy ? `<p>Powered by ScrollLibrary</p>` : '')}`;
 
   if (isAcademic) {
     titleContent += `
@@ -3300,15 +3302,17 @@ All references in this document are retrieved from verifiable academic databases
 </html>`;
   await zipWriter.add("OEBPS/title.xhtml", new zip.TextReader(titleContent));
 
-  // Dedication Page
+  // Dedication Page (blank by default; AI disclosure only when transparent)
+  const dedicationInner = ctx.showAILongDisclosure
+    ? `<p>This book was developed with AI assistance via ScrollLibrary.</p><p>The author retains full ownership and commercial rights.</p>`
+    : '';
   const dedicationXhtml = `<?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE html>
 <html xmlns="http://www.w3.org/1999/xhtml">
 <head><title>About This Book</title><link rel="stylesheet" href="style.css"/></head>
 <body>
 <div style="text-align: center; margin-top: 40%; font-style: italic;">
-<p>This book was created with AI assistance via ScrollLibrary.</p>
-<p>The author retains full ownership and commercial rights.</p>
+${dedicationInner}
 </div>
 </body>
 </html>`;
