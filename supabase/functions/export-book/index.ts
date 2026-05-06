@@ -1142,7 +1142,8 @@ async function generatePDF(
   coverImageBytes: Uint8Array | null,
   isAcademic: boolean,
   citationStyle: string,
-  bibliography: string[]
+  bibliography: string[],
+  ctx: ExportContext,
 ): Promise<Uint8Array> {
   const pdfDoc = await PDFDocument.create();
   const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
