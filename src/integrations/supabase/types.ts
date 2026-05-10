@@ -2208,6 +2208,119 @@ export type Database = {
           },
         ]
       }
+      scrollvision_assets: {
+        Row: {
+          attribution: string | null
+          content_hash: string | null
+          created_at: string
+          description: string | null
+          entity: string | null
+          height: number | null
+          id: string
+          image_url: string
+          license: string | null
+          metadata: Json
+          query: string | null
+          relevance_score: number | null
+          source: string
+          source_id: string | null
+          source_url: string
+          thumbnail_url: string | null
+          title: string | null
+          updated_at: string
+          width: number | null
+        }
+        Insert: {
+          attribution?: string | null
+          content_hash?: string | null
+          created_at?: string
+          description?: string | null
+          entity?: string | null
+          height?: number | null
+          id?: string
+          image_url: string
+          license?: string | null
+          metadata?: Json
+          query?: string | null
+          relevance_score?: number | null
+          source: string
+          source_id?: string | null
+          source_url: string
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          width?: number | null
+        }
+        Update: {
+          attribution?: string | null
+          content_hash?: string | null
+          created_at?: string
+          description?: string | null
+          entity?: string | null
+          height?: number | null
+          id?: string
+          image_url?: string
+          license?: string | null
+          metadata?: Json
+          query?: string | null
+          relevance_score?: number | null
+          source?: string
+          source_id?: string | null
+          source_url?: string
+          thumbnail_url?: string | null
+          title?: string | null
+          updated_at?: string
+          width?: number | null
+        }
+        Relationships: []
+      }
+      scrollvision_chapter_assets: {
+        Row: {
+          asset_id: string
+          book_id: string
+          caption: string | null
+          chapter_id: string
+          created_at: string
+          entity: string | null
+          id: string
+          is_active: boolean
+          placement_order: number
+          updated_at: string
+        }
+        Insert: {
+          asset_id: string
+          book_id: string
+          caption?: string | null
+          chapter_id: string
+          created_at?: string
+          entity?: string | null
+          id?: string
+          is_active?: boolean
+          placement_order?: number
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string
+          book_id?: string
+          caption?: string | null
+          chapter_id?: string
+          created_at?: string
+          entity?: string | null
+          id?: string
+          is_active?: boolean
+          placement_order?: number
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "scrollvision_chapter_assets_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "scrollvision_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       spaced_repetition_cards: {
         Row: {
           answer: string
