@@ -60,6 +60,7 @@ const VoiceConversation = lazy(() => import("@/components/reader/VoiceConversati
 import { TextHighlighter } from "@/components/reader/TextHighlighter";
 import { QuizMode } from "@/components/reader/QuizMode";
 import { MarkdownRenderer } from "@/components/reader/MarkdownRenderer";
+import { EvidencePanel } from "@/components/reader/EvidencePanel";
 import { ReaderSkeleton } from "@/components/reader/ReaderSkeleton";
 const CodePlayground = lazy(() => import("@/components/reader/CodePlayground").then(m => ({ default: m.CodePlayground })));
 
