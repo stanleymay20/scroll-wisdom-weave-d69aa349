@@ -99,14 +99,17 @@ export function EvidencePanel({ bookId, chapterId, chapterTitle, chapterContent 
           size="sm"
           variant="outline"
           onClick={handleRetrieve}
-          disabled={retrieving || !chapterContent}
+          disabled={retrieving || tooShort}
+          title={tooShort ? "Chapter content too short" : undefined}
         >
           {retrieving ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <Sparkles className="h-3.5 w-3.5" />
           )}
-          <span className="ml-2">{assets.length > 0 ? "Refresh" : "Retrieve"}</span>
+          <span className="ml-2">
+            {retrieving ? "Retrieving…" : assets.length > 0 ? "Refresh evidence" : "Retrieve"}
+          </span>
         </Button>
       </header>
 
@@ -116,8 +119,13 @@ export function EvidencePanel({ bookId, chapterId, chapterTitle, chapterContent 
         </div>
       ) : assets.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          No real-image evidence linked yet. Click <strong>Retrieve</strong> to pull from
-          Wikimedia Commons & The Met.
+          {failed ? (
+            <>Retrieval failed. Click <strong>Retrieve</strong> to try again.</>
+          ) : tooShort ? (
+            <>Chapter is too short for evidence retrieval.</>
+          ) : (
+            <>No real-image evidence linked yet. Click <strong>Retrieve</strong> to pull verified images from Wikimedia Commons &amp; The Met.</>
+          )}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
