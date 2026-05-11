@@ -5718,6 +5718,54 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
 
     console.log(`[GENERATE-CHAPTER] Chapter ${chapterNumber} saved (${actualWordCount} words)`);
 
+    // ScrollVision Phase 2: auto-trigger evidence retrieval (non-blocking, safe)
+    try {
+      const bookIdForVision = chapter?.book_id;
+      const trimmed = (finalContent || "").trim();
+      if (bookIdForVision && chapterId && trimmed.length >= 400) {
+        const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+        const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        // Skip if assets already exist (dedupe by chapter)
+        const { count: existingAssets } = await supabase
+          .from("scrollvision_chapter_assets")
+          .select("id", { count: "exact", head: true })
+          .eq("chapter_id", chapterId)
+          .eq("is_active", true);
+        if (!existingAssets || existingAssets === 0) {
+          console.log(`[SCROLLVISION] Auto-retrieving evidence for chapter ${chapterId.slice(0,8)}...`);
+          // Fire-and-forget; do not await long
+          fetch(`${SUPABASE_URL}/functions/v1/scrollvision-retrieve`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${SERVICE_KEY}`,
+              apikey: SERVICE_KEY,
+            },
+            body: JSON.stringify({
+              bookId: bookIdForVision,
+              chapterId,
+              title: chapterTitle,
+              content: trimmed.slice(0, 6000),
+              maxAssets: 6,
+            }),
+          })
+            .then(async (r) => {
+              const j = await r.json().catch(() => ({}));
+              console.log(`[SCROLLVISION] Auto-retrieve result`, {
+                status: r.status,
+                linked: j?.linked,
+                entities: j?.entities?.length,
+              });
+            })
+            .catch((e) => console.warn("[SCROLLVISION] Auto-retrieve failed:", String(e)));
+        } else {
+          console.log(`[SCROLLVISION] Skip auto-retrieve — ${existingAssets} assets already linked`);
+        }
+      }
+    } catch (visionErr) {
+      console.warn("[SCROLLVISION] Auto-trigger error (ignored):", String(visionErr));
+    }
+
     return new Response(JSON.stringify({
       success: true,
       wordCount: actualWordCount,

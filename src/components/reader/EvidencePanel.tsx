@@ -25,6 +25,7 @@ export function EvidencePanel({ bookId, chapterId, chapterTitle, chapterContent 
   const [assets, setAssets] = useState<ChapterAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [retrieving, setRetrieving] = useState(false);
+  const [failed, setFailed] = useState(false);
   const { toast } = useToast();
 
   const load = useCallback(async () => {
@@ -38,22 +39,31 @@ export function EvidencePanel({ bookId, chapterId, chapterTitle, chapterContent 
     load();
   }, [load]);
 
+  const tooShort = !chapterContent || chapterContent.trim().length < 400;
+
   const handleRetrieve = async () => {
-    if (!chapterContent) {
+    if (tooShort) {
       toast({
-        title: "No content",
-        description: "Chapter content unavailable for retrieval.",
+        title: "Chapter too short",
+        description: "Add more content before retrieving evidence.",
         variant: "destructive",
       });
       return;
     }
     setRetrieving(true);
+    setFailed(false);
     try {
       const r = await retrieveChapterEvidence({
         bookId,
         chapterId,
         title: chapterTitle,
         content: chapterContent,
+        maxAssets: 6,
+      });
+      console.log("[ScrollVision] retrieve result", {
+        entities: r.entities?.length,
+        candidates: r.candidates,
+        linked: r.linked,
       });
       toast({
         title: "Evidence retrieved",
@@ -61,6 +71,8 @@ export function EvidencePanel({ bookId, chapterId, chapterTitle, chapterContent 
       });
       await load();
     } catch (e: any) {
+      console.warn("[ScrollVision] retrieve failed", e);
+      setFailed(true);
       toast({
         title: "Retrieval failed",
         description: e?.message ?? "Try again shortly.",
@@ -87,14 +99,17 @@ export function EvidencePanel({ bookId, chapterId, chapterTitle, chapterContent 
           size="sm"
           variant="outline"
           onClick={handleRetrieve}
-          disabled={retrieving || !chapterContent}
+          disabled={retrieving || tooShort}
+          title={tooShort ? "Chapter content too short" : undefined}
         >
           {retrieving ? (
             <Loader2 className="h-3.5 w-3.5 animate-spin" />
           ) : (
             <Sparkles className="h-3.5 w-3.5" />
           )}
-          <span className="ml-2">{assets.length > 0 ? "Refresh" : "Retrieve"}</span>
+          <span className="ml-2">
+            {retrieving ? "Retrieving…" : assets.length > 0 ? "Refresh evidence" : "Retrieve"}
+          </span>
         </Button>
       </header>
 
@@ -104,8 +119,13 @@ export function EvidencePanel({ bookId, chapterId, chapterTitle, chapterContent 
         </div>
       ) : assets.length === 0 ? (
         <div className="rounded-lg border border-dashed border-border p-6 text-center text-sm text-muted-foreground">
-          No real-image evidence linked yet. Click <strong>Retrieve</strong> to pull from
-          Wikimedia Commons & The Met.
+          {failed ? (
+            <>Retrieval failed. Click <strong>Retrieve</strong> to try again.</>
+          ) : tooShort ? (
+            <>Chapter is too short for evidence retrieval.</>
+          ) : (
+            <>No real-image evidence linked yet. Click <strong>Retrieve</strong> to pull verified images from Wikimedia Commons &amp; The Met.</>
+          )}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2">
