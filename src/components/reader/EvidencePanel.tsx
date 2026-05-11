@@ -25,6 +25,7 @@ export function EvidencePanel({ bookId, chapterId, chapterTitle, chapterContent 
   const [assets, setAssets] = useState<ChapterAsset[]>([]);
   const [loading, setLoading] = useState(true);
   const [retrieving, setRetrieving] = useState(false);
+  const [failed, setFailed] = useState(false);
   const { toast } = useToast();
 
   const load = useCallback(async () => {
@@ -38,22 +39,31 @@ export function EvidencePanel({ bookId, chapterId, chapterTitle, chapterContent 
     load();
   }, [load]);
 
+  const tooShort = !chapterContent || chapterContent.trim().length < 400;
+
   const handleRetrieve = async () => {
-    if (!chapterContent) {
+    if (tooShort) {
       toast({
-        title: "No content",
-        description: "Chapter content unavailable for retrieval.",
+        title: "Chapter too short",
+        description: "Add more content before retrieving evidence.",
         variant: "destructive",
       });
       return;
     }
     setRetrieving(true);
+    setFailed(false);
     try {
       const r = await retrieveChapterEvidence({
         bookId,
         chapterId,
         title: chapterTitle,
         content: chapterContent,
+        maxAssets: 6,
+      });
+      console.log("[ScrollVision] retrieve result", {
+        entities: r.entities?.length,
+        candidates: r.candidates,
+        linked: r.linked,
       });
       toast({
         title: "Evidence retrieved",
@@ -61,6 +71,8 @@ export function EvidencePanel({ bookId, chapterId, chapterTitle, chapterContent 
       });
       await load();
     } catch (e: any) {
+      console.warn("[ScrollVision] retrieve failed", e);
+      setFailed(true);
       toast({
         title: "Retrieval failed",
         description: e?.message ?? "Try again shortly.",
