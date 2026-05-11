@@ -1770,6 +1770,18 @@ export default function Reader() {
                 }}
               />
             )}
+
+            {/* ScrollVision Phase 2: Real-image evidence from open archives */}
+            {chapter?.id && bookId && chapter?.content && (
+              <div className="mt-10 border-t border-border pt-8">
+                <EvidencePanel
+                  bookId={bookId}
+                  chapterId={chapter.id}
+                  chapterTitle={chapter.title}
+                  chapterContent={chapter.content}
+                />
+              </div>
+            )}
           </motion.div>
         </article>
       </main>
