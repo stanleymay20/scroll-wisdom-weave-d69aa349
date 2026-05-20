@@ -149,19 +149,25 @@ serve(async (req) => {
             purchased_at: new Date().toISOString(),
           };
 
+          let purchaseId: string | null = existing?.id ?? null;
           if (existing) {
             await supabase.from("book_purchases").update(updatePayload).eq("id", existing.id);
           } else {
-            // Use upsert on stripe_session_id to survive concurrent retries
-            await supabase.from("book_purchases").upsert({
+            const { data: upserted } = await supabase.from("book_purchases").upsert({
               ...updatePayload,
               listing_id: listingId,
               book_id: bookId,
               stripe_session_id: session.id,
-            }, { onConflict: "stripe_session_id" });
+            }, { onConflict: "stripe_session_id" }).select("id").maybeSingle();
+            purchaseId = upserted?.id ?? null;
           }
 
-          // Log unlock events once per session_id (best-effort dedupe via metadata)
+          // Write to immutable creator earnings ledger (idempotent)
+          if (purchaseId) {
+            const { error: ledgerErr } = await supabase.rpc("record_purchase_ledger", { _purchase_id: purchaseId });
+            if (ledgerErr) logStep("Ledger write failed", { error: ledgerErr.message, purchaseId });
+          }
+
           await supabase.from("storefront_events").insert([
             { listing_id: listingId, event_type: "checkout_completed", user_id: buyerUserId, metadata: { session_id: session.id, source: "webhook" } },
             { listing_id: listingId, event_type: "full_book_unlocked", user_id: buyerUserId, metadata: { session_id: session.id, source: "webhook" } },
@@ -210,9 +216,14 @@ serve(async (req) => {
       case "charge.refunded": {
         const charge = event.data.object as Stripe.Charge;
         if (charge.payment_intent) {
-          await supabase.from("book_purchases")
+          const { data: refunded } = await supabase.from("book_purchases")
             .update({ status: "refunded" })
-            .eq("stripe_payment_intent", charge.payment_intent as string);
+            .eq("stripe_payment_intent", charge.payment_intent as string)
+            .select("id");
+          for (const p of refunded ?? []) {
+            const { error: ledgerErr } = await supabase.rpc("record_purchase_ledger", { _purchase_id: p.id });
+            if (ledgerErr) logStep("Refund ledger write failed", { error: ledgerErr.message, purchaseId: p.id });
+          }
         }
         break;
       }
