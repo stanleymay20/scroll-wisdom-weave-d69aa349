@@ -177,12 +177,17 @@ serve(async (req) => {
       );
     }
 
+    // Paid path — only blocked tier is rejected; high/medium/low pass through.
+    const paidRisk = await riskCheck("paid_checkout");
+    if (paidRisk) return paidRisk;
+
     // Find or create Stripe customer
     let customerId: string | undefined;
     if (buyerEmail) {
       const customers = await stripe.customers.list({ email: buyerEmail, limit: 1 });
       if (customers.data.length > 0) customerId = customers.data[0].id;
     }
+
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
