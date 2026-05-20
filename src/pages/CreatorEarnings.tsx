@@ -32,6 +32,10 @@ interface Summary {
   refund_rate: number;
   arpu_cents: number;
   sources: Record<string, number>;
+  revenue_by_source?: {
+    source: string; medium: string | null; campaign: string | null;
+    conversions: number; gross_cents: number; net_cents: number; refund_cents: number;
+  }[];
   daily: { day: string; net_cents: number; gross_cents: number; sales_count: number }[];
   top_books: { book_id: string; title: string | null; sales: number; gross: number; net: number; refunds: number; visitors?: number; rpv_cents?: number | null }[];
   export_attribution?: { exports_count: number; assisted_sales_count?: number; assisted_gross_cents?: number; assisted_rpe_cents?: number | null; attribution_kind?: string; attribution_notes?: string };
