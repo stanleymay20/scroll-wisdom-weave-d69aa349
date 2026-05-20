@@ -123,13 +123,25 @@ serve(async (req) => {
     const funnel = ["listing_view", "checkout_started", "checkout_completed", "full_book_unlocked"]
       .map((stage) => ({ stage, count: funnelCounts[stage] ?? 0 }));
 
-    // Reconciliation discrepancies (last 7d)
+    // Reconciliation discrepancies (last 7d).
+    // Phase 2.1d.1 — expose only explicit safe scalars from payload to avoid
+    // accidental PII / raw stripe object leakage through the admin tab.
     const since7 = new Date(Date.now() - 7 * 86400_000).toISOString();
     const { data: discrepEvents } = await sc.from("financial_events")
-      .select("created_at,payload")
+      .select("created_at,payload,severity")
       .eq("event_type", "ledger_discrepancy")
       .gte("created_at", since7)
       .order("created_at", { ascending: false }).limit(10);
+    const reconciliation_recent = (discrepEvents ?? []).map((r) => {
+      const p = (r.payload ?? {}) as Record<string, unknown>;
+      return {
+        created_at: r.created_at,
+        severity: r.severity,
+        scanned: typeof p.scanned === "number" ? p.scanned : 0,
+        discrepancies_count: typeof p.discrepancies_count === "number" ? p.discrepancies_count : 0,
+        healed: typeof p.healed === "number" ? p.healed : 0,
+      };
+    });
 
     return json({
       totals,
@@ -143,7 +155,7 @@ serve(async (req) => {
       cohorts: cohorts ?? [],
       top_sources,
       funnel,
-      reconciliation_recent: discrepEvents ?? [],
+      reconciliation_recent,
       generated_at: new Date().toISOString(),
     });
   } catch (e) { return serverError(e); }
