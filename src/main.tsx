@@ -6,27 +6,23 @@ import { initGlobalErrorHandlers } from "@/lib/errorNotifier";
 // Initialize global error handlers before rendering
 initGlobalErrorHandlers();
 
-// PRE-MOUNT: only clear obviously corrupted auth payloads.
-// Do NOT remove sessions just because the access token is expired — the refresh token can still recover them.
+// PRE-MOUNT: only purge auth payload when JSON itself is unparseable.
+// Never remove based on shape — Supabase may evolve token formats and the
+// refresh_token can still recover an "odd-looking" session. Persistence is
+// expected to last until the user explicitly signs out.
 try {
   const STORAGE_KEY = 'sb-dxourcpvgfampcquzaqw-auth-token';
   const raw = localStorage.getItem(STORAGE_KEY);
   if (raw) {
-    const parsed = JSON.parse(raw);
-    const hasUsableShape =
-      parsed &&
-      typeof parsed === 'object' &&
-      typeof parsed.access_token === 'string' &&
-      typeof parsed.refresh_token === 'string' &&
-      parsed.refresh_token.length >= 20;
-
-    if (!hasUsableShape) {
-      console.warn('[pre-mount] Removing corrupted auth token payload');
+    try {
+      JSON.parse(raw);
+    } catch {
+      console.warn('[pre-mount] Removing unparseable auth token payload');
       localStorage.removeItem(STORAGE_KEY);
     }
   }
 } catch {
-  try { localStorage.removeItem('sb-dxourcpvgfampcquzaqw-auth-token'); } catch {}
+  // localStorage unavailable (private mode) — let supabase-js handle it.
 }
 
 // Service worker registration is now handled by usePWAUpdate hook
