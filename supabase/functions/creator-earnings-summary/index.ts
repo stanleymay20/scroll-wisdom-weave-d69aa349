@@ -207,6 +207,7 @@ serve(async (req) => {
       refund_rate,
       arpu_cents,
       sources,
+      revenue_by_source,
       daily: daily ?? [],
       top_books: top_books_with_rpv,
       export_attribution,
