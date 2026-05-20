@@ -26,13 +26,19 @@ async function runJob(jobId: string, userId: string, bookId: string, bundleType:
     const pdfRes = await fetch(`${SUPABASE_URL}/functions/v1/export-book`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
-      body: JSON.stringify({ bookId, format: bundleType === "kdp" ? "kdp-pdf" : "pdf", trimSize: options.trim_size ?? "6x9" }),
+      body: JSON.stringify({
+        bookId,
+        format: bundleType === "kdp" ? "kdp-pdf" : "pdf",
+        kdpTrimSize: options.trim_size ?? "6x9",
+      }),
     });
-    let mainPdf: Uint8Array | null = null;
-    if (pdfRes.ok) {
-      const buf = await pdfRes.arrayBuffer();
-      mainPdf = new Uint8Array(buf);
+    if (!pdfRes.ok) {
+      const errText = await pdfRes.text().catch(() => "");
+      throw new Error(`export-book failed (${pdfRes.status}): ${errText.slice(0, 200)}`);
     }
+    let mainPdf: Uint8Array | null = null;
+    const buf = await pdfRes.arrayBuffer();
+    mainPdf = new Uint8Array(buf);
 
     await sc.from("export_jobs").update({ progress: 60 }).eq("id", jobId);
 
