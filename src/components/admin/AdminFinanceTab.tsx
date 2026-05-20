@@ -234,15 +234,31 @@ export function AdminFinanceTab() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Top acquisition sources (30d)</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Revenue by source (30d)</CardTitle>
+            <div className="text-xs text-muted-foreground">First-touch attribution · source / medium / campaign</div>
+          </CardHeader>
           <CardContent className="space-y-1 text-sm">
-            {(data.top_sources ?? []).length === 0 && <div className="text-muted-foreground">No attribution data yet.</div>}
-            {(data.top_sources ?? []).map((s) => (
-              <div key={s.source} className="flex justify-between border-b border-border/40 py-1">
-                <span className="font-mono text-xs">{s.source}</span>
-                <span className="text-xs text-muted-foreground">{s.visitors} visitors</span>
-              </div>
-            ))}
+            {(data.revenue_by_source ?? []).length === 0 && <div className="text-muted-foreground">No attribution data yet.</div>}
+            {(data.revenue_by_source ?? []).map((s, i) => {
+              const net = s.gross_cents - s.refund_cents;
+              return (
+                <div key={i} className="flex justify-between border-b border-border/40 py-1 gap-2">
+                  <div className="min-w-0 truncate">
+                    <div className="font-mono text-xs truncate">
+                      {s.source}{s.medium ? ` · ${s.medium}` : ""}{s.campaign ? ` · ${s.campaign}` : ""}
+                    </div>
+                    <div className="text-xs text-muted-foreground">
+                      {s.visitors} visitors · {s.conversions} sales · CR {(s.conversion_rate * 100).toFixed(1)}%
+                    </div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-semibold">{fmt(net, c)}</div>
+                    {s.refund_cents > 0 && <div className="text-xs text-destructive">−{fmt(s.refund_cents, c)} refunds</div>}
+                  </div>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       </div>
