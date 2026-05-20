@@ -344,6 +344,20 @@ serve(async (req) => {
             correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId, user_id: buyerUserId,
             payload: { dispute_id: dispute.id, reason: dispute.reason, amount_cents: dispute.amount, status: dispute.status },
           });
+
+          // Phase 2.1c.2 — immediately re-score the buyer's risk tier.
+          if (buyerUserId) {
+            try {
+              await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/evaluate-user-risk`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+                },
+                body: JSON.stringify({ user_id: buyerUserId, source: "chargeback" }),
+              });
+            } catch (_) { /* best-effort */ }
+          }
           break;
         }
 
