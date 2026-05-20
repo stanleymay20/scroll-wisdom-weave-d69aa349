@@ -7,6 +7,8 @@ const ALLOWED_EVENTS = [
   "gumroad_export_started", "gumroad_export_completed", "gumroad_export_failed",
   "listing_view", "listing_publish", "listing_unpublish",
   "checkout_started", "checkout_completed", "checkout_failed", "full_book_unlocked",
+  "earnings_view", "payout_profile_view", "payout_profile_update",
+  "admin_finance_view", "platform_fee_updated",
 ] as const;
 
 const Body = z.object({
