@@ -124,6 +124,11 @@ serve(async (req) => {
     // FREE listing → immediate unlock for logged-in users (no Stripe call)
     if (!listing.price_cents || listing.price_cents <= 0) {
       if (!buyerUserId) throw new Error("Sign in required to claim free books");
+      // Free-unlock farming defence: per-user + per-IP velocity.
+      const userLimit = await checkVelocity("checkout:free:user", buyerUserId, 10, 3600);
+      if (userLimit) return userLimit;
+      const ipFreeLimit = await checkVelocity("checkout:free:ip", reqIp, 20, 3600);
+      if (ipFreeLimit) return ipFreeLimit;
       const { data: inserted, error: insErr } = await sb.from("book_purchases").insert({
         listing_id: listing.id,
         book_id: book.id,
