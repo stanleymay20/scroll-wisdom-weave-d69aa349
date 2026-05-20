@@ -3,7 +3,7 @@ import type { User } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { SubscriptionTier, getTierFromProductId, SUBSCRIPTION_TIERS } from '@/lib/subscription';
 import { LAUNCH_MODE_CONFIG, isLaunchModeActive } from '@/lib/config';
-import { getErrorMessageText, isTransientAuthError } from '@/lib/authResilience';
+import { getErrorMessageText, isTransientAuthError, withTransientRetry } from '@/lib/authResilience';
 
 interface DailyLimitInfo {
   dailyBookCount: number;
