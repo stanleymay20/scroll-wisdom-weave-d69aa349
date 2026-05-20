@@ -128,6 +128,72 @@ export type Database = {
           },
         ]
       }
+      attribution_sessions: {
+        Row: {
+          converted_at: string | null
+          converted_purchase_id: string | null
+          country_code: string | null
+          events_count: number
+          first_seen_at: string
+          first_touch_campaign: string | null
+          first_touch_landing_path: string | null
+          first_touch_medium: string | null
+          first_touch_referrer: string | null
+          first_touch_source: string | null
+          id: string
+          ip_hash: string | null
+          last_seen_at: string
+          metadata: Json
+          session_id: string
+          user_agent_family: string | null
+          user_id: string | null
+          utm_content: string | null
+          utm_term: string | null
+        }
+        Insert: {
+          converted_at?: string | null
+          converted_purchase_id?: string | null
+          country_code?: string | null
+          events_count?: number
+          first_seen_at?: string
+          first_touch_campaign?: string | null
+          first_touch_landing_path?: string | null
+          first_touch_medium?: string | null
+          first_touch_referrer?: string | null
+          first_touch_source?: string | null
+          id?: string
+          ip_hash?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          session_id: string
+          user_agent_family?: string | null
+          user_id?: string | null
+          utm_content?: string | null
+          utm_term?: string | null
+        }
+        Update: {
+          converted_at?: string | null
+          converted_purchase_id?: string | null
+          country_code?: string | null
+          events_count?: number
+          first_seen_at?: string
+          first_touch_campaign?: string | null
+          first_touch_landing_path?: string | null
+          first_touch_medium?: string | null
+          first_touch_referrer?: string | null
+          first_touch_source?: string | null
+          id?: string
+          ip_hash?: string | null
+          last_seen_at?: string
+          metadata?: Json
+          session_id?: string
+          user_agent_family?: string | null
+          user_id?: string | null
+          utm_content?: string | null
+          utm_term?: string | null
+        }
+        Relationships: []
+      }
       audit_log: {
         Row: {
           actor_id: string | null
@@ -971,6 +1037,60 @@ export type Database = {
           suggested_sources?: Json
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      cohort_metrics: {
+        Row: {
+          active_users: number
+          cohort_date: string
+          cohort_size: number
+          computed_at: string
+          exports_count: number
+          gross_cents: number
+          id: string
+          metadata: Json
+          metric_date: string
+          net_cents: number
+          paying_users: number
+          refund_cents: number
+          rpe_cents: number | null
+          rpv_cents: number | null
+          visitors: number
+        }
+        Insert: {
+          active_users?: number
+          cohort_date: string
+          cohort_size?: number
+          computed_at?: string
+          exports_count?: number
+          gross_cents?: number
+          id?: string
+          metadata?: Json
+          metric_date: string
+          net_cents?: number
+          paying_users?: number
+          refund_cents?: number
+          rpe_cents?: number | null
+          rpv_cents?: number | null
+          visitors?: number
+        }
+        Update: {
+          active_users?: number
+          cohort_date?: string
+          cohort_size?: number
+          computed_at?: string
+          exports_count?: number
+          gross_cents?: number
+          id?: string
+          metadata?: Json
+          metric_date?: string
+          net_cents?: number
+          paying_users?: number
+          refund_cents?: number
+          rpe_cents?: number | null
+          rpv_cents?: number | null
+          visitors?: number
         }
         Relationships: []
       }
@@ -2818,6 +2938,75 @@ export type Database = {
           longest_streak?: number | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      refund_requests: {
+        Row: {
+          amount_cents: number
+          book_id: string
+          buyer_user_id: string | null
+          correlation_id: string | null
+          created_at: string
+          creator_user_id: string | null
+          currency: string
+          error_message: string | null
+          id: string
+          metadata: Json
+          processed_at: string | null
+          processed_by: string | null
+          purchase_id: string
+          reason: string | null
+          requested_by: string | null
+          requested_role: string
+          status: string
+          stripe_payment_intent: string | null
+          stripe_refund_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          book_id: string
+          buyer_user_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          creator_user_id?: string | null
+          currency?: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          processed_at?: string | null
+          processed_by?: string | null
+          purchase_id: string
+          reason?: string | null
+          requested_by?: string | null
+          requested_role?: string
+          status?: string
+          stripe_payment_intent?: string | null
+          stripe_refund_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          book_id?: string
+          buyer_user_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          creator_user_id?: string | null
+          currency?: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          processed_at?: string | null
+          processed_by?: string | null
+          purchase_id?: string
+          reason?: string | null
+          requested_by?: string | null
+          requested_role?: string
+          status?: string
+          stripe_payment_intent?: string | null
+          stripe_refund_id?: string | null
+          updated_at?: string
         }
         Relationships: []
       }

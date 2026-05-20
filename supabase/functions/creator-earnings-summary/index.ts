@@ -93,6 +93,43 @@ serve(async (req) => {
     const refund_rate = totals.sales_count > 0
       ? totals.refund_count / totals.sales_count : 0;
 
+    // Phase 2.1d — per-book revenue per visitor (RPV)
+    const visitorsByBook = new Map<string, number>();
+    if (listingIds.length) {
+      const { data: views } = await sc.from("storefront_events")
+        .select("listing_id")
+        .eq("event_type", "listing_view")
+        .in("listing_id", listingIds)
+        .gte("created_at", since90);
+      const { data: listingBookMap } = await sc.from("public_listings")
+        .select("id, book_id").in("id", listingIds);
+      const listingToBook = new Map((listingBookMap ?? []).map((l: any) => [l.id, l.book_id]));
+      for (const v of views ?? []) {
+        const bid = listingToBook.get(v.listing_id as any);
+        if (bid) visitorsByBook.set(bid, (visitorsByBook.get(bid) ?? 0) + 1);
+      }
+    }
+    const top_books_with_rpv = top_books.map((b: any) => ({
+      ...b,
+      visitors: visitorsByBook.get(b.book_id) ?? 0,
+      rpv_cents: (visitorsByBook.get(b.book_id) ?? 0) > 0
+        ? Math.round(b.gross / (visitorsByBook.get(b.book_id) ?? 1)) : null,
+    }));
+
+    // Phase 2.1d — export-to-sale attribution for owned books
+    const { data: bundleEvents } = await sc.from("storefront_events")
+      .select("event_type, metadata, created_at")
+      .eq("user_id", userId)
+      .in("event_type", ["kdp_export_completed", "gumroad_export_completed"])
+      .gte("created_at", since90);
+    const exports_count = bundleEvents?.length ?? 0;
+    const rpe_cents = exports_count > 0 ? Math.round(totals.gross_cents / exports_count) : null;
+    const export_attribution = {
+      exports_count,
+      sales_after_export_count: sales.length, // crude attribution; refined when we ship export-source funnel
+      rpe_cents,
+    };
+
     return json({
       totals,
       funnel,
@@ -101,7 +138,8 @@ serve(async (req) => {
       arpu_cents,
       sources,
       daily: daily ?? [],
-      top_books,
+      top_books: top_books_with_rpv,
+      export_attribution,
       recent: (ledger ?? []).slice(0, 25),
       generated_at: new Date().toISOString(),
     });

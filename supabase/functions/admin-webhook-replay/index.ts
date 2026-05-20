@@ -2,7 +2,7 @@
 // Useful when downstream side effects failed and we need to re-run the handler
 // with the original payload (idempotency keys protect duplicate side effects).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@18.5.0";
+
 import {
   preflight, json, badRequest, unauthorized, forbidden, serverError,
   requireUser, validateBody, z, serviceClient,
@@ -53,30 +53,25 @@ serve(async (req) => {
       payload: { event_type: existing.event_type, force: parsed.force ?? false },
     });
 
-    // Re-dispatch payload to stripe-webhook by re-signing with the webhook secret.
-    // We sign the raw payload so the existing verification path passes.
-    const stripeKey = Deno.env.get("STRIPE_SECRET_KEY")!;
+    // Re-dispatch payload to stripe-webhook by re-signing with the webhook
+    // secret. We compute the Stripe v1 signature (HMAC-SHA256 over
+    // "<timestamp>.<payload>") directly so we don't depend on undocumented
+    // SDK helpers that may disappear on Stripe upgrades.
     const whSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
-    const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const payloadStr = JSON.stringify(existing.payload);
     const timestamp = Math.floor(Date.now() / 1000);
     const signedPayload = `${timestamp}.${payloadStr}`;
-    // Use stripe's signing utility via webhook constructEventAsync would require a real signature;
-    // for replay we directly invoke the side-effect path by calling the RPC for the purchase if applicable.
-    // Simpler & safer: rebuild stripe signature using their helper.
-    // deno-lint-ignore no-explicit-any
-    const sig = (stripe.webhooks as any).generateTestHeaderString
-      ? // deno-lint-ignore no-explicit-any
-        (stripe.webhooks as any).generateTestHeaderString({ payload: payloadStr, secret: whSecret, timestamp })
-      : null;
 
-    if (!sig) {
-      // Mark replayed but skip remote dispatch
-      await sc.from("stripe_webhook_events").update({
-        status: "replayed", processed_at: new Date().toISOString(), updated_at: new Date().toISOString(),
-      }).eq("stripe_event_id", parsed.stripe_event_id);
-      return json({ ok: true, dispatched: false, reason: "signature_helper_unavailable" });
-    }
+    const key = await crypto.subtle.importKey(
+      "raw",
+      new TextEncoder().encode(whSecret),
+      { name: "HMAC", hash: "SHA-256" },
+      false,
+      ["sign"],
+    );
+    const sigBuf = await crypto.subtle.sign("HMAC", key, new TextEncoder().encode(signedPayload));
+    const sigHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
+    const sig = `t=${timestamp},v1=${sigHex}`;
 
     const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/stripe-webhook`;
     const res = await fetch(url, {
