@@ -6,6 +6,7 @@ const ALLOWED_EVENTS = [
   "kdp_export_started", "kdp_export_completed", "kdp_export_failed",
   "gumroad_export_started", "gumroad_export_completed", "gumroad_export_failed",
   "listing_view", "listing_publish", "listing_unpublish",
+  "checkout_started", "checkout_completed", "checkout_failed", "full_book_unlocked",
 ] as const;
 
 const Body = z.object({
