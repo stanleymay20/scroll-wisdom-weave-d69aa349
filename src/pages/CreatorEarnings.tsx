@@ -156,15 +156,31 @@ export default function CreatorEarnings() {
           </CardContent>
         </Card>
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Source attribution</CardTitle></CardHeader>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-sm">Revenue by source</CardTitle>
+            <div className="text-xs text-muted-foreground">First-touch attribution · source / medium / campaign</div>
+          </CardHeader>
           <CardContent className="space-y-2">
-            {Object.keys(data.sources).length === 0 && <div className="text-sm text-muted-foreground">No tracked sources yet.</div>}
-            {Object.entries(data.sources).sort((a, b) => b[1] - a[1]).map(([src, n]) => (
-              <div key={src} className="flex justify-between text-sm">
-                <span className="capitalize">{src.replace(/_/g, " ")}</span>
-                <span className="font-semibold">{n}</span>
-              </div>
-            ))}
+            {(!data.revenue_by_source || data.revenue_by_source.length === 0) && (
+              <div className="text-sm text-muted-foreground">No attributed sales yet.</div>
+            )}
+            {(data.revenue_by_source ?? []).map((s, i) => {
+              const net = s.gross_cents - s.refund_cents;
+              return (
+                <div key={i} className="flex justify-between text-sm gap-2 border-b border-border/40 py-1">
+                  <div className="min-w-0 truncate">
+                    <div className="font-mono text-xs truncate">
+                      {s.source}{s.medium ? ` · ${s.medium}` : ""}{s.campaign ? ` · ${s.campaign}` : ""}
+                    </div>
+                    <div className="text-xs text-muted-foreground">{s.conversions} sales</div>
+                  </div>
+                  <div className="text-right shrink-0">
+                    <div className="font-semibold">{fmt(net, c)}</div>
+                    {s.refund_cents > 0 && <div className="text-xs text-destructive">−{fmt(s.refund_cents, c)} refunds</div>}
+                  </div>
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       </div>
