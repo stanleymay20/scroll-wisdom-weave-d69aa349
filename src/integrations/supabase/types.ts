@@ -211,6 +211,45 @@ export type Database = {
           },
         ]
       }
+      author_profiles: {
+        Row: {
+          avatar_url: string | null
+          bio: string | null
+          created_at: string
+          display_name: string
+          linkedin_url: string | null
+          slug: string
+          updated_at: string
+          user_id: string
+          website_url: string | null
+          x_url: string | null
+        }
+        Insert: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          display_name: string
+          linkedin_url?: string | null
+          slug: string
+          updated_at?: string
+          user_id: string
+          website_url?: string | null
+          x_url?: string | null
+        }
+        Update: {
+          avatar_url?: string | null
+          bio?: string | null
+          created_at?: string
+          display_name?: string
+          linkedin_url?: string | null
+          slug?: string
+          updated_at?: string
+          user_id?: string
+          website_url?: string | null
+          x_url?: string | null
+        }
+        Relationships: []
+      }
       book_audits: {
         Row: {
           academic_findings: Json
@@ -435,6 +474,39 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      book_series: {
+        Row: {
+          cover_image_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          slug: string
+          title: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          slug: string
+          title: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          slug?: string
+          title?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       bookmarks: {
         Row: {
@@ -1183,6 +1255,71 @@ export type Database = {
           },
         ]
       }
+      export_jobs: {
+        Row: {
+          book_id: string
+          bundle_type: string
+          completed_at: string | null
+          created_at: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          listing_id: string | null
+          metadata: Json
+          progress: number
+          result_expires_at: string | null
+          result_url: string | null
+          started_at: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          bundle_type: string
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          listing_id?: string | null
+          metadata?: Json
+          progress?: number
+          result_expires_at?: string | null
+          result_url?: string | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          bundle_type?: string
+          completed_at?: string | null
+          created_at?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          listing_id?: string | null
+          metadata?: Json
+          progress?: number
+          result_expires_at?: string | null
+          result_url?: string | null
+          started_at?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "export_jobs_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "public_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       faqs: {
         Row: {
           answer: string
@@ -1750,6 +1887,80 @@ export type Database = {
         }
         Relationships: []
       }
+      public_listings: {
+        Row: {
+          amazon_description: string | null
+          backend_keywords: string[]
+          blurb: string | null
+          book_id: string
+          cover_override_url: string | null
+          created_at: string
+          currency: string
+          id: string
+          is_public: boolean
+          license_type: string
+          price_cents: number
+          sample_chapters: number
+          seo_categories: string[]
+          seo_keywords: string[]
+          series_id: string | null
+          series_order: number | null
+          slug: string
+          subtitle: string | null
+          updated_at: string
+        }
+        Insert: {
+          amazon_description?: string | null
+          backend_keywords?: string[]
+          blurb?: string | null
+          book_id: string
+          cover_override_url?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          is_public?: boolean
+          license_type?: string
+          price_cents?: number
+          sample_chapters?: number
+          seo_categories?: string[]
+          seo_keywords?: string[]
+          series_id?: string | null
+          series_order?: number | null
+          slug: string
+          subtitle?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amazon_description?: string | null
+          backend_keywords?: string[]
+          blurb?: string | null
+          book_id?: string
+          cover_override_url?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          is_public?: boolean
+          license_type?: string
+          price_cents?: number
+          sample_chapters?: number
+          seo_categories?: string[]
+          seo_keywords?: string[]
+          series_id?: string | null
+          series_order?: number | null
+          slug?: string
+          subtitle?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "public_listings_series_id_fkey"
+            columns: ["series_id"]
+            isOneToOne: false
+            referencedRelation: "book_series"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       publishing_audits: {
         Row: {
           book_id: string
@@ -1895,6 +2106,44 @@ export type Database = {
           user_id?: string
         }
         Relationships: []
+      }
+      purchase_intents: {
+        Row: {
+          buyer_email: string | null
+          buyer_ip: string | null
+          created_at: string
+          id: string
+          listing_id: string
+          metadata: Json
+          source: string
+        }
+        Insert: {
+          buyer_email?: string | null
+          buyer_ip?: string | null
+          created_at?: string
+          id?: string
+          listing_id: string
+          metadata?: Json
+          source: string
+        }
+        Update: {
+          buyer_email?: string | null
+          buyer_ip?: string | null
+          created_at?: string
+          id?: string
+          listing_id?: string
+          metadata?: Json
+          source?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchase_intents_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "public_listings"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       quiz_attempts: {
         Row: {
@@ -2392,6 +2641,44 @@ export type Database = {
             columns: ["chapter_id"]
             isOneToOne: false
             referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      storefront_events: {
+        Row: {
+          created_at: string
+          event_type: string
+          id: string
+          listing_id: string | null
+          metadata: Json
+          session_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          event_type: string
+          id?: string
+          listing_id?: string | null
+          metadata?: Json
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          event_type?: string
+          id?: string
+          listing_id?: string | null
+          metadata?: Json
+          session_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "storefront_events_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "public_listings"
             referencedColumns: ["id"]
           },
         ]
