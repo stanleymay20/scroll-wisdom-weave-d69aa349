@@ -116,6 +116,53 @@ serve(async (req) => {
         const session = event.data.object as Stripe.Checkout.Session;
         logStep("Checkout session completed", { sessionId: session.id, email: maskEmail(session.customer_email) });
 
+        // One-off book purchase
+        if (session.mode === "payment" && session.metadata?.kind === "book_purchase") {
+          const listingId = session.metadata.listing_id;
+          const bookId = session.metadata.book_id;
+          const metaBuyerUserId = session.metadata.buyer_user_id || null;
+          const email = session.customer_details?.email ?? session.customer_email ?? null;
+
+          // Resolve buyer user_id: prefer the one from metadata; otherwise look up by email
+          let buyerUserId: string | null = metaBuyerUserId || null;
+          if (!buyerUserId && email) {
+            const u = await findUserByEmail(email);
+            buyerUserId = u?.id ?? null;
+          }
+
+          const { data: existing } = await supabase
+            .from("book_purchases").select("id").eq("stripe_session_id", session.id).maybeSingle();
+
+          const updatePayload = {
+            status: "paid" as const,
+            buyer_user_id: buyerUserId,
+            buyer_email: email,
+            stripe_payment_intent: session.payment_intent as string | null,
+            amount_cents: session.amount_total ?? 0,
+            currency: (session.currency ?? "usd").toLowerCase(),
+            purchased_at: new Date().toISOString(),
+          };
+
+          if (existing) {
+            await supabase.from("book_purchases").update(updatePayload).eq("id", existing.id);
+          } else {
+            await supabase.from("book_purchases").insert({
+              ...updatePayload,
+              listing_id: listingId,
+              book_id: bookId,
+              stripe_session_id: session.id,
+            });
+          }
+
+          await supabase.from("storefront_events").insert([
+            { listing_id: listingId, event_type: "checkout_completed", user_id: buyerUserId, metadata: { session_id: session.id } },
+            { listing_id: listingId, event_type: "full_book_unlocked", user_id: buyerUserId, metadata: { session_id: session.id } },
+          ]);
+
+          logStep("Book purchase marked paid", { sessionId: session.id, bookId });
+          break;
+        }
+
         if (session.mode === "subscription" && session.subscription) {
           const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
           const productId = subscription.items.data[0]?.price?.product as string;
@@ -132,6 +179,32 @@ serve(async (req) => {
               logStep("No Supabase user found for email", { email: maskEmail(customerEmail) });
             }
           }
+        }
+        break;
+      }
+
+      case "checkout.session.expired":
+      case "checkout.session.async_payment_failed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.metadata?.kind === "book_purchase") {
+          await supabase.from("book_purchases")
+            .update({ status: "failed" })
+            .eq("stripe_session_id", session.id);
+          await supabase.from("storefront_events").insert({
+            listing_id: session.metadata.listing_id,
+            event_type: "checkout_failed",
+            metadata: { session_id: session.id, reason: event.type },
+          });
+        }
+        break;
+      }
+
+      case "charge.refunded": {
+        const charge = event.data.object as Stripe.Charge;
+        if (charge.payment_intent) {
+          await supabase.from("book_purchases")
+            .update({ status: "refunded" })
+            .eq("stripe_payment_intent", charge.payment_intent as string);
         }
         break;
       }

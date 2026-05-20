@@ -82,12 +82,37 @@ export default function PublicBookPage() {
   async function handleBuy() {
     trackStorefrontEvent(data!.id, "cta_click", { cta: "buy" });
     try {
+      const { data: res, error } = await supabase.functions.invoke("create-book-checkout", {
+        body: { listing_id: data!.id },
+      });
+      if (error) throw error;
+      const r = res as { url?: string; redirect_url?: string; already_owned?: boolean; free?: boolean };
+      if (r.already_owned) {
+        toast.success("You already own this book");
+        navigate(`/store/${data!.slug}/read-full`);
+        return;
+      }
+      if (r.free && r.redirect_url) {
+        navigate(r.redirect_url.replace(window.location.origin, ""));
+        return;
+      }
+      if (r.url) {
+        window.location.href = r.url;
+        return;
+      }
+      // Fallback: capture intent only
       await supabase.functions.invoke("record-purchase-intent", {
         body: { listing_id: data!.id, source: "storefront" },
       });
       toast.success("Thanks! We'll notify you when purchases open.");
-    } catch {
-      toast.error("Could not record interest. Try again.");
+    } catch (e: any) {
+      const msg = e?.message ?? "Could not start checkout";
+      if (msg.includes("Sign in")) {
+        toast.error("Please sign in to claim this book");
+        navigate("/auth?redirect=" + encodeURIComponent(`/store/${data!.slug}`));
+        return;
+      }
+      toast.error(msg);
     }
   }
 
@@ -130,7 +155,7 @@ export default function PublicBookPage() {
                 Read sample
               </Button>
               <Button variant="default" onClick={handleBuy}>
-                {data.price_cents > 0 ? "Buy" : "Get notified"}
+                {data.price_cents > 0 ? `Buy for $${(data.price_cents / 100).toFixed(2)}` : "Get free copy"}
               </Button>
               <Button variant="outline" onClick={handleShare}>Share</Button>
             </div>

@@ -89,6 +89,9 @@ const SeriesPage = lazy(() => import("./pages/SeriesPage"));
 const BookPublishSettings = lazy(() => import("./pages/BookPublishSettings"));
 const AuthorProfileEditor = lazy(() => import("./pages/AuthorProfileEditor"));
 const ExportJobsPage = lazy(() => import("./pages/ExportJobsPage"));
+const PurchaseSuccess = lazy(() => import("./pages/PurchaseSuccess"));
+const FullBookReader = lazy(() => import("./pages/FullBookReader"));
+const PurchasedLibrary = lazy(() => import("./pages/PurchasedLibrary"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
@@ -231,6 +234,9 @@ const App = () => (
                   <Route path="/book/:bookId/publish" element={withRecovery('BookPublishSettings', <ProtectedRoute><BookPublishSettings /></ProtectedRoute>)} />
                   <Route path="/account/author" element={withRecovery('AuthorProfileEditor', <ProtectedRoute><AuthorProfileEditor /></ProtectedRoute>)} />
                   <Route path="/account/exports" element={withRecovery('ExportJobs', <ProtectedRoute><ExportJobsPage /></ProtectedRoute>)} />
+                  <Route path="/store/:slug/success" element={withRecovery('PurchaseSuccess', <PurchaseSuccess />)} />
+                  <Route path="/store/:slug/read-full" element={withRecovery('FullBookReader', <ProtectedRoute><FullBookReader /></ProtectedRoute>)} />
+                  <Route path="/account/library/purchases" element={withRecovery('PurchasedLibrary', <ProtectedRoute><PurchasedLibrary /></ProtectedRoute>)} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
