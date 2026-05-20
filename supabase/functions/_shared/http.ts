@@ -257,20 +257,67 @@ export async function enforcePersistentVelocity(
   opts: VelocityOptions,
 ): Promise<Response | null> {
   try {
-    const { data } = await sc.rpc("check_velocity", {
+    const { data, error } = await sc.rpc("check_velocity", {
       _key: `${opts.name}:${opts.key}`,
       _limit: opts.limit,
       _window_seconds: opts.windowSec,
     });
+    if (error) throw error;
     const ok = (data as any)?.ok;
     if (ok === false) {
       const retry = Number((data as any)?.retry_after ?? opts.windowSec);
       return tooManyRequests(retry);
     }
     return null;
-  } catch (_e) {
+  } catch (e) {
     // Fail-open on velocity infra errors — never block legitimate traffic
-    // because the counter is unavailable. The in-memory limiter still applies.
+    // because the counter is unavailable. Emit a warn financial_event so
+    // ops can see when the gate is silently disabled (Phase 2.1c.2).
+    try {
+      await sc.from("financial_events").insert({
+        event_type: "velocity_check_failed_open",
+        severity: "warn",
+        actor: "system",
+        payload: { name: opts.name, key_prefix: opts.key.slice(0, 16), error: e instanceof Error ? e.message : String(e) },
+      });
+    } catch (_) { /* swallow */ }
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Risk-tier gate (Phase 2.1c.2). Checks user_risk_scores and enforces
+// based on the requested action. Manual override always wins (handled by
+// the get_effective_user_tier RPC).
+// ---------------------------------------------------------------------------
+export type RiskAction = "free_unlock" | "export" | "paid_checkout";
+
+export async function enforceUserRiskTier(
+  sc: SupabaseClient,
+  userId: string | null | undefined,
+  action: RiskAction,
+): Promise<Response | null> {
+  if (!userId) return null;
+  try {
+    const { data } = await sc.from("user_risk_scores")
+      .select("tier, manual_override_tier, score, reasons")
+      .eq("user_id", userId).maybeSingle();
+    if (!data) return null;
+    const tier = (data as any).manual_override_tier ?? (data as any).tier ?? "low";
+    const blocks =
+      tier === "blocked" ? true :
+      tier === "high" ? (action === "free_unlock" || action === "export") :
+      false;
+    if (!blocks) return null;
+    return json({
+      error: "Action blocked by risk policy",
+      code: "risk_blocked",
+      tier,
+      action,
+      contact: "Reply to support if this is in error.",
+    }, 403);
+  } catch (_e) {
+    // Fail-open — never block on risk lookup failure.
     return null;
   }
 }

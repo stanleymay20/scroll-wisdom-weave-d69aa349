@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import JSZip from "https://esm.sh/jszip@3.10.1";
-import { preflight, json, badRequest, serverError, unauthorized, requireUser, validateBody, z, serviceClient, enforcePersistentVelocity } from "../_shared/http.ts";
+import { preflight, json, badRequest, serverError, unauthorized, requireUser, validateBody, z, serviceClient, enforcePersistentVelocity, enforceUserRiskTier } from "../_shared/http.ts";
 import { correlationId, PhaseTimer, logExportPhase, logFinancialEvent } from "../_shared/observability.ts";
 
 const Body = z.object({
@@ -146,6 +146,12 @@ serve(async (req) => {
 
   try {
     const sc = serviceClient();
+
+    // Phase 2.1c.2 — risk-tier gate (high/blocked users may not enqueue exports).
+    const risk = await enforceUserRiskTier(sc, auth.userId, "export");
+    if (risk) return risk;
+
+
 
     // Phase 2.1c.1 — export farming defence.
     // 20 exports per user per hour, and 5 per minute burst cap.

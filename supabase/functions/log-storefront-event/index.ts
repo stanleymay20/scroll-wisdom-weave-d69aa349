@@ -24,7 +24,9 @@ serve(async (req) => {
   if (req.method !== "POST") return badRequest("POST only");
 
   const ip = clientIp(req);
-  const limited = enforceRateLimit({ name: "log-storefront-event", key: ip, limit: 120, windowSec: 60 });
+  // Aligned with persistent 600/min cap (Phase 2.1c.2 cleanup): in-memory is a
+  // cheap first-line gate but no longer stricter than the cross-instance limit.
+  const limited = enforceRateLimit({ name: "log-storefront-event", key: ip, limit: 600, windowSec: 60 });
   if (limited) return limited;
 
   const parsed = await validateBody(req, Body);

@@ -13,6 +13,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { AuditLogViewer } from "@/components/admin/AuditLogViewer";
 import { AdminFinanceTab } from "@/components/admin/AdminFinanceTab";
 import { AdminReliabilityTab } from "@/components/admin/AdminReliabilityTab";
+import { AdminRiskTab } from "@/components/admin/AdminRiskTab";
 import { Activity, Users, Building2, FileClock, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -182,6 +183,7 @@ export default function AdminOps() {
           <TabsTrigger value="jobs">Generation Jobs</TabsTrigger>
           <TabsTrigger value="orgs">Organizations</TabsTrigger>
           <TabsTrigger value="finance">Finance</TabsTrigger>
+          <TabsTrigger value="risk">Risk</TabsTrigger>
         </TabsList>
 
         <TabsContent value="reliability">
@@ -195,6 +197,11 @@ export default function AdminOps() {
         <TabsContent value="finance">
           <AdminFinanceTab />
         </TabsContent>
+
+        <TabsContent value="risk">
+          <AdminRiskTab />
+        </TabsContent>
+
 
 
 
