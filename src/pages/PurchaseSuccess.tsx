@@ -15,6 +15,8 @@ export default function PurchaseSuccess() {
   const [bookTitle, setBookTitle] = useState("");
 
   useEffect(() => {
+    let cancelled = false;
+    let firedFreeEvent = false;
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       const { data: listing } = await supabase
@@ -22,20 +24,25 @@ export default function PurchaseSuccess() {
         .select("id, book:books(id, title)")
         .eq("slug", slug!)
         .maybeSingle();
+      if (cancelled) return;
       if (!listing) { setStatus("pending"); return; }
       const bookId = (listing.book as any)?.id;
       setBookTitle((listing.book as any)?.title ?? "");
 
       if (params.get("free")) {
-        trackStorefrontEvent(listing.id, "checkout_completed", { free: true });
+        if (!firedFreeEvent) {
+          firedFreeEvent = true;
+          trackStorefrontEvent(listing.id, "checkout_completed", { free: true, source: "client" });
+        }
         setStatus("ready");
         return;
       }
 
-      // Poll up to ~30s for webhook to mark purchase paid
-      const sessionId = params.get("session_id");
+      // Poll up to ~30s for webhook to mark purchase paid. Webhook owns the
+      // checkout_completed analytics event, so we do NOT fire it from client here.
       let attempts = 0;
       const poll = async (): Promise<void> => {
+        if (cancelled) return;
         if (!user || !bookId) { setStatus("pending"); return; }
         const { data: p } = await supabase
           .from("book_purchases")
@@ -45,16 +52,13 @@ export default function PurchaseSuccess() {
           .order("created_at", { ascending: false })
           .limit(1)
           .maybeSingle();
-        if (p?.status === "paid") {
-          trackStorefrontEvent(listing.id, "checkout_completed", { session_id: sessionId ?? null });
-          setStatus("ready");
-          return;
-        }
+        if (p?.status === "paid") { setStatus("ready"); return; }
         if (++attempts > 15) { setStatus("pending"); return; }
         setTimeout(poll, 2000);
       };
       poll();
     })();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slug]);
 
