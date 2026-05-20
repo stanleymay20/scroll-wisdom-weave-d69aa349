@@ -210,6 +210,7 @@ serve(async (req) => {
       chargebacks_pending: chargebacksPending ?? [],
       cohorts: cohorts ?? [],
       top_sources,
+      revenue_by_source,
       funnel,
       reconciliation_recent,
       generated_at: new Date().toISOString(),
