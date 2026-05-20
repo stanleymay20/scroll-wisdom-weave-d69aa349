@@ -131,7 +131,13 @@ serve(async (req) => {
           }
 
           const { data: existing } = await supabase
-            .from("book_purchases").select("id").eq("stripe_session_id", session.id).maybeSingle();
+            .from("book_purchases").select("id, status").eq("stripe_session_id", session.id).maybeSingle();
+
+          // Idempotency: if already paid/refunded, skip side effects
+          if (existing && (existing.status === "paid" || existing.status === "refunded")) {
+            logStep("Webhook replay ignored", { sessionId: session.id, status: existing.status });
+            break;
+          }
 
           const updatePayload = {
             status: "paid" as const,
@@ -146,17 +152,19 @@ serve(async (req) => {
           if (existing) {
             await supabase.from("book_purchases").update(updatePayload).eq("id", existing.id);
           } else {
-            await supabase.from("book_purchases").insert({
+            // Use upsert on stripe_session_id to survive concurrent retries
+            await supabase.from("book_purchases").upsert({
               ...updatePayload,
               listing_id: listingId,
               book_id: bookId,
               stripe_session_id: session.id,
-            });
+            }, { onConflict: "stripe_session_id" });
           }
 
+          // Log unlock events once per session_id (best-effort dedupe via metadata)
           await supabase.from("storefront_events").insert([
-            { listing_id: listingId, event_type: "checkout_completed", user_id: buyerUserId, metadata: { session_id: session.id } },
-            { listing_id: listingId, event_type: "full_book_unlocked", user_id: buyerUserId, metadata: { session_id: session.id } },
+            { listing_id: listingId, event_type: "checkout_completed", user_id: buyerUserId, metadata: { session_id: session.id, source: "webhook" } },
+            { listing_id: listingId, event_type: "full_book_unlocked", user_id: buyerUserId, metadata: { session_id: session.id, source: "webhook" } },
           ]);
 
           logStep("Book purchase marked paid", { sessionId: session.id, bookId });
