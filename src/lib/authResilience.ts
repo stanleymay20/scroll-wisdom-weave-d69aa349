@@ -64,8 +64,13 @@ export function getErrorMessageText(error: unknown): string {
 }
 
 export function isTransientAuthError(error: unknown): boolean {
-  const message = getErrorMessageText(error).toLowerCase();
-  return TRANSIENT_AUTH_PATTERNS.some((pattern) => message.includes(pattern));
+  const parts: string[] = [getErrorMessageText(error).toLowerCase()];
+  if (error && typeof error === 'object') {
+    const anyErr = error as { name?: unknown; context?: unknown };
+    if (typeof anyErr.name === 'string') parts.push(anyErr.name.toLowerCase());
+    if (anyErr.context) parts.push(getErrorMessageText(anyErr.context).toLowerCase());
+  }
+  return TRANSIENT_AUTH_PATTERNS.some((pattern) => parts.some((p) => p.includes(pattern)));
 }
 
 export async function withTransientRetry<T>(
