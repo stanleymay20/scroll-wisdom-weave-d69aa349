@@ -156,17 +156,29 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
       setUser((prev) => (prev?.id === session.user.id ? prev : session.user));
 
-      const [profileResult, subResult] = await Promise.all([
+      const profilePromise = withTransientRetry(() => Promise.resolve(
         supabase
           .from('profiles')
           .select('daily_book_count, last_book_date, plan')
           .or(`user_id.eq.${session.user.id},id.eq.${session.user.id}`)
-          .maybeSingle(),
-        supabase.functions.invoke('check-subscription'),
-      ]);
+          .maybeSingle()
+          .then((res) => {
+            if (res.error && isTransientAuthError(res.error)) throw res.error;
+            return res;
+          })
+      ), 2, 600).catch((err) => ({ data: null, error: err as any }));
+
+      const subPromise = withTransientRetry(() => Promise.resolve(
+        supabase.functions.invoke('check-subscription').then((res) => {
+          if (res.error && isTransientAuthError(res.error)) throw res.error;
+          return res;
+        })
+      ), 2, 600).catch((err) => ({ data: null, error: err as any }));
+
+      const [profileResult, subResult] = await Promise.all([profilePromise, subPromise]);
 
       if (profileResult.error) {
-        console.warn('Profile fetch failed during subscription check:', profileResult.error.message);
+        console.warn('Profile fetch failed during subscription check:', getErrorMessageText(profileResult.error));
       }
 
       const profileData = profileResult.data;
@@ -187,7 +199,11 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
 
       const { data: subData, error: subError } = subResult;
       if (subError) {
-        console.error('Error checking subscription:', subError);
+        if (isTransientAuthError(subError)) {
+          console.warn('Transient subscription check failure; falling back to profile plan');
+        } else {
+          console.error('Error checking subscription:', subError);
+        }
         if (profileData?.plan) {
           setTier(profileData.plan as SubscriptionTier);
         }
