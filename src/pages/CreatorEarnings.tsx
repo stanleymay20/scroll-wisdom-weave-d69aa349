@@ -133,10 +133,20 @@ export default function CreatorEarnings() {
                 <div className="min-w-0 truncate">{b.title || b.book_id.slice(0, 8) + "…"}</div>
                 <div className="text-right shrink-0">
                   <div className="font-semibold">{fmt(b.net, c)}</div>
-                  <div className="text-xs text-muted-foreground">{b.sales} sales · {b.refunds} refunds</div>
+                  <div className="text-xs text-muted-foreground">
+                    {b.sales} sales · {b.refunds} refunds
+                    {b.visitors ? ` · ${b.visitors} visitors` : ""}
+                    {b.rpv_cents != null ? ` · RPV ${fmt(b.rpv_cents, c)}` : ""}
+                  </div>
                 </div>
               </div>
             ))}
+            {data.export_attribution && data.export_attribution.exports_count > 0 && (
+              <div className="mt-3 pt-3 border-t border-border/40 text-xs text-muted-foreground">
+                Exports last 90d: <span className="font-semibold text-foreground">{data.export_attribution.exports_count}</span>
+                {data.export_attribution.rpe_cents != null && <> · RPE <span className="font-semibold text-foreground">{fmt(data.export_attribution.rpe_cents, c)}</span></>}
+              </div>
+            )}
           </CardContent>
         </Card>
         <Card>
