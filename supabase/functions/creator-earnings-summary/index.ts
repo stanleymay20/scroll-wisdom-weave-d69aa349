@@ -16,7 +16,7 @@ serve(async (req) => {
     // Ledger rows
     const { data: ledger, error: ledgerErr } = await sc
       .from("creator_earnings_ledger")
-      .select("entry_type,gross_cents,platform_fee_cents,creator_net_cents,currency,payout_status,occurred_at,book_id,book_title_snapshot,listing_id,listing_slug_snapshot")
+      .select("purchase_id,entry_type,gross_cents,platform_fee_cents,creator_net_cents,currency,payout_status,occurred_at,book_id,book_title_snapshot,listing_id,listing_slug_snapshot")
       .eq("creator_user_id", userId)
       .order("occurred_at", { ascending: false })
       .limit(2000);
