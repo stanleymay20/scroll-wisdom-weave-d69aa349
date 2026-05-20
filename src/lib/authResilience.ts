@@ -1,6 +1,8 @@
 const TRANSIENT_AUTH_PATTERNS = [
   'load failed',
   'failed to fetch',
+  'failed to send a request',
+  'functionsfetcherror',
   'networkerror',
   'network request failed',
   'fetch failed',
