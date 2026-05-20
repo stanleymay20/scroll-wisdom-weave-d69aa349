@@ -23,6 +23,7 @@ import { initContract5 } from "@/lib/contract5";
 import { installChunkReloadGuard } from "@/lib/chunkReloadGuard";
 import { initObservability } from "@/lib/observability";
 import { RouteTelemetry } from "@/components/observability/RouteTelemetry";
+import { GlobalAttributionBeacon } from "@/components/observability/AttributionBeacon";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 
@@ -166,6 +167,8 @@ const App = () => (
             <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
               {/* PHASE 7: Per-navigation telemetry (logs route changes + dwell time) */}
               <RouteTelemetry />
+              {/* Phase 2.1d.1: first-touch attribution beacon for store/reader routes */}
+              <GlobalAttributionBeacon />
               {/* PERFORMANCE: Use InlineSplash for branded visual feedback during lazy load */}
               {/* Inner ErrorBoundary keeps page crashes from killing the whole shell */}
               <ErrorBoundary context="Routes">
