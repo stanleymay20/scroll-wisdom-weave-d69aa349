@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders, preflight, json, badRequest, serverError, serviceClient, validateBody, z, clientIp, enforceRateLimit } from "../_shared/http.ts";
+import { corsHeaders, preflight, json, badRequest, serverError, serviceClient, validateBody, z, clientIp, enforceRateLimit, enforcePersistentVelocity } from "../_shared/http.ts";
 
 const ALLOWED_EVENTS = [
   "sample_open", "sample_complete", "cta_click", "buy_click", "share_click",
