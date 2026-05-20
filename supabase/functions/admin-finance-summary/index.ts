@@ -98,16 +98,72 @@ serve(async (req) => {
       .gte("metric_date", since30)
       .order("metric_date", { ascending: true });
 
-    const { data: sources } = await sc.from("attribution_sessions")
-      .select("first_touch_source")
-      .gte("first_seen_at", since30);
-    const sourceMap = new Map<string, number>();
-    for (const s of sources ?? []) {
-      const k = s.first_touch_source ?? "direct";
-      sourceMap.set(k, (sourceMap.get(k) ?? 0) + 1);
+    // Phase 2.1d.2 — Revenue-by-source (first-touch attribution).
+    // 1) Visitors per source/medium/campaign from all sessions in window.
+    // 2) Conversions + revenue by joining converted_purchase_id → ledger.
+    const { data: allSessions } = await sc.from("attribution_sessions")
+      .select("first_touch_source,first_touch_medium,first_touch_campaign,converted_purchase_id")
+      .gte("first_seen_at", since30 + "T00:00:00Z");
+
+    const sourceKey = (s: any) =>
+      `${s.first_touch_source ?? "direct"}\u241f${s.first_touch_medium ?? ""}\u241f${s.first_touch_campaign ?? ""}`;
+
+    const bySource = new Map<string, {
+      source: string; medium: string | null; campaign: string | null;
+      visitors: number; conversions: number;
+      gross_cents: number; net_cents: number; refund_cents: number;
+    }>();
+    const convertedPurchaseIds: string[] = [];
+    const purchaseToKey = new Map<string, string>();
+
+    for (const s of allSessions ?? []) {
+      const k = sourceKey(s);
+      const row = bySource.get(k) ?? {
+        source: s.first_touch_source ?? "direct",
+        medium: s.first_touch_medium ?? null,
+        campaign: s.first_touch_campaign ?? null,
+        visitors: 0, conversions: 0, gross_cents: 0, net_cents: 0, refund_cents: 0,
+      };
+      row.visitors += 1;
+      if (s.converted_purchase_id) {
+        row.conversions += 1;
+        convertedPurchaseIds.push(s.converted_purchase_id);
+        purchaseToKey.set(s.converted_purchase_id, k);
+      }
+      bySource.set(k, row);
     }
-    const top_sources = [...sourceMap.entries()]
-      .map(([source, visitors]) => ({ source, visitors }))
+
+    if (convertedPurchaseIds.length) {
+      const { data: ledgerRows } = await sc.from("creator_earnings_ledger")
+        .select("purchase_id,entry_type,gross_cents,creator_net_cents")
+        .in("purchase_id", convertedPurchaseIds);
+      for (const lr of ledgerRows ?? []) {
+        const k = purchaseToKey.get(lr.purchase_id);
+        if (!k) continue;
+        const row = bySource.get(k);
+        if (!row) continue;
+        if (lr.entry_type === "sale") {
+          row.gross_cents += lr.gross_cents ?? 0;
+          row.net_cents += lr.creator_net_cents ?? 0;
+        } else if (lr.entry_type === "refund" || lr.entry_type === "chargeback") {
+          row.refund_cents += -(lr.gross_cents ?? 0); // gross_cents are negative on refunds
+          row.net_cents += lr.creator_net_cents ?? 0;
+        }
+      }
+    }
+
+    const revenue_by_source = [...bySource.values()]
+      .map((r) => ({
+        ...r,
+        conversion_rate: r.visitors > 0 ? r.conversions / r.visitors : 0,
+        refund_rate: r.conversions > 0 ? r.refund_cents / Math.max(r.gross_cents, 1) : 0,
+      }))
+      .sort((a, b) => (b.gross_cents - b.refund_cents) - (a.gross_cents - a.refund_cents))
+      .slice(0, 20);
+
+    // Backwards-compat: keep top_sources for any consumer not yet updated.
+    const top_sources = revenue_by_source
+      .map((r) => ({ source: r.source, visitors: r.visitors }))
       .sort((a, b) => b.visitors - a.visitors).slice(0, 10);
 
     // Funnel dropoff (last 30d storefront events)
