@@ -166,6 +166,110 @@ export function AdminFinanceTab() {
           )}
         </CardContent>
       </Card>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Refunds queue</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {(data.refunds_queue ?? []).length === 0 && <div className="text-muted-foreground">No refund requests.</div>}
+            {(data.refunds_queue ?? []).slice(0, 10).map((r) => (
+              <div key={r.id} className="flex justify-between border-b border-border/40 py-1">
+                <div className="min-w-0 truncate">
+                  <div className="font-mono text-xs truncate">{r.purchase_id.slice(0, 8)}… · {r.reason ?? "n/a"}</div>
+                  {r.error_message && <div className="text-xs text-destructive truncate">{r.error_message}</div>}
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-semibold">{fmt(r.amount_cents, r.currency)}</div>
+                  <div className="text-xs text-muted-foreground">{r.status}</div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Chargebacks pending</CardTitle></CardHeader>
+          <CardContent className="space-y-2 text-sm">
+            {(data.chargebacks_pending ?? []).length === 0 && <div className="text-muted-foreground">No active disputes.</div>}
+            {(data.chargebacks_pending ?? []).slice(0, 10).map((cb) => (
+              <div key={cb.id} className="flex justify-between border-b border-border/40 py-1">
+                <div className="min-w-0 truncate">
+                  <div className="font-mono text-xs truncate">{cb.stripe_dispute_id}</div>
+                  <div className="text-xs text-muted-foreground">{cb.reason ?? "—"} · due {cb.evidence_due_by ? new Date(cb.evidence_due_by).toLocaleDateString() : "n/a"}</div>
+                </div>
+                <div className="text-right shrink-0">
+                  <div className="font-semibold">{fmt(cb.amount_cents)}</div>
+                  <div className="text-xs text-muted-foreground">{cb.status}</div>
+                </div>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Cohort retention (last 30d)</CardTitle></CardHeader>
+          <CardContent>
+            {(data.cohorts ?? []).length === 0 ? (
+              <div className="text-sm text-muted-foreground">No cohort rollup yet. Run analytics-cohort-rollup.</div>
+            ) : (
+              <div className="space-y-1 text-xs font-mono max-h-56 overflow-y-auto">
+                {data.cohorts.map((co) => (
+                  <div key={co.metric_date} className="flex justify-between border-b border-border/40 py-1">
+                    <span>{co.metric_date}</span>
+                    <span>{co.paying_users} paying · {co.visitors} visitors · RPV {co.rpv_cents != null ? fmt(Number(co.rpv_cents)) : "—"} · RPE {co.rpe_cents != null ? fmt(Number(co.rpe_cents)) : "—"}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Top acquisition sources (30d)</CardTitle></CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            {(data.top_sources ?? []).length === 0 && <div className="text-muted-foreground">No attribution data yet.</div>}
+            {(data.top_sources ?? []).map((s) => (
+              <div key={s.source} className="flex justify-between border-b border-border/40 py-1">
+                <span className="font-mono text-xs">{s.source}</span>
+                <span className="text-xs text-muted-foreground">{s.visitors} visitors</span>
+              </div>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-4">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Funnel dropoff (30d)</CardTitle></CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            {(data.funnel ?? []).map((f, i) => {
+              const prev = i > 0 ? data.funnel[i - 1].count : f.count;
+              const rate = prev > 0 ? (f.count / prev) * 100 : 100;
+              return (
+                <div key={f.stage} className="flex justify-between border-b border-border/40 py-1">
+                  <span className="font-mono text-xs">{f.stage}</span>
+                  <span className="text-xs">{f.count.toLocaleString()} <span className="text-muted-foreground">({rate.toFixed(1)}%)</span></span>
+                </div>
+              );
+            })}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Reconciliation discrepancies (7d)</CardTitle></CardHeader>
+          <CardContent className="space-y-1 text-sm">
+            {(data.reconciliation_recent ?? []).length === 0 ? (
+              <div className="text-muted-foreground">No discrepancies detected.</div>
+            ) : (
+              data.reconciliation_recent.map((r, i) => (
+                <div key={i} className="text-xs border-b border-border/40 py-1">
+                  <div className="text-muted-foreground">{new Date(r.created_at).toLocaleString()}</div>
+                  <div className="font-mono">scanned {(r.payload as any)?.scanned ?? 0} · discrepancies {(r.payload as any)?.discrepancies_count ?? 0}</div>
+                </div>
+              ))
+            )}
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
