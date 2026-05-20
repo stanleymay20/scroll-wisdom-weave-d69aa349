@@ -155,7 +155,7 @@ export default function PublicBookPage() {
                 Read sample
               </Button>
               <Button variant="default" onClick={handleBuy}>
-                {data.price_cents > 0 ? "Buy" : "Get notified"}
+                {data.price_cents > 0 ? `Buy for $${(data.price_cents / 100).toFixed(2)}` : "Get free copy"}
               </Button>
               <Button variant="outline" onClick={handleShare}>Share</Button>
             </div>
