@@ -164,6 +164,14 @@ serve(async (req) => {
         listing_id: listing.id,
         book_id: book.id,
         buyer_user_id: buyerUserId ?? "",
+        // Phase 2.1d.1 — propagate attribution so webhook can stitch
+        // attribution_sessions.converted_purchase_id without leaking PII.
+        attribution_session_id: attrSession,
+        attribution_source: attrSource,
+        attribution_medium: attrMedium,
+        attribution_campaign: attrCampaign,
+        attribution_referrer: attrReferrer,
+        attribution_landing_path: attrLanding,
       },
     });
 
@@ -177,13 +185,18 @@ serve(async (req) => {
       amount_cents: listing.price_cents,
       currency: listing.currency ?? "usd",
       status: "pending",
-      metadata: { source: "stripe_checkout" },
+      metadata: {
+        source: "stripe_checkout",
+        attribution_session_id: attrSession || null,
+        attribution_source: attrSource || null,
+      },
     });
 
     await sb.from("storefront_events").insert({
       listing_id: listing.id,
       event_type: "checkout_started",
       user_id: buyerUserId,
+      session_id: attrSession || null,
       metadata: { session_id: session.id, amount_cents: listing.price_cents },
     });
 
