@@ -21,7 +21,7 @@ type FinEvent = {
   id: string; event_type: string; severity: string; actor: string;
   correlation_id: string | null; purchase_id: string | null;
   stripe_event_id: string | null; created_at: string;
-  payload: Record<string, unknown>;
+  dead_letter_reason: string | null;
 };
 type Chargeback = {
   id: string; stripe_dispute_id: string; amount_cents: number;
