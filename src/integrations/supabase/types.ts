@@ -475,6 +475,72 @@ export type Database = {
           },
         ]
       }
+      book_purchases: {
+        Row: {
+          amount_cents: number
+          book_id: string
+          buyer_email: string | null
+          buyer_user_id: string | null
+          created_at: string
+          currency: string
+          id: string
+          listing_id: string
+          metadata: Json
+          purchased_at: string | null
+          status: string
+          stripe_payment_intent: string | null
+          stripe_session_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          book_id: string
+          buyer_email?: string | null
+          buyer_user_id?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          listing_id: string
+          metadata?: Json
+          purchased_at?: string | null
+          status?: string
+          stripe_payment_intent?: string | null
+          stripe_session_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          book_id?: string
+          buyer_email?: string | null
+          buyer_user_id?: string | null
+          created_at?: string
+          currency?: string
+          id?: string
+          listing_id?: string
+          metadata?: Json
+          purchased_at?: string | null
+          status?: string
+          stripe_payment_intent?: string | null
+          stripe_session_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_purchases_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "book_purchases_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "public_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       book_series: {
         Row: {
           cover_image_url: string | null
@@ -3027,6 +3093,10 @@ export type Database = {
           _severity?: string
         }
         Returns: string
+      }
+      user_owns_book_purchase: {
+        Args: { _book_id: string; _user_id: string }
+        Returns: boolean
       }
     }
     Enums: {
