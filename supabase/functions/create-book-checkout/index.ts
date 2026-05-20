@@ -81,7 +81,7 @@ serve(async (req) => {
     // FREE listing → immediate unlock for logged-in users (no Stripe call)
     if (!listing.price_cents || listing.price_cents <= 0) {
       if (!buyerUserId) throw new Error("Sign in required to claim free books");
-      const { error: insErr } = await sb.from("book_purchases").insert({
+      const { data: inserted, error: insErr } = await sb.from("book_purchases").insert({
         listing_id: listing.id,
         book_id: book.id,
         buyer_user_id: buyerUserId,
@@ -91,12 +91,13 @@ serve(async (req) => {
         status: "paid",
         purchased_at: new Date().toISOString(),
         metadata: { source: "free_unlock" },
-      });
+      }).select("id").maybeSingle();
       // Ignore unique violation — caller already owns it (race / replay safe)
       if (insErr && insErr.code !== "23505" && !String(insErr.message).toLowerCase().includes("duplicate")) {
         throw insErr;
       }
-      if (!insErr) {
+      if (!insErr && inserted?.id) {
+        await sb.rpc("record_purchase_ledger", { _purchase_id: inserted.id });
         await sb.from("storefront_events").insert({
           listing_id: listing.id,
           event_type: "full_book_unlocked",
