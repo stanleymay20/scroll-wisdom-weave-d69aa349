@@ -266,7 +266,7 @@ export function AdminFinanceTab() {
               data.reconciliation_recent.map((r, i) => (
                 <div key={i} className="text-xs border-b border-border/40 py-1">
                   <div className="text-muted-foreground">{new Date(r.created_at).toLocaleString()}</div>
-                  <div className="font-mono">scanned {(r.payload as any)?.scanned ?? 0} · discrepancies {(r.payload as any)?.discrepancies_count ?? 0}</div>
+                  <div className="font-mono">scanned {r.scanned} · discrepancies {r.discrepancies_count} · healed {r.healed} · {r.severity}</div>
                 </div>
               ))
             )}
