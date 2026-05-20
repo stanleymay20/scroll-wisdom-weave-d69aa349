@@ -1,7 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { correlationId, logFinancialEvent, logFraudSignal } from "../_shared/observability.ts";
+import { correlationId, logFinancialEvent, logFraudSignal, evaluateSeverity } from "../_shared/observability.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -200,15 +200,38 @@ serve(async (req) => {
 
             await supabase.from("storefront_events").insert([
               { listing_id: listingId, event_type: "checkout_completed", user_id: buyerUserId,
+                session_id: session.metadata?.attribution_session_id || null,
                 metadata: { session_id: session.id, source: "webhook", correlation_id: corr } },
               { listing_id: listingId, event_type: "full_book_unlocked", user_id: buyerUserId,
+                session_id: session.metadata?.attribution_session_id || null,
                 metadata: { session_id: session.id, source: "webhook", correlation_id: corr } },
             ]);
+
+            // Phase 2.1d.1 — stitch attribution_sessions → purchase
+            const attrSessionId = session.metadata?.attribution_session_id;
+            if (attrSessionId && purchaseId) {
+              const { error: attrErr } = await supabase.from("attribution_sessions")
+                .update({
+                  converted_purchase_id: purchaseId,
+                  converted_at: new Date().toISOString(),
+                  user_id: buyerUserId ?? undefined,
+                  last_seen_at: new Date().toISOString(),
+                })
+                .eq("session_id", attrSessionId)
+                .is("converted_purchase_id", null); // never overwrite a prior conversion
+              if (attrErr) {
+                await logFinancialEvent(supabase, {
+                  event_type: "attribution_stitch_failed", severity: "warn", actor: "webhook",
+                  correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId,
+                  payload: { session_id: attrSessionId, error: attrErr.message },
+                });
+              }
+            }
 
             await logFinancialEvent(supabase, {
               event_type: "checkout_completed", severity: "info", actor: "webhook",
               correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId,
-              user_id: buyerUserId, payload: { session_id: session.id, book_id: bookId, amount_cents: updatePayload.amount_cents },
+              user_id: buyerUserId, payload: { session_id: session.id, book_id: bookId, amount_cents: updatePayload.amount_cents, attribution_source: session.metadata?.attribution_source || null },
             });
             break;
           }
@@ -373,8 +396,23 @@ serve(async (req) => {
               userId = user?.id ?? null;
             }
           } catch (_) { /* best-effort */ }
+
+          // Phase 2.1d.1 — threshold-driven severity for subscription failure spikes
+          const sinceIso = new Date(Date.now() - 5 * 60_000).toISOString();
+          const { count: recentCount } = await supabase
+            .from("financial_events")
+            .select("id", { count: "exact", head: true })
+            .eq("event_type", "subscription_payment_failed")
+            .gte("created_at", sinceIso);
+          const failuresInWindow = (recentCount ?? 0) + 1; // include current
+          const severity = await evaluateSeverity(
+            supabase,
+            "subscription.payment_failed_count_5m",
+            failuresInWindow,
+          );
+
           await logFinancialEvent(supabase, {
-            event_type: "subscription_payment_failed", severity: "error", actor: "webhook",
+            event_type: "subscription_payment_failed", severity, actor: "webhook",
             correlation_id: corr, stripe_event_id: event.id, user_id: userId,
             payload: {
               invoice_id: invoice.id,
@@ -384,6 +422,8 @@ serve(async (req) => {
               currency: invoice.currency,
               email_mask: maskEmail(email),
               next_attempt: invoice.next_payment_attempt,
+              failures_in_window_5m: failuresInWindow,
+              threshold_key: "subscription.payment_failed_count_5m",
             },
           });
           break;
