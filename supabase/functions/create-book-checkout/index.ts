@@ -121,9 +121,27 @@ serve(async (req) => {
     const origin = req.headers.get("origin") || "https://scrolllibrary.org";
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
+    // Phase 2.1c.2 — risk-tier gate for buyers (manual override wins via column).
+    const riskCheck = async (action: "free_unlock" | "paid_checkout") => {
+      if (!buyerUserId) return null;
+      const { data } = await sb.from("user_risk_scores")
+        .select("tier, manual_override_tier").eq("user_id", buyerUserId).maybeSingle();
+      const tier = (data as any)?.manual_override_tier ?? (data as any)?.tier ?? "low";
+      const blocks =
+        tier === "blocked" ? true :
+        tier === "high" ? action === "free_unlock" :
+        false;
+      if (!blocks) return null;
+      return new Response(JSON.stringify({
+        error: "Action blocked by risk policy", code: "risk_blocked", tier, action,
+      }), { status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" } });
+    };
+
     // FREE listing → immediate unlock for logged-in users (no Stripe call)
     if (!listing.price_cents || listing.price_cents <= 0) {
       if (!buyerUserId) throw new Error("Sign in required to claim free books");
+      const risk = await riskCheck("free_unlock");
+      if (risk) return risk;
       // Free-unlock farming defence: per-user + per-IP velocity.
       const userLimit = await checkVelocity("checkout:free:user", buyerUserId, 10, 3600);
       if (userLimit) return userLimit;
