@@ -1953,6 +1953,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "public_listings_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: true
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "public_listings_series_id_fkey"
             columns: ["series_id"]
             isOneToOne: false
