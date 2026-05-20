@@ -1,0 +1,276 @@
+import { useEffect, useState } from "react";
+import { useParams, useNavigate, Link } from "react-router-dom";
+import { supabase } from "@/integrations/supabase/client";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Card } from "@/components/ui/card";
+import { Switch } from "@/components/ui/switch";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { SEO } from "@/components/SEO";
+import { toast } from "sonner";
+import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
+import { Sparkles, Package } from "lucide-react";
+
+function slugify(s: string) {
+  return s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
+}
+
+const LICENSE_OPTIONS = [
+  { value: "personal", label: "Personal use" },
+  { value: "commercial", label: "Commercial" },
+  { value: "educational", label: "Educational" },
+  { value: "institutional", label: "Institutional" },
+  { value: "resale", label: "Resale rights" },
+];
+
+export default function BookPublishSettings() {
+  const { bookId } = useParams<{ bookId: string }>();
+  const navigate = useNavigate();
+  const [book, setBook] = useState<any>(null);
+  const [series, setSeries] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [suggesting, setSuggesting] = useState(false);
+  const [bundling, setBundling] = useState<"" | "kdp" | "gumroad">("");
+
+  const [form, setForm] = useState({
+    listing_id: "",
+    is_public: false,
+    slug: "",
+    price_cents: 0,
+    sample_chapters: 1,
+    blurb: "",
+    subtitle: "",
+    amazon_description: "",
+    seo_keywords: "",
+    seo_categories: "",
+    backend_keywords: "",
+    license_type: "personal",
+    series_id: "",
+    series_order: "",
+    cover_override_url: "",
+  });
+
+  useEffect(() => {
+    if (!bookId) return;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) { navigate("/auth"); return; }
+      const { data: b } = await supabase.from("books").select("id, title, user_id, cover_image_url").eq("id", bookId).maybeSingle();
+      if (!b || b.user_id !== user.id) { toast.error("Not your book"); navigate("/dashboard"); return; }
+      setBook(b);
+      const { data: l } = await supabase.from("public_listings").select("*").eq("book_id", bookId).maybeSingle();
+      if (l) setForm({
+        listing_id: l.id, is_public: l.is_public, slug: l.slug, price_cents: l.price_cents,
+        sample_chapters: l.sample_chapters, blurb: l.blurb ?? "", subtitle: l.subtitle ?? "",
+        amazon_description: l.amazon_description ?? "",
+        seo_keywords: (l.seo_keywords ?? []).join(", "),
+        seo_categories: (l.seo_categories ?? []).join(", "),
+        backend_keywords: (l.backend_keywords ?? []).join(", "),
+        license_type: l.license_type, series_id: l.series_id ?? "",
+        series_order: l.series_order?.toString() ?? "", cover_override_url: l.cover_override_url ?? "",
+      });
+      else setForm((f) => ({ ...f, slug: slugify(b.title) }));
+      const { data: s } = await supabase.from("book_series").select("id, title").eq("user_id", user.id);
+      setSeries(s ?? []);
+      setLoading(false);
+    })();
+  }, [bookId, navigate]);
+
+  async function save() {
+    if (!bookId) return;
+    setSaving(true);
+    try {
+      const payload: any = {
+        book_id: bookId,
+        slug: form.slug || slugify(book.title),
+        is_public: form.is_public,
+        price_cents: Number(form.price_cents) || 0,
+        sample_chapters: Math.max(0, Number(form.sample_chapters) || 1),
+        blurb: form.blurb || null,
+        subtitle: form.subtitle || null,
+        amazon_description: form.amazon_description || null,
+        seo_keywords: form.seo_keywords.split(",").map((s) => s.trim()).filter(Boolean),
+        seo_categories: form.seo_categories.split(",").map((s) => s.trim()).filter(Boolean),
+        backend_keywords: form.backend_keywords.split(",").map((s) => s.trim()).filter(Boolean),
+        license_type: form.license_type,
+        series_id: form.series_id || null,
+        series_order: form.series_order ? Number(form.series_order) : null,
+        cover_override_url: form.cover_override_url || null,
+      };
+      const { data, error } = form.listing_id
+        ? await supabase.from("public_listings").update(payload).eq("id", form.listing_id).select("id, is_public").single()
+        : await supabase.from("public_listings").insert(payload).select("id, is_public").single();
+      if (error) throw error;
+      if (data) {
+        setForm((f) => ({ ...f, listing_id: data.id }));
+        trackStorefrontEvent(data.id, data.is_public ? "listing_publish" : "listing_unpublish");
+      }
+      toast.success("Saved");
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to save");
+    } finally { setSaving(false); }
+  }
+
+  async function suggest() {
+    setSuggesting(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("suggest-publishing-metadata", { body: { book_id: bookId } });
+      if (error) throw error;
+      const s = (data as any)?.suggestion;
+      if (!s) throw new Error("Empty suggestion");
+      setForm((f) => ({
+        ...f,
+        subtitle: s.subtitle ?? f.subtitle,
+        amazon_description: s.amazon_description ?? f.amazon_description,
+        seo_keywords: (s.keywords ?? []).join(", "),
+        seo_categories: (s.categories ?? []).join(", "),
+        backend_keywords: (s.backend_keywords ?? []).join(", "),
+      }));
+      toast.success("AI suggestions applied — review and save");
+    } catch (e: any) {
+      toast.error(e.message ?? "AI suggestion failed");
+    } finally { setSuggesting(false); }
+  }
+
+  async function enqueue(kind: "kdp" | "gumroad") {
+    setBundling(kind);
+    try {
+      const { data, error } = await supabase.functions.invoke("enqueue-export-bundle", {
+        body: { book_id: bookId, bundle_type: kind, listing_id: form.listing_id || undefined, options: {} },
+      });
+      if (error) throw error;
+      toast.success(`Bundle queued (job ${(data as any).job_id.slice(0, 8)}…)`);
+      navigate("/account/exports");
+    } catch (e: any) {
+      toast.error(e.message ?? "Could not queue bundle");
+    } finally { setBundling(""); }
+  }
+
+  if (loading) return <div className="container mx-auto max-w-3xl p-8">Loading…</div>;
+
+  return (
+    <div className="min-h-screen bg-background">
+      <SEO title={`Publish — ${book?.title}`} description="Manage storefront listing." noindex />
+      <div className="container mx-auto max-w-3xl px-4 py-10">
+        <Link to={`/book/${bookId}`} className="text-sm text-primary hover:underline">← Back to book</Link>
+        <h1 className="text-3xl font-bold mt-3">Publish: {book?.title}</h1>
+
+        <Card className="mt-6 p-6 space-y-5">
+          <div className="flex items-center justify-between">
+            <div>
+              <Label className="text-base">Public on storefront</Label>
+              <p className="text-sm text-muted-foreground">Make this book visible at /store/{form.slug}</p>
+            </div>
+            <Switch checked={form.is_public} onCheckedChange={(v) => setForm({ ...form, is_public: v })} />
+          </div>
+
+          <div>
+            <Label>Slug</Label>
+            <Input className="text-foreground caret-foreground" value={form.slug} onChange={(e) => setForm({ ...form, slug: slugify(e.target.value) })} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Price (USD)</Label>
+              <Input type="number" min={0} className="text-foreground caret-foreground"
+                value={(form.price_cents / 100).toString()}
+                onChange={(e) => setForm({ ...form, price_cents: Math.round(parseFloat(e.target.value || "0") * 100) })} />
+            </div>
+            <div>
+              <Label>Sample chapters</Label>
+              <Input type="number" min={0} className="text-foreground caret-foreground"
+                value={form.sample_chapters}
+                onChange={(e) => setForm({ ...form, sample_chapters: Number(e.target.value) })} />
+            </div>
+          </div>
+
+          <div>
+            <Label>Storefront blurb</Label>
+            <Textarea className="text-foreground caret-foreground" value={form.blurb}
+              onChange={(e) => setForm({ ...form, blurb: e.target.value })} placeholder="One-sentence pitch shown on the card." />
+          </div>
+
+          <div className="flex items-center justify-between">
+            <Label className="text-base">Publishing metadata</Label>
+            <Button variant="outline" size="sm" onClick={suggest} disabled={suggesting}>
+              <Sparkles className="w-4 h-4 mr-2" />{suggesting ? "Generating…" : "AI suggest"}
+            </Button>
+          </div>
+
+          <div>
+            <Label>Subtitle</Label>
+            <Input className="text-foreground caret-foreground" value={form.subtitle} onChange={(e) => setForm({ ...form, subtitle: e.target.value })} />
+          </div>
+          <div>
+            <Label>Amazon description</Label>
+            <Textarea className="text-foreground caret-foreground min-h-32" value={form.amazon_description}
+              onChange={(e) => setForm({ ...form, amazon_description: e.target.value })} />
+          </div>
+          <div>
+            <Label>SEO / Amazon keywords (comma-separated, max 7)</Label>
+            <Input className="text-foreground caret-foreground" value={form.seo_keywords} onChange={(e) => setForm({ ...form, seo_keywords: e.target.value })} />
+          </div>
+          <div>
+            <Label>Categories (comma-separated, max 2)</Label>
+            <Input className="text-foreground caret-foreground" value={form.seo_categories} onChange={(e) => setForm({ ...form, seo_categories: e.target.value })} />
+          </div>
+          <div>
+            <Label>Backend keywords (Amazon-only, comma-separated)</Label>
+            <Input className="text-foreground caret-foreground" value={form.backend_keywords} onChange={(e) => setForm({ ...form, backend_keywords: e.target.value })} />
+          </div>
+
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>License</Label>
+              <Select value={form.license_type} onValueChange={(v) => setForm({ ...form, license_type: v })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  {LICENSE_OPTIONS.map((o) => <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Series (optional)</Label>
+              <Select value={form.series_id || "none"} onValueChange={(v) => setForm({ ...form, series_id: v === "none" ? "" : v })}>
+                <SelectTrigger><SelectValue placeholder="No series" /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No series</SelectItem>
+                  {series.map((s) => <SelectItem key={s.id} value={s.id}>{s.title}</SelectItem>)}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          {form.series_id && (
+            <div>
+              <Label>Series order</Label>
+              <Input type="number" min={1} className="text-foreground caret-foreground" value={form.series_order} onChange={(e) => setForm({ ...form, series_order: e.target.value })} />
+            </div>
+          )}
+
+          <div>
+            <Label>Cover override URL (optional)</Label>
+            <Input className="text-foreground caret-foreground" value={form.cover_override_url} onChange={(e) => setForm({ ...form, cover_override_url: e.target.value })} />
+          </div>
+
+          <Button onClick={save} disabled={saving} className="w-full">{saving ? "Saving…" : "Save listing"}</Button>
+        </Card>
+
+        <Card className="mt-6 p-6">
+          <h2 className="text-lg font-semibold flex items-center gap-2"><Package className="w-5 h-5" /> Publish bundles</h2>
+          <p className="text-sm text-muted-foreground mt-1">Generate a ZIP bundle ready to upload elsewhere. Heavy jobs run in the background — track progress in <Link to="/account/exports" className="text-primary hover:underline">Exports</Link>.</p>
+          <div className="mt-4 flex flex-wrap gap-3">
+            <Button onClick={() => enqueue("kdp")} disabled={!!bundling}>
+              {bundling === "kdp" ? "Queuing…" : "Publish Bundle for Amazon KDP"}
+            </Button>
+            <Button variant="outline" onClick={() => enqueue("gumroad")} disabled={!!bundling}>
+              {bundling === "gumroad" ? "Queuing…" : "Export for Gumroad"}
+            </Button>
+          </div>
+        </Card>
+      </div>
+    </div>
+  );
+}
