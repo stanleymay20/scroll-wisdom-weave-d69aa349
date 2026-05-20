@@ -432,6 +432,18 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
 
+    // PERSIST-FOREVER: proactively recover session when network returns.
+    const handleOnline = () => {
+      supabase.auth.refreshSession().then(({ data }) => {
+        if (!mounted) return;
+        if (data?.session?.user) {
+          setUser((prev) => (prev?.id === data.session!.user.id ? prev : data.session!.user));
+          void checkSubscription(true);
+        }
+      }).catch(() => { /* preserve state */ });
+    };
+    window.addEventListener('online', handleOnline);
+
     const interval = setInterval(() => void checkSubscription(false), 300000);
 
     return () => {
@@ -439,6 +451,7 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
       subscription.unsubscribe();
       clearInterval(interval);
       document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('online', handleOnline);
     };
   }, [checkSubscription, resetAnonymousState]);
 
