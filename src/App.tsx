@@ -81,6 +81,14 @@ const StudySession = lazy(() => import("./pages/StudySession"));
 const PublishingCommandCenter = lazy(() => import("./pages/PublishingCommandCenter"));
 const Cognition = lazy(() => import("./pages/Cognition"));
 const DataExport = lazy(() => import("./pages/DataExport"));
+const Storefront = lazy(() => import("./pages/Storefront"));
+const PublicBookPage = lazy(() => import("./pages/PublicBookPage"));
+const PublicSampleReader = lazy(() => import("./pages/PublicSampleReader"));
+const AuthorProfilePage = lazy(() => import("./pages/AuthorProfilePage"));
+const SeriesPage = lazy(() => import("./pages/SeriesPage"));
+const BookPublishSettings = lazy(() => import("./pages/BookPublishSettings"));
+const AuthorProfileEditor = lazy(() => import("./pages/AuthorProfileEditor"));
+const ExportJobsPage = lazy(() => import("./pages/ExportJobsPage"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
@@ -213,6 +221,16 @@ const App = () => (
                   <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />
                   <Route path="/account/data-export" element={<ProtectedRoute><DataExport /></ProtectedRoute>} />
                   <Route path="/book/:bookId/publishing" element={withRecovery('PublishingCommandCenter', <ProtectedRoute><PublishingCommandCenter /></ProtectedRoute>)} />
+                  
+                  {/* Storefront (public) */}
+                  <Route path="/store" element={withRecovery('Storefront', <Storefront />)} />
+                  <Route path="/store/:slug" element={withRecovery('PublicBookPage', <PublicBookPage />)} />
+                  <Route path="/store/:slug/read" element={withRecovery('PublicSampleReader', <PublicSampleReader />)} />
+                  <Route path="/authors/:slug" element={withRecovery('AuthorProfile', <AuthorProfilePage />)} />
+                  <Route path="/series/:slug" element={withRecovery('Series', <SeriesPage />)} />
+                  <Route path="/book/:bookId/publish" element={withRecovery('BookPublishSettings', <ProtectedRoute><BookPublishSettings /></ProtectedRoute>)} />
+                  <Route path="/account/author" element={withRecovery('AuthorProfileEditor', <ProtectedRoute><AuthorProfileEditor /></ProtectedRoute>)} />
+                  <Route path="/account/exports" element={withRecovery('ExportJobs', <ProtectedRoute><ExportJobsPage /></ProtectedRoute>)} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
