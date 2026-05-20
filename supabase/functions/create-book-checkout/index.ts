@@ -20,8 +20,29 @@ serve(async (req) => {
     });
 
   try {
-    const { listing_id } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { listing_id, attribution } = body as {
+      listing_id?: string;
+      attribution?: {
+        session_id?: string;
+        source?: string;
+        medium?: string | null;
+        campaign?: string | null;
+        referrer?: string | null;
+        landing_path?: string | null;
+      };
+    };
     if (!listing_id) throw new Error("listing_id required");
+
+    // Sanitize attribution (Stripe metadata values are <=500 chars, keys <=40)
+    const trim = (v: unknown, n: number) =>
+      typeof v === "string" && v.length > 0 ? v.slice(0, n) : "";
+    const attrSession = trim(attribution?.session_id, 64);
+    const attrSource = trim(attribution?.source, 60);
+    const attrMedium = trim(attribution?.medium, 60);
+    const attrCampaign = trim(attribution?.campaign, 120);
+    const attrReferrer = trim(attribution?.referrer, 200);
+    const attrLanding = trim(attribution?.landing_path, 200);
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY missing");
