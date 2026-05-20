@@ -361,6 +361,34 @@ serve(async (req) => {
           break;
         }
 
+        case "invoice.payment_failed": {
+          const invoice = event.data.object as Stripe.Invoice;
+          let userId: string | null = null;
+          let email: string | null = null;
+          try {
+            const customer = await stripe.customers.retrieve(invoice.customer as string);
+            if (customer && !customer.deleted && "email" in customer && customer.email) {
+              email = customer.email;
+              const user = await findUserByEmail(customer.email);
+              userId = user?.id ?? null;
+            }
+          } catch (_) { /* best-effort */ }
+          await logFinancialEvent(supabase, {
+            event_type: "subscription_payment_failed", severity: "error", actor: "webhook",
+            correlation_id: corr, stripe_event_id: event.id, user_id: userId,
+            payload: {
+              invoice_id: invoice.id,
+              subscription: invoice.subscription,
+              attempt_count: invoice.attempt_count,
+              amount_due: invoice.amount_due,
+              currency: invoice.currency,
+              email_mask: maskEmail(email),
+              next_attempt: invoice.next_payment_attempt,
+            },
+          });
+          break;
+        }
+
         default:
           logStep("Unhandled event type", { type: event.type });
       }
@@ -370,18 +398,25 @@ serve(async (req) => {
       logStep("Inner processing error", { error: processError });
     }
 
-    // Finalize webhook event record
+    // Finalize webhook event record. Terminal failures after >=3 attempts
+    // are dead-lettered for the reliability dashboard's DLQ view.
+    const isFatal = !processedOk;
+    const attemptsAfter = (existingWebhook?.attempts ?? 0) + 1;
+    const deadLetter = isFatal && attemptsAfter >= 3;
     await supabase.from("stripe_webhook_events").update({
-      status: processedOk ? "processed" : "failed",
+      status: deadLetter ? "dead_lettered" : (processedOk ? "processed" : "failed"),
       last_error: processError,
       processed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      ...(deadLetter ? { dead_letter_reason: processError ?? "max_attempts_exceeded", dead_lettered_at: new Date().toISOString() } : {}),
     }).eq("stripe_event_id", event.id);
 
     if (!processedOk) {
       await logFinancialEvent(supabase, {
         event_type: "webhook_processing_failed", severity: "critical", actor: "webhook",
-        correlation_id: corr, stripe_event_id: event.id, payload: { type: event.type, error: processError },
+        correlation_id: corr, stripe_event_id: event.id,
+        payload: { type: event.type, error: processError, attempts: attemptsAfter },
+        ...(deadLetter ? { dead_letter_reason: processError ?? "max_attempts_exceeded" } : {}),
       });
     }
 
