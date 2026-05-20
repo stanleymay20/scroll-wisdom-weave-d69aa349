@@ -12,6 +12,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AuditLogViewer } from "@/components/admin/AuditLogViewer";
 import { AdminFinanceTab } from "@/components/admin/AdminFinanceTab";
+import { AdminReliabilityTab } from "@/components/admin/AdminReliabilityTab";
 import { Activity, Users, Building2, FileClock, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -174,13 +175,18 @@ export default function AdminOps() {
         </Card>
       )}
 
-      <Tabs defaultValue="audit" className="space-y-4">
+      <Tabs defaultValue="reliability" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="reliability">Reliability</TabsTrigger>
           <TabsTrigger value="audit">Audit Log</TabsTrigger>
           <TabsTrigger value="jobs">Generation Jobs</TabsTrigger>
           <TabsTrigger value="orgs">Organizations</TabsTrigger>
           <TabsTrigger value="finance">Finance</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="reliability">
+          <AdminReliabilityTab />
+        </TabsContent>
 
         <TabsContent value="audit">
           <AuditLogViewer limit={150} />
@@ -189,6 +195,7 @@ export default function AdminOps() {
         <TabsContent value="finance">
           <AdminFinanceTab />
         </TabsContent>
+
 
 
         <TabsContent value="jobs">

@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import JSZip from "https://esm.sh/jszip@3.10.1";
 import { preflight, json, badRequest, serverError, unauthorized, requireUser, validateBody, z, serviceClient } from "../_shared/http.ts";
+import { correlationId, PhaseTimer, logExportPhase, logFinancialEvent } from "../_shared/observability.ts";
 
 const Body = z.object({
   book_id: z.string().uuid(),
@@ -11,24 +12,31 @@ const Body = z.object({
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 
-async function runJob(jobId: string, userId: string, bookId: string, bundleType: "kdp" | "gumroad", token: string, options: Record<string, any>) {
+async function runJob(
+  jobId: string, userId: string, bookId: string,
+  bundleType: "kdp" | "gumroad", token: string,
+  options: Record<string, any>, corr: string,
+) {
   const sc = serviceClient();
+  const timer = new PhaseTimer(sc, jobId, corr);
   try {
-    await sc.from("export_jobs").update({ status: "running", started_at: new Date().toISOString(), progress: 10 }).eq("id", jobId);
+    await sc.from("export_jobs").update({
+      status: "running", started_at: new Date().toISOString(), progress: 10, correlation_id: corr,
+    }).eq("id", jobId);
+    await timer.stop("queued_to_started");
 
     const { data: book } = await sc.from("books").select("title, description, cover_image_url").eq("id", bookId).maybeSingle();
     const { data: chapters } = await sc.from("chapters").select("chapter_number, title, content").eq("book_id", bookId).order("chapter_number");
     const { data: listing } = await sc.from("public_listings").select("*").eq("book_id", bookId).maybeSingle();
+    await timer.stop("fetch_book", { metadata: { chapters: chapters?.length ?? 0 } });
 
     await sc.from("export_jobs").update({ progress: 30 }).eq("id", jobId);
 
-    // Pull the main PDF from existing export-book function (reuses tested pipeline)
     const pdfRes = await fetch(`${SUPABASE_URL}/functions/v1/export-book`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}`, "x-correlation-id": corr },
       body: JSON.stringify({
-        bookId,
-        format: bundleType === "kdp" ? "kdp-pdf" : "pdf",
+        bookId, format: bundleType === "kdp" ? "kdp-pdf" : "pdf",
         kdpTrimSize: options.trim_size ?? "6x9",
       }),
     });
@@ -36,9 +44,8 @@ async function runJob(jobId: string, userId: string, bookId: string, bundleType:
       const errText = await pdfRes.text().catch(() => "");
       throw new Error(`export-book failed (${pdfRes.status}): ${errText.slice(0, 200)}`);
     }
-    let mainPdf: Uint8Array | null = null;
-    const buf = await pdfRes.arrayBuffer();
-    mainPdf = new Uint8Array(buf);
+    const mainPdf = new Uint8Array(await pdfRes.arrayBuffer());
+    await timer.stop("pdf", { metadata: { bytes: mainPdf.byteLength } });
 
     await sc.from("export_jobs").update({ progress: 60 }).eq("id", jobId);
 
@@ -48,13 +55,11 @@ async function runJob(jobId: string, userId: string, bookId: string, bundleType:
     if (book?.cover_image_url) {
       try {
         const coverRes = await fetch(book.cover_image_url);
-        if (coverRes.ok) {
-          zip.file("cover.jpg", new Uint8Array(await coverRes.arrayBuffer()));
-        }
-      } catch (_e) { /* ignore */ }
+        if (coverRes.ok) zip.file("cover.jpg", new Uint8Array(await coverRes.arrayBuffer()));
+      } catch (_) { /* ignore */ }
     }
+    await timer.stop("cover");
 
-    // Metadata file
     const metadata: Record<string, any> = {
       title: book?.title ?? "",
       subtitle: listing?.subtitle ?? "",
@@ -66,6 +71,7 @@ async function runJob(jobId: string, userId: string, bookId: string, bundleType:
       chapters: chapters?.length ?? 0,
       generated_at: new Date().toISOString(),
       platform: bundleType === "kdp" ? "Amazon KDP" : "Gumroad",
+      correlation_id: corr,
     };
     zip.file("metadata.json", JSON.stringify(metadata, null, 2));
 
@@ -80,11 +86,14 @@ async function runJob(jobId: string, userId: string, bookId: string, bundleType:
     }
 
     const blob = await zip.generateAsync({ type: "uint8array" });
+    await timer.stop("zip", { metadata: { bytes: blob.byteLength } });
+
     await sc.from("export_jobs").update({ progress: 85 }).eq("id", jobId);
 
     const path = `${userId}/${bookId}/${jobId}.zip`;
     const { error: upErr } = await sc.storage.from("exports").upload(path, blob, { contentType: "application/zip", upsert: true });
     if (upErr) throw upErr;
+    await timer.stop("upload", { metadata: { path } });
 
     const { data: signed, error: sErr } = await sc.storage.from("exports").createSignedUrl(path, 60 * 60 * 24 * 7);
     if (sErr) throw sErr;
@@ -95,22 +104,30 @@ async function runJob(jobId: string, userId: string, bookId: string, bundleType:
       result_expires_at: new Date(Date.now() + 7 * 86400_000).toISOString(),
       completed_at: new Date().toISOString(),
     }).eq("id", jobId);
+    await timer.stop("done");
 
-    // Analytics
     await sc.from("storefront_events").insert({
       listing_id: null,
       event_type: bundleType === "kdp" ? "kdp_export_completed" : "gumroad_export_completed",
-      user_id: userId,
-      metadata: { job_id: jobId, book_id: bookId },
+      user_id: userId, metadata: { job_id: jobId, book_id: bookId, correlation_id: corr },
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await sc.from("export_jobs").update({
       status: "failed", error_message: msg, error_code: "bundle_failed", completed_at: new Date().toISOString(),
     }).eq("id", jobId);
+    await logExportPhase(sc, {
+      job_id: jobId, phase: "failed", correlation_id: corr, error_code: "bundle_failed",
+      metadata: { error: msg },
+    });
+    await logFinancialEvent(sc, {
+      event_type: "export_job_failed", severity: "warn", actor: "system",
+      correlation_id: corr, user_id: userId,
+      payload: { job_id: jobId, book_id: bookId, bundle_type: bundleType, error: msg },
+    });
     await sc.from("storefront_events").insert({
       event_type: bundleType === "kdp" ? "kdp_export_failed" : "gumroad_export_failed",
-      user_id: userId, metadata: { job_id: jobId, error: msg },
+      user_id: userId, metadata: { job_id: jobId, error: msg, correlation_id: corr },
     });
   }
 }
@@ -125,9 +142,10 @@ serve(async (req) => {
   const parsed = await validateBody(req, Body);
   if (parsed instanceof Response) return parsed;
 
+  const corr = correlationId(req);
+
   try {
     const sc = serviceClient();
-    // Verify ownership
     const { data: book } = await sc.from("books").select("user_id").eq("id", parsed.book_id).maybeSingle();
     if (!book || book.user_id !== auth.userId) return unauthorized("Not the owner");
 
@@ -135,18 +153,21 @@ serve(async (req) => {
       user_id: auth.userId, book_id: parsed.book_id, listing_id: parsed.listing_id ?? null,
       bundle_type: parsed.bundle_type, status: "pending",
       metadata: parsed.options ?? {},
+      correlation_id: corr,
     }).select("id").single();
     if (error || !job) return serverError(error ?? new Error("insert failed"));
 
     await sc.from("storefront_events").insert({
       listing_id: parsed.listing_id ?? null,
       event_type: parsed.bundle_type === "kdp" ? "kdp_export_started" : "gumroad_export_started",
-      user_id: auth.userId, metadata: { job_id: job.id, book_id: parsed.book_id },
+      user_id: auth.userId, metadata: { job_id: job.id, book_id: parsed.book_id, correlation_id: corr },
     });
 
-    // @ts-ignore EdgeRuntime is provided by Supabase runtime
-    EdgeRuntime.waitUntil(runJob(job.id, auth.userId, parsed.book_id, parsed.bundle_type, auth.token, parsed.options ?? {}));
+    await logExportPhase(sc, { job_id: job.id, phase: "enqueued", correlation_id: corr });
 
-    return json({ ok: true, job_id: job.id });
+    // @ts-ignore EdgeRuntime is provided by Supabase runtime
+    EdgeRuntime.waitUntil(runJob(job.id, auth.userId, parsed.book_id, parsed.bundle_type, auth.token, parsed.options ?? {}, corr));
+
+    return json({ ok: true, job_id: job.id, correlation_id: corr }, 200, { "x-correlation-id": corr });
   } catch (e) { return serverError(e); }
 });
