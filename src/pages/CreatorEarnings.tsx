@@ -33,7 +33,8 @@ interface Summary {
   arpu_cents: number;
   sources: Record<string, number>;
   daily: { day: string; net_cents: number; gross_cents: number; sales_count: number }[];
-  top_books: { book_id: string; title: string | null; sales: number; gross: number; net: number; refunds: number }[];
+  top_books: { book_id: string; title: string | null; sales: number; gross: number; net: number; refunds: number; visitors?: number; rpv_cents?: number | null }[];
+  export_attribution?: { exports_count: number; sales_after_export_count: number; rpe_cents: number | null };
   recent: {
     entry_type: string;
     gross_cents: number;
