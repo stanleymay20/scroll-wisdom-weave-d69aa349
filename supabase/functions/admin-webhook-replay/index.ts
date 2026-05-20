@@ -90,6 +90,8 @@ serve(async (req) => {
       last_error: res.ok ? null : `replay http ${res.status}`,
       processed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
+      // Phase 2.1d.1 — replay success clears dead-letter markers
+      ...(res.ok ? { dead_letter_reason: null, dead_lettered_at: null } : {}),
     }).eq("stripe_event_id", parsed.stripe_event_id);
 
     await logFinancialEvent(sc, {
