@@ -133,6 +133,7 @@ export type Database = {
           converted_at: string | null
           converted_purchase_id: string | null
           country_code: string | null
+          device_class: string | null
           events_count: number
           first_seen_at: string
           first_touch_campaign: string | null
@@ -146,6 +147,7 @@ export type Database = {
           metadata: Json
           session_id: string
           user_agent_family: string | null
+          user_agent_hash: string | null
           user_id: string | null
           utm_content: string | null
           utm_term: string | null
@@ -154,6 +156,7 @@ export type Database = {
           converted_at?: string | null
           converted_purchase_id?: string | null
           country_code?: string | null
+          device_class?: string | null
           events_count?: number
           first_seen_at?: string
           first_touch_campaign?: string | null
@@ -167,6 +170,7 @@ export type Database = {
           metadata?: Json
           session_id: string
           user_agent_family?: string | null
+          user_agent_hash?: string | null
           user_id?: string | null
           utm_content?: string | null
           utm_term?: string | null
@@ -175,6 +179,7 @@ export type Database = {
           converted_at?: string | null
           converted_purchase_id?: string | null
           country_code?: string | null
+          device_class?: string | null
           events_count?: number
           first_seen_at?: string
           first_touch_campaign?: string | null
@@ -188,6 +193,7 @@ export type Database = {
           metadata?: Json
           session_id?: string
           user_agent_family?: string | null
+          user_agent_hash?: string | null
           user_id?: string | null
           utm_content?: string | null
           utm_term?: string | null
@@ -3687,11 +3693,36 @@ export type Database = {
         }
         Relationships: []
       }
+      velocity_buckets: {
+        Row: {
+          count: number
+          key: string
+          updated_at: string
+          window_start: string
+        }
+        Insert: {
+          count?: number
+          key: string
+          updated_at?: string
+          window_start?: string
+        }
+        Update: {
+          count?: number
+          key?: string
+          updated_at?: string
+          window_start?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
     }
     Functions: {
+      check_velocity: {
+        Args: { _key: string; _limit: number; _window_seconds: number }
+        Returns: Json
+      }
       get_admin_user_metrics: { Args: never; Returns: Json }
       get_user_usage_snapshot: { Args: { _user_id: string }; Returns: Json }
       has_role: {
