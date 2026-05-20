@@ -70,7 +70,7 @@ serve(async (req) => {
     const listingIds = (listings ?? []).map((l: any) => l.id);
 
     let funnel = { listing_view: 0, cta_click: 0, checkout_started: 0, checkout_completed: 0 };
-    let sources: Record<string, number> = {};
+    let sources: Record<string, number> = {}; // legacy compat — visitor counts by source
     if (listingIds.length) {
       const { data: events } = await sc
         .from("storefront_events")
@@ -79,11 +79,58 @@ serve(async (req) => {
         .gte("created_at", since90);
       for (const e of events ?? []) {
         if (e.event_type in funnel) (funnel as any)[e.event_type] += 1;
-        if (e.event_type === "cta_click" || e.event_type === "checkout_started") {
-          const s = (e.metadata as any)?.source ?? "unknown";
-          sources[s] = (sources[s] ?? 0) + 1;
+      }
+    }
+
+    // Phase 2.1d.2 — Revenue-by-source from attribution_sessions, scoped to
+    // this creator's purchases only. Replaces the old event-metadata source
+    // counter which never carried real first-touch values.
+    const creatorPurchaseIds = new Set<string>(
+      (ledger ?? []).map((r: any) => r.purchase_id).filter(Boolean)
+    );
+    const revenue_by_source: Array<{
+      source: string; medium: string | null; campaign: string | null;
+      conversions: number; gross_cents: number; net_cents: number; refund_cents: number;
+    }> = [];
+    if (creatorPurchaseIds.size) {
+      const { data: attrRows } = await sc.from("attribution_sessions")
+        .select("first_touch_source,first_touch_medium,first_touch_campaign,converted_purchase_id")
+        .in("converted_purchase_id", [...creatorPurchaseIds]);
+      const purchaseToKey = new Map<string, string>();
+      const bySource = new Map<string, any>();
+      const keyOf = (s: any) =>
+        `${s.first_touch_source ?? "direct"}\u241f${s.first_touch_medium ?? ""}\u241f${s.first_touch_campaign ?? ""}`;
+      for (const s of attrRows ?? []) {
+        if (!s.converted_purchase_id) continue;
+        const k = keyOf(s);
+        purchaseToKey.set(s.converted_purchase_id, k);
+        const row = bySource.get(k) ?? {
+          source: s.first_touch_source ?? "direct",
+          medium: s.first_touch_medium ?? null,
+          campaign: s.first_touch_campaign ?? null,
+          conversions: 0, gross_cents: 0, net_cents: 0, refund_cents: 0,
+        };
+        row.conversions += 1;
+        bySource.set(k, row);
+      }
+      for (const r of ledger ?? []) {
+        const k = purchaseToKey.get((r as any).purchase_id);
+        if (!k) continue;
+        const row = bySource.get(k);
+        if (!row) continue;
+        if (r.entry_type === "sale") {
+          row.gross_cents += r.gross_cents ?? 0;
+          row.net_cents += r.creator_net_cents ?? 0;
+        } else if (r.entry_type === "refund" || r.entry_type === "chargeback") {
+          row.refund_cents += -(r.gross_cents ?? 0);
+          row.net_cents += r.creator_net_cents ?? 0;
         }
       }
+      for (const row of bySource.values()) {
+        revenue_by_source.push(row);
+        sources[row.source] = (sources[row.source] ?? 0) + row.conversions;
+      }
+      revenue_by_source.sort((a, b) => (b.gross_cents - b.refund_cents) - (a.gross_cents - a.refund_cents));
     }
 
     const conversion_rate = funnel.listing_view > 0
