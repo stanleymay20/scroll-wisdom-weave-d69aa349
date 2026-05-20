@@ -2,7 +2,7 @@
 // Useful when downstream side effects failed and we need to re-run the handler
 // with the original payload (idempotency keys protect duplicate side effects).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import Stripe from "https://esm.sh/stripe@18.5.0";
+
 import {
   preflight, json, badRequest, unauthorized, forbidden, serverError,
   requireUser, validateBody, z, serviceClient,
