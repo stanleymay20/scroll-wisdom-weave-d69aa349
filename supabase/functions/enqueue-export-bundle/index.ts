@@ -147,6 +147,12 @@ serve(async (req) => {
   try {
     const sc = serviceClient();
 
+    // Phase 2.1c.2 — risk-tier gate (high/blocked users may not enqueue exports).
+    const risk = await enforceUserRiskTier(sc, auth.userId, "export");
+    if (risk) return risk;
+
+
+
     // Phase 2.1c.1 — export farming defence.
     // 20 exports per user per hour, and 5 per minute burst cap.
     const burst = await enforcePersistentVelocity(sc, {
