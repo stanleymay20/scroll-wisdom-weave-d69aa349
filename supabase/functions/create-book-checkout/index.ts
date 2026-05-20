@@ -92,13 +92,18 @@ serve(async (req) => {
         purchased_at: new Date().toISOString(),
         metadata: { source: "free_unlock" },
       });
-      if (insErr && !String(insErr.message).includes("duplicate")) throw insErr;
-      await sb.from("storefront_events").insert({
-        listing_id: listing.id,
-        event_type: "full_book_unlocked",
-        user_id: buyerUserId,
-        metadata: { source: "free" },
-      });
+      // Ignore unique violation — caller already owns it (race / replay safe)
+      if (insErr && insErr.code !== "23505" && !String(insErr.message).toLowerCase().includes("duplicate")) {
+        throw insErr;
+      }
+      if (!insErr) {
+        await sb.from("storefront_events").insert({
+          listing_id: listing.id,
+          event_type: "full_book_unlocked",
+          user_id: buyerUserId,
+          metadata: { source: "free" },
+        });
+      }
       return new Response(
         JSON.stringify({ free: true, redirect_url: `${origin}/store/${listing.slug}/success?free=1` }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } },
