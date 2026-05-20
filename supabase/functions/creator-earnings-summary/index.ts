@@ -1,0 +1,109 @@
+// Creator earnings summary — aggregates ledger + funnel events for the caller.
+import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { preflight, json, serverError, requireUser, serviceClient } from "../_shared/http.ts";
+
+serve(async (req) => {
+  const pre = preflight(req); if (pre) return pre;
+  const auth = await requireUser(req);
+  if (auth instanceof Response) return auth;
+
+  try {
+    const sc = serviceClient();
+    const userId = auth.userId;
+    const since30 = new Date(Date.now() - 30 * 86400_000).toISOString();
+    const since90 = new Date(Date.now() - 90 * 86400_000).toISOString();
+
+    // Ledger rows
+    const { data: ledger, error: ledgerErr } = await sc
+      .from("creator_earnings_ledger")
+      .select("entry_type,gross_cents,platform_fee_cents,creator_net_cents,currency,payout_status,occurred_at,book_id,book_title_snapshot,listing_id,listing_slug_snapshot")
+      .eq("creator_user_id", userId)
+      .order("occurred_at", { ascending: false })
+      .limit(2000);
+    if (ledgerErr) return serverError(ledgerErr, "ledger_query_failed");
+
+    const sum = (rows: any[], key: string) => rows.reduce((a, r) => a + (r[key] ?? 0), 0);
+    const sales = (ledger ?? []).filter((r) => r.entry_type === "sale");
+    const refunds = (ledger ?? []).filter((r) => r.entry_type === "refund" || r.entry_type === "chargeback");
+
+    const totals = {
+      currency: sales[0]?.currency ?? "usd",
+      gross_cents: sum(sales, "gross_cents"),
+      platform_fee_cents: sum(sales, "platform_fee_cents"),
+      net_cents: sum(sales, "creator_net_cents") + sum(refunds, "creator_net_cents"),
+      refund_cents: -sum(refunds, "gross_cents"),
+      sales_count: sales.length,
+      refund_count: refunds.length,
+      available_payout_cents: (ledger ?? [])
+        .filter((r) => r.payout_status === "available")
+        .reduce((a, r) => a + (r.creator_net_cents ?? 0), 0),
+      pending_payout_cents: (ledger ?? [])
+        .filter((r) => r.payout_status === "pending" && r.entry_type === "sale")
+        .reduce((a, r) => a + (r.creator_net_cents ?? 0), 0),
+    };
+
+    // Daily series (last 30 days)
+    const { data: daily } = await sc
+      .from("creator_revenue_daily")
+      .select("day,book_id,gross_cents,refund_cents,net_cents,sales_count,refund_count")
+      .eq("creator_user_id", userId)
+      .gte("day", since30.slice(0, 10))
+      .order("day", { ascending: true });
+
+    // Top books
+    const bookMap = new Map<string, any>();
+    for (const r of sales) {
+      const k = r.book_id;
+      const cur = bookMap.get(k) ?? { book_id: k, title: r.book_title_snapshot, sales: 0, gross: 0, net: 0, refunds: 0 };
+      cur.sales += 1; cur.gross += r.gross_cents; cur.net += r.creator_net_cents; bookMap.set(k, cur);
+    }
+    for (const r of refunds) {
+      const cur = bookMap.get(r.book_id); if (cur) { cur.refunds += 1; cur.net += r.creator_net_cents; }
+    }
+    const top_books = [...bookMap.values()].sort((a, b) => b.gross - a.gross).slice(0, 10);
+
+    // Funnel from storefront_events for this creator's listings
+    const { data: listings } = await sc
+      .from("public_listings")
+      .select("id, books!inner(user_id)")
+      .eq("books.user_id", userId);
+    const listingIds = (listings ?? []).map((l: any) => l.id);
+
+    let funnel = { listing_view: 0, cta_click: 0, checkout_started: 0, checkout_completed: 0 };
+    let sources: Record<string, number> = {};
+    if (listingIds.length) {
+      const { data: events } = await sc
+        .from("storefront_events")
+        .select("event_type, metadata, created_at")
+        .in("listing_id", listingIds)
+        .gte("created_at", since90);
+      for (const e of events ?? []) {
+        if (e.event_type in funnel) (funnel as any)[e.event_type] += 1;
+        if (e.event_type === "cta_click" || e.event_type === "checkout_started") {
+          const s = (e.metadata as any)?.source ?? "unknown";
+          sources[s] = (sources[s] ?? 0) + 1;
+        }
+      }
+    }
+
+    const conversion_rate = funnel.listing_view > 0
+      ? funnel.checkout_completed / funnel.listing_view : 0;
+    const arpu_cents = funnel.checkout_completed > 0
+      ? Math.round(totals.gross_cents / funnel.checkout_completed) : 0;
+    const refund_rate = totals.sales_count > 0
+      ? totals.refund_count / totals.sales_count : 0;
+
+    return json({
+      totals,
+      funnel,
+      conversion_rate,
+      refund_rate,
+      arpu_cents,
+      sources,
+      daily: daily ?? [],
+      top_books,
+      recent: (ledger ?? []).slice(0, 25),
+      generated_at: new Date().toISOString(),
+    });
+  } catch (e) { return serverError(e); }
+});
