@@ -7,6 +7,7 @@ import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
+import { getAttributionContext } from "@/lib/attribution";
 import { toast } from "sonner";
 
 interface Data {
@@ -82,8 +83,9 @@ export default function PublicBookPage() {
   async function handleBuy() {
     trackStorefrontEvent(data!.id, "cta_click", { cta: "buy" });
     try {
+      const attribution = getAttributionContext();
       const { data: res, error } = await supabase.functions.invoke("create-book-checkout", {
-        body: { listing_id: data!.id },
+        body: { listing_id: data!.id, attribution },
       });
       if (error) throw error;
       const r = res as { url?: string; redirect_url?: string; already_owned?: boolean; free?: boolean };
