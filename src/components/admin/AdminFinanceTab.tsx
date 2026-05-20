@@ -34,6 +34,12 @@ interface FinanceData {
   chargebacks_pending: { id: string; stripe_dispute_id: string; amount_cents: number; reason: string | null; status: string; evidence_due_by: string | null; created_at: string }[];
   cohorts: { metric_date: string; paying_users: number; gross_cents: number; visitors: number; exports_count: number; rpv_cents: number | null; rpe_cents: number | null }[];
   top_sources: { source: string; visitors: number }[];
+  revenue_by_source: {
+    source: string; medium: string | null; campaign: string | null;
+    visitors: number; conversions: number;
+    gross_cents: number; net_cents: number; refund_cents: number;
+    conversion_rate: number; refund_rate: number;
+  }[];
   funnel: { stage: string; count: number }[];
   reconciliation_recent: { created_at: string; severity: string; scanned: number; discrepancies_count: number; healed: number }[];
 }
