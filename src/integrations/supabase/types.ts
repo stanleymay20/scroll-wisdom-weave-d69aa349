@@ -1321,6 +1321,174 @@ export type Database = {
           },
         ]
       }
+      creator_earnings_ledger: {
+        Row: {
+          available_at: string | null
+          base_currency: string | null
+          book_id: string
+          book_title_snapshot: string | null
+          chargeback_status: string | null
+          created_at: string
+          creator_display_name_snapshot: string | null
+          creator_net_cents: number
+          creator_user_id: string
+          currency: string
+          entry_type: string
+          exchange_rate_snapshot: number | null
+          fee_bps_applied: number
+          fraud_flags: Json
+          gross_cents: number
+          hold_reason: string | null
+          id: string
+          listing_id: string | null
+          listing_slug_snapshot: string | null
+          metadata: Json
+          occurred_at: string
+          payout_batch_id: string | null
+          payout_status: string
+          platform_fee_cents: number
+          purchase_id: string
+          risk_score: number | null
+        }
+        Insert: {
+          available_at?: string | null
+          base_currency?: string | null
+          book_id: string
+          book_title_snapshot?: string | null
+          chargeback_status?: string | null
+          created_at?: string
+          creator_display_name_snapshot?: string | null
+          creator_net_cents: number
+          creator_user_id: string
+          currency?: string
+          entry_type: string
+          exchange_rate_snapshot?: number | null
+          fee_bps_applied: number
+          fraud_flags?: Json
+          gross_cents: number
+          hold_reason?: string | null
+          id?: string
+          listing_id?: string | null
+          listing_slug_snapshot?: string | null
+          metadata?: Json
+          occurred_at?: string
+          payout_batch_id?: string | null
+          payout_status?: string
+          platform_fee_cents: number
+          purchase_id: string
+          risk_score?: number | null
+        }
+        Update: {
+          available_at?: string | null
+          base_currency?: string | null
+          book_id?: string
+          book_title_snapshot?: string | null
+          chargeback_status?: string | null
+          created_at?: string
+          creator_display_name_snapshot?: string | null
+          creator_net_cents?: number
+          creator_user_id?: string
+          currency?: string
+          entry_type?: string
+          exchange_rate_snapshot?: number | null
+          fee_bps_applied?: number
+          fraud_flags?: Json
+          gross_cents?: number
+          hold_reason?: string | null
+          id?: string
+          listing_id?: string | null
+          listing_slug_snapshot?: string | null
+          metadata?: Json
+          occurred_at?: string
+          payout_batch_id?: string | null
+          payout_status?: string
+          platform_fee_cents?: number
+          purchase_id?: string
+          risk_score?: number | null
+        }
+        Relationships: []
+      }
+      creator_payout_profiles: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          metadata: Json
+          payout_email: string | null
+          payout_method: string
+          stripe_connect_account_id: string | null
+          stripe_connect_status: string
+          tax_form_status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          metadata?: Json
+          payout_email?: string | null
+          payout_method?: string
+          stripe_connect_account_id?: string | null
+          stripe_connect_status?: string
+          tax_form_status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          metadata?: Json
+          payout_email?: string | null
+          payout_method?: string
+          stripe_connect_account_id?: string | null
+          stripe_connect_status?: string
+          tax_form_status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      creator_revenue_daily: {
+        Row: {
+          book_id: string
+          creator_user_id: string
+          currency: string
+          day: string
+          gross_cents: number
+          net_cents: number
+          platform_fee_cents: number
+          refund_cents: number
+          refund_count: number
+          sales_count: number
+          updated_at: string
+        }
+        Insert: {
+          book_id: string
+          creator_user_id: string
+          currency?: string
+          day: string
+          gross_cents?: number
+          net_cents?: number
+          platform_fee_cents?: number
+          refund_cents?: number
+          refund_count?: number
+          sales_count?: number
+          updated_at?: string
+        }
+        Update: {
+          book_id?: string
+          creator_user_id?: string
+          currency?: string
+          day?: string
+          gross_cents?: number
+          net_cents?: number
+          platform_fee_cents?: number
+          refund_cents?: number
+          refund_count?: number
+          sales_count?: number
+          updated_at?: string
+        }
+        Relationships: []
+      }
       export_jobs: {
         Row: {
           book_id: string
@@ -1824,6 +1992,27 @@ export type Database = {
           slug?: string
           updated_at?: string
           verbose_audit?: boolean
+        }
+        Relationships: []
+      }
+      platform_config: {
+        Row: {
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: Json
+        }
+        Insert: {
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: Json
+        }
+        Update: {
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: Json
         }
         Relationships: []
       }
@@ -3094,6 +3283,8 @@ export type Database = {
         }
         Returns: string
       }
+      record_purchase_ledger: { Args: { _purchase_id: string }; Returns: Json }
+      set_platform_fee: { Args: { _bps: number }; Returns: Json }
       user_owns_book_purchase: {
         Args: { _book_id: string; _user_id: string }
         Returns: boolean
