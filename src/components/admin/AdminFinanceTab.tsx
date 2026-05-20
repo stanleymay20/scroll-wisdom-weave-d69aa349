@@ -35,7 +35,7 @@ interface FinanceData {
   cohorts: { metric_date: string; paying_users: number; gross_cents: number; visitors: number; exports_count: number; rpv_cents: number | null; rpe_cents: number | null }[];
   top_sources: { source: string; visitors: number }[];
   funnel: { stage: string; count: number }[];
-  reconciliation_recent: { created_at: string; payload: Record<string, unknown> }[];
+  reconciliation_recent: { created_at: string; severity: string; scanned: number; discrepancies_count: number; healed: number }[];
 }
 
 export function AdminFinanceTab() {
@@ -208,19 +208,22 @@ export function AdminFinanceTab() {
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
-          <CardHeader className="pb-2"><CardTitle className="text-sm">Cohort retention (last 30d)</CardTitle></CardHeader>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Daily activity (last 30d)</CardTitle></CardHeader>
           <CardContent>
             {(data.cohorts ?? []).length === 0 ? (
-              <div className="text-sm text-muted-foreground">No cohort rollup yet. Run analytics-cohort-rollup.</div>
+              <div className="text-sm text-muted-foreground">No daily rollup yet. Run analytics-cohort-rollup.</div>
             ) : (
-              <div className="space-y-1 text-xs font-mono max-h-56 overflow-y-auto">
-                {data.cohorts.map((co) => (
-                  <div key={co.metric_date} className="flex justify-between border-b border-border/40 py-1">
-                    <span>{co.metric_date}</span>
-                    <span>{co.paying_users} paying · {co.visitors} visitors · RPV {co.rpv_cents != null ? fmt(Number(co.rpv_cents)) : "—"} · RPE {co.rpe_cents != null ? fmt(Number(co.rpe_cents)) : "—"}</span>
-                  </div>
-                ))}
-              </div>
+              <>
+                <div className="text-xs text-muted-foreground mb-2">Daily snapshots — not true cohort retention.</div>
+                <div className="space-y-1 text-xs font-mono max-h-56 overflow-y-auto">
+                  {data.cohorts.map((co) => (
+                    <div key={co.metric_date} className="flex justify-between border-b border-border/40 py-1">
+                      <span>{co.metric_date}</span>
+                      <span>{co.paying_users} paying · {co.visitors} visitors · RPV {co.rpv_cents != null ? fmt(Number(co.rpv_cents)) : "—"} · RPE {co.rpe_cents != null ? fmt(Number(co.rpe_cents)) : "—"}</span>
+                    </div>
+                  ))}
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
@@ -263,7 +266,7 @@ export function AdminFinanceTab() {
               data.reconciliation_recent.map((r, i) => (
                 <div key={i} className="text-xs border-b border-border/40 py-1">
                   <div className="text-muted-foreground">{new Date(r.created_at).toLocaleString()}</div>
-                  <div className="font-mono">scanned {(r.payload as any)?.scanned ?? 0} · discrepancies {(r.payload as any)?.discrepancies_count ?? 0}</div>
+                  <div className="font-mono">scanned {r.scanned} · discrepancies {r.discrepancies_count} · healed {r.healed} · {r.severity}</div>
                 </div>
               ))
             )}

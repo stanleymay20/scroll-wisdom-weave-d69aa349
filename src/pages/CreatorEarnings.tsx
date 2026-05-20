@@ -34,7 +34,7 @@ interface Summary {
   sources: Record<string, number>;
   daily: { day: string; net_cents: number; gross_cents: number; sales_count: number }[];
   top_books: { book_id: string; title: string | null; sales: number; gross: number; net: number; refunds: number; visitors?: number; rpv_cents?: number | null }[];
-  export_attribution?: { exports_count: number; sales_after_export_count: number; rpe_cents: number | null };
+  export_attribution?: { exports_count: number; assisted_sales_count?: number; assisted_gross_cents?: number; assisted_rpe_cents?: number | null; attribution_kind?: string; attribution_notes?: string };
   recent: {
     entry_type: string;
     gross_cents: number;
@@ -144,7 +144,9 @@ export default function CreatorEarnings() {
             {data.export_attribution && data.export_attribution.exports_count > 0 && (
               <div className="mt-3 pt-3 border-t border-border/40 text-xs text-muted-foreground">
                 Exports last 90d: <span className="font-semibold text-foreground">{data.export_attribution.exports_count}</span>
-                {data.export_attribution.rpe_cents != null && <> · RPE <span className="font-semibold text-foreground">{fmt(data.export_attribution.rpe_cents, c)}</span></>}
+                {data.export_attribution.assisted_rpe_cents != null && <> · Assisted RPE <span className="font-semibold text-foreground">{fmt(data.export_attribution.assisted_rpe_cents, c)}</span></>}
+                {data.export_attribution.assisted_sales_count != null && <> · {data.export_attribution.assisted_sales_count} sales after first export</>}
+                <div className="mt-1 italic">Assisted attribution — not a causal link.</div>
               </div>
             )}
           </CardContent>

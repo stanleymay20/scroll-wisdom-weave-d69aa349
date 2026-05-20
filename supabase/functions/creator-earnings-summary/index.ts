@@ -93,21 +93,29 @@ serve(async (req) => {
     const refund_rate = totals.sales_count > 0
       ? totals.refund_count / totals.sales_count : 0;
 
-    // Phase 2.1d — per-book revenue per visitor (RPV)
+    // Phase 2.1d.1 — per-book revenue per visitor (RPV).
+    // Count DISTINCT session_id per listing (not raw view rows) so reloads
+    // and quick re-mounts don't inflate the denominator.
     const visitorsByBook = new Map<string, number>();
     if (listingIds.length) {
       const { data: views } = await sc.from("storefront_events")
-        .select("listing_id")
+        .select("listing_id, session_id")
         .eq("event_type", "listing_view")
         .in("listing_id", listingIds)
+        .not("session_id", "is", null)
         .gte("created_at", since90);
       const { data: listingBookMap } = await sc.from("public_listings")
         .select("id, book_id").in("id", listingIds);
       const listingToBook = new Map((listingBookMap ?? []).map((l: any) => [l.id, l.book_id]));
+      const sessionsByBook = new Map<string, Set<string>>();
       for (const v of views ?? []) {
         const bid = listingToBook.get(v.listing_id as any);
-        if (bid) visitorsByBook.set(bid, (visitorsByBook.get(bid) ?? 0) + 1);
+        const sid = (v as any).session_id as string | null;
+        if (!bid || !sid) continue;
+        if (!sessionsByBook.has(bid)) sessionsByBook.set(bid, new Set());
+        sessionsByBook.get(bid)!.add(sid);
       }
+      for (const [bid, set] of sessionsByBook.entries()) visitorsByBook.set(bid, set.size);
     }
     const top_books_with_rpv = top_books.map((b: any) => ({
       ...b,
@@ -116,18 +124,33 @@ serve(async (req) => {
         ? Math.round(b.gross / (visitorsByBook.get(b.book_id) ?? 1)) : null,
     }));
 
-    // Phase 2.1d — export-to-sale attribution for owned books
+    // Phase 2.1d.1 — export-to-sale attribution.
+    // We don't yet have an exact "sale caused by this export" link, so we
+    // surface this as ASSISTED attribution: sales that happened in the same
+    // 90d window after at least one export event by the creator. We label it
+    // clearly so the UI cannot mistake it for true RPE.
     const { data: bundleEvents } = await sc.from("storefront_events")
       .select("event_type, metadata, created_at")
       .eq("user_id", userId)
       .in("event_type", ["kdp_export_completed", "gumroad_export_completed"])
       .gte("created_at", since90);
     const exports_count = bundleEvents?.length ?? 0;
-    const rpe_cents = exports_count > 0 ? Math.round(totals.gross_cents / exports_count) : null;
+    const firstExportAt = (bundleEvents ?? [])
+      .map(e => e.created_at).sort()[0] ?? null;
+    const assistedSales = firstExportAt
+      ? sales.filter(s => s.occurred_at > firstExportAt)
+      : [];
+    const assistedGross = assistedSales.reduce((a, r) => a + (r.gross_cents ?? 0), 0);
     const export_attribution = {
       exports_count,
-      sales_after_export_count: sales.length, // crude attribution; refined when we ship export-source funnel
-      rpe_cents,
+      assisted_sales_count: assistedSales.length,
+      assisted_gross_cents: assistedGross,
+      assisted_rpe_cents: exports_count > 0
+        ? Math.round(assistedGross / exports_count) : null,
+      attribution_kind: "assisted" as const,
+      attribution_notes:
+        "Counts sales that occurred after the first export in the last 90d. " +
+        "Not a causal link — true RPE requires source-tagged export funnels.",
     };
 
     return json({

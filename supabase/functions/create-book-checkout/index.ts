@@ -20,8 +20,29 @@ serve(async (req) => {
     });
 
   try {
-    const { listing_id } = await req.json();
+    const body = await req.json().catch(() => ({}));
+    const { listing_id, attribution } = body as {
+      listing_id?: string;
+      attribution?: {
+        session_id?: string;
+        source?: string;
+        medium?: string | null;
+        campaign?: string | null;
+        referrer?: string | null;
+        landing_path?: string | null;
+      };
+    };
     if (!listing_id) throw new Error("listing_id required");
+
+    // Sanitize attribution (Stripe metadata values are <=500 chars, keys <=40)
+    const trim = (v: unknown, n: number) =>
+      typeof v === "string" && v.length > 0 ? v.slice(0, n) : "";
+    const attrSession = trim(attribution?.session_id, 64);
+    const attrSource = trim(attribution?.source, 60);
+    const attrMedium = trim(attribution?.medium, 60);
+    const attrCampaign = trim(attribution?.campaign, 120);
+    const attrReferrer = trim(attribution?.referrer, 200);
+    const attrLanding = trim(attribution?.landing_path, 200);
 
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY missing");
@@ -143,6 +164,14 @@ serve(async (req) => {
         listing_id: listing.id,
         book_id: book.id,
         buyer_user_id: buyerUserId ?? "",
+        // Phase 2.1d.1 — propagate attribution so webhook can stitch
+        // attribution_sessions.converted_purchase_id without leaking PII.
+        attribution_session_id: attrSession,
+        attribution_source: attrSource,
+        attribution_medium: attrMedium,
+        attribution_campaign: attrCampaign,
+        attribution_referrer: attrReferrer,
+        attribution_landing_path: attrLanding,
       },
     });
 
@@ -156,13 +185,18 @@ serve(async (req) => {
       amount_cents: listing.price_cents,
       currency: listing.currency ?? "usd",
       status: "pending",
-      metadata: { source: "stripe_checkout" },
+      metadata: {
+        source: "stripe_checkout",
+        attribution_session_id: attrSession || null,
+        attribution_source: attrSource || null,
+      },
     });
 
     await sb.from("storefront_events").insert({
       listing_id: listing.id,
       event_type: "checkout_started",
       user_id: buyerUserId,
+      session_id: attrSession || null,
       metadata: { session_id: session.id, amount_cents: listing.price_cents },
     });
 
