@@ -51,10 +51,16 @@ export function AdminReliabilityTab() {
   const load = useCallback(async () => {
     setLoading(true);
     const [wh, fe, cb, th, tel] = await Promise.all([
-      supabase.from("stripe_webhook_events").select("*").order("received_at", { ascending: false }).limit(50),
-      supabase.from("financial_events").select("*").order("created_at", { ascending: false }).limit(50),
-      supabase.from("chargebacks").select("*").order("created_at", { ascending: false }).limit(20),
-      supabase.from("alert_thresholds").select("*").order("key"),
+      // Explicit columns — never select raw payload to reduce admin blast radius
+      supabase.from("stripe_webhook_events")
+        .select("stripe_event_id,event_type,status,attempts,last_error,received_at")
+        .order("received_at", { ascending: false }).limit(50),
+      supabase.from("financial_events")
+        .select("id,event_type,severity,actor,correlation_id,purchase_id,stripe_event_id,created_at,dead_letter_reason")
+        .order("created_at", { ascending: false }).limit(50),
+      supabase.from("chargebacks").select("id,stripe_dispute_id,amount_cents,reason,status,evidence_due_by,created_at")
+        .order("created_at", { ascending: false }).limit(20),
+      supabase.from("alert_thresholds").select("key,description,warn_value,critical_value,window_seconds,enabled").order("key"),
       supabase.from("export_job_telemetry").select("phase, duration_ms").not("duration_ms", "is", null).limit(500),
     ]);
     setWebhooks((wh.data ?? []) as Webhook[]);
