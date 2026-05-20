@@ -92,6 +92,8 @@ const ExportJobsPage = lazy(() => import("./pages/ExportJobsPage"));
 const PurchaseSuccess = lazy(() => import("./pages/PurchaseSuccess"));
 const FullBookReader = lazy(() => import("./pages/FullBookReader"));
 const PurchasedLibrary = lazy(() => import("./pages/PurchasedLibrary"));
+const CreatorEarnings = lazy(() => import("./pages/CreatorEarnings"));
+const PayoutProfileEditor = lazy(() => import("./pages/PayoutProfileEditor"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
