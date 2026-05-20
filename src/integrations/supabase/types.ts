@@ -3672,6 +3672,48 @@ export type Database = {
           },
         ]
       }
+      user_risk_scores: {
+        Row: {
+          created_at: string
+          last_evaluated_at: string
+          manual_override_tier: string | null
+          reasons: Json
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          score: number
+          tier: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          last_evaluated_at?: string
+          manual_override_tier?: string | null
+          reasons?: Json
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          score?: number
+          tier?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          last_evaluated_at?: string
+          manual_override_tier?: string | null
+          reasons?: Json
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          score?: number
+          tier?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       user_roles: {
         Row: {
           created_at: string
@@ -3719,11 +3761,16 @@ export type Database = {
       [_ in never]: never
     }
     Functions: {
+      admin_set_user_risk_override: {
+        Args: { _notes?: string; _override_tier: string; _user_id: string }
+        Returns: Json
+      }
       check_velocity: {
         Args: { _key: string; _limit: number; _window_seconds: number }
         Returns: Json
       }
       get_admin_user_metrics: { Args: never; Returns: Json }
+      get_effective_user_tier: { Args: { _user_id: string }; Returns: string }
       get_user_usage_snapshot: { Args: { _user_id: string }; Returns: Json }
       has_role: {
         Args: {
@@ -3763,6 +3810,7 @@ export type Database = {
         }
         Returns: string
       }
+      purge_velocity_buckets: { Args: never; Returns: number }
       record_purchase_ledger: { Args: { _purchase_id: string }; Returns: Json }
       set_platform_fee: { Args: { _bps: number }; Returns: Json }
       user_owns_book_purchase: {
