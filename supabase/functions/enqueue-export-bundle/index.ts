@@ -37,10 +37,8 @@ async function runJob(jobId: string, userId: string, bookId: string, bundleType:
       throw new Error(`export-book failed (${pdfRes.status}): ${errText.slice(0, 200)}`);
     }
     let mainPdf: Uint8Array | null = null;
-    if (pdfRes.ok) {
-      const buf = await pdfRes.arrayBuffer();
-      mainPdf = new Uint8Array(buf);
-    }
+    const buf = await pdfRes.arrayBuffer();
+    mainPdf = new Uint8Array(buf);
 
     await sc.from("export_jobs").update({ progress: 60 }).eq("id", jobId);
 
