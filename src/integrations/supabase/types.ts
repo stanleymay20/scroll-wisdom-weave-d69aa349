@@ -47,6 +47,39 @@ export type Database = {
         }
         Relationships: []
       }
+      alert_thresholds: {
+        Row: {
+          critical_value: number | null
+          description: string | null
+          enabled: boolean
+          key: string
+          updated_at: string
+          updated_by: string | null
+          warn_value: number | null
+          window_seconds: number
+        }
+        Insert: {
+          critical_value?: number | null
+          description?: string | null
+          enabled?: boolean
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          warn_value?: number | null
+          window_seconds?: number
+        }
+        Update: {
+          critical_value?: number | null
+          description?: string | null
+          enabled?: boolean
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          warn_value?: number | null
+          window_seconds?: number
+        }
+        Relationships: []
+      }
       assessment_integrity_logs: {
         Row: {
           book_id: string | null
@@ -481,6 +514,7 @@ export type Database = {
           book_id: string
           buyer_email: string | null
           buyer_user_id: string | null
+          correlation_id: string | null
           created_at: string
           currency: string
           id: string
@@ -497,6 +531,7 @@ export type Database = {
           book_id: string
           buyer_email?: string | null
           buyer_user_id?: string | null
+          correlation_id?: string | null
           created_at?: string
           currency?: string
           id?: string
@@ -513,6 +548,7 @@ export type Database = {
           book_id?: string
           buyer_email?: string | null
           buyer_user_id?: string | null
+          correlation_id?: string | null
           created_at?: string
           currency?: string
           id?: string
@@ -836,6 +872,59 @@ export type Database = {
             columns: ["book_id"]
             isOneToOne: false
             referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      chargebacks: {
+        Row: {
+          amount_cents: number
+          correlation_id: string | null
+          created_at: string
+          currency: string
+          evidence_due_by: string | null
+          id: string
+          metadata: Json | null
+          purchase_id: string | null
+          reason: string | null
+          status: string
+          stripe_dispute_id: string
+          updated_at: string
+        }
+        Insert: {
+          amount_cents?: number
+          correlation_id?: string | null
+          created_at?: string
+          currency?: string
+          evidence_due_by?: string | null
+          id?: string
+          metadata?: Json | null
+          purchase_id?: string | null
+          reason?: string | null
+          status?: string
+          stripe_dispute_id: string
+          updated_at?: string
+        }
+        Update: {
+          amount_cents?: number
+          correlation_id?: string | null
+          created_at?: string
+          currency?: string
+          evidence_due_by?: string | null
+          id?: string
+          metadata?: Json | null
+          purchase_id?: string | null
+          reason?: string | null
+          status?: string
+          stripe_dispute_id?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "chargebacks_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "book_purchases"
             referencedColumns: ["id"]
           },
         ]
@@ -1489,12 +1578,51 @@ export type Database = {
         }
         Relationships: []
       }
+      export_job_telemetry: {
+        Row: {
+          correlation_id: string | null
+          created_at: string
+          duration_ms: number | null
+          error_code: string | null
+          id: string
+          job_id: string
+          memory_mb: number | null
+          metadata: Json | null
+          phase: string
+        }
+        Insert: {
+          correlation_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          id?: string
+          job_id: string
+          memory_mb?: number | null
+          metadata?: Json | null
+          phase: string
+        }
+        Update: {
+          correlation_id?: string | null
+          created_at?: string
+          duration_ms?: number | null
+          error_code?: string | null
+          id?: string
+          job_id?: string
+          memory_mb?: number | null
+          metadata?: Json | null
+          phase?: string
+        }
+        Relationships: []
+      }
       export_jobs: {
         Row: {
           book_id: string
           bundle_type: string
           completed_at: string | null
+          correlation_id: string | null
           created_at: string
+          dead_letter_reason: string | null
+          dead_lettered_at: string | null
           error_code: string | null
           error_message: string | null
           id: string
@@ -1512,7 +1640,10 @@ export type Database = {
           book_id: string
           bundle_type: string
           completed_at?: string | null
+          correlation_id?: string | null
           created_at?: string
+          dead_letter_reason?: string | null
+          dead_lettered_at?: string | null
           error_code?: string | null
           error_message?: string | null
           id?: string
@@ -1530,7 +1661,10 @@ export type Database = {
           book_id?: string
           bundle_type?: string
           completed_at?: string | null
+          correlation_id?: string | null
           created_at?: string
+          dead_letter_reason?: string | null
+          dead_lettered_at?: string | null
           error_code?: string | null
           error_message?: string | null
           id?: string
@@ -1581,6 +1715,87 @@ export type Database = {
           is_published?: boolean | null
           question?: string
           sort_order?: number | null
+        }
+        Relationships: []
+      }
+      financial_events: {
+        Row: {
+          actor: string
+          correlation_id: string | null
+          created_at: string
+          dead_letter_reason: string | null
+          dead_lettered_at: string | null
+          event_type: string
+          id: string
+          payload: Json
+          purchase_id: string | null
+          severity: string
+          stripe_event_id: string | null
+          user_id: string | null
+        }
+        Insert: {
+          actor?: string
+          correlation_id?: string | null
+          created_at?: string
+          dead_letter_reason?: string | null
+          dead_lettered_at?: string | null
+          event_type: string
+          id?: string
+          payload?: Json
+          purchase_id?: string | null
+          severity?: string
+          stripe_event_id?: string | null
+          user_id?: string | null
+        }
+        Update: {
+          actor?: string
+          correlation_id?: string | null
+          created_at?: string
+          dead_letter_reason?: string | null
+          dead_lettered_at?: string | null
+          event_type?: string
+          id?: string
+          payload?: Json
+          purchase_id?: string | null
+          severity?: string
+          stripe_event_id?: string | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
+      fraud_signals: {
+        Row: {
+          correlation_id: string | null
+          created_at: string
+          id: string
+          metadata: Json | null
+          score: number
+          signal_type: string
+          source: string
+          subject_type: string
+          subject_value: string
+        }
+        Insert: {
+          correlation_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          score?: number
+          signal_type: string
+          source?: string
+          subject_type: string
+          subject_value: string
+        }
+        Update: {
+          correlation_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json | null
+          score?: number
+          signal_type?: string
+          source?: string
+          subject_type?: string
+          subject_value?: string
         }
         Relationships: []
       }
@@ -2944,6 +3159,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      stripe_webhook_events: {
+        Row: {
+          attempts: number
+          correlation_id: string | null
+          dead_letter_reason: string | null
+          dead_lettered_at: string | null
+          event_type: string
+          last_error: string | null
+          payload: Json
+          processed_at: string | null
+          received_at: string
+          status: string
+          stripe_event_id: string
+          updated_at: string
+        }
+        Insert: {
+          attempts?: number
+          correlation_id?: string | null
+          dead_letter_reason?: string | null
+          dead_lettered_at?: string | null
+          event_type: string
+          last_error?: string | null
+          payload: Json
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+          stripe_event_id: string
+          updated_at?: string
+        }
+        Update: {
+          attempts?: number
+          correlation_id?: string | null
+          dead_letter_reason?: string | null
+          dead_lettered_at?: string | null
+          event_type?: string
+          last_error?: string | null
+          payload?: Json
+          processed_at?: string | null
+          received_at?: string
+          status?: string
+          stripe_event_id?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       study_music_tracks: {
         Row: {
