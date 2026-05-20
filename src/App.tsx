@@ -234,6 +234,9 @@ const App = () => (
                   <Route path="/book/:bookId/publish" element={withRecovery('BookPublishSettings', <ProtectedRoute><BookPublishSettings /></ProtectedRoute>)} />
                   <Route path="/account/author" element={withRecovery('AuthorProfileEditor', <ProtectedRoute><AuthorProfileEditor /></ProtectedRoute>)} />
                   <Route path="/account/exports" element={withRecovery('ExportJobs', <ProtectedRoute><ExportJobsPage /></ProtectedRoute>)} />
+                  <Route path="/store/:slug/success" element={withRecovery('PurchaseSuccess', <PurchaseSuccess />)} />
+                  <Route path="/store/:slug/read-full" element={withRecovery('FullBookReader', <ProtectedRoute><FullBookReader /></ProtectedRoute>)} />
+                  <Route path="/account/library/purchases" element={withRecovery('PurchasedLibrary', <ProtectedRoute><PurchasedLibrary /></ProtectedRoute>)} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
