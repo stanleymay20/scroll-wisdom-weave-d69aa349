@@ -53,6 +53,28 @@ serve(async (req) => {
       { auth: { persistSession: false } },
     );
 
+    // Phase 2.1c.1 — persistent velocity gate against scripted checkout attempts.
+    const reqIp = (req.headers.get("x-forwarded-for")?.split(",")[0]?.trim()) ||
+                  req.headers.get("cf-connecting-ip") || "anonymous";
+    const checkVelocity = async (name: string, key: string, limit: number, windowSec: number) => {
+      try {
+        const { data } = await sb.rpc("check_velocity", {
+          _key: `${name}:${key}`, _limit: limit, _window_seconds: windowSec,
+        });
+        if ((data as any)?.ok === false) {
+          const retry = Number((data as any)?.retry_after ?? windowSec);
+          return new Response(JSON.stringify({ error: "Rate limit exceeded", code: "rate_limited", retry_after: retry }), {
+            status: 429,
+            headers: { ...corsHeaders, "Content-Type": "application/json", "Retry-After": String(retry) },
+          });
+        }
+      } catch (_e) { /* fail-open */ }
+      return null;
+    };
+    const ipLimit = await checkVelocity("checkout:ip", reqIp, 30, 60);
+    if (ipLimit) return ipLimit;
+
+
     // Resolve listing + book
     const { data: listing, error: lErr } = await sb
       .from("public_listings")
@@ -102,6 +124,11 @@ serve(async (req) => {
     // FREE listing → immediate unlock for logged-in users (no Stripe call)
     if (!listing.price_cents || listing.price_cents <= 0) {
       if (!buyerUserId) throw new Error("Sign in required to claim free books");
+      // Free-unlock farming defence: per-user + per-IP velocity.
+      const userLimit = await checkVelocity("checkout:free:user", buyerUserId, 10, 3600);
+      if (userLimit) return userLimit;
+      const ipFreeLimit = await checkVelocity("checkout:free:ip", reqIp, 20, 3600);
+      if (ipFreeLimit) return ipFreeLimit;
       const { data: inserted, error: insErr } = await sb.from("book_purchases").insert({
         listing_id: listing.id,
         book_id: book.id,

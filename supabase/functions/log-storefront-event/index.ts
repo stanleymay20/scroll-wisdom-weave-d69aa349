@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { corsHeaders, preflight, json, badRequest, serverError, serviceClient, validateBody, z, clientIp, enforceRateLimit } from "../_shared/http.ts";
+import { corsHeaders, preflight, json, badRequest, serverError, serviceClient, validateBody, z, clientIp, enforceRateLimit, enforcePersistentVelocity } from "../_shared/http.ts";
 
 const ALLOWED_EVENTS = [
   "sample_open", "sample_complete", "cta_click", "buy_click", "share_click",
@@ -32,6 +32,21 @@ serve(async (req) => {
 
   try {
     const sc = serviceClient();
+
+    // Persistent cross-instance velocity gate (defends against bot floods
+    // even after edge-instance churn). Higher cap per session than per IP
+    // because legit users may share IPs (corporate NAT, mobile carriers).
+    const velIp = await enforcePersistentVelocity(sc, {
+      name: "storefront-event:ip", key: ip, limit: 600, windowSec: 60,
+    });
+    if (velIp) return velIp;
+    if (parsed.session_id) {
+      const velSession = await enforcePersistentVelocity(sc, {
+        name: "storefront-event:session", key: parsed.session_id, limit: 300, windowSec: 60,
+      });
+      if (velSession) return velSession;
+    }
+
     const { error } = await sc.from("storefront_events").insert({
       listing_id: parsed.listing_id ?? null,
       event_type: parsed.event_type,

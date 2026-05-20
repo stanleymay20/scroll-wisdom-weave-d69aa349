@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import JSZip from "https://esm.sh/jszip@3.10.1";
-import { preflight, json, badRequest, serverError, unauthorized, requireUser, validateBody, z, serviceClient } from "../_shared/http.ts";
+import { preflight, json, badRequest, serverError, unauthorized, requireUser, validateBody, z, serviceClient, enforcePersistentVelocity } from "../_shared/http.ts";
 import { correlationId, PhaseTimer, logExportPhase, logFinancialEvent } from "../_shared/observability.ts";
 
 const Body = z.object({
@@ -146,8 +146,21 @@ serve(async (req) => {
 
   try {
     const sc = serviceClient();
+
+    // Phase 2.1c.1 — export farming defence.
+    // 20 exports per user per hour, and 5 per minute burst cap.
+    const burst = await enforcePersistentVelocity(sc, {
+      name: "export:user:burst", key: auth.userId, limit: 5, windowSec: 60,
+    });
+    if (burst) return burst;
+    const hourly = await enforcePersistentVelocity(sc, {
+      name: "export:user:hour", key: auth.userId, limit: 20, windowSec: 3600,
+    });
+    if (hourly) return hourly;
+
     const { data: book } = await sc.from("books").select("user_id").eq("id", parsed.book_id).maybeSingle();
     if (!book || book.user_id !== auth.userId) return unauthorized("Not the owner");
+
 
     const { data: job, error } = await sc.from("export_jobs").insert({
       user_id: auth.userId, book_id: parsed.book_id, listing_id: parsed.listing_id ?? null,
