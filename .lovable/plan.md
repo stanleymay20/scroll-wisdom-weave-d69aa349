@@ -94,3 +94,57 @@ Edits incorporated: Author Profiles, Series Support, Export Queueing, Analytics,
 - Real CAPTCHA on purchase_intents
 
 Approving this kicks off step 1 (migration). Confirm and I'll start.
+
+---
+
+# Phase 3+ — Export-First Publishing & Distribution Roadmap
+
+Strategic direction: ScrollLibrary evolves into "the operating system for AI-native publishing." Export-first now, direct integrations later. Never automate KDP publishing directly (Amazon AI-content scrutiny + account risk).
+
+## Model A — Export & Sell Elsewhere (current + near-term)
+User generates → ScrollLibrary exports bundle → user manually uploads.
+- KDP bundle (print PDF + EPUB + metadata.txt) ✅ Phase 1
+- Gumroad bundle (watermarked PDF + sample + license + social PNG) ✅ Phase 1
+- Etsy bundle (printable PDFs, planners, study packs) — Phase 3
+- Substack assets (chapter-as-newsletter HTML + cover crops) — Phase 3
+- Patreon content pack (tiered downloads, serialized chapters) — Phase 3
+
+Safer, simpler, lower compliance risk. Correct first step.
+
+## Phase 3 — Reduce Creator Friction (no OAuth yet)
+- One-click metadata copy (titles, descriptions, hashtags) per destination
+- Auto-generated thumbnails sized per platform (KDP 1.6:1, Substack 1200×630, Patreon 1280×720, Etsy 2000×2000, Gumroad 600×900)
+- SEO descriptions tuned per destination
+- Social asset pack (Twitter/X, LinkedIn, Instagram square + story)
+- "Publishing Wizard" checklist per destination with copy-paste fields
+
+## Phase 4 — Direct OAuth Integrations (Model B, selective)
+Priority order based on feasibility + strategic alignment:
+
+1. **Gumroad** — API mature. Auto-create products, upload PDFs, set pricing, sync updates. Highest near-term ROI.
+2. **Patreon** — Auto-create member-only posts, release serialized chapters, push premium downloads. Enables "AI-generated subscription publishing."
+3. **Substack** — Convert books → newsletters, serialize chapters, AI-assisted long-form. Strong alignment with AtlasResearch + educational publishing vision.
+4. **Etsy** — Lower priority. Good for templates/planners/printables. Less aligned with infrastructure thesis.
+5. **KDP** — DO NOT automate direct publishing. Export-only forever (or assisted wizard with metadata sync, far future).
+
+## Phase 5 — Creator Operating System (long-term)
+Creator dashboard surfaces across destinations:
+- Revenue (per platform + aggregate via Creator Earnings Ledger from Phase 2)
+- Analytics (sales, conversion, audience growth)
+- Subscribers (Patreon + Substack)
+- Royalties (KDP imported / Gumroad direct)
+- Publishing destinations health + sync status
+- Audience growth (cross-platform funnel)
+
+End state: "part Canva, part Gumroad, part Kindle tooling, part Substack, part AI publishing infrastructure."
+
+## Hard Constraints
+- KDP: never direct-publish. Export bundles only.
+- Every direct integration is per-user OAuth, tokens stored per-user, never workspace-level service accounts.
+- Each external publish creates an immutable `external_publications` ledger row (destination, external_id, published_at, status, last_synced_at).
+- Revenue from direct integrations flows through Creator Earnings Ledger (Phase 2) for unified analytics.
+
+## Out of Scope (forever or until explicitly revisited)
+- Direct Amazon KDP automated publishing
+- Owning customer payment relationship on Patreon/Substack (they handle it)
+- Print fulfillment / physical inventory
