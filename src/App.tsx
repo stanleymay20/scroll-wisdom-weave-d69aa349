@@ -89,6 +89,9 @@ const SeriesPage = lazy(() => import("./pages/SeriesPage"));
 const BookPublishSettings = lazy(() => import("./pages/BookPublishSettings"));
 const AuthorProfileEditor = lazy(() => import("./pages/AuthorProfileEditor"));
 const ExportJobsPage = lazy(() => import("./pages/ExportJobsPage"));
+const PurchaseSuccess = lazy(() => import("./pages/PurchaseSuccess"));
+const FullBookReader = lazy(() => import("./pages/FullBookReader"));
+const PurchasedLibrary = lazy(() => import("./pages/PurchasedLibrary"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
