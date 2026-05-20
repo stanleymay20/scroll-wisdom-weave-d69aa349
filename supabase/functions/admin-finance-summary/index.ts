@@ -83,6 +83,54 @@ serve(async (req) => {
       .from("platform_config").select("value,updated_at,updated_by")
       .eq("key", "revenue.platform_fee_bps").maybeSingle();
 
+    // Phase 2.1d additions
+    const { data: refundsQueue } = await sc.from("refund_requests")
+      .select("id,purchase_id,book_id,buyer_user_id,creator_user_id,status,reason,amount_cents,currency,stripe_refund_id,error_message,created_at,processed_at")
+      .order("created_at", { ascending: false }).limit(50);
+
+    const { data: chargebacksPending } = await sc.from("chargebacks")
+      .select("id,stripe_dispute_id,amount_cents,currency,reason,status,evidence_due_by,created_at")
+      .in("status", ["needs_response", "warning_needs_response", "warning_under_review", "under_review"])
+      .order("created_at", { ascending: false }).limit(50);
+
+    const { data: cohorts } = await sc.from("cohort_metrics")
+      .select("metric_date,paying_users,active_users,gross_cents,refund_cents,net_cents,visitors,exports_count,rpv_cents,rpe_cents")
+      .gte("metric_date", since30)
+      .order("metric_date", { ascending: true });
+
+    const { data: sources } = await sc.from("attribution_sessions")
+      .select("first_touch_source")
+      .gte("first_seen_at", since30);
+    const sourceMap = new Map<string, number>();
+    for (const s of sources ?? []) {
+      const k = s.first_touch_source ?? "direct";
+      sourceMap.set(k, (sourceMap.get(k) ?? 0) + 1);
+    }
+    const top_sources = [...sourceMap.entries()]
+      .map(([source, visitors]) => ({ source, visitors }))
+      .sort((a, b) => b.visitors - a.visitors).slice(0, 10);
+
+    // Funnel dropoff (last 30d storefront events)
+    const { data: events } = await sc.from("storefront_events")
+      .select("event_type")
+      .gte("created_at", since30 + "T00:00:00Z")
+      .in("event_type", ["listing_view", "checkout_started", "checkout_completed", "full_book_unlocked"])
+      .limit(50000);
+    const funnelCounts: Record<string, number> = {
+      listing_view: 0, checkout_started: 0, checkout_completed: 0, full_book_unlocked: 0,
+    };
+    for (const e of events ?? []) funnelCounts[e.event_type] = (funnelCounts[e.event_type] ?? 0) + 1;
+    const funnel = ["listing_view", "checkout_started", "checkout_completed", "full_book_unlocked"]
+      .map((stage) => ({ stage, count: funnelCounts[stage] ?? 0 }));
+
+    // Reconciliation discrepancies (last 7d)
+    const since7 = new Date(Date.now() - 7 * 86400_000).toISOString();
+    const { data: discrepEvents } = await sc.from("financial_events")
+      .select("created_at,payload")
+      .eq("event_type", "ledger_discrepancy")
+      .gte("created_at", since7)
+      .order("created_at", { ascending: false }).limit(10);
+
     return json({
       totals,
       failed_payments: failed_payments ?? 0,
@@ -90,6 +138,12 @@ serve(async (req) => {
       top_books,
       series,
       fee: feeRow ?? null,
+      refunds_queue: refundsQueue ?? [],
+      chargebacks_pending: chargebacksPending ?? [],
+      cohorts: cohorts ?? [],
+      top_sources,
+      funnel,
+      reconciliation_recent: discrepEvents ?? [],
       generated_at: new Date().toISOString(),
     });
   } catch (e) { return serverError(e); }
