@@ -1,11 +1,13 @@
-// Phase 2.1d — First-touch attribution capture.
+// Phase 2.1d — First-touch attribution capture (2.1c.1 hardening).
 // Anonymous-callable; persists only first-touch UTM/referrer per session_id.
 // Updates last_seen_at + bumps events_count on subsequent calls without
 // overwriting first-touch fields. Optionally links user_id once known.
+// 2.1c.1: stores hashed UA + coarse device_class for bot/fraud clustering.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import {
   preflight, json, badRequest, serverError,
-  validateBody, z, serviceClient,
+  validateBody, z, serviceClient, clientIp,
+  enforcePersistentVelocity, hashUserAgent, classifyDevice,
 } from "../_shared/http.ts";
 import { correlationId } from "../_shared/observability.ts";
 
@@ -37,12 +39,25 @@ serve(async (req) => {
   if (parsed instanceof Response) return parsed;
 
   const corr = correlationId(req);
-  const ip = req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ?? null;
+  const ip = clientIp(req);
   const ipHash = await hashIp(ip);
   const country = req.headers.get("cf-ipcountry") ?? req.headers.get("x-vercel-ip-country") ?? null;
+  const rawUa = req.headers.get("user-agent") ?? null;
+  const uaHash = await hashUserAgent(rawUa);
+  const deviceClass = classifyDevice(rawUa);
 
   try {
     const sc = serviceClient();
+
+    // Persistent velocity: per IP+session (covers anon callers).
+    const limited = await enforcePersistentVelocity(sc, {
+      name: "attribution-tag",
+      key: `${ipHash ?? "anon"}:${parsed.session_id}`,
+      limit: 60,
+      windowSec: 60,
+    });
+    if (limited) return limited;
+
     const { data: existing } = await sc.from("attribution_sessions")
       .select("id, user_id, events_count").eq("session_id", parsed.session_id).maybeSingle();
 
@@ -69,6 +84,8 @@ serve(async (req) => {
       ip_hash: ipHash,
       country_code: country,
       user_agent_family: parsed.user_agent_family ?? null,
+      user_agent_hash: uaHash,
+      device_class: deviceClass,
       events_count: 1,
       metadata: { correlation_id: corr },
     });
