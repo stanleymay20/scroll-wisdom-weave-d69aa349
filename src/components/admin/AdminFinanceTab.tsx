@@ -30,6 +30,12 @@ interface FinanceData {
   top_books: { book_id: string; title: string | null; gross: number; sales: number }[];
   series: { day: string; gross: number; platform_fee: number; net: number; refund: number; sales: number; refunds: number }[];
   fee: { value: { bps: number }; updated_at: string } | null;
+  refunds_queue: { id: string; purchase_id: string; status: string; reason: string | null; amount_cents: number; currency: string; created_at: string; processed_at: string | null; error_message: string | null }[];
+  chargebacks_pending: { id: string; stripe_dispute_id: string; amount_cents: number; reason: string | null; status: string; evidence_due_by: string | null; created_at: string }[];
+  cohorts: { metric_date: string; paying_users: number; gross_cents: number; visitors: number; exports_count: number; rpv_cents: number | null; rpe_cents: number | null }[];
+  top_sources: { source: string; visitors: number }[];
+  funnel: { stage: string; count: number }[];
+  reconciliation_recent: { created_at: string; payload: Record<string, unknown> }[];
 }
 
 export function AdminFinanceTab() {
