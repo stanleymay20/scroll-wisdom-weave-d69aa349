@@ -236,3 +236,65 @@ export function clientIp(req: Request): string {
     "anonymous"
   );
 }
+
+// ---------------------------------------------------------------------------
+// Persistent (cross-instance) velocity gate, backed by public.check_velocity.
+// Use for abuse-prone endpoints (free unlocks, exports, attribution beacon,
+// anonymous event ingestion). In-memory rateLimit() is still useful as a
+// cheap first line, but it does NOT survive cold starts or scale-out.
+// ---------------------------------------------------------------------------
+export interface VelocityOptions {
+  /** Logical bucket name, e.g. "checkout:free". */
+  name: string;
+  /** Identifier — userId, ipHash, uaHash, or composite. */
+  key: string;
+  limit: number;
+  windowSec: number;
+}
+
+export async function enforcePersistentVelocity(
+  sc: SupabaseClient,
+  opts: VelocityOptions,
+): Promise<Response | null> {
+  try {
+    const { data } = await sc.rpc("check_velocity", {
+      _key: `${opts.name}:${opts.key}`,
+      _limit: opts.limit,
+      _window_seconds: opts.windowSec,
+    });
+    const ok = (data as any)?.ok;
+    if (ok === false) {
+      const retry = Number((data as any)?.retry_after ?? opts.windowSec);
+      return tooManyRequests(retry);
+    }
+    return null;
+  } catch (_e) {
+    // Fail-open on velocity infra errors — never block legitimate traffic
+    // because the counter is unavailable. The in-memory limiter still applies.
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Lightweight device/UA fingerprinting. We never store raw UA strings — only
+// a salted SHA-256 hash + a coarse device_class bucket for fraud clustering.
+// ---------------------------------------------------------------------------
+const UA_SALT = "scrolllibrary-ua-salt-v1";
+
+export async function hashUserAgent(ua: string | null | undefined): Promise<string | null> {
+  if (!ua) return null;
+  const data = new TextEncoder().encode(`${ua}:${UA_SALT}`);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return Array.from(new Uint8Array(buf)).slice(0, 16)
+    .map((b) => b.toString(16).padStart(2, "0")).join("");
+}
+
+export function classifyDevice(ua: string | null | undefined): string {
+  if (!ua) return "unknown";
+  const s = ua.toLowerCase();
+  if (/bot|crawler|spider|crawling|preview|headless|axios|curl|wget|python-requests/.test(s)) return "bot";
+  if (/ipad|tablet/.test(s)) return "tablet";
+  if (/iphone|android.*mobile|mobi|opera mini|windows phone/.test(s)) return "mobile";
+  if (/macintosh|mac os x|windows nt|linux|cros/.test(s)) return "desktop";
+  return "other";
+}
