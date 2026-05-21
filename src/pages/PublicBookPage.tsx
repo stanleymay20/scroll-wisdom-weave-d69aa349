@@ -9,7 +9,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { getAttributionContext } from "@/lib/attribution";
 import { toast } from "sonner";
+import { storefrontApi, type StoreListing } from "@/lib/storefrontApi";
 
+// Local view type retains existing shape used by the page below.
 interface Data {
   id: string;
   slug: string;
@@ -33,6 +35,31 @@ interface Data {
   } | null;
 }
 
+function toLocal(l: StoreListing): Data {
+  return {
+    id: l.id,
+    slug: l.slug,
+    blurb: l.blurb,
+    subtitle: l.subtitle,
+    amazon_description: l.amazon_description,
+    price_cents: l.price_cents,
+    currency: l.currency,
+    sample_chapters: l.sample_chapters,
+    cover_override_url: l.cover_override_url,
+    license_type: l.license_type,
+    seo_keywords: l.seo_keywords ?? [],
+    book: l.book ? {
+      id: l.book.id,
+      title: l.book.title,
+      description: l.book.description,
+      cover_image_url: l.book.cover_image_url,
+      category: l.book.category,
+      user_id: l.book.author_user_id,
+      total_chapters: l.book.total_chapters,
+    } : null,
+  };
+}
+
 export default function PublicBookPage() {
   const { slug } = useParams<{ slug: string }>();
   const navigate = useNavigate();
@@ -43,20 +70,17 @@ export default function PublicBookPage() {
   useEffect(() => {
     if (!slug) return;
     (async () => {
-      const { data: l } = await supabase
-        .from("public_listings")
-        .select("id, slug, blurb, subtitle, amazon_description, price_cents, currency, sample_chapters, cover_override_url, license_type, seo_keywords, book:books(id, title, description, cover_image_url, category, user_id, total_chapters)")
-        .eq("slug", slug).eq("is_public", true).maybeSingle();
-      if (!l) { setLoading(false); return; }
-      setData(l as any);
-      if (l.book?.user_id) {
-        const { data: a } = await supabase.from("author_profiles").select("slug, display_name").eq("user_id", l.book.user_id).maybeSingle();
-        setAuthor(a as any);
-      }
+      try {
+        const l = await storefrontApi.getBook(slug);
+        setData(toLocal(l));
+        if (l.author) setAuthor({ slug: l.author.slug, display_name: l.author.display_name });
+        trackStorefrontEvent(l.id, "listing_view");
+      } catch (_) { /* not found / network */ }
       setLoading(false);
-      trackStorefrontEvent((l as any).id, "listing_view");
     })();
   }, [slug]);
+
+
 
   if (loading) return <div className="container mx-auto max-w-5xl p-8"><Skeleton className="h-96 w-full" /></div>;
   if (!data || !data.book) return <div className="container mx-auto max-w-5xl p-8"><h1 className="text-2xl font-bold">Not found</h1><Link to="/store" className="text-primary">Back to store</Link></div>;
