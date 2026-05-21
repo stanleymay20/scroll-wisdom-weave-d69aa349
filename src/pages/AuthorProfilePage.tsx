@@ -4,9 +4,10 @@ import { supabase } from "@/integrations/supabase/client";
 import { SEO } from "@/components/SEO";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { storefrontApi } from "@/lib/storefrontApi";
 
 interface Author { user_id: string; slug: string; display_name: string; bio: string | null; avatar_url: string | null; website_url: string | null; linkedin_url: string | null; x_url: string | null; }
-interface Book { id: string; title: string; cover_image_url: string | null; }
+interface Book { id: string; title: string; cover_image_url: string | null; slug: string; }
 
 export default function AuthorProfilePage() {
   const { slug } = useParams<{ slug: string }>();
@@ -20,10 +21,19 @@ export default function AuthorProfilePage() {
       const { data: a } = await supabase.from("author_profiles").select("*").eq("slug", slug).maybeSingle();
       if (!a) { setLoading(false); return; }
       setAuthor(a as any);
-      const { data: listings } = await supabase
-        .from("public_listings").select("slug, book:books(id, title, cover_image_url, user_id)").eq("is_public", true);
-      const userBooks = ((listings ?? []) as any[]).filter((l) => l.book?.user_id === (a as any).user_id);
-      setBooks(userBooks.map((l) => ({ ...l.book, slug: l.slug })));
+      try {
+        // Canonical public API — filter to this author.
+        const res = await storefrontApi.listBooks({ pageSize: 60 });
+        const mine = res.items
+          .filter((l) => l.book?.author_user_id === (a as any).user_id)
+          .map((l) => ({
+            id: l.book!.id,
+            title: l.book!.title,
+            cover_image_url: l.cover_override_url ?? l.book!.cover_image_url,
+            slug: l.slug,
+          }));
+        setBooks(mine);
+      } catch (_) { /* noop */ }
       setLoading(false);
     })();
   }, [slug]);
@@ -55,7 +65,7 @@ export default function AuthorProfilePage() {
         </Card>
         <h2 className="text-2xl font-semibold mt-10 mb-4">Books</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
-          {books.map((b: any) => (
+          {books.map((b) => (
             <Link key={b.id} to={`/store/${b.slug}`}>
               <Card className="overflow-hidden hover:shadow-md transition">
                 <div className="aspect-[3/4] bg-muted">

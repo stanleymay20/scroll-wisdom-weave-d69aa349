@@ -1,36 +1,23 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
-import { supabase } from "@/integrations/supabase/client";
 import { SEO } from "@/components/SEO";
 import { Input } from "@/components/ui/input";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
-
-interface Listing {
-  id: string;
-  slug: string;
-  blurb: string | null;
-  price_cents: number;
-  cover_override_url: string | null;
-  license_type: string;
-  book: { title: string; description: string | null; cover_image_url: string | null; category: string } | null;
-}
+import { storefrontApi, type StoreListing } from "@/lib/storefrontApi";
 
 export default function Storefront() {
-  const [listings, setListings] = useState<Listing[]>([]);
+  const [listings, setListings] = useState<StoreListing[]>([]);
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
 
   useEffect(() => {
     (async () => {
-      const { data } = await supabase
-        .from("public_listings")
-        .select("id, slug, blurb, price_cents, cover_override_url, license_type, book:books(title, description, cover_image_url, category)")
-        .eq("is_public", true)
-        .order("created_at", { ascending: false })
-        .limit(60);
-      setListings((data ?? []) as any);
+      try {
+        const res = await storefrontApi.listBooks({ pageSize: 60 });
+        setListings(res.items);
+      } catch (_) { /* fail silent, empty list */ }
       setLoading(false);
     })();
   }, []);

@@ -107,3 +107,6 @@ verify_jwt = false
 
 [functions.grade-think-answer]
 verify_jwt = false
+
+[functions.storefront-api]
+verify_jwt = false
