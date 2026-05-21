@@ -316,11 +316,21 @@ export async function enforceUserRiskTier(
       action,
       contact: "Reply to support if this is in error.",
     }, 403);
-  } catch (_e) {
-    // Fail-open — never block on risk lookup failure.
+  } catch (e) {
+    // Fail-open — never block on risk lookup failure. Emit warn event for ops visibility.
+    try {
+      await sc.from("financial_events").insert({
+        event_type: "risk_check_failed_open",
+        severity: "warn",
+        actor: "system",
+        user_id: userId,
+        payload: { action, error: e instanceof Error ? e.message : String(e) },
+      });
+    } catch (_) { /* swallow */ }
     return null;
   }
 }
+
 
 // ---------------------------------------------------------------------------
 // Lightweight device/UA fingerprinting. We never store raw UA strings — only

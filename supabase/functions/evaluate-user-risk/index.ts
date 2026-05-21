@@ -112,6 +112,12 @@ async function scoreOne(sc: any, userId: string): Promise<{ score: number; tier:
 }
 
 async function persistScore(sc: any, userId: string, score: number, tier: string, reasons: Signal[]) {
+  // Dedup: read prior tier so we only emit risk_tier_changed on actual transitions.
+  const { data: prior } = await sc.from("user_risk_scores")
+    .select("tier, manual_override_tier")
+    .eq("user_id", userId).maybeSingle();
+  const priorEffective = (prior as any)?.manual_override_tier ?? (prior as any)?.tier ?? null;
+
   await sc.from("user_risk_scores").upsert({
     user_id: userId,
     score,
@@ -121,16 +127,18 @@ async function persistScore(sc: any, userId: string, score: number, tier: string
     updated_at: new Date().toISOString(),
   }, { onConflict: "user_id" });
 
-  if (tier === "high" || tier === "blocked") {
+  const tierChanged = priorEffective !== tier;
+  if (tierChanged && (tier === "high" || tier === "blocked")) {
     await sc.from("financial_events").insert({
       event_type: "risk_tier_changed",
       severity: tier === "blocked" ? "critical" : "warn",
       actor: "system",
       user_id: userId,
-      payload: { tier, score, reason_codes: reasons.map((r) => r.code) },
+      payload: { tier, prior_tier: priorEffective, score, reason_codes: reasons.map((r) => r.code) },
     }).select().maybeSingle().catch(() => null);
   }
 }
+
 
 serve(async (req) => {
   const pre = preflight(req); if (pre) return pre;

@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { SEO } from "@/components/SEO";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { storefrontApi } from "@/lib/storefrontApi";
 
 interface Series { id: string; slug: string; title: string; description: string | null; cover_image_url: string | null; }
 
@@ -19,11 +20,15 @@ export default function SeriesPage() {
       const { data: s } = await supabase.from("book_series").select("*").eq("slug", slug).maybeSingle();
       if (!s) { setLoading(false); return; }
       setSeries(s as any);
-      const { data } = await supabase
-        .from("public_listings")
-        .select("slug, series_order, book:books(id, title, cover_image_url)")
-        .eq("is_public", true).eq("series_id", (s as any).id).order("series_order", { ascending: true });
-      setItems(data ?? []);
+      // Pull a generous page from the canonical public API, then filter by series client-side.
+      // (Series order ranking is preserved by sorting after fetch.)
+      try {
+        const res = await storefrontApi.listBooks({ pageSize: 60 });
+        const filtered = res.items
+          .filter((l) => l.series_id === (s as any).id)
+          .sort((a, b) => (a.series_order ?? 0) - (b.series_order ?? 0));
+        setItems(filtered);
+      } catch (_) { /* noop */ }
       setLoading(false);
     })();
   }, [slug]);
@@ -39,10 +44,12 @@ export default function SeriesPage() {
         {series.description && <p className="text-muted-foreground mt-3">{series.description}</p>}
         <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
           {items.map((it: any) => (
-            <Link key={it.book?.id} to={`/store/${it.slug}`}>
+            <Link key={it.book?.id ?? it.id} to={`/store/${it.slug}`}>
               <Card className="overflow-hidden hover:shadow-md transition">
                 <div className="aspect-[3/4] bg-muted">
-                  {it.book?.cover_image_url && <img src={it.book.cover_image_url} alt={it.book.title} className="w-full h-full object-cover" />}
+                  {(it.cover_override_url || it.book?.cover_image_url) && (
+                    <img src={it.cover_override_url || it.book?.cover_image_url} alt={it.book?.title} className="w-full h-full object-cover" />
+                  )}
                 </div>
                 <div className="p-3">
                   {it.series_order && <p className="text-xs text-muted-foreground">Book {it.series_order}</p>}
