@@ -96,8 +96,40 @@ async function logLatency(sc: any, route: string, ms: number, status: number) {
   } catch (_) { /* swallow */ }
 }
 
+// Weighted search: title (highest), blurb/subtitle (medium), author name (medium),
+// category/keywords (lower). Computed in-process from a candidate pool to keep CDN-cacheable.
+async function rankSearchResults(sc: any, rows: any[], qRaw: string) {
+  const q = qRaw.toLowerCase();
+  if (!q) return rows;
+  const tokens = q.split(/\s+/).filter(Boolean);
+  const authors = await attachAuthors(sc, rows);
+  const scored = rows.map((r: any) => {
+    const title = (r.book?.title ?? "").toLowerCase();
+    const blurb = (r.blurb ?? "").toLowerCase();
+    const subtitle = (r.subtitle ?? "").toLowerCase();
+    const category = (r.book?.category ?? "").toLowerCase();
+    const kws = (r.seo_keywords ?? []).map((k: string) => k.toLowerCase()).join(" ");
+    const author = r.book?.author_user_id ? authors.get(r.book.author_user_id) : null;
+    const authorName = (author?.display_name ?? "").toLowerCase();
+    let s = 0;
+    if (title === q) s += 120;
+    if (title.startsWith(q)) s += 60;
+    for (const t of tokens) {
+      if (title.includes(t)) s += 30;
+      if (subtitle.includes(t)) s += 12;
+      if (blurb.includes(t)) s += 8;
+      if (authorName.includes(t)) s += 20;
+      if (category.includes(t)) s += 6;
+      if (kws.includes(t)) s += 4;
+    }
+    if (author) r.author = { slug: author.slug, display_name: author.display_name, avatar_url: author.avatar_url };
+    return { r, s };
+  });
+  return scored.filter((x) => x.s > 0).sort((a, b) => b.s - a.s).map((x) => x.r);
+}
+
 async function handleBooks(sc: any, url: URL): Promise<Response> {
-  const search = (url.searchParams.get("search") ?? "").trim().slice(0, 120);
+  const search = (url.searchParams.get("search") ?? url.searchParams.get("q") ?? "").trim().slice(0, 120);
   const category = (url.searchParams.get("category") ?? "").trim().slice(0, 60);
   const sort = url.searchParams.get("sort") ?? "newest";
   const page = Math.max(1, parseInt(url.searchParams.get("page") ?? "1") || 1);
@@ -105,16 +137,28 @@ async function handleBooks(sc: any, url: URL): Promise<Response> {
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
 
+  if (search) {
+    const like = `%${search.replace(/[%_]/g, "")}%`;
+    let q = sc.from("public_listings")
+      .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
+      .eq("is_public", true)
+      .or(`blurb.ilike.${like},subtitle.ilike.${like},book.title.ilike.${like}`)
+      .limit(200);
+    if (category) q = q.eq("book.category", category);
+    const { data, error } = await q;
+    if (error) return cached({ error: error.message, code: "query_failed" }, 500);
+    const shaped = (data ?? []).map(shapeListing);
+    const ranked = await rankSearchResults(sc, shaped, search);
+    const total = ranked.length;
+    const slice = ranked.slice(from, from + pageSize);
+    return cached({ items: slice, page, pageSize, total, query: search });
+  }
+
   let q = sc.from("public_listings")
     .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`, { count: "exact" })
     .eq("is_public", true);
 
   if (category) q = q.eq("book.category", category);
-  if (search) {
-    // server-side ILIKE across title/blurb
-    q = q.or(`blurb.ilike.%${search}%,subtitle.ilike.%${search}%`);
-  }
-
   if (sort === "price_asc") q = q.order("price_cents", { ascending: true });
   else if (sort === "price_desc") q = q.order("price_cents", { ascending: false });
   else q = q.order("created_at", { ascending: false });
