@@ -238,49 +238,6 @@ async function handleRelated(sc: any, url: URL): Promise<Response> {
   return cached({ items: scored });
 }
 
-async function handleTrending(sc: any, url: URL): Promise<Response> {
-  const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get("limit") ?? "12") || 12));
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-
-  // Aggregate storefront events into a lightweight score
-  const { data: events } = await sc.from("storefront_events")
-    .select("listing_id, event_type")
-    .gte("created_at", since)
-    .limit(5000);
-
-  const scoreMap = new Map<string, number>();
-  const weights: Record<string, number> = {
-    listing_view: 1,
-    sample_open: 3,
-    cta_click: 5,
-    checkout_started: 8,
-    purchase_completed: 25,
-  };
-  (events ?? []).forEach((e: any) => {
-    if (!e.listing_id) return;
-    const w = weights[e.event_type] ?? 0;
-    if (w === 0) return;
-    scoreMap.set(e.listing_id, (scoreMap.get(e.listing_id) ?? 0) + w);
-  });
-
-  const topIds = Array.from(scoreMap.entries())
-    .sort((a, b) => b[1] - a[1])
-    .slice(0, limit)
-    .map(([id]) => id);
-
-  if (topIds.length === 0) {
-    // Fallback: most recent
-    const { data } = await sc.from("public_listings")
-      .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
-      .eq("is_public", true).order("created_at", { ascending: false }).limit(limit);
-    return cached({ items: (data ?? []).map(shapeListing), source: "recent" });
-  }
-
-  const { data } = await sc.from("public_listings")
-    .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
-    .in("id", topIds).eq("is_public", true);
-  const shaped = (data ?? []).map(shapeListing);
-  shaped.sort((a: any, b: any) => (scoreMap.get(b.id) ?? 0) - (scoreMap.get(a.id) ?? 0));
 async function loadWeights(sc: any) {
   const defaults = {
     w_view: 1, w_sample: 3, w_cta: 5, w_checkout: 8, w_purchase: 25,
