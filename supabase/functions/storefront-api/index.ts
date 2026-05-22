@@ -281,7 +281,161 @@ async function handleTrending(sc: any, url: URL): Promise<Response> {
     .in("id", topIds).eq("is_public", true);
   const shaped = (data ?? []).map(shapeListing);
   shaped.sort((a: any, b: any) => (scoreMap.get(b.id) ?? 0) - (scoreMap.get(a.id) ?? 0));
+async function loadWeights(sc: any) {
+  const defaults = {
+    w_view: 1, w_sample: 3, w_cta: 5, w_checkout: 8, w_purchase: 25,
+    w_refund_penalty: 25, w_fraud_penalty: 50,
+    w_freshness_days: 14, w_freshness_boost: 8,
+  };
+  try {
+    const { data } = await sc.from("discovery_weights").select("key, value");
+    (data ?? []).forEach((r: any) => { if (r.key in defaults) (defaults as any)[r.key] = Number(r.value); });
+  } catch (_) { /* keep defaults */ }
+  return defaults;
+}
+
+async function handleTrending(sc: any, url: URL): Promise<Response> {
+  const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get("limit") ?? "12") || 12));
+  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
+  const w = await loadWeights(sc);
+
+  const { data: events } = await sc.from("storefront_events")
+    .select("listing_id, event_type, created_at")
+    .gte("created_at", since).limit(8000);
+
+  const scoreMap = new Map<string, number>();
+  const eventWeights: Record<string, number> = {
+    listing_view: w.w_view, sample_open: w.w_sample, cta_click: w.w_cta,
+    checkout_started: w.w_checkout, purchase_completed: w.w_purchase,
+  };
+  (events ?? []).forEach((e: any) => {
+    if (!e.listing_id) return;
+    const ew = eventWeights[e.event_type] ?? 0;
+    if (ew === 0) return;
+    scoreMap.set(e.listing_id, (scoreMap.get(e.listing_id) ?? 0) + ew);
+  });
+
+  // Apply refund + fraud penalties on book_id, then map back via listings.
+  const candidateIds = Array.from(scoreMap.keys());
+  if (candidateIds.length > 0) {
+    const { data: listingRows } = await sc.from("public_listings")
+      .select("id, book_id, created_at").in("id", candidateIds);
+    const idToBook = new Map<string, string>();
+    const idToCreated = new Map<string, string>();
+    (listingRows ?? []).forEach((r: any) => {
+      idToBook.set(r.id, r.book_id);
+      idToCreated.set(r.id, r.created_at);
+    });
+
+    const bookIds = Array.from(new Set(Array.from(idToBook.values())));
+    const [refunds, fraud] = await Promise.all([
+      sc.from("book_purchases").select("book_id").in("book_id", bookIds).eq("status", "refunded"),
+      sc.from("fraud_signals").select("metadata").gte("created_at", since).limit(2000)
+        .then((r: any) => r).catch(() => ({ data: [] })),
+    ]);
+    const refundByBook = new Map<string, number>();
+    (refunds.data ?? []).forEach((p: any) => refundByBook.set(p.book_id, (refundByBook.get(p.book_id) ?? 0) + 1));
+
+    // fraud_signals may reference book_id inside metadata; tolerant lookup.
+    const fraudByBook = new Map<string, number>();
+    (fraud.data ?? []).forEach((s: any) => {
+      const bid = s?.metadata?.book_id;
+      if (bid) fraudByBook.set(bid, (fraudByBook.get(bid) ?? 0) + 1);
+    });
+
+    const now = Date.now();
+    for (const lid of candidateIds) {
+      const bookId = idToBook.get(lid);
+      let score = scoreMap.get(lid) ?? 0;
+      if (bookId) {
+        score -= (refundByBook.get(bookId) ?? 0) * w.w_refund_penalty;
+        score -= (fraudByBook.get(bookId) ?? 0) * w.w_fraud_penalty;
+      }
+      const createdAt = idToCreated.get(lid);
+      if (createdAt) {
+        const ageDays = (now - new Date(createdAt).getTime()) / 86_400_000;
+        if (ageDays < w.w_freshness_days) {
+          score += w.w_freshness_boost * (1 - ageDays / w.w_freshness_days);
+        }
+      }
+      scoreMap.set(lid, score);
+    }
+  }
+
+  const topIds = Array.from(scoreMap.entries())
+    .filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1])
+    .slice(0, limit).map(([id]) => id);
+
+  if (topIds.length === 0) {
+    const { data } = await sc.from("public_listings")
+      .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
+      .eq("is_public", true).order("created_at", { ascending: false }).limit(limit);
+    return cached({ items: (data ?? []).map(shapeListing), source: "recent" });
+  }
+
+  const { data } = await sc.from("public_listings")
+    .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
+    .in("id", topIds).eq("is_public", true);
+  const shaped = (data ?? []).map(shapeListing);
+  shaped.sort((a: any, b: any) => (scoreMap.get(b.id) ?? 0) - (scoreMap.get(a.id) ?? 0));
   return cached({ items: shaped, source: "trending" });
+}
+
+async function handleTopSelling(sc: any, url: URL): Promise<Response> {
+  const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get("limit") ?? "12") || 12));
+  const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+  const { data: purchases } = await sc.from("book_purchases")
+    .select("book_id, listing_id, status").eq("status", "paid").gte("created_at", since).limit(5000);
+
+  const byListing = new Map<string, number>();
+  const byBook = new Map<string, number>();
+  (purchases ?? []).forEach((p: any) => {
+    if (p.listing_id) byListing.set(p.listing_id, (byListing.get(p.listing_id) ?? 0) + 1);
+    if (p.book_id) byBook.set(p.book_id, (byBook.get(p.book_id) ?? 0) + 1);
+  });
+
+  const topIds = Array.from(byListing.entries()).sort((a, b) => b[1] - a[1]).slice(0, limit).map(([id]) => id);
+  if (topIds.length === 0) {
+    return cached({ items: [], source: "empty" });
+  }
+  const { data } = await sc.from("public_listings")
+    .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
+    .in("id", topIds).eq("is_public", true);
+  const shaped = (data ?? []).map(shapeListing);
+  shaped.sort((a: any, b: any) => (byListing.get(b.id) ?? 0) - (byListing.get(a.id) ?? 0));
+  return cached({ items: shaped, source: "top_selling" });
+}
+
+async function handleRecent(sc: any, url: URL): Promise<Response> {
+  const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get("limit") ?? "12") || 12));
+  const { data } = await sc.from("public_listings")
+    .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
+    .eq("is_public", true).order("created_at", { ascending: false }).limit(limit);
+  const shaped = (data ?? []).map(shapeListing);
+  const authors = await attachAuthors(sc, shaped);
+  shaped.forEach((l: any) => {
+    const a = l.book?.author_user_id ? authors.get(l.book.author_user_id) : null;
+    if (a) l.author = { slug: a.slug, display_name: a.display_name, avatar_url: a.avatar_url };
+  });
+  return cached({ items: shaped });
+}
+
+async function handleAuthorBooks(sc: any, url: URL): Promise<Response> {
+  const slug = (url.searchParams.get("author") ?? "").trim();
+  const excludeSlug = (url.searchParams.get("exclude") ?? "").trim();
+  const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get("limit") ?? "8") || 8));
+  if (!slug) return badRequest("author required");
+  const { data: ap } = await sc.from("author_profiles").select("user_id, slug, display_name, avatar_url").eq("slug", slug).maybeSingle();
+  if (!ap) return notFound();
+  let q = sc.from("public_listings")
+    .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
+    .eq("is_public", true).eq("book.user_id", ap.user_id).limit(limit);
+  if (excludeSlug) q = q.neq("slug", excludeSlug);
+  const { data } = await q;
+  const shaped = (data ?? []).map(shapeListing);
+  shaped.forEach((l: any) => { l.author = { slug: ap.slug, display_name: ap.display_name, avatar_url: ap.avatar_url }; });
+  return cached({ items: shaped, author: { slug: ap.slug, display_name: ap.display_name } });
 }
 
 serve(async (req) => {
@@ -296,7 +450,6 @@ serve(async (req) => {
 
   const start = Date.now();
   const url = new URL(req.url);
-  // Path looks like /storefront-api/<route>
   const parts = url.pathname.split("/").filter(Boolean);
   const route = parts[parts.length - 1] || "books";
 
@@ -310,11 +463,14 @@ serve(async (req) => {
   let res: Response;
   try {
     switch (route) {
-      case "books":    res = await handleBooks(sc, url); break;
-      case "book":     res = await handleBook(sc, url); break;
-      case "related":  res = await handleRelated(sc, url); break;
-      case "trending": res = await handleTrending(sc, url); break;
-      default:         res = notFound("Unknown route");
+      case "books":        res = await handleBooks(sc, url); break;
+      case "book":         res = await handleBook(sc, url); break;
+      case "related":      res = await handleRelated(sc, url); break;
+      case "trending":     res = await handleTrending(sc, url); break;
+      case "top-selling":  res = await handleTopSelling(sc, url); break;
+      case "recent":       res = await handleRecent(sc, url); break;
+      case "by-author":    res = await handleAuthorBooks(sc, url); break;
+      default:             res = notFound("Unknown route");
     }
   } catch (e) {
     res = new Response(JSON.stringify({ error: (e as Error).message, code: "internal_error" }), {
@@ -322,7 +478,6 @@ serve(async (req) => {
     });
   }
 
-  // Fire-and-forget latency telemetry
   logLatency(sc, route, Date.now() - start, res.status).catch(() => {});
   return res;
 });
