@@ -139,15 +139,41 @@ async function handleBooks(sc: any, url: URL): Promise<Response> {
 
   if (search) {
     const like = `%${search.replace(/[%_]/g, "")}%`;
-    let q = sc.from("public_listings")
-      .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
-      .eq("is_public", true)
-      .or(`blurb.ilike.${like},subtitle.ilike.${like},book.title.ilike.${like}`)
-      .limit(200);
-    if (category) q = q.eq("book.category", category);
-    const { data, error } = await q;
-    if (error) return cached({ error: error.message, code: "query_failed" }, 500);
-    const shaped = (data ?? []).map(shapeListing);
+
+    // Embedded foreign-table filters can't go inside top-level .or(), so split
+    // into two passes: (a) listing-text match, (b) book.title match via FK.
+    const [a, b] = await Promise.all([
+      (() => {
+        let q = sc.from("public_listings")
+          .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
+          .eq("is_public", true)
+          .or(`blurb.ilike.${like},subtitle.ilike.${like}`)
+          .limit(120);
+        if (category) q = q.eq("book.category", category);
+        return q;
+      })(),
+      (() => {
+        let q = sc.from("public_listings")
+          .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
+          .eq("is_public", true)
+          .ilike("book.title", like)
+          .limit(120);
+        if (category) q = q.eq("book.category", category);
+        return q;
+      })(),
+    ]);
+
+    if (a.error) return cached({ error: a.error.message, code: "query_failed" }, 500);
+    if (b.error) return cached({ error: b.error.message, code: "query_failed" }, 500);
+
+    const seen = new Set<string>();
+    const merged: any[] = [];
+    for (const row of [...(a.data ?? []), ...(b.data ?? [])]) {
+      if (seen.has(row.id)) continue;
+      seen.add(row.id);
+      merged.push(row);
+    }
+    const shaped = merged.map(shapeListing);
     const ranked = await rankSearchResults(sc, shaped, search);
     const total = ranked.length;
     const slice = ranked.slice(from, from + pageSize);
