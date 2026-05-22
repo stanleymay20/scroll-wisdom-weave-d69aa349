@@ -10,6 +10,7 @@ import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { getAttributionContext } from "@/lib/attribution";
 import { toast } from "sonner";
 import { storefrontApi, type StoreListing } from "@/lib/storefrontApi";
+import { DiscoveryRail } from "@/components/storefront/DiscoveryRail";
 
 // Local view type retains existing shape used by the page below.
 interface Data {
