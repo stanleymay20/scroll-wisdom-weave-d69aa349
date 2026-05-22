@@ -57,7 +57,7 @@ async function getJson<T>(path: string, params?: Record<string, string | number 
 
 export const storefrontApi = {
   listBooks(opts: { search?: string; category?: string; sort?: "newest" | "price_asc" | "price_desc"; page?: number; pageSize?: number } = {}) {
-    return getJson<{ items: StoreListing[]; page: number; pageSize: number; total: number }>("books", opts);
+    return getJson<{ items: StoreListing[]; page: number; pageSize: number; total: number; query?: string }>("books", opts);
   },
   getBook(slug: string) {
     return getJson<StoreListing>("book", { slug });
@@ -67,5 +67,14 @@ export const storefrontApi = {
   },
   trending(limit = 12) {
     return getJson<{ items: StoreListing[]; source: "trending" | "recent" }>("trending", { limit });
+  },
+  topSelling(limit = 12) {
+    return getJson<{ items: StoreListing[]; source: "top_selling" | "empty" }>("top-selling", { limit });
+  },
+  recent(limit = 12) {
+    return getJson<{ items: StoreListing[] }>("recent", { limit });
+  },
+  byAuthor(author: string, opts: { exclude?: string; limit?: number } = {}) {
+    return getJson<{ items: StoreListing[]; author: { slug: string; display_name: string } }>("by-author", { author, ...opts });
   },
 };
