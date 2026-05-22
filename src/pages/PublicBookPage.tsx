@@ -207,6 +207,23 @@ export default function PublicBookPage() {
             </div>
           </div>
         </div>
+
+        <div className="mt-16">
+          {author && (
+            <DiscoveryRail
+              title={`More from ${author.display_name}`}
+              items={moreFromAuthor}
+              loading={moreFromAuthor === null}
+              onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "more_from_author" })}
+            />
+          )}
+          <DiscoveryRail
+            title="Related books"
+            items={related}
+            loading={related === null}
+            onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "related" })}
+          />
+        </div>
       </div>
     </div>
   );
