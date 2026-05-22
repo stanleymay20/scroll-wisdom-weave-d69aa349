@@ -10,6 +10,7 @@ import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { getAttributionContext } from "@/lib/attribution";
 import { toast } from "sonner";
 import { storefrontApi, type StoreListing } from "@/lib/storefrontApi";
+import { DiscoveryRail } from "@/components/storefront/DiscoveryRail";
 
 // Local view type retains existing shape used by the page below.
 interface Data {
@@ -66,6 +67,8 @@ export default function PublicBookPage() {
   const [data, setData] = useState<Data | null>(null);
   const [author, setAuthor] = useState<{ slug: string; display_name: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [related, setRelated] = useState<StoreListing[] | null>(null);
+  const [moreFromAuthor, setMoreFromAuthor] = useState<StoreListing[] | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -75,6 +78,12 @@ export default function PublicBookPage() {
         setData(toLocal(l));
         if (l.author) setAuthor({ slug: l.author.slug, display_name: l.author.display_name });
         trackStorefrontEvent(l.id, "listing_view");
+        // Fire discovery rail fetches in parallel.
+        storefrontApi.related(slug, 8).then((r) => setRelated(r.items)).catch(() => setRelated([]));
+        if (l.author?.slug) {
+          storefrontApi.byAuthor(l.author.slug, { exclude: slug, limit: 8 })
+            .then((r) => setMoreFromAuthor(r.items)).catch(() => setMoreFromAuthor([]));
+        }
       } catch (_) { /* not found / network */ }
       setLoading(false);
     })();
@@ -197,6 +206,23 @@ export default function PublicBookPage() {
               <p><span className="font-medium text-foreground">Sample:</span> First {data.sample_chapters} chapter{data.sample_chapters === 1 ? "" : "s"}</p>
             </div>
           </div>
+        </div>
+
+        <div className="mt-16">
+          {author && (
+            <DiscoveryRail
+              title={`More from ${author.display_name}`}
+              items={moreFromAuthor}
+              loading={moreFromAuthor === null}
+              onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "more_from_author" })}
+            />
+          )}
+          <DiscoveryRail
+            title="Related books"
+            items={related}
+            loading={related === null}
+            onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "related" })}
+          />
         </div>
       </div>
     </div>

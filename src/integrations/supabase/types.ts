@@ -1704,6 +1704,30 @@ export type Database = {
         }
         Relationships: []
       }
+      discovery_weights: {
+        Row: {
+          description: string | null
+          key: string
+          updated_at: string
+          updated_by: string | null
+          value: number
+        }
+        Insert: {
+          description?: string | null
+          key: string
+          updated_at?: string
+          updated_by?: string | null
+          value: number
+        }
+        Update: {
+          description?: string | null
+          key?: string
+          updated_at?: string
+          updated_by?: string | null
+          value?: number
+        }
+        Relationships: []
+      }
       export_job_telemetry: {
         Row: {
           correlation_id: string | null
@@ -3242,6 +3266,45 @@ export type Database = {
           },
         ]
       }
+      search_queries: {
+        Row: {
+          clicked_book_id: string | null
+          created_at: string
+          id: string
+          metadata: Json
+          normalized_query: string
+          query: string
+          results_count: number
+          session_id: string | null
+          source: string
+          user_id: string | null
+        }
+        Insert: {
+          clicked_book_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          normalized_query: string
+          query: string
+          results_count?: number
+          session_id?: string | null
+          source?: string
+          user_id?: string | null
+        }
+        Update: {
+          clicked_book_id?: string | null
+          created_at?: string
+          id?: string
+          metadata?: Json
+          normalized_query?: string
+          query?: string
+          results_count?: number
+          session_id?: string | null
+          source?: string
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       spaced_repetition_cards: {
         Row: {
           answer: string
@@ -3813,6 +3876,8 @@ export type Database = {
       purge_velocity_buckets: { Args: never; Returns: number }
       record_purchase_ledger: { Args: { _purchase_id: string }; Returns: Json }
       set_platform_fee: { Args: { _bps: number }; Returns: Json }
+      show_limit: { Args: never; Returns: number }
+      show_trgm: { Args: { "": string }; Returns: string[] }
       user_owns_book_purchase: {
         Args: { _book_id: string; _user_id: string }
         Returns: boolean
