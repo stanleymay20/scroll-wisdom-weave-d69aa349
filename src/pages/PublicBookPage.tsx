@@ -67,6 +67,8 @@ export default function PublicBookPage() {
   const [data, setData] = useState<Data | null>(null);
   const [author, setAuthor] = useState<{ slug: string; display_name: string } | null>(null);
   const [loading, setLoading] = useState(true);
+  const [related, setRelated] = useState<StoreListing[] | null>(null);
+  const [moreFromAuthor, setMoreFromAuthor] = useState<StoreListing[] | null>(null);
 
   useEffect(() => {
     if (!slug) return;
@@ -76,6 +78,12 @@ export default function PublicBookPage() {
         setData(toLocal(l));
         if (l.author) setAuthor({ slug: l.author.slug, display_name: l.author.display_name });
         trackStorefrontEvent(l.id, "listing_view");
+        // Fire discovery rail fetches in parallel.
+        storefrontApi.related(slug, 8).then((r) => setRelated(r.items)).catch(() => setRelated([]));
+        if (l.author?.slug) {
+          storefrontApi.byAuthor(l.author.slug, { exclude: slug, limit: 8 })
+            .then((r) => setMoreFromAuthor(r.items)).catch(() => setMoreFromAuthor([]));
+        }
       } catch (_) { /* not found / network */ }
       setLoading(false);
     })();
