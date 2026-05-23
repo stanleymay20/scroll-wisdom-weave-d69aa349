@@ -6,6 +6,7 @@
  */
 
 import { useState, useEffect } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { Dialog, DialogContent, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { VisuallyHidden } from '@radix-ui/react-visually-hidden';
 import { Button } from '@/components/ui/button';
@@ -53,13 +54,20 @@ export function OnboardingDialog() {
   const navigate = useNavigate();
 
   useEffect(() => {
-    // Check if onboarding has been completed
+    // Only show onboarding for authenticated users who haven't completed it.
+    // Public landing-page visitors must never be interrupted by this modal.
     const completed = localStorage.getItem(ONBOARDING_KEY);
-    if (!completed) {
-      // Delay slightly to avoid competing with splash screen
-      const timer = setTimeout(() => setOpen(true), 2000);
-      return () => clearTimeout(timer);
-    }
+    if (completed) return;
+    let cancelled = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    supabase.auth.getSession().then(({ data }) => {
+      if (cancelled || !data.session?.user) return;
+      timer = setTimeout(() => setOpen(true), 2000);
+    });
+    return () => {
+      cancelled = true;
+      if (timer) clearTimeout(timer);
+    };
   }, []);
 
   const handleNext = () => {
