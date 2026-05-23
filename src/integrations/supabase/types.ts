@@ -3828,6 +3828,7 @@ export type Database = {
         Args: { _notes?: string; _override_tier: string; _user_id: string }
         Returns: Json
       }
+      book_has_public_listing: { Args: { _book_id: string }; Returns: boolean }
       check_velocity: {
         Args: { _key: string; _limit: number; _window_seconds: number }
         Returns: Json
