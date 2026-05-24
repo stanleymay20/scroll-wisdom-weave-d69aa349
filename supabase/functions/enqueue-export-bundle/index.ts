@@ -239,6 +239,16 @@ async function runJob(
       event_type: `${bundleType}_export_failed`,
       user_id: userId, metadata: { job_id: jobId, error: msg, correlation_id: corr },
     });
+    await sc.from("creator_notifications").insert({
+      user_id: userId,
+      kind: "publish_status",
+      title: `${bundleType.toUpperCase()} bundle failed`,
+      body: msg.slice(0, 500),
+      link_url: "/account/exports",
+      resource_type: "export_job",
+      resource_id: jobId,
+      metadata: { book_id: bookId, bundle_type: bundleType, error: msg },
+    });
   }
 }
 
