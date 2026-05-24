@@ -206,7 +206,7 @@ async function runJob(
 
     await sc.from("storefront_events").insert({
       listing_id: null,
-      event_type: bundleType === "kdp" ? "kdp_export_completed" : "gumroad_export_completed",
+      event_type: `${bundleType}_export_completed`,
       user_id: userId, metadata: { job_id: jobId, book_id: bookId, correlation_id: corr },
     });
   } catch (e) {
