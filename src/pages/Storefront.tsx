@@ -105,10 +105,12 @@ export default function Storefront() {
           />
         ) : (
           <>
+            <ContinueReadingRail />
             <DiscoveryRail
               title="Trending now"
               items={trending}
               loading={trending === null}
+              source="trending"
               onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "trending" })}
             />
             <DiscoveryRail
@@ -116,12 +118,14 @@ export default function Storefront() {
               items={topSelling}
               loading={topSelling === null}
               emptyHint="No sales yet — check back soon."
+              source="top_selling"
               onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "top_selling" })}
             />
             <DiscoveryRail
               title="Recently published"
               items={recent}
               loading={recent === null}
+              source="recent"
               onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "recent" })}
             />
           </>
