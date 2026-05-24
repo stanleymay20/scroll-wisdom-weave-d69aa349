@@ -72,6 +72,9 @@ export function DiscoveryRail({ title, items, loading, emptyHint, source, onItem
                 </div>
                 <div className="p-3">
                   <h3 className="text-sm font-medium line-clamp-2">{l.book?.title}</h3>
+                  {l.reasons && l.reasons.length > 0 && (
+                    <p className="text-[10px] text-primary/80 mt-1 line-clamp-1">{l.reasons[0]}</p>
+                  )}
                   <div className="flex items-center gap-2 mt-2">
                     <Badge variant="secondary" className="text-[10px]">{l.book?.category ?? "General"}</Badge>
                     <span className="text-xs font-medium ml-auto">

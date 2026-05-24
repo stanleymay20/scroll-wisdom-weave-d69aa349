@@ -113,3 +113,6 @@ verify_jwt = false
 
 [functions.log-recommendation-feedback]
 verify_jwt = false
+
+[functions.storefront-user-api]
+verify_jwt = false
