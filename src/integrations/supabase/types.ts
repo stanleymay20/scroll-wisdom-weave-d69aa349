@@ -4311,6 +4311,10 @@ export type Database = {
         }
         Returns: string
       }
+      notify_followers_on_schedule_release: {
+        Args: { _item_id: string }
+        Returns: number
+      }
       purge_velocity_buckets: { Args: never; Returns: number }
       record_purchase_ledger: { Args: { _purchase_id: string }; Returns: Json }
       set_platform_fee: { Args: { _bps: number }; Returns: Json }
