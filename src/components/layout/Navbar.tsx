@@ -12,6 +12,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useIsAdmin } from "@/hooks/useAdmin";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import logo from "@/assets/logo.png";
+import { NotificationBell } from "@/components/notifications/NotificationBell";
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
