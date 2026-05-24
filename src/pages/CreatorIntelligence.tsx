@@ -8,6 +8,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Sparkles, TrendingUp, BarChart3, AlertTriangle } from "lucide-react";
+import { PlatformConnections } from "@/components/publish/PlatformConnections";
 import {
   fetchPublishingAnalytics,
   fetchPublishingFunnel,
