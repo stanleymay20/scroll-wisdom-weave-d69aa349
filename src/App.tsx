@@ -245,6 +245,7 @@ const App = () => (
                   <Route path="/account/library/purchases" element={withRecovery('PurchasedLibrary', <ProtectedRoute><PurchasedLibrary /></ProtectedRoute>)} />
                   <Route path="/account/earnings" element={withRecovery('CreatorEarnings', <ProtectedRoute><CreatorEarnings /></ProtectedRoute>)} />
                   <Route path="/account/payouts" element={withRecovery('PayoutProfile', <ProtectedRoute><PayoutProfileEditor /></ProtectedRoute>)} />
+                  <Route path="/collections/:owner/:slug" element={withRecovery('CollectionPage', <CollectionPage />)} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
