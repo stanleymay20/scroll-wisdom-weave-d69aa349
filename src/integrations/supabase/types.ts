@@ -1810,6 +1810,7 @@ export type Database = {
           metadata: Json
           platform: string
           scopes: string[]
+          shop_domain: string | null
           token_expires_at: string | null
           updated_at: string
           user_id: string
@@ -1827,6 +1828,7 @@ export type Database = {
           metadata?: Json
           platform: string
           scopes?: string[]
+          shop_domain?: string | null
           token_expires_at?: string | null
           updated_at?: string
           user_id: string
@@ -1844,6 +1846,7 @@ export type Database = {
           metadata?: Json
           platform?: string
           scopes?: string[]
+          shop_domain?: string | null
           token_expires_at?: string | null
           updated_at?: string
           user_id?: string
@@ -2850,6 +2853,51 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      publishing_audit_log: {
+        Row: {
+          book_id: string | null
+          created_at: string
+          event_type: string
+          external_id: string | null
+          external_url: string | null
+          id: string
+          listing_id: string | null
+          message: string | null
+          metadata: Json
+          platform: string
+          severity: string
+          user_id: string
+        }
+        Insert: {
+          book_id?: string | null
+          created_at?: string
+          event_type: string
+          external_id?: string | null
+          external_url?: string | null
+          id?: string
+          listing_id?: string | null
+          message?: string | null
+          metadata?: Json
+          platform: string
+          severity?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string | null
+          created_at?: string
+          event_type?: string
+          external_id?: string | null
+          external_url?: string | null
+          id?: string
+          listing_id?: string | null
+          message?: string | null
+          metadata?: Json
+          platform?: string
+          severity?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       publishing_audits: {
         Row: {
