@@ -9,6 +9,7 @@ import { storefrontApi, type StoreListing } from "@/lib/storefrontApi";
 import { DiscoveryRail } from "@/components/storefront/DiscoveryRail";
 import { logSearchClick, logSearchQuery } from "@/lib/searchAnalytics";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
+import { ContinueReadingRail } from "@/components/storefront/ContinueReadingRail";
 
 const SEARCH_DEBOUNCE_MS = 350;
 const ZERO_RESULT_HINTS = ["AI", "philosophy", "history", "science", "psychology"];
