@@ -14,6 +14,7 @@ import { AuditLogViewer } from "@/components/admin/AuditLogViewer";
 import { AdminFinanceTab } from "@/components/admin/AdminFinanceTab";
 import { AdminReliabilityTab } from "@/components/admin/AdminReliabilityTab";
 import { AdminRiskTab } from "@/components/admin/AdminRiskTab";
+import { AdminRecommendationsTab } from "@/components/admin/AdminRecommendationsTab";
 import { Activity, Users, Building2, FileClock, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
