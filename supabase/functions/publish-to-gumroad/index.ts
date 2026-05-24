@@ -16,6 +16,7 @@
 //   7. Upsert external_publications row + telemetry events.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decryptToken } from "../_shared/crypto-tokens.ts";
+import { requireCreatorCapability } from "../_shared/entitlements.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
