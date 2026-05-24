@@ -284,6 +284,7 @@ serve(async (req) => {
               const user = await findUserByEmail(customerEmail);
               if (user) {
                 await updateProfilePlan(user.id, tier);
+                await syncCreatorEntitlement(user.id, subscription);
                 await logFinancialEvent(supabase, {
                   event_type: "subscription_started", severity: "info", actor: "webhook",
                   correlation_id: corr, stripe_event_id: event.id, user_id: user.id, payload: { tier, product_id: productId },
@@ -293,6 +294,7 @@ serve(async (req) => {
           }
           break;
         }
+
 
         case "checkout.session.expired":
         case "checkout.session.async_payment_failed": {
