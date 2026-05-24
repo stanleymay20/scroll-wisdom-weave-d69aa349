@@ -92,3 +92,34 @@ export async function requireCreatorCapability(
     ),
   };
 }
+
+/**
+ * Capture an immutable snapshot of the user's current entitlement state and
+ * return the snapshot id, so downstream rows (export_jobs, external_publications,
+ * release_schedule_items) can prove the effective tier at the time of action.
+ *
+ * Returns null on failure — callers must not block on snapshot capture.
+ */
+export async function snapshotEntitlement(
+  admin: any,
+  userId: string,
+  contextType: "export_job" | "external_publish" | "scheduled_release" | "manual",
+  contextId?: string | null,
+): Promise<string | null> {
+  try {
+    const { data, error } = await admin.rpc("snapshot_creator_entitlement", {
+      _user_id: userId,
+      _context_type: contextType,
+      _context_id: contextId ?? null,
+    });
+    if (error) {
+      console.warn("[entitlements] snapshot failed:", error.message);
+      return null;
+    }
+    return (data as string) ?? null;
+  } catch (e) {
+    console.warn("[entitlements] snapshot threw:", e);
+    return null;
+  }
+}
+
