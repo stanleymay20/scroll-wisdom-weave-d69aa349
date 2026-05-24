@@ -7,6 +7,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { storefrontApi, type StoreCollection } from "@/lib/storefrontApi";
 import { FollowAuthorButton } from "@/components/storefront/FollowAuthorButton";
 import { Badge } from "@/components/ui/badge";
+import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
 
 interface Author { user_id: string; slug: string; display_name: string; bio: string | null; avatar_url: string | null; website_url: string | null; linkedin_url: string | null; x_url: string | null; }
 interface Book { id: string; title: string; cover_image_url: string | null; slug: string; }
@@ -41,10 +42,11 @@ export default function AuthorProfilePage() {
     })();
   }, [slug]);
 
-  if (loading) return <div className="container mx-auto max-w-4xl p-8"><Skeleton className="h-64" /></div>;
-  if (!author) return <div className="container mx-auto max-w-4xl p-8"><h1>Author not found</h1></div>;
+  if (loading) return <ResponsiveShell><div className="container mx-auto max-w-4xl p-8"><Skeleton className="h-64" /></div></ResponsiveShell>;
+  if (!author) return <ResponsiveShell><div className="container mx-auto max-w-4xl p-8"><h1>Author not found</h1></div></ResponsiveShell>;
 
   return (
+    <ResponsiveShell>
     <div className="min-h-screen bg-background">
       <SEO
         title={`${author.display_name} — ScrollLibrary author`}
@@ -100,5 +102,6 @@ export default function AuthorProfilePage() {
         </div>
       </div>
     </div>
+    </ResponsiveShell>
   );
 }

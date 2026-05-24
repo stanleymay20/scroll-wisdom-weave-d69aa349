@@ -5,6 +5,7 @@ import { SEO } from "@/components/SEO";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { storefrontApi } from "@/lib/storefrontApi";
+import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
 
 interface Series { id: string; slug: string; title: string; description: string | null; cover_image_url: string | null; }
 
@@ -33,33 +34,35 @@ export default function SeriesPage() {
     })();
   }, [slug]);
 
-  if (loading) return <div className="container mx-auto max-w-4xl p-8"><Skeleton className="h-48" /></div>;
-  if (!series) return <div className="container mx-auto max-w-4xl p-8"><h1>Series not found</h1></div>;
+  if (loading) return <ResponsiveShell><div className="container mx-auto max-w-4xl p-8"><Skeleton className="h-48" /></div></ResponsiveShell>;
+  if (!series) return <ResponsiveShell><div className="container mx-auto max-w-4xl p-8"><h1>Series not found</h1></div></ResponsiveShell>;
 
   return (
-    <div className="min-h-screen bg-background">
-      <SEO title={`${series.title} — Series`} description={(series.description ?? series.title).slice(0, 158)} canonical={`/series/${series.slug}`} />
-      <div className="container mx-auto max-w-4xl px-4 py-10">
-        <h1 className="text-4xl font-bold">{series.title}</h1>
-        {series.description && <p className="text-muted-foreground mt-3">{series.description}</p>}
-        <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
-          {items.map((it: any) => (
-            <Link key={it.book?.id ?? it.id} to={`/store/${it.slug}`}>
-              <Card className="overflow-hidden hover:shadow-md transition">
-                <div className="aspect-[3/4] bg-muted">
-                  {(it.cover_override_url || it.book?.cover_image_url) && (
-                    <img src={it.cover_override_url || it.book?.cover_image_url} alt={it.book?.title} className="w-full h-full object-cover" />
-                  )}
-                </div>
-                <div className="p-3">
-                  {it.series_order && <p className="text-xs text-muted-foreground">Book {it.series_order}</p>}
-                  <p className="text-sm font-medium line-clamp-2">{it.book?.title}</p>
-                </div>
-              </Card>
-            </Link>
-          ))}
+    <ResponsiveShell>
+      <div className="min-h-screen bg-background">
+        <SEO title={`${series.title} — Series`} description={(series.description ?? series.title).slice(0, 158)} canonical={`/series/${series.slug}`} />
+        <div className="container mx-auto max-w-4xl px-4 py-8 sm:py-10">
+          <h1 className="text-3xl sm:text-4xl font-bold">{series.title}</h1>
+          {series.description && <p className="text-muted-foreground mt-3">{series.description}</p>}
+          <div className="mt-8 grid grid-cols-2 md:grid-cols-4 gap-4">
+            {items.map((it: any) => (
+              <Link key={it.book?.id ?? it.id} to={`/store/${it.slug}`}>
+                <Card className="overflow-hidden hover:shadow-md transition">
+                  <div className="aspect-[3/4] bg-muted">
+                    {(it.cover_override_url || it.book?.cover_image_url) && (
+                      <img src={it.cover_override_url || it.book?.cover_image_url} alt={it.book?.title} className="w-full h-full object-cover" />
+                    )}
+                  </div>
+                  <div className="p-3">
+                    {it.series_order && <p className="text-xs text-muted-foreground">Book {it.series_order}</p>}
+                    <p className="text-sm font-medium line-clamp-2">{it.book?.title}</p>
+                  </div>
+                </Card>
+              </Link>
+            ))}
+          </div>
         </div>
       </div>
-    </div>
+    </ResponsiveShell>
   );
 }

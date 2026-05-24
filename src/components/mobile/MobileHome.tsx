@@ -132,16 +132,16 @@ export function MobileHome() {
         <p className="text-sm text-muted-foreground mb-4">
           Generate · Read · Prove Mastery
         </p>
-        <div className="flex gap-2 justify-center">
+        <div className="flex gap-2.5 w-full">
           <Link
             to="/generate"
-            className="flex-1 max-w-[160px] px-4 py-2.5 rounded-full bg-primary text-primary-foreground text-sm font-semibold shadow-sm active:scale-95 transition-transform"
+            className="flex-1 px-4 py-3 rounded-full bg-primary text-primary-foreground text-sm font-semibold shadow-sm active:scale-[0.98] transition-transform text-center"
           >
             Generate a book
           </Link>
           <Link
             to="/store"
-            className="flex-1 max-w-[160px] px-4 py-2.5 rounded-full border border-border text-foreground text-sm font-semibold active:scale-95 transition-transform"
+            className="flex-1 px-4 py-3 rounded-full border border-border text-foreground text-sm font-semibold active:scale-[0.98] transition-transform text-center"
           >
             Browse library
           </Link>
@@ -155,7 +155,7 @@ export function MobileHome() {
 
       {/* Last Added Section */}
       <section className="mb-8">
-        <SectionHeader title="Recently Added" linkTo="/explore" />
+        <SectionHeader title="Recently Added" linkTo="/store" />
         {loading ? (
           <BookGridSkeleton count={6} />
         ) : lastAdded.length > 0 ? (
