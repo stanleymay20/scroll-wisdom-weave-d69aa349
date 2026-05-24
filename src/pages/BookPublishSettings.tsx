@@ -169,7 +169,7 @@ export default function BookPublishSettings() {
     } finally { setSuggesting(false); }
   }
 
-  async function enqueue(kind: "kdp" | "gumroad") {
+  async function enqueue(kind: BundleKind) {
     setBundling(kind);
     try {
       const { data, error } = await supabase.functions.invoke("enqueue-export-bundle", {
@@ -182,6 +182,16 @@ export default function BookPublishSettings() {
       toast.error(e.message ?? "Could not queue bundle");
     } finally { setBundling(""); }
   }
+
+  // Publishing wizard checklist
+  const checklist = [
+    { ok: !!(form.subtitle || "").trim(), label: "Subtitle" },
+    { ok: !!(form.amazon_description || "").trim(), label: "Description (150+ chars)" },
+    { ok: (form.seo_keywords.split(",").filter((s) => s.trim()).length) >= 5, label: "5+ keywords" },
+    { ok: !!(book?.cover_image_url || form.cover_override_url), label: "Cover image" },
+    { ok: (form.blurb || "").trim().length >= 20, label: "Storefront blurb" },
+  ];
+  const readyCount = checklist.filter((c) => c.ok).length;
 
   if (loading) return <div className="container mx-auto max-w-3xl p-8">Loading…</div>;
 
