@@ -96,7 +96,10 @@ export default function CreatorEarnings() {
           <h1 className="text-3xl font-bold tracking-tight">Creator earnings</h1>
           <p className="text-sm text-muted-foreground mt-1">Revenue across all your published books.</p>
         </div>
-        <Button asChild variant="outline"><Link to="/account/payouts">Payout settings</Link></Button>
+        <div className="flex gap-2">
+          <Button asChild variant="outline"><Link to="/account/intelligence">Publishing intelligence</Link></Button>
+          <Button asChild variant="outline"><Link to="/account/payouts">Payout settings</Link></Button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
