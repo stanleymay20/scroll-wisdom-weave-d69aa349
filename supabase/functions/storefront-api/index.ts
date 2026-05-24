@@ -418,7 +418,94 @@ async function handleAuthorBooks(sc: any, url: URL): Promise<Response> {
   const { data } = await q;
   const shaped = (data ?? []).map(shapeListing);
   shaped.forEach((l: any) => { l.author = { slug: ap.slug, display_name: ap.display_name, avatar_url: ap.avatar_url }; });
-  return cached({ items: shaped, author: { slug: ap.slug, display_name: ap.display_name } });
+
+  let followers = 0;
+  try {
+    const { count } = await sc.from("author_followers")
+      .select("id", { head: true, count: "exact" })
+      .eq("author_user_id", ap.user_id);
+    followers = count ?? 0;
+  } catch (_) { /* swallow */ }
+
+  return cached({ items: shaped, author: { slug: ap.slug, display_name: ap.display_name, followers_count: followers } });
+}
+
+// ===== Phase 2.1b.2a: Collections (public-safe) =====
+
+async function shapeCollection(sc: any, row: any, opts: { withItems?: boolean; itemLimit?: number } = {}) {
+  const out: any = {
+    id: row.id, slug: row.slug, title: row.title, description: row.description,
+    cover_image_url: row.cover_image_url, is_public: row.is_public,
+    owner_user_id: row.owner_user_id, updated_at: row.updated_at,
+  };
+  const { data: ap } = await sc.from("author_profiles")
+    .select("slug, display_name, avatar_url")
+    .eq("user_id", row.owner_user_id).maybeSingle();
+  if (ap) out.owner = ap;
+
+  if (opts.withItems) {
+    const { data: items } = await sc.from("book_collection_items")
+      .select("book_id, sort_index")
+      .eq("collection_id", row.id)
+      .order("sort_index", { ascending: true })
+      .limit(opts.itemLimit ?? 60);
+    const bookIds = (items ?? []).map((i: any) => i.book_id);
+    if (bookIds.length > 0) {
+      const { data: listings } = await sc.from("public_listings")
+        .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
+        .in("book_id", bookIds).eq("is_public", true);
+      const shaped = (listings ?? []).map(shapeListing);
+      const byBook = new Map(shaped.map((l: any) => [l.book?.id, l]));
+      out.items = bookIds.map((bid: string) => byBook.get(bid)).filter(Boolean);
+      out.items_count = out.items.length;
+    } else {
+      out.items = []; out.items_count = 0;
+    }
+  } else {
+    const { count } = await sc.from("book_collection_items")
+      .select("id", { head: true, count: "exact" }).eq("collection_id", row.id);
+    out.items_count = count ?? 0;
+  }
+  return out;
+}
+
+async function handleCollections(sc: any, url: URL): Promise<Response> {
+  const owner = (url.searchParams.get("owner") ?? "").trim();
+  const limit = Math.min(30, Math.max(1, parseInt(url.searchParams.get("limit") ?? "12") || 12));
+  let q = sc.from("book_collections").select("*").eq("is_public", true)
+    .order("sort_index").order("updated_at", { ascending: false }).limit(limit);
+  if (owner) {
+    const { data: ap } = await sc.from("author_profiles").select("user_id").eq("slug", owner).maybeSingle();
+    if (!ap) return cached({ items: [] });
+    q = q.eq("owner_user_id", ap.user_id);
+  }
+  const { data, error } = await q;
+  if (error) return cached({ error: error.message, code: "query_failed" }, 500);
+  const items = await Promise.all((data ?? []).map((r: any) => shapeCollection(sc, r, { withItems: false })));
+  return cached({ items });
+}
+
+async function handleCollection(sc: any, url: URL): Promise<Response> {
+  const id = (url.searchParams.get("id") ?? "").trim();
+  const ownerSlug = (url.searchParams.get("owner") ?? "").trim();
+  const slug = (url.searchParams.get("slug") ?? "").trim();
+  let row: any = null;
+  if (id) {
+    const { data } = await sc.from("book_collections").select("*").eq("id", id).eq("is_public", true).maybeSingle();
+    row = data;
+  } else if (ownerSlug && slug) {
+    const { data: ap } = await sc.from("author_profiles").select("user_id").eq("slug", ownerSlug).maybeSingle();
+    if (!ap) return notFound();
+    const { data } = await sc.from("book_collections")
+      .select("*").eq("owner_user_id", ap.user_id).eq("slug", slug).eq("is_public", true).maybeSingle();
+    row = data;
+  } else {
+    return badRequest("id or (owner+slug) required");
+  }
+  if (!row) return notFound();
+  const shaped = await shapeCollection(sc, row, { withItems: true, itemLimit: 60 });
+  const etag = `"col-${row.id}-${new Date(row.updated_at ?? 0).getTime()}"`;
+  return cached(shaped, 200, etag);
 }
 
 serve(async (req) => {
