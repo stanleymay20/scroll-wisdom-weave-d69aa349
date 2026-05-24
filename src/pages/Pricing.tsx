@@ -9,7 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Check, Sparkles, Zap, BookOpen, Download, Volume2, Shield, Loader2, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
-import { SUBSCRIPTION_TIERS, SubscriptionTier } from "@/lib/subscription";
+import { SUBSCRIPTION_TIERS, SubscriptionTier, CREATOR_SUBSCRIPTION_TIERS, CreatorTier } from "@/lib/subscription";
+import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
 
