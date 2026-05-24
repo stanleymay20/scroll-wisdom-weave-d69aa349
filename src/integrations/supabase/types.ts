@@ -1930,6 +1930,45 @@ export type Database = {
           },
         ]
       }
+      external_publications: {
+        Row: {
+          book_id: string
+          created_at: string
+          external_id: string | null
+          external_url: string | null
+          id: string
+          notes: string | null
+          platform: string
+          published_at: string
+          status: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          created_at?: string
+          external_id?: string | null
+          external_url?: string | null
+          id?: string
+          notes?: string | null
+          platform: string
+          published_at?: string
+          status?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          created_at?: string
+          external_id?: string | null
+          external_url?: string | null
+          id?: string
+          notes?: string | null
+          platform?: string
+          published_at?: string
+          status?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       faqs: {
         Row: {
           answer: string
