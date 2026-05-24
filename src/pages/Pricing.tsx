@@ -292,6 +292,84 @@ export default function Pricing() {
               })}
             </div>
 
+            {/* Creator tiers (Phase 4.0) */}
+            <div id="creator" className="mt-20 mb-16 scroll-mt-24">
+              <div className="text-center mb-10">
+                <Badge className="mb-3">For Creators</Badge>
+                <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-3">
+                  Sell your work, your way
+                </h2>
+                <p className="text-muted-foreground max-w-xl mx-auto">
+                  Free creators can list on the marketplace. Upgrade to publish directly to Gumroad, Shopify, Substack, Patreon &amp; Etsy — and keep 100% of platform-side revenue.
+                </p>
+              </div>
+
+              <div className="grid sm:grid-cols-3 gap-6 max-w-5xl mx-auto">
+                {[
+                  {
+                    name: "Free", price: "€0", period: "forever",
+                    features: [
+                      "Public marketplace listing",
+                      "Basic analytics",
+                      "+10% marketplace rev-share surcharge",
+                      "No external publishing",
+                      "No release scheduling",
+                    ],
+                    cta: "Current",
+                  },
+                  {
+                    name: "Creator", price: "€19", period: "/month", popular: true,
+                    features: [
+                      "Everything in Free",
+                      "Publish to Gumroad, Shopify, Substack, Patreon, Etsy",
+                      "Release schedules + follower broadcasts",
+                      "Unlimited collections",
+                      "0% marketplace surcharge",
+                      "Full analytics",
+                    ],
+                    cta: "Upgrade to Creator",
+                  },
+                  {
+                    name: "Creator Pro", price: "€49", period: "/month",
+                    features: [
+                      "Everything in Creator",
+                      "Priority generation queue",
+                      "Advanced analytics",
+                      "+50 monthly generation bonus",
+                      "Best for publishing businesses",
+                    ],
+                    cta: "Upgrade to Pro",
+                  },
+                ].map((p) => (
+                  <Card key={p.name} className={`p-6 ${p.popular ? "border-primary/50 shadow-lg shadow-primary/10" : ""}`}>
+                    {p.popular && <Badge className="mb-3">Most Popular</Badge>}
+                    <h3 className="text-xl font-display font-semibold">{p.name}</h3>
+                    <div className="mt-2">
+                      <span className="text-3xl font-bold text-foreground">{p.price}</span>
+                      <span className="text-muted-foreground text-sm">{p.period}</span>
+                    </div>
+                    <ul className="mt-4 space-y-2 text-sm">
+                      {p.features.map((f) => (
+                        <li key={f} className="flex items-start gap-2">
+                          <Check className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                          <span className="text-foreground">{f}</span>
+                        </li>
+                      ))}
+                    </ul>
+                    <Button
+                      variant={p.popular ? "default" : "outline"}
+                      size="sm"
+                      className="w-full mt-5"
+                      onClick={() => toast({ title: "Coming soon", description: "Creator tier checkout is rolling out — contact support to enable early access." })}
+                    >
+                      {p.cta}
+                    </Button>
+                  </Card>
+                ))}
+              </div>
+            </div>
+
+
             {/* Manage Subscription */}
             {isSubscribed && (
               <div className="text-center mb-16">
