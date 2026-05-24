@@ -463,6 +463,17 @@ serve(async (req) => {
             }
           } catch (_) { /* best-effort */ }
 
+          // Phase 4.1 — move creator entitlement into 7-day grace period on payment failure.
+          if (userId && invoice.subscription) {
+            try {
+              const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
+              await syncCreatorEntitlement(userId, subscription);
+            } catch (e) {
+              logStep("Grace period sync failed", { error: e instanceof Error ? e.message : String(e) });
+            }
+          }
+
+
           // Phase 2.1d.1 — threshold-driven severity for subscription failure spikes
           const sinceIso = new Date(Date.now() - 5 * 60_000).toISOString();
           const { count: recentCount } = await supabase
