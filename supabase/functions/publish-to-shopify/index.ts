@@ -82,6 +82,12 @@ Deno.serve(async (req) => {
     if (!book) return jsonResp(404, { error: "book_not_found" });
     if (book.user_id !== caller) return jsonResp(403, { error: "not_owner" });
 
+    // Phase 4.0 — gate on Creator entitlement
+    const gate = await requireCreatorCapability(admin, caller, "can_publish_external", {
+      auditMetadata: { book_id: book.id, listing_id: listing.id, platform: "shopify" },
+    });
+    if (gate.blocked) return gate.blocked;
+
     // Connection
     const { data: conn } = await admin
       .from("creator_platform_connections")
