@@ -120,6 +120,7 @@ export default function Pricing() {
         description: "Welcome! Your features are now unlocked.",
       });
       checkSubscription();
+      refreshEntitlements();
       setSearchParams({}, { replace: true });
     } else if (searchParams.get("canceled") === "true") {
       toast({
