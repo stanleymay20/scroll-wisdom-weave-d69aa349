@@ -135,6 +135,7 @@ Deno.serve(async (req) => {
       status: "pending", sync_state: "syncing", last_error: null,
       external_url: existing?.external_url ?? null,
       external_id: existing?.external_id ?? null,
+      entitlement_snapshot_id: entitlementSnapshotId,
     }, { onConflict: "book_id,platform" });
 
     // Decrypt token
