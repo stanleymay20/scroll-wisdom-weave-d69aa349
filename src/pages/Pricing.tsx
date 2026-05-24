@@ -104,6 +104,7 @@ const plans: PlanConfig[] = [
 
 export default function Pricing() {
   const { user, tier, isSubscribed, checkSubscription } = useSubscription();
+  const { entitlements, refresh: refreshEntitlements } = useCreatorEntitlements();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
