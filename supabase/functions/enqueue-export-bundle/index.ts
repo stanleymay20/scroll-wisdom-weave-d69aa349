@@ -291,11 +291,15 @@ serve(async (req) => {
     if (!book || book.user_id !== auth.userId) return unauthorized("Not the owner");
 
     // Phase 4.0 — Creator entitlement gate for external bundles (KDP is exempt).
+    let entitlementSnapshotId: string | null = null;
     if (EXTERNAL_BUNDLES.has(parsed.bundle_type)) {
       const gate = await requireCreatorCapability(sc, auth.userId, "can_publish_external", {
         auditMetadata: { book_id: parsed.book_id, bundle_type: parsed.bundle_type, correlation_id: corr },
       });
       if (gate.blocked) return gate.blocked;
+      // Phase 4.1 — snapshot entitlement onto the export job for historical proof.
+      const { snapshotEntitlement } = await import("../_shared/entitlements.ts");
+      entitlementSnapshotId = await snapshotEntitlement(sc, auth.userId, "export_job", parsed.book_id);
     }
 
 
@@ -304,6 +308,7 @@ serve(async (req) => {
       bundle_type: parsed.bundle_type, status: "pending",
       metadata: parsed.options ?? {},
       correlation_id: corr,
+      entitlement_snapshot_id: entitlementSnapshotId,
     }).select("id").single();
     if (error || !job) return serverError(error ?? new Error("insert failed"));
 

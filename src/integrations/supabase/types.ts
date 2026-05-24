@@ -1721,19 +1721,69 @@ export type Database = {
         }
         Relationships: []
       }
+      creator_entitlement_snapshots: {
+        Row: {
+          capabilities: Json
+          captured_at: string
+          context_id: string | null
+          context_type: string
+          id: string
+          payment_status: string
+          rev_share_surcharge_bps: number
+          source: string
+          stripe_price_id: string | null
+          stripe_subscription_id: string | null
+          tier: string
+          user_id: string
+        }
+        Insert: {
+          capabilities: Json
+          captured_at?: string
+          context_id?: string | null
+          context_type: string
+          id?: string
+          payment_status?: string
+          rev_share_surcharge_bps: number
+          source: string
+          stripe_price_id?: string | null
+          stripe_subscription_id?: string | null
+          tier: string
+          user_id: string
+        }
+        Update: {
+          capabilities?: Json
+          captured_at?: string
+          context_id?: string | null
+          context_type?: string
+          id?: string
+          payment_status?: string
+          rev_share_surcharge_bps?: number
+          source?: string
+          stripe_price_id?: string | null
+          stripe_subscription_id?: string | null
+          tier?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       creator_entitlements: {
         Row: {
           can_publish_external: boolean
           can_schedule_releases: boolean
           can_use_collections_unlimited: boolean
+          current_period_end: string | null
           expires_at: string | null
+          grace_period_until: string | null
           granted_at: string
           granted_by: string | null
           monthly_generation_bonus: number
           notes: string | null
+          payment_status: string
           priority_generation: boolean
           rev_share_surcharge_bps: number
           source: string
+          stripe_customer_id: string | null
+          stripe_price_id: string | null
           stripe_subscription_id: string | null
           tier: string
           updated_at: string
@@ -1743,14 +1793,19 @@ export type Database = {
           can_publish_external?: boolean
           can_schedule_releases?: boolean
           can_use_collections_unlimited?: boolean
+          current_period_end?: string | null
           expires_at?: string | null
+          grace_period_until?: string | null
           granted_at?: string
           granted_by?: string | null
           monthly_generation_bonus?: number
           notes?: string | null
+          payment_status?: string
           priority_generation?: boolean
           rev_share_surcharge_bps?: number
           source?: string
+          stripe_customer_id?: string | null
+          stripe_price_id?: string | null
           stripe_subscription_id?: string | null
           tier?: string
           updated_at?: string
@@ -1760,14 +1815,19 @@ export type Database = {
           can_publish_external?: boolean
           can_schedule_releases?: boolean
           can_use_collections_unlimited?: boolean
+          current_period_end?: string | null
           expires_at?: string | null
+          grace_period_until?: string | null
           granted_at?: string
           granted_by?: string | null
           monthly_generation_bonus?: number
           notes?: string | null
+          payment_status?: string
           priority_generation?: boolean
           rev_share_surcharge_bps?: number
           source?: string
+          stripe_customer_id?: string | null
+          stripe_price_id?: string | null
           stripe_subscription_id?: string | null
           tier?: string
           updated_at?: string
@@ -2024,6 +2084,7 @@ export type Database = {
           created_at: string
           dead_letter_reason: string | null
           dead_lettered_at: string | null
+          entitlement_snapshot_id: string | null
           error_code: string | null
           error_message: string | null
           id: string
@@ -2045,6 +2106,7 @@ export type Database = {
           created_at?: string
           dead_letter_reason?: string | null
           dead_lettered_at?: string | null
+          entitlement_snapshot_id?: string | null
           error_code?: string | null
           error_message?: string | null
           id?: string
@@ -2066,6 +2128,7 @@ export type Database = {
           created_at?: string
           dead_letter_reason?: string | null
           dead_lettered_at?: string | null
+          entitlement_snapshot_id?: string | null
           error_code?: string | null
           error_message?: string | null
           id?: string
@@ -2081,6 +2144,13 @@ export type Database = {
         }
         Relationships: [
           {
+            foreignKeyName: "export_jobs_entitlement_snapshot_id_fkey"
+            columns: ["entitlement_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "creator_entitlement_snapshots"
+            referencedColumns: ["id"]
+          },
+          {
             foreignKeyName: "export_jobs_listing_id_fkey"
             columns: ["listing_id"]
             isOneToOne: false
@@ -2093,6 +2163,7 @@ export type Database = {
         Row: {
           book_id: string
           created_at: string
+          entitlement_snapshot_id: string | null
           external_id: string | null
           external_url: string | null
           id: string
@@ -2108,6 +2179,7 @@ export type Database = {
         Insert: {
           book_id: string
           created_at?: string
+          entitlement_snapshot_id?: string | null
           external_id?: string | null
           external_url?: string | null
           id?: string
@@ -2123,6 +2195,7 @@ export type Database = {
         Update: {
           book_id?: string
           created_at?: string
+          entitlement_snapshot_id?: string | null
           external_id?: string | null
           external_url?: string | null
           id?: string
@@ -2135,7 +2208,15 @@ export type Database = {
           updated_at?: string
           user_id?: string
         }
-        Relationships: []
+        Relationships: [
+          {
+            foreignKeyName: "external_publications_entitlement_snapshot_id_fkey"
+            columns: ["entitlement_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "creator_entitlement_snapshots"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       faqs: {
         Row: {
@@ -3491,6 +3572,7 @@ export type Database = {
           chapter_id: string | null
           chapter_number: number | null
           created_at: string
+          entitlement_snapshot_id: string | null
           error_message: string | null
           id: string
           metadata: Json
@@ -3503,6 +3585,7 @@ export type Database = {
           chapter_id?: string | null
           chapter_number?: number | null
           created_at?: string
+          entitlement_snapshot_id?: string | null
           error_message?: string | null
           id?: string
           metadata?: Json
@@ -3515,6 +3598,7 @@ export type Database = {
           chapter_id?: string | null
           chapter_number?: number | null
           created_at?: string
+          entitlement_snapshot_id?: string | null
           error_message?: string | null
           id?: string
           metadata?: Json
@@ -3524,6 +3608,13 @@ export type Database = {
           status?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "release_schedule_items_entitlement_snapshot_id_fkey"
+            columns: ["entitlement_snapshot_id"]
+            isOneToOne: false
+            referencedRelation: "creator_entitlement_snapshots"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "release_schedule_items_schedule_id_fkey"
             columns: ["schedule_id"]
@@ -4549,9 +4640,16 @@ export type Database = {
       set_platform_fee: { Args: { _bps: number }; Returns: Json }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      snapshot_creator_entitlement: {
+        Args: { _context_id?: string; _context_type: string; _user_id: string }
+        Returns: string
+      }
       sync_creator_entitlement_from_stripe: {
         Args: {
-          _expires_at: string
+          _current_period_end: string
+          _stripe_customer_id: string
+          _stripe_price_id: string
+          _stripe_status: string
           _stripe_subscription_id: string
           _tier: string
           _user_id: string

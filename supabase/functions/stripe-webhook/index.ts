@@ -118,6 +118,44 @@ serve(async (req) => {
       return productMap[productId] || "free";
     };
 
+    // Phase 4.1 — Creator-tier product mapping (separate from generation plans).
+    type CreatorTier = "free" | "creator" | "creator_pro";
+    const CREATOR_PRODUCTS: Record<string, CreatorTier> = {
+      prod_UZv8Eine5sKy0j: "creator",
+      prod_UZv8yPrOGDBuWE: "creator_pro",
+    };
+    const getCreatorTierFromProductId = (productId: string | null | undefined): CreatorTier =>
+      (productId && CREATOR_PRODUCTS[productId]) || "free";
+
+    const syncCreatorEntitlement = async (
+      userId: string,
+      subscription: Stripe.Subscription,
+    ) => {
+      const productId = subscription.items.data[0]?.price?.product as string;
+      const priceId = subscription.items.data[0]?.price?.id ?? null;
+      const creatorTier = getCreatorTierFromProductId(productId);
+      // Only sync if this is a creator-tier product OR the subscription is canceled
+      // (so we downgrade entitlements on cancel of any sub the user previously had).
+      if (creatorTier === "free" && subscription.status === "active") return;
+      const periodEnd = subscription.current_period_end
+        ? new Date(subscription.current_period_end * 1000).toISOString()
+        : null;
+      const { error } = await supabase.rpc("sync_creator_entitlement_from_stripe", {
+        _user_id: userId,
+        _tier: creatorTier,
+        _stripe_subscription_id: subscription.id,
+        _stripe_customer_id: subscription.customer as string,
+        _stripe_price_id: priceId,
+        _stripe_status: subscription.status,
+        _current_period_end: periodEnd,
+      });
+      if (error) {
+        logStep("Creator entitlement sync failed", { error: error.message, userId });
+      } else {
+        logStep("Creator entitlement synced", { userId, tier: creatorTier, status: subscription.status });
+      }
+    };
+
     const updateProfilePlan = async (authUserId: string, plan: ValidPlan) => {
       const { error } = await supabase.from("profiles")
         .update({ plan, updated_at: new Date().toISOString() })
@@ -131,6 +169,7 @@ serve(async (req) => {
       if (error || !users?.users) return null;
       return users.users.find((u) => u.email === email) || null;
     };
+
 
     let processedOk = true;
     let processError: string | null = null;
@@ -245,6 +284,7 @@ serve(async (req) => {
               const user = await findUserByEmail(customerEmail);
               if (user) {
                 await updateProfilePlan(user.id, tier);
+                await syncCreatorEntitlement(user.id, subscription);
                 await logFinancialEvent(supabase, {
                   event_type: "subscription_started", severity: "info", actor: "webhook",
                   correlation_id: corr, stripe_event_id: event.id, user_id: user.id, payload: { tier, product_id: productId },
@@ -254,6 +294,7 @@ serve(async (req) => {
           }
           break;
         }
+
 
         case "checkout.session.expired":
         case "checkout.session.async_payment_failed": {
@@ -370,7 +411,10 @@ serve(async (req) => {
             const customer = await stripe.customers.retrieve(invoice.customer as string);
             if (customer && !customer.deleted && "email" in customer && customer.email) {
               const user = await findUserByEmail(customer.email);
-              if (user) await updateProfilePlan(user.id, tier);
+              if (user) {
+                await updateProfilePlan(user.id, tier);
+                await syncCreatorEntitlement(user.id, subscription);
+              }
             }
           }
           break;
@@ -383,7 +427,10 @@ serve(async (req) => {
           const customer = await stripe.customers.retrieve(subscription.customer as string);
           if (customer && !customer.deleted && "email" in customer && customer.email) {
             const user = await findUserByEmail(customer.email);
-            if (user) await updateProfilePlan(user.id, tier);
+            if (user) {
+              await updateProfilePlan(user.id, tier);
+              await syncCreatorEntitlement(user.id, subscription);
+            }
           }
           break;
         }
@@ -393,10 +440,15 @@ serve(async (req) => {
           const customer = await stripe.customers.retrieve(subscription.customer as string);
           if (customer && !customer.deleted && "email" in customer && customer.email) {
             const user = await findUserByEmail(customer.email);
-            if (user) await updateProfilePlan(user.id, "free");
+            if (user) {
+              await updateProfilePlan(user.id, "free");
+              // Force-revoke creator entitlement (sub object reflects canceled status)
+              await syncCreatorEntitlement(user.id, { ...subscription, status: "canceled" } as Stripe.Subscription);
+            }
           }
           break;
         }
+
 
         case "invoice.payment_failed": {
           const invoice = event.data.object as Stripe.Invoice;
@@ -410,6 +462,17 @@ serve(async (req) => {
               userId = user?.id ?? null;
             }
           } catch (_) { /* best-effort */ }
+
+          // Phase 4.1 — move creator entitlement into 7-day grace period on payment failure.
+          if (userId && invoice.subscription) {
+            try {
+              const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
+              await syncCreatorEntitlement(userId, subscription);
+            } catch (e) {
+              logStep("Grace period sync failed", { error: e instanceof Error ? e.message : String(e) });
+            }
+          }
+
 
           // Phase 2.1d.1 — threshold-driven severity for subscription failure spikes
           const sinceIso = new Date(Date.now() - 5 * 60_000).toISOString();
