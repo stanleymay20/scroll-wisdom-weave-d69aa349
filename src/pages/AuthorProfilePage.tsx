@@ -4,7 +4,9 @@ import { supabase } from "@/integrations/supabase/client";
 import { SEO } from "@/components/SEO";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { storefrontApi } from "@/lib/storefrontApi";
+import { storefrontApi, type StoreCollection } from "@/lib/storefrontApi";
+import { FollowAuthorButton } from "@/components/storefront/FollowAuthorButton";
+import { Badge } from "@/components/ui/badge";
 
 interface Author { user_id: string; slug: string; display_name: string; bio: string | null; avatar_url: string | null; website_url: string | null; linkedin_url: string | null; x_url: string | null; }
 interface Book { id: string; title: string; cover_image_url: string | null; slug: string; }
@@ -13,6 +15,7 @@ export default function AuthorProfilePage() {
   const { slug } = useParams<{ slug: string }>();
   const [author, setAuthor] = useState<Author | null>(null);
   const [books, setBooks] = useState<Book[]>([]);
+  const [collections, setCollections] = useState<StoreCollection[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -22,17 +25,17 @@ export default function AuthorProfilePage() {
       if (!a) { setLoading(false); return; }
       setAuthor(a as any);
       try {
-        // Canonical public API — filter to this author.
-        const res = await storefrontApi.listBooks({ pageSize: 60 });
-        const mine = res.items
-          .filter((l) => l.book?.author_user_id === (a as any).user_id)
-          .map((l) => ({
-            id: l.book!.id,
-            title: l.book!.title,
-            cover_image_url: l.cover_override_url ?? l.book!.cover_image_url,
-            slug: l.slug,
-          }));
-        setBooks(mine);
+        const [booksRes, colsRes] = await Promise.all([
+          storefrontApi.byAuthor(slug, { limit: 24 }),
+          storefrontApi.listCollections({ owner: slug, limit: 12 }),
+        ]);
+        setBooks(booksRes.items.map((l) => ({
+          id: l.book!.id,
+          title: l.book!.title,
+          cover_image_url: l.cover_override_url ?? l.book!.cover_image_url,
+          slug: l.slug,
+        })));
+        setCollections(colsRes.items);
       } catch (_) { /* noop */ }
       setLoading(false);
     })();
@@ -55,7 +58,8 @@ export default function AuthorProfilePage() {
           {author.avatar_url && <img src={author.avatar_url} alt={author.display_name} className="w-28 h-28 rounded-full object-cover" />}
           <div className="flex-1">
             <h1 className="text-3xl font-bold">{author.display_name}</h1>
-            {author.bio && <p className="text-muted-foreground mt-2 whitespace-pre-line">{author.bio}</p>}
+            <FollowAuthorButton authorUserId={author.user_id} className="mt-3" />
+            {author.bio && <p className="text-muted-foreground mt-4 whitespace-pre-line">{author.bio}</p>}
             <div className="mt-3 flex gap-4 text-sm">
               {author.website_url && <a href={author.website_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">Website</a>}
               {author.linkedin_url && <a href={author.linkedin_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">LinkedIn</a>}
@@ -63,6 +67,24 @@ export default function AuthorProfilePage() {
             </div>
           </div>
         </Card>
+
+        {collections.length > 0 && (
+          <>
+            <h2 className="text-2xl font-semibold mt-10 mb-4">Collections</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {collections.map((c) => (
+                <Link key={c.id} to={`/collections/${author.slug}/${c.slug}`}>
+                  <Card className="overflow-hidden hover:shadow-md transition p-4">
+                    <Badge variant="secondary">{c.items_count} book{c.items_count === 1 ? "" : "s"}</Badge>
+                    <h3 className="font-semibold mt-2 line-clamp-2">{c.title}</h3>
+                    {c.description && <p className="text-sm text-muted-foreground line-clamp-2 mt-1">{c.description}</p>}
+                  </Card>
+                </Link>
+              ))}
+            </div>
+          </>
+        )}
+
         <h2 className="text-2xl font-semibold mt-10 mb-4">Books</h2>
         <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
           {books.map((b) => (

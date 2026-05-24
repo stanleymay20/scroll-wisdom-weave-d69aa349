@@ -316,6 +316,27 @@ export type Database = {
           },
         ]
       }
+      author_followers: {
+        Row: {
+          author_user_id: string
+          created_at: string
+          follower_user_id: string
+          id: string
+        }
+        Insert: {
+          author_user_id: string
+          created_at?: string
+          follower_user_id: string
+          id?: string
+        }
+        Update: {
+          author_user_id?: string
+          created_at?: string
+          follower_user_id?: string
+          id?: string
+        }
+        Relationships: []
+      }
       author_profiles: {
         Row: {
           avatar_url: string | null
@@ -538,6 +559,77 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      book_collection_items: {
+        Row: {
+          added_at: string
+          book_id: string
+          collection_id: string
+          id: string
+          sort_index: number
+        }
+        Insert: {
+          added_at?: string
+          book_id: string
+          collection_id: string
+          id?: string
+          sort_index?: number
+        }
+        Update: {
+          added_at?: string
+          book_id?: string
+          collection_id?: string
+          id?: string
+          sort_index?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_collection_items_collection_id_fkey"
+            columns: ["collection_id"]
+            isOneToOne: false
+            referencedRelation: "book_collections"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      book_collections: {
+        Row: {
+          cover_image_url: string | null
+          created_at: string
+          description: string | null
+          id: string
+          is_public: boolean
+          owner_user_id: string
+          slug: string
+          sort_index: number
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean
+          owner_user_id: string
+          slug: string
+          sort_index?: number
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          cover_image_url?: string | null
+          created_at?: string
+          description?: string | null
+          id?: string
+          is_public?: boolean
+          owner_user_id?: string
+          slug?: string
+          sort_index?: number
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
       }
       book_knowledge_graphs: {
         Row: {
@@ -2900,6 +2992,42 @@ export type Database = {
         }
         Relationships: []
       }
+      reading_progress: {
+        Row: {
+          book_id: string
+          chapter_id: string | null
+          created_at: string
+          id: string
+          last_read_at: string
+          percent: number
+          source: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          book_id: string
+          chapter_id?: string | null
+          created_at?: string
+          id?: string
+          last_read_at?: string
+          percent?: number
+          source?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          book_id?: string
+          chapter_id?: string | null
+          created_at?: string
+          id?: string
+          last_read_at?: string
+          percent?: number
+          source?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       reading_sessions: {
         Row: {
           book_id: string
@@ -2968,6 +3096,45 @@ export type Database = {
           longest_streak?: number | null
           updated_at?: string
           user_id?: string
+        }
+        Relationships: []
+      }
+      recommendation_feedback: {
+        Row: {
+          action: string
+          book_id: string | null
+          created_at: string
+          id: string
+          listing_id: string | null
+          metadata: Json
+          position: number | null
+          session_id: string | null
+          source: string
+          user_id: string | null
+        }
+        Insert: {
+          action: string
+          book_id?: string | null
+          created_at?: string
+          id?: string
+          listing_id?: string | null
+          metadata?: Json
+          position?: number | null
+          session_id?: string | null
+          source: string
+          user_id?: string | null
+        }
+        Update: {
+          action?: string
+          book_id?: string | null
+          created_at?: string
+          id?: string
+          listing_id?: string | null
+          metadata?: Json
+          position?: number | null
+          session_id?: string | null
+          source?: string
+          user_id?: string | null
         }
         Relationships: []
       }
@@ -3832,6 +3999,14 @@ export type Database = {
       check_velocity: {
         Args: { _key: string; _limit: number; _window_seconds: number }
         Returns: Json
+      }
+      collection_owned_by: {
+        Args: { _collection_id: string; _user_id: string }
+        Returns: boolean
+      }
+      collection_visible_to: {
+        Args: { _collection_id: string; _user_id: string }
+        Returns: boolean
       }
       get_admin_user_metrics: { Args: never; Returns: Json }
       get_effective_user_tier: { Args: { _user_id: string }; Returns: string }

@@ -55,6 +55,20 @@ async function getJson<T>(path: string, params?: Record<string, string | number 
   return res.json() as Promise<T>;
 }
 
+export interface StoreCollection {
+  id: string;
+  slug: string;
+  title: string;
+  description: string | null;
+  cover_image_url: string | null;
+  is_public: boolean;
+  owner_user_id: string;
+  updated_at: string;
+  items_count: number;
+  owner?: { slug: string; display_name: string; avatar_url: string | null } | null;
+  items?: StoreListing[];
+}
+
 export const storefrontApi = {
   listBooks(opts: { search?: string; category?: string; sort?: "newest" | "price_asc" | "price_desc"; page?: number; pageSize?: number } = {}) {
     return getJson<{ items: StoreListing[]; page: number; pageSize: number; total: number; query?: string }>("books", opts);
@@ -75,6 +89,12 @@ export const storefrontApi = {
     return getJson<{ items: StoreListing[] }>("recent", { limit });
   },
   byAuthor(author: string, opts: { exclude?: string; limit?: number } = {}) {
-    return getJson<{ items: StoreListing[]; author: { slug: string; display_name: string } }>("by-author", { author, ...opts });
+    return getJson<{ items: StoreListing[]; author: { slug: string; display_name: string; followers_count?: number } }>("by-author", { author, ...opts });
+  },
+  listCollections(opts: { owner?: string; limit?: number } = {}) {
+    return getJson<{ items: StoreCollection[] }>("collections", opts);
+  },
+  getCollection(opts: { id?: string; owner?: string; slug?: string }) {
+    return getJson<StoreCollection>("collection", opts);
   },
 };
