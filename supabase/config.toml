@@ -116,3 +116,5 @@ verify_jwt = false
 
 [functions.storefront-user-api]
 verify_jwt = false
+[functions.materialize-release-schedules]
+verify_jwt = false
