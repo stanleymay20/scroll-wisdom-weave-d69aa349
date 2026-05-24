@@ -75,10 +75,10 @@ export async function createSchedule(input: {
   return data as ReleaseSchedule;
 }
 
-export async function updateSchedule(id: string, patch: Partial<ReleaseSchedule>) {
+export async function updateSchedule(id: string, patch: Partial<Omit<ReleaseSchedule, "metadata">> & { metadata?: Record<string, unknown> }) {
   const { data, error } = await supabase
     .from("release_schedules")
-    .update(patch)
+    .update(patch as never)
     .eq("id", id)
     .select("*")
     .single();
