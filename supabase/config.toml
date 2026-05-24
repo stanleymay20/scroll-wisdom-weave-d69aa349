@@ -118,3 +118,15 @@ verify_jwt = false
 verify_jwt = false
 [functions.materialize-release-schedules]
 verify_jwt = false
+
+[functions.connect-gumroad]
+verify_jwt = false
+
+[functions.gumroad-oauth-callback]
+verify_jwt = false
+
+[functions.publish-to-gumroad]
+verify_jwt = false
+
+[functions.disconnect-platform]
+verify_jwt = false
