@@ -1796,6 +1796,60 @@ export type Database = {
         }
         Relationships: []
       }
+      creator_platform_connections: {
+        Row: {
+          connection_status: string
+          created_at: string
+          encrypted_access_token: string
+          encrypted_refresh_token: string | null
+          external_creator_id: string | null
+          external_creator_name: string | null
+          id: string
+          last_error: string | null
+          last_used_at: string | null
+          metadata: Json
+          platform: string
+          scopes: string[]
+          token_expires_at: string | null
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          connection_status?: string
+          created_at?: string
+          encrypted_access_token: string
+          encrypted_refresh_token?: string | null
+          external_creator_id?: string | null
+          external_creator_name?: string | null
+          id?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          metadata?: Json
+          platform: string
+          scopes?: string[]
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          connection_status?: string
+          created_at?: string
+          encrypted_access_token?: string
+          encrypted_refresh_token?: string | null
+          external_creator_id?: string | null
+          external_creator_name?: string | null
+          id?: string
+          last_error?: string | null
+          last_used_at?: string | null
+          metadata?: Json
+          platform?: string
+          scopes?: string[]
+          token_expires_at?: string | null
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       creator_revenue_daily: {
         Row: {
           book_id: string
@@ -1979,10 +2033,13 @@ export type Database = {
           external_id: string | null
           external_url: string | null
           id: string
+          last_error: string | null
           notes: string | null
           platform: string
           published_at: string
           status: string
+          sync_state: string
+          updated_at: string
           user_id: string
         }
         Insert: {
@@ -1991,10 +2048,13 @@ export type Database = {
           external_id?: string | null
           external_url?: string | null
           id?: string
+          last_error?: string | null
           notes?: string | null
           platform: string
           published_at?: string
           status?: string
+          sync_state?: string
+          updated_at?: string
           user_id: string
         }
         Update: {
@@ -2003,10 +2063,13 @@ export type Database = {
           external_id?: string | null
           external_url?: string | null
           id?: string
+          last_error?: string | null
           notes?: string | null
           platform?: string
           published_at?: string
           status?: string
+          sync_state?: string
+          updated_at?: string
           user_id?: string
         }
         Relationships: []
@@ -2461,6 +2524,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      oauth_states: {
+        Row: {
+          created_at: string
+          expires_at: string
+          platform: string
+          return_url: string | null
+          state: string
+          user_id: string
+        }
+        Insert: {
+          created_at?: string
+          expires_at?: string
+          platform: string
+          return_url?: string | null
+          state: string
+          user_id: string
+        }
+        Update: {
+          created_at?: string
+          expires_at?: string
+          platform?: string
+          return_url?: string | null
+          state?: string
+          user_id?: string
+        }
+        Relationships: []
       }
       organization_members: {
         Row: {
@@ -4240,6 +4330,18 @@ export type Database = {
         Returns: Json
       }
       get_effective_user_tier: { Args: { _user_id: string }; Returns: string }
+      get_my_platform_connections: {
+        Args: never
+        Returns: {
+          connected_at: string
+          connection_status: string
+          external_creator_name: string
+          last_error: string
+          last_used_at: string
+          platform: string
+          scopes: string[]
+        }[]
+      }
       get_recommendation_analytics: {
         Args: { _window_days?: number }
         Returns: {
