@@ -11,9 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SEO } from "@/components/SEO";
 import { toast } from "sonner";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
-import { Sparkles, Package, BookOpen, Heart, Store, FileText, ExternalLink, CheckCircle2, Zap } from "lucide-react";
+import { Sparkles, Package, BookOpen, Heart, Store, ShoppingBag, FileText, ExternalLink, CheckCircle2, Zap } from "lucide-react";
 import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
-import { publishToGumroad } from "@/lib/platformConnections";
+import { publishToGumroad, publishToShopify } from "@/lib/platformConnections";
 
 type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
 
@@ -47,6 +47,7 @@ export default function BookPublishSettings() {
   const [suggesting, setSuggesting] = useState(false);
   const [bundling, setBundling] = useState<"" | BundleKind>("");
   const [publishingGumroad, setPublishingGumroad] = useState(false);
+  const [publishingShopify, setPublishingShopify] = useState(false);
   const [pubs, setPubs] = useState<any[]>([]);
   const [newPub, setNewPub] = useState<{ platform: BundleKind | "other"; url: string }>({ platform: "kdp", url: "" });
 
@@ -185,6 +186,12 @@ export default function BookPublishSettings() {
       toast.error(e.message ?? "Could not queue bundle");
     } finally { setBundling(""); }
   }
+  async function refreshPubs() {
+    const { data: ep } = await supabase.from("external_publications")
+      .select("id, platform, external_url, status, published_at")
+      .eq("book_id", bookId!).order("published_at", { ascending: false });
+    setPubs(ep ?? []);
+  }
   async function publishGumroadDirect() {
     if (!form.listing_id) { toast.error("Save the listing first"); return; }
     setPublishingGumroad(true);
@@ -192,11 +199,7 @@ export default function BookPublishSettings() {
       const r = await publishToGumroad(form.listing_id);
       if (r.idempotent) toast.info("Already published to Gumroad");
       else toast.success("Published to Gumroad");
-      // Refresh ledger
-      const { data: ep } = await supabase.from("external_publications")
-        .select("id, platform, external_url, status, published_at")
-        .eq("book_id", bookId!).order("published_at", { ascending: false });
-      setPubs(ep ?? []);
+      await refreshPubs();
       if (r.edit_url) window.open(r.edit_url, "_blank", "noopener");
     } catch (e: any) {
       const m = String(e?.message ?? "");
@@ -204,6 +207,23 @@ export default function BookPublishSettings() {
       else if (m.includes("expired")) toast.error("Gumroad connection expired — reconnect");
       else toast.error(m || "Gumroad publish failed");
     } finally { setPublishingGumroad(false); }
+  }
+  async function publishShopifyDirect() {
+    if (!form.listing_id) { toast.error("Save the listing first"); return; }
+    setPublishingShopify(true);
+    try {
+      const r = await publishToShopify(form.listing_id);
+      if (r.idempotent) toast.info("Already published to Shopify");
+      else toast.success("Published to Shopify");
+      await refreshPubs();
+      if (r.edit_url) window.open(r.edit_url, "_blank", "noopener");
+    } catch (e: any) {
+      const m = String(e?.message ?? "");
+      if (m.includes("not_connected")) toast.error("Connect Shopify first (Publishing Intelligence → Connect)");
+      else if (m.includes("expired") || m.includes("revoked")) toast.error("Shopify connection expired — reconnect");
+      else if (m.includes("shop_missing")) toast.error("Shopify shop domain missing — reconnect");
+      else toast.error(m || "Shopify publish failed");
+    } finally { setPublishingShopify(false); }
   }
 
 
@@ -371,15 +391,24 @@ export default function BookPublishSettings() {
               Auto-create the product on a connected platform. Connect accounts in{" "}
               <Link to="/account/intelligence" className="text-primary hover:underline">Publishing Intelligence</Link>.
             </p>
-            <Button
-              className="mt-3"
-              variant="secondary"
-              disabled={publishingGumroad || !form.listing_id}
-              onClick={publishGumroadDirect}
-            >
-              <Store className="w-4 h-4 mr-2" />
-              {publishingGumroad ? "Publishing…" : "Publish to Gumroad"}
-            </Button>
+            <div className="mt-3 flex flex-wrap gap-2">
+              <Button
+                variant="secondary"
+                disabled={publishingGumroad || !form.listing_id}
+                onClick={publishGumroadDirect}
+              >
+                <Store className="w-4 h-4 mr-2" />
+                {publishingGumroad ? "Publishing…" : "Publish to Gumroad"}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={publishingShopify || !form.listing_id}
+                onClick={publishShopifyDirect}
+              >
+                <ShoppingBag className="w-4 h-4 mr-2" />
+                {publishingShopify ? "Publishing…" : "Publish to Shopify"}
+              </Button>
+            </div>
           </div>
         </Card>
 
