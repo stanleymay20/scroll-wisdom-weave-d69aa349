@@ -276,7 +276,7 @@ serve(async (req) => {
 
     await sc.from("storefront_events").insert({
       listing_id: parsed.listing_id ?? null,
-      event_type: parsed.bundle_type === "kdp" ? "kdp_export_started" : "gumroad_export_started",
+      event_type: `${parsed.bundle_type}_export_started`,
       user_id: auth.userId, metadata: { job_id: job.id, book_id: parsed.book_id, correlation_id: corr },
     });
 
