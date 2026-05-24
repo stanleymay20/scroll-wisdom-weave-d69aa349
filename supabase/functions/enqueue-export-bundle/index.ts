@@ -290,6 +290,14 @@ serve(async (req) => {
     const { data: book } = await sc.from("books").select("user_id").eq("id", parsed.book_id).maybeSingle();
     if (!book || book.user_id !== auth.userId) return unauthorized("Not the owner");
 
+    // Phase 4.0 — Creator entitlement gate for external bundles (KDP is exempt).
+    if (EXTERNAL_BUNDLES.has(parsed.bundle_type)) {
+      const gate = await requireCreatorCapability(sc, auth.userId, "can_publish_external", {
+        auditMetadata: { book_id: parsed.book_id, bundle_type: parsed.bundle_type, correlation_id: corr },
+      });
+      if (gate.blocked) return gate.blocked;
+    }
+
 
     const { data: job, error } = await sc.from("export_jobs").insert({
       user_id: auth.userId, book_id: parsed.book_id, listing_id: parsed.listing_id ?? null,
