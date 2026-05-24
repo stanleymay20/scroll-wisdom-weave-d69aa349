@@ -15,6 +15,7 @@ import { AdminFinanceTab } from "@/components/admin/AdminFinanceTab";
 import { AdminReliabilityTab } from "@/components/admin/AdminReliabilityTab";
 import { AdminRiskTab } from "@/components/admin/AdminRiskTab";
 import { AdminRecommendationsTab } from "@/components/admin/AdminRecommendationsTab";
+import { AdminEntitlementsTab } from "@/components/admin/AdminEntitlementsTab";
 import { Activity, Users, Building2, FileClock, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -177,8 +178,9 @@ export default function AdminOps() {
         </Card>
       )}
 
-      <Tabs defaultValue="reliability" className="space-y-4">
+      <Tabs defaultValue="entitlements" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="entitlements">Entitlements</TabsTrigger>
           <TabsTrigger value="reliability">Reliability</TabsTrigger>
           <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
           <TabsTrigger value="audit">Audit Log</TabsTrigger>
@@ -187,6 +189,10 @@ export default function AdminOps() {
           <TabsTrigger value="finance">Finance</TabsTrigger>
           <TabsTrigger value="risk">Risk</TabsTrigger>
         </TabsList>
+
+        <TabsContent value="entitlements">
+          <AdminEntitlementsTab />
+        </TabsContent>
 
         <TabsContent value="reliability">
           <AdminReliabilityTab />
@@ -207,10 +213,6 @@ export default function AdminOps() {
         <TabsContent value="risk">
           <AdminRiskTab />
         </TabsContent>
-
-
-
-
 
         <TabsContent value="jobs">
           <Card>
