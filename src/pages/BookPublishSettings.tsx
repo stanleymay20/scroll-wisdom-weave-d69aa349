@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SEO } from "@/components/SEO";
 import { toast } from "sonner";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
-import { Sparkles, Package, BookOpen, Heart, Store, FileText, ExternalLink, CheckCircle2 } from "lucide-react";
+import { Sparkles, Package, BookOpen, Heart, Store, FileText, ExternalLink, CheckCircle2, Zap } from "lucide-react";
 import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
+import { publishToGumroad } from "@/lib/platformConnections";
 
 type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
 
