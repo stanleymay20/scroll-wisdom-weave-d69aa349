@@ -43,7 +43,9 @@ export default function BookPublishSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
-  const [bundling, setBundling] = useState<"" | "kdp" | "gumroad">("");
+  const [bundling, setBundling] = useState<"" | BundleKind>("");
+  const [pubs, setPubs] = useState<any[]>([]);
+  const [newPub, setNewPub] = useState<{ platform: BundleKind | "other"; url: string }>({ platform: "kdp", url: "" });
 
   const [form, setForm] = useState({
     listing_id: "",
