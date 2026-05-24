@@ -11,6 +11,7 @@ import { getAttributionContext } from "@/lib/attribution";
 import { toast } from "sonner";
 import { storefrontApi, type StoreListing } from "@/lib/storefrontApi";
 import { DiscoveryRail } from "@/components/storefront/DiscoveryRail";
+import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
 
 // Local view type retains existing shape used by the page below.
 interface Data {
@@ -91,8 +92,9 @@ export default function PublicBookPage() {
 
 
 
-  if (loading) return <div className="container mx-auto max-w-5xl p-8"><Skeleton className="h-96 w-full" /></div>;
-  if (!data || !data.book) return <div className="container mx-auto max-w-5xl p-8"><h1 className="text-2xl font-bold">Not found</h1><Link to="/store" className="text-primary">Back to store</Link></div>;
+  if (loading) return <ResponsiveShell><div className="container mx-auto max-w-5xl p-8"><Skeleton className="h-96 w-full" /></div></ResponsiveShell>;
+  if (!data || !data.book) return <ResponsiveShell><div className="container mx-auto max-w-5xl p-8"><h1 className="text-2xl font-bold">Not found</h1><Link to="/store" className="text-primary">Back to store</Link></div></ResponsiveShell>;
+
 
   const cover = data.cover_override_url || data.book.cover_image_url || "";
   const description = data.blurb || data.book.description || "";
@@ -159,6 +161,7 @@ export default function PublicBookPage() {
   }
 
   return (
+    <ResponsiveShell>
     <div className="min-h-screen bg-background">
       <SEO
         title={`${data.book.title} — ScrollLibrary`}
@@ -226,5 +229,6 @@ export default function PublicBookPage() {
         </div>
       </div>
     </div>
+    </ResponsiveShell>
   );
 }

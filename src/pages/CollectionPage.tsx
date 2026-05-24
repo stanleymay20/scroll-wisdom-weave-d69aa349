@@ -8,6 +8,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { storefrontApi, type StoreCollection } from "@/lib/storefrontApi";
 import { logRecommendationBatch, logRecommendationEvent } from "@/lib/recommendationFeedback";
+import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
 
 export default function CollectionPage() {
   const { owner, slug } = useParams<{ owner: string; slug: string }>();
@@ -39,19 +40,22 @@ export default function CollectionPage() {
   }, [owner, slug]);
 
   if (loading) {
-    return <div className="container mx-auto max-w-5xl p-8"><Skeleton className="h-64" /></div>;
+    return <ResponsiveShell><div className="container mx-auto max-w-5xl p-8"><Skeleton className="h-64" /></div></ResponsiveShell>;
   }
   if (notFound || !collection) {
     return (
-      <div className="container mx-auto max-w-5xl p-8">
-        <h1 className="text-2xl font-semibold">Collection not found</h1>
-        <p className="text-muted-foreground mt-2">It may be private or no longer exist.</p>
-        <Link to="/store" className="text-primary hover:underline mt-4 inline-block">Back to store</Link>
-      </div>
+      <ResponsiveShell>
+        <div className="container mx-auto max-w-5xl p-8">
+          <h1 className="text-2xl font-semibold">Collection not found</h1>
+          <p className="text-muted-foreground mt-2">It may be private or no longer exist.</p>
+          <Link to="/store" className="text-primary hover:underline mt-4 inline-block">Back to store</Link>
+        </div>
+      </ResponsiveShell>
     );
   }
 
   return (
+    <ResponsiveShell>
     <div className="min-h-screen bg-background">
       <SEO
         title={`${collection.title} — ScrollLibrary collection`}
@@ -115,5 +119,6 @@ export default function CollectionPage() {
         )}
       </main>
     </div>
+    </ResponsiveShell>
   );
 }

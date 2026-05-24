@@ -10,6 +10,7 @@ import { DiscoveryRail } from "@/components/storefront/DiscoveryRail";
 import { logSearchClick, logSearchQuery } from "@/lib/searchAnalytics";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { ContinueReadingRail } from "@/components/storefront/ContinueReadingRail";
+import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
 
 const SEARCH_DEBOUNCE_MS = 350;
 const ZERO_RESULT_HINTS = ["AI", "philosophy", "history", "science", "psychology"];
@@ -75,63 +76,68 @@ export default function Storefront() {
   const showZeroState = isSearching && !searching && searchResults?.length === 0;
 
   return (
-    <div className="min-h-screen bg-background">
-      <SEO
-        title="ScrollLibrary Store — Published Books"
-        description="Discover AI-native books. Trending, top-selling, and recently published reads on ScrollLibrary."
-        canonical="/store"
-      />
-      <header className="border-b border-border">
-        <div className="container mx-auto max-w-6xl px-4 py-10">
-          <h1 className="text-4xl font-bold tracking-tight">Store</h1>
-          <p className="mt-2 text-muted-foreground">Published books from ScrollLibrary authors.</p>
-          <div className="mt-6 max-w-md">
-            <Input
-              placeholder="Search titles, topics, authors…"
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              aria-label="Search the store"
-            />
+    <ResponsiveShell>
+      <div className="min-h-screen bg-background">
+        <SEO
+          title="ScrollLibrary Store — Published Books"
+          description="Discover AI-native books. Trending, top-selling, and recently published reads on ScrollLibrary."
+          canonical="/store"
+        />
+        <header className="border-b border-border">
+          <div className="container mx-auto max-w-6xl px-4 py-8 sm:py-10">
+            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Store</h1>
+            <p className="mt-2 text-muted-foreground text-sm sm:text-base">Published books from ScrollLibrary authors.</p>
+            <div className="mt-5 sm:mt-6 max-w-md">
+              <Input
+                placeholder="Search titles, topics, authors…"
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                aria-label="Search the store"
+                className="text-foreground caret-foreground"
+              />
+            </div>
           </div>
-        </div>
-      </header>
-      <main className="container mx-auto max-w-6xl px-4 py-10">
-        {isSearching ? (
-          <SearchResults
-            query={committedQ || q.trim()}
-            results={searchResults}
-            loading={searching}
-            zeroState={showZeroState}
-          />
-        ) : (
-          <>
-            <ContinueReadingRail />
-            <DiscoveryRail
-              title="Trending now"
-              items={trending}
-              loading={trending === null}
-              source="trending"
-              onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "trending" })}
+        </header>
+        <main className="container mx-auto max-w-6xl px-4 py-8 sm:py-10">
+          {isSearching ? (
+            <SearchResults
+              query={committedQ || q.trim()}
+              results={searchResults}
+              loading={searching}
+              zeroState={showZeroState}
             />
-            <DiscoveryRail
-              title="Top selling"
-              items={topSelling}
-              loading={topSelling === null}
-              emptyHint="No sales yet — check back soon."
-              source="top_selling"
-              onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "top_selling" })}
-            />
-            <DiscoveryRail
-              title="Recently published"
-              items={recent}
-              loading={recent === null}
-              source="recent"
-              onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "recent" })}
-            />
-          </>
-        )}
-      </main>
-    </div>
+          ) : (
+            <>
+              <ContinueReadingRail />
+              <DiscoveryRail
+                title="Trending now"
+                items={trending}
+                loading={trending === null}
+                emptyHint="Trending picks are warming up — check back soon."
+                source="trending"
+                onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "trending" })}
+              />
+              <DiscoveryRail
+                title="Top selling"
+                items={topSelling}
+                loading={topSelling === null}
+                emptyHint="No sales yet — check back soon."
+                source="top_selling"
+                onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "top_selling" })}
+              />
+              <DiscoveryRail
+                title="Recently published"
+                items={recent}
+                loading={recent === null}
+                emptyHint="New releases will appear here."
+                source="recent"
+                onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "recent" })}
+              />
+            </>
+          )}
+        </main>
+      </div>
+    </ResponsiveShell>
   );
 }
 

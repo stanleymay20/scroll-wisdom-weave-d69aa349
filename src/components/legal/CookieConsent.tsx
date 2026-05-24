@@ -54,32 +54,35 @@ function CookieConsentInner() {
     <motion.div
       initial={{ y: 100, opacity: 0 }}
       animate={{ y: 0, opacity: 1 }}
-      transition={{ type: "spring", damping: 25, stiffness: 300 }}
-      className="fixed bottom-0 left-0 right-0 z-50 p-3 sm:p-4"
+      transition={{ duration: 0.35, ease: [0.22, 1, 0.36, 1] }}
+      className="fixed bottom-0 left-0 right-0 z-50 px-2 sm:p-4 pb-[calc(env(safe-area-inset-bottom,0px)+88px)] sm:pb-4"
     >
       <div className="container mx-auto max-w-4xl">
-        <div className="bg-card/95 backdrop-blur-xl border border-border rounded-2xl shadow-2xl p-4 sm:p-6">
+        <div className="bg-card/95 backdrop-blur-xl border border-border rounded-xl sm:rounded-2xl shadow-2xl p-3 sm:p-6">
           {!showSettings ? (
-            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-4">
+            <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3 sm:gap-4">
               <div className="hidden sm:flex h-10 w-10 rounded-full bg-primary/10 items-center justify-center flex-shrink-0">
                 <Cookie className="h-5 w-5 text-primary" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-semibold text-foreground mb-1 text-sm sm:text-base">{t('cookie.title')}</h3>
-                <p className="text-xs sm:text-sm text-muted-foreground leading-relaxed">
+                <h3 className="font-semibold text-foreground mb-0.5 text-sm sm:text-base flex items-center gap-2">
+                  <Cookie className="h-4 w-4 text-primary sm:hidden" />
+                  {t('cookie.title')}
+                </h3>
+                <p className="text-xs sm:text-sm text-muted-foreground leading-snug line-clamp-2 sm:line-clamp-none">
                   {t('cookie.description')}{" "}
                   <Link to="/privacy" className="text-primary hover:underline font-medium">{t('cookie.learnMore')}</Link>
                 </p>
               </div>
-              <div className="flex flex-wrap gap-2 w-full sm:w-auto sm:flex-nowrap">
-                <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)} className="flex-1 sm:flex-none">
-                  <Settings className="h-4 w-4 mr-1.5" />
-                  {t('cookie.settings')}
+              <div className="flex gap-1.5 sm:gap-2 w-full sm:w-auto sm:flex-nowrap">
+                <Button variant="ghost" size="sm" onClick={() => setShowSettings(true)} className="px-2 sm:flex-none" aria-label={t('cookie.settings')}>
+                  <Settings className="h-4 w-4 sm:mr-1.5" />
+                  <span className="hidden sm:inline">{t('cookie.settings')}</span>
                 </Button>
-                <Button variant="outline" size="sm" onClick={acceptEssential} className="flex-1 sm:flex-none">
+                <Button variant="outline" size="sm" onClick={acceptEssential} className="flex-1 sm:flex-none text-xs sm:text-sm">
                   {t('cookie.essentialOnly')}
                 </Button>
-                <Button variant="gold" size="sm" onClick={acceptAll} className="flex-1 sm:flex-none">
+                <Button variant="gold" size="sm" onClick={acceptAll} className="flex-1 sm:flex-none text-xs sm:text-sm">
                   {t('cookie.acceptAll')}
                 </Button>
               </div>
