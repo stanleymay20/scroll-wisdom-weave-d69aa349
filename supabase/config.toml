@@ -130,3 +130,12 @@ verify_jwt = false
 
 [functions.disconnect-platform]
 verify_jwt = false
+
+[functions.connect-shopify]
+verify_jwt = false
+
+[functions.shopify-oauth-callback]
+verify_jwt = false
+
+[functions.publish-to-shopify]
+verify_jwt = false
