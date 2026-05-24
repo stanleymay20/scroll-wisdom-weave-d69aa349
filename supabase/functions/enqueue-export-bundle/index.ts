@@ -224,7 +224,7 @@ async function runJob(
       payload: { job_id: jobId, book_id: bookId, bundle_type: bundleType, error: msg },
     });
     await sc.from("storefront_events").insert({
-      event_type: bundleType === "kdp" ? "kdp_export_failed" : "gumroad_export_failed",
+      event_type: `${bundleType}_export_failed`,
       user_id: userId, metadata: { job_id: jobId, error: msg, correlation_id: corr },
     });
   }
