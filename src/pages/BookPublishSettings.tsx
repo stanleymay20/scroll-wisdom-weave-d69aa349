@@ -12,6 +12,7 @@ import { SEO } from "@/components/SEO";
 import { toast } from "sonner";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { Sparkles, Package, BookOpen, Heart, Store, FileText, ExternalLink, CheckCircle2 } from "lucide-react";
+import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
 
 type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
 
@@ -398,6 +399,13 @@ export default function BookPublishSettings() {
             <Button onClick={recordPublication} disabled={!newPub.url.trim()}>Record</Button>
           </div>
         </Card>
+
+        {/* Serialized publishing */}
+        {bookId && book?.user_id && (
+          <div className="mt-6">
+            <ReleaseScheduleSection bookId={bookId} ownerUserId={book.user_id} />
+          </div>
+        )}
 
       </div>
     </div>
