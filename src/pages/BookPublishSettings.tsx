@@ -87,9 +87,31 @@ export default function BookPublishSettings() {
       else setForm((f) => ({ ...f, slug: slugify(b.title) }));
       const { data: s } = await supabase.from("book_series").select("id, title").eq("user_id", user.id);
       setSeries(s ?? []);
+      const { data: ep } = await supabase.from("external_publications")
+        .select("id, platform, external_url, status, published_at")
+        .eq("book_id", bookId).order("published_at", { ascending: false });
+      setPubs(ep ?? []);
       setLoading(false);
     })();
   }, [bookId, navigate]);
+
+  async function recordPublication() {
+    if (!bookId || !newPub.url.trim()) { toast.error("URL required"); return; }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data, error } = await supabase.from("external_publications").insert({
+        user_id: user.id, book_id: bookId,
+        platform: newPub.platform, external_url: newPub.url.trim(), status: "live",
+      }).select("*").single();
+      if (error) throw error;
+      setPubs((p) => [data, ...p]);
+      setNewPub({ platform: "kdp", url: "" });
+      toast.success("Publication recorded");
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to record");
+    }
+  }
 
   async function save() {
     if (!bookId) return;
