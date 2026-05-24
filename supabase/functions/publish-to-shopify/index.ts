@@ -88,6 +88,10 @@ Deno.serve(async (req) => {
     });
     if (gate.blocked) return gate.blocked;
 
+    // Phase 4.1 — snapshot entitlement for historical proof.
+    const { snapshotEntitlement } = await import("../_shared/entitlements.ts");
+    const entitlementSnapshotId = await snapshotEntitlement(admin, caller, "external_publish", book.id);
+
     // Connection
     const { data: conn } = await admin
       .from("creator_platform_connections")
