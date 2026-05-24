@@ -5,10 +5,17 @@ import { correlationId, PhaseTimer, logExportPhase, logFinancialEvent } from "..
 
 const Body = z.object({
   book_id: z.string().uuid(),
-  bundle_type: z.enum(["kdp", "gumroad"]),
+  bundle_type: z.enum(["kdp", "gumroad", "substack", "patreon", "etsy"]),
   listing_id: z.string().uuid().optional(),
   options: z.record(z.any()).optional(),
 });
+
+type BundleType = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
+
+function slugify(s: string) {
+  return (s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
+    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "chapter";
+}
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 
