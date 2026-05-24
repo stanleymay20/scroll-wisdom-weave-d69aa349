@@ -540,6 +540,8 @@ serve(async (req) => {
       case "top-selling":  res = await handleTopSelling(sc, url); break;
       case "recent":       res = await handleRecent(sc, url); break;
       case "by-author":    res = await handleAuthorBooks(sc, url); break;
+      case "collections":  res = await handleCollections(sc, url); break;
+      case "collection":   res = await handleCollection(sc, url); break;
       default:             res = notFound("Unknown route");
     }
   } catch (e) {
