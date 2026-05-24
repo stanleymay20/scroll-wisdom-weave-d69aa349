@@ -11,7 +11,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SEO } from "@/components/SEO";
 import { toast } from "sonner";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
-import { Sparkles, Package } from "lucide-react";
+import { Sparkles, Package, BookOpen, Heart, Store, FileText, ExternalLink, CheckCircle2 } from "lucide-react";
+
+type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
+
+const BUNDLE_BUTTONS: Array<{ kind: BundleKind; label: string; icon: any; variant?: "default" | "outline" | "secondary" }> = [
+  { kind: "kdp",      label: "Amazon KDP",   icon: Package,  variant: "default"  },
+  { kind: "gumroad",  label: "Gumroad",      icon: Store,    variant: "outline"  },
+  { kind: "substack", label: "Substack",     icon: BookOpen, variant: "outline"  },
+  { kind: "patreon",  label: "Patreon",      icon: Heart,    variant: "outline"  },
+  { kind: "etsy",     label: "Etsy",         icon: FileText, variant: "outline"  },
+];
 
 function slugify(s: string) {
   return s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
@@ -33,7 +43,9 @@ export default function BookPublishSettings() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
-  const [bundling, setBundling] = useState<"" | "kdp" | "gumroad">("");
+  const [bundling, setBundling] = useState<"" | BundleKind>("");
+  const [pubs, setPubs] = useState<any[]>([]);
+  const [newPub, setNewPub] = useState<{ platform: BundleKind | "other"; url: string }>({ platform: "kdp", url: "" });
 
   const [form, setForm] = useState({
     listing_id: "",
@@ -75,9 +87,31 @@ export default function BookPublishSettings() {
       else setForm((f) => ({ ...f, slug: slugify(b.title) }));
       const { data: s } = await supabase.from("book_series").select("id, title").eq("user_id", user.id);
       setSeries(s ?? []);
+      const { data: ep } = await supabase.from("external_publications")
+        .select("id, platform, external_url, status, published_at")
+        .eq("book_id", bookId).order("published_at", { ascending: false });
+      setPubs(ep ?? []);
       setLoading(false);
     })();
   }, [bookId, navigate]);
+
+  async function recordPublication() {
+    if (!bookId || !newPub.url.trim()) { toast.error("URL required"); return; }
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+      const { data, error } = await supabase.from("external_publications").insert({
+        user_id: user.id, book_id: bookId,
+        platform: newPub.platform, external_url: newPub.url.trim(), status: "live",
+      }).select("*").single();
+      if (error) throw error;
+      setPubs((p) => [data, ...p]);
+      setNewPub({ platform: "kdp", url: "" });
+      toast.success("Publication recorded");
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to record");
+    }
+  }
 
   async function save() {
     if (!bookId) return;
@@ -135,7 +169,7 @@ export default function BookPublishSettings() {
     } finally { setSuggesting(false); }
   }
 
-  async function enqueue(kind: "kdp" | "gumroad") {
+  async function enqueue(kind: BundleKind) {
     setBundling(kind);
     try {
       const { data, error } = await supabase.functions.invoke("enqueue-export-bundle", {
@@ -148,6 +182,16 @@ export default function BookPublishSettings() {
       toast.error(e.message ?? "Could not queue bundle");
     } finally { setBundling(""); }
   }
+
+  // Publishing wizard checklist
+  const checklist = [
+    { ok: !!(form.subtitle || "").trim(), label: "Subtitle" },
+    { ok: !!(form.amazon_description || "").trim(), label: "Description (150+ chars)" },
+    { ok: (form.seo_keywords.split(",").filter((s) => s.trim()).length) >= 5, label: "5+ keywords" },
+    { ok: !!(book?.cover_image_url || form.cover_override_url), label: "Cover image" },
+    { ok: (form.blurb || "").trim().length >= 20, label: "Storefront blurb" },
+  ];
+  const readyCount = checklist.filter((c) => c.ok).length;
 
   if (loading) return <div className="container mx-auto max-w-3xl p-8">Loading…</div>;
 
@@ -258,18 +302,103 @@ export default function BookPublishSettings() {
           <Button onClick={save} disabled={saving} className="w-full">{saving ? "Saving…" : "Save listing"}</Button>
         </Card>
 
+        {/* Publishing Wizard checklist */}
+        <Card className="mt-6 p-6">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <CheckCircle2 className="w-5 h-5" /> Publishing readiness
+            <span className="ml-auto text-sm font-normal text-muted-foreground tabular-nums">
+              {readyCount}/{checklist.length}
+            </span>
+          </h2>
+          <ul className="mt-3 space-y-1.5 text-sm">
+            {checklist.map((c) => (
+              <li key={c.label} className="flex items-center gap-2">
+                <CheckCircle2 className={`w-4 h-4 ${c.ok ? "text-primary" : "text-muted-foreground/40"}`} />
+                <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
+              </li>
+            ))}
+          </ul>
+        </Card>
+
+        {/* Bundles */}
         <Card className="mt-6 p-6">
           <h2 className="text-lg font-semibold flex items-center gap-2"><Package className="w-5 h-5" /> Publish bundles</h2>
-          <p className="text-sm text-muted-foreground mt-1">Generate a ZIP bundle ready to upload elsewhere. Heavy jobs run in the background — track progress in <Link to="/account/exports" className="text-primary hover:underline">Exports</Link>.</p>
-          <div className="mt-4 flex flex-wrap gap-3">
-            <Button onClick={() => enqueue("kdp")} disabled={!!bundling}>
-              {bundling === "kdp" ? "Queuing…" : "Publish Bundle for Amazon KDP"}
-            </Button>
-            <Button variant="outline" onClick={() => enqueue("gumroad")} disabled={!!bundling}>
-              {bundling === "gumroad" ? "Queuing…" : "Export for Gumroad"}
-            </Button>
+          <p className="text-sm text-muted-foreground mt-1">
+            Generate a ZIP bundle ready to upload elsewhere. Heavy jobs run in the background — track progress in{" "}
+            <Link to="/account/exports" className="text-primary hover:underline">Exports</Link>. KDP is never auto-published.
+          </p>
+          <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-2">
+            {BUNDLE_BUTTONS.map(({ kind, label, icon: Icon, variant }) => (
+              <Button
+                key={kind}
+                variant={variant}
+                onClick={() => enqueue(kind)}
+                disabled={!!bundling}
+                className="justify-start"
+              >
+                <Icon className="w-4 h-4 mr-2" />
+                {bundling === kind ? "Queuing…" : label}
+              </Button>
+            ))}
           </div>
         </Card>
+
+        {/* External publications ledger */}
+        <Card className="mt-6 p-6">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <ExternalLink className="w-5 h-5" /> External publications
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Record where you've uploaded this book. Builds your distribution history.
+          </p>
+
+          {pubs.length > 0 && (
+            <ul className="mt-4 space-y-2">
+              {pubs.map((p) => (
+                <li key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm">
+                  <div className="min-w-0 flex-1">
+                    <div className="font-medium capitalize">{p.platform}</div>
+                    {p.external_url && (
+                      <a href={p.external_url} target="_blank" rel="noreferrer noopener"
+                         className="text-xs text-primary hover:underline truncate block">
+                        {p.external_url}
+                      </a>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground capitalize shrink-0">{p.status}</span>
+                </li>
+              ))}
+            </ul>
+          )}
+
+          <div className="mt-4 grid grid-cols-[140px_1fr_auto] gap-2 items-end">
+            <div>
+              <Label className="text-xs">Platform</Label>
+              <Select value={newPub.platform} onValueChange={(v) => setNewPub({ ...newPub, platform: v as any })}>
+                <SelectTrigger><SelectValue /></SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="kdp">Amazon KDP</SelectItem>
+                  <SelectItem value="gumroad">Gumroad</SelectItem>
+                  <SelectItem value="substack">Substack</SelectItem>
+                  <SelectItem value="patreon">Patreon</SelectItem>
+                  <SelectItem value="etsy">Etsy</SelectItem>
+                  <SelectItem value="other">Other</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label className="text-xs">URL</Label>
+              <Input
+                className="text-foreground caret-foreground"
+                placeholder="https://…"
+                value={newPub.url}
+                onChange={(e) => setNewPub({ ...newPub, url: e.target.value })}
+              />
+            </div>
+            <Button onClick={recordPublication} disabled={!newPub.url.trim()}>Record</Button>
+          </div>
+        </Card>
+
       </div>
     </div>
   );
