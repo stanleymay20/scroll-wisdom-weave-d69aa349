@@ -93,6 +93,24 @@ async function handleRecommendedForUser(sc: any, userId: string, url: URL): Prom
     });
   }
 
+  // 1b) Suppression: explicit hides in the last 30 days.
+  const { data: hides } = await sc.from("recommendation_feedback")
+    .select("book_id")
+    .eq("user_id", userId)
+    .eq("action", "hidden")
+    .gte("created_at", new Date(Date.now() - 30 * 86400_000).toISOString())
+    .limit(500);
+  const hiddenBookIds = new Set((hides ?? []).map((r: any) => r.book_id).filter(Boolean));
+  const authorHidePenalty = new Map<string, number>();
+  if (hiddenBookIds.size > 0) {
+    const { data: hbBooks } = await sc.from("books")
+      .select("id, user_id").in("id", Array.from(hiddenBookIds));
+    (hbBooks ?? []).forEach((b: any) => {
+      if (!b.user_id) return;
+      authorHidePenalty.set(b.user_id, Math.min(60, (authorHidePenalty.get(b.user_id) ?? 0) + 20));
+    });
+  }
+
   // 2) Followed authors.
   const { data: follows } = await sc.from("author_followers")
     .select("author_user_id").eq("follower_user_id", userId).limit(200);
@@ -110,7 +128,7 @@ async function handleRecommendedForUser(sc: any, userId: string, url: URL): Prom
   const FOLLOW_BOOST = 30;
   const CATEGORY_BOOST = 15;
   const personalized = pool
-    .filter((p) => !owned.has(p.book_id))
+    .filter((p) => !owned.has(p.book_id) && !hiddenBookIds.has(p.book_id))
     .map((p) => {
       const reasons: string[] = [];
       let boost = 0;
@@ -122,8 +140,9 @@ async function handleRecommendedForUser(sc: any, userId: string, url: URL): Prom
         boost += CATEGORY_BOOST;
         reasons.push(`Because you sampled ${sampledTitlesByCategory.get(p.category)}`);
       }
+      const penalty = (p.author_user_id && authorHidePenalty.get(p.author_user_id)) || 0;
       if (reasons.length === 0) reasons.push("Popular right now");
-      return { ...p, _final: Number(p.score) + boost, _reasons: reasons };
+      return { ...p, _final: Number(p.score) + boost - penalty, _reasons: reasons };
     })
     .sort((a, b) => b._final - a._final);
 

@@ -4010,6 +4010,10 @@ export type Database = {
         Args: { _notes?: string; _override_tier: string; _user_id: string }
         Returns: Json
       }
+      admin_update_discovery_weight: {
+        Args: { _key: string; _value: number }
+        Returns: Json
+      }
       book_has_public_listing: { Args: { _book_id: string }; Returns: boolean }
       check_velocity: {
         Args: { _key: string; _limit: number; _window_seconds: number }
@@ -4046,6 +4050,38 @@ export type Database = {
       }
       get_admin_user_metrics: { Args: never; Returns: Json }
       get_effective_user_tier: { Args: { _user_id: string }; Returns: string }
+      get_recommendation_analytics: {
+        Args: { _window_days?: number }
+        Returns: {
+          clicked: number
+          context: string
+          ctr: number
+          hidden: number
+          hide_rate: number
+          purchase_rate: number
+          purchased: number
+          sample_rate: number
+          sampled: number
+          shown: number
+          source: string
+          unique_listings: number
+          unique_users: number
+        }[]
+      }
+      get_recommendation_diversity: {
+        Args: { _window_days?: number }
+        Returns: Json
+      }
+      get_user_recommendation_suppression: {
+        Args: { _user_id: string; _window_days?: number }
+        Returns: {
+          click_count: number
+          hide_count: number
+          ignore_ratio: number
+          shown_count: number
+          source: string
+        }[]
+      }
       get_user_usage_snapshot: { Args: { _user_id: string }; Returns: Json }
       has_role: {
         Args: {

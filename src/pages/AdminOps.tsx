@@ -14,6 +14,7 @@ import { AuditLogViewer } from "@/components/admin/AuditLogViewer";
 import { AdminFinanceTab } from "@/components/admin/AdminFinanceTab";
 import { AdminReliabilityTab } from "@/components/admin/AdminReliabilityTab";
 import { AdminRiskTab } from "@/components/admin/AdminRiskTab";
+import { AdminRecommendationsTab } from "@/components/admin/AdminRecommendationsTab";
 import { Activity, Users, Building2, FileClock, RefreshCw } from "lucide-react";
 import { formatDistanceToNow } from "date-fns";
 
@@ -179,6 +180,7 @@ export default function AdminOps() {
       <Tabs defaultValue="reliability" className="space-y-4">
         <TabsList>
           <TabsTrigger value="reliability">Reliability</TabsTrigger>
+          <TabsTrigger value="recommendations">Recommendations</TabsTrigger>
           <TabsTrigger value="audit">Audit Log</TabsTrigger>
           <TabsTrigger value="jobs">Generation Jobs</TabsTrigger>
           <TabsTrigger value="orgs">Organizations</TabsTrigger>
@@ -188,6 +190,10 @@ export default function AdminOps() {
 
         <TabsContent value="reliability">
           <AdminReliabilityTab />
+        </TabsContent>
+
+        <TabsContent value="recommendations">
+          <AdminRecommendationsTab />
         </TabsContent>
 
         <TabsContent value="audit">
@@ -201,6 +207,7 @@ export default function AdminOps() {
         <TabsContent value="risk">
           <AdminRiskTab />
         </TabsContent>
+
 
 
 
