@@ -1,18 +1,34 @@
 import { Link } from "react-router-dom";
+import { useEffect, useRef } from "react";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StoreListing } from "@/lib/storefrontApi";
+import { logRecommendationBatch, logRecommendationEvent, type RecSource } from "@/lib/recommendationFeedback";
 
 interface Props {
   title: string;
   items: StoreListing[] | null;
   loading?: boolean;
   emptyHint?: string;
+  source?: RecSource;
   onItemClick?: (l: StoreListing, position: number) => void;
 }
 
-export function DiscoveryRail({ title, items, loading, emptyHint, onItemClick }: Props) {
+export function DiscoveryRail({ title, items, loading, emptyHint, source, onItemClick }: Props) {
+  const loggedShown = useRef(false);
+
+  useEffect(() => {
+    if (loggedShown.current || !source || !items || items.length === 0) return;
+    loggedShown.current = true;
+    logRecommendationBatch(
+      items.slice(0, 24).map((l, i) => ({
+        source, action: "shown",
+        listing_id: l.id, book_id: l.book?.id ?? null, position: i,
+      })),
+    );
+  }, [items, source]);
+
   if (!loading && (!items || items.length === 0) && !emptyHint) return null;
   return (
     <section className="mb-10">
@@ -29,7 +45,15 @@ export function DiscoveryRail({ title, items, loading, emptyHint, onItemClick }:
             <Link
               key={l.id}
               to={`/store/${l.slug}`}
-              onClick={() => onItemClick?.(l, idx)}
+              onClick={() => {
+                if (source) {
+                  logRecommendationEvent({
+                    source, action: "clicked",
+                    listing_id: l.id, book_id: l.book?.id ?? null, position: idx,
+                  });
+                }
+                onItemClick?.(l, idx);
+              }}
             >
               <Card className="overflow-hidden hover:shadow-md transition-shadow h-full">
                 <div className="aspect-[3/4] bg-muted">
