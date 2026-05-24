@@ -332,8 +332,9 @@ export default function Pricing() {
               </div>
 
               <div className="grid sm:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                {[
+                {([
                   {
+                    key: "free" as const,
                     name: "Free", price: "€0", period: "forever",
                     features: [
                       "Public marketplace listing",
@@ -342,10 +343,13 @@ export default function Pricing() {
                       "No external publishing",
                       "No release scheduling",
                     ],
-                    cta: "Current",
                   },
                   {
-                    name: "Creator", price: "€19", period: "/month", popular: true,
+                    key: "creator" as const,
+                    name: CREATOR_SUBSCRIPTION_TIERS.creator.name,
+                    price: `€${CREATOR_SUBSCRIPTION_TIERS.creator.monthlyPrice}`,
+                    period: "/month",
+                    popular: true,
                     features: [
                       "Everything in Free",
                       "Publish to Gumroad, Shopify, Substack, Patreon, Etsy",
@@ -354,10 +358,12 @@ export default function Pricing() {
                       "0% marketplace surcharge",
                       "Full analytics",
                     ],
-                    cta: "Upgrade to Creator",
                   },
                   {
-                    name: "Creator Pro", price: "€49", period: "/month",
+                    key: "creator_pro" as const,
+                    name: CREATOR_SUBSCRIPTION_TIERS.creator_pro.name,
+                    price: `€${CREATOR_SUBSCRIPTION_TIERS.creator_pro.monthlyPrice}`,
+                    period: "/month",
                     features: [
                       "Everything in Creator",
                       "Priority generation queue",
@@ -365,34 +371,61 @@ export default function Pricing() {
                       "+50 monthly generation bonus",
                       "Best for publishing businesses",
                     ],
-                    cta: "Upgrade to Pro",
                   },
-                ].map((p) => (
-                  <Card key={p.name} className={`p-6 ${p.popular ? "border-primary/50 shadow-lg shadow-primary/10" : ""}`}>
-                    {p.popular && <Badge className="mb-3">Most Popular</Badge>}
-                    <h3 className="text-xl font-display font-semibold">{p.name}</h3>
-                    <div className="mt-2">
-                      <span className="text-3xl font-bold text-foreground">{p.price}</span>
-                      <span className="text-muted-foreground text-sm">{p.period}</span>
-                    </div>
-                    <ul className="mt-4 space-y-2 text-sm">
-                      {p.features.map((f) => (
-                        <li key={f} className="flex items-start gap-2">
-                          <Check className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                          <span className="text-foreground">{f}</span>
-                        </li>
-                      ))}
-                    </ul>
-                    <Button
-                      variant={p.popular ? "default" : "outline"}
-                      size="sm"
-                      className="w-full mt-5"
-                      onClick={() => toast({ title: "Coming soon", description: "Creator tier checkout is rolling out — contact support to enable early access." })}
-                    >
-                      {p.cta}
-                    </Button>
-                  </Card>
-                ))}
+                ]).map((p) => {
+                  const isCurrent = entitlements.tier === p.key;
+                  const inGrace = isCurrent && (entitlements as any).payment_status === "grace_period";
+                  const loadingKey = `creator:${p.key}`;
+                  const isLoading = checkoutLoading === loadingKey;
+                  return (
+                    <Card key={p.name} className={`p-6 ${p.popular ? "border-primary/50 shadow-lg shadow-primary/10" : ""} ${isCurrent ? "ring-2 ring-primary" : ""}`}>
+                      <div className="flex items-center gap-2 mb-3 min-h-[24px]">
+                        {p.popular && <Badge>Most Popular</Badge>}
+                        {isCurrent && <Badge variant="secondary">Your plan</Badge>}
+                        {inGrace && <Badge variant="destructive">Payment retry</Badge>}
+                      </div>
+                      <h3 className="text-xl font-display font-semibold">{p.name}</h3>
+                      <div className="mt-2">
+                        <span className="text-3xl font-bold text-foreground">{p.price}</span>
+                        <span className="text-muted-foreground text-sm">{p.period}</span>
+                      </div>
+                      <ul className="mt-4 space-y-2 text-sm">
+                        {p.features.map((f) => (
+                          <li key={f} className="flex items-start gap-2">
+                            <Check className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
+                            <span className="text-foreground">{f}</span>
+                          </li>
+                        ))}
+                      </ul>
+                      {p.key === "free" ? (
+                        <Button variant="outline" size="sm" className="w-full mt-5" disabled>
+                          {isCurrent ? "Current" : "Default"}
+                        </Button>
+                      ) : isCurrent ? (
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="w-full mt-5"
+                          onClick={handleManageSubscription}
+                          disabled={portalLoading}
+                        >
+                          {portalLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Opening...</> : "Manage subscription"}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant={p.popular ? "default" : "outline"}
+                          size="sm"
+                          className="w-full mt-5"
+                          onClick={() => handleCreatorCheckout(p.key as CreatorTier)}
+                          disabled={isLoading}
+                        >
+                          {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Redirecting...</> : `Upgrade to ${p.name}`}
+                        </Button>
+                      )}
+                    </Card>
+                  );
+                })}
+
               </div>
             </div>
 
