@@ -92,6 +92,41 @@ export const SUBSCRIPTION_TIERS = {
 
 export type SubscriptionTier = keyof typeof SUBSCRIPTION_TIERS;
 
+// Phase 4.1 — Creator-tier subscriptions (publishing capabilities, separate from generation plans).
+// These are gated by creator_entitlements in the DB. A user can hold both a generation
+// plan (Premium, Student...) AND a Creator subscription concurrently.
+export const CREATOR_SUBSCRIPTION_TIERS = {
+  creator: {
+    name: 'Creator',
+    price_id: 'price_1TalITJYFIBeCvefdkr4LeL7',
+    product_id: 'prod_UZv8Eine5sKy0j',
+    monthlyPrice: 19,
+    currency: 'EUR',
+    features: [
+      'External publishing (Gumroad, Shopify, KDP)',
+      'Release scheduling',
+      'Unlimited collections',
+      '0% marketplace surcharge',
+    ],
+  },
+  creator_pro: {
+    name: 'Creator Pro',
+    price_id: 'price_1TalIUJYFIBeCvefHU67sm3O',
+    product_id: 'prod_UZv8yPrOGDBuWE',
+    monthlyPrice: 49,
+    currency: 'EUR',
+    features: [
+      'Everything in Creator',
+      'Priority generation queue',
+      '+50 monthly generation bonus',
+      'Early access to new platforms',
+    ],
+  },
+} as const;
+
+export type CreatorTier = keyof typeof CREATOR_SUBSCRIPTION_TIERS;
+
+
 export function getTierFromProductId(productId: string | null): SubscriptionTier {
   if (!productId) return 'free';
   
