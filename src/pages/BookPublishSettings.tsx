@@ -14,6 +14,8 @@ import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { Sparkles, Package, BookOpen, Heart, Store, ShoppingBag, FileText, ExternalLink, CheckCircle2, Zap } from "lucide-react";
 import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
 import { publishToGumroad, publishToShopify } from "@/lib/platformConnections";
+import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
+import { Lock } from "lucide-react";
 
 type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
 
