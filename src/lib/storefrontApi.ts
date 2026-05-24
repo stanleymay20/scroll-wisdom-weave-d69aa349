@@ -33,6 +33,8 @@ export interface StoreListing {
   book: StoreBook | null;
   author?: { slug: string; display_name: string; avatar_url: string | null; bio?: string | null } | null;
   series?: { slug: string; title: string } | null;
+  /** Optional explanation labels (from recommendation rails). */
+  reasons?: string[];
 }
 
 async function getJson<T>(path: string, params?: Record<string, string | number | undefined>): Promise<T> {
@@ -81,6 +83,9 @@ export const storefrontApi = {
   },
   trending(limit = 12) {
     return getJson<{ items: StoreListing[]; source: "trending" | "recent" }>("trending", { limit });
+  },
+  recommended(limit = 12) {
+    return getJson<{ items: StoreListing[]; source: "recommended" | "empty" }>("recommended", { limit });
   },
   topSelling(limit = 12) {
     return getJson<{ items: StoreListing[]; source: "top_selling" | "empty" }>("top-selling", { limit });

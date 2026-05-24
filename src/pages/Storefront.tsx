@@ -11,6 +11,8 @@ import { logSearchClick, logSearchQuery } from "@/lib/searchAnalytics";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { ContinueReadingRail } from "@/components/storefront/ContinueReadingRail";
 import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
+import { storefrontUserApi } from "@/lib/storefrontUserApi";
+import { supabase } from "@/integrations/supabase/client";
 
 const SEARCH_DEBOUNCE_MS = 350;
 const ZERO_RESULT_HINTS = ["AI", "philosophy", "history", "science", "psychology"];
@@ -24,6 +26,11 @@ export default function Storefront() {
   const [trending, setTrending] = useState<StoreListing[] | null>(null);
   const [topSelling, setTopSelling] = useState<StoreListing[] | null>(null);
   const [recent, setRecent] = useState<StoreListing[] | null>(null);
+  const [recommended, setRecommended] = useState<StoreListing[] | null>(null);
+  const [forYou, setForYou] = useState<StoreListing[] | null>(null);
+  const [fromAuthors, setFromAuthors] = useState<StoreListing[] | null>(null);
+  const [continueSeries, setContinueSeries] = useState<StoreListing[] | null>(null);
+  const [isAuthed, setIsAuthed] = useState(false);
 
   const debounceTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastLoggedQuery = useRef<string>("");
@@ -32,16 +39,38 @@ export default function Storefront() {
   useEffect(() => {
     (async () => {
       try {
-        const [t, ts, r] = await Promise.allSettled([
+        const [t, ts, r, rec] = await Promise.allSettled([
           storefrontApi.trending(12),
           storefrontApi.topSelling(12),
           storefrontApi.recent(12),
+          storefrontApi.recommended(12),
         ]);
         if (t.status === "fulfilled") setTrending(t.value.items);
         if (ts.status === "fulfilled") setTopSelling(ts.value.items);
         if (r.status === "fulfilled") setRecent(r.value.items);
+        if (rec.status === "fulfilled") setRecommended(rec.value.items);
       } catch { /* swallow */ }
     })();
+  }, []);
+
+  // Personalized rails for authenticated users only.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (cancelled || !session?.user) return;
+      setIsAuthed(true);
+      const [fu, fa, cs] = await Promise.allSettled([
+        storefrontUserApi.recommendedForUser(12),
+        storefrontUserApi.fromFollowedAuthors(12),
+        storefrontUserApi.continueSeries(8),
+      ]);
+      if (cancelled) return;
+      if (fu.status === "fulfilled") setForYou(fu.value.items);
+      if (fa.status === "fulfilled") setFromAuthors(fa.value.items);
+      if (cs.status === "fulfilled") setContinueSeries(cs.value.items);
+    })();
+    return () => { cancelled = true; };
   }, []);
 
   // Debounced server search.
@@ -109,6 +138,31 @@ export default function Storefront() {
           ) : (
             <>
               <ContinueReadingRail />
+              {isAuthed && (
+                <>
+                  <DiscoveryRail
+                    title="Continue this series"
+                    items={continueSeries}
+                    loading={continueSeries === null}
+                    source="continue_series"
+                    onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "continue_series" })}
+                  />
+                  <DiscoveryRail
+                    title="For you"
+                    items={forYou}
+                    loading={forYou === null}
+                    source="recommended_for_user"
+                    onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "recommended_for_user" })}
+                  />
+                  <DiscoveryRail
+                    title="From authors you follow"
+                    items={fromAuthors}
+                    loading={fromAuthors === null}
+                    source="from_followed_authors"
+                    onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "from_followed_authors" })}
+                  />
+                </>
+              )}
               <DiscoveryRail
                 title="Trending now"
                 items={trending}
@@ -116,6 +170,14 @@ export default function Storefront() {
                 emptyHint="Trending picks are warming up — check back soon."
                 source="trending"
                 onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "trending" })}
+              />
+              <DiscoveryRail
+                title="Recommended"
+                items={recommended}
+                loading={recommended === null}
+                emptyHint="Recommendations will appear as the catalog grows."
+                source="recommended"
+                onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "recommended" })}
               />
               <DiscoveryRail
                 title="Top selling"

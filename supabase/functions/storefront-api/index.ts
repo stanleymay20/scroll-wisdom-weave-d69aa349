@@ -277,91 +277,108 @@ async function loadWeights(sc: any) {
   return defaults;
 }
 
+// Diversity cap helper — no more than N books per author per rail.
+function capPerAuthor<T extends { book?: { author_user_id?: string } | null }>(
+  rows: T[], maxPerAuthor = 2,
+): T[] {
+  const seen = new Map<string, number>();
+  const out: T[] = [];
+  for (const r of rows) {
+    const a = r.book?.author_user_id ?? "_";
+    const n = seen.get(a) ?? 0;
+    if (n >= maxPerAuthor) continue;
+    seen.set(a, n + 1);
+    out.push(r);
+  }
+  return out;
+}
+
+// Derive a one-line reason from discovery-score components.
+function explainScore(c: { engagement: number; conversion: number; freshness: number; purchases: number; samples: number; views: number }): string {
+  if (c.conversion > Math.max(c.engagement, 20) && c.purchases > 0) return "Top seller this week";
+  if (c.freshness > 4 && c.views < 5) return "Fresh release";
+  if (c.samples > 3 && c.engagement > c.conversion) return "Readers are sampling";
+  if (c.engagement > 20) return "Popular right now";
+  return "Trending";
+}
+
+// Score row shape returned by compute_discovery_scores RPC.
+interface ScoreRow {
+  listing_id: string;
+  book_id: string;
+  author_user_id: string | null;
+  category: string | null;
+  score: number;
+  engagement: number;
+  conversion: number;
+  freshness: number;
+  penalty: number;
+  views: number;
+  samples: number;
+  ctas: number;
+  checkouts: number;
+  purchases: number;
+}
+
+async function loadScored(sc: any, windowDays: number, poolLimit: number): Promise<ScoreRow[]> {
+  const { data, error } = await sc.rpc("compute_discovery_scores", { _window_days: windowDays, _limit: poolLimit });
+  if (error) throw error;
+  return (data ?? []) as ScoreRow[];
+}
+
 async function handleTrending(sc: any, url: URL): Promise<Response> {
   const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get("limit") ?? "12") || 12));
-  const since = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
-  const w = await loadWeights(sc);
-
-  const { data: events } = await sc.from("storefront_events")
-    .select("listing_id, event_type, created_at")
-    .gte("created_at", since).limit(8000);
-
-  const scoreMap = new Map<string, number>();
-  const eventWeights: Record<string, number> = {
-    listing_view: w.w_view, sample_open: w.w_sample, cta_click: w.w_cta,
-    checkout_started: w.w_checkout, purchase_completed: w.w_purchase,
-  };
-  (events ?? []).forEach((e: any) => {
-    if (!e.listing_id) return;
-    const ew = eventWeights[e.event_type] ?? 0;
-    if (ew === 0) return;
-    scoreMap.set(e.listing_id, (scoreMap.get(e.listing_id) ?? 0) + ew);
-  });
-
-  // Apply refund + fraud penalties on book_id, then map back via listings.
-  const candidateIds = Array.from(scoreMap.keys());
-  if (candidateIds.length > 0) {
-    const { data: listingRows } = await sc.from("public_listings")
-      .select("id, book_id, created_at").in("id", candidateIds);
-    const idToBook = new Map<string, string>();
-    const idToCreated = new Map<string, string>();
-    (listingRows ?? []).forEach((r: any) => {
-      idToBook.set(r.id, r.book_id);
-      idToCreated.set(r.id, r.created_at);
-    });
-
-    const bookIds = Array.from(new Set(Array.from(idToBook.values())));
-    const [refunds, fraud] = await Promise.all([
-      sc.from("book_purchases").select("book_id").in("book_id", bookIds).eq("status", "refunded"),
-      sc.from("fraud_signals").select("metadata").gte("created_at", since).limit(2000)
-        .then((r: any) => r).catch(() => ({ data: [] })),
-    ]);
-    const refundByBook = new Map<string, number>();
-    (refunds.data ?? []).forEach((p: any) => refundByBook.set(p.book_id, (refundByBook.get(p.book_id) ?? 0) + 1));
-
-    // fraud_signals may reference book_id inside metadata; tolerant lookup.
-    const fraudByBook = new Map<string, number>();
-    (fraud.data ?? []).forEach((s: any) => {
-      const bid = s?.metadata?.book_id;
-      if (bid) fraudByBook.set(bid, (fraudByBook.get(bid) ?? 0) + 1);
-    });
-
-    const now = Date.now();
-    for (const lid of candidateIds) {
-      const bookId = idToBook.get(lid);
-      let score = scoreMap.get(lid) ?? 0;
-      if (bookId) {
-        score -= (refundByBook.get(bookId) ?? 0) * w.w_refund_penalty;
-        score -= (fraudByBook.get(bookId) ?? 0) * w.w_fraud_penalty;
-      }
-      const createdAt = idToCreated.get(lid);
-      if (createdAt) {
-        const ageDays = (now - new Date(createdAt).getTime()) / 86_400_000;
-        if (ageDays < w.w_freshness_days) {
-          score += w.w_freshness_boost * (1 - ageDays / w.w_freshness_days);
-        }
-      }
-      scoreMap.set(lid, score);
-    }
-  }
-
-  const topIds = Array.from(scoreMap.entries())
-    .filter(([, s]) => s > 0).sort((a, b) => b[1] - a[1])
-    .slice(0, limit).map(([id]) => id);
-
-  if (topIds.length === 0) {
+  const scored = (await loadScored(sc, 7, 120)).filter((s) => s.score > 0);
+  if (scored.length === 0) {
     const { data } = await sc.from("public_listings")
       .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
       .eq("is_public", true).order("created_at", { ascending: false }).limit(limit);
     return cached({ items: (data ?? []).map(shapeListing), source: "recent" });
   }
-
+  const ids = scored.slice(0, limit * 3).map((s) => s.listing_id);
   const { data } = await sc.from("public_listings")
     .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
-    .in("id", topIds).eq("is_public", true);
-  const shaped = (data ?? []).map(shapeListing);
-  shaped.sort((a: any, b: any) => (scoreMap.get(b.id) ?? 0) - (scoreMap.get(a.id) ?? 0));
-  return cached({ items: shaped, source: "trending" });
+    .in("id", ids).eq("is_public", true);
+  const shapedById = new Map<string, any>();
+  (data ?? []).forEach((r: any) => shapedById.set(r.id, shapeListing(r)));
+  const ordered = scored
+    .map((s) => {
+      const item = shapedById.get(s.listing_id);
+      if (!item) return null;
+      item.reasons = ["Trending"];
+      return item;
+    })
+    .filter(Boolean);
+  const diverse = capPerAuthor(ordered, 2).slice(0, limit);
+  return cached({ items: diverse, source: "trending" });
+}
+
+async function handleRecommended(sc: any, url: URL): Promise<Response> {
+  const limit = Math.min(24, Math.max(1, parseInt(url.searchParams.get("limit") ?? "12") || 12));
+  const scored = (await loadScored(sc, 14, 150)).filter((s) => s.score > 0);
+  if (scored.length === 0) return cached({ items: [], source: "empty" });
+  const ids = scored.slice(0, limit * 4).map((s) => s.listing_id);
+  const { data } = await sc.from("public_listings")
+    .select(`${LISTING_FIELDS}, book:books!inner(${BOOK_FIELDS})`)
+    .in("id", ids).eq("is_public", true);
+  const shapedById = new Map<string, any>();
+  (data ?? []).forEach((r: any) => shapedById.set(r.id, shapeListing(r)));
+  const ordered = scored
+    .map((s) => {
+      const item = shapedById.get(s.listing_id);
+      if (!item) return null;
+      item.reasons = [explainScore(s)];
+      return item;
+    })
+    .filter(Boolean);
+  // Authors for ribbon labels
+  const authors = await attachAuthors(sc, ordered);
+  ordered.forEach((l: any) => {
+    const a = l.book?.author_user_id ? authors.get(l.book.author_user_id) : null;
+    if (a) l.author = { slug: a.slug, display_name: a.display_name, avatar_url: a.avatar_url };
+  });
+  const diverse = capPerAuthor(ordered, 2).slice(0, limit);
+  return cached({ items: diverse, source: "recommended" });
 }
 
 async function handleTopSelling(sc: any, url: URL): Promise<Response> {
@@ -537,6 +554,7 @@ serve(async (req) => {
       case "book":         res = await handleBook(sc, url); break;
       case "related":      res = await handleRelated(sc, url); break;
       case "trending":     res = await handleTrending(sc, url); break;
+      case "recommended":  res = await handleRecommended(sc, url); break;
       case "top-selling":  res = await handleTopSelling(sc, url); break;
       case "recent":       res = await handleRecent(sc, url); break;
       case "by-author":    res = await handleAuthorBooks(sc, url); break;

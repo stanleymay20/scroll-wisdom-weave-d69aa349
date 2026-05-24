@@ -4,7 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 
 export type RecSource =
   | "trending" | "top_selling" | "recent" | "related" | "same_author"
-  | "same_series" | "collection" | "continue_reading" | "search" | "author_profile";
+  | "same_series" | "collection" | "continue_reading" | "search" | "author_profile"
+  | "recommended" | "recommended_for_user" | "from_followed_authors" | "continue_series";
 
 export type RecAction = "shown" | "clicked" | "sampled" | "purchased" | "hidden";
 
