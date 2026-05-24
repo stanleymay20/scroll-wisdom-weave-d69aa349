@@ -411,7 +411,10 @@ serve(async (req) => {
             const customer = await stripe.customers.retrieve(invoice.customer as string);
             if (customer && !customer.deleted && "email" in customer && customer.email) {
               const user = await findUserByEmail(customer.email);
-              if (user) await updateProfilePlan(user.id, tier);
+              if (user) {
+                await updateProfilePlan(user.id, tier);
+                await syncCreatorEntitlement(user.id, subscription);
+              }
             }
           }
           break;
@@ -424,7 +427,10 @@ serve(async (req) => {
           const customer = await stripe.customers.retrieve(subscription.customer as string);
           if (customer && !customer.deleted && "email" in customer && customer.email) {
             const user = await findUserByEmail(customer.email);
-            if (user) await updateProfilePlan(user.id, tier);
+            if (user) {
+              await updateProfilePlan(user.id, tier);
+              await syncCreatorEntitlement(user.id, subscription);
+            }
           }
           break;
         }
@@ -434,10 +440,15 @@ serve(async (req) => {
           const customer = await stripe.customers.retrieve(subscription.customer as string);
           if (customer && !customer.deleted && "email" in customer && customer.email) {
             const user = await findUserByEmail(customer.email);
-            if (user) await updateProfilePlan(user.id, "free");
+            if (user) {
+              await updateProfilePlan(user.id, "free");
+              // Force-revoke creator entitlement (sub object reflects canceled status)
+              await syncCreatorEntitlement(user.id, { ...subscription, status: "canceled" } as Stripe.Subscription);
+            }
           }
           break;
         }
+
 
         case "invoice.payment_failed": {
           const invoice = event.data.object as Stripe.Invoice;
