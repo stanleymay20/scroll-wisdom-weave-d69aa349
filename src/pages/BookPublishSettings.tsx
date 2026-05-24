@@ -11,7 +11,17 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SEO } from "@/components/SEO";
 import { toast } from "sonner";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
-import { Sparkles, Package } from "lucide-react";
+import { Sparkles, Package, BookOpen, Heart, Store, FileText, ExternalLink, CheckCircle2 } from "lucide-react";
+
+type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
+
+const BUNDLE_BUTTONS: Array<{ kind: BundleKind; label: string; icon: any; variant?: "default" | "outline" | "secondary" }> = [
+  { kind: "kdp",      label: "Amazon KDP",   icon: Package,  variant: "default"  },
+  { kind: "gumroad",  label: "Gumroad",      icon: Store,    variant: "outline"  },
+  { kind: "substack", label: "Substack",     icon: BookOpen, variant: "outline"  },
+  { kind: "patreon",  label: "Patreon",      icon: Heart,    variant: "outline"  },
+  { kind: "etsy",     label: "Etsy",         icon: FileText, variant: "outline"  },
+];
 
 function slugify(s: string) {
   return s.toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80);
