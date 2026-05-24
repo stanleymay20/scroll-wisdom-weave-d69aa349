@@ -3988,7 +3988,22 @@ export type Database = {
       }
     }
     Views: {
-      [_ in never]: never
+      recommendation_rail_metrics: {
+        Row: {
+          clicked: number | null
+          ctr: number | null
+          day: string | null
+          hidden: number | null
+          hide_rate: number | null
+          purchase_rate: number | null
+          purchased: number | null
+          sample_rate: number | null
+          sampled: number | null
+          shown: number | null
+          source: string | null
+        }
+        Relationships: []
+      }
     }
     Functions: {
       admin_set_user_risk_override: {
@@ -4007,6 +4022,27 @@ export type Database = {
       collection_visible_to: {
         Args: { _collection_id: string; _user_id: string }
         Returns: boolean
+      }
+      compute_discovery_scores: {
+        Args: { _limit?: number; _window_days?: number }
+        Returns: {
+          author_user_id: string
+          book_id: string
+          category: string
+          checkouts: number
+          conversion: number
+          ctas: number
+          engagement: number
+          fraud_hits: number
+          freshness: number
+          listing_id: string
+          penalty: number
+          purchases: number
+          refunds: number
+          samples: number
+          score: number
+          views: number
+        }[]
       }
       get_admin_user_metrics: { Args: never; Returns: Json }
       get_effective_user_tier: { Args: { _user_id: string }; Returns: string }
