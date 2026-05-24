@@ -138,6 +138,31 @@ export default function Storefront() {
           ) : (
             <>
               <ContinueReadingRail />
+              {isAuthed && (
+                <>
+                  <DiscoveryRail
+                    title="Continue this series"
+                    items={continueSeries}
+                    loading={continueSeries === null}
+                    source="continue_series"
+                    onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "continue_series" })}
+                  />
+                  <DiscoveryRail
+                    title="For you"
+                    items={forYou}
+                    loading={forYou === null}
+                    source="recommended_for_user"
+                    onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "recommended_for_user" })}
+                  />
+                  <DiscoveryRail
+                    title="From authors you follow"
+                    items={fromAuthors}
+                    loading={fromAuthors === null}
+                    source="from_followed_authors"
+                    onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "from_followed_authors" })}
+                  />
+                </>
+              )}
               <DiscoveryRail
                 title="Trending now"
                 items={trending}
@@ -145,6 +170,14 @@ export default function Storefront() {
                 emptyHint="Trending picks are warming up — check back soon."
                 source="trending"
                 onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "trending" })}
+              />
+              <DiscoveryRail
+                title="Recommended"
+                items={recommended}
+                loading={recommended === null}
+                emptyHint="Recommendations will appear as the catalog grows."
+                source="recommended"
+                onItemClick={(l) => trackStorefrontEvent(l.id, "cta_click", { surface: "recommended" })}
               />
               <DiscoveryRail
                 title="Top selling"
