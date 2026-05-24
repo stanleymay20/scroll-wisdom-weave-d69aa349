@@ -128,7 +128,7 @@ async function handleRecommendedForUser(sc: any, userId: string, url: URL): Prom
   const FOLLOW_BOOST = 30;
   const CATEGORY_BOOST = 15;
   const personalized = pool
-    .filter((p) => !owned.has(p.book_id))
+    .filter((p) => !owned.has(p.book_id) && !hiddenBookIds.has(p.book_id))
     .map((p) => {
       const reasons: string[] = [];
       let boost = 0;
@@ -140,8 +140,9 @@ async function handleRecommendedForUser(sc: any, userId: string, url: URL): Prom
         boost += CATEGORY_BOOST;
         reasons.push(`Because you sampled ${sampledTitlesByCategory.get(p.category)}`);
       }
+      const penalty = (p.author_user_id && authorHidePenalty.get(p.author_user_id)) || 0;
       if (reasons.length === 0) reasons.push("Popular right now");
-      return { ...p, _final: Number(p.score) + boost, _reasons: reasons };
+      return { ...p, _final: Number(p.score) + boost - penalty, _reasons: reasons };
     })
     .sort((a, b) => b._final - a._final);
 
