@@ -1715,6 +1715,48 @@ export type Database = {
         }
         Relationships: []
       }
+      creator_notifications: {
+        Row: {
+          body: string | null
+          created_at: string
+          id: string
+          kind: string
+          link_url: string | null
+          metadata: Json
+          read_at: string | null
+          resource_id: string | null
+          resource_type: string | null
+          title: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind: string
+          link_url?: string | null
+          metadata?: Json
+          read_at?: string | null
+          resource_id?: string | null
+          resource_type?: string | null
+          title: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          id?: string
+          kind?: string
+          link_url?: string | null
+          metadata?: Json
+          read_at?: string | null
+          resource_id?: string | null
+          resource_type?: string | null
+          title?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
       creator_payout_profiles: {
         Row: {
           country_code: string | null
@@ -3246,6 +3288,103 @@ export type Database = {
         }
         Relationships: []
       }
+      release_schedule_items: {
+        Row: {
+          chapter_id: string | null
+          chapter_number: number | null
+          created_at: string
+          error_message: string | null
+          id: string
+          metadata: Json
+          release_at: string
+          released_at: string | null
+          schedule_id: string
+          status: string
+        }
+        Insert: {
+          chapter_id?: string | null
+          chapter_number?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          release_at: string
+          released_at?: string | null
+          schedule_id: string
+          status?: string
+        }
+        Update: {
+          chapter_id?: string | null
+          chapter_number?: number | null
+          created_at?: string
+          error_message?: string | null
+          id?: string
+          metadata?: Json
+          release_at?: string
+          released_at?: string | null
+          schedule_id?: string
+          status?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "release_schedule_items_schedule_id_fkey"
+            columns: ["schedule_id"]
+            isOneToOne: false
+            referencedRelation: "release_schedules"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      release_schedules: {
+        Row: {
+          book_id: string
+          cadence: string
+          channel: string
+          created_at: string
+          early_access_tier: string | null
+          id: string
+          metadata: Json
+          owner_user_id: string
+          start_at: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          book_id: string
+          cadence?: string
+          channel?: string
+          created_at?: string
+          early_access_tier?: string | null
+          id?: string
+          metadata?: Json
+          owner_user_id: string
+          start_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          book_id?: string
+          cadence?: string
+          channel?: string
+          created_at?: string
+          early_access_tier?: string | null
+          id?: string
+          metadata?: Json
+          owner_user_id?: string
+          start_at?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "release_schedules_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       saved_decks: {
         Row: {
           book_id: string | null
@@ -4088,6 +4227,18 @@ export type Database = {
         }[]
       }
       get_admin_user_metrics: { Args: never; Returns: Json }
+      get_creator_channel_recommendations: {
+        Args: { _user_id: string; _window_days?: number }
+        Returns: Json
+      }
+      get_creator_publishing_analytics: {
+        Args: { _user_id: string; _window_days?: number }
+        Returns: Json
+      }
+      get_creator_publishing_funnel: {
+        Args: { _user_id: string; _window_days?: number }
+        Returns: Json
+      }
       get_effective_user_tier: { Args: { _user_id: string }; Returns: string }
       get_recommendation_analytics: {
         Args: { _window_days?: number }

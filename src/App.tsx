@@ -96,6 +96,7 @@ const PurchasedLibrary = lazy(() => import("./pages/PurchasedLibrary"));
 const CreatorEarnings = lazy(() => import("./pages/CreatorEarnings"));
 const PayoutProfileEditor = lazy(() => import("./pages/PayoutProfileEditor"));
 const CollectionPage = lazy(() => import("./pages/CollectionPage"));
+const CreatorIntelligence = lazy(() => import("./pages/CreatorIntelligence"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
@@ -246,6 +247,7 @@ const App = () => (
                   <Route path="/account/earnings" element={withRecovery('CreatorEarnings', <ProtectedRoute><CreatorEarnings /></ProtectedRoute>)} />
                   <Route path="/account/payouts" element={withRecovery('PayoutProfile', <ProtectedRoute><PayoutProfileEditor /></ProtectedRoute>)} />
                   <Route path="/collections/:owner/:slug" element={withRecovery('CollectionPage', <CollectionPage />)} />
+                  <Route path="/account/intelligence" element={withRecovery('CreatorIntelligence', <ProtectedRoute><CreatorIntelligence /></ProtectedRoute>)} />
                   
                   {/* 404 - eager loaded */}
                   <Route path="*" element={<NotFound />} />
