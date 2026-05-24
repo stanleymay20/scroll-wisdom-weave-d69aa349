@@ -185,6 +185,27 @@ export default function BookPublishSettings() {
       toast.error(e.message ?? "Could not queue bundle");
     } finally { setBundling(""); }
   }
+  async function publishGumroadDirect() {
+    if (!form.listing_id) { toast.error("Save the listing first"); return; }
+    setPublishingGumroad(true);
+    try {
+      const r = await publishToGumroad(form.listing_id);
+      if (r.idempotent) toast.info("Already published to Gumroad");
+      else toast.success("Published to Gumroad");
+      // Refresh ledger
+      const { data: ep } = await supabase.from("external_publications")
+        .select("id, platform, external_url, status, published_at")
+        .eq("book_id", bookId!).order("published_at", { ascending: false });
+      setPubs(ep ?? []);
+      if (r.edit_url) window.open(r.edit_url, "_blank", "noopener");
+    } catch (e: any) {
+      const m = String(e?.message ?? "");
+      if (m.includes("not_connected")) toast.error("Connect Gumroad first (Publishing Intelligence → Connect)");
+      else if (m.includes("expired")) toast.error("Gumroad connection expired — reconnect");
+      else toast.error(m || "Gumroad publish failed");
+    } finally { setPublishingGumroad(false); }
+  }
+
 
   // Publishing wizard checklist
   const checklist = [
