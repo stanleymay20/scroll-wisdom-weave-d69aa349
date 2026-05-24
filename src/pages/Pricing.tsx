@@ -168,6 +168,30 @@ export default function Pricing() {
     }
   };
 
+  const handleCreatorCheckout = async (creatorTier: CreatorTier) => {
+    if (!user) {
+      navigate("/auth", { state: { redirectTo: "/pricing#creator" } });
+      return;
+    }
+    const cfg = CREATOR_SUBSCRIPTION_TIERS[creatorTier];
+    setCheckoutLoading(`creator:${creatorTier}`);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-checkout", {
+        body: { priceId: cfg.price_id, tier: creatorTier },
+      });
+      if (error) throw error;
+      if (data?.url) window.open(data.url, "_blank");
+    } catch (e: any) {
+      toast({
+        title: "Checkout error",
+        description: e.message || "Unable to start Creator checkout. Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setCheckoutLoading(null);
+    }
+  };
+
   const handleManageSubscription = async () => {
     setPortalLoading(true);
     try {
