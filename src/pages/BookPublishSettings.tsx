@@ -365,6 +365,22 @@ export default function BookPublishSettings() {
               </Button>
             ))}
           </div>
+          <div className="mt-4 border-t border-border pt-4">
+            <p className="text-sm font-medium flex items-center gap-2"><Zap className="w-4 h-4" /> Direct publishing</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Auto-create the product on a connected platform. Connect accounts in{" "}
+              <Link to="/account/intelligence" className="text-primary hover:underline">Publishing Intelligence</Link>.
+            </p>
+            <Button
+              className="mt-3"
+              variant="secondary"
+              disabled={publishingGumroad || !form.listing_id}
+              onClick={publishGumroadDirect}
+            >
+              <Store className="w-4 h-4 mr-2" />
+              {publishingGumroad ? "Publishing…" : "Publish to Gumroad"}
+            </Button>
+          </div>
         </Card>
 
         {/* External publications ledger */}
