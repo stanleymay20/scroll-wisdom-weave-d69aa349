@@ -209,6 +209,18 @@ async function runJob(
       event_type: `${bundleType}_export_completed`,
       user_id: userId, metadata: { job_id: jobId, book_id: bookId, correlation_id: corr },
     });
+
+    // Phase 3.1 — in-app notification on completion
+    await sc.from("creator_notifications").insert({
+      user_id: userId,
+      kind: "publish_status",
+      title: `${bundleType.toUpperCase()} bundle is ready`,
+      body: "Your export bundle has been generated and is ready to download.",
+      link_url: "/account/exports",
+      resource_type: "export_job",
+      resource_id: jobId,
+      metadata: { book_id: bookId, bundle_type: bundleType },
+    });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
     await sc.from("export_jobs").update({
