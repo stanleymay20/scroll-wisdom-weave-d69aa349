@@ -118,6 +118,9 @@ export default function CreatorIntelligence() {
         </Card>
       </div>
 
+      <PlatformConnections />
+
+
       {/* Channel performance */}
       <Card>
         <CardHeader><CardTitle className="flex items-center gap-2">
