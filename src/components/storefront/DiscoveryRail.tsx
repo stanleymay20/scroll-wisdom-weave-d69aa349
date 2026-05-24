@@ -30,21 +30,25 @@ export function DiscoveryRail({ title, items, loading, emptyHint, source, onItem
   }, [items, source]);
 
   if (!loading && (!items || items.length === 0) && !emptyHint) return null;
+  const hint = emptyHint ?? "Nothing here yet — check back soon.";
   return (
     <section className="mb-10">
-      <h2 className="text-xl font-semibold mb-4">{title}</h2>
+      <h2 className="text-xl font-semibold mb-4 px-1">{title}</h2>
       {loading ? (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-          {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-56 w-full" />)}
+        <div className="flex sm:grid sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Skeleton key={i} className="h-56 w-[44vw] sm:w-full flex-shrink-0 snap-start" />
+          ))}
         </div>
       ) : !items || items.length === 0 ? (
-        <p className="text-sm text-muted-foreground">{emptyHint}</p>
+        <p className="text-sm text-muted-foreground px-1">{hint}</p>
       ) : (
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
+        <div className="flex sm:grid sm:grid-cols-3 lg:grid-cols-4 gap-3 sm:gap-4 overflow-x-auto sm:overflow-visible snap-x snap-mandatory scrollbar-hide -mx-4 px-4 sm:mx-0 sm:px-0">
           {items.map((l, idx) => (
             <Link
               key={l.id}
               to={`/store/${l.slug}`}
+              className="w-[44vw] sm:w-auto flex-shrink-0 snap-start"
               onClick={() => {
                 if (source) {
                   logRecommendationEvent({
