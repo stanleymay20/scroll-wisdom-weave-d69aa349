@@ -139,3 +139,6 @@ verify_jwt = false
 
 [functions.publish-to-shopify]
 verify_jwt = false
+
+[functions.get-entitlements]
+verify_jwt = false

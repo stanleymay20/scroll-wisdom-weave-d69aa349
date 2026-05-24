@@ -14,6 +14,8 @@ import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { Sparkles, Package, BookOpen, Heart, Store, ShoppingBag, FileText, ExternalLink, CheckCircle2, Zap } from "lucide-react";
 import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
 import { publishToGumroad, publishToShopify } from "@/lib/platformConnections";
+import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
+import { Lock } from "lucide-react";
 
 type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
 
@@ -47,6 +49,8 @@ export default function BookPublishSettings() {
   const [suggesting, setSuggesting] = useState(false);
   const [bundling, setBundling] = useState<"" | BundleKind>("");
   const [publishingGumroad, setPublishingGumroad] = useState(false);
+  const { entitlements } = useCreatorEntitlements();
+  const canPublishExternal = entitlements.can_publish_external;
   const [publishingShopify, setPublishingShopify] = useState(false);
   const [pubs, setPubs] = useState<any[]>([]);
   const [newPub, setNewPub] = useState<{ platform: BundleKind | "other"; url: string }>({ platform: "kdp", url: "" });
@@ -372,18 +376,23 @@ export default function BookPublishSettings() {
             <Link to="/account/exports" className="text-primary hover:underline">Exports</Link>. KDP is never auto-published.
           </p>
           <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-2">
-            {BUNDLE_BUTTONS.map(({ kind, label, icon: Icon, variant }) => (
-              <Button
-                key={kind}
-                variant={variant}
-                onClick={() => enqueue(kind)}
-                disabled={!!bundling}
-                className="justify-start"
-              >
-                <Icon className="w-4 h-4 mr-2" />
-                {bundling === kind ? "Queuing…" : label}
-              </Button>
-            ))}
+            {BUNDLE_BUTTONS.map(({ kind, label, icon: Icon, variant }) => {
+              const isExternal = kind !== "kdp";
+              const locked = isExternal && !canPublishExternal;
+              return (
+                <Button
+                  key={kind}
+                  variant={variant}
+                  onClick={() => locked ? navigate("/pricing#creator") : enqueue(kind)}
+                  disabled={!!bundling}
+                  className="justify-start"
+                  title={locked ? "Creator tier required" : undefined}
+                >
+                  {locked ? <Lock className="w-4 h-4 mr-2" /> : <Icon className="w-4 h-4 mr-2" />}
+                  {bundling === kind ? "Queuing…" : locked ? `${label} (Pro)` : label}
+                </Button>
+              );
+            })}
           </div>
           <div className="mt-4 border-t border-border pt-4">
             <p className="text-sm font-medium flex items-center gap-2"><Zap className="w-4 h-4" /> Direct publishing</p>
@@ -391,10 +400,21 @@ export default function BookPublishSettings() {
               Auto-create the product on a connected platform. Connect accounts in{" "}
               <Link to="/account/intelligence" className="text-primary hover:underline">Publishing Intelligence</Link>.
             </p>
+            {!canPublishExternal && (
+              <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex items-center justify-between gap-2">
+                <span className="text-foreground">
+                  <Lock className="w-3.5 h-3.5 inline mr-1.5" />
+                  External publishing requires <strong>Creator</strong> (€19/mo) or higher.
+                </span>
+                <Button size="sm" variant="default" onClick={() => navigate("/pricing#creator")}>
+                  Upgrade
+                </Button>
+              </div>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 variant="secondary"
-                disabled={publishingGumroad || !form.listing_id}
+                disabled={publishingGumroad || !form.listing_id || !canPublishExternal}
                 onClick={publishGumroadDirect}
               >
                 <Store className="w-4 h-4 mr-2" />
@@ -402,7 +422,7 @@ export default function BookPublishSettings() {
               </Button>
               <Button
                 variant="secondary"
-                disabled={publishingShopify || !form.listing_id}
+                disabled={publishingShopify || !form.listing_id || !canPublishExternal}
                 onClick={publishShopifyDirect}
               >
                 <ShoppingBag className="w-4 h-4 mr-2" />
@@ -411,6 +431,7 @@ export default function BookPublishSettings() {
             </div>
           </div>
         </Card>
+
 
         {/* External publications ledger */}
         <Card className="mt-6 p-6">

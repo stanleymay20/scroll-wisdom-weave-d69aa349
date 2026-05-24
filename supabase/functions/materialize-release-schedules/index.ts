@@ -34,6 +34,33 @@ Deno.serve(async (req) => {
     for (const item of due ?? []) {
       processed++;
       try {
+        // Phase 4.0 — verify the schedule owner still has entitlement.
+        // Resolve owner via release_schedules -> books.user_id.
+        const { data: sched } = await admin
+          .from("release_schedules")
+          .select("book_id, books:book_id(user_id)")
+          .eq("id", item.schedule_id)
+          .maybeSingle();
+        const ownerId = (sched as any)?.books?.user_id;
+        if (ownerId) {
+          const { data: ent } = await admin.rpc("get_user_entitlements", { _user_id: ownerId });
+          if (!ent?.can_schedule_releases) {
+            await admin.from("release_schedule_items")
+              .update({ status: "failed", error_message: "entitlement_revoked" })
+              .eq("id", item.id)
+              .eq("status", "scheduled");
+            await admin.from("publishing_audit_log").insert({
+              user_id: ownerId, platform: null,
+              event_type: "publish_blocked_by_tier", severity: "warning",
+              message: "Scheduled release skipped: owner lost can_schedule_releases",
+              metadata: { release_schedule_item_id: item.id, current_tier: ent?.tier ?? "free" },
+            });
+            failed++;
+            results.push({ id: item.id, skipped: "entitlement_revoked" });
+            continue;
+          }
+        }
+
         // Mark released first (idempotent: only flip from scheduled)
         const { data: upd, error: updErr } = await admin
           .from("release_schedule_items")

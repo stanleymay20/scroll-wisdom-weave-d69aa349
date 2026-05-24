@@ -16,6 +16,7 @@
 //   7. Upsert external_publications row + telemetry events.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decryptToken } from "../_shared/crypto-tokens.ts";
+import { requireCreatorCapability } from "../_shared/entitlements.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -85,6 +86,12 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (bErr || !book) return jsonResp(404, { error: "book_not_found" });
     if (book.user_id !== caller) return jsonResp(403, { error: "not_owner" });
+
+    // Phase 4.0 — gate on Creator entitlement
+    const gate = await requireCreatorCapability(admin, caller, "can_publish_external", {
+      auditMetadata: { book_id: book.id, listing_id: listing.id, platform: "gumroad" },
+    });
+    if (gate.blocked) return gate.blocked;
 
     // Connection
     const { data: conn, error: cErr } = await admin

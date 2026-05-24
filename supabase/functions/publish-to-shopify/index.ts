@@ -16,6 +16,7 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { decryptToken } from "../_shared/crypto-tokens.ts";
 import { logPublishEvent } from "../_shared/publishing-audit.ts";
+import { requireCreatorCapability } from "../_shared/entitlements.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -80,6 +81,12 @@ Deno.serve(async (req) => {
       .eq("id", listing.book_id).maybeSingle();
     if (!book) return jsonResp(404, { error: "book_not_found" });
     if (book.user_id !== caller) return jsonResp(403, { error: "not_owner" });
+
+    // Phase 4.0 — gate on Creator entitlement
+    const gate = await requireCreatorCapability(admin, caller, "can_publish_external", {
+      auditMetadata: { book_id: book.id, listing_id: listing.id, platform: "shopify" },
+    });
+    if (gate.blocked) return gate.blocked;
 
     // Connection
     const { data: conn } = await admin

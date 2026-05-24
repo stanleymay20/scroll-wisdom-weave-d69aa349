@@ -1655,6 +1655,8 @@ export type Database = {
           payout_status: string
           platform_fee_cents: number
           purchase_id: string
+          rev_share_surcharge_bps: number
+          rev_share_surcharge_cents: number
           risk_score: number | null
         }
         Insert: {
@@ -1683,6 +1685,8 @@ export type Database = {
           payout_status?: string
           platform_fee_cents: number
           purchase_id: string
+          rev_share_surcharge_bps?: number
+          rev_share_surcharge_cents?: number
           risk_score?: number | null
         }
         Update: {
@@ -1711,7 +1715,63 @@ export type Database = {
           payout_status?: string
           platform_fee_cents?: number
           purchase_id?: string
+          rev_share_surcharge_bps?: number
+          rev_share_surcharge_cents?: number
           risk_score?: number | null
+        }
+        Relationships: []
+      }
+      creator_entitlements: {
+        Row: {
+          can_publish_external: boolean
+          can_schedule_releases: boolean
+          can_use_collections_unlimited: boolean
+          expires_at: string | null
+          granted_at: string
+          granted_by: string | null
+          monthly_generation_bonus: number
+          notes: string | null
+          priority_generation: boolean
+          rev_share_surcharge_bps: number
+          source: string
+          stripe_subscription_id: string | null
+          tier: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          can_publish_external?: boolean
+          can_schedule_releases?: boolean
+          can_use_collections_unlimited?: boolean
+          expires_at?: string | null
+          granted_at?: string
+          granted_by?: string | null
+          monthly_generation_bonus?: number
+          notes?: string | null
+          priority_generation?: boolean
+          rev_share_surcharge_bps?: number
+          source?: string
+          stripe_subscription_id?: string | null
+          tier?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          can_publish_external?: boolean
+          can_schedule_releases?: boolean
+          can_use_collections_unlimited?: boolean
+          expires_at?: string | null
+          granted_at?: string
+          granted_by?: string | null
+          monthly_generation_bonus?: number
+          notes?: string | null
+          priority_generation?: boolean
+          rev_share_surcharge_bps?: number
+          source?: string
+          stripe_subscription_id?: string | null
+          tier?: string
+          updated_at?: string
+          user_id?: string
         }
         Relationships: []
       }
@@ -4322,6 +4382,15 @@ export type Database = {
       }
     }
     Functions: {
+      admin_set_creator_entitlement: {
+        Args: {
+          _expires_at?: string
+          _notes?: string
+          _tier: string
+          _user_id: string
+        }
+        Returns: Json
+      }
       admin_set_user_risk_override: {
         Args: { _notes?: string; _override_tier: string; _user_id: string }
         Returns: Json
@@ -4378,6 +4447,7 @@ export type Database = {
         Returns: Json
       }
       get_effective_user_tier: { Args: { _user_id: string }; Returns: string }
+      get_my_entitlements: { Args: never; Returns: Json }
       get_my_platform_connections: {
         Args: never
         Returns: {
@@ -4412,6 +4482,7 @@ export type Database = {
         Args: { _window_days?: number }
         Returns: Json
       }
+      get_user_entitlements: { Args: { _user_id: string }; Returns: Json }
       get_user_recommendation_suppression: {
         Args: { _user_id: string; _window_days?: number }
         Returns: {
@@ -4422,7 +4493,15 @@ export type Database = {
           source: string
         }[]
       }
+      get_user_rev_share_surcharge_bps: {
+        Args: { _user_id: string }
+        Returns: number
+      }
       get_user_usage_snapshot: { Args: { _user_id: string }; Returns: Json }
+      has_creator_capability: {
+        Args: { _capability: string; _user_id: string }
+        Returns: boolean
+      }
       has_role: {
         Args: {
           _role: Database["public"]["Enums"]["app_role"]
@@ -4470,6 +4549,15 @@ export type Database = {
       set_platform_fee: { Args: { _bps: number }; Returns: Json }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      sync_creator_entitlement_from_stripe: {
+        Args: {
+          _expires_at: string
+          _stripe_subscription_id: string
+          _tier: string
+          _user_id: string
+        }
+        Returns: Json
+      }
       user_owns_book_purchase: {
         Args: { _book_id: string; _user_id: string }
         Returns: boolean
