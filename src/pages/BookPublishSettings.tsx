@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SEO } from "@/components/SEO";
 import { toast } from "sonner";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
-import { Sparkles, Package, BookOpen, Heart, Store, FileText, ExternalLink, CheckCircle2 } from "lucide-react";
+import { Sparkles, Package, BookOpen, Heart, Store, FileText, ExternalLink, CheckCircle2, Zap } from "lucide-react";
 import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
+import { publishToGumroad } from "@/lib/platformConnections";
 
 type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
 
@@ -45,6 +46,7 @@ export default function BookPublishSettings() {
   const [saving, setSaving] = useState(false);
   const [suggesting, setSuggesting] = useState(false);
   const [bundling, setBundling] = useState<"" | BundleKind>("");
+  const [publishingGumroad, setPublishingGumroad] = useState(false);
   const [pubs, setPubs] = useState<any[]>([]);
   const [newPub, setNewPub] = useState<{ platform: BundleKind | "other"; url: string }>({ platform: "kdp", url: "" });
 
@@ -183,6 +185,27 @@ export default function BookPublishSettings() {
       toast.error(e.message ?? "Could not queue bundle");
     } finally { setBundling(""); }
   }
+  async function publishGumroadDirect() {
+    if (!form.listing_id) { toast.error("Save the listing first"); return; }
+    setPublishingGumroad(true);
+    try {
+      const r = await publishToGumroad(form.listing_id);
+      if (r.idempotent) toast.info("Already published to Gumroad");
+      else toast.success("Published to Gumroad");
+      // Refresh ledger
+      const { data: ep } = await supabase.from("external_publications")
+        .select("id, platform, external_url, status, published_at")
+        .eq("book_id", bookId!).order("published_at", { ascending: false });
+      setPubs(ep ?? []);
+      if (r.edit_url) window.open(r.edit_url, "_blank", "noopener");
+    } catch (e: any) {
+      const m = String(e?.message ?? "");
+      if (m.includes("not_connected")) toast.error("Connect Gumroad first (Publishing Intelligence → Connect)");
+      else if (m.includes("expired")) toast.error("Gumroad connection expired — reconnect");
+      else toast.error(m || "Gumroad publish failed");
+    } finally { setPublishingGumroad(false); }
+  }
+
 
   // Publishing wizard checklist
   const checklist = [
@@ -341,6 +364,22 @@ export default function BookPublishSettings() {
                 {bundling === kind ? "Queuing…" : label}
               </Button>
             ))}
+          </div>
+          <div className="mt-4 border-t border-border pt-4">
+            <p className="text-sm font-medium flex items-center gap-2"><Zap className="w-4 h-4" /> Direct publishing</p>
+            <p className="text-xs text-muted-foreground mt-1">
+              Auto-create the product on a connected platform. Connect accounts in{" "}
+              <Link to="/account/intelligence" className="text-primary hover:underline">Publishing Intelligence</Link>.
+            </p>
+            <Button
+              className="mt-3"
+              variant="secondary"
+              disabled={publishingGumroad || !form.listing_id}
+              onClick={publishGumroadDirect}
+            >
+              <Store className="w-4 h-4 mr-2" />
+              {publishingGumroad ? "Publishing…" : "Publish to Gumroad"}
+            </Button>
           </div>
         </Card>
 
