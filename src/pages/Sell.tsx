@@ -113,7 +113,7 @@ export default function Sell() {
         next.profile.slug = slugify(name);
       }
 
-      setDraft(next);
+      // (setDraft called after bookId preselect below)
 
       // Books for publish step
       const { data: bs } = await supabase.from("books")
