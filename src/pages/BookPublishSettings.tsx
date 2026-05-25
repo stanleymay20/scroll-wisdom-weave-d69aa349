@@ -244,36 +244,40 @@ export default function BookPublishSettings() {
   if (loading) return <div className="container mx-auto max-w-3xl p-8">Loading…</div>;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       <SEO title={`Publish — ${book?.title}`} description="Manage storefront listing." noindex />
-      <div className="container mx-auto max-w-3xl px-4 py-10">
-        <Link to={`/book/${bookId}`} className="text-sm text-primary hover:underline">← Back to book</Link>
-        <h1 className="text-3xl font-bold mt-3">Publish: {book?.title}</h1>
+      <div className="container mx-auto max-w-3xl px-4 py-6 sm:py-10 pb-32">
+        <Link to={`/book/${bookId}`} className="inline-flex items-center min-h-11 text-sm text-primary hover:underline">
+          ← Back to book
+        </Link>
+        <h1 className="text-2xl sm:text-3xl font-bold mt-2 break-words">Publish: {book?.title}</h1>
 
-        <Card className="mt-6 p-6 space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
+        <Card className="mt-6 p-4 sm:p-6 space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <Label className="text-base">Public on storefront</Label>
-              <p className="text-sm text-muted-foreground">Make this book visible at /store/{form.slug}</p>
+              <p className="text-sm text-muted-foreground mt-0.5 break-all">
+                Make this book visible at /store/{form.slug}
+              </p>
             </div>
-            <Switch checked={form.is_public} onCheckedChange={(v) => setForm({ ...form, is_public: v })} />
+            <Switch checked={form.is_public} onCheckedChange={(v) => setForm({ ...form, is_public: v })} aria-label="Make public on storefront" />
           </div>
 
           <div>
-            <Label>Slug</Label>
-            <Input className="text-foreground caret-foreground" value={form.slug} onChange={(e) => setForm({ ...form, slug: slugify(e.target.value) })} />
+            <Label htmlFor="pub-slug">Slug</Label>
+            <Input id="pub-slug" className="text-foreground caret-foreground" value={form.slug} onChange={(e) => setForm({ ...form, slug: slugify(e.target.value) })} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label>Price (USD)</Label>
-              <Input type="number" min={0} className="text-foreground caret-foreground"
+              <Label htmlFor="pub-price">Price (USD)</Label>
+              <Input id="pub-price" type="number" inputMode="decimal" min={0} className="text-foreground caret-foreground"
                 value={(form.price_cents / 100).toString()}
                 onChange={(e) => setForm({ ...form, price_cents: Math.round(parseFloat(e.target.value || "0") * 100) })} />
             </div>
             <div>
-              <Label>Sample chapters</Label>
-              <Input type="number" min={0} className="text-foreground caret-foreground"
+              <Label htmlFor="pub-samples">Sample chapters</Label>
+              <Input id="pub-samples" type="number" inputMode="numeric" min={0} className="text-foreground caret-foreground"
                 value={form.sample_chapters}
                 onChange={(e) => setForm({ ...form, sample_chapters: Number(e.target.value) })} />
             </div>
