@@ -64,6 +64,7 @@ export function Navbar() {
             <Link to="/library" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.library')}</Link>
             <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
             <Link to="/upload" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Upload</Link>
+            <Link to="/sell" className="text-sm text-primary hover:text-primary/80 transition-colors font-semibold">Sell</Link>
             <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</Link>
           </div>
 
@@ -144,6 +145,9 @@ export function Navbar() {
               </Link>
               <Link to="/upload" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                 Upload
+              </Link>
+              <Link to="/sell" className="flex items-center gap-3 py-3 px-3 text-primary font-semibold rounded-lg hover:bg-primary/5 transition-colors" onClick={() => setIsMenuOpen(false)}>
+                Start Selling
               </Link>
               <Link to="/pricing" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                 Pricing

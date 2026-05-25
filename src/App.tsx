@@ -96,6 +96,7 @@ const FullBookReader = lazy(() => import("./pages/FullBookReader"));
 const PurchasedLibrary = lazy(() => import("./pages/PurchasedLibrary"));
 const CreatorEarnings = lazy(() => import("./pages/CreatorEarnings"));
 const PayoutProfileEditor = lazy(() => import("./pages/PayoutProfileEditor"));
+const Sell = lazy(() => import("./pages/Sell"));
 const CollectionPage = lazy(() => import("./pages/CollectionPage"));
 const CreatorIntelligence = lazy(() => import("./pages/CreatorIntelligence"));
 
@@ -196,6 +197,7 @@ const App = () => (
                   <Route path="/terms" element={<TermsOfService />} />
                   <Route path="/moderation" element={<AdminRoute><ModerationDashboard /></AdminRoute>} />
                   <Route path="/pricing" element={<Pricing />} />
+                  <Route path="/sell" element={withRecovery('Sell', <ProtectedRoute><Sell /></ProtectedRoute>)} />
                   <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
                   <Route path="/install" element={<Install />} />
                   <Route path="/pwa-test" element={<PWATest />} />
