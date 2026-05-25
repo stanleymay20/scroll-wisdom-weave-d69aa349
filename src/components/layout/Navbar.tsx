@@ -146,6 +146,9 @@ export function Navbar() {
               <Link to="/upload" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                 Upload
               </Link>
+              <Link to="/sell" className="flex items-center gap-3 py-3 px-3 text-primary font-semibold rounded-lg hover:bg-primary/5 transition-colors" onClick={() => setIsMenuOpen(false)}>
+                Start Selling
+              </Link>
               <Link to="/pricing" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
                 Pricing
               </Link>
