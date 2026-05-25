@@ -109,7 +109,7 @@ export function AdminEntitlementsTab() {
 
   const overrideTier = async (userId: string, tier: string) => {
     const reason = window.prompt(`Reason for setting tier to ${tier}?`) || "Admin override";
-    const { error } = await supabase.rpc("admin_override_creator_entitlement", {
+    const { error } = await (supabase as any).rpc("admin_override_creator_entitlement", {
       _target_user_id: userId,
       _new_tier: tier,
       _reason: reason,
