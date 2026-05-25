@@ -113,13 +113,30 @@ export default function Sell() {
         next.profile.slug = slugify(name);
       }
 
-      setDraft(next);
+      // (setDraft called after bookId preselect below)
 
       // Books for publish step
       const { data: bs } = await supabase.from("books")
         .select("id, title, cover_image_url, category")
         .eq("user_id", user.id).order("created_at", { ascending: false }).limit(50);
       setBooks(bs ?? []);
+
+      // Preselect from ?bookId= if user owns it
+      const urlBookId = params.get("bookId");
+      if (urlBookId && (bs ?? []).some((b) => b.id === urlBookId)) {
+        const b = (bs ?? []).find((x) => x.id === urlBookId)!;
+        next = {
+          ...next,
+          publish: {
+            ...next.publish,
+            book_id: urlBookId,
+            slug: next.publish.slug || slugify(b.title),
+          },
+        };
+      }
+
+      setDraft(next);
+
 
       // Payout profile (best-effort)
       try {

@@ -16,6 +16,8 @@ import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSect
 import { publishToGumroad, publishToShopify } from "@/lib/platformConnections";
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { Lock } from "lucide-react";
+import { ExportQualityPanel } from "@/components/publish/ExportQualityPanel";
+import type { ExportQualityReport } from "@/lib/exportQuality";
 
 type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
 
@@ -54,6 +56,7 @@ export default function BookPublishSettings() {
   const [publishingShopify, setPublishingShopify] = useState(false);
   const [pubs, setPubs] = useState<any[]>([]);
   const [newPub, setNewPub] = useState<{ platform: BundleKind | "other"; url: string }>({ platform: "kdp", url: "" });
+  const [qualityReport, setQualityReport] = useState<ExportQualityReport | null>(null);
 
   const [form, setForm] = useState({
     listing_id: "",
@@ -123,6 +126,12 @@ export default function BookPublishSettings() {
 
   async function save() {
     if (!bookId) return;
+    // Hard gate: never let a blocked book go public for paid distribution.
+    const isPaid = (Number(form.price_cents) || 0) > 0;
+    if (form.is_public && isPaid && qualityReport?.status === "blocked") {
+      toast.error("Resolve export-quality blockers before publishing a paid book.");
+      return;
+    }
     setSaving(true);
     try {
       const payload: any = {
@@ -351,8 +360,26 @@ export default function BookPublishSettings() {
             <Input className="text-foreground caret-foreground" value={form.cover_override_url} onChange={(e) => setForm({ ...form, cover_override_url: e.target.value })} />
           </div>
 
-          <Button onClick={save} disabled={saving} className="w-full">{saving ? "Saving…" : "Save listing"}</Button>
+          <Button
+            onClick={save}
+            disabled={saving || (form.is_public && (Number(form.price_cents) || 0) > 0 && qualityReport?.status === "blocked")}
+            className="w-full"
+          >
+            {saving ? "Saving…" : "Save listing"}
+          </Button>
         </Card>
+
+        {/* Export quality + preview — runs the same canonical pipeline as the reader */}
+        <div className="mt-6">
+          <ExportQualityPanel
+            bookId={bookId!}
+            listingId={form.listing_id || null}
+            hasCover={!!(book?.cover_image_url || form.cover_override_url)}
+            bookType={book?.book_type ?? null}
+            onStatusChange={setQualityReport}
+          />
+        </div>
+
 
         {/* Publishing Wizard checklist */}
         <Card className="mt-6 p-4 sm:p-6">

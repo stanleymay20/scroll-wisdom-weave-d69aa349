@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Trash2, Archive, Network } from "lucide-react";
+import { Loader2, Trash2, Archive, Network, DollarSign, ArrowRight } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
@@ -76,6 +76,22 @@ export function BookOwnerControls({
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Sell this book — fast path into the creator onboarding wizard */}
+      <div className={`flex items-center gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5 ${isMobile ? "" : "mt-6"}`}>
+        <DollarSign className="h-5 w-5 text-primary shrink-0" aria-hidden />
+        <div className="flex-1 min-w-0">
+          <div className="font-medium text-foreground">Sell this book</div>
+          <p className="text-xs text-muted-foreground mt-0.5">
+            Publish "{book.title}" to your storefront — no need to generate again.
+          </p>
+        </div>
+        <Button asChild size="sm">
+          <Link to={`/sell?bookId=${book.id}&step=3`}>
+            Sell <ArrowRight className="h-3.5 w-3.5 ml-1" />
+          </Link>
+        </Button>
+      </div>
+
       {/* Chapter Management */}
       <ChapterManagement
         bookId={book.id}
@@ -84,7 +100,7 @@ export function BookOwnerControls({
         onChaptersChange={onChaptersChange}
         onBookUpdate={onBookUpdate}
         preface={book.description}
-        className={isMobile ? "" : "mt-6"}
+        className={isMobile ? "mt-4" : "mt-6"}
       />
 
       {/* Publish Toggle */}
