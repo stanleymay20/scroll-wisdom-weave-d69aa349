@@ -360,8 +360,26 @@ export default function BookPublishSettings() {
             <Input className="text-foreground caret-foreground" value={form.cover_override_url} onChange={(e) => setForm({ ...form, cover_override_url: e.target.value })} />
           </div>
 
-          <Button onClick={save} disabled={saving} className="w-full">{saving ? "Saving…" : "Save listing"}</Button>
+          <Button
+            onClick={save}
+            disabled={saving || (form.is_public && (Number(form.price_cents) || 0) > 0 && qualityReport?.status === "blocked")}
+            className="w-full"
+          >
+            {saving ? "Saving…" : "Save listing"}
+          </Button>
         </Card>
+
+        {/* Export quality + preview — runs the same canonical pipeline as the reader */}
+        <div className="mt-6">
+          <ExportQualityPanel
+            bookId={bookId!}
+            listingId={form.listing_id || null}
+            hasCover={!!(book?.cover_image_url || form.cover_override_url)}
+            bookType={book?.book_type ?? null}
+            onStatusChange={setQualityReport}
+          />
+        </div>
+
 
         {/* Publishing Wizard checklist */}
         <Card className="mt-6 p-4 sm:p-6">
