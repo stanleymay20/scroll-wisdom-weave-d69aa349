@@ -142,69 +142,68 @@ export function ReleaseScheduleSection({ bookId, ownerUserId }: Props) {
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div>
             <Label className="text-xs">Cadence</Label>
-            <select
-              value={cadence}
-              onChange={(e) => setCadence(e.target.value as Cadence)}
-              className="w-full mt-1 h-9 rounded-md border bg-background px-2 text-sm text-foreground"
-            >
-              <option value="daily">Daily</option>
-              <option value="weekly">Weekly</option>
-              <option value="biweekly">Biweekly</option>
-              <option value="monthly">Monthly</option>
-              <option value="manual">Manual</option>
-            </select>
+            <Select value={cadence} onValueChange={(v) => setCadence(v as Cadence)}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="daily">Daily</SelectItem>
+                <SelectItem value="weekly">Weekly</SelectItem>
+                <SelectItem value="biweekly">Biweekly</SelectItem>
+                <SelectItem value="monthly">Monthly</SelectItem>
+                <SelectItem value="manual">Manual</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label className="text-xs">Channel</Label>
-            <select
-              value={channel}
-              onChange={(e) => setChannel(e.target.value as Channel)}
-              className="w-full mt-1 h-9 rounded-md border bg-background px-2 text-sm text-foreground"
-            >
-              <option value="platform">Platform</option>
-              <option value="substack">Substack</option>
-              <option value="patreon">Patreon</option>
-              <option value="email">Email</option>
-              <option value="rss">RSS</option>
-            </select>
+            <Select value={channel} onValueChange={(v) => setChannel(v as Channel)}>
+              <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="platform">Platform</SelectItem>
+                <SelectItem value="substack">Substack</SelectItem>
+                <SelectItem value="patreon">Patreon</SelectItem>
+                <SelectItem value="email">Email</SelectItem>
+                <SelectItem value="rss">RSS</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
           <div>
-            <Label className="text-xs">First release</Label>
+            <Label className="text-xs" htmlFor="release-start">First release</Label>
             <Input
+              id="release-start"
               type="datetime-local"
               value={startAt}
               onChange={(e) => setStartAt(e.target.value)}
-              className="mt-1 text-foreground"
+              className="mt-1 text-foreground caret-foreground"
             />
           </div>
         </div>
 
-        <div className="flex flex-wrap gap-2">
-          <Button onClick={saveOrCreate} disabled={busy || loading}>
+        <div className="flex flex-wrap gap-2 items-center">
+          <Button onClick={saveOrCreate} disabled={busy || loading} className="min-h-10">
             {schedule ? "Save schedule" : "Create schedule"}
           </Button>
           {schedule && (
             <>
-              <Button variant="secondary" onClick={regenerate} disabled={busy || cadence === "manual"}>
+              <Button variant="secondary" onClick={regenerate} disabled={busy || cadence === "manual"} className="min-h-10">
                 Regenerate releases
               </Button>
-              <Button variant="ghost" onClick={remove} disabled={busy} className="text-destructive">
-                <Trash2 className="w-3 h-3 mr-1" /> Remove
+              <Button variant="ghost" onClick={remove} disabled={busy} className="text-destructive min-h-10">
+                <Trash2 className="w-3 h-3 mr-1" aria-hidden="true" /> Remove
               </Button>
-              <Badge variant="outline" className="ml-auto">{schedule.status}</Badge>
+              <Badge variant="outline" className="ml-auto capitalize">{schedule.status}</Badge>
             </>
           )}
         </div>
 
         {!!items.length && (
-          <div className="border rounded-md max-h-64 overflow-y-auto text-sm">
+          <div className="border rounded-md max-h-64 overflow-y-auto text-sm divide-y divide-border">
             {items.map((it) => (
-              <div key={it.id} className="flex items-center justify-between px-3 py-2 border-b last:border-0">
-                <span>Ch. {it.chapter_number ?? "?"}</span>
-                <span className="text-muted-foreground tabular-nums">
+              <div key={it.id} className="grid grid-cols-[auto_1fr_auto] items-center gap-3 px-3 py-2">
+                <span className="font-medium tabular-nums">Ch. {it.chapter_number ?? "?"}</span>
+                <span className="text-muted-foreground text-xs tabular-nums truncate">
                   {new Date(it.release_at).toLocaleString()}
                 </span>
-                <Badge variant={it.status === "released" ? "default" : "secondary"}>{it.status}</Badge>
+                <Badge variant={it.status === "released" ? "default" : "secondary"} className="capitalize">{it.status}</Badge>
               </div>
             ))}
           </div>
