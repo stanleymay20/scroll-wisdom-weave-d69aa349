@@ -26,35 +26,37 @@ function MobileHeaderComponent() {
     <header 
       className="fixed top-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border/20"
       style={{ paddingTop: "env(safe-area-inset-top)" }}
+      role="banner"
     >
       <div className="flex items-center justify-between h-14 px-4">
-        {/* Logo - static, no computation */}
-        <Link to="/" className="flex items-center">
+        {/* Logo */}
+        <Link to="/" className="flex items-center min-h-11" aria-label="ScrollLibrary home">
           <img 
             src={logo} 
-            alt="ScrollLibrary" 
+            alt="" 
             className="h-8 w-auto" 
             loading="eager"
           />
+          <span className="sr-only">ScrollLibrary</span>
         </Link>
 
-        {/* Actions - static buttons, no data */}
+        {/* Actions */}
         <div className="flex items-center gap-1">
           <Button
             variant="ghost"
             size="icon"
-            className="h-10 w-10 text-muted-foreground active:text-foreground"
+            className="h-11 w-11 text-muted-foreground active:text-foreground"
             onClick={goToExplore}
-            aria-label="Search"
+            aria-label="Search and explore"
           >
             <Search className="h-5 w-5" />
           </Button>
           <Button
             variant="ghost"
             size="icon"
-            className="h-10 w-10 text-muted-foreground active:text-foreground"
+            className="h-11 w-11 text-muted-foreground active:text-foreground"
             onClick={goToProfile}
-            aria-label="Profile"
+            aria-label="Profile and settings"
           >
             <User className="h-5 w-5" />
           </Button>
