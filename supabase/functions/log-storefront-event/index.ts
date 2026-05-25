@@ -9,6 +9,7 @@ const ALLOWED_EVENTS = [
   "checkout_started", "checkout_completed", "checkout_failed", "full_book_unlocked",
   "earnings_view", "payout_profile_view", "payout_profile_update",
   "admin_finance_view", "platform_fee_updated",
+  "sell_onboarding_started", "sell_payout_connected", "sell_first_book_published",
 ] as const;
 
 const Body = z.object({
