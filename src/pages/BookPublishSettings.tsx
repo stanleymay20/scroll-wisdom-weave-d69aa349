@@ -56,6 +56,7 @@ export default function BookPublishSettings() {
   const [publishingShopify, setPublishingShopify] = useState(false);
   const [pubs, setPubs] = useState<any[]>([]);
   const [newPub, setNewPub] = useState<{ platform: BundleKind | "other"; url: string }>({ platform: "kdp", url: "" });
+  const [qualityReport, setQualityReport] = useState<ExportQualityReport | null>(null);
 
   const [form, setForm] = useState({
     listing_id: "",
