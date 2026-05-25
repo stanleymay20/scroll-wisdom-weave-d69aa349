@@ -459,7 +459,7 @@ export default function BookPublishSettings() {
 
 
         {/* External publications ledger */}
-        <Card className="mt-6 p-6">
+        <Card className="mt-6 p-4 sm:p-6">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <ExternalLink className="w-5 h-5" /> External publications
           </h2>
@@ -470,23 +470,23 @@ export default function BookPublishSettings() {
           {pubs.length > 0 && (
             <ul className="mt-4 space-y-2">
               {pubs.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm">
+                <li key={p.id} className="flex items-start justify-between gap-2 rounded-md border border-border p-3 text-sm">
                   <div className="min-w-0 flex-1">
                     <div className="font-medium capitalize">{p.platform}</div>
                     {p.external_url && (
                       <a href={p.external_url} target="_blank" rel="noreferrer noopener"
-                         className="text-xs text-primary hover:underline truncate block">
+                         className="text-xs text-primary hover:underline truncate block mt-0.5">
                         {p.external_url}
                       </a>
                     )}
                   </div>
-                  <span className="text-xs text-muted-foreground capitalize shrink-0">{p.status}</span>
+                  <span className="text-xs text-muted-foreground capitalize shrink-0 mt-0.5">{p.status}</span>
                 </li>
               ))}
             </ul>
           )}
 
-          <div className="mt-4 grid grid-cols-[140px_1fr_auto] gap-2 items-end">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-[140px_1fr_auto] gap-2 sm:items-end">
             <div>
               <Label className="text-xs">Platform</Label>
               <Select value={newPub.platform} onValueChange={(v) => setNewPub({ ...newPub, platform: v as any })}>
@@ -502,15 +502,18 @@ export default function BookPublishSettings() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">URL</Label>
+              <Label className="text-xs" htmlFor="pub-url">URL</Label>
               <Input
+                id="pub-url"
+                type="url"
+                inputMode="url"
                 className="text-foreground caret-foreground"
                 placeholder="https://…"
                 value={newPub.url}
                 onChange={(e) => setNewPub({ ...newPub, url: e.target.value })}
               />
             </div>
-            <Button onClick={recordPublication} disabled={!newPub.url.trim()}>Record</Button>
+            <Button onClick={recordPublication} disabled={!newPub.url.trim()} className="min-h-11 sm:w-auto">Record</Button>
           </div>
         </Card>
 
