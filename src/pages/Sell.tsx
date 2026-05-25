@@ -128,7 +128,7 @@ export default function Sell() {
       } catch { /* ignore */ }
 
       setLoading(false);
-      void trackStorefrontEvent(null, "sell_onboarding_started", { step: next.step });
+      void trackStorefrontEvent(null, "sell_onboarding_started" as any, { step: next.step });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -186,7 +186,7 @@ export default function Sell() {
       });
       if (error) throw error;
       setPayoutProfile((data as any).profile);
-      void trackStorefrontEvent(null, "sell_payout_connected");
+      void trackStorefrontEvent(null, "sell_payout_connected" as any);
       setStep(3);
     } catch (e: any) {
       toast.error(e.message ?? "Could not save payout");
@@ -222,7 +222,7 @@ export default function Sell() {
         if (error) throw error;
       }
       setPublishedListing({ slug });
-      void trackStorefrontEvent(null, "sell_first_book_published", { book_id: draft.publish.book_id });
+      void trackStorefrontEvent(null, "sell_first_book_published" as any, { book_id: draft.publish.book_id });
       setStep(4);
     } catch (e: any) {
       toast.error(e.message ?? "Could not publish");
