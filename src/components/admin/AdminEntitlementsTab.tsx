@@ -84,14 +84,6 @@ export function AdminEntitlementsTab() {
       }),
     ]);
 
-    if (overviewRes.error) {
-      toast.error("Failed loading overview");
-    }
-
-    if (rowsRes.error) {
-      toast.error(rowsRes.error.message || "Failed loading entitlements");
-    }
-
     setOverview((overviewRes.data as OverviewRow) || null);
     setRows((rowsRes.data as CreatorEntitlementRow[]) || []);
 
@@ -106,14 +98,9 @@ export function AdminEntitlementsTab() {
   const totalCount = useMemo(() => rows[0]?.total_count || rows.length || 0, [rows]);
 
   const loadDetail = async (userId: string) => {
-    const { data, error } = await supabase.rpc("admin_get_creator_entitlement_detail", {
+    const { data } = await supabase.rpc("admin_get_creator_entitlement_detail", {
       _target_user_id: userId,
     });
-
-    if (error) {
-      toast.error(error.message || "Failed loading detail");
-      return;
-    }
 
     setDetail(data);
   };
@@ -134,23 +121,27 @@ export function AdminEntitlementsTab() {
 
     toast.success(`Tier updated to ${tier}`);
     await load();
+  };
+
+  const requestResync = async (userId: string) => {
+    toast.loading("Syncing Stripe subscription…", { id: `sync-${userId}` });
+
+    const { data, error } = await supabase.functions.invoke("admin-force-stripe-resync", {
+      body: { user_id: userId },
+    });
+
+    if (error) {
+      toast.error(error.message || "Stripe resync failed", { id: `sync-${userId}` });
+      return;
+    }
+
+    toast.success(`Resynced as ${data?.tier || "unknown"}`, { id: `sync-${userId}` });
+
+    await load();
 
     if (selected?.user_id === userId) {
       await loadDetail(userId);
     }
-  };
-
-  const requestResync = async (userId: string) => {
-    const { error } = await supabase.rpc("admin_mark_creator_entitlement_resync_requested", {
-      _target_user_id: userId,
-    });
-
-    if (error) {
-      toast.error(error.message || "Resync request failed");
-      return;
-    }
-
-    toast.success("Stripe resync requested");
   };
 
   return (
@@ -169,290 +160,105 @@ export function AdminEntitlementsTab() {
         </Button>
       </div>
 
-      {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          {Array.from({ length: 8 }).map((_, i) => (
-            <Skeleton key={i} className="h-24" />
-          ))}
-        </div>
-      ) : (
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Active creators</div>
-              <div className="text-2xl font-semibold mt-1">{overview?.active_creators || 0}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Creator Pro</div>
-              <div className="text-2xl font-semibold mt-1">{overview?.creator_pro_users || 0}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Grace period</div>
-              <div className="text-2xl font-semibold mt-1">{overview?.grace_period_users || 0}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Failed payments</div>
-              <div className="text-2xl font-semibold mt-1">{overview?.failed_payment_users || 0}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Estimated MRR</div>
-              <div className="text-2xl font-semibold mt-1">{formatMoney(overview?.estimated_mrr_cents)}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Shopify connected</div>
-              <div className="text-2xl font-semibold mt-1">{overview?.shopify_connected_creators || 0}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">Gumroad connected</div>
-              <div className="text-2xl font-semibold mt-1">{overview?.gumroad_connected_creators || 0}</div>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardContent className="p-4">
-              <div className="text-xs text-muted-foreground">External publications</div>
-              <div className="text-2xl font-semibold mt-1">{overview?.external_publications_count || 0}</div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {loading ? Array.from({ length: 8 }).map((_, i) => (
+          <Skeleton key={i} className="h-24" />
+        )) : (
+          <>
+            <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Active creators</div><div className="text-2xl font-semibold mt-1">{overview?.active_creators || 0}</div></CardContent></Card>
+            <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Creator Pro</div><div className="text-2xl font-semibold mt-1">{overview?.creator_pro_users || 0}</div></CardContent></Card>
+            <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Grace period</div><div className="text-2xl font-semibold mt-1">{overview?.grace_period_users || 0}</div></CardContent></Card>
+            <Card><CardContent className="p-4"><div className="text-xs text-muted-foreground">Estimated MRR</div><div className="text-2xl font-semibold mt-1">{formatMoney(overview?.estimated_mrr_cents)}</div></CardContent></Card>
+          </>
+        )}
+      </div>
 
       <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-sm">Creator entitlements</CardTitle>
+        <CardHeader>
+          <CardTitle>Creator entitlements ({totalCount})</CardTitle>
         </CardHeader>
 
         <CardContent className="space-y-4">
-          <div className="flex flex-col md:flex-row gap-3">
-            <Input
-              placeholder="Search email, user ID, Stripe customer"
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="flex gap-2 flex-wrap">
+            <Input placeholder="Search" value={search} onChange={(e) => setSearch(e.target.value)} />
+            <Button size="sm" variant={tierFilter === "" ? "default" : "outline"} onClick={() => setTierFilter("")}>All</Button>
+            <Button size="sm" variant={tierFilter === "creator" ? "default" : "outline"} onClick={() => setTierFilter("creator")}>Creator</Button>
+            <Button size="sm" variant={tierFilter === "creator_pro" ? "default" : "outline"} onClick={() => setTierFilter("creator_pro")}>Pro</Button>
+            <Button size="sm" onClick={load}>Apply</Button>
+          </div>
 
-            <div className="flex gap-2 flex-wrap">
-              <Button variant={tierFilter === "" ? "default" : "outline"} size="sm" onClick={() => setTierFilter("")}>All</Button>
-              <Button variant={tierFilter === "free" ? "default" : "outline"} size="sm" onClick={() => setTierFilter("free")}>Free</Button>
-              <Button variant={tierFilter === "creator" ? "default" : "outline"} size="sm" onClick={() => setTierFilter("creator")}>Creator</Button>
-              <Button variant={tierFilter === "creator_pro" ? "default" : "outline"} size="sm" onClick={() => setTierFilter("creator_pro")}>Creator Pro</Button>
-              <Button size="sm" onClick={load}>Apply</Button>
+          <ScrollArea className="w-full">
+            <div className="min-w-[1100px] space-y-2">
+              {rows.map((row) => (
+                <div key={row.user_id} className="rounded-md border p-3 flex items-start justify-between gap-4">
+                  <div>
+                    <div className="font-medium">{row.email || "Unknown"}</div>
+                    <div className="text-xs text-muted-foreground font-mono mt-1">{row.user_id.slice(0, 8)}…</div>
+                    <div className="flex items-center gap-2 mt-2 flex-wrap">
+                      <TierBadge tier={row.tier} />
+                      <Badge variant="outline">{row.payment_status}</Badge>
+                      {row.shopify_connected && <Badge variant="outline">Shopify</Badge>}
+                      {row.gumroad_connected && <Badge variant="outline">Gumroad</Badge>}
+                    </div>
+                  </div>
+
+                  <div className="flex gap-2 flex-wrap justify-end">
+                    <Button size="sm" variant="outline" onClick={async () => {
+                      setSelected(row);
+                      await loadDetail(row.user_id);
+                    }}>
+                      Details
+                    </Button>
+
+                    <Button size="sm" variant="outline" onClick={() => requestResync(row.user_id)}>
+                      Resync
+                    </Button>
+
+                    <Button size="sm" onClick={() => overrideTier(row.user_id, "creator")}>Creator</Button>
+                    <Button size="sm" onClick={() => overrideTier(row.user_id, "creator_pro")}>Pro</Button>
+                    <Button size="sm" variant="destructive" onClick={() => overrideTier(row.user_id, "free")}>Free</Button>
+                  </div>
+                </div>
+              ))}
             </div>
-          </div>
-
-          <div className="text-xs text-muted-foreground">
-            {totalCount} creators found
-          </div>
-
-          <div className="rounded-md border overflow-hidden">
-            <ScrollArea className="w-full">
-              <div className="min-w-[1200px]">
-                <table className="w-full text-sm">
-                  <thead className="bg-muted/40 border-b">
-                    <tr>
-                      <th className="text-left p-3">Creator</th>
-                      <th className="text-left p-3">Tier</th>
-                      <th className="text-left p-3">Payment</th>
-                      <th className="text-left p-3">Grace</th>
-                      <th className="text-left p-3">Connections</th>
-                      <th className="text-left p-3">Publications</th>
-                      <th className="text-left p-3">Updated</th>
-                      <th className="text-left p-3">Actions</th>
-                    </tr>
-                  </thead>
-
-                  <tbody>
-                    {rows.map((row) => (
-                      <tr key={row.user_id} className="border-b align-top">
-                        <td className="p-3">
-                          <div className="font-medium">{row.email || "Unknown"}</div>
-                          <div className="text-xs text-muted-foreground font-mono">
-                            {row.user_id.slice(0, 8)}…
-                          </div>
-                        </td>
-
-                        <td className="p-3">
-                          <TierBadge tier={row.tier} />
-                        </td>
-
-                        <td className="p-3">
-                          <Badge variant={row.payment_status === "active" ? "default" : "secondary"}>
-                            <CreditCard className="h-3 w-3 mr-1" />
-                            {row.payment_status}
-                          </Badge>
-                        </td>
-
-                        <td className="p-3">
-                          {row.grace_period_until ? (
-                            <Badge variant="outline">
-                              <AlertTriangle className="h-3 w-3 mr-1" />
-                              Until {new Date(row.grace_period_until).toLocaleDateString()}
-                            </Badge>
-                          ) : (
-                            <span className="text-muted-foreground text-xs">—</span>
-                          )}
-                        </td>
-
-                        <td className="p-3">
-                          <div className="flex flex-col gap-1">
-                            {row.shopify_connected && <Badge variant="outline">Shopify</Badge>}
-                            {row.gumroad_connected && <Badge variant="outline">Gumroad</Badge>}
-                            {!row.shopify_connected && !row.gumroad_connected && (
-                              <span className="text-xs text-muted-foreground">None</span>
-                            )}
-                          </div>
-                        </td>
-
-                        <td className="p-3 font-medium">
-                          {row.external_publications_count}
-                        </td>
-
-                        <td className="p-3 text-xs text-muted-foreground whitespace-nowrap">
-                          {row.updated_at ? new Date(row.updated_at).toLocaleString() : "—"}
-                        </td>
-
-                        <td className="p-3">
-                          <div className="flex flex-wrap gap-2">
-                            <Button size="sm" variant="outline" onClick={async () => {
-                              setSelected(row);
-                              await loadDetail(row.user_id);
-                            }}>
-                              Details
-                            </Button>
-
-                            <Button size="sm" variant="outline" onClick={() => requestResync(row.user_id)}>
-                              Resync
-                            </Button>
-
-                            <Button size="sm" onClick={() => overrideTier(row.user_id, "creator")}>
-                              Creator
-                            </Button>
-
-                            <Button size="sm" onClick={() => overrideTier(row.user_id, "creator_pro")}>
-                              Pro
-                            </Button>
-
-                            <Button size="sm" variant="destructive" onClick={() => overrideTier(row.user_id, "free")}>
-                              Free
-                            </Button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            </ScrollArea>
-          </div>
+          </ScrollArea>
         </CardContent>
       </Card>
 
       {selected && detail && (
         <Card>
           <CardHeader>
-            <CardTitle>
-              Entitlement detail — {selected.email || selected.user_id.slice(0, 8)}
-            </CardTitle>
+            <CardTitle>Entitlement detail — {selected.email || selected.user_id.slice(0, 8)}</CardTitle>
           </CardHeader>
-
           <CardContent>
-            <Tabs defaultValue="subscription" className="space-y-4">
+            <Tabs defaultValue="snapshots">
               <TabsList>
-                <TabsTrigger value="subscription">Subscription</TabsTrigger>
                 <TabsTrigger value="snapshots">Snapshots</TabsTrigger>
                 <TabsTrigger value="audit">Audit</TabsTrigger>
-                <TabsTrigger value="publications">Publications</TabsTrigger>
               </TabsList>
 
-              <TabsContent value="subscription">
-                <div className="grid md:grid-cols-2 gap-3 text-sm">
-                  <div className="rounded-md border p-3">
-                    <div className="text-muted-foreground text-xs">Stripe customer</div>
-                    <div className="font-mono break-all mt-1">{detail?.user?.stripe_customer_id || "—"}</div>
+              <TabsContent value="snapshots" className="space-y-2 mt-4">
+                {(detail?.snapshots || []).map((s: any) => (
+                  <div key={s.id} className="rounded-md border p-3 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2">
+                      <TierBadge tier={s.tier} />
+                      <Badge variant="outline">{s.context_type}</Badge>
+                    </div>
+                    <div className="text-xs text-muted-foreground">{new Date(s.created_at).toLocaleString()}</div>
                   </div>
-
-                  <div className="rounded-md border p-3">
-                    <div className="text-muted-foreground text-xs">Stripe price</div>
-                    <div className="font-mono break-all mt-1">{detail?.user?.stripe_price_id || "—"}</div>
-                  </div>
-
-                  <div className="rounded-md border p-3">
-                    <div className="text-muted-foreground text-xs">Current period end</div>
-                    <div className="mt-1">{detail?.user?.current_period_end ? new Date(detail.user.current_period_end).toLocaleString() : "—"}</div>
-                  </div>
-
-                  <div className="rounded-md border p-3">
-                    <div className="text-muted-foreground text-xs">Grace period</div>
-                    <div className="mt-1">{detail?.user?.grace_period_until ? new Date(detail.user.grace_period_until).toLocaleString() : "—"}</div>
-                  </div>
-                </div>
+                ))}
               </TabsContent>
 
-              <TabsContent value="snapshots">
-                <div className="space-y-2">
-                  {(detail?.snapshots || []).map((s: any) => (
-                    <div key={s.id} className="rounded-md border p-3 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <div className="flex items-center gap-2">
-                          <TierBadge tier={s.tier} />
-                          <Badge variant="outline">{s.context_type}</Badge>
-                        </div>
-                        <div className="text-xs text-muted-foreground">
-                          {new Date(s.created_at).toLocaleString()}
-                        </div>
-                      </div>
+              <TabsContent value="audit" className="space-y-2 mt-4">
+                {(detail?.audit_events || []).map((a: any) => (
+                  <div key={a.id} className="rounded-md border p-3 flex items-center justify-between gap-3">
+                    <div>
+                      <div className="font-medium">{a.event_type}</div>
+                      <div className="text-xs text-muted-foreground mt-1">{a.message}</div>
                     </div>
-                  ))}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="audit">
-                <div className="space-y-2">
-                  {(detail?.audit_events || []).map((a: any) => (
-                    <div key={a.id} className="rounded-md border p-3 text-sm">
-                      <div className="flex items-center justify-between gap-3">
-                        <div>
-                          <div className="font-medium">{a.event_type}</div>
-                          <div className="text-muted-foreground text-xs mt-1">{a.message}</div>
-                        </div>
-
-                        <Badge variant="outline">{a.severity}</Badge>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              </TabsContent>
-
-              <TabsContent value="publications">
-                <div className="space-y-2">
-                  {(detail?.publications || []).map((p: any) => (
-                    <div key={p.id} className="rounded-md border p-3 text-sm flex items-center justify-between gap-3">
-                      <div>
-                        <div className="font-medium">{p.platform}</div>
-                        <div className="text-xs text-muted-foreground">{p.status}</div>
-                      </div>
-
-                      <Badge variant="outline">{p.sync_state}</Badge>
-                    </div>
-                  ))}
-                </div>
+                    <Badge variant="outline">{a.severity}</Badge>
+                  </div>
+                ))}
               </TabsContent>
             </Tabs>
           </CardContent>
