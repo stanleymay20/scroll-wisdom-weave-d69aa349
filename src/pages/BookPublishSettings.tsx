@@ -126,6 +126,12 @@ export default function BookPublishSettings() {
 
   async function save() {
     if (!bookId) return;
+    // Hard gate: never let a blocked book go public for paid distribution.
+    const isPaid = (Number(form.price_cents) || 0) > 0;
+    if (form.is_public && isPaid && qualityReport?.status === "blocked") {
+      toast.error("Resolve export-quality blockers before publishing a paid book.");
+      return;
+    }
     setSaving(true);
     try {
       const payload: any = {
