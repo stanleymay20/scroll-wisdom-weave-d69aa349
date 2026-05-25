@@ -74,6 +74,7 @@ const MasteryModel = lazy(() => import("./pages/MasteryModel"));
 const QuickLearn = lazy(() => import("./pages/QuickLearn"));
 const ExperimentReport = lazy(() => import("./pages/ExperimentReport"));
 const AdminOps = lazy(() => import("./pages/AdminOps"));
+const AdminEntitlements = lazy(() => import("./pages/AdminEntitlements"));
 const Organizations = lazy(() => import("./pages/Organizations"));
 const OrgAnalytics = lazy(() => import("./pages/OrgAnalytics"));
 const VerifyLookup = lazy(() => import("./pages/VerifyLookup"));
@@ -223,6 +224,7 @@ const App = () => (
                   <Route path="/quick-learn" element={withRecovery('QuickLearn', <QuickLearn />)} />
                   <Route path="/experiments" element={<AdminRoute><ExperimentReport /></AdminRoute>} />
                   <Route path="/admin/ops" element={<AdminRoute><AdminOps /></AdminRoute>} />
+                  <Route path="/admin/entitlements" element={<AdminRoute><AdminEntitlements /></AdminRoute>} />
                   <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
                   <Route path="/organizations/analytics" element={<ProtectedRoute><OrgAnalytics /></ProtectedRoute>} />
                   <Route path="/verify-certificate" element={<VerifyLookup />} />
