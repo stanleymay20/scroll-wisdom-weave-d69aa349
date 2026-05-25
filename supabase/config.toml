@@ -142,3 +142,6 @@ verify_jwt = false
 
 [functions.get-entitlements]
 verify_jwt = false
+
+[functions.admin-force-stripe-resync]
+verify_jwt = false
