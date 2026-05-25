@@ -355,17 +355,30 @@ export default function BookPublishSettings() {
         </Card>
 
         {/* Publishing Wizard checklist */}
-        <Card className="mt-6 p-6">
+        <Card className="mt-6 p-4 sm:p-6">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5" /> Publishing readiness
             <span className="ml-auto text-sm font-normal text-muted-foreground tabular-nums">
               {readyCount}/{checklist.length}
             </span>
           </h2>
-          <ul className="mt-3 space-y-1.5 text-sm">
+          <div
+            className="mt-3 h-1.5 w-full rounded-full bg-muted overflow-hidden"
+            role="progressbar"
+            aria-valuenow={readyCount}
+            aria-valuemin={0}
+            aria-valuemax={checklist.length}
+            aria-label="Publishing readiness"
+          >
+            <div
+              className="h-full bg-primary transition-[width] duration-500"
+              style={{ width: `${(readyCount / checklist.length) * 100}%` }}
+            />
+          </div>
+          <ul className="mt-4 space-y-1.5 text-sm">
             {checklist.map((c) => (
               <li key={c.label} className="flex items-center gap-2">
-                <CheckCircle2 className={`w-4 h-4 ${c.ok ? "text-primary" : "text-muted-foreground/40"}`} />
+                <CheckCircle2 className={`w-4 h-4 ${c.ok ? "text-primary" : "text-muted-foreground/40"}`} aria-hidden="true" />
                 <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
               </li>
             ))}
@@ -373,13 +386,13 @@ export default function BookPublishSettings() {
         </Card>
 
         {/* Bundles */}
-        <Card className="mt-6 p-6">
+        <Card className="mt-6 p-4 sm:p-6">
           <h2 className="text-lg font-semibold flex items-center gap-2"><Package className="w-5 h-5" /> Publish bundles</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Generate a ZIP bundle ready to upload elsewhere. Heavy jobs run in the background — track progress in{" "}
             <Link to="/account/exports" className="text-primary hover:underline">Exports</Link>. KDP is never auto-published.
           </p>
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
             {BUNDLE_BUTTONS.map(({ kind, label, icon: Icon, variant }) => {
               const isExternal = kind !== "kdp";
               const locked = isExternal && !canPublishExternal;
@@ -389,25 +402,26 @@ export default function BookPublishSettings() {
                   variant={variant}
                   onClick={() => locked ? navigate("/pricing#creator") : enqueue(kind)}
                   disabled={!!bundling}
-                  className="justify-start"
+                  className="justify-start min-h-11"
                   title={locked ? "Creator tier required" : undefined}
+                  aria-label={locked ? `${label} — Creator tier required` : `Queue ${label} bundle`}
                 >
-                  {locked ? <Lock className="w-4 h-4 mr-2" /> : <Icon className="w-4 h-4 mr-2" />}
-                  {bundling === kind ? "Queuing…" : locked ? `${label} (Pro)` : label}
+                  {locked ? <Lock className="w-4 h-4 mr-2 shrink-0" aria-hidden="true" /> : <Icon className="w-4 h-4 mr-2 shrink-0" aria-hidden="true" />}
+                  <span className="truncate">{bundling === kind ? "Queuing…" : locked ? `${label} (Pro)` : label}</span>
                 </Button>
               );
             })}
           </div>
-          <div className="mt-4 border-t border-border pt-4">
-            <p className="text-sm font-medium flex items-center gap-2"><Zap className="w-4 h-4" /> Direct publishing</p>
+          <div className="mt-6 border-t border-border pt-4">
+            <p className="text-sm font-medium flex items-center gap-2"><Zap className="w-4 h-4" aria-hidden="true" /> Direct publishing</p>
             <p className="text-xs text-muted-foreground mt-1">
               Auto-create the product on a connected platform. Connect accounts in{" "}
               <Link to="/account/intelligence" className="text-primary hover:underline">Publishing Intelligence</Link>.
             </p>
             {!canPublishExternal && (
-              <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex items-center justify-between gap-2">
+              <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
                 <span className="text-foreground">
-                  <Lock className="w-3.5 h-3.5 inline mr-1.5" />
+                  <Lock className="w-3.5 h-3.5 inline mr-1.5" aria-hidden="true" />
                   External publishing requires <strong>Creator</strong> (€19/mo) or higher.
                 </span>
                 <Button size="sm" variant="default" onClick={() => navigate("/pricing#creator")}>
@@ -415,21 +429,28 @@ export default function BookPublishSettings() {
                 </Button>
               </div>
             )}
+            {!form.listing_id && canPublishExternal && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Save the listing first to enable direct publishing.
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 variant="secondary"
                 disabled={publishingGumroad || !form.listing_id || !canPublishExternal}
                 onClick={publishGumroadDirect}
+                className="min-h-11"
               >
-                <Store className="w-4 h-4 mr-2" />
+                <Store className="w-4 h-4 mr-2" aria-hidden="true" />
                 {publishingGumroad ? "Publishing…" : "Publish to Gumroad"}
               </Button>
               <Button
                 variant="secondary"
                 disabled={publishingShopify || !form.listing_id || !canPublishExternal}
                 onClick={publishShopifyDirect}
+                className="min-h-11"
               >
-                <ShoppingBag className="w-4 h-4 mr-2" />
+                <ShoppingBag className="w-4 h-4 mr-2" aria-hidden="true" />
                 {publishingShopify ? "Publishing…" : "Publish to Shopify"}
               </Button>
             </div>
