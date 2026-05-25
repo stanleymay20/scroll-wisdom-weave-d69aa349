@@ -103,7 +103,7 @@ export function AdminEntitlementsTab() {
   const totalCount = useMemo(() => rows[0]?.total_count || rows.length || 0, [rows]);
 
   const loadDetail = async (userId: string) => {
-    const { data } = await supabase.rpc("admin_get_creator_entitlement_detail", { _target_user_id: userId });
+    const { data } = await (supabase as any).rpc("admin_get_creator_entitlement_detail", { _target_user_id: userId });
     setDetail(data);
   };
 
