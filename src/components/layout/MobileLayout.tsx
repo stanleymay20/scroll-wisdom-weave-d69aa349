@@ -12,9 +12,13 @@ interface MobileLayoutProps {
  */
 export function MobileLayout({ children }: MobileLayoutProps) {
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       <MobileHeader />
-      <main className="pb-24" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)" }}>
+      <main
+        id="main-content"
+        className="pb-[calc(6rem+env(safe-area-inset-bottom,0px))]"
+        style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 56px)" }}
+      >
         {children}
       </main>
       <MobileBottomNav />
