@@ -318,7 +318,7 @@ export default function BookPublishSettings() {
             <Input className="text-foreground caret-foreground" value={form.backend_keywords} onChange={(e) => setForm({ ...form, backend_keywords: e.target.value })} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label>License</Label>
               <Select value={form.license_type} onValueChange={(v) => setForm({ ...form, license_type: v })}>
@@ -342,7 +342,7 @@ export default function BookPublishSettings() {
           {form.series_id && (
             <div>
               <Label>Series order</Label>
-              <Input type="number" min={1} className="text-foreground caret-foreground" value={form.series_order} onChange={(e) => setForm({ ...form, series_order: e.target.value })} />
+              <Input type="number" inputMode="numeric" min={1} className="text-foreground caret-foreground" value={form.series_order} onChange={(e) => setForm({ ...form, series_order: e.target.value })} />
             </div>
           )}
 
