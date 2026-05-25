@@ -78,16 +78,17 @@ export function AdminEntitlementsTab() {
 
   const load = async () => {
     setRefreshing(true);
+    const sb = supabase as any;
     const [overviewRes, rowsRes, analyticsRes] = await Promise.all([
-      supabase.from("admin_creator_subscription_overview").select("*").maybeSingle(),
-      supabase.rpc("admin_get_creator_entitlements", {
+      sb.from("admin_creator_subscription_overview").select("*").maybeSingle(),
+      sb.rpc("admin_get_creator_entitlements", {
         _search: search || null,
         _tier: tierFilter || null,
         _payment_status: null,
         _limit: 50,
         _offset: 0,
       }),
-      supabase.rpc("admin_get_creator_subscription_analytics", { _days: 30 }),
+      sb.rpc("admin_get_creator_subscription_analytics", { _days: 30 }),
     ]);
 
     setOverview((overviewRes.data as OverviewRow) || null);
