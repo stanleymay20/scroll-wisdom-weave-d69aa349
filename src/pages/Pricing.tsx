@@ -378,8 +378,8 @@ export default function Pricing() {
                   const loadingKey = `creator:${p.key}`;
                   const isLoading = checkoutLoading === loadingKey;
                   return (
-                    <Card key={p.name} className={`p-6 ${p.popular ? "border-primary/50 shadow-lg shadow-primary/10" : ""} ${isCurrent ? "ring-2 ring-primary" : ""}`}>
-                      <div className="flex items-center gap-2 mb-3 min-h-[24px]">
+                    <Card key={p.name} className={`p-6 h-full flex flex-col ${p.popular ? "border-primary/50 shadow-lg shadow-primary/10" : ""} ${isCurrent ? "ring-2 ring-primary" : ""}`}>
+                      <div className="flex items-center gap-2 mb-3 min-h-[24px] flex-wrap">
                         {p.popular && <Badge>Most Popular</Badge>}
                         {isCurrent && <Badge variant="secondary">Your plan</Badge>}
                         {inGrace && <Badge variant="destructive">Payment retry</Badge>}
@@ -389,7 +389,7 @@ export default function Pricing() {
                         <span className="text-3xl font-bold text-foreground">{p.price}</span>
                         <span className="text-muted-foreground text-sm">{p.period}</span>
                       </div>
-                      <ul className="mt-4 space-y-2 text-sm">
+                      <ul className="mt-4 space-y-2 text-sm flex-1">
                         {p.features.map((f) => (
                           <li key={f} className="flex items-start gap-2">
                             <Check className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />

@@ -78,16 +78,17 @@ export function AdminEntitlementsTab() {
 
   const load = async () => {
     setRefreshing(true);
+    const sb = supabase as any;
     const [overviewRes, rowsRes, analyticsRes] = await Promise.all([
-      supabase.from("admin_creator_subscription_overview").select("*").maybeSingle(),
-      supabase.rpc("admin_get_creator_entitlements", {
+      sb.from("admin_creator_subscription_overview").select("*").maybeSingle(),
+      sb.rpc("admin_get_creator_entitlements", {
         _search: search || null,
         _tier: tierFilter || null,
         _payment_status: null,
         _limit: 50,
         _offset: 0,
       }),
-      supabase.rpc("admin_get_creator_subscription_analytics", { _days: 30 }),
+      sb.rpc("admin_get_creator_subscription_analytics", { _days: 30 }),
     ]);
 
     setOverview((overviewRes.data as OverviewRow) || null);
@@ -102,13 +103,13 @@ export function AdminEntitlementsTab() {
   const totalCount = useMemo(() => rows[0]?.total_count || rows.length || 0, [rows]);
 
   const loadDetail = async (userId: string) => {
-    const { data } = await supabase.rpc("admin_get_creator_entitlement_detail", { _target_user_id: userId });
+    const { data } = await (supabase as any).rpc("admin_get_creator_entitlement_detail", { _target_user_id: userId });
     setDetail(data);
   };
 
   const overrideTier = async (userId: string, tier: string) => {
     const reason = window.prompt(`Reason for setting tier to ${tier}?`) || "Admin override";
-    const { error } = await supabase.rpc("admin_override_creator_entitlement", {
+    const { error } = await (supabase as any).rpc("admin_override_creator_entitlement", {
       _target_user_id: userId,
       _new_tier: tier,
       _reason: reason,

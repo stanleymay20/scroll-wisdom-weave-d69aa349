@@ -121,40 +121,40 @@ export function MobileHome() {
     return () => { cancelled = true; };
   }, [fetchData]);
 
-  // Main content - note: padding-top is handled by MobileLayout wrapper
+  // Main content - padding handled by MobileLayout wrapper
   return (
-    <div className="min-h-screen bg-background pb-24 px-4 pt-4">
+    <div className="px-4 pt-2">
       {/* Welcome Hero for Mobile */}
-      <section className="mb-6 text-center py-4">
-        <h1 className="font-display text-2xl font-bold text-foreground mb-1 tracking-tight">
-          ScrollLibrary
+      <section className="mb-6 pt-2" aria-labelledby="mobile-hero-title">
+        <h1 id="mobile-hero-title" className="font-display text-[26px] leading-tight font-bold text-foreground mb-1 tracking-tight">
+          Generate. Read. Master.
         </h1>
         <p className="text-sm text-muted-foreground mb-4">
-          Generate · Read · Prove Mastery
+          AI-native books with verified mastery proofs.
         </p>
         <div className="flex gap-2.5 w-full">
           <Link
             to="/generate"
-            className="flex-1 px-4 py-3 rounded-full bg-primary text-primary-foreground text-sm font-semibold shadow-sm active:scale-[0.98] transition-transform text-center"
+            className="flex-1 inline-flex items-center justify-center min-h-11 px-4 rounded-full bg-primary text-primary-foreground text-sm font-semibold shadow-sm active:scale-[0.98] transition-transform"
           >
             Generate a book
           </Link>
           <Link
             to="/store"
-            className="flex-1 px-4 py-3 rounded-full border border-border text-foreground text-sm font-semibold active:scale-[0.98] transition-transform text-center"
+            className="flex-1 inline-flex items-center justify-center min-h-11 px-4 rounded-full border border-border text-foreground text-sm font-semibold active:scale-[0.98] transition-transform"
           >
             Browse library
           </Link>
         </div>
       </section>
 
-      {/* Continue Reading Widget - Single instance, no duplication */}
-      <section className="mb-6">
+      {/* Continue Reading Widget */}
+      <section className="mb-6" aria-label="Continue reading">
         <ContinueReadingWidget />
       </section>
 
       {/* Last Added Section */}
-      <section className="mb-8">
+      <section className="mb-8" aria-labelledby="recently-added-heading">
         <SectionHeader title="Recently Added" linkTo="/store" />
         {loading ? (
           <BookGridSkeleton count={6} />
@@ -172,25 +172,32 @@ export function MobileHome() {
             ))}
           </div>
         ) : (
-          <div className="text-center py-16 rounded-xl bg-muted/20 border border-border/50">
-            <BookOpen className="h-10 w-10 text-primary/30 mx-auto mb-3" />
+          <div className="text-center py-12 rounded-xl bg-muted/20 border border-border/50 px-6">
+            <BookOpen className="h-10 w-10 text-primary/40 mx-auto mb-3" aria-hidden="true" />
             <h3 className="text-base font-semibold text-foreground mb-1">No books yet</h3>
-            <p className="text-muted-foreground text-sm max-w-[200px] mx-auto">
-              Tap the <span className="font-bold text-primary">+</span> button below to create your first book
+            <p className="text-muted-foreground text-sm mb-4">
+              Tap <span className="font-semibold text-primary">+</span> below to create your first book.
             </p>
+            <Link
+              to="/generate"
+              className="inline-flex items-center justify-center min-h-11 px-5 rounded-full bg-primary text-primary-foreground text-sm font-semibold active:scale-[0.98] transition-transform"
+            >
+              Generate now
+            </Link>
           </div>
         )}
       </section>
 
       {/* Quick Categories */}
-      <section>
+      <section aria-labelledby="categories-heading">
         <SectionHeader title="Browse Categories" linkTo="/explore" />
-        <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide">
+        <div className="flex gap-2 overflow-x-auto pb-2 -mx-4 px-4 scrollbar-hide" role="list">
           {QUICK_CATEGORIES.map((cat) => (
             <Link
               key={cat}
               to={`/explore?category=${cat.toLowerCase()}`}
-              className="flex-shrink-0 px-4 py-2.5 rounded-full bg-muted/50 text-sm font-medium text-foreground border border-border/50 hover:bg-primary/10 hover:text-primary hover:border-primary/30 active:scale-95 transition-all"
+              role="listitem"
+              className="flex-shrink-0 inline-flex items-center min-h-11 px-4 rounded-full bg-muted/50 text-sm font-medium text-foreground border border-border/60 active:bg-primary/10 active:text-primary active:border-primary/30 transition-colors"
             >
               {cat}
             </Link>

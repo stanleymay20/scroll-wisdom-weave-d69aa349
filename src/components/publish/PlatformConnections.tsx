@@ -102,51 +102,62 @@ export function PlatformConnections() {
             const broken = !!c && c.connection_status !== "connected";
             return (
               <li key={p.id} className="rounded-md border border-border p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3 min-w-0">
-                    <Icon className="w-5 h-5 shrink-0" />
+                <div className="flex items-start justify-between gap-3 flex-wrap">
+                  <div className="flex items-center gap-3 min-w-0 flex-1">
+                    <Icon className="w-5 h-5 shrink-0" aria-hidden="true" />
                     <div className="min-w-0">
                       <div className="font-medium">{p.label}</div>
                       {c?.external_creator_name && (
                         <div className="text-xs text-muted-foreground truncate">as {c.external_creator_name}</div>
                       )}
                       {broken && c?.last_error && (
-                        <div className="text-xs text-destructive truncate">{c.last_error}</div>
+                        <div className="text-xs text-destructive break-words">{c.last_error}</div>
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-2 shrink-0">
+                  <div className="flex items-center gap-2 shrink-0 flex-wrap justify-end">
                     {connected && (
                       <Badge variant="secondary" className="gap-1">
-                        <CheckCircle2 className="w-3 h-3" /> Connected
+                        <CheckCircle2 className="w-3 h-3" aria-hidden="true" /> Connected
                       </Badge>
                     )}
                     {broken && (
                       <Badge variant="destructive" className="gap-1">
-                        <AlertCircle className="w-3 h-3" /> {c!.connection_status}
+                        <AlertCircle className="w-3 h-3" aria-hidden="true" /> {c!.connection_status}
                       </Badge>
                     )}
                     {c ? (
-                      <Button size="sm" variant="outline" disabled={busy === p.id} onClick={() => onDisconnect(p.id)}>
+                      <Button size="sm" variant="outline" disabled={busy === p.id} onClick={() => onDisconnect(p.id)} className="min-h-9">
                         Disconnect
                       </Button>
-                    ) : (
-                      <Button size="sm" disabled={!p.available || busy === p.id} onClick={() => onConnect(p)}>
+                    ) : !p.needsShop ? (
+                      <Button size="sm" disabled={!p.available || busy === p.id} onClick={() => onConnect(p)} className="min-h-9">
                         {busy === p.id ? "Opening…" : "Connect"}
                       </Button>
-                    )}
+                    ) : null}
                   </div>
                 </div>
                 {!c && p.needsShop && (
-                  <div className="mt-3 flex items-center gap-2">
+                  <div className="mt-3 flex flex-col sm:flex-row items-stretch sm:items-center gap-2">
                     <Input
                       placeholder="mystore.myshopify.com"
                       value={shopInput[p.id] ?? ""}
                       onChange={(e) => setShopInput((x) => ({ ...x, [p.id]: e.target.value }))}
-                      className="text-foreground caret-foreground"
+                      className="text-foreground caret-foreground flex-1"
+                      aria-label={`${p.label} shop domain`}
                     />
-                    {p.helper && <span className="text-xs text-muted-foreground shrink-0 hidden sm:block">{p.helper}</span>}
+                    <Button
+                      size="sm"
+                      disabled={!p.available || busy === p.id}
+                      onClick={() => onConnect(p)}
+                      className="min-h-9 sm:w-auto"
+                    >
+                      {busy === p.id ? "Opening…" : "Connect"}
+                    </Button>
                   </div>
+                )}
+                {!c && p.needsShop && p.helper && (
+                  <p className="mt-1.5 text-xs text-muted-foreground">{p.helper}</p>
                 )}
               </li>
             );

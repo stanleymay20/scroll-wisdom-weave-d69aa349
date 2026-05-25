@@ -244,36 +244,40 @@ export default function BookPublishSettings() {
   if (loading) return <div className="container mx-auto max-w-3xl p-8">Loading…</div>;
 
   return (
-    <div className="min-h-screen bg-background">
+    <div className="min-h-dvh bg-background">
       <SEO title={`Publish — ${book?.title}`} description="Manage storefront listing." noindex />
-      <div className="container mx-auto max-w-3xl px-4 py-10">
-        <Link to={`/book/${bookId}`} className="text-sm text-primary hover:underline">← Back to book</Link>
-        <h1 className="text-3xl font-bold mt-3">Publish: {book?.title}</h1>
+      <div className="container mx-auto max-w-3xl px-4 py-6 sm:py-10 pb-32">
+        <Link to={`/book/${bookId}`} className="inline-flex items-center min-h-11 text-sm text-primary hover:underline">
+          ← Back to book
+        </Link>
+        <h1 className="text-2xl sm:text-3xl font-bold mt-2 break-words">Publish: {book?.title}</h1>
 
-        <Card className="mt-6 p-6 space-y-5">
-          <div className="flex items-center justify-between">
-            <div>
+        <Card className="mt-6 p-4 sm:p-6 space-y-5">
+          <div className="flex items-start justify-between gap-3">
+            <div className="min-w-0">
               <Label className="text-base">Public on storefront</Label>
-              <p className="text-sm text-muted-foreground">Make this book visible at /store/{form.slug}</p>
+              <p className="text-sm text-muted-foreground mt-0.5 break-all">
+                Make this book visible at /store/{form.slug}
+              </p>
             </div>
-            <Switch checked={form.is_public} onCheckedChange={(v) => setForm({ ...form, is_public: v })} />
+            <Switch checked={form.is_public} onCheckedChange={(v) => setForm({ ...form, is_public: v })} aria-label="Make public on storefront" />
           </div>
 
           <div>
-            <Label>Slug</Label>
-            <Input className="text-foreground caret-foreground" value={form.slug} onChange={(e) => setForm({ ...form, slug: slugify(e.target.value) })} />
+            <Label htmlFor="pub-slug">Slug</Label>
+            <Input id="pub-slug" className="text-foreground caret-foreground" value={form.slug} onChange={(e) => setForm({ ...form, slug: slugify(e.target.value) })} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label>Price (USD)</Label>
-              <Input type="number" min={0} className="text-foreground caret-foreground"
+              <Label htmlFor="pub-price">Price (USD)</Label>
+              <Input id="pub-price" type="number" inputMode="decimal" min={0} className="text-foreground caret-foreground"
                 value={(form.price_cents / 100).toString()}
                 onChange={(e) => setForm({ ...form, price_cents: Math.round(parseFloat(e.target.value || "0") * 100) })} />
             </div>
             <div>
-              <Label>Sample chapters</Label>
-              <Input type="number" min={0} className="text-foreground caret-foreground"
+              <Label htmlFor="pub-samples">Sample chapters</Label>
+              <Input id="pub-samples" type="number" inputMode="numeric" min={0} className="text-foreground caret-foreground"
                 value={form.sample_chapters}
                 onChange={(e) => setForm({ ...form, sample_chapters: Number(e.target.value) })} />
             </div>
@@ -314,7 +318,7 @@ export default function BookPublishSettings() {
             <Input className="text-foreground caret-foreground" value={form.backend_keywords} onChange={(e) => setForm({ ...form, backend_keywords: e.target.value })} />
           </div>
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <Label>License</Label>
               <Select value={form.license_type} onValueChange={(v) => setForm({ ...form, license_type: v })}>
@@ -338,7 +342,7 @@ export default function BookPublishSettings() {
           {form.series_id && (
             <div>
               <Label>Series order</Label>
-              <Input type="number" min={1} className="text-foreground caret-foreground" value={form.series_order} onChange={(e) => setForm({ ...form, series_order: e.target.value })} />
+              <Input type="number" inputMode="numeric" min={1} className="text-foreground caret-foreground" value={form.series_order} onChange={(e) => setForm({ ...form, series_order: e.target.value })} />
             </div>
           )}
 
@@ -351,17 +355,30 @@ export default function BookPublishSettings() {
         </Card>
 
         {/* Publishing Wizard checklist */}
-        <Card className="mt-6 p-6">
+        <Card className="mt-6 p-4 sm:p-6">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <CheckCircle2 className="w-5 h-5" /> Publishing readiness
             <span className="ml-auto text-sm font-normal text-muted-foreground tabular-nums">
               {readyCount}/{checklist.length}
             </span>
           </h2>
-          <ul className="mt-3 space-y-1.5 text-sm">
+          <div
+            className="mt-3 h-1.5 w-full rounded-full bg-muted overflow-hidden"
+            role="progressbar"
+            aria-valuenow={readyCount}
+            aria-valuemin={0}
+            aria-valuemax={checklist.length}
+            aria-label="Publishing readiness"
+          >
+            <div
+              className="h-full bg-primary transition-[width] duration-500"
+              style={{ width: `${(readyCount / checklist.length) * 100}%` }}
+            />
+          </div>
+          <ul className="mt-4 space-y-1.5 text-sm">
             {checklist.map((c) => (
               <li key={c.label} className="flex items-center gap-2">
-                <CheckCircle2 className={`w-4 h-4 ${c.ok ? "text-primary" : "text-muted-foreground/40"}`} />
+                <CheckCircle2 className={`w-4 h-4 ${c.ok ? "text-primary" : "text-muted-foreground/40"}`} aria-hidden="true" />
                 <span className={c.ok ? "" : "text-muted-foreground"}>{c.label}</span>
               </li>
             ))}
@@ -369,13 +386,13 @@ export default function BookPublishSettings() {
         </Card>
 
         {/* Bundles */}
-        <Card className="mt-6 p-6">
+        <Card className="mt-6 p-4 sm:p-6">
           <h2 className="text-lg font-semibold flex items-center gap-2"><Package className="w-5 h-5" /> Publish bundles</h2>
           <p className="text-sm text-muted-foreground mt-1">
             Generate a ZIP bundle ready to upload elsewhere. Heavy jobs run in the background — track progress in{" "}
             <Link to="/account/exports" className="text-primary hover:underline">Exports</Link>. KDP is never auto-published.
           </p>
-          <div className="mt-4 grid grid-cols-2 md:grid-cols-3 gap-2">
+          <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
             {BUNDLE_BUTTONS.map(({ kind, label, icon: Icon, variant }) => {
               const isExternal = kind !== "kdp";
               const locked = isExternal && !canPublishExternal;
@@ -385,25 +402,26 @@ export default function BookPublishSettings() {
                   variant={variant}
                   onClick={() => locked ? navigate("/pricing#creator") : enqueue(kind)}
                   disabled={!!bundling}
-                  className="justify-start"
+                  className="justify-start min-h-11"
                   title={locked ? "Creator tier required" : undefined}
+                  aria-label={locked ? `${label} — Creator tier required` : `Queue ${label} bundle`}
                 >
-                  {locked ? <Lock className="w-4 h-4 mr-2" /> : <Icon className="w-4 h-4 mr-2" />}
-                  {bundling === kind ? "Queuing…" : locked ? `${label} (Pro)` : label}
+                  {locked ? <Lock className="w-4 h-4 mr-2 shrink-0" aria-hidden="true" /> : <Icon className="w-4 h-4 mr-2 shrink-0" aria-hidden="true" />}
+                  <span className="truncate">{bundling === kind ? "Queuing…" : locked ? `${label} (Pro)` : label}</span>
                 </Button>
               );
             })}
           </div>
-          <div className="mt-4 border-t border-border pt-4">
-            <p className="text-sm font-medium flex items-center gap-2"><Zap className="w-4 h-4" /> Direct publishing</p>
+          <div className="mt-6 border-t border-border pt-4">
+            <p className="text-sm font-medium flex items-center gap-2"><Zap className="w-4 h-4" aria-hidden="true" /> Direct publishing</p>
             <p className="text-xs text-muted-foreground mt-1">
               Auto-create the product on a connected platform. Connect accounts in{" "}
               <Link to="/account/intelligence" className="text-primary hover:underline">Publishing Intelligence</Link>.
             </p>
             {!canPublishExternal && (
-              <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex items-center justify-between gap-2">
+              <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
                 <span className="text-foreground">
-                  <Lock className="w-3.5 h-3.5 inline mr-1.5" />
+                  <Lock className="w-3.5 h-3.5 inline mr-1.5" aria-hidden="true" />
                   External publishing requires <strong>Creator</strong> (€19/mo) or higher.
                 </span>
                 <Button size="sm" variant="default" onClick={() => navigate("/pricing#creator")}>
@@ -411,21 +429,28 @@ export default function BookPublishSettings() {
                 </Button>
               </div>
             )}
+            {!form.listing_id && canPublishExternal && (
+              <p className="mt-3 text-xs text-muted-foreground">
+                Save the listing first to enable direct publishing.
+              </p>
+            )}
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 variant="secondary"
                 disabled={publishingGumroad || !form.listing_id || !canPublishExternal}
                 onClick={publishGumroadDirect}
+                className="min-h-11"
               >
-                <Store className="w-4 h-4 mr-2" />
+                <Store className="w-4 h-4 mr-2" aria-hidden="true" />
                 {publishingGumroad ? "Publishing…" : "Publish to Gumroad"}
               </Button>
               <Button
                 variant="secondary"
                 disabled={publishingShopify || !form.listing_id || !canPublishExternal}
                 onClick={publishShopifyDirect}
+                className="min-h-11"
               >
-                <ShoppingBag className="w-4 h-4 mr-2" />
+                <ShoppingBag className="w-4 h-4 mr-2" aria-hidden="true" />
                 {publishingShopify ? "Publishing…" : "Publish to Shopify"}
               </Button>
             </div>
@@ -434,7 +459,7 @@ export default function BookPublishSettings() {
 
 
         {/* External publications ledger */}
-        <Card className="mt-6 p-6">
+        <Card className="mt-6 p-4 sm:p-6">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <ExternalLink className="w-5 h-5" /> External publications
           </h2>
@@ -445,23 +470,23 @@ export default function BookPublishSettings() {
           {pubs.length > 0 && (
             <ul className="mt-4 space-y-2">
               {pubs.map((p) => (
-                <li key={p.id} className="flex items-center justify-between gap-2 rounded-md border border-border p-2 text-sm">
+                <li key={p.id} className="flex items-start justify-between gap-2 rounded-md border border-border p-3 text-sm">
                   <div className="min-w-0 flex-1">
                     <div className="font-medium capitalize">{p.platform}</div>
                     {p.external_url && (
                       <a href={p.external_url} target="_blank" rel="noreferrer noopener"
-                         className="text-xs text-primary hover:underline truncate block">
+                         className="text-xs text-primary hover:underline truncate block mt-0.5">
                         {p.external_url}
                       </a>
                     )}
                   </div>
-                  <span className="text-xs text-muted-foreground capitalize shrink-0">{p.status}</span>
+                  <span className="text-xs text-muted-foreground capitalize shrink-0 mt-0.5">{p.status}</span>
                 </li>
               ))}
             </ul>
           )}
 
-          <div className="mt-4 grid grid-cols-[140px_1fr_auto] gap-2 items-end">
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-[140px_1fr_auto] gap-2 sm:items-end">
             <div>
               <Label className="text-xs">Platform</Label>
               <Select value={newPub.platform} onValueChange={(v) => setNewPub({ ...newPub, platform: v as any })}>
@@ -477,15 +502,18 @@ export default function BookPublishSettings() {
               </Select>
             </div>
             <div>
-              <Label className="text-xs">URL</Label>
+              <Label className="text-xs" htmlFor="pub-url">URL</Label>
               <Input
+                id="pub-url"
+                type="url"
+                inputMode="url"
                 className="text-foreground caret-foreground"
                 placeholder="https://…"
                 value={newPub.url}
                 onChange={(e) => setNewPub({ ...newPub, url: e.target.value })}
               />
             </div>
-            <Button onClick={recordPublication} disabled={!newPub.url.trim()}>Record</Button>
+            <Button onClick={recordPublication} disabled={!newPub.url.trim()} className="min-h-11 sm:w-auto">Record</Button>
           </div>
         </Card>
 

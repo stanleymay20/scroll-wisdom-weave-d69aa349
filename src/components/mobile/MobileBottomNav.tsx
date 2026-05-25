@@ -100,6 +100,7 @@ function MobileBottomNavInner() {
       <nav 
         className="fixed bottom-0 left-0 right-0 z-50 bg-background/95 backdrop-blur-sm border-t border-border/30 md:hidden"
         style={{ paddingBottom: "env(safe-area-inset-bottom)" }}
+        aria-label="Primary"
       >
         <div className="flex items-center justify-around h-16">
           {/* Left Nav Items */}
@@ -111,15 +112,17 @@ function MobileBottomNavInner() {
               <Link
                 key={item.path}
                 to={item.path}
+                aria-current={active ? "page" : undefined}
+                aria-label={item.label}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-colors",
+                  "flex flex-col items-center justify-center gap-0.5 px-3 min-w-[64px] min-h-[44px] rounded-lg transition-colors",
                   active 
                     ? "text-primary" 
                     : "text-muted-foreground active:text-foreground"
                 )}
               >
-                <Icon className={cn("h-5 w-5", active && "fill-primary/20")} />
-                <span className="text-[10px] font-medium">{item.label}</span>
+                <Icon className={cn("h-5 w-5", active && "fill-primary/20")} aria-hidden="true" />
+                <span className="text-[11px] font-medium leading-tight">{item.label}</span>
               </Link>
             );
           })}
@@ -127,14 +130,17 @@ function MobileBottomNavInner() {
           {/* Center Create Button */}
           <button
             onClick={() => setShowCreateMenu(!showCreateMenu)}
+            aria-label={showCreateMenu ? "Close create menu" : "Create new book"}
+            aria-expanded={showCreateMenu}
+            aria-haspopup="menu"
             className={cn(
               "relative flex items-center justify-center w-14 h-14 -mt-6 rounded-full shadow-lg transition-all",
               showCreateMenu
                 ? "bg-destructive text-destructive-foreground rotate-45"
-                : "bg-primary text-background shadow-primary/30"
+                : "bg-primary text-primary-foreground shadow-primary/30"
             )}
           >
-            <Plus className="h-7 w-7 transition-transform" />
+            <Plus className="h-7 w-7 transition-transform" aria-hidden="true" />
           </button>
 
           {/* Right Nav Items */}
@@ -146,15 +152,17 @@ function MobileBottomNavInner() {
               <Link
                 key={item.path}
                 to={item.path}
+                aria-current={active ? "page" : undefined}
+                aria-label={item.label}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-1 px-4 py-2 rounded-lg transition-colors",
+                  "flex flex-col items-center justify-center gap-0.5 px-3 min-w-[64px] min-h-[44px] rounded-lg transition-colors",
                   active 
                     ? "text-primary" 
                     : "text-muted-foreground active:text-foreground"
                 )}
               >
-                <Icon className={cn("h-5 w-5", active && "fill-primary/20")} />
-                <span className="text-[10px] font-medium">{item.label}</span>
+                <Icon className={cn("h-5 w-5", active && "fill-primary/20")} aria-hidden="true" />
+                <span className="text-[11px] font-medium leading-tight">{item.label}</span>
               </Link>
             );
           })}
