@@ -10,6 +10,8 @@ const ALLOWED_EVENTS = [
   "earnings_view", "payout_profile_view", "payout_profile_update",
   "admin_finance_view", "platform_fee_updated",
   "sell_onboarding_started", "sell_payout_connected", "sell_first_book_published",
+  "export_preview_opened", "export_quality_warning", "export_quality_blocked",
+  "export_completed", "export_failed",
 ] as const;
 
 const Body = z.object({
