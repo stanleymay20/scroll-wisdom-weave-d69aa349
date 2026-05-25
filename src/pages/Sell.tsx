@@ -121,6 +121,23 @@ export default function Sell() {
         .eq("user_id", user.id).order("created_at", { ascending: false }).limit(50);
       setBooks(bs ?? []);
 
+      // Preselect from ?bookId= if user owns it
+      const urlBookId = params.get("bookId");
+      if (urlBookId && (bs ?? []).some((b) => b.id === urlBookId)) {
+        const b = (bs ?? []).find((x) => x.id === urlBookId)!;
+        next = {
+          ...next,
+          publish: {
+            ...next.publish,
+            book_id: urlBookId,
+            slug: next.publish.slug || slugify(b.title),
+          },
+        };
+      }
+
+      setDraft(next);
+
+
       // Payout profile (best-effort)
       try {
         const { data: pd } = await supabase.functions.invoke("creator-payout-profile", { method: "GET" });
