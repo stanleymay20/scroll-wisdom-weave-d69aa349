@@ -16,6 +16,8 @@ import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSect
 import { publishToGumroad, publishToShopify } from "@/lib/platformConnections";
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { Lock } from "lucide-react";
+import { ExportQualityPanel } from "@/components/publish/ExportQualityPanel";
+import type { ExportQualityReport } from "@/lib/exportQuality";
 
 type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
 
