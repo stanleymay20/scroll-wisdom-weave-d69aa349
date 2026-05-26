@@ -745,7 +745,7 @@ function StepPublish({
         </>
       )}
 
-      <StepNav onBack={onBack} onNext={onNext} saving={saving} nextLabel="Publish" disabled={!value.book_id} />
+      <StepNav onBack={onBack} onNext={onNext} saving={saving} nextLabel={editing ? "Save changes" : "Publish"} disabled={!value.book_id} />
     </Card>
   );
 }
