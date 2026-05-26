@@ -99,8 +99,10 @@ export default function Sell() {
   const [payoutProfile, setPayoutProfile] = useState<any>(null);
   const [savingStep, setSavingStep] = useState(false);
   const [publishedListing, setPublishedListing] = useState<{ slug: string } | null>(null);
+  const [editingListing, setEditingListing] = useState(false);
+  const [hasAuthorProfile, setHasAuthorProfile] = useState(false);
 
-  // Load draft + user + books + author profile + payout profile
+  // Load draft + user + books + author profile + payout profile + existing listing
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -116,13 +118,13 @@ export default function Sell() {
 
       // Override step from URL if present
       const urlStep = Number(params.get("step"));
-      if (!Number.isNaN(urlStep) && urlStep >= 0 && urlStep < TOTAL_STEPS) {
-        next = { ...next, step: urlStep as Step };
-      }
+      const hasUrlStep = !Number.isNaN(urlStep) && urlStep >= 0 && urlStep < TOTAL_STEPS;
+      if (hasUrlStep) next = { ...next, step: urlStep as Step };
 
       // Hydrate from existing author profile (server wins for already-saved fields)
       const { data: ap } = await supabase.from("author_profiles").select("*").eq("user_id", user.id).maybeSingle();
       if (ap) {
+        setHasAuthorProfile(true);
         next = {
           ...next,
           profile: {
@@ -142,8 +144,6 @@ export default function Sell() {
         next.profile.slug = slugify(name);
       }
 
-      // (setDraft called after bookId preselect below)
-
       // Books for publish step
       const { data: bs } = await supabase.from("books")
         .select("id, title, cover_image_url, category")
@@ -156,16 +156,45 @@ export default function Sell() {
         const b = (bs ?? []).find((x) => x.id === urlBookId)!;
         next = {
           ...next,
-          publish: {
-            ...next.publish,
-            book_id: urlBookId,
-            slug: next.publish.slug || slugify(b.title),
-          },
+          publish: { ...next.publish, book_id: urlBookId, slug: next.publish.slug || slugify(b.title) },
         };
       }
 
-      setDraft(next);
+      // Hydrate existing public_listing for the selected book (prevents data loss on re-entry)
+      if (next.publish.book_id) {
+        const { data: existing } = await supabase.from("public_listings")
+          .select("slug, blurb, price_cents, sample_chapters, is_public, cover_override_url")
+          .eq("book_id", next.publish.book_id).maybeSingle();
+        if (existing) {
+          setEditingListing(true);
+          next = {
+            ...next,
+            publish: {
+              book_id: next.publish.book_id,
+              slug: existing.slug,
+              blurb: existing.blurb ?? "",
+              price_cents: existing.price_cents ?? 0,
+              sample_chapters: existing.sample_chapters ?? 1,
+              is_public: existing.is_public ?? true,
+              cover_override_url: existing.cover_override_url ?? "",
+            },
+          };
+          // If user landed on step=4 (launch) via refresh, recover the success view from DB.
+          if (next.step === 4) setPublishedListing({ slug: existing.slug });
+        } else if (next.step === 4) {
+          // step=4 but no listing yet → bounce to publish step
+          next = { ...next, step: 3 as Step };
+        }
+      } else if (next.step === 4) {
+        next = { ...next, step: 3 as Step };
+      }
 
+      // Step-guard: jumping past Welcome via URL without a saved profile → force step 1
+      if (hasUrlStep && urlStep >= 1 && !ap && !next.profile.display_name.trim()) {
+        next = { ...next, step: 1 as Step };
+      }
+
+      setDraft(next);
 
       // Payout profile (best-effort)
       try {
@@ -174,7 +203,7 @@ export default function Sell() {
       } catch { /* ignore */ }
 
       setLoading(false);
-      void trackStorefrontEvent(null, "sell_onboarding_started" as any, { step: next.step });
+      void trackStorefrontEvent(null, "sell_onboarding_started" as any, { step: next.step, resumed: !!ap });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
