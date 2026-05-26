@@ -28,12 +28,41 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
+import { parseBookToCanonical } from "@/lib/canonicalContent";
+import { auditBookForExport, type ExportQualityReport } from "@/lib/exportQuality";
 import { toast } from "sonner";
 import {
   Sparkles, Rocket, CheckCircle2, Lock, ArrowRight, ArrowLeft, Copy, Share2,
   DollarSign, Globe, BookOpen, ShieldCheck, AlertTriangle, ExternalLink, Wallet,
-  Users, TrendingUp, PartyPopper,
+  Users, TrendingUp, PartyPopper, Pencil,
 } from "lucide-react";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** Surface a clean message instead of raw Postgres / pg-rest errors. */
+function friendlyError(e: any, fallback: string): string {
+  const msg = String(e?.message ?? e ?? "");
+  if (!msg) return fallback;
+  if (/duplicate key|unique constraint|23505/i.test(msg)) return "That URL is already taken — try a different one.";
+  if (/not_authorised|not authorized|permission/i.test(msg)) return "You don't have permission to do that.";
+  if (/network|fetch|failed to fetch/i.test(msg)) return "Network issue — check your connection and retry.";
+  if (msg.length > 160) return fallback;
+  return msg;
+}
+
+/** Try INSERT/UPSERT; on slug-collision (23505) retry with -2, -3… up to 5. */
+async function withSlugRetry<T>(baseSlug: string, run: (slug: string) => Promise<T>): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i < 6; i++) {
+    const slug = i === 0 ? baseSlug : `${baseSlug}-${i + 1}`;
+    try { return await run(slug); }
+    catch (e: any) {
+      lastErr = e;
+      if (!/duplicate key|unique constraint|23505/i.test(String(e?.message ?? e))) throw e;
+    }
+  }
+  throw lastErr;
+}
 
 type Step = 0 | 1 | 2 | 3 | 4;
 const TOTAL_STEPS = 5;
