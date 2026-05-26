@@ -224,39 +224,50 @@ export default function Sell() {
   // --- Step actions -------------------------------------------------------
   async function saveProfileAndContinue() {
     if (!userId) return;
-    const slug = draft.profile.slug || slugify(draft.profile.display_name);
-    if (!draft.profile.display_name.trim() || !slug) {
+    const baseSlug = draft.profile.slug || slugify(draft.profile.display_name);
+    if (!draft.profile.display_name.trim() || !baseSlug) {
       toast.error("Display name is required"); return;
     }
     setSavingStep(true);
     try {
-      const { error } = await supabase.from("author_profiles").upsert({
-        user_id: userId,
-        display_name: draft.profile.display_name.trim(),
-        slug,
-        bio: draft.profile.bio || null,
-        avatar_url: draft.profile.avatar_url || null,
-        website_url: draft.profile.website_url || null,
-        x_url: draft.profile.x_url || null,
-        linkedin_url: draft.profile.linkedin_url || null,
-      }, { onConflict: "user_id" });
-      if (error) throw error;
-      setDraft((d) => ({ ...d, profile: { ...d.profile, slug } }));
+      const savedSlug = await withSlugRetry(baseSlug, async (candidate) => {
+        const { error } = await supabase.from("author_profiles").upsert({
+          user_id: userId,
+          display_name: draft.profile.display_name.trim(),
+          slug: candidate,
+          bio: draft.profile.bio || null,
+          avatar_url: draft.profile.avatar_url || null,
+          website_url: draft.profile.website_url || null,
+          x_url: draft.profile.x_url || null,
+          linkedin_url: draft.profile.linkedin_url || null,
+        }, { onConflict: "user_id" });
+        if (error) throw error;
+        return candidate;
+      });
+      if (savedSlug !== baseSlug) {
+        toast.info(`Your URL was taken — saved as /authors/${savedSlug}.`);
+      }
+      setDraft((d) => ({ ...d, profile: { ...d.profile, slug: savedSlug } }));
+      setHasAuthorProfile(true);
       toast.success("Profile saved");
       setStep(2);
     } catch (e: any) {
-      toast.error(e.message ?? "Could not save profile");
+      toast.error(friendlyError(e, "Could not save profile"));
     } finally { setSavingStep(false); }
   }
 
   async function savePayoutAndContinue() {
+    const email = (payoutProfile?.payout_email ?? "").trim();
+    const country = (payoutProfile?.country_code ?? "").trim().toUpperCase();
+    if (email && !EMAIL_RE.test(email)) { toast.error("Enter a valid email."); return; }
+    if (country && country.length !== 2) { toast.error("Country must be a 2-letter ISO code (e.g. US)."); return; }
     setSavingStep(true);
     try {
       const { data, error } = await supabase.functions.invoke("creator-payout-profile", {
         body: {
           payout_method: payoutProfile?.payout_method === "stripe_connect" ? undefined : "manual",
-          payout_email: payoutProfile?.payout_email ?? null,
-          country_code: payoutProfile?.country_code ?? null,
+          payout_email: email || null,
+          country_code: country || null,
         },
       });
       if (error) throw error;
@@ -264,43 +275,79 @@ export default function Sell() {
       void trackStorefrontEvent(null, "sell_payout_connected" as any);
       setStep(3);
     } catch (e: any) {
-      toast.error(e.message ?? "Could not save payout");
+      toast.error(friendlyError(e, "Could not save payout"));
     } finally { setSavingStep(false); }
   }
 
   async function publishAndContinue() {
     if (!userId) return;
     if (!draft.publish.book_id) { toast.error("Select a book to publish"); return; }
-    const slug = draft.publish.slug || slugify(books.find(b => b.id === draft.publish.book_id)?.title ?? "");
-    if (!slug) { toast.error("URL slug is required"); return; }
+    // Guard: must have author profile before listing publicly
+    if (draft.publish.is_public && !hasAuthorProfile) {
+      toast.error("Save your creator profile first.");
+      setStep(1); return;
+    }
+    const baseSlug = draft.publish.slug || slugify(books.find(b => b.id === draft.publish.book_id)?.title ?? "");
+    if (!baseSlug) { toast.error("URL slug is required"); return; }
+    const priceCents = Math.max(0, Math.floor(draft.publish.price_cents || 0));
+    const isPaid = priceCents > 0;
+
     setSavingStep(true);
     try {
+      // Quality gate for paid public listings — match the BookPublishSettings policy.
+      if (isPaid && draft.publish.is_public) {
+        const { data: chs } = await supabase.from("chapters")
+          .select("chapter_number, title, content")
+          .eq("book_id", draft.publish.book_id)
+          .order("chapter_number", { ascending: true });
+        const selectedBook = books.find(b => b.id === draft.publish.book_id);
+        const report: ExportQualityReport = auditBookForExport(
+          parseBookToCanonical(chs ?? []),
+          { hasCover: !!selectedBook?.cover_image_url },
+        );
+        if (report.status === "blocked") {
+          void trackStorefrontEvent(null, "export_quality_blocked" as any, { book_id: draft.publish.book_id, issues: report.issues.length });
+          toast.error("This book has export-quality blockers. Open publishing settings to resolve them before charging readers.");
+          setSavingStep(false);
+          return;
+        }
+        if (report.status === "needs_review") {
+          void trackStorefrontEvent(null, "export_quality_warning" as any, { book_id: draft.publish.book_id, issues: report.issues.length });
+        }
+      }
+
       const { data: existing } = await supabase.from("public_listings")
         .select("id").eq("book_id", draft.publish.book_id).maybeSingle();
 
-      const payload: any = {
-        user_id: userId,
+      const basePayload = {
         book_id: draft.publish.book_id,
-        slug,
         blurb: draft.publish.blurb || null,
-        price_cents: Math.max(0, Math.floor(draft.publish.price_cents || 0)),
+        price_cents: priceCents,
         sample_chapters: Math.max(0, Math.floor(draft.publish.sample_chapters || 0)),
         is_public: draft.publish.is_public,
         cover_override_url: draft.publish.cover_override_url || null,
       };
 
-      if (existing) {
-        const { error } = await supabase.from("public_listings").update(payload).eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("public_listings").insert(payload);
-        if (error) throw error;
-      }
-      setPublishedListing({ slug });
-      void trackStorefrontEvent(null, "sell_first_book_published" as any, { book_id: draft.publish.book_id });
+      const savedSlug = await withSlugRetry(baseSlug, async (candidate) => {
+        if (existing) {
+          const { error } = await supabase.from("public_listings")
+            .update({ ...basePayload, slug: candidate }).eq("id", existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("public_listings")
+            .insert({ ...basePayload, slug: candidate });
+          if (error) throw error;
+        }
+        return candidate;
+      });
+
+      if (savedSlug !== baseSlug) toast.info(`That URL was taken — saved as /store/${savedSlug}.`);
+      setPublishedListing({ slug: savedSlug });
+      setEditingListing(true);
+      void trackStorefrontEvent(null, "sell_first_book_published" as any, { book_id: draft.publish.book_id, edited: !!existing });
       setStep(4);
     } catch (e: any) {
-      toast.error(e.message ?? "Could not publish");
+      toast.error(friendlyError(e, "Could not publish"));
     } finally { setSavingStep(false); }
   }
 
