@@ -590,12 +590,13 @@ function StepPayout({
 
 function StepPublish({
   books, value, onChange, onBack, onNext, saving,
-  canPublishExternal, entitlementTier, entitlementLoading,
+  canPublishExternal, entitlementTier, entitlementLoading, editing,
 }: {
   books: Book[]; value: DraftState["publish"];
   onChange: (v: DraftState["publish"]) => void;
   onBack: () => void; onNext: () => void; saving: boolean;
   canPublishExternal: boolean; entitlementTier: string; entitlementLoading: boolean;
+  editing?: boolean;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const selected = books.find(b => b.id === value.book_id);
@@ -620,8 +621,19 @@ function StepPublish({
   return (
     <Card className="p-5 md:p-7 space-y-5">
       <div>
-        <h2 className="text-2xl font-display font-semibold">Publish your first book</h2>
-        <p className="text-sm text-muted-foreground mt-1">Pick a book, add a price, and you're live.</p>
+        <div className="flex items-center gap-2">
+          <h2 className="text-2xl font-display font-semibold">
+            {editing ? "Update your listing" : "Publish your first book"}
+          </h2>
+          {editing && (
+            <Badge variant="secondary" className="gap-1"><Pencil className="h-3 w-3" />Editing</Badge>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground mt-1">
+          {editing
+            ? "Changes go live as soon as you save."
+            : "Pick a book, add a price, and you're live."}
+        </p>
       </div>
 
       <div>
