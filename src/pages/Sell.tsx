@@ -409,6 +409,7 @@ export default function Sell() {
             onBack={() => setStep(2)} onNext={publishAndContinue} saving={savingStep}
             canPublishExternal={entitlements.can_publish_external}
             entitlementTier={entitlements.tier} entitlementLoading={entLoading}
+            editing={editingListing}
           />
         )}
         {draft.step === 4 && publishedListing && (
