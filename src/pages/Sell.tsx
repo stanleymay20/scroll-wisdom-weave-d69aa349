@@ -28,12 +28,41 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
+import { parseBookToCanonical } from "@/lib/canonicalContent";
+import { auditBookForExport, type ExportQualityReport } from "@/lib/exportQuality";
 import { toast } from "sonner";
 import {
   Sparkles, Rocket, CheckCircle2, Lock, ArrowRight, ArrowLeft, Copy, Share2,
   DollarSign, Globe, BookOpen, ShieldCheck, AlertTriangle, ExternalLink, Wallet,
-  Users, TrendingUp, PartyPopper,
+  Users, TrendingUp, PartyPopper, Pencil,
 } from "lucide-react";
+
+const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
+
+/** Surface a clean message instead of raw Postgres / pg-rest errors. */
+function friendlyError(e: any, fallback: string): string {
+  const msg = String(e?.message ?? e ?? "");
+  if (!msg) return fallback;
+  if (/duplicate key|unique constraint|23505/i.test(msg)) return "That URL is already taken — try a different one.";
+  if (/not_authorised|not authorized|permission/i.test(msg)) return "You don't have permission to do that.";
+  if (/network|fetch|failed to fetch/i.test(msg)) return "Network issue — check your connection and retry.";
+  if (msg.length > 160) return fallback;
+  return msg;
+}
+
+/** Try INSERT/UPSERT; on slug-collision (23505) retry with -2, -3… up to 5. */
+async function withSlugRetry<T>(baseSlug: string, run: (slug: string) => Promise<T>): Promise<T> {
+  let lastErr: any;
+  for (let i = 0; i < 6; i++) {
+    const slug = i === 0 ? baseSlug : `${baseSlug}-${i + 1}`;
+    try { return await run(slug); }
+    catch (e: any) {
+      lastErr = e;
+      if (!/duplicate key|unique constraint|23505/i.test(String(e?.message ?? e))) throw e;
+    }
+  }
+  throw lastErr;
+}
 
 type Step = 0 | 1 | 2 | 3 | 4;
 const TOTAL_STEPS = 5;
@@ -70,8 +99,10 @@ export default function Sell() {
   const [payoutProfile, setPayoutProfile] = useState<any>(null);
   const [savingStep, setSavingStep] = useState(false);
   const [publishedListing, setPublishedListing] = useState<{ slug: string } | null>(null);
+  const [editingListing, setEditingListing] = useState(false);
+  const [hasAuthorProfile, setHasAuthorProfile] = useState(false);
 
-  // Load draft + user + books + author profile + payout profile
+  // Load draft + user + books + author profile + payout profile + existing listing
   useEffect(() => {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
@@ -87,13 +118,13 @@ export default function Sell() {
 
       // Override step from URL if present
       const urlStep = Number(params.get("step"));
-      if (!Number.isNaN(urlStep) && urlStep >= 0 && urlStep < TOTAL_STEPS) {
-        next = { ...next, step: urlStep as Step };
-      }
+      const hasUrlStep = !Number.isNaN(urlStep) && urlStep >= 0 && urlStep < TOTAL_STEPS;
+      if (hasUrlStep) next = { ...next, step: urlStep as Step };
 
       // Hydrate from existing author profile (server wins for already-saved fields)
       const { data: ap } = await supabase.from("author_profiles").select("*").eq("user_id", user.id).maybeSingle();
       if (ap) {
+        setHasAuthorProfile(true);
         next = {
           ...next,
           profile: {
@@ -113,8 +144,6 @@ export default function Sell() {
         next.profile.slug = slugify(name);
       }
 
-      // (setDraft called after bookId preselect below)
-
       // Books for publish step
       const { data: bs } = await supabase.from("books")
         .select("id, title, cover_image_url, category")
@@ -127,16 +156,45 @@ export default function Sell() {
         const b = (bs ?? []).find((x) => x.id === urlBookId)!;
         next = {
           ...next,
-          publish: {
-            ...next.publish,
-            book_id: urlBookId,
-            slug: next.publish.slug || slugify(b.title),
-          },
+          publish: { ...next.publish, book_id: urlBookId, slug: next.publish.slug || slugify(b.title) },
         };
       }
 
-      setDraft(next);
+      // Hydrate existing public_listing for the selected book (prevents data loss on re-entry)
+      if (next.publish.book_id) {
+        const { data: existing } = await supabase.from("public_listings")
+          .select("slug, blurb, price_cents, sample_chapters, is_public, cover_override_url")
+          .eq("book_id", next.publish.book_id).maybeSingle();
+        if (existing) {
+          setEditingListing(true);
+          next = {
+            ...next,
+            publish: {
+              book_id: next.publish.book_id,
+              slug: existing.slug,
+              blurb: existing.blurb ?? "",
+              price_cents: existing.price_cents ?? 0,
+              sample_chapters: existing.sample_chapters ?? 1,
+              is_public: existing.is_public ?? true,
+              cover_override_url: existing.cover_override_url ?? "",
+            },
+          };
+          // If user landed on step=4 (launch) via refresh, recover the success view from DB.
+          if (next.step === 4) setPublishedListing({ slug: existing.slug });
+        } else if (next.step === 4) {
+          // step=4 but no listing yet → bounce to publish step
+          next = { ...next, step: 3 as Step };
+        }
+      } else if (next.step === 4) {
+        next = { ...next, step: 3 as Step };
+      }
 
+      // Step-guard: jumping past Welcome via URL without a saved profile → force step 1
+      if (hasUrlStep && urlStep >= 1 && !ap && !next.profile.display_name.trim()) {
+        next = { ...next, step: 1 as Step };
+      }
+
+      setDraft(next);
 
       // Payout profile (best-effort)
       try {
@@ -145,7 +203,7 @@ export default function Sell() {
       } catch { /* ignore */ }
 
       setLoading(false);
-      void trackStorefrontEvent(null, "sell_onboarding_started" as any, { step: next.step });
+      void trackStorefrontEvent(null, "sell_onboarding_started" as any, { step: next.step, resumed: !!ap });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -166,39 +224,50 @@ export default function Sell() {
   // --- Step actions -------------------------------------------------------
   async function saveProfileAndContinue() {
     if (!userId) return;
-    const slug = draft.profile.slug || slugify(draft.profile.display_name);
-    if (!draft.profile.display_name.trim() || !slug) {
+    const baseSlug = draft.profile.slug || slugify(draft.profile.display_name);
+    if (!draft.profile.display_name.trim() || !baseSlug) {
       toast.error("Display name is required"); return;
     }
     setSavingStep(true);
     try {
-      const { error } = await supabase.from("author_profiles").upsert({
-        user_id: userId,
-        display_name: draft.profile.display_name.trim(),
-        slug,
-        bio: draft.profile.bio || null,
-        avatar_url: draft.profile.avatar_url || null,
-        website_url: draft.profile.website_url || null,
-        x_url: draft.profile.x_url || null,
-        linkedin_url: draft.profile.linkedin_url || null,
-      }, { onConflict: "user_id" });
-      if (error) throw error;
-      setDraft((d) => ({ ...d, profile: { ...d.profile, slug } }));
+      const savedSlug = await withSlugRetry(baseSlug, async (candidate) => {
+        const { error } = await supabase.from("author_profiles").upsert({
+          user_id: userId,
+          display_name: draft.profile.display_name.trim(),
+          slug: candidate,
+          bio: draft.profile.bio || null,
+          avatar_url: draft.profile.avatar_url || null,
+          website_url: draft.profile.website_url || null,
+          x_url: draft.profile.x_url || null,
+          linkedin_url: draft.profile.linkedin_url || null,
+        }, { onConflict: "user_id" });
+        if (error) throw error;
+        return candidate;
+      });
+      if (savedSlug !== baseSlug) {
+        toast.info(`Your URL was taken — saved as /authors/${savedSlug}.`);
+      }
+      setDraft((d) => ({ ...d, profile: { ...d.profile, slug: savedSlug } }));
+      setHasAuthorProfile(true);
       toast.success("Profile saved");
       setStep(2);
     } catch (e: any) {
-      toast.error(e.message ?? "Could not save profile");
+      toast.error(friendlyError(e, "Could not save profile"));
     } finally { setSavingStep(false); }
   }
 
   async function savePayoutAndContinue() {
+    const email = (payoutProfile?.payout_email ?? "").trim();
+    const country = (payoutProfile?.country_code ?? "").trim().toUpperCase();
+    if (email && !EMAIL_RE.test(email)) { toast.error("Enter a valid email."); return; }
+    if (country && country.length !== 2) { toast.error("Country must be a 2-letter ISO code (e.g. US)."); return; }
     setSavingStep(true);
     try {
       const { data, error } = await supabase.functions.invoke("creator-payout-profile", {
         body: {
           payout_method: payoutProfile?.payout_method === "stripe_connect" ? undefined : "manual",
-          payout_email: payoutProfile?.payout_email ?? null,
-          country_code: payoutProfile?.country_code ?? null,
+          payout_email: email || null,
+          country_code: country || null,
         },
       });
       if (error) throw error;
@@ -206,43 +275,79 @@ export default function Sell() {
       void trackStorefrontEvent(null, "sell_payout_connected" as any);
       setStep(3);
     } catch (e: any) {
-      toast.error(e.message ?? "Could not save payout");
+      toast.error(friendlyError(e, "Could not save payout"));
     } finally { setSavingStep(false); }
   }
 
   async function publishAndContinue() {
     if (!userId) return;
     if (!draft.publish.book_id) { toast.error("Select a book to publish"); return; }
-    const slug = draft.publish.slug || slugify(books.find(b => b.id === draft.publish.book_id)?.title ?? "");
-    if (!slug) { toast.error("URL slug is required"); return; }
+    // Guard: must have author profile before listing publicly
+    if (draft.publish.is_public && !hasAuthorProfile) {
+      toast.error("Save your creator profile first.");
+      setStep(1); return;
+    }
+    const baseSlug = draft.publish.slug || slugify(books.find(b => b.id === draft.publish.book_id)?.title ?? "");
+    if (!baseSlug) { toast.error("URL slug is required"); return; }
+    const priceCents = Math.max(0, Math.floor(draft.publish.price_cents || 0));
+    const isPaid = priceCents > 0;
+
     setSavingStep(true);
     try {
+      // Quality gate for paid public listings — match the BookPublishSettings policy.
+      if (isPaid && draft.publish.is_public) {
+        const { data: chs } = await supabase.from("chapters")
+          .select("chapter_number, title, content")
+          .eq("book_id", draft.publish.book_id)
+          .order("chapter_number", { ascending: true });
+        const selectedBook = books.find(b => b.id === draft.publish.book_id);
+        const report: ExportQualityReport = auditBookForExport(
+          parseBookToCanonical(chs ?? []),
+          { hasCover: !!selectedBook?.cover_image_url },
+        );
+        if (report.status === "blocked") {
+          void trackStorefrontEvent(null, "export_quality_blocked" as any, { book_id: draft.publish.book_id, issues: report.issues.length });
+          toast.error("This book has export-quality blockers. Open publishing settings to resolve them before charging readers.");
+          setSavingStep(false);
+          return;
+        }
+        if (report.status === "needs_review") {
+          void trackStorefrontEvent(null, "export_quality_warning" as any, { book_id: draft.publish.book_id, issues: report.issues.length });
+        }
+      }
+
       const { data: existing } = await supabase.from("public_listings")
         .select("id").eq("book_id", draft.publish.book_id).maybeSingle();
 
-      const payload: any = {
-        user_id: userId,
+      const basePayload = {
         book_id: draft.publish.book_id,
-        slug,
         blurb: draft.publish.blurb || null,
-        price_cents: Math.max(0, Math.floor(draft.publish.price_cents || 0)),
+        price_cents: priceCents,
         sample_chapters: Math.max(0, Math.floor(draft.publish.sample_chapters || 0)),
         is_public: draft.publish.is_public,
         cover_override_url: draft.publish.cover_override_url || null,
       };
 
-      if (existing) {
-        const { error } = await supabase.from("public_listings").update(payload).eq("id", existing.id);
-        if (error) throw error;
-      } else {
-        const { error } = await supabase.from("public_listings").insert(payload);
-        if (error) throw error;
-      }
-      setPublishedListing({ slug });
-      void trackStorefrontEvent(null, "sell_first_book_published" as any, { book_id: draft.publish.book_id });
+      const savedSlug = await withSlugRetry(baseSlug, async (candidate) => {
+        if (existing) {
+          const { error } = await supabase.from("public_listings")
+            .update({ ...basePayload, slug: candidate }).eq("id", existing.id);
+          if (error) throw error;
+        } else {
+          const { error } = await supabase.from("public_listings")
+            .insert({ ...basePayload, slug: candidate });
+          if (error) throw error;
+        }
+        return candidate;
+      });
+
+      if (savedSlug !== baseSlug) toast.info(`That URL was taken — saved as /store/${savedSlug}.`);
+      setPublishedListing({ slug: savedSlug });
+      setEditingListing(true);
+      void trackStorefrontEvent(null, "sell_first_book_published" as any, { book_id: draft.publish.book_id, edited: !!existing });
       setStep(4);
     } catch (e: any) {
-      toast.error(e.message ?? "Could not publish");
+      toast.error(friendlyError(e, "Could not publish"));
     } finally { setSavingStep(false); }
   }
 
@@ -304,6 +409,7 @@ export default function Sell() {
             onBack={() => setStep(2)} onNext={publishAndContinue} saving={savingStep}
             canPublishExternal={entitlements.can_publish_external}
             entitlementTier={entitlements.tier} entitlementLoading={entLoading}
+            editing={editingListing}
           />
         )}
         {draft.step === 4 && publishedListing && (
@@ -484,12 +590,13 @@ function StepPayout({
 
 function StepPublish({
   books, value, onChange, onBack, onNext, saving,
-  canPublishExternal, entitlementTier, entitlementLoading,
+  canPublishExternal, entitlementTier, entitlementLoading, editing,
 }: {
   books: Book[]; value: DraftState["publish"];
   onChange: (v: DraftState["publish"]) => void;
   onBack: () => void; onNext: () => void; saving: boolean;
   canPublishExternal: boolean; entitlementTier: string; entitlementLoading: boolean;
+  editing?: boolean;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const selected = books.find(b => b.id === value.book_id);
@@ -514,8 +621,19 @@ function StepPublish({
   return (
     <Card className="p-5 md:p-7 space-y-5">
       <div>
-        <h2 className="text-2xl font-display font-semibold">Publish your first book</h2>
-        <p className="text-sm text-muted-foreground mt-1">Pick a book, add a price, and you're live.</p>
+        <div className="flex items-center gap-2">
+          <h2 className="text-2xl font-display font-semibold">
+            {editing ? "Update your listing" : "Publish your first book"}
+          </h2>
+          {editing && (
+            <Badge variant="secondary" className="gap-1"><Pencil className="h-3 w-3" />Editing</Badge>
+          )}
+        </div>
+        <p className="text-sm text-muted-foreground mt-1">
+          {editing
+            ? "Changes go live as soon as you save."
+            : "Pick a book, add a price, and you're live."}
+        </p>
       </div>
 
       <div>
@@ -627,7 +745,7 @@ function StepPublish({
         </>
       )}
 
-      <StepNav onBack={onBack} onNext={onNext} saving={saving} nextLabel="Publish" disabled={!value.book_id} />
+      <StepNav onBack={onBack} onNext={onNext} saving={saving} nextLabel={editing ? "Save changes" : "Publish"} disabled={!value.book_id} />
     </Card>
   );
 }
