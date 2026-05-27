@@ -1182,7 +1182,380 @@ serve(async (req) => {
   }
 });
 
+// =====================================================================
+// Canonical PDF Renderer (v1) — renders chapter bodies from CanonicalBlock[]
+// produced by the shared canonical parser. Falls back to legacy generatePDF
+// on exception. Reuses cover/title/copyright/TOC/bibliography/about shells
+// from the legacy renderer's design language for output parity.
+// =====================================================================
+async function generateCanonicalPDF(
+  book: any,
+  chapters: any[],
+  author: string,
+  identifier: string,
+  isISBN: boolean,
+  year: number,
+  coverImageBytes: Uint8Array | null,
+  isAcademic: boolean,
+  citationStyle: string,
+  bibliography: string[],
+  ctx: ExportContext,
+): Promise<Uint8Array> {
+  const canonical = parseBookToCanonical(
+    (chapters || []).map((c: any) => ({
+      chapter_number: c.chapter_number,
+      title: c.title,
+      content: c.content,
+    })),
+  );
+
+  const pdfDoc = await PDFDocument.create();
+  const timesRoman = await pdfDoc.embedFont(StandardFonts.TimesRoman);
+  const timesRomanBold = await pdfDoc.embedFont(StandardFonts.TimesRomanBold);
+  const timesRomanItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanItalic);
+  const timesRomanBoldItalic = await pdfDoc.embedFont(StandardFonts.TimesRomanBoldItalic);
+  const helvetica = await pdfDoc.embedFont(StandardFonts.Helvetica);
+  const courier = await pdfDoc.embedFont(StandardFonts.Courier);
+  const bodyFonts = { regular: timesRoman, bold: timesRomanBold, italic: timesRomanItalic, boldItalic: timesRomanBoldItalic };
+
+  const pageWidth = 612;
+  const pageHeight = 792;
+  const margin = 72;
+  const textWidth = pageWidth - margin * 2;
+
+  let currentChapterTitle = "";
+  const pageNumberRef = { current: 0 };
+  const addPageNumber = (pg: any, num: number) => {
+    if (num > 5) {
+      pg.drawText(String(num - 5), { x: pageWidth / 2 - 5, y: 30, size: 10, font: helvetica, color: rgb(0.5, 0.5, 0.5) });
+      if (currentChapterTitle) {
+        pg.drawText(sanitizeForPDF(author), { x: margin, y: pageHeight - 45, size: 8, font: helvetica, color: rgb(0.6, 0.6, 0.6) });
+        const trunc = currentChapterTitle.length > 50 ? currentChapterTitle.slice(0, 47) + "..." : currentChapterTitle;
+        const w = helvetica.widthOfTextAtSize(sanitizeForPDF(trunc), 8);
+        pg.drawText(sanitizeForPDF(trunc), { x: pageWidth - margin - w, y: pageHeight - 45, size: 8, font: helvetica, color: rgb(0.6, 0.6, 0.6) });
+      }
+    }
+  };
+
+  // --- Cover page ---
+  let page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumberRef.current++;
+  if (coverImageBytes) {
+    try {
+      let image: any;
+      try { image = await pdfDoc.embedPng(coverImageBytes); }
+      catch { try { image = await pdfDoc.embedJpg(coverImageBytes); } catch { /* ignore */ } }
+      if (image) {
+        const imgAspect = image.width / image.height;
+        const pageAspect = pageWidth / pageHeight;
+        let dw, dh, dx, dy;
+        if (imgAspect > pageAspect) { dh = pageHeight; dw = dh * imgAspect; dx = (pageWidth - dw) / 2; dy = 0; }
+        else { dw = pageWidth; dh = dw / imgAspect; dx = 0; dy = (pageHeight - dh) / 2; }
+        page.drawImage(image, { x: dx, y: dy, width: dw, height: dh });
+      }
+    } catch (e) { console.error("[CANONICAL_PDF] cover embed error", e); }
+  }
+
+  // --- Title page ---
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumberRef.current++;
+  let y = pageHeight - 200;
+  page.drawText(sanitizeForPDF((book.category || "BOOK").toUpperCase()), { x: margin, y, size: 12, font: helvetica, color: rgb(0.6, 0.5, 0.1) });
+  y -= 50;
+  for (const line of wrapText(sanitizeForPDF(book.title || "Untitled"), timesRomanBold, 28, textWidth)) {
+    page.drawText(line, { x: margin, y, size: 28, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1) });
+    y -= 36;
+  }
+  y -= 30;
+  page.drawText(sanitizeForPDF(`by ${author}`), { x: margin, y, size: 16, font: timesRoman, color: rgb(0.3, 0.3, 0.3) });
+  if (isAcademic) {
+    page.drawText(sanitizeForPDF(`[Academic Content - ${citationStyle} Citations]`), { x: margin, y: y - 30, size: 10, font: helvetica, color: rgb(0.4, 0.3, 0.1) });
+  }
+  if (ctx.showPoweredBy || ctx.showBranding) {
+    page.drawText(ctx.showBranding ? "Created with ScrollLibrary" : "Powered by ScrollLibrary", { x: margin, y: margin + 50, size: 10, font: helvetica, color: rgb(0.5, 0.5, 0.5) });
+  }
+
+  // --- Copyright page ---
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumberRef.current++;
+  y = margin + 200;
+  const copyrightLines: string[] = [
+    `Copyright ${year} ${author}. All rights reserved.`,
+    "",
+    isISBN ? `ISBN: ${identifier}` : `Scroll Publishing Code: ${identifier}`,
+    isISBN ? "" : "(Internal identifier - not an ISBN)",
+  ];
+  if (ctx.pub.publisher_name) {
+    copyrightLines.push("", `Published by ${ctx.pub.publisher_name}${ctx.pub.publisher_imprint ? ` — ${ctx.pub.publisher_imprint}` : ""}`);
+  }
+  if (ctx.showAINotice) copyrightLines.push("", "This work was developed with editorial and AI-assisted tooling", "under full authorship ownership by the author.");
+  if (ctx.showAILongDisclosure) copyrightLines.push("", "AI Collaboration Disclosure: portions of this work were drafted,", "refined, or edited with AI assistance via ScrollLibrary. The author", "retains intellectual ownership and final editorial control.");
+  if (ctx.showBranding) copyrightLines.push("", "Created with ScrollLibrary");
+  for (const line of copyrightLines) {
+    page.drawText(sanitizeForPDF(line), { x: margin, y, size: 10, font: timesRoman, color: rgb(0.3, 0.3, 0.3) });
+    y -= 16;
+  }
+
+  // --- Blank ---
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumberRef.current++;
+
+  // --- TOC ---
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumberRef.current++;
+  addPageNumber(page, pageNumberRef.current);
+  y = pageHeight - margin - 50;
+  page.drawText("TABLE OF CONTENTS", { x: margin, y, size: 18, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1) });
+  y -= 50;
+  for (const ch of canonical) {
+    const titleText = /^chapter\s+\d+/i.test(ch.title) ? ch.title : `Chapter ${ch.chapter_number}: ${ch.title}`;
+    page.drawText(sanitizeForPDF(titleText), { x: margin, y, size: 12, font: timesRoman, color: rgb(0.2, 0.2, 0.2) });
+    y -= 24;
+    if (y < margin + 50) {
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      pageNumberRef.current++;
+      addPageNumber(page, pageNumberRef.current);
+      y = pageHeight - margin - 50;
+    }
+  }
+  if (bibliography.length > 0) {
+    y -= 20;
+    page.drawText(isAcademic ? "References" : "Bibliography", { x: margin, y, size: 12, font: timesRomanBold, color: rgb(0.2, 0.2, 0.2) });
+  }
+
+  // --- Helper: ensure room or page-break ---
+  const ensureRoom = (needed: number): void => {
+    if (y - needed < margin + 30) {
+      page = pdfDoc.addPage([pageWidth, pageHeight]);
+      pageNumberRef.current++;
+      addPageNumber(page, pageNumberRef.current);
+      y = pageHeight - margin - 30;
+    }
+  };
+
+  // --- Render each chapter from canonical blocks ---
+  for (const ch of canonical) {
+    currentChapterTitle = ch.title;
+    page = pdfDoc.addPage([pageWidth, pageHeight]);
+    pageNumberRef.current++;
+    addPageNumber(page, pageNumberRef.current);
+    y = pageHeight - margin - 50;
+    page.drawText(sanitizeForPDF(`CHAPTER ${ch.chapter_number}`), { x: margin, y, size: 10, font: helvetica, color: rgb(0.6, 0.5, 0.1) });
+    y -= 30;
+    for (const line of wrapText(sanitizeForPDF(ch.title), timesRomanBold, 22, textWidth)) {
+      page.drawText(line, { x: margin, y, size: 22, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1) });
+      y -= 28;
+    }
+    y -= 20;
+
+    // Strip duplicate chapter title heading at the top if first block matches
+    const blocks = ch.blocks.slice();
+    if (blocks.length > 0 && blocks[0].kind === "heading" && blocks[0].text) {
+      const first = blocks[0].text.toLowerCase().trim();
+      const t = (ch.title || "").toLowerCase().trim();
+      if (first === t || first === `chapter ${ch.chapter_number}: ${t}` || first === `chapter ${ch.chapter_number}`) {
+        blocks.shift();
+      }
+    }
+
+    for (const block of blocks) {
+      try {
+        switch (block.kind) {
+          case "heading": {
+            const level = Math.min(Math.max(block.level || 2, 1), 3);
+            const size = level === 1 ? 18 : level === 2 ? 15 : 12;
+            const spaceBefore = level === 1 ? 18 : 12;
+            ensureRoom(size + spaceBefore + 8);
+            y -= spaceBefore;
+            for (const line of wrapText(sanitizeForPDF(block.text || ""), timesRomanBold, size, textWidth)) {
+              ensureRoom(size + 4);
+              page.drawText(line, { x: margin, y, size, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1) });
+              y -= size + 4;
+            }
+            y -= 6;
+            break;
+          }
+          case "paragraph": {
+            ensureRoom(14);
+            const res = drawStyledParagraph(page, block.text || "", margin, y, textWidth, 11, bodyFonts, rgb(0.15, 0.15, 0.15), pdfDoc, pageWidth, pageHeight, margin, addPageNumber, pageNumberRef);
+            page = res.page;
+            y = res.y - 4;
+            break;
+          }
+          case "list": {
+            const items = block.list?.items || [];
+            const ordered = !!block.list?.ordered;
+            for (let i = 0; i < items.length; i++) {
+              const bullet = ordered ? `${i + 1}. ` : "• ";
+              ensureRoom(14);
+              page.drawText(sanitizeForPDF(bullet), { x: margin, y, size: 11, font: timesRoman, color: rgb(0.2, 0.2, 0.2) });
+              const indent = margin + 18;
+              const res = drawStyledParagraph(page, items[i] || "", indent, y, textWidth - 18, 11, bodyFonts, rgb(0.15, 0.15, 0.15), pdfDoc, pageWidth, pageHeight, margin, addPageNumber, pageNumberRef);
+              page = res.page;
+              y = res.y - 2;
+            }
+            y -= 4;
+            break;
+          }
+          case "quote": {
+            const text = block.text || "";
+            ensureRoom(16);
+            // Left bar
+            page.drawRectangle({ x: margin, y: y - 2, width: 3, height: 14, color: rgb(0.6, 0.6, 0.6) });
+            const res = drawStyledParagraph(page, text, margin + 14, y, textWidth - 14, 11, bodyFonts, rgb(0.35, 0.35, 0.35), pdfDoc, pageWidth, pageHeight, margin, addPageNumber, pageNumberRef);
+            page = res.page;
+            y = res.y - 6;
+            break;
+          }
+          case "code": {
+            const src = block.code?.source || "";
+            const lines = src.split("\n");
+            const lineH = 12;
+            const padding = 8;
+            const blockH = lines.length * lineH + padding * 2;
+            ensureRoom(Math.min(blockH, pageHeight - margin * 2 - 30));
+            // Background
+            const startY = y + 4;
+            const drawH = Math.min(blockH, startY - (margin + 30));
+            page.drawRectangle({ x: margin - 4, y: startY - drawH, width: textWidth + 8, height: drawH, color: rgb(0.96, 0.96, 0.97) });
+            for (const ln of lines) {
+              ensureRoom(lineH);
+              // Truncate ultra-wide lines by wrap to avoid overflow
+              const sanitized = sanitizeForPDF(ln.replace(/\t/g, "  "));
+              const wrapped = wrapText(sanitized, courier, 9, textWidth);
+              for (const wl of wrapped) {
+                ensureRoom(lineH);
+                page.drawText(wl, { x: margin, y, size: 9, font: courier, color: rgb(0.15, 0.15, 0.2) });
+                y -= lineH;
+              }
+            }
+            y -= 8;
+            break;
+          }
+          case "table": {
+            const header = block.table?.header || [];
+            const rows = block.table?.rows || [];
+            const cols = Math.max(1, header.length);
+            const colW = textWidth / cols;
+            const cellH = 16;
+            ensureRoom(cellH * (rows.length + 1) + 8);
+            // Header
+            for (let c = 0; c < cols; c++) {
+              page.drawRectangle({ x: margin + c * colW, y: y - cellH + 4, width: colW, height: cellH, color: rgb(0.92, 0.92, 0.94) });
+              page.drawText(sanitizeForPDF((header[c] || "").slice(0, 40)), { x: margin + c * colW + 4, y: y - 8, size: 9, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1) });
+            }
+            y -= cellH;
+            for (const row of rows) {
+              ensureRoom(cellH);
+              for (let c = 0; c < cols; c++) {
+                page.drawText(sanitizeForPDF((row[c] || "").slice(0, 60)), { x: margin + c * colW + 4, y: y - 8, size: 9, font: timesRoman, color: rgb(0.2, 0.2, 0.2) });
+              }
+              y -= cellH;
+            }
+            y -= 6;
+            break;
+          }
+          case "image": {
+            // Skip remote fetch in canonical v1 (parity with legacy: legacy also skips images in PDF body)
+            const alt = block.image?.alt || block.image?.src || "image";
+            ensureRoom(28);
+            page.drawRectangle({ x: margin, y: y - 24, width: textWidth, height: 28, color: rgb(0.97, 0.97, 0.98), borderColor: rgb(0.85, 0.85, 0.88), borderWidth: 0.5 });
+            page.drawText(sanitizeForPDF(`[Image: ${alt}]`), { x: margin + 8, y: y - 14, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.45) });
+            y -= 36;
+            break;
+          }
+          case "callout": {
+            ensureRoom(20);
+            page.drawRectangle({ x: margin, y: y - 4, width: 3, height: 14, color: rgb(0.2, 0.4, 0.8) });
+            const res = drawStyledParagraph(page, block.text || "", margin + 14, y, textWidth - 14, 11, bodyFonts, rgb(0.2, 0.3, 0.5), pdfDoc, pageWidth, pageHeight, margin, addPageNumber, pageNumberRef);
+            page = res.page;
+            y = res.y - 6;
+            break;
+          }
+          case "reference": {
+            ensureRoom(12);
+            for (const line of wrapText(sanitizeForPDF(block.text || ""), timesRomanItalic, 9, textWidth)) {
+              ensureRoom(12);
+              page.drawText(line, { x: margin, y, size: 9, font: timesRomanItalic, color: rgb(0.4, 0.4, 0.4) });
+              y -= 12;
+            }
+            y -= 4;
+            break;
+          }
+          case "hr": {
+            ensureRoom(14);
+            page.drawLine({ start: { x: margin + 40, y: y - 4 }, end: { x: margin + textWidth - 40, y: y - 4 }, thickness: 0.5, color: rgb(0.7, 0.7, 0.7) });
+            y -= 14;
+            break;
+          }
+        }
+      } catch (blockErr) {
+        // Single-block failure should NOT poison the whole render — log and move on
+        console.warn("[CANONICAL_PDF] block render error", block.kind, blockErr);
+        y -= 4;
+      }
+    }
+  }
+
+  // --- Bibliography ---
+  if (bibliography.length > 0) {
+    currentChapterTitle = "";
+    page = pdfDoc.addPage([pageWidth, pageHeight]);
+    pageNumberRef.current++;
+    addPageNumber(page, pageNumberRef.current);
+    y = pageHeight - margin - 50;
+    page.drawText(isAcademic ? "REFERENCES" : "BIBLIOGRAPHY", { x: margin, y, size: 18, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1) });
+    y -= 40;
+    if (isAcademic) {
+      page.drawText(`Citation Style: ${citationStyle}`, { x: margin, y, size: 10, font: helvetica, color: rgb(0.5, 0.5, 0.5) });
+      y -= 30;
+    }
+    for (const ref of bibliography) {
+      const refLines = wrapText(sanitizeForPDF(ref), timesRoman, 10, textWidth - 20);
+      for (let i = 0; i < refLines.length; i++) {
+        if (y < margin + 30) {
+          page = pdfDoc.addPage([pageWidth, pageHeight]);
+          pageNumberRef.current++;
+          addPageNumber(page, pageNumberRef.current);
+          y = pageHeight - margin - 30;
+        }
+        page.drawText(refLines[i], { x: margin + (i > 0 ? 20 : 0), y, size: 10, font: timesRoman, color: rgb(0.2, 0.2, 0.2) });
+        y -= 14;
+      }
+      y -= 8;
+    }
+  }
+
+  // --- About author ---
+  currentChapterTitle = "";
+  page = pdfDoc.addPage([pageWidth, pageHeight]);
+  pageNumberRef.current++;
+  y = pageHeight - margin - 80;
+  page.drawText("ABOUT THE AUTHOR", { x: margin, y, size: 18, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1) });
+  y -= 50;
+  const about = `${author} is the author of "${book.title}". This work reflects a commitment to advancing knowledge and thought leadership in the field of ${(book.category || "general studies").replace(/_/g, " ")}. The author retains full ownership and commercial rights to this publication.`;
+  for (const line of wrapText(sanitizeForPDF(about), timesRoman, 12, textWidth)) {
+    page.drawText(line, { x: margin, y, size: 12, font: timesRoman, color: rgb(0.2, 0.2, 0.2) });
+    y -= 18;
+  }
+
+  // --- Metadata ---
+  pdfDoc.setTitle(book.title || "Untitled");
+  pdfDoc.setAuthor(author);
+  pdfDoc.setSubject((book.category || "Book").replace(/_/g, " "));
+  if (ctx.sanitizeMeta) {
+    pdfDoc.setCreator(ctx.pub.publisher_name || author);
+    pdfDoc.setProducer(ctx.pub.publisher_name || author);
+  } else {
+    pdfDoc.setCreator(ctx.showBranding ? "ScrollLibrary" : (ctx.pub.publisher_name || author));
+    pdfDoc.setProducer(ctx.showBranding ? `ScrollLibrary Canonical Renderer v${CANONICAL_RENDERER_VERSION}` : (ctx.pub.publisher_name || author));
+  }
+  pdfDoc.setKeywords([`canonical_renderer:${CANONICAL_RENDERER_VERSION}`]);
+  return pdfDoc.save();
+}
+
 // ===== PDF Generation with Cover Page, TOC, and References =====
+
 async function generatePDF(
   book: any, 
   chapters: any[], 
