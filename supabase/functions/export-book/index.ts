@@ -1105,13 +1105,23 @@ serve(async (req) => {
 
     switch (format) {
       case "pdf": {
-        const pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+        let pdfBytes: Uint8Array;
+        try {
+          pdfBytes = await generateCanonicalPDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+          canonicalFallbackUsed = false;
+          console.log("[EXPORT] canonical PDF render succeeded");
+        } catch (e) {
+          canonicalFallbackUsed = true;
+          console.warn("[EXPORT] canonical PDF render failed, falling back to legacy:", e);
+          pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+        }
         content = uint8ArrayToBase64(pdfBytes);
         contentType = "application/pdf";
         filename = `${sanitizeFilename(book.title)}.pdf`;
         isBase64 = true;
         break;
       }
+
 
       case "kdp-pdf": {
         const trimSize = KDP_TRIM_SIZES[kdpTrimSize || '6x9'] || KDP_TRIM_SIZES['6x9'];
