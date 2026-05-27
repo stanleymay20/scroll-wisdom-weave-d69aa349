@@ -12,6 +12,11 @@ const ALLOWED_EVENTS = [
   "sell_onboarding_started", "sell_payout_connected", "sell_first_book_published",
   "export_preview_opened", "export_quality_warning", "export_quality_blocked",
   "export_completed", "export_failed",
+  "library_sell_clicked", "sell_book_preselected",
+  "listing_created", "listing_updated", "storefront_viewed_after_publish",
+  "purchase_failed", "full_reader_opened",
+  "canonical_pdf_export_used", "canonical_pdf_export_fallback_used",
+
 ] as const;
 
 const Body = z.object({
