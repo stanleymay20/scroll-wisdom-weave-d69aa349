@@ -2,6 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, rgb, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
 import * as zip from "https://deno.land/x/zipjs@v2.7.32/index.js";
+import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
+import { auditBookForExport } from "../_shared/exportQuality.ts";
+
+const CANONICAL_RENDERER_VERSION = "1.0.0";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1073,6 +1078,31 @@ serve(async (req) => {
     let filename: string;
     let isBase64 = false;
 
+    // ===== Canonical content audit (non-blocking; powers export metadata) =====
+    let canonicalRendererVersion: string | null = CANONICAL_RENDERER_VERSION;
+    let exportQualityStatus: string | null = null;
+    let exportQualityScore: number | null = null;
+    let canonicalFallbackUsed = false;
+    try {
+      const canonical = parseBookToCanonical(
+        (chapters || []).map((c: any) => ({
+          chapter_number: c.chapter_number,
+          title: c.title,
+          content: c.content,
+        })),
+      );
+      const audit = auditBookForExport(canonical, { hasCover: !!coverImageBytes, bookType: book.book_type });
+      exportQualityStatus = audit.status;
+      exportQualityScore = audit.score;
+      console.log(`[EXPORT] canonical audit status=${audit.status} score=${audit.score} chapters=${canonical.length}`);
+    } catch (e) {
+      canonicalFallbackUsed = true;
+      canonicalRendererVersion = null;
+      console.warn("[EXPORT] canonical parse failed, falling back to legacy renderer", e);
+    }
+
+
+
     switch (format) {
       case "pdf": {
         const pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
@@ -1119,9 +1149,20 @@ serve(async (req) => {
     
 
     return new Response(
-      JSON.stringify({ success: true, content, contentType, filename, isBase64 }),
+      JSON.stringify({
+        success: true,
+        content,
+        contentType,
+        filename,
+        isBase64,
+        canonical_renderer_version: canonicalRendererVersion,
+        export_quality_status: exportQualityStatus,
+        export_quality_score: exportQualityScore,
+        canonical_fallback_used: canonicalFallbackUsed,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (error) {
     console.error("[EXPORT] Error:", error);
     return new Response(
