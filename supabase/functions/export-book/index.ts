@@ -2,6 +2,11 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, rgb, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
 import * as zip from "https://deno.land/x/zipjs@v2.7.32/index.js";
+import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
+import { auditBookForExport } from "../_shared/exportQuality.ts";
+
+const CANONICAL_RENDERER_VERSION = "1.0.0";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
