@@ -1078,6 +1078,31 @@ serve(async (req) => {
     let filename: string;
     let isBase64 = false;
 
+    // ===== Canonical content audit (non-blocking; powers export metadata) =====
+    let canonicalRendererVersion: string | null = CANONICAL_RENDERER_VERSION;
+    let exportQualityStatus: string | null = null;
+    let exportQualityScore: number | null = null;
+    let canonicalFallbackUsed = false;
+    try {
+      const canonical = parseBookToCanonical(
+        (chapters || []).map((c: any) => ({
+          chapter_number: c.chapter_number,
+          title: c.title,
+          content: c.content,
+        })),
+      );
+      const audit = auditBookForExport(canonical, { hasCover: !!coverImageBytes, bookType: book.book_type });
+      exportQualityStatus = audit.status;
+      exportQualityScore = audit.score;
+      console.log(`[EXPORT] canonical audit status=${audit.status} score=${audit.score} chapters=${canonical.length}`);
+    } catch (e) {
+      canonicalFallbackUsed = true;
+      canonicalRendererVersion = null;
+      console.warn("[EXPORT] canonical parse failed, falling back to legacy renderer", e);
+    }
+
+
+
     switch (format) {
       case "pdf": {
         const pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
