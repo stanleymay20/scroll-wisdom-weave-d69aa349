@@ -1149,9 +1149,20 @@ serve(async (req) => {
     
 
     return new Response(
-      JSON.stringify({ success: true, content, contentType, filename, isBase64 }),
+      JSON.stringify({
+        success: true,
+        content,
+        contentType,
+        filename,
+        isBase64,
+        canonical_renderer_version: canonicalRendererVersion,
+        export_quality_status: exportQualityStatus,
+        export_quality_score: exportQualityScore,
+        canonical_fallback_used: canonicalFallbackUsed,
+      }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
+
   } catch (error) {
     console.error("[EXPORT] Error:", error);
     return new Response(
