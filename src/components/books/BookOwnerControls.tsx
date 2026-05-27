@@ -86,10 +86,18 @@ export function BookOwnerControls({
           </p>
         </div>
         <Button asChild size="sm">
-          <Link to={`/sell?bookId=${book.id}&step=3`}>
+          <Link
+            to={`/sell?bookId=${book.id}&step=3`}
+            onClick={() => {
+              import("@/lib/storefrontAnalytics").then(({ trackStorefrontEvent }) =>
+                trackStorefrontEvent(null, "library_sell_clicked", { book_id: book.id, source: "book_owner_controls" }),
+              );
+            }}
+          >
             Sell <ArrowRight className="h-3.5 w-3.5 ml-1" />
           </Link>
         </Button>
+
       </div>
 
       {/* Chapter Management */}
