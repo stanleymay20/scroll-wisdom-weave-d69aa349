@@ -43,6 +43,11 @@ export default function FullBookReader() {
       }
       if (!isOwner && !isBuyer) { setDenied(true); setLoading(false); return; }
 
+      trackStorefrontEvent(l!.id, "full_reader_opened", {
+        access: isOwner ? "owner" : "buyer",
+        book_id: book.id,
+      });
+
       setTitle(book.title);
       const { data: ch } = await supabase
         .from("chapters").select("id, chapter_number, title, content")
