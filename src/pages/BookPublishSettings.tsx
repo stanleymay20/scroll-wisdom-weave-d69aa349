@@ -151,13 +151,18 @@ export default function BookPublishSettings() {
         series_order: form.series_order ? Number(form.series_order) : null,
         cover_override_url: form.cover_override_url || null,
       };
+      const wasCreate = !form.listing_id;
       const { data, error } = form.listing_id
         ? await supabase.from("public_listings").update(payload).eq("id", form.listing_id).select("id, is_public").single()
         : await supabase.from("public_listings").insert(payload).select("id, is_public").single();
       if (error) throw error;
       if (data) {
         setForm((f) => ({ ...f, listing_id: data.id }));
+        trackStorefrontEvent(data.id, wasCreate ? "listing_created" : "listing_updated", { is_public: data.is_public });
         trackStorefrontEvent(data.id, data.is_public ? "listing_publish" : "listing_unpublish");
+        if (data.is_public) {
+          try { sessionStorage.setItem("sl_just_published_listing", data.id); } catch { /* ignore */ }
+        }
       }
       toast.success("Saved");
     } catch (e: any) {

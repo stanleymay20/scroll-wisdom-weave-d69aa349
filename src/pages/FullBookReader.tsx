@@ -5,6 +5,7 @@ import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 
 interface Chapter { id: string; chapter_number: number; title: string; content: string | null; }
 
@@ -41,6 +42,11 @@ export default function FullBookReader() {
         isBuyer = !!p;
       }
       if (!isOwner && !isBuyer) { setDenied(true); setLoading(false); return; }
+
+      trackStorefrontEvent(l!.id, "full_reader_opened", {
+        access: isOwner ? "owner" : "buyer",
+        book_id: book.id,
+      });
 
       setTitle(book.title);
       const { data: ch } = await supabase

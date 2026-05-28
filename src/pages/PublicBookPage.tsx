@@ -144,6 +144,10 @@ export default function PublicBookPage() {
       toast.success("Thanks! We'll notify you when purchases open.");
     } catch (e: any) {
       const msg = e?.message ?? "Could not start checkout";
+      trackStorefrontEvent(data!.id, "purchase_failed", {
+        reason: msg.includes("Sign in") ? "unauthenticated" : "checkout_error",
+        message: String(msg).slice(0, 240),
+      });
       if (msg.includes("Sign in")) {
         toast.error("Please sign in to claim this book");
         navigate("/auth?redirect=" + encodeURIComponent(`/store/${data!.slug}`));
