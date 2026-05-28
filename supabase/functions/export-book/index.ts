@@ -1188,7 +1188,7 @@ serve(async (req) => {
 // on exception. Reuses cover/title/copyright/TOC/bibliography/about shells
 // from the legacy renderer's design language for output parity.
 // =====================================================================
-async function generateCanonicalPDF(
+export async function generateCanonicalPDF(
   book: any,
   chapters: any[],
   author: string,

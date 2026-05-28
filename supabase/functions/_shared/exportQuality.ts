@@ -3,7 +3,7 @@
  * Evaluates a normalized book and produces a Ready/Needs review/Blocked score.
  * Powers the in-app Export Preview and gates paid publishing.
  */
-import type { CanonicalChapter, CanonicalBlock } from "./canonicalContent";
+import type { CanonicalChapter, CanonicalBlock } from "./canonicalContent.ts";
 
 export type ExportQualityStatus = "ready" | "needs_review" | "blocked";
 export type ExportIssueSeverity = "blocker" | "warning" | "info";
@@ -141,7 +141,7 @@ function checkBlock(b: CanonicalBlock, chapter: number, issues: ExportIssue[]) {
   }
 
   if (b.kind === "code" && b.code) {
-    const longLine = b.code.source.split("\n").some((ln) => ln.length > CODE_LINE_HARD_WRAP);
+    const longLine = b.code.source.split("\n").some((ln: string) => ln.length > CODE_LINE_HARD_WRAP);
     if (longLine) {
       issues.push({
         severity: "warning",
@@ -155,7 +155,7 @@ function checkBlock(b: CanonicalBlock, chapter: number, issues: ExportIssue[]) {
 
   if (b.kind === "table" && b.table) {
     const cols = b.table.header.length;
-    const malformed = b.table.rows.some((r) => r.length !== cols);
+    const malformed = b.table.rows.some((r: string[]) => r.length !== cols);
     if (malformed) {
       issues.push({
         severity: "warning",
