@@ -37,6 +37,16 @@ export default function Storefront() {
 
   // Load discovery rails once.
   useEffect(() => {
+    // Drain the post-publish marker set by BookPublishSettings so the
+    // creator's first storefront visit after going live is observable.
+    try {
+      const justPublished = sessionStorage.getItem("sl_just_published_listing");
+      if (justPublished) {
+        sessionStorage.removeItem("sl_just_published_listing");
+        trackStorefrontEvent(justPublished, "storefront_viewed_after_publish");
+      }
+    } catch { /* ignore */ }
+
     (async () => {
       try {
         const [t, ts, r, rec] = await Promise.allSettled([
