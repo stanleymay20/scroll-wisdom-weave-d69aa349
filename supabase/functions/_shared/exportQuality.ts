@@ -141,7 +141,7 @@ function checkBlock(b: CanonicalBlock, chapter: number, issues: ExportIssue[]) {
   }
 
   if (b.kind === "code" && b.code) {
-    const longLine = b.code.source.split("\n").some((ln) => ln.length > CODE_LINE_HARD_WRAP);
+    const longLine = b.code.source.split("\n").some((ln: string) => ln.length > CODE_LINE_HARD_WRAP);
     if (longLine) {
       issues.push({
         severity: "warning",
