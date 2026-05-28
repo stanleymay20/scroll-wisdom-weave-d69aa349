@@ -155,7 +155,7 @@ function checkBlock(b: CanonicalBlock, chapter: number, issues: ExportIssue[]) {
 
   if (b.kind === "table" && b.table) {
     const cols = b.table.header.length;
-    const malformed = b.table.rows.some((r) => r.length !== cols);
+    const malformed = b.table.rows.some((r: string[]) => r.length !== cols);
     if (malformed) {
       issues.push({
         severity: "warning",
