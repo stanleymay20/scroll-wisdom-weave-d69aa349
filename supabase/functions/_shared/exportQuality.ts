@@ -3,7 +3,7 @@
  * Evaluates a normalized book and produces a Ready/Needs review/Blocked score.
  * Powers the in-app Export Preview and gates paid publishing.
  */
-import type { CanonicalChapter, CanonicalBlock } from "./canonicalContent";
+import type { CanonicalChapter, CanonicalBlock } from "./canonicalContent.ts";
 
 export type ExportQualityStatus = "ready" | "needs_review" | "blocked";
 export type ExportIssueSeverity = "blocker" | "warning" | "info";
