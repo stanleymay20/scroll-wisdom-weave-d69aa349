@@ -1144,7 +1144,16 @@ serve(async (req) => {
       }
       
       case "docx": {
-        const docxBytes = await generateDOCX(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+        let docxBytes: ArrayBuffer;
+        try {
+          docxBytes = await generateCanonicalDOCX(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+          canonicalFallbackUsed = false;
+          console.log("[EXPORT] canonical DOCX render succeeded — canonical_docx_export_used");
+        } catch (e) {
+          canonicalFallbackUsed = true;
+          console.warn("[EXPORT] canonical DOCX render failed, falling back to legacy — canonical_docx_export_fallback_used:", e);
+          docxBytes = await generateDOCX(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+        }
         content = uint8ArrayToBase64(new Uint8Array(docxBytes));
         contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         filename = `${sanitizeFilename(book.title)}.docx`;
