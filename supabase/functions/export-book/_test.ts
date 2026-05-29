@@ -233,3 +233,178 @@ Deno.test("canonical PDF: malformed/unsupported content does not crash", async (
   // Renderer must complete without throwing; output must still be a valid PDF.
   assertValidPDF(bytes);
 });
+
+// =====================================================================
+// Canonical DOCX renderer tests
+// =====================================================================
+import { generateCanonicalDOCX } from "./index.ts";
+
+const MIN_DOCX_BYTES = 1500;
+
+async function renderDOCX(chapters: { chapter_number: number; title: string; content: string }[]) {
+  const book = makeBook();
+  const buf = await generateCanonicalDOCX(
+    book,
+    chapters,
+    "Test Author",
+    "TEST-ID-0001",
+    false,
+    2026,
+    null,
+    false,
+    "APA",
+    [],
+    ctx,
+  );
+  return new Uint8Array(buf);
+}
+
+function assertValidDOCX(bytes: Uint8Array, minLen = MIN_DOCX_BYTES) {
+  assert(bytes instanceof Uint8Array, "expected Uint8Array");
+  assert(bytes.byteLength > minLen, `DOCX too small: ${bytes.byteLength} bytes`);
+  // .docx is a zip; magic bytes "PK\x03\x04"
+  assertEquals(bytes[0], 0x50);
+  assertEquals(bytes[1], 0x4b);
+}
+
+Deno.test("canonical DOCX: heading hierarchy (h1/h2/h3)", async () => {
+  const bytes = await renderDOCX([
+    {
+      chapter_number: 1,
+      title: "Headings",
+      content: [
+        "# Top-Level Heading",
+        "",
+        "Intro paragraph.",
+        "",
+        "## Second Level",
+        "",
+        "More text under H2.",
+        "",
+        "### Third Level",
+        "",
+        "Deepest section paragraph.",
+      ].join("\n"),
+    },
+  ]);
+  assertValidDOCX(bytes);
+});
+
+Deno.test("canonical DOCX: nested ordered + unordered lists", async () => {
+  const bytes = await renderDOCX([
+    {
+      chapter_number: 1,
+      title: "Lists",
+      content: [
+        "Unordered:",
+        "",
+        "- Alpha",
+        "- Beta with **bold** text",
+        "- Gamma",
+        "",
+        "Ordered:",
+        "",
+        "1. First step",
+        "2. Second step",
+        "3. Third step",
+      ].join("\n"),
+    },
+  ]);
+  assertValidDOCX(bytes);
+});
+
+Deno.test("canonical DOCX: markdown table renders", async () => {
+  const bytes = await renderDOCX([
+    {
+      chapter_number: 1,
+      title: "Table",
+      content: [
+        "Comparison:",
+        "",
+        "| Name  | Score | Notes        |",
+        "| ----- | ----- | ------------ |",
+        "| Alice | 92    | Strong start |",
+        "| Bob   | 87    | Improving    |",
+        "| Carol | 95    | Top scorer   |",
+        "",
+        "Trailing paragraph.",
+      ].join("\n"),
+    },
+  ]);
+  assertValidDOCX(bytes);
+});
+
+Deno.test("canonical DOCX: wide code block does not crash", async () => {
+  const longLine = "const x = " + "y".repeat(220) + ";";
+  const bytes = await renderDOCX([
+    {
+      chapter_number: 1,
+      title: "Code",
+      content: ["Example:", "", "```ts", "function demo() {", `  ${longLine}`, "}", "```", "", "After."].join("\n"),
+    },
+  ]);
+  assertValidDOCX(bytes);
+});
+
+Deno.test("canonical DOCX: long chapter grows file size", async () => {
+  const shortBytes = await renderDOCX([
+    { chapter_number: 1, title: "Short", content: "Just one short paragraph." },
+  ]);
+  const para = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(20);
+  const longContent = Array.from({ length: 40 }, (_, i) => `Paragraph ${i + 1}. ${para}`).join("\n\n");
+  const longBytes = await renderDOCX([{ chapter_number: 1, title: "Long", content: longContent }]);
+  assertValidDOCX(shortBytes);
+  assertValidDOCX(longBytes, MIN_DOCX_BYTES * 2);
+  assert(longBytes.byteLength > shortBytes.byteLength);
+});
+
+Deno.test("canonical DOCX: mixed image / quote / reference content", async () => {
+  const bytes = await renderDOCX([
+    {
+      chapter_number: 1,
+      title: "Mixed",
+      content: [
+        "Intro paragraph with **bold** and *italic*.",
+        "",
+        "![Alt text](https://example.invalid/missing.png)",
+        "",
+        "> A blockquote that should render as a styled block",
+        "> spanning multiple lines.",
+        "",
+        "Body continues after the quote.",
+        "",
+        "## References",
+        "",
+        "[^1]: Smith, J. (2024). Example Work. Example Press.",
+        "[^2]: Doe, A. (2023). Another Source. Sample Journal.",
+      ].join("\n"),
+    },
+  ]);
+  assertValidDOCX(bytes);
+});
+
+Deno.test("canonical DOCX: malformed/unsupported content does not crash", async () => {
+  const bytes = await renderDOCX([
+    {
+      chapter_number: 1,
+      title: "Malformed",
+      content: [
+        "Unterminated code fence:",
+        "",
+        "```js",
+        "const x = 1;",
+        "",
+        "| broken | table",
+        "| --- |",
+        "| only one col | extra | cells |",
+        "",
+        "Random control chars: \u0000\u0001\uFFFD inline.",
+        "",
+        "![](   )",
+        "",
+        "Trailing paragraph still renders.",
+      ].join("\n"),
+    },
+  ]);
+  assertValidDOCX(bytes);
+});
