@@ -4412,3 +4412,357 @@ ${isAcademic ? `<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Citation Style: ${citationSt
   const blob = await blobWriter.getData();
   return await blob.arrayBuffer();
 }
+
+// =====================================================================
+// Canonical DOCX Renderer (v1) — renders chapter bodies from
+// CanonicalBlock[] produced by the shared canonical parser. Falls back
+// to legacy generateDOCX on exception. Reuses cover/title/copyright/
+// bibliography/about shells from the legacy renderer for parity.
+// =====================================================================
+export async function generateCanonicalDOCX(
+  book: any,
+  chapters: any[],
+  author: string,
+  identifier: string,
+  isISBN: boolean,
+  year: number,
+  coverImageBytes: Uint8Array | null,
+  isAcademic: boolean,
+  citationStyle: string,
+  bibliography: string[],
+  ctx: ExportContext,
+): Promise<ArrayBuffer> {
+  // Parse all chapters into canonical form up-front so any structural
+  // failure surfaces before we start writing zip entries.
+  const canonical = parseBookToCanonical(
+    (chapters || []).map((c: any) => ({
+      chapter_number: c.chapter_number,
+      title: c.title,
+      content: c.content,
+    })),
+  );
+
+  const blobWriter = new zip.BlobWriter("application/vnd.openxmlformats-officedocument.wordprocessingml.document");
+  const zipWriter = new zip.ZipWriter(blobWriter);
+
+  // ── Pre-fetch inline images per chapter (cap at 5 per chapter) ─────
+  let imageCounter = 0;
+  const docxImages: { id: string; bytes: Uint8Array }[] = [];
+  const imageRefsByChapter: Map<number, { index: number; alt: string }[]> = new Map();
+  for (const ch of canonical) {
+    const refs: { index: number; alt: string }[] = [];
+    const imgBlocks = ch.blocks.filter((b) => b.kind === "image").slice(0, 5);
+    for (const blk of imgBlocks) {
+      const url = blk.image?.src || "";
+      if (!url) continue;
+      try {
+        const bytes = await fetchImageBytes(url);
+        if (bytes) {
+          imageCounter++;
+          docxImages.push({ id: `image${imageCounter}`, bytes });
+          refs.push({ index: imageCounter, alt: blk.image?.alt || "Image" });
+        }
+      } catch (_) {
+        // Skip unreachable image; renderer continues
+      }
+    }
+    imageRefsByChapter.set(ch.chapter_number, refs);
+  }
+
+  // ── Content types ──────────────────────────────────────────────────
+  const contentTypes = `<?xml version="1.0" encoding="UTF-8"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+  <Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+  <Default Extension="xml" ContentType="application/xml"/>
+  <Default Extension="jpeg" ContentType="image/jpeg"/>
+  <Default Extension="jpg" ContentType="image/jpeg"/>
+  <Default Extension="png" ContentType="image/png"/>
+  <Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+  <Override PartName="/word/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.styles+xml"/>
+</Types>`;
+  await zipWriter.add("[Content_Types].xml", new zip.TextReader(contentTypes));
+
+  // ── Styles (mirror legacy heading scale for output parity) ────────
+  const stylesXml = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:styles xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+  <w:style w:type="paragraph" w:styleId="Title"><w:name w:val="Title"/><w:pPr><w:jc w:val="center"/></w:pPr><w:rPr><w:b/><w:sz w:val="56"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading1"><w:name w:val="heading 1"/><w:pPr><w:keepNext/><w:spacing w:before="240" w:after="120"/></w:pPr><w:rPr><w:b/><w:sz w:val="36"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading2"><w:name w:val="heading 2"/><w:pPr><w:keepNext/><w:spacing w:before="200" w:after="80"/></w:pPr><w:rPr><w:b/><w:sz w:val="32"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading3"><w:name w:val="heading 3"/><w:pPr><w:keepNext/><w:spacing w:before="160" w:after="80"/></w:pPr><w:rPr><w:b/><w:sz w:val="28"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading4"><w:name w:val="heading 4"/><w:pPr><w:keepNext/><w:spacing w:before="120" w:after="60"/></w:pPr><w:rPr><w:b/><w:sz w:val="26"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading5"><w:name w:val="heading 5"/><w:pPr><w:keepNext/><w:spacing w:before="120" w:after="60"/></w:pPr><w:rPr><w:b/><w:sz w:val="24"/></w:rPr></w:style>
+  <w:style w:type="paragraph" w:styleId="Heading6"><w:name w:val="heading 6"/><w:pPr><w:keepNext/><w:spacing w:before="100" w:after="40"/></w:pPr><w:rPr><w:b/><w:i/><w:sz w:val="22"/></w:rPr></w:style>
+</w:styles>`;
+  await zipWriter.add("word/styles.xml", new zip.TextReader(stylesXml));
+
+  await zipWriter.add(
+    "_rels/.rels",
+    new zip.TextReader(`<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`),
+  );
+
+  // ── Cover + image relationships ───────────────────────────────────
+  let imageRelId = 2;
+  let imageRels = "";
+  const coverKind: ImageKind = coverImageBytes ? detectImageKind(coverImageBytes) : "unknown";
+  const canEmbedCover = coverKind === "png" || coverKind === "jpeg";
+  const coverExt = imageKindToExt(coverKind);
+  if (coverImageBytes && canEmbedCover) {
+    await zipWriter.add(`word/media/cover.${coverExt}`, new zip.Uint8ArrayReader(coverImageBytes));
+    imageRels += `<Relationship Id="rId${imageRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/cover.${coverExt}"/>`;
+    imageRelId++;
+  }
+  const imageRelMap: Map<number, number> = new Map();
+  for (const img of docxImages) {
+    const kind = detectImageKind(img.bytes);
+    if (kind !== "png" && kind !== "jpeg") continue;
+    const ext = imageKindToExt(kind);
+    await zipWriter.add(`word/media/${img.id}.${ext}`, new zip.Uint8ArrayReader(img.bytes));
+    imageRels += `<Relationship Id="rId${imageRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/image" Target="media/${img.id}.${ext}"/>`;
+    imageRelMap.set(parseInt(img.id.replace("image", "")), imageRelId);
+    imageRelId++;
+  }
+  const stylesRelId = imageRelId++;
+  await zipWriter.add(
+    "word/_rels/document.xml.rels",
+    new zip.TextReader(`<?xml version="1.0" encoding="UTF-8"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+  <Relationship Id="rId${stylesRelId}" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/styles" Target="styles.xml"/>
+  ${imageRels}
+</Relationships>`),
+  );
+
+  // ── Document body ─────────────────────────────────────────────────
+  let doc = `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main"
+            xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"
+            xmlns:wp="http://schemas.openxmlformats.org/drawingml/2006/wordprocessingDrawing"
+            xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main"
+            xmlns:pic="http://schemas.openxmlformats.org/drawingml/2006/picture">
+<w:body>`;
+
+  let docPicId = 1;
+  if (coverImageBytes && canEmbedCover) {
+    docPicId++;
+    doc += `
+<w:p><w:r><w:drawing><wp:inline>
+  <wp:extent cx="5943600" cy="7920000"/>
+  <wp:docPr id="${docPicId}" name="Cover"/>
+  <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>
+    <pic:nvPicPr><pic:cNvPr id="${docPicId}" name="cover.${coverExt}"/><pic:cNvPicPr/></pic:nvPicPr>
+    <pic:blipFill><a:blip r:embed="rId2"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+    <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="5943600" cy="7920000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+  </pic:pic></a:graphicData></a:graphic>
+</wp:inline></w:drawing></w:r></w:p>
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+  }
+
+  // Title page (mirrors legacy)
+  doc += `
+<w:p><w:pPr><w:pStyle w:val="Title"/></w:pPr><w:r><w:t>${escapeXml(book.title)}</w:t></w:r></w:p>
+<w:p><w:r><w:t>by ${escapeXml(author)}</w:t></w:r></w:p>
+<w:p><w:r><w:t>${escapeXml(book.category?.replace(/_/g, " ") || "Book")}</w:t></w:r></w:p>`;
+  if (isAcademic) {
+    doc += `<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>[Academic Content - ${escapeXml(citationStyle)} Citations]</w:t></w:r></w:p>`;
+  }
+  doc += `
+<w:p><w:r><w:t></w:t></w:r></w:p>
+<w:p><w:r><w:t>© ${year} ${escapeXml(author)}. All rights reserved.</w:t></w:r></w:p>
+<w:p><w:r><w:t>${isISBN ? `ISBN: ${escapeXml(identifier)}` : `Scroll Publishing Code: ${escapeXml(identifier)}`}</w:t></w:r></w:p>`;
+  if (ctx.pub.publisher_name) {
+    doc += `<w:p><w:r><w:t>Published by ${escapeXml(ctx.pub.publisher_name)}${ctx.pub.publisher_imprint ? ` — ${escapeXml(ctx.pub.publisher_imprint)}` : ""}</w:t></w:r></w:p>`;
+  }
+  if (ctx.showAINotice) {
+    doc += `<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>This work was developed with editorial and AI-assisted tooling under full authorship ownership by the author.</w:t></w:r></w:p>`;
+  }
+  if (ctx.showBranding) {
+    doc += `<w:p><w:r><w:t>Created with ScrollLibrary</w:t></w:r></w:p>`;
+  } else if (ctx.showPoweredBy) {
+    doc += `<w:p><w:r><w:t>Powered by ScrollLibrary</w:t></w:r></w:p>`;
+  }
+  if (isAcademic) {
+    doc += `
+<w:p><w:r><w:t></w:t></w:r></w:p>
+<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="FFF8E1"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t>Academic Content Notice</w:t></w:r></w:p>
+<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="FFF8E1"/></w:pPr><w:r><w:t>All references in this document are retrieved from verifiable academic databases. ScrollLibrary does not replace academic judgment. Users remain responsible for proper academic use and verification of all citations.</w:t></w:r></w:p>`;
+  }
+  doc += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+  if (ctx.showAILongDisclosure) {
+    doc += `
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>This book was developed with AI assistance via ScrollLibrary.</w:t></w:r></w:p>
+<w:p><w:pPr><w:jc w:val="center"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t>The author retains full ownership and commercial rights.</w:t></w:r></w:p>
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+  }
+
+  // ── Chapter rendering via CanonicalBlock[] ─────────────────────────
+  for (const ch of canonical) {
+    doc += `
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>Chapter ${ch.chapter_number}: ${escapeXml(ch.title || "")}</w:t></w:r></w:p>`;
+    const refs = imageRefsByChapter.get(ch.chapter_number) || [];
+    let imgPtr = 0;
+    for (const blk of ch.blocks) {
+      try {
+        doc += renderCanonicalBlockDocx(blk, refs, imgPtr, imageRelMap, () => ++docPicId);
+        if (blk.kind === "image") imgPtr++;
+      } catch (e) {
+        // Malformed-block guard — skip block, keep chapter intact
+        console.warn(`[EXPORT] canonical DOCX: skipping malformed ${blk.kind} block`, e);
+      }
+    }
+    doc += `<w:p><w:r><w:br w:type="page"/></w:r></w:p>`;
+  }
+
+  // ── Bibliography / References ──────────────────────────────────────
+  if (bibliography.length > 0) {
+    const sectionTitle = isAcademic ? "References" : "Bibliography";
+    doc += `
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>${sectionTitle}</w:t></w:r></w:p>
+${isAcademic ? `<w:p><w:r><w:rPr><w:i/></w:rPr><w:t>Citation Style: ${escapeXml(citationStyle)}</w:t></w:r></w:p>` : ""}
+<w:p><w:r><w:t></w:t></w:r></w:p>`;
+    for (const ref of bibliography) {
+      doc += `<w:p><w:pPr><w:ind w:left="720" w:hanging="720"/></w:pPr><w:r><w:t>${escapeXml(ref)}</w:t></w:r></w:p>`;
+    }
+    if (isAcademic) {
+      doc += `<w:p><w:r><w:rPr><w:sz w:val="20"/><w:color w:val="666666"/></w:rPr><w:t>All references are retrieved from verifiable academic databases.</w:t></w:r></w:p>`;
+    }
+  }
+
+  // ── About the Author ──────────────────────────────────────────────
+  doc += `
+<w:p><w:r><w:br w:type="page"/></w:r></w:p>
+<w:p><w:pPr><w:pStyle w:val="Heading1"/></w:pPr><w:r><w:t>About the Author</w:t></w:r></w:p>
+<w:p><w:r><w:t>${escapeXml(author)} is the author of "${escapeXml(book.title)}". This work reflects a commitment to advancing knowledge and thought leadership in the field of ${escapeXml(book.category?.replace(/_/g, " ") || "general studies")}. The author retains full ownership and commercial rights to this publication.</w:t></w:r></w:p>`;
+
+  doc += `</w:body></w:document>`;
+  await zipWriter.add("word/document.xml", new zip.TextReader(doc));
+  await zipWriter.close();
+  const blob = await blobWriter.getData();
+  return await blob.arrayBuffer();
+}
+
+// Render a single CanonicalBlock as WordprocessingML XML.
+function renderCanonicalBlockDocx(
+  blk: any,
+  imageRefs: { index: number; alt: string }[],
+  imgPtr: number,
+  imageRelMap: Map<number, number>,
+  nextPicId: () => number,
+): string {
+  switch (blk.kind) {
+    case "heading": {
+      const level = Math.min(Math.max(blk.level || 2, 1), 6);
+      // Map markdown H1→Heading2 etc. (chapter title already uses Heading1).
+      const wordLevel = Math.min(level + 1, 6);
+      return `\n<w:p><w:pPr><w:pStyle w:val="Heading${wordLevel}"/></w:pPr><w:r><w:t>${escapeXml(blk.text || "")}</w:t></w:r></w:p>`;
+    }
+    case "paragraph": {
+      const text = blk.text || "";
+      if (/\*/.test(text)) {
+        return `\n<w:p>${markdownToDocxRuns(text)}</w:p>`;
+      }
+      return `\n<w:p><w:r><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`;
+    }
+    case "list": {
+      const items: string[] = blk.list?.items || [];
+      const ordered: boolean = !!blk.list?.ordered;
+      return items
+        .map((item, i) => {
+          const bullet = ordered ? `${i + 1}. ` : "• ";
+          const inner = /\*/.test(item)
+            ? `<w:r><w:t xml:space="preserve">${escapeXml(bullet)}</w:t></w:r>${markdownToDocxRuns(item)}`
+            : `<w:r><w:t xml:space="preserve">${escapeXml(bullet + item)}</w:t></w:r>`;
+          return `\n<w:p><w:pPr><w:ind w:left="720" w:hanging="360"/></w:pPr>${inner}</w:p>`;
+        })
+        .join("");
+    }
+    case "quote": {
+      const text = blk.text || "";
+      return `\n<w:p><w:pPr><w:ind w:left="720"/><w:shd w:val="clear" w:color="auto" w:fill="F5F5F5"/></w:pPr><w:r><w:rPr><w:i/></w:rPr><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`;
+    }
+    case "callout": {
+      const text = blk.text || "";
+      return `\n<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="FFF8E1"/></w:pPr><w:r><w:rPr><w:b/></w:rPr><w:t xml:space="preserve">${escapeXml(text)}</w:t></w:r></w:p>`;
+    }
+    case "reference": {
+      const text = blk.text || blk.raw || "";
+      return `\n<w:p><w:pPr><w:ind w:left="720" w:hanging="720"/></w:pPr><w:r><w:rPr><w:sz w:val="20"/></w:rPr><w:t>${escapeXml(text)}</w:t></w:r></w:p>`;
+    }
+    case "hr": {
+      return `\n<w:p><w:pPr><w:pBdr><w:bottom w:val="single" w:sz="6" w:space="1" w:color="CCCCCC"/></w:pBdr></w:pPr><w:r><w:t></w:t></w:r></w:p>`;
+    }
+    case "code": {
+      const lang = (blk.code?.language || "text").toUpperCase();
+      const source: string = blk.code?.source || "";
+      let out = `\n<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="E8E8E8"/></w:pPr><w:r><w:rPr><w:b/><w:sz w:val="16"/></w:rPr><w:t>${escapeXml(lang)}</w:t></w:r></w:p>`;
+      for (const line of source.split("\n")) {
+        out += `<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="F5F5F5"/></w:pPr><w:r><w:rPr><w:rFonts w:ascii="Consolas" w:hAnsi="Consolas"/><w:sz w:val="18"/></w:rPr><w:t xml:space="preserve">${escapeXml(line)}</w:t></w:r></w:p>`;
+      }
+      out += `<w:p><w:r><w:t></w:t></w:r></w:p>`;
+      return out;
+    }
+    case "table": {
+      const headers: string[] = blk.table?.header || [];
+      const rows: string[][] = blk.table?.rows || [];
+      if (headers.length === 0) return "";
+      const numCols = headers.length;
+      const colWidth = Math.floor(9000 / numCols);
+      const headerCells = headers
+        .map((h) => `<w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="F0F0F0"/></w:tcPr><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>${escapeXml(h)}</w:t></w:r></w:p></w:tc>`)
+        .join("");
+      const bodyRows = rows
+        .map((row, rowIdx) => {
+          const cells: string[] = [];
+          for (let c = 0; c < numCols; c++) {
+            const cell = row[c] !== undefined ? row[c] : "";
+            const shade = rowIdx % 2 === 1 ? '<w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="FAFAFA"/></w:tcPr>' : "";
+            cells.push(`<w:tc>${shade}<w:p><w:r><w:t>${escapeXml(cell)}</w:t></w:r></w:p></w:tc>`);
+          }
+          return `<w:tr>${cells.join("")}</w:tr>`;
+        })
+        .join("");
+      return `
+<w:tbl>
+  <w:tblPr><w:tblW w:w="0" w:type="auto"/>
+    <w:tblBorders>
+      <w:top w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+      <w:left w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+      <w:bottom w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+      <w:right w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+      <w:insideH w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+      <w:insideV w:val="single" w:sz="4" w:space="0" w:color="CCCCCC"/>
+    </w:tblBorders>
+  </w:tblPr>
+  <w:tblGrid>${headers.map(() => `<w:gridCol w:w="${colWidth}"/>`).join("")}</w:tblGrid>
+  <w:tr>${headerCells}</w:tr>
+  ${bodyRows}
+</w:tbl>
+<w:p><w:r><w:t></w:t></w:r></w:p>`;
+    }
+    case "image": {
+      const alt = blk.image?.alt || "Image";
+      const ref = imageRefs[imgPtr];
+      const relId = ref ? imageRelMap.get(ref.index) : undefined;
+      if (relId) {
+        const picId = nextPicId();
+        return `
+<w:p><w:r><w:drawing><wp:inline>
+  <wp:extent cx="4572000" cy="3429000"/>
+  <wp:docPr id="${picId}" name="${escapeXml(alt)}"/>
+  <a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/picture"><pic:pic>
+    <pic:nvPicPr><pic:cNvPr id="${picId}" name="image${ref!.index}"/><pic:cNvPicPr/></pic:nvPicPr>
+    <pic:blipFill><a:blip r:embed="rId${relId}"/><a:stretch><a:fillRect/></a:stretch></pic:blipFill>
+    <pic:spPr><a:xfrm><a:off x="0" y="0"/><a:ext cx="4572000" cy="3429000"/></a:xfrm><a:prstGeom prst="rect"><a:avLst/></a:prstGeom></pic:spPr>
+  </pic:pic></a:graphicData></a:graphic>
+</wp:inline></w:drawing></w:r></w:p>
+<w:p><w:r><w:rPr><w:i/><w:sz w:val="18"/></w:rPr><w:t>${escapeXml(alt)}</w:t></w:r></w:p>`;
+      }
+      // Fallback placeholder (unsupported format / fetch failed)
+      return `
+<w:p><w:pPr><w:shd w:val="clear" w:color="auto" w:fill="FFF3E0"/><w:pBdr><w:top w:val="single" w:sz="4" w:space="1" w:color="FF9800"/><w:bottom w:val="single" w:sz="4" w:space="1" w:color="FF9800"/></w:pBdr></w:pPr><w:r><w:rPr><w:color w:val="E65100"/></w:rPr><w:t>[Image: ${escapeXml(alt)}]</w:t></w:r></w:p>`;
+    }
+    default:
+      return "";
+  }
+}
