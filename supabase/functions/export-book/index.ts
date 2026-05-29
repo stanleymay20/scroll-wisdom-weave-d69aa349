@@ -681,18 +681,22 @@ async function fetchImageBytes(url: string, timeoutMs = 8000): Promise<Uint8Arra
     // Handle remote URLs with timeout
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
-    
-    const response = await fetch(url, {
-      headers: { 'Accept': 'image/*' },
-      signal: controller.signal,
-    });
-    clearTimeout(timeout);
-    
+    let response: Response;
+    try {
+      response = await fetch(url, {
+        headers: { 'Accept': 'image/*' },
+        signal: controller.signal,
+      });
+    } finally {
+      // Always clear timer to avoid leaked handles (e.g. when fetch throws on DNS failure)
+      clearTimeout(timeout);
+    }
+
     if (!response.ok) {
       console.error(`[EXPORT] Failed to fetch image: ${response.status} ${response.statusText}`);
       return null;
     }
-    
+
     const arrayBuffer = await response.arrayBuffer();
     // Cap image size at 2MB to prevent CPU timeout during PDF embedding
     if (arrayBuffer.byteLength > 2 * 1024 * 1024) {
