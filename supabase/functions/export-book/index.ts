@@ -5,6 +5,10 @@ import * as zip from "https://deno.land/x/zipjs@v2.7.32/index.js";
 import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
 import { auditBookForExport } from "../_shared/exportQuality.ts";
 
+// Disable zip.js web workers — Deno edge runtime + test runner leak worker
+// timers otherwise (no Worker pool to clean up).
+try { (zip as any).configure?.({ useWebWorkers: false }); } catch (_) { /* noop */ }
+
 const CANONICAL_RENDERER_VERSION = "1.0.0";
 
 
