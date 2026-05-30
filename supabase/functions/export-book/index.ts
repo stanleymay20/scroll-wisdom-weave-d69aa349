@@ -1143,7 +1143,16 @@ serve(async (req) => {
       }
       
       case "epub": {
-        const epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+        let epubBytes: ArrayBuffer;
+        try {
+          epubBytes = await generateCanonicalEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+          canonicalFallbackUsed = false;
+          console.log("[EXPORT] canonical EPUB render succeeded — canonical_epub_export_used");
+        } catch (e) {
+          canonicalFallbackUsed = true;
+          console.warn("[EXPORT] canonical EPUB render failed, falling back to legacy — canonical_epub_export_fallback_used:", e);
+          epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+        }
         content = uint8ArrayToBase64(new Uint8Array(epubBytes));
         contentType = "application/epub+zip";
         filename = `${sanitizeFilename(book.title)}.epub`;
