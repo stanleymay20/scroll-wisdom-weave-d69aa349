@@ -408,3 +408,215 @@ Deno.test("canonical DOCX: malformed/unsupported content does not crash", async 
   ]);
   assertValidDOCX(bytes);
 });
+
+// =====================================================================
+// Canonical EPUB renderer tests
+// =====================================================================
+import { generateCanonicalEPUB } from "./index.ts";
+
+const MIN_EPUB_BYTES = 1500;
+
+async function renderEPUB(chapters: { chapter_number: number; title: string; content: string }[]) {
+  const book = makeBook();
+  const buf = await generateCanonicalEPUB(
+    book,
+    chapters,
+    "Test Author",
+    "TEST-ID-0001",
+    false,
+    2026,
+    null,
+    false,
+    "APA",
+    [],
+    ctx,
+  );
+  return new Uint8Array(buf);
+}
+
+function assertValidEPUB(bytes: Uint8Array, minLen = MIN_EPUB_BYTES) {
+  assert(bytes instanceof Uint8Array, "expected Uint8Array");
+  assert(bytes.byteLength > minLen, `EPUB too small: ${bytes.byteLength} bytes`);
+  // .epub is a zip; magic bytes "PK\x03\x04"
+  assertEquals(bytes[0], 0x50);
+  assertEquals(bytes[1], 0x4b);
+}
+
+// Read a few central-directory file names out of the zip without a real
+// unzip lib: scan for the "PK\x01\x02" central directory header and pull
+// the filename that follows the 46-byte fixed record.
+function listZipEntries(bytes: Uint8Array): string[] {
+  const names: string[] = [];
+  const dec = new TextDecoder();
+  for (let i = 0; i < bytes.length - 4; i++) {
+    if (bytes[i] === 0x50 && bytes[i + 1] === 0x4b && bytes[i + 2] === 0x01 && bytes[i + 3] === 0x02) {
+      const nameLen = bytes[i + 28] | (bytes[i + 29] << 8);
+      const start = i + 46;
+      if (start + nameLen <= bytes.length) {
+        names.push(dec.decode(bytes.subarray(start, start + nameLen)));
+      }
+      i += 46 + nameLen - 1;
+    }
+  }
+  return names;
+}
+
+Deno.test("canonical EPUB: heading hierarchy (h1/h2/h3)", async () => {
+  const bytes = await renderEPUB([
+    {
+      chapter_number: 1,
+      title: "Headings",
+      content: [
+        "# Top-Level Heading",
+        "",
+        "Intro paragraph.",
+        "",
+        "## Second Level",
+        "",
+        "More text under H2.",
+        "",
+        "### Third Level",
+        "",
+        "Deepest section paragraph.",
+      ].join("\n"),
+    },
+  ]);
+  assertValidEPUB(bytes);
+});
+
+Deno.test("canonical EPUB: nested ordered + unordered lists", async () => {
+  const bytes = await renderEPUB([
+    {
+      chapter_number: 1,
+      title: "Lists",
+      content: [
+        "Unordered:",
+        "",
+        "- Alpha",
+        "- Beta with **bold** text",
+        "- Gamma",
+        "",
+        "Ordered:",
+        "",
+        "1. First step",
+        "2. Second step",
+        "3. Third step",
+      ].join("\n"),
+    },
+  ]);
+  assertValidEPUB(bytes);
+});
+
+Deno.test("canonical EPUB: markdown table renders", async () => {
+  const bytes = await renderEPUB([
+    {
+      chapter_number: 1,
+      title: "Table",
+      content: [
+        "Comparison:",
+        "",
+        "| Name  | Score | Notes        |",
+        "| ----- | ----- | ------------ |",
+        "| Alice | 92    | Strong start |",
+        "| Bob   | 87    | Improving    |",
+        "| Carol | 95    | Top scorer   |",
+        "",
+        "Trailing paragraph.",
+      ].join("\n"),
+    },
+  ]);
+  assertValidEPUB(bytes);
+});
+
+Deno.test("canonical EPUB: wide code block does not crash", async () => {
+  const longLine = "const x = " + "y".repeat(220) + ";";
+  const bytes = await renderEPUB([
+    {
+      chapter_number: 1,
+      title: "Code",
+      content: ["Example:", "", "```ts", "function demo() {", `  ${longLine}`, "}", "```", "", "After."].join("\n"),
+    },
+  ]);
+  assertValidEPUB(bytes);
+});
+
+Deno.test("canonical EPUB: long chapter grows file size", async () => {
+  const shortBytes = await renderEPUB([
+    { chapter_number: 1, title: "Short", content: "Just one short paragraph." },
+  ]);
+  const para = "Lorem ipsum dolor sit amet, consectetur adipiscing elit. ".repeat(20);
+  const longContent = Array.from({ length: 40 }, (_, i) => `Paragraph ${i + 1}. ${para}`).join("\n\n");
+  const longBytes = await renderEPUB([{ chapter_number: 1, title: "Long", content: longContent }]);
+  assertValidEPUB(shortBytes);
+  assertValidEPUB(longBytes, MIN_EPUB_BYTES * 2);
+  assert(longBytes.byteLength > shortBytes.byteLength);
+});
+
+Deno.test("canonical EPUB: mixed image / quote / reference content", async () => {
+  const bytes = await renderEPUB([
+    {
+      chapter_number: 1,
+      title: "Mixed",
+      content: [
+        "Intro paragraph with **bold** and *italic*.",
+        "",
+        "![Alt text](https://example.invalid/missing.png)",
+        "",
+        "> A blockquote that should render as a styled block",
+        "> spanning multiple lines.",
+        "",
+        "Body continues after the quote.",
+        "",
+        "## References",
+        "",
+        "[^1]: Smith, J. (2024). Example Work. Example Press.",
+        "[^2]: Doe, A. (2023). Another Source. Sample Journal.",
+      ].join("\n"),
+    },
+  ]);
+  assertValidEPUB(bytes);
+});
+
+Deno.test("canonical EPUB: malformed/unsupported content does not crash", async () => {
+  const bytes = await renderEPUB([
+    {
+      chapter_number: 1,
+      title: "Malformed",
+      content: [
+        "Unterminated code fence:",
+        "",
+        "```js",
+        "const x = 1;",
+        "",
+        "| broken | table",
+        "| --- |",
+        "| only one col | extra | cells |",
+        "",
+        "Random control chars: \u0000\u0001\uFFFD inline.",
+        "",
+        "![](   )",
+        "",
+        "Trailing paragraph still renders.",
+      ].join("\n"),
+    },
+  ]);
+  assertValidEPUB(bytes);
+});
+
+Deno.test("canonical EPUB: zip contains OPF + nav + chapter files", async () => {
+  const bytes = await renderEPUB([
+    { chapter_number: 1, title: "One", content: "First chapter." },
+    { chapter_number: 2, title: "Two", content: "Second chapter." },
+  ]);
+  assertValidEPUB(bytes);
+  const names = listZipEntries(bytes);
+  assert(names.includes("mimetype"), `missing mimetype; got: ${names.join(", ")}`);
+  assert(names.includes("META-INF/container.xml"), "missing container.xml");
+  assert(names.includes("OEBPS/content.opf"), "missing content.opf");
+  assert(names.includes("OEBPS/nav.xhtml"), "missing nav.xhtml");
+  assert(names.includes("OEBPS/chapter1.xhtml"), "missing chapter1.xhtml");
+  assert(names.includes("OEBPS/chapter2.xhtml"), "missing chapter2.xhtml");
+  assert(names.includes("OEBPS/title.xhtml"), "missing title.xhtml");
+  assert(names.includes("OEBPS/about-author.xhtml"), "missing about-author.xhtml");
+  assert(names.includes("OEBPS/style.css"), "missing style.css");
+});

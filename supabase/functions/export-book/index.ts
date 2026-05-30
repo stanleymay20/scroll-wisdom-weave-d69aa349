@@ -1143,7 +1143,16 @@ serve(async (req) => {
       }
       
       case "epub": {
-        const epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+        let epubBytes: ArrayBuffer;
+        try {
+          epubBytes = await generateCanonicalEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+          canonicalFallbackUsed = false;
+          console.log("[EXPORT] canonical EPUB render succeeded — canonical_epub_export_used");
+        } catch (e) {
+          canonicalFallbackUsed = true;
+          console.warn("[EXPORT] canonical EPUB render failed, falling back to legacy — canonical_epub_export_fallback_used:", e);
+          epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+        }
         content = uint8ArrayToBase64(new Uint8Array(epubBytes));
         contentType = "application/epub+zip";
         filename = `${sanitizeFilename(book.title)}.epub`;
@@ -4773,4 +4782,383 @@ function renderCanonicalBlockDocx(
     default:
       return "";
   }
+}
+
+// =====================================================================
+// Canonical EPUB Renderer (v1) — renders chapter bodies from
+// CanonicalBlock[] produced by the shared canonical parser. Reuses the
+// legacy EPUB shell (cover, title, dedication, nav/toc, references,
+// about-author, CSS, OPF manifest/spine) for output parity. Falls back
+// to legacy generateEPUB on exception.
+// =====================================================================
+
+function inlineMdToXhtml(text: string): string {
+  // Escape first, then convert bold/italic markdown to safe XHTML.
+  // Order matters: ** before *, __ before _.
+  let s = escapeXml(text || "");
+  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
+  s = s.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
+  s = s.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
+  // Inline code
+  s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
+  return s;
+}
+
+function renderCanonicalBlockXhtml(
+  blk: any,
+  imageRefs: { href: string; alt: string }[],
+  imgPtrRef: { i: number },
+): string {
+  switch (blk.kind) {
+    case "heading": {
+      const level = Math.min(Math.max(blk.level || 2, 1), 6);
+      // Chapter title is rendered as <h1>, so demote markdown H1 to H2 etc.
+      const lvl = Math.min(level + 1, 6);
+      return `<h${lvl}>${escapeXml(blk.text || "")}</h${lvl}>`;
+    }
+    case "paragraph": {
+      return `<p>${inlineMdToXhtml(blk.text || "")}</p>`;
+    }
+    case "list": {
+      const items: string[] = blk.list?.items || [];
+      const ordered: boolean = !!blk.list?.ordered;
+      const tag = ordered ? "ol" : "ul";
+      const lis = items.map((it) => `<li>${inlineMdToXhtml(it)}</li>`).join("");
+      return `<${tag}>${lis}</${tag}>`;
+    }
+    case "quote": {
+      return `<blockquote>${inlineMdToXhtml(blk.text || "")}</blockquote>`;
+    }
+    case "callout": {
+      return `<aside class="callout">${inlineMdToXhtml(blk.text || "")}</aside>`;
+    }
+    case "reference": {
+      return `<p class="reference">${escapeXml(blk.text || blk.raw || "")}</p>`;
+    }
+    case "hr": {
+      return `<hr/>`;
+    }
+    case "code": {
+      const lang = (blk.code?.language || "text");
+      const source: string = blk.code?.source || "";
+      return `<pre><code class="${escapeXml(lang)}">${escapeXml(source)}</code></pre>`;
+    }
+    case "table": {
+      const headers: string[] = blk.table?.header || [];
+      const rows: string[][] = blk.table?.rows || [];
+      if (headers.length === 0) return "";
+      const numCols = headers.length;
+      const thead = `<thead><tr>${headers.map((h) => `<th>${escapeXml(h)}</th>`).join("")}</tr></thead>`;
+      const tbody = `<tbody>${rows
+        .map((row) => {
+          const cells: string[] = [];
+          for (let c = 0; c < numCols; c++) {
+            cells.push(`<td>${escapeXml(row[c] !== undefined ? row[c] : "")}</td>`);
+          }
+          return `<tr>${cells.join("")}</tr>`;
+        })
+        .join("")}</tbody>`;
+      return `<table>${thead}${tbody}</table>`;
+    }
+    case "image": {
+      const alt = blk.image?.alt || "Image";
+      const ref = imageRefs[imgPtrRef.i];
+      imgPtrRef.i++;
+      if (ref) {
+        return `<figure><img src="${escapeXml(ref.href)}" alt="${escapeXml(alt)}" style="max-width:100%;"/><figcaption>${escapeXml(alt)}</figcaption></figure>`;
+      }
+      return `<p><em>[Image not available: ${escapeXml(alt)}]</em></p>`;
+    }
+    default:
+      return "";
+  }
+}
+
+export async function generateCanonicalEPUB(
+  book: any,
+  chapters: any[],
+  author: string,
+  identifier: string,
+  isISBN: boolean,
+  year: number,
+  coverImageBytes: Uint8Array | null,
+  isAcademic: boolean,
+  citationStyle: string,
+  bibliography: string[],
+  ctx: ExportContext,
+): Promise<ArrayBuffer> {
+  // Parse all chapters up-front so structural failure aborts before any
+  // zip entries are written (clean fallback to legacy renderer).
+  const canonical = parseBookToCanonical(
+    (chapters || []).map((c: any) => ({
+      chapter_number: c.chapter_number,
+      title: c.title,
+      content: c.content,
+    })),
+  );
+
+  const blobWriter = new zip.BlobWriter("application/epub+zip");
+  const zipWriter = new zip.ZipWriter(blobWriter);
+
+  await zipWriter.add("mimetype", new zip.TextReader("application/epub+zip"), { level: 0 });
+
+  const containerXml = `<?xml version="1.0" encoding="UTF-8"?>
+<container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
+  <rootfiles>
+    <rootfile full-path="OEBPS/content.opf" media-type="application/oebps-package+xml"/>
+  </rootfiles>
+</container>`;
+  await zipWriter.add("META-INF/container.xml", new zip.TextReader(containerXml));
+
+  const hasCover = !!coverImageBytes && coverImageBytes.length > 0;
+  const coverKind: ImageKind = hasCover ? detectImageKind(coverImageBytes!) : "unknown";
+  const coverExt = imageKindToExt(coverKind);
+  const coverMediaType = imageKindToMediaType(coverKind);
+  if (hasCover) {
+    await zipWriter.add(`OEBPS/images/cover.${coverExt}`, new zip.Uint8ArrayReader(coverImageBytes!));
+  }
+
+  // ── Pre-fetch inline images per chapter (cap at 5 per chapter) ─────
+  let imageCounter = 0;
+  const epubImages: { id: string; href: string; bytes: Uint8Array; mediaType: string }[] = [];
+  const imageRefsByChapter: Map<number, { href: string; alt: string }[]> = new Map();
+  for (const ch of canonical) {
+    const refs: { href: string; alt: string }[] = [];
+    const imgBlocks = ch.blocks.filter((b) => b.kind === "image").slice(0, 5);
+    for (const blk of imgBlocks) {
+      const url = blk.image?.src || "";
+      if (!url) continue;
+      try {
+        const bytes = await fetchImageBytes(url);
+        if (bytes) {
+          const kind = detectImageKind(bytes);
+          const ext = imageKindToExt(kind);
+          const id = `img-${imageCounter}`;
+          const href = `images/img-${imageCounter}.${ext}`;
+          imageCounter++;
+          epubImages.push({ id, href, bytes, mediaType: imageKindToMediaType(kind) });
+          refs.push({ href, alt: blk.image?.alt || "Image" });
+        }
+      } catch (_) {
+        // Skip unreachable image; renderer continues.
+      }
+    }
+    imageRefsByChapter.set(ch.chapter_number, refs);
+  }
+
+  // ── Render chapter XHTML from CanonicalBlock[] ─────────────────────
+  const chapterItems = canonical.map((ch, i) => ({
+    id: `chapter${i + 1}`,
+    href: `chapter${i + 1}.xhtml`,
+    chapter: ch,
+  }));
+  const processedChapters: { id: string; href: string; xhtml: string }[] = [];
+  for (const item of chapterItems) {
+    let body = "";
+    const refs = imageRefsByChapter.get(item.chapter.chapter_number) || [];
+    const imgPtr = { i: 0 };
+    for (const blk of item.chapter.blocks) {
+      try {
+        body += renderCanonicalBlockXhtml(blk, refs, imgPtr) + "\n";
+      } catch (e) {
+        // Malformed-block guard — skip the block, keep chapter intact.
+        console.warn(`[EXPORT] canonical EPUB: skipping malformed ${blk?.kind} block`, e);
+      }
+    }
+    const xhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>${escapeXml(item.chapter.title || "")}</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<h1>Chapter ${item.chapter.chapter_number}: ${escapeXml(item.chapter.title || "")}</h1>
+${body}
+</body>
+</html>`;
+    processedChapters.push({ id: item.id, href: item.href, xhtml });
+  }
+
+  const hasRefs = bibliography.length > 0;
+
+  // ── OPF manifest + spine ───────────────────────────────────────────
+  const imageManifestItems = epubImages
+    .map((img) => `<item id="${img.id}" href="${img.href}" media-type="${img.mediaType}"/>`)
+    .join("\n    ");
+  const contentOpf = `<?xml version="1.0" encoding="UTF-8"?>
+<package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
+  <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
+    <dc:identifier id="bookid">${escapeXml(identifier)}</dc:identifier>
+    <dc:title>${escapeXml(book.title)}</dc:title>
+    <dc:creator>${escapeXml(author)}</dc:creator>
+    <dc:language>${escapeXml(book.language || "en")}</dc:language>
+    <dc:publisher>${escapeXml(ctx.pub.publisher_name || (ctx.showBranding ? "ScrollLibrary" : author))}</dc:publisher>
+    <dc:date>${year}</dc:date>
+    <meta property="dcterms:modified">${new Date().toISOString().split(".")[0]}Z</meta>
+    ${hasCover ? '<meta name="cover" content="cover-image"/>' : ""}
+  </metadata>
+  <manifest>
+    <item id="nav" href="nav.xhtml" media-type="application/xhtml+xml" properties="nav"/>
+    ${hasCover ? '<item id="cover" href="cover.xhtml" media-type="application/xhtml+xml"/>' : ""}
+    ${hasCover ? `<item id="cover-image" href="images/cover.${coverExt}" media-type="${coverMediaType}" properties="cover-image"/>` : ""}
+    <item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>
+    <item id="dedication" href="dedication.xhtml" media-type="application/xhtml+xml"/>
+    ${chapterItems.map((c) => `<item id="${c.id}" href="${c.href}" media-type="application/xhtml+xml"/>`).join("\n    ")}
+    <item id="about-author" href="about-author.xhtml" media-type="application/xhtml+xml"/>
+    ${hasRefs ? '<item id="references" href="references.xhtml" media-type="application/xhtml+xml"/>' : ""}
+    ${imageManifestItems}
+    <item id="css" href="style.css" media-type="text/css"/>
+  </manifest>
+  <spine>
+    ${hasCover ? '<itemref idref="cover"/>' : ""}
+    <itemref idref="nav"/>
+    <itemref idref="title"/>
+    <itemref idref="dedication"/>
+    ${chapterItems.map((c) => `<itemref idref="${c.id}"/>`).join("\n    ")}
+    <itemref idref="about-author"/>
+    ${hasRefs ? '<itemref idref="references"/>' : ""}
+  </spine>
+</package>`;
+  await zipWriter.add("OEBPS/content.opf", new zip.TextReader(contentOpf));
+
+  // ── CSS (mirrors legacy EPUB visual language) ─────────────────────
+  const css = `body { font-family: Georgia, serif; margin: 2em; line-height: 1.7; color: #1a1a1a; }
+h1 { font-size: 1.8em; margin: 1em 0 0.5em; font-weight: bold; }
+h2 { font-size: 1.5em; margin: 1.5em 0 0.5em; font-weight: bold; border-bottom: 1px solid #ddd; padding-bottom: 0.3em; }
+h3 { font-size: 1.3em; margin: 1.3em 0 0.4em; font-weight: bold; }
+h4 { font-size: 1.15em; margin: 1.2em 0 0.3em; font-weight: bold; }
+h5 { font-size: 1.05em; margin: 1em 0 0.3em; font-weight: bold; }
+h6 { font-size: 1em; margin: 1em 0 0.3em; font-weight: bold; font-style: italic; }
+p { margin: 0.8em 0; text-align: justify; }
+ul, ol { margin: 0.8em 0; padding-left: 2em; }
+li { margin: 0.3em 0; line-height: 1.6; }
+.cover { text-align: center; }
+.cover img { max-width: 100%; height: auto; }
+pre { background: #1e1e24; color: #e0e0e0; padding: 1em; border-radius: 6px; overflow-x: auto; font-family: 'Courier New', Courier, monospace; font-size: 0.88em; line-height: 1.5; white-space: pre-wrap; word-wrap: break-word; }
+code { font-family: 'Courier New', Courier, monospace; background: #f0f0f0; padding: 0.15em 0.4em; border-radius: 3px; font-size: 0.92em; }
+pre code { background: transparent; padding: 0; font-size: 1em; }
+.reference { margin: 0.5em 0; padding-left: 2em; text-indent: -2em; font-size: 0.95em; }
+.academic-notice { background: #fff8e1; border-left: 4px solid #ffc107; padding: 1em; margin: 1em 0; font-size: 0.9em; }
+aside.callout { background: #fff8e1; border-left: 4px solid #ffc107; padding: 0.8em 1em; margin: 1em 0; font-size: 0.95em; }
+table { border-collapse: collapse; width: 100%; margin: 1.5em 0; page-break-inside: avoid; }
+th, td { border: 1px solid #ccc; padding: 0.6em 0.8em; text-align: left; vertical-align: top; }
+th { background: #e8e8e8; font-weight: bold; }
+tr:nth-child(even) { background: #f9f9f9; }
+figure { margin: 1.5em 0; text-align: center; }
+figure img { max-width: 100%; height: auto; border-radius: 4px; }
+figcaption { font-style: italic; font-size: 0.9em; color: #666; margin-top: 0.5em; }
+blockquote { border-left: 3px solid #ccc; margin: 1em 0; padding: 0.5em 1em; color: #555; font-style: italic; }
+hr { border: 0; border-top: 1px solid #ccc; margin: 1.5em 0; }`;
+  await zipWriter.add("OEBPS/style.css", new zip.TextReader(css));
+
+  if (hasCover) {
+    const coverXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>Cover</title><link rel="stylesheet" href="style.css"/></head>
+<body class="cover"><img src="images/cover.${coverExt}" alt="Cover"/></body>
+</html>`;
+    await zipWriter.add("OEBPS/cover.xhtml", new zip.TextReader(coverXhtml));
+  }
+
+  const navXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" xmlns:epub="http://www.idpf.org/2007/ops">
+<head><title>Navigation</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<nav epub:type="toc" id="toc">
+  <h1>Table of Contents</h1>
+  <ol>
+    ${chapterItems.map((c) => `<li><a href="${c.href}">Chapter ${c.chapter.chapter_number}: ${escapeXml(c.chapter.title || "")}</a></li>`).join("\n    ")}
+    ${hasRefs ? '<li><a href="references.xhtml">References</a></li>' : ""}
+  </ol>
+</nav>
+</body>
+</html>`;
+  await zipWriter.add("OEBPS/nav.xhtml", new zip.TextReader(navXhtml));
+
+  // ── Title page (mirrors legacy) ───────────────────────────────────
+  let titleContent = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>${escapeXml(book.title)}</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<h1>${escapeXml(book.title)}</h1>
+<p>by ${escapeXml(author)}</p>
+<p>${escapeXml(book.category?.replace(/_/g, " ") || "Book")}</p>
+${isAcademic ? `<p><em>[Academic Content - ${escapeXml(citationStyle)} Citations]</em></p>` : ""}
+<hr/>
+<p>© ${year} ${escapeXml(author)}. All rights reserved.</p>
+<p>${isISBN ? `ISBN: ${escapeXml(identifier)}` : `SPC: ${escapeXml(identifier)}`}</p>
+${ctx.pub.publisher_name ? `<p>Published by ${escapeXml(ctx.pub.publisher_name)}${ctx.pub.publisher_imprint ? ` — ${escapeXml(ctx.pub.publisher_imprint)}` : ""}</p>` : ""}
+${ctx.showAINotice ? `<p><em>This work was developed with editorial and AI-assisted tooling under full authorship ownership by the author.</em></p>` : ""}
+${ctx.showBranding ? `<p>Created with ScrollLibrary</p>` : (ctx.showPoweredBy ? `<p>Powered by ScrollLibrary</p>` : "")}`;
+  if (isAcademic) {
+    titleContent += `
+<div class="academic-notice">
+<strong>Academic Content Notice</strong><br/>
+All references in this document are retrieved from verifiable academic databases including OpenAlex, CrossRef, Semantic Scholar, arXiv, and PubMed. ScrollLibrary does not replace academic judgment. Users remain responsible for proper academic use and verification of all citations before submission.
+</div>`;
+  }
+  titleContent += `
+</body>
+</html>`;
+  await zipWriter.add("OEBPS/title.xhtml", new zip.TextReader(titleContent));
+
+  // ── Dedication / disclosure ────────────────────────────────────────
+  const dedicationInner = ctx.showAILongDisclosure
+    ? `<p>This book was developed with AI assistance via ScrollLibrary.</p><p>The author retains full ownership and commercial rights.</p>`
+    : "";
+  const dedicationXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>About This Book</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<div style="text-align: center; margin-top: 40%; font-style: italic;">
+${dedicationInner}
+</div>
+</body>
+</html>`;
+  await zipWriter.add("OEBPS/dedication.xhtml", new zip.TextReader(dedicationXhtml));
+
+  // ── Chapter files + inline images ──────────────────────────────────
+  for (const chapter of processedChapters) {
+    await zipWriter.add(`OEBPS/${chapter.href}`, new zip.TextReader(chapter.xhtml));
+  }
+  for (const img of epubImages) {
+    await zipWriter.add(`OEBPS/${img.href}`, new zip.Uint8ArrayReader(img.bytes));
+  }
+
+  // ── References ─────────────────────────────────────────────────────
+  if (hasRefs) {
+    const sectionTitle = isAcademic ? "References" : "Bibliography";
+    const refsContent = bibliography.map((ref) => `<p class="reference">${escapeXml(ref)}</p>`).join("\n");
+    const referencesXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>${sectionTitle}</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<h1>${sectionTitle}</h1>
+${isAcademic ? `<p><em>Citation Style: ${escapeXml(citationStyle)}</em></p>` : ""}
+${refsContent}
+${isAcademic ? "<hr/>\n<p><small>All references are retrieved from verifiable academic databases.</small></p>" : ""}
+</body>
+</html>`;
+    await zipWriter.add("OEBPS/references.xhtml", new zip.TextReader(referencesXhtml));
+  }
+
+  // ── About the Author ──────────────────────────────────────────────
+  const aboutAuthorXhtml = `<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head><title>About the Author</title><link rel="stylesheet" href="style.css"/></head>
+<body>
+<h1>About the Author</h1>
+<p>${escapeXml(author)} is the author of <em>${escapeXml(book.title)}</em>. This work reflects a commitment to advancing knowledge and thought leadership in the field of ${escapeXml(book.category?.replace(/_/g, " ") || "general studies")}. The author retains full ownership and commercial rights to this publication.</p>
+</body>
+</html>`;
+  await zipWriter.add("OEBPS/about-author.xhtml", new zip.TextReader(aboutAuthorXhtml));
+
+  await zipWriter.close();
+  const blob = await blobWriter.getData();
+  return await blob.arrayBuffer();
 }
