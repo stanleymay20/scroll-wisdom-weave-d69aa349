@@ -15,7 +15,8 @@ export type StorefrontEvent =
   | "listing_created" | "listing_updated" | "storefront_viewed_after_publish"
   | "purchase_failed" | "full_reader_opened"
   | "canonical_pdf_export_used" | "canonical_pdf_export_fallback_used"
-  | "canonical_docx_export_used" | "canonical_docx_export_fallback_used";
+  | "canonical_docx_export_used" | "canonical_docx_export_fallback_used"
+  | "canonical_epub_export_used" | "canonical_epub_export_fallback_used";
 
 
 function sessionId(): string {
