@@ -17,6 +17,7 @@ const ALLOWED_EVENTS = [
   "purchase_failed", "full_reader_opened",
   "canonical_pdf_export_used", "canonical_pdf_export_fallback_used",
   "canonical_docx_export_used", "canonical_docx_export_fallback_used",
+  "canonical_epub_export_used", "canonical_epub_export_fallback_used",
 
 ] as const;
 
