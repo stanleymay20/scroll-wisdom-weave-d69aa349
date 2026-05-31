@@ -221,26 +221,26 @@ function SearchResults({ query, results, loading, zeroState }: {
 }) {
   if (loading && !results) {
     return (
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
-        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-72 w-full" />)}
+      <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
+        {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-56 sm:h-72 w-full" />)}
       </div>
     );
   }
   if (zeroState) {
     return (
-      <div className="text-center py-16">
-        <h2 className="text-xl font-semibold">No results for “{query}”</h2>
-        <p className="mt-2 text-muted-foreground">Try one of these:</p>
+      <div className="text-center py-12 sm:py-16">
+        <h2 className="text-lg sm:text-xl font-semibold">No results for “{query}”</h2>
+        <p className="mt-2 text-sm text-muted-foreground">Try one of these:</p>
         <div className="mt-4 flex flex-wrap justify-center gap-2">
           {ZERO_RESULT_HINTS.map((h) => (
-            <Link key={h} to={`/store?cat=${h}`} className="px-3 py-1 rounded-full bg-muted text-sm hover:bg-muted/80">{h}</Link>
+            <Link key={h} to={`/store?cat=${h}`} className="px-3 py-1.5 rounded-full bg-muted text-sm hover:bg-muted/80">{h}</Link>
           ))}
         </div>
       </div>
     );
   }
   return (
-    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
+    <div className="grid grid-cols-2 sm:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6">
       {(results ?? []).map((l, idx) => (
         <Link
           key={l.id}
@@ -258,14 +258,14 @@ function SearchResults({ query, results, loading, zeroState }: {
                 />
               )}
             </div>
-            <div className="p-4">
-              <h2 className="font-semibold line-clamp-2">{l.book?.title}</h2>
-              <p className="text-sm text-muted-foreground line-clamp-2 mt-1">
+            <div className="p-3 sm:p-4">
+              <h2 className="text-sm sm:text-base font-semibold line-clamp-2">{l.book?.title}</h2>
+              <p className="hidden sm:block text-sm text-muted-foreground line-clamp-2 mt-1">
                 {l.blurb ?? l.book?.description}
               </p>
-              <div className="flex items-center gap-2 mt-3">
-                <Badge variant="secondary">{l.book?.category ?? "General"}</Badge>
-                <span className="text-sm font-medium ml-auto">
+              <div className="flex items-center gap-2 mt-2 sm:mt-3">
+                <Badge variant="secondary" className="text-[10px] sm:text-xs">{l.book?.category ?? "General"}</Badge>
+                <span className="text-xs sm:text-sm font-medium ml-auto">
                   {l.price_cents > 0 ? `$${(l.price_cents / 100).toFixed(2)}` : "Free"}
                 </span>
               </div>
