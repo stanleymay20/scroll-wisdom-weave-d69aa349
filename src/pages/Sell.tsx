@@ -146,10 +146,27 @@ export default function Sell() {
         next.profile.slug = slugify(name);
       }
 
-      // Books for publish step
-      const { data: bs } = await supabase.from("books")
-        .select("id, title, cover_image_url, category")
-        .eq("user_id", user.id).order("created_at", { ascending: false }).limit(50);
+      // Books for publish step — match RLS policy (creator_id OR user_id)
+      // with a single retry to absorb transient statement_timeout (Postgres 57014).
+      const fetchOwnedBooks = async () => {
+        const filter = `user_id.eq.${user.id},creator_id.eq.${user.id}`;
+        return await supabase.from("books")
+          .select("id, title, cover_image_url, category")
+          .or(filter)
+          .order("created_at", { ascending: false })
+          .limit(50);
+      };
+      let { data: bs, error: booksErr } = await fetchOwnedBooks();
+      if (booksErr && /57014|timeout|timed out/i.test(String(booksErr.message ?? booksErr.code ?? ""))) {
+        await new Promise((r) => setTimeout(r, 400));
+        ({ data: bs, error: booksErr } = await fetchOwnedBooks());
+      }
+      if (booksErr) {
+        console.error("[SELL] books load failed:", booksErr);
+        setBooksLoadError(friendlyError(booksErr, "Could not load your books."));
+      } else {
+        setBooksLoadError(null);
+      }
       setBooks(bs ?? []);
 
       // Preselect from ?bookId= if user owns it
