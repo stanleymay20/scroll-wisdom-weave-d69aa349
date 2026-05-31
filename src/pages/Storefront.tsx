@@ -122,22 +122,22 @@ export default function Storefront() {
           description="Discover AI-native books. Trending, top-selling, and recently published reads on ScrollLibrary."
           canonical="/store"
         />
-        <header className="border-b border-border">
-          <div className="container mx-auto max-w-6xl px-4 py-8 sm:py-10">
-            <h1 className="text-3xl sm:text-4xl font-bold tracking-tight">Store</h1>
-            <p className="mt-2 text-muted-foreground text-sm sm:text-base">Published books from ScrollLibrary authors.</p>
-            <div className="mt-5 sm:mt-6 max-w-md">
+        <header className="border-b border-border bg-background/95 backdrop-blur sticky top-0 sm:static z-30">
+          <div className="container mx-auto max-w-6xl px-4 py-4 sm:py-10">
+            <h1 className="text-2xl sm:text-4xl font-bold tracking-tight">Store</h1>
+            <p className="mt-1 hidden sm:block text-muted-foreground text-sm sm:text-base">Published books from ScrollLibrary authors.</p>
+            <div className="mt-3 sm:mt-6 max-w-md">
               <Input
                 placeholder="Search titles, topics, authors…"
                 value={q}
                 onChange={(e) => setQ(e.target.value)}
                 aria-label="Search the store"
-                className="text-foreground caret-foreground"
+                className="text-foreground caret-foreground h-11 rounded-full"
               />
             </div>
           </div>
         </header>
-        <main className="container mx-auto max-w-6xl px-4 py-8 sm:py-10">
+        <main className="container mx-auto max-w-6xl px-4 py-5 sm:py-10">
           {isSearching ? (
             <SearchResults
               query={committedQ || q.trim()}
