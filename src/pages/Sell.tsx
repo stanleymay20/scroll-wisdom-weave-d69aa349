@@ -225,7 +225,7 @@ export default function Sell() {
       void trackStorefrontEvent(null, "sell_onboarding_started" as any, { step: next.step, resumed: !!ap });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reloadBooksTick]);
 
   // Persist draft
   useEffect(() => {
