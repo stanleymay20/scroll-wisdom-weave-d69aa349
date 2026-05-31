@@ -47,6 +47,7 @@ interface BookDetailHeaderProps {
   onCoverThemeChange: (theme: string) => void;
   onCoverAuthorNameChange: (name: string) => void;
   onGenerateCover: () => void;
+  onCoverUploaded?: (publicUrl: string) => void;
   onSaveToLibrary: () => void;
   onStartReading: () => void;
 }
