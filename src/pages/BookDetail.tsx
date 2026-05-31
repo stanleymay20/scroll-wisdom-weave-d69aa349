@@ -346,6 +346,7 @@ export default function BookDetail() {
                 coverTheme={coverTheme} coverAuthorName={coverAuthorName} isGeneratingCover={isGeneratingCover}
                 onCoverThemeChange={setCoverTheme} onCoverAuthorNameChange={setCoverAuthorName}
                 onGenerateCover={handleGenerateCover} onSaveToLibrary={handleSaveToLibrary}
+                onCoverUploaded={(url) => setBook(prev => prev ? { ...prev, cover_image_url: url } : null)}
                 onStartReading={() => navigate(`/read/${id}/1`)}
               />
 
