@@ -10,6 +10,7 @@ import {
 const ALLOWED_SOURCES = [
   "trending", "top_selling", "recent", "related", "same_author",
   "same_series", "collection", "continue_reading", "search", "author_profile",
+  "recommended", "recommended_for_user", "from_followed_authors", "continue_series",
 ] as const;
 
 const ItemSchema = z.object({
