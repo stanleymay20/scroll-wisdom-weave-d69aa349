@@ -429,6 +429,8 @@ export default function Sell() {
             canPublishExternal={entitlements.can_publish_external}
             entitlementTier={entitlements.tier} entitlementLoading={entLoading}
             editing={editingListing}
+            loadError={booksLoadError}
+            onRetryLoad={() => { setBooksLoadError(null); setReloadBooksTick((t) => t + 1); }}
           />
         )}
         {draft.step === 4 && publishedListing && (
