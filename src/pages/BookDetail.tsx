@@ -399,6 +399,14 @@ export default function BookDetail() {
                   {isGeneratingCover ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><RefreshCw className="h-3.5 w-3.5 mr-1" />Cover</>}
                 </Button>
               </div>
+              <CustomCoverUploadButton
+                bookId={book.id}
+                userId={book.user_id}
+                onUploaded={(url) => setBook(prev => prev ? { ...prev, cover_image_url: url } : null)}
+                size="sm"
+                className="w-full h-9 text-xs"
+                label={book.cover_image_url ? "Upload your own cover" : "Upload cover image"}
+              />
             </div>
           )}
 
