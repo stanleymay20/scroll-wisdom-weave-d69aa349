@@ -122,6 +122,15 @@ export function BookDetailHeader({
                     <><RefreshCw className="h-4 w-4 mr-2" />{book.cover_image_url ? t('book.regenerateCover') : t('book.generateCover')}</>
                   )}
                 </Button>
+                {onCoverUploaded && (
+                  <CustomCoverUploadButton
+                    bookId={book.id}
+                    userId={book.user_id}
+                    onUploaded={onCoverUploaded}
+                    size="sm"
+                    label={book.cover_image_url ? "Upload your own" : "Upload cover image"}
+                  />
+                )}
               </div>
             </div>
           )}
