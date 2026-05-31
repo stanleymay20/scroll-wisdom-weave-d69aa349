@@ -95,6 +95,8 @@ export default function Sell() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [books, setBooks] = useState<Book[]>([]);
+  const [booksLoadError, setBooksLoadError] = useState<string | null>(null);
+  const [reloadBooksTick, setReloadBooksTick] = useState(0);
   const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT);
   const [payoutProfile, setPayoutProfile] = useState<any>(null);
   const [savingStep, setSavingStep] = useState(false);
@@ -144,10 +146,27 @@ export default function Sell() {
         next.profile.slug = slugify(name);
       }
 
-      // Books for publish step
-      const { data: bs } = await supabase.from("books")
-        .select("id, title, cover_image_url, category")
-        .eq("user_id", user.id).order("created_at", { ascending: false }).limit(50);
+      // Books for publish step — match RLS policy (creator_id OR user_id)
+      // with a single retry to absorb transient statement_timeout (Postgres 57014).
+      const fetchOwnedBooks = async () => {
+        const filter = `user_id.eq.${user.id},creator_id.eq.${user.id}`;
+        return await supabase.from("books")
+          .select("id, title, cover_image_url, category")
+          .or(filter)
+          .order("created_at", { ascending: false })
+          .limit(50);
+      };
+      let { data: bs, error: booksErr } = await fetchOwnedBooks();
+      if (booksErr && /57014|timeout|timed out/i.test(String(booksErr.message ?? booksErr.code ?? ""))) {
+        await new Promise((r) => setTimeout(r, 400));
+        ({ data: bs, error: booksErr } = await fetchOwnedBooks());
+      }
+      if (booksErr) {
+        console.error("[SELL] books load failed:", booksErr);
+        setBooksLoadError(friendlyError(booksErr, "Could not load your books."));
+      } else {
+        setBooksLoadError(null);
+      }
       setBooks(bs ?? []);
 
       // Preselect from ?bookId= if user owns it
@@ -206,7 +225,7 @@ export default function Sell() {
       void trackStorefrontEvent(null, "sell_onboarding_started" as any, { step: next.step, resumed: !!ap });
     })();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [reloadBooksTick]);
 
   // Persist draft
   useEffect(() => {
@@ -410,6 +429,8 @@ export default function Sell() {
             canPublishExternal={entitlements.can_publish_external}
             entitlementTier={entitlements.tier} entitlementLoading={entLoading}
             editing={editingListing}
+            loadError={booksLoadError}
+            onRetryLoad={() => { setBooksLoadError(null); setReloadBooksTick((t) => t + 1); }}
           />
         )}
         {draft.step === 4 && publishedListing && (
@@ -591,15 +612,36 @@ function StepPayout({
 function StepPublish({
   books, value, onChange, onBack, onNext, saving,
   canPublishExternal, entitlementTier, entitlementLoading, editing,
+  loadError, onRetryLoad,
 }: {
   books: Book[]; value: DraftState["publish"];
   onChange: (v: DraftState["publish"]) => void;
   onBack: () => void; onNext: () => void; saving: boolean;
   canPublishExternal: boolean; entitlementTier: string; entitlementLoading: boolean;
   editing?: boolean;
+  loadError?: string | null;
+  onRetryLoad?: () => void;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const selected = books.find(b => b.id === value.book_id);
+
+  if (loadError && books.length === 0) {
+    return (
+      <Card className="p-6 md:p-8 text-center space-y-4">
+        <AlertTriangle className="h-10 w-10 mx-auto text-amber-500" aria-hidden />
+        <h2 className="text-2xl font-display font-semibold">We couldn't load your books</h2>
+        <p className="text-sm text-muted-foreground">{loadError}</p>
+        <p className="text-xs text-muted-foreground">
+          This is usually a brief database hiccup. Your books are safe.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+          <Button size="lg" onClick={onRetryLoad}>Retry</Button>
+          <Button asChild variant="outline" size="lg"><Link to="/library">Open library</Link></Button>
+        </div>
+        <Button variant="ghost" onClick={onBack} className="mt-2"><ArrowLeft className="h-4 w-4" />Back</Button>
+      </Card>
+    );
+  }
 
   if (books.length === 0) {
     return (
