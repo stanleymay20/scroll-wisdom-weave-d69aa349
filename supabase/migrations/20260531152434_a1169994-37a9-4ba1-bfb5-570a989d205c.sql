@@ -1,0 +1,1 @@
+UPDATE public.subscriptions SET tier='prophet_tier' WHERE user_id='607b86cf-c9cd-4ce3-bf4a-e60e6da09fcf' AND tier='prophet';
