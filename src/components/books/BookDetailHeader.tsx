@@ -7,6 +7,7 @@ import { ShareDialog, ExportDialog } from "@/components/books";
 import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { CodeQualityBadge } from "@/components/books/CodeQualityBadge";
 import { CollaborationPanel } from "@/components/books/CollaborationPanel";
+import { CustomCoverUploadButton } from "@/components/books/CustomCoverUploadButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 
@@ -47,6 +48,7 @@ interface BookDetailHeaderProps {
   onCoverThemeChange: (theme: string) => void;
   onCoverAuthorNameChange: (name: string) => void;
   onGenerateCover: () => void;
+  onCoverUploaded?: (publicUrl: string) => void;
   onSaveToLibrary: () => void;
   onStartReading: () => void;
 }
@@ -65,7 +67,7 @@ const coverThemes = [
 export function BookDetailHeader({
   book, chapters, readingTime, isSaved, isOwner,
   coverTheme, coverAuthorName, isGeneratingCover,
-  onCoverThemeChange, onCoverAuthorNameChange, onGenerateCover,
+  onCoverThemeChange, onCoverAuthorNameChange, onGenerateCover, onCoverUploaded,
   onSaveToLibrary, onStartReading,
 }: BookDetailHeaderProps) {
   const { t } = useLanguage();
@@ -120,6 +122,15 @@ export function BookDetailHeader({
                     <><RefreshCw className="h-4 w-4 mr-2" />{book.cover_image_url ? t('book.regenerateCover') : t('book.generateCover')}</>
                   )}
                 </Button>
+                {onCoverUploaded && (
+                  <CustomCoverUploadButton
+                    bookId={book.id}
+                    userId={book.user_id}
+                    onUploaded={onCoverUploaded}
+                    size="sm"
+                    label={book.cover_image_url ? "Upload your own" : "Upload cover image"}
+                  />
+                )}
               </div>
             </div>
           )}

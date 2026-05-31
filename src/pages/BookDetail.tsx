@@ -34,6 +34,7 @@ import { isAcademicCategory } from "@/lib/academicCategories";
 import { ChiefEditorPanel } from "@/components/books/ChiefEditorPanel";
 import { CodeAuditPanel } from "@/components/books/CodeAuditPanel";
 import { BookDetailHeader } from "@/components/books/BookDetailHeader";
+import { CustomCoverUploadButton } from "@/components/books/CustomCoverUploadButton";
 import { BookOwnerControls } from "@/components/books/BookOwnerControls";
 import { ChapterList } from "@/components/books/ChapterList";
 
@@ -346,6 +347,7 @@ export default function BookDetail() {
                 coverTheme={coverTheme} coverAuthorName={coverAuthorName} isGeneratingCover={isGeneratingCover}
                 onCoverThemeChange={setCoverTheme} onCoverAuthorNameChange={setCoverAuthorName}
                 onGenerateCover={handleGenerateCover} onSaveToLibrary={handleSaveToLibrary}
+                onCoverUploaded={(url) => setBook(prev => prev ? { ...prev, cover_image_url: url } : null)}
                 onStartReading={() => navigate(`/read/${id}/1`)}
               />
 
@@ -397,6 +399,14 @@ export default function BookDetail() {
                   {isGeneratingCover ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <><RefreshCw className="h-3.5 w-3.5 mr-1" />Cover</>}
                 </Button>
               </div>
+              <CustomCoverUploadButton
+                bookId={book.id}
+                userId={book.user_id}
+                onUploaded={(url) => setBook(prev => prev ? { ...prev, cover_image_url: url } : null)}
+                size="sm"
+                className="w-full h-9 text-xs"
+                label={book.cover_image_url ? "Upload your own cover" : "Upload cover image"}
+              />
             </div>
           )}
 
