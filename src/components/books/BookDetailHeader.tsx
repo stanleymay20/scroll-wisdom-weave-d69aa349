@@ -7,6 +7,7 @@ import { ShareDialog, ExportDialog } from "@/components/books";
 import { ReportContentDialog } from "@/components/legal/ReportContentDialog";
 import { CodeQualityBadge } from "@/components/books/CodeQualityBadge";
 import { CollaborationPanel } from "@/components/books/CollaborationPanel";
+import { CustomCoverUploadButton } from "@/components/books/CustomCoverUploadButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 
