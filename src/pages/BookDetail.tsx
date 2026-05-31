@@ -34,6 +34,7 @@ import { isAcademicCategory } from "@/lib/academicCategories";
 import { ChiefEditorPanel } from "@/components/books/ChiefEditorPanel";
 import { CodeAuditPanel } from "@/components/books/CodeAuditPanel";
 import { BookDetailHeader } from "@/components/books/BookDetailHeader";
+import { CustomCoverUploadButton } from "@/components/books/CustomCoverUploadButton";
 import { BookOwnerControls } from "@/components/books/BookOwnerControls";
 import { ChapterList } from "@/components/books/ChapterList";
 
