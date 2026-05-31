@@ -612,15 +612,36 @@ function StepPayout({
 function StepPublish({
   books, value, onChange, onBack, onNext, saving,
   canPublishExternal, entitlementTier, entitlementLoading, editing,
+  loadError, onRetryLoad,
 }: {
   books: Book[]; value: DraftState["publish"];
   onChange: (v: DraftState["publish"]) => void;
   onBack: () => void; onNext: () => void; saving: boolean;
   canPublishExternal: boolean; entitlementTier: string; entitlementLoading: boolean;
   editing?: boolean;
+  loadError?: string | null;
+  onRetryLoad?: () => void;
 }) {
   const [showAdvanced, setShowAdvanced] = useState(false);
   const selected = books.find(b => b.id === value.book_id);
+
+  if (loadError && books.length === 0) {
+    return (
+      <Card className="p-6 md:p-8 text-center space-y-4">
+        <AlertTriangle className="h-10 w-10 mx-auto text-amber-500" aria-hidden />
+        <h2 className="text-2xl font-display font-semibold">We couldn't load your books</h2>
+        <p className="text-sm text-muted-foreground">{loadError}</p>
+        <p className="text-xs text-muted-foreground">
+          This is usually a brief database hiccup. Your books are safe.
+        </p>
+        <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+          <Button size="lg" onClick={onRetryLoad}>Retry</Button>
+          <Button asChild variant="outline" size="lg"><Link to="/library">Open library</Link></Button>
+        </div>
+        <Button variant="ghost" onClick={onBack} className="mt-2"><ArrowLeft className="h-4 w-4" />Back</Button>
+      </Card>
+    );
+  }
 
   if (books.length === 0) {
     return (
