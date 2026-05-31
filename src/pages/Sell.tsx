@@ -95,6 +95,8 @@ export default function Sell() {
   const [userId, setUserId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [books, setBooks] = useState<Book[]>([]);
+  const [booksLoadError, setBooksLoadError] = useState<string | null>(null);
+  const [reloadBooksTick, setReloadBooksTick] = useState(0);
   const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT);
   const [payoutProfile, setPayoutProfile] = useState<any>(null);
   const [savingStep, setSavingStep] = useState(false);
