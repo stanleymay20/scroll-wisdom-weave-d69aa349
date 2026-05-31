@@ -66,7 +66,7 @@ const coverThemes = [
 export function BookDetailHeader({
   book, chapters, readingTime, isSaved, isOwner,
   coverTheme, coverAuthorName, isGeneratingCover,
-  onCoverThemeChange, onCoverAuthorNameChange, onGenerateCover,
+  onCoverThemeChange, onCoverAuthorNameChange, onGenerateCover, onCoverUploaded,
   onSaveToLibrary, onStartReading,
 }: BookDetailHeaderProps) {
   const { t } = useLanguage();
