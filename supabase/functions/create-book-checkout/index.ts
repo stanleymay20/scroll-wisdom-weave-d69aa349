@@ -203,7 +203,7 @@ serve(async (req) => {
             unit_amount: listing.price_cents,
             product_data: {
               name: book.title,
-              images: book.cover_image_url ? [book.cover_image_url] : undefined,
+              images: book.cover_image_url && /^https?:\/\//i.test(book.cover_image_url) && book.cover_image_url.length <= 2000 ? [book.cover_image_url] : undefined,
               metadata: { book_id: book.id, listing_id: listing.id },
             },
           },
