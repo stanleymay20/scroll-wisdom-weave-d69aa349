@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
-import { SEO, SITE_URL } from "@/components/SEO";
+import { SEO } from "@/components/SEO";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -11,6 +11,7 @@ import { getAttributionContext } from "@/lib/attribution";
 import { toast } from "sonner";
 import { storefrontApi, type StoreListing } from "@/lib/storefrontApi";
 import { DiscoveryRail } from "@/components/storefront/DiscoveryRail";
+import { ShareDialog } from "@/components/books/ShareDialog";
 import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
 
 // Local view type retains existing shape used by the page below.
@@ -122,8 +123,25 @@ export default function PublicBookPage() {
       const { data: res, error } = await supabase.functions.invoke("create-book-checkout", {
         body: { listing_id: data!.id, attribution },
       });
-      if (error) throw error;
-      const r = res as { url?: string; redirect_url?: string; already_owned?: boolean; free?: boolean };
+      // supabase-js wraps non-2xx as FunctionsHttpError; read the real body
+      if (error) {
+        let serverMsg = error.message || "Could not start checkout";
+        try {
+          const ctx: any = (error as any).context;
+          if (ctx && typeof ctx.json === "function") {
+            const body = await ctx.json();
+            if (body?.error) serverMsg = body.error;
+            if (body?.already_owned) {
+              toast.success("You already own this book");
+              navigate(`/store/${data!.slug}/read-full`);
+              return;
+            }
+          }
+        } catch { /* keep serverMsg */ }
+        throw new Error(serverMsg);
+      }
+      const r = (res ?? {}) as { url?: string; redirect_url?: string; already_owned?: boolean; free?: boolean; error?: string };
+      if (r.error) throw new Error(r.error);
       if (r.already_owned) {
         toast.success("You already own this book");
         navigate(`/store/${data!.slug}/read-full`);
@@ -134,7 +152,9 @@ export default function PublicBookPage() {
         return;
       }
       if (r.url) {
-        window.location.href = r.url;
+        // Open in new tab so the storefront tab is preserved (works in iframe previews too)
+        const win = window.open(r.url, "_blank", "noopener,noreferrer");
+        if (!win) window.location.href = r.url;
         return;
       }
       // Fallback: capture intent only
@@ -145,10 +165,10 @@ export default function PublicBookPage() {
     } catch (e: any) {
       const msg = e?.message ?? "Could not start checkout";
       trackStorefrontEvent(data!.id, "purchase_failed", {
-        reason: msg.includes("Sign in") ? "unauthenticated" : "checkout_error",
+        reason: /sign in/i.test(msg) ? "unauthenticated" : "checkout_error",
         message: String(msg).slice(0, 240),
       });
-      if (msg.includes("Sign in")) {
+      if (/sign in/i.test(msg)) {
         toast.error("Please sign in to claim this book");
         navigate("/auth?redirect=" + encodeURIComponent(`/store/${data!.slug}`));
         return;
@@ -157,12 +177,6 @@ export default function PublicBookPage() {
     }
   }
 
-  function handleShare() {
-    trackStorefrontEvent(data!.id, "share_click");
-    const url = `${SITE_URL}/store/${data!.slug}`;
-    if (navigator.share) navigator.share({ title: data!.book!.title, url }).catch(() => {});
-    else { navigator.clipboard.writeText(url); toast.success("Link copied"); }
-  }
 
   return (
     <ResponsiveShell>
@@ -199,7 +213,7 @@ export default function PublicBookPage() {
               <Button variant="default" onClick={handleBuy}>
                 {data.price_cents > 0 ? `Buy for $${(data.price_cents / 100).toFixed(2)}` : "Get free copy"}
               </Button>
-              <Button variant="outline" onClick={handleShare}>Share</Button>
+              <ShareDialog title={data.book.title} bookId={data.book.id} description={description} />
             </div>
             <Card className="mt-8 p-6">
               <h2 className="text-lg font-semibold">About this book</h2>
