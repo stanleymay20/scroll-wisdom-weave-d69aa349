@@ -100,7 +100,9 @@ serve(async (req) => {
         buyerUserId = u.user.id;
         buyerEmail = u.user.email ?? null;
         if (book.user_id === buyerUserId) {
-          throw new Error("You already own this book");
+          return new Response(JSON.stringify({ already_owned: true, reason: "author" }), {
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
         }
         // Already purchased?
         const { data: prior } = await sb
