@@ -213,7 +213,7 @@ export default function PublicBookPage() {
               <Button variant="default" onClick={handleBuy}>
                 {data.price_cents > 0 ? `Buy for $${(data.price_cents / 100).toFixed(2)}` : "Get free copy"}
               </Button>
-              <Button variant="outline" onClick={handleShare}>Share</Button>
+              <ShareDialog title={data.book.title} bookId={data.book.id} description={description} />
             </div>
             <Card className="mt-8 p-6">
               <h2 className="text-lg font-semibold">About this book</h2>
