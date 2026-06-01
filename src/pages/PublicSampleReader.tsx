@@ -54,9 +54,9 @@ export default function PublicSampleReader() {
         <p className="text-muted-foreground mt-1">Free sample · First {sampleCount} chapter{sampleCount === 1 ? "" : "s"}</p>
         <div className="mt-10 space-y-12">
           {chapters.map((c) => (
-            <article key={c.id} className="prose prose-neutral dark:prose-invert max-w-none">
-              <h2>Chapter {c.chapter_number}: {c.title}</h2>
-              <div className="whitespace-pre-wrap">{c.content}</div>
+            <article key={c.id}>
+              <h2 className="text-2xl font-semibold mb-4">Chapter {c.chapter_number}: {c.title}</h2>
+              <MarkdownRenderer content={c.content || ""} />
             </article>
           ))}
         </div>
