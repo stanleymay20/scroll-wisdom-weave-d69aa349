@@ -11,6 +11,7 @@ import { getAttributionContext } from "@/lib/attribution";
 import { toast } from "sonner";
 import { storefrontApi, type StoreListing } from "@/lib/storefrontApi";
 import { DiscoveryRail } from "@/components/storefront/DiscoveryRail";
+import { ShareDialog } from "@/components/books/ShareDialog";
 import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
 
 // Local view type retains existing shape used by the page below.
