@@ -4525,6 +4525,10 @@ export type Database = {
         }[]
       }
       get_admin_user_metrics: { Args: never; Returns: Json }
+      get_creator_audience_summary: {
+        Args: { _user_id: string; _window_days?: number }
+        Returns: Json
+      }
       get_creator_channel_recommendations: {
         Args: { _user_id: string; _window_days?: number }
         Returns: Json
@@ -4534,6 +4538,14 @@ export type Database = {
         Returns: Json
       }
       get_creator_publishing_funnel: {
+        Args: { _user_id: string; _window_days?: number }
+        Returns: Json
+      }
+      get_creator_revenue_summary: {
+        Args: { _user_id: string; _window_days?: number }
+        Returns: Json
+      }
+      get_creator_sales_conversion: {
         Args: { _user_id: string; _window_days?: number }
         Returns: Json
       }
