@@ -99,6 +99,7 @@ const PayoutProfileEditor = lazy(() => import("./pages/PayoutProfileEditor"));
 const Sell = lazy(() => import("./pages/Sell"));
 const CollectionPage = lazy(() => import("./pages/CollectionPage"));
 const CreatorIntelligence = lazy(() => import("./pages/CreatorIntelligence"));
+const CreatorBusinessHub = lazy(() => import("./pages/CreatorBusinessHub"));
 
 // Lazy load legal components
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
