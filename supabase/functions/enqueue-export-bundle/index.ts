@@ -294,7 +294,9 @@ serve(async (req) => {
     let entitlementSnapshotId: string | null = null;
     if (EXTERNAL_BUNDLES.has(parsed.bundle_type)) {
       const gate = await requireCreatorCapability(sc, auth.userId, "can_publish_external", {
-        auditMetadata: { book_id: parsed.book_id, bundle_type: parsed.bundle_type, correlation_id: corr },
+        auditMetadata: { book_id: parsed.book_id, bundle_type: parsed.bundle_type },
+        correlationId: corr,
+        platform: parsed.bundle_type,
       });
       if (gate.blocked) return gate.blocked;
       // Phase 4.1 — snapshot entitlement onto the export job for historical proof.

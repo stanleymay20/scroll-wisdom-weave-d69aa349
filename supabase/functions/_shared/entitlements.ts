@@ -48,7 +48,12 @@ export async function requireCreatorCapability(
   admin: any,
   userId: string,
   capability: keyof CreatorEntitlements,
-  opts: { auditEventType?: string; auditMetadata?: Record<string, unknown> } = {},
+  opts: {
+    auditEventType?: string;
+    auditMetadata?: Record<string, unknown>;
+    correlationId?: string | null;
+    platform?: string | null;
+  } = {},
 ): Promise<{ entitlements: CreatorEntitlements; blocked: Response | null }> {
   const ent = await getUserEntitlements(admin, userId);
   const ok = Boolean(ent[capability]);
@@ -58,10 +63,11 @@ export async function requireCreatorCapability(
   try {
     await admin.from("publishing_audit_log").insert({
       user_id: userId,
-      platform: null,
+      platform: opts.platform ?? null,
       event_type: "publish_blocked_by_tier",
       severity: "warning",
       message: `Blocked by tier: missing ${String(capability)}`,
+      correlation_id: opts.correlationId ?? null,
       metadata: {
         capability,
         current_tier: ent.tier,
@@ -69,6 +75,14 @@ export async function requireCreatorCapability(
       },
     });
   } catch { /* best-effort */ }
+
+  const headers: Record<string, string> = {
+    "Access-Control-Allow-Origin": "*",
+    "Access-Control-Allow-Headers":
+      "authorization, x-client-info, apikey, content-type, x-supabase-client-name, x-supabase-client-version",
+    "Content-Type": "application/json",
+  };
+  if (opts.correlationId) headers["x-correlation-id"] = opts.correlationId;
 
   return {
     entitlements: ent,
@@ -79,16 +93,9 @@ export async function requireCreatorCapability(
         current_tier: ent.tier,
         upgrade_url: "/pricing#creator",
         message: "Upgrade to Creator to use this feature.",
+        correlation_id: opts.correlationId ?? null,
       }),
-      {
-        status: 402,
-        headers: {
-          "Access-Control-Allow-Origin": "*",
-          "Access-Control-Allow-Headers":
-            "authorization, x-client-info, apikey, content-type, x-supabase-client-name, x-supabase-client-version",
-          "Content-Type": "application/json",
-        },
-      },
+      { status: 402, headers },
     ),
   };
 }

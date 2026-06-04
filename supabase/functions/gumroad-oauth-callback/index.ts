@@ -2,8 +2,15 @@
 // We exchange code -> access_token, encrypt and store it, then redirect the user back
 // to the app. This endpoint is browser-facing, so it returns 302s (HTML redirects),
 // not JSON.
+//
+// Enterprise hardening: every connection lifecycle event is recorded in
+// publishing_audit_log so operators can reconstruct who connected when, and
+// debug failed token exchanges without spelunking edge function logs.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encryptToken } from "../_shared/crypto-tokens.ts";
+import { logPublishEvent } from "../_shared/publishing-audit.ts";
+import { fetchWithRetry } from "../_shared/upstream-retry.ts";
+import { sanitiseError } from "../_shared/publish-validation.ts";
 
 function redirect(to: string): Response {
   return new Response(null, { status: 302, headers: { Location: to } });
@@ -46,9 +53,30 @@ Deno.serve(async (req) => {
     await admin.from("oauth_states").delete().eq("state", state);
   }
 
-  if (oauthError) return errorRedirect(oauthError, returnUrl);
-  if (!code || !state || !userId) return errorRedirect("invalid_state", returnUrl);
-  if (!clientId || !clientSecret) return errorRedirect("not_configured", returnUrl);
+  // Best-effort audit logging for failed callbacks. We don't have a userId for
+  // truly bogus states, so we only log when we know who the request claims to be.
+  const logFailure = async (reason: string, sev: "warning" | "error" = "warning") => {
+    if (userId) {
+      await logPublishEvent(admin, {
+        user_id: userId, platform: "gumroad", event_type: "connection_failed",
+        severity: sev, message: reason,
+        metadata: { stage: "oauth_callback" },
+      });
+    }
+  };
+
+  if (oauthError) {
+    await logFailure(`oauth_error:${oauthError}`);
+    return errorRedirect(oauthError, returnUrl);
+  }
+  if (!code || !state || !userId) {
+    await logFailure("invalid_state");
+    return errorRedirect("invalid_state", returnUrl);
+  }
+  if (!clientId || !clientSecret) {
+    await logFailure("not_configured", "error");
+    return errorRedirect("not_configured", returnUrl);
+  }
 
   try {
     const redirectUri = `${url}/functions/v1/gumroad-oauth-callback`;
@@ -59,14 +87,15 @@ Deno.serve(async (req) => {
       code,
       grant_type: "authorization_code",
     });
-    const tokRes = await fetch("https://api.gumroad.com/oauth/token", {
+    const tokRes = await fetchWithRetry("https://api.gumroad.com/oauth/token", {
       method: "POST",
       headers: { "Content-Type": "application/x-www-form-urlencoded" },
       body: tokenForm.toString(),
-    });
+    }, { attempts: 3 });
     const tokJson: any = await tokRes.json().catch(() => ({}));
     if (!tokRes.ok || !tokJson?.access_token) {
       console.error("gumroad token exchange failed", tokRes.status, tokJson);
+      await logFailure(`token_exchange_failed_${tokRes.status}`, "error");
       return errorRedirect("token_exchange_failed", returnUrl);
     }
     const accessToken: string = tokJson.access_token;
@@ -74,7 +103,10 @@ Deno.serve(async (req) => {
     const scopeStr: string = tokJson.scope ?? "";
 
     // Fetch profile
-    const meRes = await fetch(`https://api.gumroad.com/v2/user?access_token=${encodeURIComponent(accessToken)}`);
+    const meRes = await fetchWithRetry(
+      `https://api.gumroad.com/v2/user?access_token=${encodeURIComponent(accessToken)}`,
+      {}, { attempts: 2 },
+    );
     const meJson: any = await meRes.json().catch(() => ({}));
     const extId = String(meJson?.user?.user_id ?? meJson?.user?.id ?? "");
     const extName = String(meJson?.user?.name ?? meJson?.user?.email ?? "Gumroad creator");
@@ -96,8 +128,17 @@ Deno.serve(async (req) => {
         connection_status: "connected",
         last_error: null,
         last_used_at: new Date().toISOString(),
+        last_success_at: new Date().toISOString(),
+        consecutive_failures: 0,
+        revoked_at: null,
+        disconnected_at: null,
       }, { onConflict: "user_id,platform" });
     if (upErr) throw upErr;
+
+    await logPublishEvent(admin, {
+      user_id: userId, platform: "gumroad", event_type: "connection_completed",
+      metadata: { external_creator_id: extId || null, has_refresh_token: !!refreshToken, scopes: scopeStr },
+    });
 
     const base = returnUrl || `${appBase()}/account/intelligence`;
     const u = new URL(base);
@@ -105,6 +146,7 @@ Deno.serve(async (req) => {
     return redirect(u.toString());
   } catch (e) {
     console.error("gumroad-oauth-callback error", e);
+    await logFailure(sanitiseError(e, 200), "error");
     return errorRedirect("server_error", returnUrl);
   }
 });
