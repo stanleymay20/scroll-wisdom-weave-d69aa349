@@ -852,6 +852,8 @@ function StepLaunch({
         toast.error(res.message ?? `Connect ${platform} first`);
       } else if (res.status === "blocked") {
         toast.error(res.message ?? "Export quality blocked");
+      } else if (res.status === "unsafe") {
+        toast.error(res.message ?? `${platform} safety check failed`, { duration: 8000 });
       } else {
         toast.error(res.message ?? `${platform} publish failed`);
       }

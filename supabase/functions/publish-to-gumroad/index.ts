@@ -22,6 +22,7 @@ import { logPublishEvent } from "../_shared/publishing-audit.ts";
 import { fetchWithRetry } from "../_shared/upstream-retry.ts";
 import { normaliseListing, sanitiseError } from "../_shared/publish-validation.ts";
 import { correlationId } from "../_shared/observability.ts";
+import { auditSellSafety, type SellSafetyInput } from "../_shared/sell-safety.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -82,7 +83,7 @@ Deno.serve(async (req) => {
 
     const { data: book, error: bErr } = await admin
       .from("books")
-      .select("id, user_id, title, cover_image_url, category")
+      .select("id, user_id, title, description, cover_image_url, category, book_type, ai_assistance_level")
       .eq("id", listing.book_id)
       .maybeSingle();
     if (bErr || !book) return jsonResp(404, { error: "book_not_found" }, corr);
@@ -133,6 +134,33 @@ Deno.serve(async (req) => {
       return jsonResp(400, { error: "invalid_listing", code: normalised.code, message: normalised.message }, corr);
     }
     const { title, description, priceCents, tags, coverImageUrl } = normalised.value;
+
+    // Defence-in-depth sell-safety gate. The bundle pipeline already ran a
+    // platform-aware check; this rechecks at the upstream-create boundary so
+    // a stale or out-of-band publish call still gets blocked on platform
+    // policy violations (AI disclosure, hard-prohibited content).
+    const { data: chSafety } = await admin
+      .from("chapters").select("title, content").eq("book_id", book.id).order("chapter_number");
+    const safetyInput: SellSafetyInput = {
+      book: { title: (book as any).title, description: (book as any).description, category: (book as any).category, book_type: (book as any).book_type },
+      listing,
+      chaptersFullText: (chSafety ?? []).map((c: any) => `${c.title ?? ""}\n${c.content ?? ""}`).join("\n\n"),
+      aiAssistanceLevel: (book as any).ai_assistance_level ?? null,
+      cover: null, // dimensions decided at bundle time; not re-fetched here
+    };
+    const safety = auditSellSafety(safetyInput, "gumroad");
+    if (safety.verdict === "unsafe") {
+      const blockers = safety.issues.filter((i) => i.severity === "blocker").map((i) => i.message);
+      await logPublishEvent(admin, {
+        user_id: caller, platform: "gumroad", event_type: "publish_validation_failed",
+        book_id: book.id, listing_id: listingId, severity: "error",
+        message: safety.summary, correlation_id: corr,
+        metadata: { codes: safety.issues.filter((i) => i.severity === "blocker").map((i) => i.code) },
+      });
+      return jsonResp(422, {
+        error: "sell_safety_blocked", message: safety.summary, blockers,
+      }, corr);
+    }
 
     // Snapshot effective entitlement for historical proof.
     const entitlementSnapshotId = await snapshotEntitlement(admin, caller, "external_publish", book.id);

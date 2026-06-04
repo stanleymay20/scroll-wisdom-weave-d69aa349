@@ -38,6 +38,19 @@ export interface BundleAuthor {
   x_url?: string | null;
   linkedin_url?: string | null;
   avatar_url?: string | null;
+  /** Optional list of other titles by the same author for back-matter. */
+  also_by?: Array<{ title: string; url?: string | null }> | null;
+}
+
+export interface BundleExtras {
+  /** Author-declared AI assistance level — surfaced in ai-disclosure.md. */
+  aiAssistanceLevel?: "none" | "assisted" | "generated" | null;
+  /** Optional dedication line for the front matter. */
+  dedication?: string | null;
+  /** Optional epigraph for the front matter (quote + attribution). */
+  epigraph?: { text: string; attribution?: string | null } | null;
+  /** Optional ISBN for the copyright page. */
+  isbn?: string | null;
 }
 
 export interface BundleChapter {
@@ -56,6 +69,8 @@ export interface BundleContext {
   correlationId: string;
   /** SHA-256 of the source manuscript text; included in metadata.json. */
   contentHash?: string | null;
+  /** Optional extras for elite front/back-matter polish. */
+  extras?: BundleExtras | null;
 }
 
 export const PLATFORM_LABEL: Record<BundlePlatform, string> = {
@@ -118,18 +133,35 @@ function cleanProse(s: string | null | undefined, maxLen = 6000): string {
 // ───────────── front matter / metadata ─────────────────────────────────────
 
 export function renderFrontMatter(ctx: BundleContext): string {
-  const { book, listing, author } = ctx;
+  const { book, listing, author, extras } = ctx;
   const year = new Date(ctx.generatedAt).getUTCFullYear();
   const publisher = "ScrollLibrary";
   const lines: string[] = [];
 
   lines.push(`# ${book.title}`);
   if (book.subtitle || listing?.subtitle) lines.push(``, `*${book.subtitle ?? listing?.subtitle}*`);
+  if (author?.display_name) lines.push(``, `by ${author.display_name}`);
   lines.push(``, `---`, ``);
+
+  // Optional dedication — appears on its own page-equivalent above the
+  // copyright. Real publishers do this; the bundle now supports it.
+  if (extras?.dedication?.trim()) {
+    lines.push(`## Dedication`, ``, cleanProse(extras.dedication, 400), ``, `---`, ``);
+  }
+
+  // Optional epigraph — short quote, attributed.
+  if (extras?.epigraph?.text?.trim()) {
+    const epi = extras.epigraph;
+    lines.push(`> ${cleanProse(epi.text, 400)}`);
+    if (epi.attribution) lines.push(`>`, `> — ${cleanProse(epi.attribution, 120)}`);
+    lines.push(``, `---`, ``);
+  }
+
   lines.push(`## Copyright`, ``);
   lines.push(`© ${year} ${author?.display_name ?? "The Author"}. All rights reserved.`, ``);
   lines.push(`Published via ${publisher}.`, ``);
   lines.push(`License: ${humanLicense(listing?.license_type)}.`, ``);
+  if (extras?.isbn) lines.push(`ISBN: ${extras.isbn}`, ``);
   if (book.id) lines.push(`Reference: SPC-SL-${year}-${book.id.slice(0, 8).toUpperCase()}`, ``);
   if (ctx.contentHash) lines.push(`Manuscript integrity hash (SHA-256): \`${ctx.contentHash}\``, ``);
   lines.push(`No part of this publication may be reproduced, distributed, or transmitted in any form or by any means without prior written permission of the copyright holder, except for brief quotations in critical reviews and certain other non-commercial uses permitted by copyright law.`, ``);
@@ -152,6 +184,97 @@ export function renderFrontMatter(ctx: BundleContext): string {
   }
 
   return lines.join("\n");
+}
+
+/**
+ * Back-matter document. Mirrors what every elite publisher attaches at the
+ * tail of a book: a thank-you, a review CTA (Amazon discoverability cares
+ * about review velocity), an "Also by this author" list, and the author's
+ * link block.
+ */
+export function renderBackMatter(ctx: BundleContext): string {
+  const { book, author, extras } = ctx;
+  const lines: string[] = [];
+  lines.push(`# Thank you`, ``);
+  lines.push(
+    `Thank you for reading ${book.title}. If you enjoyed it, the single most ` +
+    `valuable thing you can do is leave an honest review on the platform ` +
+    `where you bought it — it helps new readers find the book.`,
+    ``,
+  );
+  lines.push(`---`, ``, `## Leave a review`, ``);
+  lines.push(`- On Amazon (KDP): search "${book.title}" and tap the review button.`);
+  lines.push(`- On Gumroad: rate the product from your library.`);
+  lines.push(`- On Goodreads, Bookbub, StoryGraph: a short rating is enough.`, ``);
+
+  if (author?.also_by && author.also_by.length > 0) {
+    lines.push(`---`, ``, `## Also by ${author.display_name ?? "this author"}`, ``);
+    for (const b of author.also_by.slice(0, 12)) {
+      lines.push(b.url ? `- [${b.title}](${b.url})` : `- ${b.title}`);
+    }
+    lines.push(``);
+  }
+
+  if (author?.display_name || author?.website_url || author?.x_url || author?.linkedin_url) {
+    lines.push(`---`, ``, `## Stay in touch`, ``);
+    if (author.display_name) lines.push(`**${author.display_name}**`, ``);
+    const links: string[] = [];
+    if (author.website_url) links.push(`[Website](${author.website_url})`);
+    if (author.x_url) links.push(`[X / Twitter](${author.x_url})`);
+    if (author.linkedin_url) links.push(`[LinkedIn](${author.linkedin_url})`);
+    if (links.length) lines.push(links.join(" · "));
+  }
+
+  // AI assistance disclosure block — required by Amazon KDP as of 2023.
+  if (extras?.aiAssistanceLevel && extras.aiAssistanceLevel !== "none") {
+    lines.push(``, `---`, ``, `## AI assistance disclosure`, ``);
+    lines.push(aiDisclosureBlock(extras.aiAssistanceLevel));
+  }
+  return lines.join("\n");
+}
+
+/**
+ * Stand-alone AI-disclosure document for the KDP bundle. Amazon's content
+ * review wants a clear declaration; this is the text creators paste into
+ * their KDP submission form (it doesn't accept hyperlinks — plain prose only).
+ */
+export function renderAiDisclosure(ctx: BundleContext): string {
+  const level = ctx.extras?.aiAssistanceLevel ?? "none";
+  const lines: string[] = [];
+  lines.push(`# AI assistance disclosure`, ``);
+  lines.push(`Title: **${ctx.book.title}**`, ``);
+  lines.push(`Author: ${ctx.author?.display_name ?? "Independent author"}`, ``);
+  lines.push(`Generated at: ${ctx.generatedAt}`, ``);
+  lines.push(`---`, ``);
+  lines.push(`## Declared level`, ``, `**${level.toUpperCase()}**`, ``);
+  lines.push(aiDisclosureBlock(level), ``);
+  lines.push(`---`, ``);
+  lines.push(`## Amazon KDP submission text`, ``);
+  lines.push(`> ${amazonKdpText(level)}`, ``);
+  lines.push(
+    `Copy the block above into the AI-content disclosure prompt when ` +
+    `submitting to KDP. Amazon may also require you to tick a separate ` +
+    `checkbox: do not skip it.`,
+  );
+  return lines.join("\n");
+}
+
+function aiDisclosureBlock(level: "none" | "assisted" | "generated" | null | undefined): string {
+  switch (level) {
+    case "generated":
+      return "This work was created with the help of generative AI. The text was generated by an AI system, then reviewed and edited by the author before publication. Citations and factual claims have been verified against primary sources where possible.";
+    case "assisted":
+      return "Portions of this work were created with the help of generative AI. The author wrote the manuscript, with AI used for ideation, outlining, copy-editing, or summarisation. The narrative voice and the final text are the author's.";
+    case "none":
+    default:
+      return "This work was created without the use of generative AI tools.";
+  }
+}
+
+function amazonKdpText(level: "none" | "assisted" | "generated" | null | undefined): string {
+  if (level === "generated") return "AI-generated: the text in this book was produced using generative AI tools.";
+  if (level === "assisted")  return "AI-assisted: generative AI tools were used to ideate, outline, or copy-edit; the author wrote the manuscript.";
+  return "No AI use: this book was written without the use of generative AI.";
 }
 
 function humanLicense(code: string | null | undefined): string {
@@ -354,6 +477,104 @@ export function renderSocialPack(ctx: BundleContext): SocialPack {
 function clip(s: string, n: number): string {
   if (s.length <= n) return s;
   return s.slice(0, Math.max(0, n - 1)).replace(/\s+\S*$/, "") + "…";
+}
+
+// ───────────── editor report (multi-section human audit) ──────────────────
+
+export interface EditorReportInput {
+  structuralIssues: Array<{ severity: string; code: string; message: string; chapter?: number; hint?: string }>;
+  contentCleanupIssues: Array<{ severity: string; code: string; message: string; chapter?: number; hint?: string }>;
+  styleIssues: Array<{ severity: string; code: string; message: string; chapter?: number; hint?: string }>;
+  sellSafetyByPlatform: Record<string, { verdict: string; summary: string; issues: Array<{ severity: string; code: string; message: string; hint?: string }> }>;
+  styleTotals?: {
+    words: number;
+    cliche_per_1k_overall: number;
+    em_dash_per_1k_overall: number;
+    adverb_rate_overall: number;
+    passive_rate_overall: number;
+    reading_grade_mean: number;
+    reading_grade_stddev: number;
+  };
+  contentCleanupStats?: Record<string, number | boolean>;
+  qualityScore?: number;
+}
+
+/**
+ * Human-readable multi-section report shipped inside every bundle as
+ * `editor-report.md`. Tells the creator exactly what passes, what needs
+ * review, and what blocks distribution per platform.
+ */
+export function renderEditorReport(ctx: BundleContext, input: EditorReportInput): string {
+  const lines: string[] = [];
+  lines.push(`# Editor's report — ${ctx.book.title}`, ``);
+  lines.push(`Generated ${ctx.generatedAt}`, ``);
+  if (typeof input.qualityScore === "number") {
+    lines.push(`**Overall export quality:** ${Math.round(input.qualityScore)} / 100`, ``);
+  }
+
+  // Style totals → at-a-glance verdicts
+  if (input.styleTotals) {
+    const s = input.styleTotals;
+    lines.push(`## Manuscript metrics`, ``);
+    lines.push(`| Metric | Value | Publisher target |`);
+    lines.push(`| --- | --- | --- |`);
+    lines.push(`| Words | ${s.words.toLocaleString()} | — |`);
+    lines.push(`| Cliché density / 1k words | ${s.cliche_per_1k_overall.toFixed(2)} | < 2.0 |`);
+    lines.push(`| Em-dash density / 1k words | ${s.em_dash_per_1k_overall.toFixed(2)} | < 8.0 |`);
+    lines.push(`| Adverb rate | ${(s.adverb_rate_overall * 100).toFixed(1)}% | < 3% |`);
+    lines.push(`| Passive voice rate | ${(s.passive_rate_overall * 100).toFixed(0)}% | < 20% |`);
+    lines.push(`| Reading grade (mean) | ${s.reading_grade_mean.toFixed(1)} | consistent |`);
+    lines.push(`| Reading grade (variance ±) | ${s.reading_grade_stddev.toFixed(1)} | < 5 |`);
+    lines.push(``);
+  }
+
+  // Cleanup stats — what the bundle pipeline auto-fixed
+  if (input.contentCleanupStats && Object.keys(input.contentCleanupStats).length > 0) {
+    lines.push(`## Automatic cleanup applied`, ``);
+    for (const [k, v] of Object.entries(input.contentCleanupStats)) {
+      if (k === "changed") continue;
+      if (typeof v === "number" && v > 0) lines.push(`- ${k.replace(/_/g, " ")}: ${v}`);
+    }
+    lines.push(``);
+  }
+
+  // Issue lists by category
+  renderIssueSection(lines, "Structural issues", input.structuralIssues);
+  renderIssueSection(lines, "Content issues", input.contentCleanupIssues);
+  renderIssueSection(lines, "Style issues", input.styleIssues);
+
+  // Per-platform sell-safety
+  lines.push(`## Platform safety verdicts`, ``);
+  for (const [platform, rep] of Object.entries(input.sellSafetyByPlatform)) {
+    const badge = rep.verdict === "safe" ? "✅" : rep.verdict === "needs_review" ? "⚠️" : "⛔";
+    lines.push(`### ${badge} ${platform.toUpperCase()} — ${rep.verdict}`, ``);
+    lines.push(`> ${rep.summary}`, ``);
+    if (rep.issues.length > 0) {
+      for (const iss of rep.issues.slice(0, 8)) {
+        const tag = iss.severity === "blocker" ? "BLOCK" : iss.severity === "warning" ? "WARN" : "INFO";
+        lines.push(`- **${tag}** ${iss.message}${iss.hint ? ` — ${iss.hint}` : ""}`);
+      }
+      if (rep.issues.length > 8) lines.push(`- ...and ${rep.issues.length - 8} more`);
+      lines.push(``);
+    }
+  }
+
+  lines.push(`---`, ``, `*This report was produced automatically by the ScrollLibrary bundle pipeline.*`);
+  return lines.join("\n");
+}
+
+function renderIssueSection(lines: string[], title: string, issues: Array<{ severity: string; code: string; message: string; chapter?: number; hint?: string }>) {
+  lines.push(`## ${title}`, ``);
+  if (issues.length === 0) { lines.push(`_None._`, ``); return; }
+  const order: Record<string, number> = { blocker: 0, warning: 1, info: 2 };
+  const sorted = [...issues].sort((a, b) => (order[a.severity] ?? 3) - (order[b.severity] ?? 3));
+  for (const iss of sorted.slice(0, 40)) {
+    const tag = iss.severity === "blocker" ? "BLOCK" : iss.severity === "warning" ? "WARN" : "INFO";
+    const where = typeof iss.chapter === "number" ? ` (ch. ${iss.chapter})` : "";
+    lines.push(`- **${tag}**${where} ${iss.message}${iss.hint ? ` — ${iss.hint}` : ""}`);
+  }
+  if (sorted.length > 40) lines.push(`- ...and ${sorted.length - 40} more`);
+  lines.push(``);
 }
 
 // ───────────── per-platform README ─────────────────────────────────────────

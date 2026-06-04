@@ -30,11 +30,14 @@ import { auditBookForExport } from "../_shared/exportQuality.ts";
 import { logPublishEvent } from "../_shared/publishing-audit.ts";
 import { fetchImageAsset, sha256Hex } from "../_shared/asset-fetch.ts";
 import { cleanBookChapters } from "../_shared/content-quality.ts";
+import { auditBookStyle } from "../_shared/style-quality.ts";
+import { auditAllPlatforms, type SellSafetyInput } from "../_shared/sell-safety.ts";
 import {
   bundleFilename, renderFrontMatter, renderLongDescription, renderShortDescription,
   renderKeywords, renderLicense, renderSocialPack, renderReadme, renderManifest,
-  renderSubstackSchedule, renderPatreonCsv, PLATFORM_LABEL, slugify,
-  type BundleContext, type BundlePlatform,
+  renderSubstackSchedule, renderPatreonCsv, renderEditorReport, renderBackMatter,
+  renderAiDisclosure, PLATFORM_LABEL, slugify,
+  type BundleContext, type BundlePlatform, type BundleExtras,
 } from "../_shared/bundle-content.ts";
 
 const EXTERNAL_BUNDLES = new Set<BundlePlatform>(["gumroad", "substack", "patreon", "etsy"]);
@@ -67,8 +70,11 @@ async function runJob(
     await timer.stop("queued_to_started");
 
     // ─── Load source data ───────────────────────────────────────────────
+    // ai_assistance_level/isbn/dedication/epigraph may not exist on the books
+    // table yet — load them best-effort so the elite-bundle fields are
+    // optional rather than required.
     const { data: book } = await sc.from("books")
-      .select("id, title, subtitle, description, cover_image_url, category, book_type, user_id")
+      .select("id, title, subtitle, description, cover_image_url, category, book_type, user_id, ai_assistance_level, isbn, dedication, epigraph")
       .eq("id", bookId).maybeSingle();
     if (!book) throw new Error("Book not found");
 
@@ -95,7 +101,7 @@ async function runJob(
 
     await timer.stop("fetch_book", { metadata: { chapters: chapterList.length } });
 
-    // ─── Quality gate ───────────────────────────────────────────────────
+    // ─── Quality gate (structural + content + style) ──────────────────
     const canonical = parseBookToCanonical(chapterList);
     const audit = auditBookForExport(canonical, {
       hasCover: !!(book.cover_image_url || (listing as any)?.cover_override_url),
@@ -104,8 +110,22 @@ async function runJob(
     // Content-quality issues that the cleaner can't safely auto-fix become
     // blockers (placeholders, dangerous HTML) or warnings (self-references).
     for (const iss of cleanup.report.issues) audit.issues.push(iss);
-    const refusalBlockers = cleanup.report.issues.filter((i) => i.severity === "blocker");
-    if (refusalBlockers.length > 0) audit.status = "blocked";
+
+    // Literary-polish audit. Elite output means publisher-grade prose
+    // metrics, not just "no AI artifacts". Cliché density, em-dash overuse,
+    // adverb rate, passive voice, sentence-starter repetition, reading-grade
+    // variance. The auditor emits issues at blocker/warning/info severity;
+    // blockers (e.g. extreme cliché density) refuse the bundle.
+    const styleAudit = auditBookStyle(chapterList);
+    for (const iss of styleAudit.issues) audit.issues.push(iss);
+
+    // Sell-safety blockers from the BUNDLE PLATFORM (others are reported but
+    // don't gate this bundle — a Gumroad bundle isn't blocked by an Etsy
+    // warning). The full multi-platform report is included in editor-report.md
+    // so the creator can see all verdicts at once.
+    const styleBlockers = styleAudit.issues.filter((i) => i.severity === "blocker");
+    const cleanupBlockers = cleanup.report.issues.filter((i) => i.severity === "blocker");
+    if (styleBlockers.length + cleanupBlockers.length > 0) audit.status = "blocked";
 
     if (audit.status === "blocked") {
       const blockers = audit.issues.filter((i) => i.severity === "blocker").map((i) => i.message);
@@ -113,7 +133,7 @@ async function runJob(
         user_id: userId, platform: bundleType, event_type: "publish_validation_failed",
         book_id: bookId, severity: "error", correlation_id: corr,
         message: "Bundle generation refused: export quality blockers",
-        metadata: { blockers, score: audit.score, cleanup: cleanup.report.totals },
+        metadata: { blockers, score: audit.score, cleanup: cleanup.report.totals, style_totals: styleAudit.totals },
       });
       throw new Error(`Export quality blocked (score ${audit.score}): ${blockers.slice(0, 3).join("; ")}`);
     }
@@ -125,6 +145,17 @@ async function runJob(
       .map((c: any) => `# ${c.title ?? ""}\n${c.content ?? ""}`)
       .join("\n\n---\n\n");
     const contentHash = sourceForHash ? await sha256Hex(sourceForHash) : null;
+
+    // Elite extras: AI disclosure level, ISBN, dedication, epigraph. All
+    // optional — the renderer skips sections that aren't supplied.
+    const extras: BundleExtras = {
+      aiAssistanceLevel: (book as any).ai_assistance_level ?? null,
+      isbn: (book as any).isbn ?? null,
+      dedication: (book as any).dedication ?? null,
+      epigraph: typeof (book as any).epigraph === "object"
+        ? ((book as any).epigraph as { text: string; attribution?: string | null })
+        : null,
+    };
 
     const ctx: BundleContext = {
       platform: bundleType,
@@ -141,6 +172,7 @@ async function runJob(
       generatedAt,
       correlationId: corr,
       contentHash,
+      extras,
     };
 
     // ─── PDF (if applicable) ────────────────────────────────────────────
@@ -166,7 +198,44 @@ async function runJob(
     // ─── Cover (robust) ─────────────────────────────────────────────────
     const coverSeed = (listing as any)?.cover_override_url || book.cover_image_url || null;
     const cover = coverSeed ? await fetchImageAsset(coverSeed) : null;
-    await timer.stop("cover", { metadata: { ok: !!cover, bytes: cover?.bytes.byteLength ?? 0 } });
+    await timer.stop("cover", {
+      metadata: {
+        ok: !!cover, bytes: cover?.bytes.byteLength ?? 0,
+        width: cover?.widthPx ?? null, height: cover?.heightPx ?? null,
+      },
+    });
+
+    // ─── Sell-safety per platform ─────────────────────────────────────
+    // We compute all platforms so the editor-report.md can show the full
+    // matrix, but only the current bundle's platform is allowed to BLOCK
+    // bundle generation. Cross-platform issues are visible to the creator
+    // without surprising a Gumroad bundle with an Etsy-specific failure.
+    const sellSafetyInput: SellSafetyInput = {
+      book: { title: book.title, description: book.description, category: book.category, book_type: book.book_type },
+      listing: ctx.listing,
+      chaptersFullText: chapterList.map((c) => `${c.title ?? ""}\n${c.content ?? ""}`).join("\n\n"),
+      aiAssistanceLevel: extras.aiAssistanceLevel ?? null,
+      cover: cover && cover.widthPx && cover.heightPx
+        ? { widthPx: cover.widthPx, heightPx: cover.heightPx, mime: cover.mime }
+        : null,
+    };
+    const safetyByPlatform = auditAllPlatforms(sellSafetyInput);
+    const platformSafety = safetyByPlatform[bundleType];
+    if (platformSafety.verdict === "unsafe") {
+      const reasons = platformSafety.issues
+        .filter((i) => i.severity === "blocker")
+        .map((i) => i.message).slice(0, 3);
+      await logPublishEvent(sc, {
+        user_id: userId, platform: bundleType, event_type: "publish_validation_failed",
+        book_id: bookId, severity: "error", correlation_id: corr,
+        message: `Bundle refused: ${platformSafety.summary}`,
+        metadata: { reasons, sell_safety: platformSafety.issues.map((i) => i.code) },
+      });
+      throw new Error(`${PLATFORM_LABEL[bundleType]} safety check failed: ${reasons.join("; ")}`);
+    }
+    // Fold warnings/info from the target platform into the audit issues so
+    // they reach the editor report and the audit log.
+    for (const iss of platformSafety.issues) audit.issues.push(iss);
 
     // ─── EPUB (paid digital distribution) ───────────────────────────────
     let epubBytes: Uint8Array | null = null;
@@ -252,6 +321,36 @@ async function runJob(
       included.push(`author-bio.md — drop-in author byline`);
     }
 
+    // Back matter — review CTA, also-by-this-author, stay-in-touch block.
+    zip.file("back-matter.md", renderBackMatter(ctx));
+    included.push(`back-matter.md — review CTA + author links`);
+
+    // AI disclosure — required for KDP, harmless for everyone else. We
+    // always include it so the creator has the exact text Amazon expects.
+    zip.file("ai-disclosure.md", renderAiDisclosure(ctx));
+    included.push(`ai-disclosure.md — AI assistance declaration (paste into KDP)`);
+
+    // Editor's report — full multi-section human-readable audit shipped
+    // inside every bundle so the creator can see exactly what passes, what
+    // needs review, and what blocks distribution per platform.
+    const editorReport = renderEditorReport(ctx, {
+      structuralIssues: audit.issues.filter((i) =>
+        !cleanup.report.issues.includes(i as any)
+        && !styleAudit.issues.includes(i as any)
+        && !platformSafety.issues.includes(i as any)
+      ) as any,
+      contentCleanupIssues: cleanup.report.issues as any,
+      styleIssues: styleAudit.issues as any,
+      sellSafetyByPlatform: Object.fromEntries(
+        Object.entries(safetyByPlatform).map(([k, v]) => [k, { verdict: v.verdict, summary: v.summary, issues: v.issues as any }]),
+      ),
+      styleTotals: styleAudit.totals,
+      contentCleanupStats: cleanup.report.totals as any,
+      qualityScore: audit.score,
+    });
+    zip.file("editor-report.md", editorReport);
+    included.push(`editor-report.md — full editorial audit`);
+
     // Substack
     if (bundleType === "substack") {
       const chDir = zip.folder("chapters")!;
@@ -326,11 +425,18 @@ async function runJob(
         content_sha256: contentHash,
         included_assets: included,
         cover_attached: !!cover,
+        cover_dimensions: cover && cover.widthPx && cover.heightPx
+          ? { width: cover.widthPx, height: cover.heightPx, mime: cover.mime } : null,
         epub_attached: !!epubBytes,
         word_count_estimate: manifest.word_count_estimate,
         export_quality_score: audit.score,
         export_quality_status: audit.status,
         content_cleanup: cleanup.report.totals,
+        style_totals: styleAudit.totals,
+        sell_safety_summary: Object.fromEntries(
+          Object.entries(safetyByPlatform).map(([k, v]) => [k, v.verdict]),
+        ),
+        ai_assistance_level: extras.aiAssistanceLevel ?? null,
       },
     }).eq("id", jobId);
     await timer.stop("done");

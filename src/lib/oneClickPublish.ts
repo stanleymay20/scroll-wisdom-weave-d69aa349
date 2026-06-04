@@ -25,7 +25,8 @@ import { parseBookToCanonical } from "@/lib/canonicalContent";
 import { auditBookForExport, type ExportQualityReport } from "@/lib/exportQuality";
 
 export type OneClickStatus =
-  | "blocked"        // export quality refused
+  | "blocked"        // export quality refused (structural / content blockers)
+  | "unsafe"         // sell-safety verifier rejected for this platform
   | "not_connected"  // upstream platform not connected (caller routes to connect)
   | "bundling"       // bundle job queued; caller should poll job_id
   | "published"      // upstream product created (idempotent or fresh)
@@ -173,6 +174,10 @@ export async function publishExternallyOneClick(
     };
   } catch (e: any) {
     const m = String(e?.message ?? "");
+    if (/sell_safety_blocked/i.test(m)) {
+      // The edge function refused on policy — surface the specific reason.
+      return { status: "unsafe", message: m.replace(/^[^:]*:\s*/, "") || `${platform} safety check failed.` };
+    }
     if (/not_connected/i.test(m)) return { status: "not_connected", message: `Connect ${platform === "gumroad" ? "Gumroad" : "Shopify"} first.` };
     if (/expired|revoked/i.test(m)) return { status: "not_connected", message: `${platform === "gumroad" ? "Gumroad" : "Shopify"} connection expired — reconnect.` };
     if (/entitlement|402/i.test(m)) return { status: "failed", message: "Upgrade to Creator to publish externally." };

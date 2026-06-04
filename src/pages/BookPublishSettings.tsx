@@ -243,6 +243,8 @@ export default function BookPublishSettings() {
         if (editUrl) window.open(editUrl, "_blank", "noopener");
       } else if (res.status === "blocked") {
         toast.error(res.message ?? "Export quality blocked");
+      } else if (res.status === "unsafe") {
+        toast.error(res.message ?? `${platform} safety check failed`, { duration: 8000 });
       } else if (res.status === "not_connected") {
         toast.error(res.message ?? `Connect ${platform} first`);
       } else {
