@@ -14,6 +14,7 @@ import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { Sparkles, Package, BookOpen, Heart, Store, ShoppingBag, FileText, ExternalLink, CheckCircle2, Zap } from "lucide-react";
 import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
 import { publishToGumroad, publishToShopify } from "@/lib/platformConnections";
+import { publishExternallyOneClick, waitForBundle } from "@/lib/oneClickPublish";
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { Lock } from "lucide-react";
 import { ExportQualityPanel } from "@/components/publish/ExportQualityPanel";
@@ -54,6 +55,8 @@ export default function BookPublishSettings() {
   const { entitlements } = useCreatorEntitlements();
   const canPublishExternal = entitlements.can_publish_external;
   const [publishingShopify, setPublishingShopify] = useState(false);
+  // Tracked per-platform so the user sees "Auditing → Building bundle → Creating product".
+  const [oneClickStage, setOneClickStage] = useState<{ platform: "gumroad" | "shopify"; label: string } | null>(null);
   const [pubs, setPubs] = useState<any[]>([]);
   const [newPub, setNewPub] = useState<{ platform: BundleKind | "other"; url: string }>({ platform: "kdp", url: "" });
   const [qualityReport, setQualityReport] = useState<ExportQualityReport | null>(null);
@@ -210,39 +213,52 @@ export default function BookPublishSettings() {
       .eq("book_id", bookId!).order("published_at", { ascending: false });
     setPubs(ep ?? []);
   }
-  async function publishGumroadDirect() {
-    if (!form.listing_id) { toast.error("Save the listing first"); return; }
-    setPublishingGumroad(true);
+  /**
+   * One-click publish to Gumroad/Shopify.
+   * Drives the orchestrator end-to-end:
+   *  audit → bundle (if missing/stale) → wait → create upstream product → open edit URL.
+   * The user sees a single button with sub-status, not a 3-step manual flow.
+   */
+  async function publishExternal(platform: "gumroad" | "shopify") {
+    if (!form.listing_id || !bookId) { toast.error("Save the listing first"); return; }
+    const setBusy = platform === "gumroad" ? setPublishingGumroad : setPublishingShopify;
+    setBusy(true);
+    setOneClickStage({ platform, label: "Auditing export quality…" });
     try {
-      const r = await publishToGumroad(form.listing_id);
-      if (r.idempotent) toast.info("Already published to Gumroad");
-      else toast.success("Published to Gumroad");
-      await refreshPubs();
-      if (r.edit_url) window.open(r.edit_url, "_blank", "noopener");
+      let res = await publishExternallyOneClick(form.listing_id, bookId, platform);
+      if (res.status === "bundling" && res.job_id) {
+        setOneClickStage({ platform, label: "Building bundle (cover, EPUB, front matter)…" });
+        const final = await waitForBundle(res.job_id);
+        if (final.status !== "completed") {
+          throw new Error(final.error_message || "Bundle failed to build");
+        }
+        setOneClickStage({ platform, label: "Creating upstream product…" });
+        res = await publishExternallyOneClick(form.listing_id, bookId, platform);
+      }
+      if (res.status === "published" && res.publish) {
+        if (res.publish.idempotent) toast.info(res.message ?? `Already published to ${platform}`);
+        else toast.success(res.message ?? `Published to ${platform}`);
+        await refreshPubs();
+        const editUrl = res.publish.edit_url;
+        if (editUrl) window.open(editUrl, "_blank", "noopener");
+      } else if (res.status === "blocked") {
+        toast.error(res.message ?? "Export quality blocked");
+      } else if (res.status === "unsafe") {
+        toast.error(res.message ?? `${platform} safety check failed`, { duration: 8000 });
+      } else if (res.status === "not_connected") {
+        toast.error(res.message ?? `Connect ${platform} first`);
+      } else {
+        toast.error(res.message ?? `${platform} publish failed`);
+      }
     } catch (e: any) {
-      const m = String(e?.message ?? "");
-      if (m.includes("not_connected")) toast.error("Connect Gumroad first (Publishing Intelligence → Connect)");
-      else if (m.includes("expired")) toast.error("Gumroad connection expired — reconnect");
-      else toast.error(m || "Gumroad publish failed");
-    } finally { setPublishingGumroad(false); }
+      toast.error(e?.message ?? `${platform} publish failed`);
+    } finally {
+      setBusy(false);
+      setOneClickStage(null);
+    }
   }
-  async function publishShopifyDirect() {
-    if (!form.listing_id) { toast.error("Save the listing first"); return; }
-    setPublishingShopify(true);
-    try {
-      const r = await publishToShopify(form.listing_id);
-      if (r.idempotent) toast.info("Already published to Shopify");
-      else toast.success("Published to Shopify");
-      await refreshPubs();
-      if (r.edit_url) window.open(r.edit_url, "_blank", "noopener");
-    } catch (e: any) {
-      const m = String(e?.message ?? "");
-      if (m.includes("not_connected")) toast.error("Connect Shopify first (Publishing Intelligence → Connect)");
-      else if (m.includes("expired") || m.includes("revoked")) toast.error("Shopify connection expired — reconnect");
-      else if (m.includes("shop_missing")) toast.error("Shopify shop domain missing — reconnect");
-      else toast.error(m || "Shopify publish failed");
-    } finally { setPublishingShopify(false); }
-  }
+  const publishGumroadDirect = () => publishExternal("gumroad");
+  const publishShopifyDirect = () => publishExternal("shopify");
 
 
   // Publishing wizard checklist
@@ -469,7 +485,7 @@ export default function BookPublishSettings() {
             <div className="mt-3 flex flex-wrap gap-2">
               <Button
                 variant="secondary"
-                disabled={publishingGumroad || !form.listing_id || !canPublishExternal}
+                disabled={publishingGumroad || publishingShopify || !form.listing_id || !canPublishExternal}
                 onClick={publishGumroadDirect}
                 className="min-h-11"
               >
@@ -478,7 +494,7 @@ export default function BookPublishSettings() {
               </Button>
               <Button
                 variant="secondary"
-                disabled={publishingShopify || !form.listing_id || !canPublishExternal}
+                disabled={publishingShopify || publishingGumroad || !form.listing_id || !canPublishExternal}
                 onClick={publishShopifyDirect}
                 className="min-h-11"
               >
@@ -486,6 +502,16 @@ export default function BookPublishSettings() {
                 {publishingShopify ? "Publishing…" : "Publish to Shopify"}
               </Button>
             </div>
+            {oneClickStage && (
+              <div
+                className="mt-3 rounded-md border bg-muted/40 px-3 py-2 text-xs text-muted-foreground flex items-center gap-2"
+                aria-live="polite"
+              >
+                <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" aria-hidden="true" />
+                <span className="capitalize font-medium text-foreground">{oneClickStage.platform}:</span>
+                <span>{oneClickStage.label}</span>
+              </div>
+            )}
           </div>
         </Card>
 

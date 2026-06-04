@@ -34,8 +34,9 @@ import { toast } from "sonner";
 import {
   Sparkles, Rocket, CheckCircle2, Lock, ArrowRight, ArrowLeft, Copy, Share2,
   DollarSign, Globe, BookOpen, ShieldCheck, AlertTriangle, ExternalLink, Wallet,
-  Users, TrendingUp, PartyPopper, Pencil,
+  Users, TrendingUp, PartyPopper, Pencil, Store, ShoppingBag,
 } from "lucide-react";
+import { publishExternallyOneClick, waitForBundle } from "@/lib/oneClickPublish";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -100,7 +101,7 @@ export default function Sell() {
   const [draft, setDraft] = useState<DraftState>(EMPTY_DRAFT);
   const [payoutProfile, setPayoutProfile] = useState<any>(null);
   const [savingStep, setSavingStep] = useState(false);
-  const [publishedListing, setPublishedListing] = useState<{ slug: string } | null>(null);
+  const [publishedListing, setPublishedListing] = useState<{ slug: string; id: string } | null>(null);
   const [editingListing, setEditingListing] = useState(false);
   const [hasAuthorProfile, setHasAuthorProfile] = useState(false);
 
@@ -182,7 +183,7 @@ export default function Sell() {
       // Hydrate existing public_listing for the selected book (prevents data loss on re-entry)
       if (next.publish.book_id) {
         const { data: existing } = await supabase.from("public_listings")
-          .select("slug, blurb, price_cents, sample_chapters, is_public, cover_override_url")
+          .select("id, slug, blurb, price_cents, sample_chapters, is_public, cover_override_url")
           .eq("book_id", next.publish.book_id).maybeSingle();
         if (existing) {
           setEditingListing(true);
@@ -199,7 +200,7 @@ export default function Sell() {
             },
           };
           // If user landed on step=4 (launch) via refresh, recover the success view from DB.
-          if (next.step === 4) setPublishedListing({ slug: existing.slug });
+          if (next.step === 4) setPublishedListing({ slug: existing.slug, id: existing.id });
         } else if (next.step === 4) {
           // step=4 but no listing yet → bounce to publish step
           next = { ...next, step: 3 as Step };
@@ -347,21 +348,29 @@ export default function Sell() {
         cover_override_url: draft.publish.cover_override_url || null,
       };
 
+      let savedListingId: string | null = existing?.id ?? null;
       const savedSlug = await withSlugRetry(baseSlug, async (candidate) => {
         if (existing) {
           const { error } = await supabase.from("public_listings")
             .update({ ...basePayload, slug: candidate }).eq("id", existing.id);
           if (error) throw error;
         } else {
-          const { error } = await supabase.from("public_listings")
-            .insert({ ...basePayload, slug: candidate });
+          const { data: inserted, error } = await supabase.from("public_listings")
+            .insert({ ...basePayload, slug: candidate }).select("id").single();
           if (error) throw error;
+          savedListingId = inserted?.id ?? null;
         }
         return candidate;
       });
 
       if (savedSlug !== baseSlug) toast.info(`That URL was taken — saved as /store/${savedSlug}.`);
-      setPublishedListing({ slug: savedSlug });
+      if (!savedListingId) {
+        // Re-fetch to get the listing id we need for one-click external publish.
+        const { data: l } = await supabase.from("public_listings")
+          .select("id").eq("book_id", draft.publish.book_id).maybeSingle();
+        savedListingId = l?.id ?? "";
+      }
+      setPublishedListing({ slug: savedSlug, id: savedListingId ?? "" });
       setEditingListing(true);
       void trackStorefrontEvent(null, "sell_first_book_published" as any, { book_id: draft.publish.book_id, edited: !!existing });
       setStep(4);
@@ -435,7 +444,10 @@ export default function Sell() {
         )}
         {draft.step === 4 && publishedListing && (
           <StepLaunch
-            slug={publishedListing.slug} bookId={draft.publish.book_id}
+            slug={publishedListing.slug}
+            bookId={draft.publish.book_id}
+            listingId={publishedListing.id}
+            canPublishExternal={entitlements.can_publish_external}
             onReset={() => { localStorage.removeItem(DRAFT_KEY); setDraft(EMPTY_DRAFT); setPublishedListing(null); setStep(0); }}
           />
         )}
@@ -792,8 +804,19 @@ function StepPublish({
   );
 }
 
-function StepLaunch({ slug, bookId, onReset }: { slug: string; bookId: string; onReset: () => void; }) {
+function StepLaunch({
+  slug, bookId, listingId, canPublishExternal, onReset,
+}: {
+  slug: string;
+  bookId: string;
+  listingId: string;
+  canPublishExternal: boolean;
+  onReset: () => void;
+}) {
   const storefrontUrl = `${window.location.origin}/store/${slug}`;
+  const [busy, setBusy] = useState<"" | "gumroad" | "shopify">("");
+  const [stage, setStage] = useState<string>("");
+
   const copyLink = async () => {
     try { await navigator.clipboard.writeText(storefrontUrl); toast.success("Link copied"); }
     catch { toast.error("Could not copy"); }
@@ -804,6 +827,42 @@ function StepLaunch({ slug, bookId, onReset }: { slug: string; bookId: string; o
       catch { /* user cancelled */ }
     } else { void copyLink(); }
   };
+
+  // One-click flow shared by Gumroad / Shopify CTAs.
+  // Mirrors BookPublishSettings.publishExternal so creators who haven't
+  // discovered the Publishing Command Center can still launch in one tap.
+  async function oneClick(platform: "gumroad" | "shopify") {
+    if (!listingId) { toast.error("Listing not ready yet"); return; }
+    setBusy(platform);
+    setStage("Auditing export quality…");
+    try {
+      let res = await publishExternallyOneClick(listingId, bookId, platform);
+      if (res.status === "bundling" && res.job_id) {
+        setStage("Building bundle (PDF, EPUB, front matter)…");
+        const final = await waitForBundle(res.job_id);
+        if (final.status !== "completed") throw new Error(final.error_message || "Bundle failed to build");
+        setStage("Creating upstream product…");
+        res = await publishExternallyOneClick(listingId, bookId, platform);
+      }
+      if (res.status === "published" && res.publish) {
+        toast.success(res.message ?? `Published to ${platform}`);
+        const editUrl = res.publish.edit_url;
+        if (editUrl) window.open(editUrl, "_blank", "noopener");
+      } else if (res.status === "not_connected") {
+        toast.error(res.message ?? `Connect ${platform} first`);
+      } else if (res.status === "blocked") {
+        toast.error(res.message ?? "Export quality blocked");
+      } else if (res.status === "unsafe") {
+        toast.error(res.message ?? `${platform} safety check failed`, { duration: 8000 });
+      } else {
+        toast.error(res.message ?? `${platform} publish failed`);
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? `${platform} publish failed`);
+    } finally {
+      setBusy(""); setStage("");
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -825,6 +884,56 @@ function StepLaunch({ slug, bookId, onReset }: { slug: string; bookId: string; o
         </div>
       </Card>
 
+      {/* One-click external selling */}
+      <Card className="p-5 md:p-6">
+        <div className="flex items-center gap-2">
+          <Globe className="h-4 w-4 text-primary" aria-hidden />
+          <h3 className="font-semibold">Sell on Gumroad or Shopify too</h3>
+        </div>
+        <p className="text-sm text-muted-foreground mt-1">
+          We prepare a print-ready bundle (PDF + EPUB + cover + license + listing copy) and create the product upstream — one tap.
+        </p>
+        {!canPublishExternal ? (
+          <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
+            <span><Lock className="h-3.5 w-3.5 inline mr-1.5" aria-hidden />External publishing requires the Creator plan.</span>
+            <Button asChild size="sm" variant="default"><Link to="/pricing#creator">Upgrade</Link></Button>
+          </div>
+        ) : (
+          <>
+            <div className="mt-3 grid grid-cols-1 sm:grid-cols-2 gap-2">
+              <Button
+                variant="secondary"
+                disabled={!!busy || !listingId}
+                onClick={() => oneClick("gumroad")}
+                className="min-h-11"
+              >
+                <Store className="h-4 w-4 mr-2" aria-hidden />
+                {busy === "gumroad" ? "Publishing…" : "Publish to Gumroad"}
+              </Button>
+              <Button
+                variant="secondary"
+                disabled={!!busy || !listingId}
+                onClick={() => oneClick("shopify")}
+                className="min-h-11"
+              >
+                <ShoppingBag className="h-4 w-4 mr-2" aria-hidden />
+                {busy === "shopify" ? "Publishing…" : "Publish to Shopify"}
+              </Button>
+            </div>
+            {stage && (
+              <div className="mt-3 text-xs text-muted-foreground flex items-center gap-2" aria-live="polite">
+                <span className="inline-block h-2 w-2 rounded-full bg-primary animate-pulse" aria-hidden />
+                {stage}
+              </div>
+            )}
+            <p className="mt-3 text-[11px] text-muted-foreground">
+              Connect Gumroad / Shopify first in{" "}
+              <Link to="/account/intelligence" className="text-primary hover:underline">Publishing Intelligence</Link>.
+            </p>
+          </>
+        )}
+      </Card>
+
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">Next</div>
@@ -833,9 +942,9 @@ function StepLaunch({ slug, bookId, onReset }: { slug: string; bookId: string; o
           <Button asChild size="sm" variant="outline" className="mt-3"><Link to="/account/earnings">View earnings</Link></Button>
         </Card>
         <Card className="p-4">
-          <div className="text-xs text-muted-foreground">Optional</div>
-          <div className="font-medium mt-1">Publish externally</div>
-          <p className="text-xs text-muted-foreground mt-1">Send the same book to Gumroad, KDP, Substack.</p>
+          <div className="text-xs text-muted-foreground">More</div>
+          <div className="font-medium mt-1">Bundles & schedules</div>
+          <p className="text-xs text-muted-foreground mt-1">Substack, Patreon, KDP, release schedules.</p>
           <Button asChild size="sm" variant="outline" className="mt-3">
             <Link to={`/book/${bookId}/publish`}>Open publishing center</Link>
           </Button>

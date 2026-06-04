@@ -17,6 +17,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { CheckCircle2, AlertTriangle, XCircle, Eye, Sparkles } from "lucide-react";
 import { parseBookToCanonical, type CanonicalChapter } from "@/lib/canonicalContent";
 import { auditBookForExport, qualityStatusLabel, type ExportQualityReport } from "@/lib/exportQuality";
+import { auditBookArtifacts } from "@/lib/contentQuality";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { cn } from "@/lib/utils";
 
@@ -31,6 +32,9 @@ interface Props {
 
 export function ExportQualityPanel({ bookId, listingId, hasCover, bookType, onStatusChange }: Props) {
   const [canonical, setCanonical] = useState<CanonicalChapter[] | null>(null);
+  // Raw chapter rows are kept so we can audit AI artifacts on the original
+  // text (the canonical parser strips some of the markers we want to detect).
+  const [rawChapters, setRawChapters] = useState<Array<{ chapter_number: number; content: string | null }> | null>(null);
   const [loading, setLoading] = useState(true);
   const [previewOpen, setPreviewOpen] = useState(false);
 
@@ -44,6 +48,7 @@ export function ExportQualityPanel({ bookId, listingId, hasCover, bookType, onSt
         .eq("book_id", bookId)
         .order("chapter_number", { ascending: true });
       if (cancel) return;
+      setRawChapters((data ?? []).map((c) => ({ chapter_number: c.chapter_number, content: c.content })));
       setCanonical(parseBookToCanonical(data ?? []));
       setLoading(false);
     })();
@@ -52,8 +57,21 @@ export function ExportQualityPanel({ bookId, listingId, hasCover, bookType, onSt
 
   const report = useMemo<ExportQualityReport | null>(() => {
     if (!canonical) return null;
-    return auditBookForExport(canonical, { hasCover, bookType: bookType ?? null });
-  }, [canonical, hasCover, bookType]);
+    const base = auditBookForExport(canonical, { hasCover, bookType: bookType ?? null });
+    // Fold AI-artifact issues into the report so the creator sees them in
+    // one list and the score gates publishing the same way.
+    const artifacts = rawChapters ? auditBookArtifacts(rawChapters) : [];
+    if (artifacts.length === 0) return base;
+    const merged = [...base.issues, ...artifacts];
+    const blockers = merged.filter((i) => i.severity === "blocker").length;
+    const warnings = merged.filter((i) => i.severity === "warning").length;
+    return {
+      ...base,
+      issues: merged,
+      score: Math.max(0, 100 - blockers * 25 - warnings * 5),
+      status: blockers > 0 ? "blocked" : warnings > 0 ? "needs_review" : "ready",
+    };
+  }, [canonical, rawChapters, hasCover, bookType]);
 
   useEffect(() => {
     if (!report) return;

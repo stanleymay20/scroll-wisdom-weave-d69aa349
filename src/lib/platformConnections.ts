@@ -38,9 +38,10 @@ export async function startShopifyConnect(shop: string, returnUrl: string): Prom
   return url as string;
 }
 
-export async function disconnectPlatform(platform: PlatformId | string): Promise<void> {
-  const { error } = await supabase.functions.invoke("disconnect-platform", { body: { platform } });
+export async function disconnectPlatform(platform: PlatformId | string): Promise<DisconnectResult> {
+  const { data, error } = await supabase.functions.invoke("disconnect-platform", { body: { platform } });
   if (error) throw error;
+  return (data ?? { ok: true }) as DisconnectResult;
 }
 
 export type DirectPublishResult = {
@@ -51,6 +52,17 @@ export type DirectPublishResult = {
   bundle_hint?: string | null;
   note?: string;
   idempotent?: boolean;
+  /** Stitched into publishing_audit_log + external_publications. Quote this in support tickets. */
+  correlation_id?: string;
+};
+
+export type DisconnectResult = {
+  ok: boolean;
+  idempotent?: boolean;
+  upstream_revoked?: boolean;
+  upstream_revoke_attempted?: boolean;
+  upstream_revoke_reason?: string | null;
+  correlation_id?: string;
 };
 
 /** @deprecated use DirectPublishResult */

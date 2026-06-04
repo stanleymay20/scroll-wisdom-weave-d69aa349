@@ -1,10 +1,46 @@
+// enqueue-export-bundle — produces the elite-tier ZIP bundle that ships to
+// external selling platforms (Gumroad, Substack, Patreon, Etsy) and the
+// print-ready interior PDF for Amazon KDP.
+//
+// Elite-tier bundle invariants:
+//   * Quality gate: refuses to ship a bundle with auditBookForExport blockers.
+//   * Source of truth: every artefact derives from the same canonical chapter
+//     stream the in-app reader uses, so what creators see is what buyers get.
+//   * Robust assets: cover image is retried, size-capped, MIME-validated.
+//   * Front matter: title page, copyright, integrity hash, ToC, author bio.
+//   * Polished descriptions: `description.md` (long) + `description-short.txt`
+//     ready to paste into any product page.
+//   * EPUB 3.0.1 alongside the PDF for every paid-distribution platform.
+//   * SHA-256 manuscript hash for buyer integrity, embedded in metadata.json
+//     and the licence block.
+//   * Platform-shaped social caption pack (X / LinkedIn / Instagram / Threads).
+//   * Step-by-step platform README so the upload flow is one-glance obvious.
+//   * Filename: `<book-slug>-<platform>-bundle.zip` (no UUIDs in the URL).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import JSZip from "https://esm.sh/jszip@3.10.1";
-import { preflight, json, badRequest, serverError, unauthorized, requireUser, validateBody, z, serviceClient, enforcePersistentVelocity, enforceUserRiskTier } from "../_shared/http.ts";
+import {
+  preflight, json, badRequest, serverError, unauthorized,
+  requireUser, validateBody, z, serviceClient,
+  enforcePersistentVelocity, enforceUserRiskTier,
+} from "../_shared/http.ts";
 import { correlationId, PhaseTimer, logExportPhase, logFinancialEvent } from "../_shared/observability.ts";
 import { requireCreatorCapability } from "../_shared/entitlements.ts";
+import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
+import { auditBookForExport } from "../_shared/exportQuality.ts";
+import { logPublishEvent } from "../_shared/publishing-audit.ts";
+import { fetchImageAsset, sha256Hex } from "../_shared/asset-fetch.ts";
+import { cleanBookChapters } from "../_shared/content-quality.ts";
+import { auditBookStyle } from "../_shared/style-quality.ts";
+import { auditAllPlatforms, type SellSafetyInput } from "../_shared/sell-safety.ts";
+import {
+  bundleFilename, renderFrontMatter, renderLongDescription, renderShortDescription,
+  renderKeywords, renderLicense, renderSocialPack, renderReadme, renderManifest,
+  renderSubstackSchedule, renderPatreonCsv, renderEditorReport, renderBackMatter,
+  renderAiDisclosure, PLATFORM_LABEL, slugify,
+  type BundleContext, type BundlePlatform, type BundleExtras,
+} from "../_shared/bundle-content.ts";
 
-const EXTERNAL_BUNDLES = new Set(["gumroad", "substack", "patreon", "etsy"]);
+const EXTERNAL_BUNDLES = new Set<BundlePlatform>(["gumroad", "substack", "patreon", "etsy"]);
 
 const Body = z.object({
   book_id: z.string().uuid(),
@@ -13,54 +49,133 @@ const Body = z.object({
   options: z.record(z.any()).optional(),
 });
 
-type BundleType = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
-
-function slugify(s: string) {
-  return (s || "").toLowerCase().normalize("NFKD").replace(/[\u0300-\u036f]/g, "")
-    .replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 80) || "chapter";
-}
-
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 
-const PLATFORM_LABEL: Record<BundleType, string> = {
-  kdp: "Amazon KDP",
-  gumroad: "Gumroad",
-  substack: "Substack",
-  patreon: "Patreon",
-  etsy: "Etsy",
-};
-
-const PLATFORM_URL: Record<BundleType, string> = {
-  kdp: "https://kdp.amazon.com",
-  gumroad: "https://app.gumroad.com/products/new",
-  substack: "https://substack.com/dashboard",
-  patreon: "https://www.patreon.com/posts/new",
-  etsy: "https://www.etsy.com/your/shops/me/tools/listings",
-};
-
-// PDF-emitting platforms reuse export-book; markdown-only platforms skip the PDF call.
-const PDF_PLATFORMS: BundleType[] = ["kdp", "gumroad", "etsy"];
+// PDF-emitting platforms reuse export-book; markdown-only platforms skip it.
+const PDF_PLATFORMS: BundlePlatform[] = ["kdp", "gumroad", "etsy"];
+// EPUB ships with anything sold as a finished digital product.
+const EPUB_PLATFORMS: BundlePlatform[] = ["gumroad", "etsy"];
 
 async function runJob(
   jobId: string, userId: string, bookId: string,
-  bundleType: BundleType, token: string,
+  bundleType: BundlePlatform, token: string,
   options: Record<string, any>, corr: string,
 ) {
   const sc = serviceClient();
   const timer = new PhaseTimer(sc, jobId, corr);
   try {
     await sc.from("export_jobs").update({
-      status: "running", started_at: new Date().toISOString(), progress: 10, correlation_id: corr,
+      status: "running", started_at: new Date().toISOString(), progress: 5, correlation_id: corr,
     }).eq("id", jobId);
     await timer.stop("queued_to_started");
 
-    const { data: book } = await sc.from("books").select("title, description, cover_image_url").eq("id", bookId).maybeSingle();
-    const { data: chapters } = await sc.from("chapters").select("chapter_number, title, content").eq("book_id", bookId).order("chapter_number");
-    const { data: listing } = await sc.from("public_listings").select("*").eq("book_id", bookId).maybeSingle();
-    await timer.stop("fetch_book", { metadata: { chapters: chapters?.length ?? 0 } });
+    // ─── Load source data ───────────────────────────────────────────────
+    // ai_assistance_level/isbn/dedication/epigraph may not exist on the books
+    // table yet — load them best-effort so the elite-bundle fields are
+    // optional rather than required.
+    const { data: book } = await sc.from("books")
+      .select("id, title, subtitle, description, cover_image_url, category, book_type, user_id, ai_assistance_level, isbn, dedication, epigraph")
+      .eq("id", bookId).maybeSingle();
+    if (!book) throw new Error("Book not found");
 
-    await sc.from("export_jobs").update({ progress: 30 }).eq("id", jobId);
+    const { data: chaptersRaw } = await sc.from("chapters")
+      .select("chapter_number, title, content")
+      .eq("book_id", bookId).order("chapter_number");
 
+    // ── Content-quality clean ─────────────────────────────────────────
+    // Every chapter is rewritten to remove AI preambles/postambles,
+    // unresolved placeholders, unclosed code fences, dangerous HTML, and
+    // typographic noise BEFORE it touches the canonical parser, the EPUB,
+    // the substack/patreon markdown files, or the audit. The reader sees
+    // the same canonical pipeline; the buyer sees clean content.
+    const cleanup = cleanBookChapters(chaptersRaw ?? []);
+    const chapterList = cleanup.cleaned;
+
+    const { data: listing } = await sc.from("public_listings")
+      .select("slug, subtitle, blurb, amazon_description, price_cents, currency, seo_keywords, seo_categories, backend_keywords, license_type, sample_chapters, cover_override_url")
+      .eq("book_id", bookId).maybeSingle();
+
+    const { data: author } = await sc.from("author_profiles")
+      .select("display_name, bio, website_url, x_url, linkedin_url, avatar_url")
+      .eq("user_id", userId).maybeSingle();
+
+    await timer.stop("fetch_book", { metadata: { chapters: chapterList.length } });
+
+    // ─── Quality gate (structural + content + style) ──────────────────
+    const canonical = parseBookToCanonical(chapterList);
+    const audit = auditBookForExport(canonical, {
+      hasCover: !!(book.cover_image_url || (listing as any)?.cover_override_url),
+      bookType: book.book_type ?? null,
+    });
+    // Content-quality issues that the cleaner can't safely auto-fix become
+    // blockers (placeholders, dangerous HTML) or warnings (self-references).
+    for (const iss of cleanup.report.issues) audit.issues.push(iss);
+
+    // Literary-polish audit. Elite output means publisher-grade prose
+    // metrics, not just "no AI artifacts". Cliché density, em-dash overuse,
+    // adverb rate, passive voice, sentence-starter repetition, reading-grade
+    // variance. The auditor emits issues at blocker/warning/info severity;
+    // blockers (e.g. extreme cliché density) refuse the bundle.
+    const styleAudit = auditBookStyle(chapterList);
+    for (const iss of styleAudit.issues) audit.issues.push(iss);
+
+    // Sell-safety blockers from the BUNDLE PLATFORM (others are reported but
+    // don't gate this bundle — a Gumroad bundle isn't blocked by an Etsy
+    // warning). The full multi-platform report is included in editor-report.md
+    // so the creator can see all verdicts at once.
+    const styleBlockers = styleAudit.issues.filter((i) => i.severity === "blocker");
+    const cleanupBlockers = cleanup.report.issues.filter((i) => i.severity === "blocker");
+    if (styleBlockers.length + cleanupBlockers.length > 0) audit.status = "blocked";
+
+    if (audit.status === "blocked") {
+      const blockers = audit.issues.filter((i) => i.severity === "blocker").map((i) => i.message);
+      await logPublishEvent(sc, {
+        user_id: userId, platform: bundleType, event_type: "publish_validation_failed",
+        book_id: bookId, severity: "error", correlation_id: corr,
+        message: "Bundle generation refused: export quality blockers",
+        metadata: { blockers, score: audit.score, cleanup: cleanup.report.totals, style_totals: styleAudit.totals },
+      });
+      throw new Error(`Export quality blocked (score ${audit.score}): ${blockers.slice(0, 3).join("; ")}`);
+    }
+    await sc.from("export_jobs").update({ progress: 20 }).eq("id", jobId);
+
+    // ─── Build canonical bundle context ─────────────────────────────────
+    const generatedAt = new Date().toISOString();
+    const sourceForHash = chapterList
+      .map((c: any) => `# ${c.title ?? ""}\n${c.content ?? ""}`)
+      .join("\n\n---\n\n");
+    const contentHash = sourceForHash ? await sha256Hex(sourceForHash) : null;
+
+    // Elite extras: AI disclosure level, ISBN, dedication, epigraph. All
+    // optional — the renderer skips sections that aren't supplied.
+    const extras: BundleExtras = {
+      aiAssistanceLevel: (book as any).ai_assistance_level ?? null,
+      isbn: (book as any).isbn ?? null,
+      dedication: (book as any).dedication ?? null,
+      epigraph: typeof (book as any).epigraph === "object"
+        ? ((book as any).epigraph as { text: string; attribution?: string | null })
+        : null,
+    };
+
+    const ctx: BundleContext = {
+      platform: bundleType,
+      book: {
+        id: book.id, title: book.title, subtitle: book.subtitle ?? null,
+        description: book.description ?? null,
+        cover_image_url: book.cover_image_url ?? null,
+        category: book.category ?? null,
+        book_type: book.book_type ?? null,
+      },
+      listing: listing as any ?? null,
+      chapters: chapterList,
+      author: author as any ?? null,
+      generatedAt,
+      correlationId: corr,
+      contentHash,
+      extras,
+    };
+
+    // ─── PDF (if applicable) ────────────────────────────────────────────
     let mainPdf: Uint8Array | null = null;
     if (PDF_PLATFORMS.includes(bundleType)) {
       const pdfRes = await fetch(`${SUPABASE_URL}/functions/v1/export-book`, {
@@ -78,125 +193,225 @@ async function runJob(
       mainPdf = new Uint8Array(await pdfRes.arrayBuffer());
     }
     await timer.stop("pdf", { metadata: { bytes: mainPdf?.byteLength ?? 0 } });
+    await sc.from("export_jobs").update({ progress: 45 }).eq("id", jobId);
 
-    await sc.from("export_jobs").update({ progress: 60 }).eq("id", jobId);
+    // ─── Cover (robust) ─────────────────────────────────────────────────
+    const coverSeed = (listing as any)?.cover_override_url || book.cover_image_url || null;
+    const cover = coverSeed ? await fetchImageAsset(coverSeed) : null;
+    await timer.stop("cover", {
+      metadata: {
+        ok: !!cover, bytes: cover?.bytes.byteLength ?? 0,
+        width: cover?.widthPx ?? null, height: cover?.heightPx ?? null,
+      },
+    });
 
+    // ─── Sell-safety per platform ─────────────────────────────────────
+    // We compute all platforms so the editor-report.md can show the full
+    // matrix, but only the current bundle's platform is allowed to BLOCK
+    // bundle generation. Cross-platform issues are visible to the creator
+    // without surprising a Gumroad bundle with an Etsy-specific failure.
+    const sellSafetyInput: SellSafetyInput = {
+      book: { title: book.title, description: book.description, category: book.category, book_type: book.book_type },
+      listing: ctx.listing,
+      chaptersFullText: chapterList.map((c) => `${c.title ?? ""}\n${c.content ?? ""}`).join("\n\n"),
+      aiAssistanceLevel: extras.aiAssistanceLevel ?? null,
+      cover: cover && cover.widthPx && cover.heightPx
+        ? { widthPx: cover.widthPx, heightPx: cover.heightPx, mime: cover.mime }
+        : null,
+    };
+    const safetyByPlatform = auditAllPlatforms(sellSafetyInput);
+    const platformSafety = safetyByPlatform[bundleType];
+    if (platformSafety.verdict === "unsafe") {
+      const reasons = platformSafety.issues
+        .filter((i) => i.severity === "blocker")
+        .map((i) => i.message).slice(0, 3);
+      await logPublishEvent(sc, {
+        user_id: userId, platform: bundleType, event_type: "publish_validation_failed",
+        book_id: bookId, severity: "error", correlation_id: corr,
+        message: `Bundle refused: ${platformSafety.summary}`,
+        metadata: { reasons, sell_safety: platformSafety.issues.map((i) => i.code) },
+      });
+      throw new Error(`${PLATFORM_LABEL[bundleType]} safety check failed: ${reasons.join("; ")}`);
+    }
+    // Fold warnings/info from the target platform into the audit issues so
+    // they reach the editor report and the audit log.
+    for (const iss of platformSafety.issues) audit.issues.push(iss);
+
+    // ─── EPUB (paid digital distribution) ───────────────────────────────
+    let epubBytes: Uint8Array | null = null;
+    if (EPUB_PLATFORMS.includes(bundleType)) {
+      const { buildEpub } = await import("../_shared/epub-builder.ts");
+      epubBytes = await buildEpub(JSZip as any, {
+        book: ctx.book, listing: ctx.listing, author: ctx.author,
+        chapters: ctx.chapters,
+        coverBytes: cover?.bytes ?? null,
+        coverMime: cover?.mime ?? null,
+        generatedAt,
+        language: (options.language as string | undefined) ?? "en",
+      });
+    }
+    await timer.stop("epub", { metadata: { bytes: epubBytes?.byteLength ?? 0 } });
+    await sc.from("export_jobs").update({ progress: 65 }).eq("id", jobId);
+
+    // ─── Assemble ZIP ───────────────────────────────────────────────────
     const zip = new JSZip();
+    const included: string[] = [];
+
     if (mainPdf) {
       const pdfName = bundleType === "kdp" ? "interior.pdf"
         : bundleType === "etsy" ? "printable.pdf"
         : "book.pdf";
       zip.file(pdfName, mainPdf);
+      included.push(`${pdfName} — print/PDF`);
+    }
+    if (epubBytes) {
+      zip.file("book.epub", epubBytes);
+      included.push(`book.epub — EPUB 3 for Kindle/Apple Books/Kobo`);
     }
 
-    if (book?.cover_image_url) {
-      try {
-        const coverRes = await fetch(book.cover_image_url);
-        if (coverRes.ok) zip.file("cover.jpg", new Uint8Array(await coverRes.arrayBuffer()));
-      } catch (_) { /* ignore */ }
+    // assets/
+    const assetsDir = zip.folder("assets")!;
+    if (cover) {
+      assetsDir.file(`cover.${cover.ext}`, cover.bytes);
+      included.push(`assets/cover.${cover.ext} — cover image`);
+      // Cover doubles as the social card on platforms that need one.
+      assetsDir.file(`social-card.${cover.ext}`, cover.bytes);
+      included.push(`assets/social-card.${cover.ext} — gallery/social image`);
     }
-    await timer.stop("cover");
 
-    const metadata: Record<string, any> = {
-      title: book?.title ?? "",
-      subtitle: listing?.subtitle ?? "",
-      description: listing?.amazon_description ?? book?.description ?? "",
-      blurb: listing?.blurb ?? "",
-      keywords: listing?.seo_keywords ?? [],
-      categories: listing?.seo_categories ?? [],
-      backend_keywords: listing?.backend_keywords ?? [],
-      license_type: listing?.license_type ?? "personal",
-      chapters: chapters?.length ?? 0,
-      generated_at: new Date().toISOString(),
-      platform: PLATFORM_LABEL[bundleType],
-      correlation_id: corr,
-    };
-    zip.file("metadata.json", JSON.stringify(metadata, null, 2));
+    // Front matter, descriptions, keywords, license
+    zip.file("front-matter.md", renderFrontMatter(ctx));
+    included.push(`front-matter.md — title page, copyright, ToC, author bio`);
 
-    // Platform-specific assets.
+    zip.file("description.md", renderLongDescription(ctx));
+    included.push(`description.md — long-form product description`);
+
+    zip.file("description-short.txt", renderShortDescription(ctx));
+    included.push(`description-short.txt — ≤280-char headline`);
+
+    const kw = renderKeywords(ctx.listing, ctx.book);
+    zip.file("keywords.txt", kw.keywords.join("\n") + "\n");
+    if (kw.categories.length) zip.file("categories.txt", kw.categories.join("\n") + "\n");
+    if (kw.backendKeywords.length) zip.file("backend-keywords.txt", kw.backendKeywords.join("\n") + "\n");
+    included.push(`keywords.txt — clean keyword list`);
+
+    const lic = renderLicense(ctx);
+    zip.file("license.md", lic.md);
+    zip.file("license.json", JSON.stringify(lic.json, null, 2));
+    included.push(`license.md + license.json — human- and machine-readable licence`);
+
+    const social = renderSocialPack(ctx);
+    const socialDir = zip.folder("social")!;
+    socialDir.file("twitter.txt", social.twitter);
+    socialDir.file("linkedin.txt", social.linkedin);
+    socialDir.file("instagram.txt", social.instagram);
+    socialDir.file("threads.txt", social.threads);
+    included.push(`social/* — platform-shaped launch captions`);
+
+    if (author?.display_name || author?.bio) {
+      const bio = [
+        `# About ${author?.display_name ?? "the author"}`, ``,
+        author?.bio ?? "",
+        ``,
+        ...(author?.website_url ? [`Website: ${author.website_url}`] : []),
+        ...(author?.x_url ? [`X: ${author.x_url}`] : []),
+        ...(author?.linkedin_url ? [`LinkedIn: ${author.linkedin_url}`] : []),
+      ].join("\n");
+      zip.file("author-bio.md", bio);
+      included.push(`author-bio.md — drop-in author byline`);
+    }
+
+    // Back matter — review CTA, also-by-this-author, stay-in-touch block.
+    zip.file("back-matter.md", renderBackMatter(ctx));
+    included.push(`back-matter.md — review CTA + author links`);
+
+    // AI disclosure — required for KDP, harmless for everyone else. We
+    // always include it so the creator has the exact text Amazon expects.
+    zip.file("ai-disclosure.md", renderAiDisclosure(ctx));
+    included.push(`ai-disclosure.md — AI assistance declaration (paste into KDP)`);
+
+    // Editor's report — full multi-section human-readable audit shipped
+    // inside every bundle so the creator can see exactly what passes, what
+    // needs review, and what blocks distribution per platform.
+    const editorReport = renderEditorReport(ctx, {
+      structuralIssues: audit.issues.filter((i) =>
+        !cleanup.report.issues.includes(i as any)
+        && !styleAudit.issues.includes(i as any)
+        && !platformSafety.issues.includes(i as any)
+      ) as any,
+      contentCleanupIssues: cleanup.report.issues as any,
+      styleIssues: styleAudit.issues as any,
+      sellSafetyByPlatform: Object.fromEntries(
+        Object.entries(safetyByPlatform).map(([k, v]) => [k, { verdict: v.verdict, summary: v.summary, issues: v.issues as any }]),
+      ),
+      styleTotals: styleAudit.totals,
+      contentCleanupStats: cleanup.report.totals as any,
+      qualityScore: audit.score,
+    });
+    zip.file("editor-report.md", editorReport);
+    included.push(`editor-report.md — full editorial audit`);
+
+    // Substack
     if (bundleType === "substack") {
-      // Chapter-per-post markdown.
       const chDir = zip.folder("chapters")!;
-      (chapters ?? []).forEach((c: any) => {
-        const fname = `${String(c.chapter_number).padStart(2, "0")}-${slugify(c.title)}.md`;
-        chDir.file(fname, `# ${c.title}\n\n${c.content ?? ""}\n`);
+      ctx.chapters.forEach((c) => {
+        const fname = `${String(c.chapter_number).padStart(2, "0")}-${slugify(c.title ?? "chapter", "chapter")}.md`;
+        chDir.file(fname, `# ${c.title ?? "Untitled"}\n\n${c.content ?? ""}\n`);
       });
-      const schedule = (chapters ?? []).map((c: any, i: number) =>
-        `Week ${i + 1}: ${c.title}`).join("\n");
-      zip.file("publishing-schedule.txt",
-        `Suggested weekly cadence for ${book?.title ?? "this serial"}:\n\n${schedule}\n`);
-      const welcome = `# Welcome to ${book?.title ?? "the series"}\n\n${listing?.blurb ?? book?.description ?? ""}\n\nNew chapter every week.\n`;
-      zip.file("welcome-email.md", welcome);
+      const sched = renderSubstackSchedule(ctx);
+      zip.file("publishing-schedule.txt", sched.schedule);
+      zip.file("email-subject-lines.txt", sched.subjects);
+      const blurb = ctx.listing?.blurb ?? ctx.book.description ?? "";
+      zip.file("welcome-email.md",
+        `# Welcome to ${ctx.book.title}\n\n${blurb}\n\nNew chapter every week. — ${author?.display_name ?? "The Author"}\n`);
+      included.push(`chapters/*.md, publishing-schedule.txt, email-subject-lines.txt, welcome-email.md`);
     }
 
+    // Patreon
     if (bundleType === "patreon") {
-      // Free preview = sample_chapters; rest = patron-only.
-      const sample = Math.max(1, Number(listing?.sample_chapters ?? 1));
+      const sample = Math.max(1, Number(ctx.listing?.sample_chapters ?? 1));
       const freeDir = zip.folder("posts-free")!;
       const patronDir = zip.folder("posts-patron-only")!;
-      const csvRows: string[] = ["chapter,title,tier,filename"];
-      (chapters ?? []).forEach((c: any) => {
-        const isFree = c.chapter_number <= sample;
-        const dir = isFree ? freeDir : patronDir;
-        const tier = isFree ? "Public" : "Patrons";
-        const fname = `${String(c.chapter_number).padStart(2, "0")}-${slugify(c.title)}.md`;
-        dir.file(fname, `# ${c.title}\n\n${c.content ?? ""}\n`);
-        csvRows.push(`${c.chapter_number},"${(c.title ?? "").replace(/"/g, '""')}",${tier},${fname}`);
+      ctx.chapters.forEach((c) => {
+        const dir = c.chapter_number <= sample ? freeDir : patronDir;
+        const fname = `${String(c.chapter_number).padStart(2, "0")}-${slugify(c.title ?? "chapter", "chapter")}.md`;
+        dir.file(fname, `# ${c.title ?? "Untitled"}\n\n${c.content ?? ""}\n`);
       });
-      zip.file("post-schedule.csv", csvRows.join("\n"));
+      zip.file("post-schedule.csv", renderPatreonCsv(ctx, sample));
+      included.push(`posts-free/* + posts-patron-only/*, post-schedule.csv`);
     }
 
+    // Etsy
     if (bundleType === "etsy") {
-      // Print-ready PDF (already added) + listing copy + tags.
-      const tags = (listing?.seo_keywords ?? []).slice(0, 13);
-      const listingCopy =
-        `# ${book?.title ?? ""}\n\n${listing?.amazon_description ?? book?.description ?? ""}\n\n` +
-        `Tags: ${tags.join(", ")}\n` +
-        `License: ${listing?.license_type ?? "personal"}\n`;
-      zip.file("etsy-listing.md", listingCopy);
-      zip.file("tags.txt", tags.join("\n"));
+      zip.file("tags.txt", kw.etsyTags.join("\n") + "\n");
+      zip.file("materials.txt", "digital download\npdf\nepub\nprintable\nebook\n");
+      included.push(`tags.txt (13 Etsy tags), materials.txt`);
     }
 
-    // Social caption pack (all platforms).
-    const captions = [
-      `📚 New release: ${book?.title ?? ""}\n${listing?.blurb ?? ""}\n#books #reading`,
-      `Just published ${book?.title ?? ""} — ${listing?.subtitle ?? ""}\nLink in bio.`,
-      `If you liked ${listing?.seo_keywords?.[0] ?? "this topic"}, you'll love ${book?.title ?? ""}.`,
-    ].join("\n\n---\n\n");
-    zip.file("social-captions.txt", captions);
+    // Manifest LAST (after all included paths are known) + README LAST too
+    const manifest = renderManifest(ctx);
+    zip.file("metadata.json", JSON.stringify(manifest, null, 2));
+    included.unshift(`metadata.json — machine-readable bundle manifest`);
 
-    // License (Gumroad / Etsy explicit).
-    if (bundleType === "gumroad" || bundleType === "etsy") {
-      const license = `LICENSE\n\nLicense Type: ${listing?.license_type ?? "personal"}\nTitle: ${book?.title ?? ""}\n\nThis copy is licensed for ${listing?.license_type ?? "personal"} use only.\nRedistribution without permission is prohibited.\n`;
-      zip.file("license.txt", license);
-    }
-
-    const readme = `# ${PLATFORM_LABEL[bundleType]} Publishing Bundle\n\n` +
-      `Title: ${book?.title ?? ""}\n` +
-      `Generated: ${new Date().toISOString()}\n\n` +
-      `Upload destination: ${PLATFORM_URL[bundleType]}\n\n` +
-      `Inside this bundle:\n` +
-      `- metadata.json — title, description, keywords\n` +
-      `- cover.jpg — cover image (if available)\n` +
-      `- social-captions.txt — ready-to-post promo copy\n` +
-      (mainPdf ? `- Print/PDF file\n` : "") +
-      (bundleType === "substack" ? `- chapters/ — one markdown file per chapter\n- publishing-schedule.txt\n- welcome-email.md\n` : "") +
-      (bundleType === "patreon" ? `- posts-free/ and posts-patron-only/ markdown\n- post-schedule.csv\n` : "") +
-      (bundleType === "etsy" ? `- etsy-listing.md, tags.txt, license.txt\n` : "") +
-      `\nKDP is never published automatically — always upload manually.\n`;
-    zip.file("README.md", readme);
+    zip.file("README.md", renderReadme(ctx, included));
 
     const blob = await zip.generateAsync({ type: "uint8array" });
     await timer.stop("zip", { metadata: { bytes: blob.byteLength } });
+    await sc.from("export_jobs").update({ progress: 88 }).eq("id", jobId);
 
-    await sc.from("export_jobs").update({ progress: 85 }).eq("id", jobId);
-
-    const path = `${userId}/${bookId}/${jobId}.zip`;
-    const { error: upErr } = await sc.storage.from("exports").upload(path, blob, { contentType: "application/zip", upsert: true });
+    // ─── Upload + sign ──────────────────────────────────────────────────
+    // The path stays under `<userId>/<bookId>/` for RLS, but the file ends
+    // with a creator-friendly slug so the download attachment isn't a UUID.
+    const filename = bundleFilename(ctx.book, bundleType);
+    const path = `${userId}/${bookId}/${jobId}/${filename}`;
+    const { error: upErr } = await sc.storage.from("exports").upload(path, blob, {
+      contentType: "application/zip", upsert: true,
+    });
     if (upErr) throw upErr;
-    await timer.stop("upload", { metadata: { path } });
+    await timer.stop("upload", { metadata: { path, bytes: blob.byteLength } });
 
-    const { data: signed, error: sErr } = await sc.storage.from("exports").createSignedUrl(path, 60 * 60 * 24 * 7);
+    const { data: signed, error: sErr } = await sc.storage.from("exports")
+      .createSignedUrl(path, 60 * 60 * 24 * 7, { download: filename });
     if (sErr) throw sErr;
 
     await sc.from("export_jobs").update({
@@ -204,6 +419,25 @@ async function runJob(
       result_url: signed.signedUrl,
       result_expires_at: new Date(Date.now() + 7 * 86400_000).toISOString(),
       completed_at: new Date().toISOString(),
+      metadata: {
+        ...(options ?? {}),
+        bundle_schema_version: manifest.bundle_schema_version,
+        content_sha256: contentHash,
+        included_assets: included,
+        cover_attached: !!cover,
+        cover_dimensions: cover && cover.widthPx && cover.heightPx
+          ? { width: cover.widthPx, height: cover.heightPx, mime: cover.mime } : null,
+        epub_attached: !!epubBytes,
+        word_count_estimate: manifest.word_count_estimate,
+        export_quality_score: audit.score,
+        export_quality_status: audit.status,
+        content_cleanup: cleanup.report.totals,
+        style_totals: styleAudit.totals,
+        sell_safety_summary: Object.fromEntries(
+          Object.entries(safetyByPlatform).map(([k, v]) => [k, v.verdict]),
+        ),
+        ai_assistance_level: extras.aiAssistanceLevel ?? null,
+      },
     }).eq("id", jobId);
     await timer.stop("done");
 
@@ -212,17 +446,25 @@ async function runJob(
       event_type: `${bundleType}_export_completed`,
       user_id: userId, metadata: { job_id: jobId, book_id: bookId, correlation_id: corr },
     });
-
-    // Phase 3.1 — in-app notification on completion
+    await logPublishEvent(sc, {
+      user_id: userId, platform: bundleType, event_type: "publish_completed",
+      book_id: bookId, severity: "info", correlation_id: corr,
+      message: "bundle ready",
+      metadata: {
+        job_id: jobId, included: included.length, content_sha256: contentHash,
+        cover_attached: !!cover, epub_attached: !!epubBytes,
+        cleanup: cleanup.report.totals,
+      },
+    });
     await sc.from("creator_notifications").insert({
       user_id: userId,
       kind: "publish_status",
-      title: `${bundleType.toUpperCase()} bundle is ready`,
-      body: "Your export bundle has been generated and is ready to download.",
+      title: `${PLATFORM_LABEL[bundleType]} bundle is ready`,
+      body: `Your ${manifest.word_count_estimate.toLocaleString()}-word bundle has been generated and is ready to download.`,
       link_url: "/account/exports",
       resource_type: "export_job",
       resource_id: jobId,
-      metadata: { book_id: bookId, bundle_type: bundleType },
+      metadata: { book_id: bookId, bundle_type: bundleType, score: audit.score },
     });
   } catch (e) {
     const msg = e instanceof Error ? e.message : String(e);
@@ -242,10 +484,15 @@ async function runJob(
       event_type: `${bundleType}_export_failed`,
       user_id: userId, metadata: { job_id: jobId, error: msg, correlation_id: corr },
     });
+    await logPublishEvent(sc, {
+      user_id: userId, platform: bundleType, event_type: "publish_failed",
+      book_id: bookId, severity: "error", correlation_id: corr,
+      message: msg, metadata: { job_id: jobId },
+    });
     await sc.from("creator_notifications").insert({
       user_id: userId,
       kind: "publish_status",
-      title: `${bundleType.toUpperCase()} bundle failed`,
+      title: `${PLATFORM_LABEL[bundleType]} bundle failed`,
       body: msg.slice(0, 500),
       link_url: "/account/exports",
       resource_type: "export_job",
@@ -270,14 +517,9 @@ serve(async (req) => {
   try {
     const sc = serviceClient();
 
-    // Phase 2.1c.2 — risk-tier gate (high/blocked users may not enqueue exports).
     const risk = await enforceUserRiskTier(sc, auth.userId, "export");
     if (risk) return risk;
 
-
-
-    // Phase 2.1c.1 — export farming defence.
-    // 20 exports per user per hour, and 5 per minute burst cap.
     const burst = await enforcePersistentVelocity(sc, {
       name: "export:user:burst", key: auth.userId, limit: 5, windowSec: 60,
     });
@@ -290,18 +532,17 @@ serve(async (req) => {
     const { data: book } = await sc.from("books").select("user_id").eq("id", parsed.book_id).maybeSingle();
     if (!book || book.user_id !== auth.userId) return unauthorized("Not the owner");
 
-    // Phase 4.0 — Creator entitlement gate for external bundles (KDP is exempt).
     let entitlementSnapshotId: string | null = null;
-    if (EXTERNAL_BUNDLES.has(parsed.bundle_type)) {
+    if (EXTERNAL_BUNDLES.has(parsed.bundle_type as BundlePlatform)) {
       const gate = await requireCreatorCapability(sc, auth.userId, "can_publish_external", {
-        auditMetadata: { book_id: parsed.book_id, bundle_type: parsed.bundle_type, correlation_id: corr },
+        auditMetadata: { book_id: parsed.book_id, bundle_type: parsed.bundle_type },
+        correlationId: corr,
+        platform: parsed.bundle_type,
       });
       if (gate.blocked) return gate.blocked;
-      // Phase 4.1 — snapshot entitlement onto the export job for historical proof.
       const { snapshotEntitlement } = await import("../_shared/entitlements.ts");
       entitlementSnapshotId = await snapshotEntitlement(sc, auth.userId, "export_job", parsed.book_id);
     }
-
 
     const { data: job, error } = await sc.from("export_jobs").insert({
       user_id: auth.userId, book_id: parsed.book_id, listing_id: parsed.listing_id ?? null,
@@ -319,9 +560,14 @@ serve(async (req) => {
     });
 
     await logExportPhase(sc, { job_id: job.id, phase: "enqueued", correlation_id: corr });
+    await logPublishEvent(sc, {
+      user_id: auth.userId, platform: parsed.bundle_type, event_type: "publish_started",
+      book_id: parsed.book_id, listing_id: parsed.listing_id ?? null,
+      correlation_id: corr, metadata: { job_id: job.id, kind: "bundle" },
+    });
 
     // @ts-ignore EdgeRuntime is provided by Supabase runtime
-    EdgeRuntime.waitUntil(runJob(job.id, auth.userId, parsed.book_id, parsed.bundle_type, auth.token, parsed.options ?? {}, corr));
+    EdgeRuntime.waitUntil(runJob(job.id, auth.userId, parsed.book_id, parsed.bundle_type as BundlePlatform, auth.token, parsed.options ?? {}, corr));
 
     return json({ ok: true, job_id: job.id, correlation_id: corr }, 200, { "x-correlation-id": corr });
   } catch (e) { return serverError(e); }

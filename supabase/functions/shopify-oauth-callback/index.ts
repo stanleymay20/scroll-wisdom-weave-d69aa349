@@ -1,7 +1,14 @@
 // shopify-oauth-callback — exchanges ?code for an admin access token, encrypts and
 // stores it on creator_platform_connections, then 302-redirects to the app.
+//
+// Enterprise hardening: connection lifecycle events are audit-logged so SecOps
+// can investigate failed/abused callbacks (e.g. HMAC mismatches, replayed
+// states) without needing edge-function log access.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { encryptToken } from "../_shared/crypto-tokens.ts";
+import { logPublishEvent } from "../_shared/publishing-audit.ts";
+import { fetchWithRetry } from "../_shared/upstream-retry.ts";
+import { sanitiseError } from "../_shared/publish-validation.ts";
 
 function redirect(to: string): Response {
   return new Response(null, { status: 302, headers: { Location: to } });
@@ -72,26 +79,44 @@ Deno.serve(async (req) => {
     await admin.from("oauth_states").delete().eq("state", state);
   }
 
-  if (!code || !state || !userId) return errorRedirect("invalid_state", returnUrl);
-  if (!clientId || !clientSecret) return errorRedirect("not_configured", returnUrl);
+  const logFailure = async (reason: string, sev: "warning" | "error" = "warning") => {
+    if (userId) {
+      await logPublishEvent(admin, {
+        user_id: userId, platform: "shopify", event_type: "connection_failed",
+        severity: sev, message: reason,
+        metadata: { stage: "oauth_callback", shop: shop ?? null },
+      });
+    }
+  };
+
+  if (!code || !state || !userId) { await logFailure("invalid_state"); return errorRedirect("invalid_state", returnUrl); }
+  if (!clientId || !clientSecret) { await logFailure("not_configured", "error"); return errorRedirect("not_configured", returnUrl); }
   if (!shop || !/^[a-z0-9][a-z0-9-]*\.myshopify\.com$/.test(shop)) {
+    await logFailure("invalid_shop");
     return errorRedirect("invalid_shop", returnUrl);
   }
-  if (expectedShop && expectedShop !== shop) return errorRedirect("shop_mismatch", returnUrl);
+  if (expectedShop && expectedShop !== shop) {
+    await logFailure(`shop_mismatch:${expectedShop}->${shop}`, "error");
+    return errorRedirect("shop_mismatch", returnUrl);
+  }
 
   // Verify HMAC
   const ok = await verifyHmac(reqUrl.searchParams, clientSecret);
-  if (!ok) return errorRedirect("hmac_invalid", returnUrl);
+  if (!ok) {
+    await logFailure("hmac_invalid", "error");
+    return errorRedirect("hmac_invalid", returnUrl);
+  }
 
   try {
-    const tokRes = await fetch(`https://${shop}/admin/oauth/access_token`, {
+    const tokRes = await fetchWithRetry(`https://${shop}/admin/oauth/access_token`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ client_id: clientId, client_secret: clientSecret, code }),
-    });
+    }, { attempts: 3 });
     const tokJson: any = await tokRes.json().catch(() => ({}));
     if (!tokRes.ok || !tokJson?.access_token) {
       console.error("shopify token exchange failed", tokRes.status, tokJson);
+      await logFailure(`token_exchange_failed_${tokRes.status}`, "error");
       return errorRedirect("token_exchange_failed", returnUrl);
     }
     const accessToken: string = tokJson.access_token;
@@ -100,9 +125,9 @@ Deno.serve(async (req) => {
     // Look up shop display name (best-effort)
     let shopName = shop;
     try {
-      const shopRes = await fetch(`https://${shop}/admin/api/2024-10/shop.json`, {
+      const shopRes = await fetchWithRetry(`https://${shop}/admin/api/2024-10/shop.json`, {
         headers: { "X-Shopify-Access-Token": accessToken },
-      });
+      }, { attempts: 2, timeoutMs: 8000 });
       const j: any = await shopRes.json().catch(() => ({}));
       if (j?.shop?.name) shopName = String(j.shop.name);
     } catch (_) { /* non-fatal */ }
@@ -124,8 +149,17 @@ Deno.serve(async (req) => {
         connection_status: "connected",
         last_error: null,
         last_used_at: new Date().toISOString(),
+        last_success_at: new Date().toISOString(),
+        consecutive_failures: 0,
+        revoked_at: null,
+        disconnected_at: null,
       }, { onConflict: "user_id,platform" });
     if (upErr) throw upErr;
+
+    await logPublishEvent(admin, {
+      user_id: userId, platform: "shopify", event_type: "connection_completed",
+      metadata: { shop, scopes: scopeStr },
+    });
 
     const base = returnUrl || `${appBase()}/account/intelligence`;
     const u = new URL(base);
@@ -134,6 +168,7 @@ Deno.serve(async (req) => {
     return redirect(u.toString());
   } catch (e) {
     console.error("shopify-oauth-callback error", e);
+    await logFailure(sanitiseError(e, 200), "error");
     return errorRedirect("server_error", returnUrl);
   }
 });
