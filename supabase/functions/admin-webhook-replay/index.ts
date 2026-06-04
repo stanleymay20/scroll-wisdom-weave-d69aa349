@@ -4,7 +4,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 
 import {
-  preflight, json, badRequest, unauthorized, forbidden, serverError,
+  preflight, json, badRequest, forbidden, serverError,
   requireUser, validateBody, z, serviceClient,
 } from "../_shared/http.ts";
 import { correlationId, logFinancialEvent } from "../_shared/observability.ts";
@@ -12,6 +12,7 @@ import { correlationId, logFinancialEvent } from "../_shared/observability.ts";
 const Body = z.object({
   stripe_event_id: z.string().min(1),
   force: z.boolean().optional(),
+  reason: z.string().trim().min(12).max(500).optional(),
 });
 
 serve(async (req) => {
@@ -36,8 +37,24 @@ serve(async (req) => {
       .eq("stripe_event_id", parsed.stripe_event_id).maybeSingle();
     if (!existing) return badRequest("Webhook event not found");
 
-    if (existing.status === "processed" && !parsed.force) {
-      return json({ ok: false, reason: "already_processed", hint: "pass force=true to replay anyway" });
+    const priorStatus = String(existing.status ?? "unknown");
+    const force = parsed.force === true;
+
+    if (existing.status === "processed" && !force) {
+      return json({ ok: false, reason: "already_processed", hint: "pass force=true with reason to replay anyway" });
+    }
+
+    if (force && !parsed.reason) {
+      return badRequest("Forced replay requires a reason of at least 12 characters");
+    }
+
+    if (!["failed", "dead_lettered"].includes(priorStatus) && !force) {
+      return json({
+        ok: false,
+        reason: "not_replayable_status",
+        status: priorStatus,
+        hint: "Only failed or dead_lettered events can be replayed without force.",
+      }, 409);
     }
 
     // Mark replaying
@@ -48,15 +65,11 @@ serve(async (req) => {
     }).eq("stripe_event_id", parsed.stripe_event_id);
 
     await logFinancialEvent(sc, {
-      event_type: "webhook_replay_started", severity: "warn", actor: "admin",
+      event_type: "webhook_replay_started", severity: force ? "critical" : "warn", actor: "admin",
       correlation_id: corr, stripe_event_id: parsed.stripe_event_id, user_id: auth.userId,
-      payload: { event_type: existing.event_type, force: parsed.force ?? false },
+      payload: { event_type: existing.event_type, prior_status: priorStatus, force, reason: parsed.reason ?? null },
     });
 
-    // Re-dispatch payload to stripe-webhook by re-signing with the webhook
-    // secret. We compute the Stripe v1 signature (HMAC-SHA256 over
-    // "<timestamp>.<payload>") directly so we don't depend on undocumented
-    // SDK helpers that may disappear on Stripe upgrades.
     const whSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
     const payloadStr = JSON.stringify(existing.payload);
     const timestamp = Math.floor(Date.now() / 1000);
@@ -90,14 +103,13 @@ serve(async (req) => {
       last_error: res.ok ? null : `replay http ${res.status}`,
       processed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
-      // Phase 2.1d.1 — replay success clears dead-letter markers
       ...(res.ok ? { dead_letter_reason: null, dead_lettered_at: null } : {}),
     }).eq("stripe_event_id", parsed.stripe_event_id);
 
     await logFinancialEvent(sc, {
-      event_type: "webhook_replay_finished", severity: res.ok ? "info" : "error", actor: "admin",
+      event_type: "webhook_replay_finished", severity: res.ok ? (force ? "warn" : "info") : "error", actor: "admin",
       correlation_id: corr, stripe_event_id: parsed.stripe_event_id, user_id: auth.userId,
-      payload: { http_status: res.status },
+      payload: { http_status: res.status, prior_status: priorStatus, final_status: finalStatus, force, reason: parsed.reason ?? null },
     });
 
     return json({ ok: res.ok, http_status: res.status, correlation_id: corr });
