@@ -166,12 +166,13 @@ function inlineXhtml(text: string): string {
   s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/(^|[^*])\*([^*]+)\*/g, "$1<em>$2</em>");
   s = s.replace(/`([^`]+)`/g, "<code>$1</code>");
-  // [label](url) — restrict url scheme
+  // [label](url) — restrict url scheme. Kindle's web view honours mailto:
+  // and tel: links; everything else is downgraded to plain text so a hostile
+  // chapter can't slip a javascript: payload past us.
   s = s.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (_, label, href) => {
-    if (!/^https?:\/\//i.test(href) && !href.startsWith("#") && !href.startsWith("/")) {
-      return label;
-    }
-    return `<a href="${escAttr(href)}">${label}</a>`;
+    const url = String(href).trim();
+    if (!/^(?:https?:\/\/|mailto:|tel:|#|\/)/i.test(url)) return label;
+    return `<a href="${escAttr(url)}">${label}</a>`;
   });
   return s;
 }

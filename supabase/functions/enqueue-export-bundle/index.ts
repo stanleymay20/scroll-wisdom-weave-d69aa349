@@ -29,6 +29,7 @@ import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
 import { auditBookForExport } from "../_shared/exportQuality.ts";
 import { logPublishEvent } from "../_shared/publishing-audit.ts";
 import { fetchImageAsset, sha256Hex } from "../_shared/asset-fetch.ts";
+import { cleanBookChapters } from "../_shared/content-quality.ts";
 import {
   bundleFilename, renderFrontMatter, renderLongDescription, renderShortDescription,
   renderKeywords, renderLicense, renderSocialPack, renderReadme, renderManifest,
@@ -71,10 +72,18 @@ async function runJob(
       .eq("id", bookId).maybeSingle();
     if (!book) throw new Error("Book not found");
 
-    const { data: chapters } = await sc.from("chapters")
+    const { data: chaptersRaw } = await sc.from("chapters")
       .select("chapter_number, title, content")
       .eq("book_id", bookId).order("chapter_number");
-    const chapterList = chapters ?? [];
+
+    // ── Content-quality clean ─────────────────────────────────────────
+    // Every chapter is rewritten to remove AI preambles/postambles,
+    // unresolved placeholders, unclosed code fences, dangerous HTML, and
+    // typographic noise BEFORE it touches the canonical parser, the EPUB,
+    // the substack/patreon markdown files, or the audit. The reader sees
+    // the same canonical pipeline; the buyer sees clean content.
+    const cleanup = cleanBookChapters(chaptersRaw ?? []);
+    const chapterList = cleanup.cleaned;
 
     const { data: listing } = await sc.from("public_listings")
       .select("slug, subtitle, blurb, amazon_description, price_cents, currency, seo_keywords, seo_categories, backend_keywords, license_type, sample_chapters, cover_override_url")
@@ -92,13 +101,19 @@ async function runJob(
       hasCover: !!(book.cover_image_url || (listing as any)?.cover_override_url),
       bookType: book.book_type ?? null,
     });
+    // Content-quality issues that the cleaner can't safely auto-fix become
+    // blockers (placeholders, dangerous HTML) or warnings (self-references).
+    for (const iss of cleanup.report.issues) audit.issues.push(iss);
+    const refusalBlockers = cleanup.report.issues.filter((i) => i.severity === "blocker");
+    if (refusalBlockers.length > 0) audit.status = "blocked";
+
     if (audit.status === "blocked") {
       const blockers = audit.issues.filter((i) => i.severity === "blocker").map((i) => i.message);
       await logPublishEvent(sc, {
         user_id: userId, platform: bundleType, event_type: "publish_validation_failed",
         book_id: bookId, severity: "error", correlation_id: corr,
         message: "Bundle generation refused: export quality blockers",
-        metadata: { blockers, score: audit.score },
+        metadata: { blockers, score: audit.score, cleanup: cleanup.report.totals },
       });
       throw new Error(`Export quality blocked (score ${audit.score}): ${blockers.slice(0, 3).join("; ")}`);
     }
@@ -315,6 +330,7 @@ async function runJob(
         word_count_estimate: manifest.word_count_estimate,
         export_quality_score: audit.score,
         export_quality_status: audit.status,
+        content_cleanup: cleanup.report.totals,
       },
     }).eq("id", jobId);
     await timer.stop("done");
@@ -331,6 +347,7 @@ async function runJob(
       metadata: {
         job_id: jobId, included: included.length, content_sha256: contentHash,
         cover_attached: !!cover, epub_attached: !!epubBytes,
+        cleanup: cleanup.report.totals,
       },
     });
     await sc.from("creator_notifications").insert({
