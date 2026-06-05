@@ -13,6 +13,7 @@ import { storefrontApi, type StoreListing } from "@/lib/storefrontApi";
 import { DiscoveryRail } from "@/components/storefront/DiscoveryRail";
 import { ShareDialog } from "@/components/books/ShareDialog";
 import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
+import { SocialProofBadges } from "@/components/storefront/SocialProofBadges";
 
 // Local view type retains existing shape used by the page below.
 interface Data {
