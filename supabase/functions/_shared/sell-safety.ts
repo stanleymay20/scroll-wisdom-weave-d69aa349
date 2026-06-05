@@ -39,6 +39,8 @@ export interface SellSafetyInput {
     description?: string | null;
     category?: string | null;
     book_type?: string | null;
+    /** True for books generated with academic-mode prompts. */
+    academic_mode?: boolean | null;
   };
   listing?: {
     blurb?: string | null;
@@ -52,6 +54,16 @@ export interface SellSafetyInput {
   aiAssistanceLevel?: "none" | "assisted" | "generated" | null;
   /** Cover image dimensions, if known. Populated by asset-fetch. */
   cover?: { widthPx: number; heightPx: number; mime: string } | null;
+  /** Chapter count and total word count — the minimum-viable-book check. */
+  manuscript?: { chapterCount: number; wordCount: number } | null;
+  /** Unresolved moderation_queue rows for this book — populated by caller. */
+  priorModerationFlags?: Array<{
+    severity: string | null;
+    status: string | null;
+    flagged_reason?: string | null;
+  }> | null;
+  /** Verified citation count (book_citations rows). */
+  citationCount?: number | null;
 }
 
 // ─── Pattern banks ─────────────────────────────────────────────────────────
@@ -202,6 +214,92 @@ function checkDescriptionPolish(input: SellSafetyInput, issues: ContentIssue[], 
   }
 }
 
+/**
+ * Minimum-viable-book check. A paid product with two chapters and 500 words
+ * looks fraudulent on every storefront and gets refunded en masse. We block
+ * the bundle below the floor so the creator either expands the manuscript
+ * or marks the listing free.
+ */
+function checkManuscriptVolume(input: SellSafetyInput, issues: ContentIssue[], platform: SellPlatform) {
+  const m = input.manuscript;
+  if (!m) return;
+  const isPaid = (input.listing?.price_cents ?? 0) > 0;
+  if (!isPaid) return;
+
+  // Per-platform floor. KDP rejects <2,500-word paperbacks outright; storefronts
+  // are more forgiving but a sub-3-chapter paid product is a red flag.
+  const minWords = platform === "kdp" ? 5_000 : platform === "etsy" ? 3_000 : 2_000;
+  const minChapters = platform === "kdp" ? 3 : 2;
+
+  if (m.wordCount < minWords) {
+    issues.push({
+      severity: "blocker", code: "manuscript_too_short",
+      message: `Manuscript is ${m.wordCount.toLocaleString()} words — ${platform === "kdp" ? "KDP" : platform} expects ≥${minWords.toLocaleString()} for a paid book`,
+      hint: "Expand the manuscript or move the listing to free distribution.",
+    });
+  }
+  if (m.chapterCount < minChapters) {
+    issues.push({
+      severity: "blocker", code: "too_few_chapters",
+      message: `Only ${m.chapterCount} chapter${m.chapterCount === 1 ? "" : "s"} — ${platform} expects ≥${minChapters}`,
+      hint: "Add chapters or restructure long chapters into smaller units.",
+    });
+  }
+}
+
+/**
+ * Reference rigor for academic / reference books. An academic-mode book with
+ * zero citations is a self-harming product: 1-star reviews and KDP take-downs
+ * follow within weeks. Blocks the external bundle; warns on the KDP-only path
+ * (some self-published books legitimately lack citations).
+ */
+function checkReferenceRigor(input: SellSafetyInput, issues: ContentIssue[], platform: SellPlatform) {
+  const isAcademic = input.book.academic_mode === true
+    || input.book.book_type === "academic"
+    || input.book.book_type === "reference";
+  if (!isAcademic) return;
+  const n = input.citationCount ?? 0;
+  if (n === 0) {
+    issues.push({
+      severity: platform === "kdp" ? "warning" : "blocker",
+      code: "academic_no_citations",
+      message: "Academic-mode book has zero verified citations",
+      hint: "Run reference generation + verification before publishing an academic title.",
+    });
+  } else if (n < 5) {
+    issues.push({
+      severity: "warning", code: "academic_few_citations",
+      message: `Academic-mode book has only ${n} citation${n === 1 ? "" : "s"}`,
+      hint: "Most peer-reviewed-style readers expect ≥10 verified sources.",
+    });
+  }
+}
+
+/**
+ * Existing moderation flags. If a human moderator or the content-filter
+ * pipeline flagged this book as critical/high and it isn't resolved, the
+ * bundle is refused regardless of platform.
+ */
+function checkPriorModeration(input: SellSafetyInput, issues: ContentIssue[]) {
+  const flags = input.priorModerationFlags ?? [];
+  const unresolved = flags.filter((f) => f.status !== "resolved" && f.status !== "auto_dismissed");
+  const critical = unresolved.filter((f) => (f.severity ?? "").toLowerCase() === "critical");
+  const high = unresolved.filter((f) => (f.severity ?? "").toLowerCase() === "high");
+  if (critical.length > 0) {
+    issues.push({
+      severity: "blocker", code: "prior_moderation_critical",
+      message: `${critical.length} unresolved critical moderation flag${critical.length === 1 ? "" : "s"} on this book`,
+      hint: "Address the flagged content (or wait for moderator review) before re-publishing.",
+    });
+  } else if (high.length > 0) {
+    issues.push({
+      severity: "warning", code: "prior_moderation_high",
+      message: `${high.length} unresolved high-severity moderation flag${high.length === 1 ? "" : "s"} on this book`,
+      hint: "Review the flagged passages — KDP / Gumroad may remove the listing.",
+    });
+  }
+}
+
 function checkSoftFlags(input: SellSafetyInput, issues: ContentIssue[]) {
   // Libel-shape sentences. Flag for review only — never block.
   const text = input.chaptersFullText;
@@ -230,11 +328,14 @@ function checkSoftFlags(input: SellSafetyInput, issues: ContentIssue[]) {
 
 export function auditSellSafety(input: SellSafetyInput, platform: SellPlatform): SellSafetyReport {
   const issues: ContentIssue[] = [];
+  checkPriorModeration(input, issues);
   checkUniversalBlockers(input, issues);
   checkExplicitContent(input, issues, platform);
   checkAiDisclosure(input, issues, platform);
   checkCover(input, issues, platform);
   checkDescriptionPolish(input, issues, platform);
+  checkManuscriptVolume(input, issues, platform);
+  checkReferenceRigor(input, issues, platform);
   checkSoftFlags(input, issues);
 
   // Sort: blockers first, then warnings, then info.

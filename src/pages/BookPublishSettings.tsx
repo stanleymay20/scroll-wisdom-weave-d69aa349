@@ -11,7 +11,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { SEO } from "@/components/SEO";
 import { toast } from "sonner";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
-import { Sparkles, Package, BookOpen, Heart, Store, ShoppingBag, FileText, ExternalLink, CheckCircle2, Zap } from "lucide-react";
+import { Sparkles, Package, BookOpen, Heart, Store, ShoppingBag, FileText, ExternalLink, CheckCircle2, Zap, ShieldCheck, AlertCircle } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
 import { publishToGumroad, publishToShopify } from "@/lib/platformConnections";
 import { publishExternallyOneClick, waitForBundle } from "@/lib/oneClickPublish";
@@ -60,6 +61,9 @@ export default function BookPublishSettings() {
   const [pubs, setPubs] = useState<any[]>([]);
   const [newPub, setNewPub] = useState<{ platform: BundleKind | "other"; url: string }>({ platform: "kdp", url: "" });
   const [qualityReport, setQualityReport] = useState<ExportQualityReport | null>(null);
+  // Author-declared AI-assistance level. Required for KDP submission.
+  const [aiLevel, setAiLevel] = useState<"" | "none" | "assisted" | "generated">("");
+  const [savingAiLevel, setSavingAiLevel] = useState(false);
 
   const [form, setForm] = useState({
     listing_id: "",
@@ -84,9 +88,15 @@ export default function BookPublishSettings() {
     (async () => {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) { navigate("/auth"); return; }
-      const { data: b } = await supabase.from("books").select("id, title, user_id, cover_image_url").eq("id", bookId).maybeSingle();
+      // ai_assistance_level / isbn / dedication / epigraph were added in
+      // 20260604201230_elite_publishing_metadata.sql. Cast to any until the
+      // generated Supabase types catch up.
+      const { data: b } = await (supabase.from("books") as any)
+        .select("id, title, user_id, cover_image_url, ai_assistance_level")
+        .eq("id", bookId).maybeSingle();
       if (!b || b.user_id !== user.id) { toast.error("Not your book"); navigate("/dashboard"); return; }
       setBook(b);
+      setAiLevel(b.ai_assistance_level ?? "");
       const { data: l } = await supabase.from("public_listings").select("*").eq("book_id", bookId).maybeSingle();
       if (l) setForm({
         listing_id: l.id, is_public: l.is_public, slug: l.slug, price_cents: l.price_cents,
@@ -261,6 +271,21 @@ export default function BookPublishSettings() {
   const publishShopifyDirect = () => publishExternal("shopify");
 
 
+  async function saveAiLevel(next: "none" | "assisted" | "generated") {
+    if (!bookId) return;
+    setSavingAiLevel(true);
+    try {
+      const { error } = await (supabase.from("books") as any)
+        .update({ ai_assistance_level: next })
+        .eq("id", bookId);
+      if (error) throw error;
+      setAiLevel(next);
+      toast.success("AI disclosure saved");
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not save");
+    } finally { setSavingAiLevel(false); }
+  }
+
   // Publishing wizard checklist
   const checklist = [
     { ok: !!(form.subtitle || "").trim(), label: "Subtitle" },
@@ -401,6 +426,45 @@ export default function BookPublishSettings() {
           />
         </div>
 
+
+        {/* AI assistance declaration — required by Amazon KDP since 2023.
+            Missing this blocks the KDP bundle from generating. */}
+        <Card className="mt-6 p-4 sm:p-6">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <ShieldCheck className="w-5 h-5" /> AI use disclosure
+            {aiLevel && <Badge variant="secondary" className="ml-auto capitalize">{aiLevel}</Badge>}
+          </h2>
+          <p className="text-sm text-muted-foreground mt-1">
+            Amazon KDP requires every author to declare AI use before publishing. The bundle ships
+            the matching disclosure text in <code>ai-disclosure.md</code>.
+          </p>
+          <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {([
+              { value: "none",      label: "No AI use",     hint: "You wrote every word yourself." },
+              { value: "assisted",  label: "AI-assisted",   hint: "AI helped with ideas / editing." },
+              { value: "generated", label: "AI-generated",  hint: "AI drafted the text; you edited." },
+            ] as const).map((o) => (
+              <button
+                key={o.value}
+                type="button"
+                onClick={() => saveAiLevel(o.value)}
+                disabled={savingAiLevel}
+                className={`min-h-16 rounded-md border px-3 py-2 text-left transition-colors ${
+                  aiLevel === o.value ? "border-primary bg-primary/5" : "border-border hover:bg-muted/40"
+                }`}
+              >
+                <div className="font-medium text-sm">{o.label}</div>
+                <div className="text-xs text-muted-foreground mt-0.5">{o.hint}</div>
+              </button>
+            ))}
+          </div>
+          {!aiLevel && (
+            <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs flex items-start gap-2">
+              <AlertCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" aria-hidden />
+              <span>Set a disclosure level before publishing to Amazon KDP — bundles are refused without it.</span>
+            </div>
+          )}
+        </Card>
 
         {/* Publishing Wizard checklist */}
         <Card className="mt-6 p-4 sm:p-6">

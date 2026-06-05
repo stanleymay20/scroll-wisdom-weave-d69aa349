@@ -74,9 +74,23 @@ async function runJob(
     // table yet — load them best-effort so the elite-bundle fields are
     // optional rather than required.
     const { data: book } = await sc.from("books")
-      .select("id, title, subtitle, description, cover_image_url, category, book_type, user_id, ai_assistance_level, isbn, dedication, epigraph")
+      .select("id, title, subtitle, description, cover_image_url, category, book_type, user_id, ai_assistance_level, isbn, dedication, epigraph, academic_mode")
       .eq("id", bookId).maybeSingle();
     if (!book) throw new Error("Book not found");
+
+    // Pull the data the safety verifier needs from the DB. Moderation flags
+    // come from the moderation_queue (populated by the content-filter
+    // function); citations from book_citations (populated by verify-references).
+    // Both queries are bounded and cheap.
+    const [{ data: priorFlags }, { count: citationCount }] = await Promise.all([
+      sc.from("moderation_queue")
+        .select("severity, status, flagged_reason")
+        .eq("book_id", bookId).neq("status", "resolved").neq("status", "auto_dismissed")
+        .limit(50),
+      sc.from("book_citations")
+        .select("id", { count: "exact", head: true })
+        .eq("book_id", bookId),
+    ]);
 
     const { data: chaptersRaw } = await sc.from("chapters")
       .select("chapter_number, title, content")
@@ -210,14 +224,23 @@ async function runJob(
     // matrix, but only the current bundle's platform is allowed to BLOCK
     // bundle generation. Cross-platform issues are visible to the creator
     // without surprising a Gumroad bundle with an Etsy-specific failure.
+    const chaptersFullText = chapterList.map((c) => `${c.title ?? ""}\n${c.content ?? ""}`).join("\n\n");
+    const wordCount = (chaptersFullText.match(/\b[A-Za-z][A-Za-z'’-]*\b/g) || []).length;
     const sellSafetyInput: SellSafetyInput = {
-      book: { title: book.title, description: book.description, category: book.category, book_type: book.book_type },
+      book: {
+        title: book.title, description: book.description,
+        category: book.category, book_type: book.book_type,
+        academic_mode: (book as any).academic_mode ?? false,
+      },
       listing: ctx.listing,
-      chaptersFullText: chapterList.map((c) => `${c.title ?? ""}\n${c.content ?? ""}`).join("\n\n"),
+      chaptersFullText,
       aiAssistanceLevel: extras.aiAssistanceLevel ?? null,
       cover: cover && cover.widthPx && cover.heightPx
         ? { widthPx: cover.widthPx, heightPx: cover.heightPx, mime: cover.mime }
         : null,
+      manuscript: { chapterCount: chapterList.length, wordCount },
+      priorModerationFlags: priorFlags ?? [],
+      citationCount: citationCount ?? 0,
     };
     const safetyByPlatform = auditAllPlatforms(sellSafetyInput);
     const platformSafety = safetyByPlatform[bundleType];
@@ -238,6 +261,15 @@ async function runJob(
     for (const iss of platformSafety.issues) audit.issues.push(iss);
 
     // ─── EPUB (paid digital distribution) ───────────────────────────────
+    // Subjects = listing categories + keywords + book.category, deduped.
+    // These land as <dc:subject> tags in the OPF and surface in Kindle /
+    // Apple Books genre search.
+    const subjectSet = new Set<string>();
+    const _kw = renderKeywords(ctx.listing, ctx.book);
+    for (const c of _kw.categories) subjectSet.add(c);
+    for (const k of _kw.keywords) subjectSet.add(k);
+    if (book.category) subjectSet.add(book.category);
+
     let epubBytes: Uint8Array | null = null;
     if (EPUB_PLATFORMS.includes(bundleType)) {
       const { buildEpub } = await import("../_shared/epub-builder.ts");
@@ -248,6 +280,9 @@ async function runJob(
         coverMime: cover?.mime ?? null,
         generatedAt,
         language: (options.language as string | undefined) ?? "en",
+        isbn: extras.isbn ?? null,
+        subjects: Array.from(subjectSet),
+        aiAssistanceLevel: extras.aiAssistanceLevel ?? null,
       });
     }
     await timer.stop("epub", { metadata: { bytes: epubBytes?.byteLength ?? 0 } });
