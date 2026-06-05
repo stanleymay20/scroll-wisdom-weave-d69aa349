@@ -70,6 +70,32 @@ export function PlatformConnections() {
       setBusy("");
     }
   }
+
+  /**
+   * Reconnect for an expired/revoked connection. Shopify keeps its previous
+   * shop_domain in creator_platform_connections, so we can skip the manual
+   * "type your store domain" step and head straight to the OAuth screen.
+   * Gumroad's auth has no per-shop concept, so it's a one-button flow.
+   */
+  async function onReconnect(p: PlatformDef, c: PlatformConnection) {
+    setBusy(p.id);
+    try {
+      if (p.id === "gumroad") {
+        const oauthUrl = await startGumroadConnect(window.location.href);
+        window.location.href = oauthUrl;
+      } else if (p.id === "shopify") {
+        const shop = (c.shop_domain ?? shopInput[p.id] ?? "").trim();
+        if (!shop) {
+          toast.error("Enter your Shopify store domain"); setBusy(""); return;
+        }
+        const oauthUrl = await startShopifyConnect(shop, window.location.href);
+        window.location.href = oauthUrl;
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Could not start OAuth");
+      setBusy("");
+    }
+  }
   async function onDisconnect(platform: string) {
     if (!confirm(`Disconnect ${platform}? Your stored credentials will be deleted.`)) return;
     setBusy(platform);
@@ -127,9 +153,21 @@ export function PlatformConnections() {
                       </Badge>
                     )}
                     {c ? (
-                      <Button size="sm" variant="outline" disabled={busy === p.id} onClick={() => onDisconnect(p.id)} className="min-h-9">
-                        Disconnect
-                      </Button>
+                      <>
+                        {broken && (
+                          <Button
+                            size="sm"
+                            disabled={busy === p.id}
+                            onClick={() => onReconnect(p, c)}
+                            className="min-h-9"
+                          >
+                            {busy === p.id ? "Opening…" : "Reconnect"}
+                          </Button>
+                        )}
+                        <Button size="sm" variant="outline" disabled={busy === p.id} onClick={() => onDisconnect(p.id)} className="min-h-9">
+                          Disconnect
+                        </Button>
+                      </>
                     ) : !p.needsShop ? (
                       <Button size="sm" disabled={!p.available || busy === p.id} onClick={() => onConnect(p)} className="min-h-9">
                         {busy === p.id ? "Opening…" : "Connect"}

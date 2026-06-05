@@ -1,6 +1,7 @@
 // connect-shopify — generate OAuth authorize URL for a creator's Shopify store.
 // Caller must be authenticated and provide their *.myshopify.com shop domain.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { safeReturnUrl } from "../_shared/oauth-return-url.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -52,13 +53,17 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const shop = normalizeShop(String(body?.shop ?? ""));
     if (!shop) return jsonResp(400, { error: "invalid_shop_domain" });
-    const returnUrl = typeof body?.return_url === "string" ? body.return_url.slice(0, 500) : null;
+    const returnUrl = safeReturnUrl(body?.return_url);
 
     const admin = createClient(url, svc);
     const state = randomState();
+    // shop_domain lives in the typed metadata column now — the previous
+    // "<url>|<shop>" packing into return_url broke whenever a legitimate
+    // returnUrl contained a "|" character.
     const { error: insErr } = await admin.from("oauth_states").insert({
       state, user_id: caller, platform: "shopify",
-      return_url: returnUrl ? `${returnUrl}|${shop}` : `|${shop}`,
+      return_url: returnUrl,
+      metadata: { shop },
     });
     if (insErr) throw insErr;
 

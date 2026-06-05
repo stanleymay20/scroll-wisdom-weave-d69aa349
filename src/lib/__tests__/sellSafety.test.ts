@@ -142,6 +142,88 @@ describe("auditSellSafety — soft flags", () => {
   });
 });
 
+describe("auditSellSafety — minimum-viable-book", () => {
+  it("blocks paid KDP submission of a 500-word manuscript", () => {
+    const input = { ...clean, manuscript: { chapterCount: 2, wordCount: 500 } };
+    const r = auditSellSafety(input, "kdp");
+    expect(r.verdict).toBe("unsafe");
+    expect(r.issues.some((i) => i.code === "manuscript_too_short")).toBe(true);
+  });
+
+  it("blocks Gumroad on 1-chapter paid product", () => {
+    const input = { ...clean, manuscript: { chapterCount: 1, wordCount: 8_000 } };
+    const r = auditSellSafety(input, "gumroad");
+    expect(r.issues.some((i) => i.code === "too_few_chapters")).toBe(true);
+  });
+
+  it("allows the same short text when listing is free", () => {
+    const input = {
+      ...clean,
+      listing: { ...clean.listing!, price_cents: 0 },
+      manuscript: { chapterCount: 1, wordCount: 500 },
+    };
+    const r = auditSellSafety(input, "kdp");
+    // Should still be safe modulo other warnings (none here).
+    expect(r.issues.some((i) => i.code === "manuscript_too_short")).toBe(false);
+  });
+});
+
+describe("auditSellSafety — reference rigor", () => {
+  it("blocks external bundle when academic book has 0 citations", () => {
+    const input = { ...clean, book: { ...clean.book, academic_mode: true }, citationCount: 0 };
+    const r = auditSellSafety(input, "gumroad");
+    expect(r.verdict).toBe("unsafe");
+    expect(r.issues.some((i) => i.code === "academic_no_citations" && i.severity === "blocker")).toBe(true);
+  });
+
+  it("warns KDP (doesn't block) when academic book has 0 citations", () => {
+    const input = { ...clean, book: { ...clean.book, academic_mode: true }, citationCount: 0 };
+    const r = auditSellSafety(input, "kdp");
+    expect(r.issues.some((i) => i.code === "academic_no_citations" && i.severity === "warning")).toBe(true);
+  });
+
+  it("warns when academic book has <5 citations", () => {
+    const input = { ...clean, book: { ...clean.book, book_type: "academic" }, citationCount: 3 };
+    const r = auditSellSafety(input, "gumroad");
+    expect(r.issues.some((i) => i.code === "academic_few_citations")).toBe(true);
+  });
+
+  it("doesn't penalize non-academic books for citation count", () => {
+    const r = auditSellSafety({ ...clean, citationCount: 0 }, "gumroad");
+    expect(r.issues.every((i) => !i.code.startsWith("academic_"))).toBe(true);
+  });
+});
+
+describe("auditSellSafety — prior moderation", () => {
+  it("blocks on unresolved critical moderation flag", () => {
+    const input = {
+      ...clean,
+      priorModerationFlags: [{ severity: "critical", status: "pending", flagged_reason: "explicit" }],
+    };
+    const r = auditSellSafety(input, "gumroad");
+    expect(r.verdict).toBe("unsafe");
+    expect(r.issues.some((i) => i.code === "prior_moderation_critical")).toBe(true);
+  });
+
+  it("warns on unresolved high-severity flag", () => {
+    const input = {
+      ...clean,
+      priorModerationFlags: [{ severity: "high", status: "pending", flagged_reason: "violence" }],
+    };
+    const r = auditSellSafety(input, "gumroad");
+    expect(r.issues.some((i) => i.code === "prior_moderation_high")).toBe(true);
+  });
+
+  it("ignores resolved flags", () => {
+    const input = {
+      ...clean,
+      priorModerationFlags: [{ severity: "critical", status: "resolved", flagged_reason: "x" }],
+    };
+    const r = auditSellSafety(input, "gumroad");
+    expect(r.issues.every((i) => !i.code.startsWith("prior_moderation_"))).toBe(true);
+  });
+});
+
 describe("auditAllPlatforms", () => {
   it("returns a verdict for every platform", () => {
     const all = auditAllPlatforms(clean);

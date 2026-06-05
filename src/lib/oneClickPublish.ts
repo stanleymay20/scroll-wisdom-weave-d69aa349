@@ -130,6 +130,29 @@ export async function publishExternallyOneClick(
 ): Promise<OneClickResult> {
   const opts = { ...DEFAULTS, ...options };
 
+  // 0) Already-live short-circuit. publish-to-X is idempotent and returns
+  //    immediately when an external_publications row in 'live' state exists,
+  //    but waking the bundle pipeline just to discover this is wasteful and
+  //    racy with the rate limiter (each one-click click consumes a publish
+  //    velocity token). Detect the steady state on the client.
+  if (!opts.forceFreshBundle) {
+    const { data: existing } = await supabase
+      .from("external_publications")
+      .select("external_url, external_id, status, sync_state")
+      .eq("book_id", bookId).eq("platform", platform).maybeSingle();
+    if (existing && existing.status === "live" && existing.external_id) {
+      return {
+        status: "published",
+        publish: {
+          ok: true, idempotent: true,
+          external_url: existing.external_url ?? undefined,
+          external_id: existing.external_id ?? undefined,
+        },
+        message: `Already live on ${platform === "gumroad" ? "Gumroad" : "Shopify"}.`,
+      };
+    }
+  }
+
   // 1) Quality gate
   const report = await loadQualityReport(bookId);
   if (report?.status === "blocked") {

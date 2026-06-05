@@ -22,6 +22,13 @@ export interface EpubInput {
   coverMime: string | null;
   language?: string;
   generatedAt: string;
+  /** Optional ISBN to emit as dc:identifier. */
+  isbn?: string | null;
+  /** Optional subjects emitted as dc:subject entries — categories + keywords. */
+  subjects?: string[];
+  /** Optional AI assistance disclosure — emitted as a meta property so
+   *  Apple Books / Kobo catalog the work correctly. */
+  aiAssistanceLevel?: "none" | "assisted" | "generated" | null;
 }
 
 const NS_PACKAGE = "http://www.idpf.org/2007/opf";
@@ -184,10 +191,28 @@ function packageOpf(input: EpubInput, bookId: string, manifestItems: string, spi
   const subtitle = input.listing?.subtitle ? `<meta property="dcterms:alternative">${escXml(input.listing.subtitle)}</meta>` : "";
   const description = escXml(input.listing?.amazon_description || input.listing?.blurb || input.book.description || "");
   const modified = new Date(input.generatedAt).toISOString().replace(/\.\d+Z$/, "Z");
+
+  // ISBN as a secondary dc:identifier. Apple Books and Kobo index on this.
+  const isbn = (input.isbn || "").trim();
+  const isbnTag = isbn
+    ? `<dc:identifier opf:scheme="ISBN" xmlns:opf="http://www.idpf.org/2007/opf">${escXml(isbn)}</dc:identifier>`
+    : "";
+
+  // dc:subject — Kindle / Apple Books surface these in genre search.
+  const subjects = (input.subjects ?? []).slice(0, 12)
+    .map((s) => `<dc:subject>${escXml(s)}</dc:subject>`).join("\n    ");
+
+  // AI assistance disclosure — emitted as a refinable meta property so
+  // platform catalogs that opt to surface AI content notices can.
+  const aiTag = input.aiAssistanceLevel && input.aiAssistanceLevel !== "none"
+    ? `<meta property="schema:disambiguatingDescription">AI-${input.aiAssistanceLevel}</meta>`
+    : "";
+
   return `<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="${NS_PACKAGE}" version="3.0" unique-identifier="bookid" xml:lang="${lang}">
   <metadata xmlns:dc="${NS_DC}">
     <dc:identifier id="bookid">urn:uuid:${bookId}</dc:identifier>
+    ${isbnTag}
     <dc:title>${title}</dc:title>
     <dc:language>${lang}</dc:language>
     <dc:creator id="author">${author}</dc:creator>
@@ -197,6 +222,8 @@ function packageOpf(input: EpubInput, bookId: string, manifestItems: string, spi
     <meta property="dcterms:modified">${modified}</meta>
     ${description ? `<dc:description>${description}</dc:description>` : ""}
     ${subtitle}
+    ${subjects}
+    ${aiTag}
     ${input.coverBytes ? `<meta name="cover" content="cover-image"/>` : ""}
   </metadata>
   <manifest>
