@@ -118,7 +118,19 @@ export default function CreatorIntelligence() {
         </Card>
       </div>
 
-      <PlatformConnections />
+      <details className="group rounded-lg border border-border/60 bg-card/40">
+        <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2 text-sm font-medium hover:bg-muted/30 rounded-lg">
+          <span className="flex items-center gap-2">
+            <Sparkles className="w-4 h-4 text-muted-foreground" />
+            Publish Everywhere <span className="text-xs font-normal text-muted-foreground">(Advanced — Gumroad, Shopify)</span>
+          </span>
+          <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">▾</span>
+        </summary>
+        <div className="px-4 pb-4 pt-1">
+          <PlatformConnections />
+        </div>
+      </details>
+
 
 
       {/* Channel performance */}
