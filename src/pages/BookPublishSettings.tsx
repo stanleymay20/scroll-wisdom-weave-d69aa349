@@ -307,6 +307,45 @@ export default function BookPublishSettings() {
         </Link>
         <h1 className="text-2xl sm:text-3xl font-bold mt-2 break-words">Publish: {book?.title}</h1>
 
+        {/* Three-step primary path: Price → Cover → Publish on ScrollLibrary */}
+        <Card className="mt-6 p-4 sm:p-6 bg-gradient-to-br from-primary/5 via-card to-card border-primary/20">
+          <div className="flex items-center gap-2 text-sm font-medium text-primary">
+            <Zap className="w-4 h-4" /> Publish on ScrollLibrary
+            <Badge variant="secondary" className="ml-auto">Recommended</Badge>
+          </div>
+          <p className="text-sm text-muted-foreground mt-1">
+            The fastest path: set a price, confirm your cover, flip the switch. ScrollLibrary handles checkout,
+            delivery, and payouts. No external accounts, no OAuth, no webhooks.
+          </p>
+          <ol className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
+            {[
+              { n: 1, label: "Set price", ok: (form.price_cents ?? 0) >= 0 && form.slug.length > 0, hint: "Free or paid — both work." },
+              { n: 2, label: "Confirm cover", ok: !!(book?.cover_image_url || form.cover_override_url), hint: "Used everywhere your book appears." },
+              { n: 3, label: "Make public", ok: form.is_public, hint: "Flips the switch above." },
+            ].map((step) => (
+              <li key={step.n} className={`rounded-md border px-3 py-2 ${step.ok ? "border-primary/40 bg-primary/5" : "border-border bg-background/40"}`}>
+                <div className="flex items-center gap-2 text-sm font-medium">
+                  <span className={`inline-flex w-5 h-5 items-center justify-center rounded-full text-xs ${step.ok ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
+                    {step.ok ? <CheckCircle2 className="w-3.5 h-3.5" /> : step.n}
+                  </span>
+                  {step.label}
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">{step.hint}</p>
+              </li>
+            ))}
+          </ol>
+          <div className="mt-4 flex flex-wrap gap-2">
+            <Button variant="outline" size="sm" onClick={() => navigate("/sell")} className="min-h-10">
+              <Sparkles className="w-4 h-4 mr-2" /> Get paid in minutes
+            </Button>
+            <span className="text-xs text-muted-foreground self-center">
+              Stripe Connect onboarding — one screen, then payouts are automatic.
+            </span>
+          </div>
+        </Card>
+
+
+
         <Card className="mt-6 p-4 sm:p-6 space-y-5">
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
@@ -497,6 +536,17 @@ export default function BookPublishSettings() {
           </ul>
         </Card>
 
+        {/* Advanced distribution — hidden by default. Most authors stop above. */}
+        <details className="mt-6 group rounded-lg border border-border/60 bg-card/40">
+          <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2 text-sm font-medium hover:bg-muted/30 rounded-lg">
+            <span className="flex items-center gap-2">
+              <ExternalLink className="w-4 h-4 text-muted-foreground" />
+              Publish Everywhere <span className="text-xs font-normal text-muted-foreground">(Advanced — KDP, Gumroad, Shopify, Substack, Patreon, Etsy)</span>
+            </span>
+            <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">▾</span>
+          </summary>
+          <div className="px-2 sm:px-3 pb-3 pt-1 space-y-6">
+
         {/* Bundles */}
         <Card className="mt-6 p-4 sm:p-6">
           <h2 className="text-lg font-semibold flex items-center gap-2"><Package className="w-5 h-5" /> Publish bundles</h2>
@@ -638,6 +688,11 @@ export default function BookPublishSettings() {
             <Button onClick={recordPublication} disabled={!newPub.url.trim()} className="min-h-11 sm:w-auto">Record</Button>
           </div>
         </Card>
+
+          </div>
+        </details>
+
+
 
         {/* Serialized publishing */}
         {bookId && book?.user_id && (

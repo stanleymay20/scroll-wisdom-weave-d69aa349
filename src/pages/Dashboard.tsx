@@ -337,6 +337,31 @@ export default function Dashboard() {
 
                   {/* Quick Actions */}
                   <div className="space-y-6">
+                    {/* Primary CTA — marketplace-first publishing */}
+                    <Card className="bg-gradient-to-br from-primary/10 via-card to-card border-primary/30">
+                      <CardContent className="p-5">
+                        <div className="flex items-center gap-2 text-xs font-medium text-primary uppercase tracking-wide">
+                          <Sparkles className="h-3.5 w-3.5" /> Sell your book
+                        </div>
+                        <h3 className="font-semibold text-foreground mt-2 text-lg leading-tight">
+                          Publish on ScrollLibrary
+                        </h3>
+                        <p className="text-sm text-muted-foreground mt-1">
+                          Set a price, hit publish. Checkout, delivery, and payouts handled for you — no Amazon, no OAuth.
+                        </p>
+                        <Button variant="hero" className="w-full mt-4" onClick={() => navigate("/sell")}>
+                          Publish on ScrollLibrary
+                        </Button>
+                        <button
+                          type="button"
+                          onClick={() => navigate("/sell")}
+                          className="w-full text-xs text-muted-foreground hover:text-foreground mt-2 underline-offset-2 hover:underline"
+                        >
+                          Get paid in minutes →
+                        </button>
+                      </CardContent>
+                    </Card>
+
                     <Card className="bg-gradient-card border-border/50">
                       <CardHeader>
                         <CardTitle className="text-lg">Quick Actions</CardTitle>
@@ -360,6 +385,7 @@ export default function Dashboard() {
                         </Button>
                       </CardContent>
                     </Card>
+
 
                     <Card className="bg-gradient-card border-border/50">
                       <CardContent className="p-6">
