@@ -4572,6 +4572,10 @@ export type Database = {
         Args: { _collection_id: string; _user_id: string }
         Returns: boolean
       }
+      compute_book_elite_readiness: {
+        Args: { _book_id: string }
+        Returns: Json
+      }
       compute_discovery_scores: {
         Args: { _limit?: number; _window_days?: number }
         Returns: {
@@ -4594,6 +4598,7 @@ export type Database = {
         }[]
       }
       get_admin_user_metrics: { Args: never; Returns: Json }
+      get_book_elite_readiness: { Args: { _book_id: string }; Returns: Json }
       get_creator_audience_summary: {
         Args: { _user_id: string; _window_days?: number }
         Returns: Json
@@ -4629,6 +4634,19 @@ export type Database = {
           rating_count: number
           readers: number
           views: number
+        }[]
+      }
+      get_marketplace_elite_readiness: {
+        Args: { _limit?: number; _offset?: number; _tier?: string }
+        Returns: {
+          author_user_id: string
+          book_id: string
+          composite: number
+          dimensions: Json
+          hard_blocker_count: number
+          listing_slug: string
+          tier: string
+          title: string
         }[]
       }
       get_my_entitlements: { Args: never; Returns: Json }
