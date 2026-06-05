@@ -111,10 +111,11 @@ export function PlatformConnections() {
   return (
     <Card className="p-6">
       <h2 className="text-lg font-semibold flex items-center gap-2">
-        <Link2 className="w-5 h-5" /> Platform connections
+        <Link2 className="w-5 h-5" /> Publish Everywhere <span className="text-xs font-normal text-muted-foreground">(Advanced)</span>
       </h2>
       <p className="text-sm text-muted-foreground mt-1">
-        Connect external publishing platforms to publish directly from ScrollLibrary.
+        Most authors don't need this. ScrollLibrary handles checkout, payouts, and delivery natively.
+        Connect Gumroad or Shopify only if you want to mirror your book to an external store you already run.
       </p>
 
       {loading ? (
