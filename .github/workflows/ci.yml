@@ -11,5 +11,10 @@ jobs:
         with:
           node-version: 22
           cache: npm
-      - run: npm install --legacy-peer-deps
-      - run: npm run ci
+      - name: Show dependency manifest versions
+        run: |
+          node -e "const p=require('./package.json'); console.log('@lovable.dev/cloud-auth-js=', p.dependencies['@lovable.dev/cloud-auth-js']); console.log('@radix-ui/react-visually-hidden=', p.dependencies['@radix-ui/react-visually-hidden']); console.log('workbox-window=', p.dependencies['workbox-window']);"
+      - name: Install dependencies
+        run: npm install --legacy-peer-deps
+      - name: Run quality gates
+        run: npm run ci
