@@ -39,11 +39,10 @@ export function SocialProofBadges({ listingId, variant = "row", show = DEFAULTS,
     .map((key) => {
       const value = data[key];
       if (!value || value <= 0) return null;
-      const label = LABELS[key];
       const Icon = ICONS[key];
-      return { key, value, label: label(value), Icon };
+      return { key, value, Icon };
     })
-    .filter((x): x is { key: string; value: number; label: string; Icon: typeof BookOpen } => x !== null);
+    .filter((x): x is { key: typeof DEFAULTS[number]; value: number; Icon: typeof BookOpen } => x !== null);
 
   if (items.length === 0) return null;
 
