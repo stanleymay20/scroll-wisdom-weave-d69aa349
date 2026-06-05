@@ -11,6 +11,7 @@ import { encryptToken } from "../_shared/crypto-tokens.ts";
 import { logPublishEvent } from "../_shared/publishing-audit.ts";
 import { fetchWithRetry } from "../_shared/upstream-retry.ts";
 import { sanitiseError } from "../_shared/publish-validation.ts";
+import { safeReturnUrl } from "../_shared/oauth-return-url.ts";
 
 function redirect(to: string): Response {
   return new Response(null, { status: 302, headers: { Location: to } });
@@ -41,16 +42,39 @@ Deno.serve(async (req) => {
   // Look up state -> user/return_url (may be null if state is bogus)
   let userId: string | null = null;
   let returnUrl: string | null = null;
+  let stateFound = false;
+  let stateExpired = false;
   if (state) {
     const { data: st } = await admin.from("oauth_states")
       .select("user_id, return_url, expires_at")
       .eq("state", state).maybeSingle();
-    if (st && new Date(st.expires_at).getTime() > Date.now()) {
-      userId = st.user_id;
-      returnUrl = st.return_url;
+    if (st) {
+      stateFound = true;
+      if (new Date(st.expires_at).getTime() > Date.now()) {
+        userId = st.user_id;
+        // Defence-in-depth: re-validate the stored return_url against the
+        // app-origin allow list. oauth_states is service-role only, but a
+        // pre-validation-fix row could still be in flight, and free
+        // checks are free.
+        returnUrl = safeReturnUrl(st.return_url);
+      } else {
+        stateExpired = true;
+      }
     }
     // Single-use: delete regardless
     await admin.from("oauth_states").delete().eq("state", state);
+  }
+
+  // Forensic logging: a callback hit with a state we never issued (or with
+  // no state at all) is interesting — it's an attacker probing the OAuth
+  // surface. We log it without exposing the state value itself.
+  if (state && !stateFound) {
+    console.warn("gumroad-oauth-callback: unknown state", {
+      state_prefix: state.slice(0, 6), ua: req.headers.get("user-agent")?.slice(0, 80) ?? null,
+    });
+  }
+  if (stateExpired) {
+    console.warn("gumroad-oauth-callback: expired state", { state_prefix: state!.slice(0, 6) });
   }
 
   // Best-effort audit logging for failed callbacks. We don't have a userId for

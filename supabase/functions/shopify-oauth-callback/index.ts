@@ -9,6 +9,7 @@ import { encryptToken } from "../_shared/crypto-tokens.ts";
 import { logPublishEvent } from "../_shared/publishing-audit.ts";
 import { fetchWithRetry } from "../_shared/upstream-retry.ts";
 import { sanitiseError } from "../_shared/publish-validation.ts";
+import { safeReturnUrl } from "../_shared/oauth-return-url.ts";
 
 function redirect(to: string): Response {
   return new Response(null, { status: 302, headers: { Location: to } });
@@ -60,23 +61,51 @@ Deno.serve(async (req) => {
   let userId: string | null = null;
   let returnUrl: string | null = null;
   let expectedShop: string | null = null;
+  let stateFound = false;
+  let stateExpired = false;
   if (state) {
     const { data: st } = await admin.from("oauth_states")
-      .select("user_id, return_url, expires_at")
+      .select("user_id, return_url, expires_at, metadata")
       .eq("state", state).maybeSingle();
-    if (st && new Date(st.expires_at).getTime() > Date.now()) {
-      userId = st.user_id;
-      // return_url encoded as `<url>|<shop>`
-      const raw = (st.return_url ?? "") as string;
-      const idx = raw.lastIndexOf("|");
-      if (idx >= 0) {
-        returnUrl = raw.slice(0, idx) || null;
-        expectedShop = raw.slice(idx + 1) || null;
+    if (st) {
+      stateFound = true;
+      if (new Date(st.expires_at).getTime() > Date.now()) {
+        userId = st.user_id;
+        // Preferred path: shop_domain lives in oauth_states.metadata.shop
+        // (migrated). Legacy fallback: states created before the migration
+        // packed "<url>|<shop>" into return_url. Read both shapes for the
+        // 15-minute window during which old states might still be in flight.
+        const metaShop = (st.metadata && typeof (st.metadata as any).shop === "string")
+          ? (st.metadata as any).shop as string
+          : null;
+        if (metaShop) {
+          expectedShop = metaShop;
+          // re-validate the stored return_url defensively
+          returnUrl = safeReturnUrl(st.return_url);
+        } else {
+          const raw = (st.return_url ?? "") as string;
+          const idx = raw.lastIndexOf("|");
+          if (idx >= 0) {
+            returnUrl = safeReturnUrl(raw.slice(0, idx));
+            expectedShop = raw.slice(idx + 1) || null;
+          } else {
+            returnUrl = safeReturnUrl(raw);
+          }
+        }
       } else {
-        returnUrl = raw || null;
+        stateExpired = true;
       }
     }
     await admin.from("oauth_states").delete().eq("state", state);
+  }
+
+  if (state && !stateFound) {
+    console.warn("shopify-oauth-callback: unknown state", {
+      state_prefix: state.slice(0, 6), shop, ua: req.headers.get("user-agent")?.slice(0, 80) ?? null,
+    });
+  }
+  if (stateExpired) {
+    console.warn("shopify-oauth-callback: expired state", { state_prefix: state!.slice(0, 6), shop });
   }
 
   const logFailure = async (reason: string, sev: "warning" | "error" = "warning") => {

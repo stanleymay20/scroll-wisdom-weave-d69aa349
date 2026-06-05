@@ -1,6 +1,7 @@
 // connect-gumroad — generates the OAuth authorization URL and stores a CSRF state.
 // Caller must be authenticated.
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { safeReturnUrl } from "../_shared/oauth-return-url.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
@@ -49,12 +50,15 @@ Deno.serve(async (req) => {
     }
 
     const body = await req.json().catch(() => ({}));
-    const returnUrl = typeof body?.return_url === "string" ? body.return_url.slice(0, 500) : null;
+    // Same-origin allow-listing closes the open-redirect primitive: an
+    // unvalidated return_url could be abused to phish through our domain.
+    const returnUrl = safeReturnUrl(body?.return_url);
 
     const admin = createClient(url, svc);
     const state = randomState();
     const { error: insErr } = await admin.from("oauth_states").insert({
       state, user_id: caller, platform: "gumroad", return_url: returnUrl,
+      metadata: {},
     });
     if (insErr) throw insErr;
 
