@@ -13,6 +13,7 @@ import { storefrontApi, type StoreListing } from "@/lib/storefrontApi";
 import { DiscoveryRail } from "@/components/storefront/DiscoveryRail";
 import { ShareDialog } from "@/components/books/ShareDialog";
 import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
+import { SocialProofBadges } from "@/components/storefront/SocialProofBadges";
 
 // Local view type retains existing shape used by the page below.
 interface Data {
@@ -206,6 +207,7 @@ export default function PublicBookPage() {
               </p>
             )}
             <div className="mt-6 text-2xl font-semibold">{price}</div>
+            <SocialProofBadges listingId={data.id} variant="row" className="mt-3" />
             <div className="mt-4 flex flex-wrap gap-3">
               <Button onClick={() => { trackStorefrontEvent(data.id, "cta_click", { cta: "read_sample" }); navigate(`/store/${data.slug}/read`); }}>
                 Read sample

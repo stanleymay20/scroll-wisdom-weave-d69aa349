@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StoreListing } from "@/lib/storefrontApi";
 import { logRecommendationBatch, logRecommendationEvent, type RecSource } from "@/lib/recommendationFeedback";
+import { SocialProofBadges } from "@/components/storefront/SocialProofBadges";
 
 interface Props {
   title: string;
@@ -81,6 +82,12 @@ export function DiscoveryRail({ title, items, loading, emptyHint, source, onItem
                       {l.price_cents > 0 ? `$${(l.price_cents / 100).toFixed(2)}` : "Free"}
                     </span>
                   </div>
+                  <SocialProofBadges
+                    listingId={l.id}
+                    variant="compact"
+                    show={["readers", "followers"]}
+                    className="mt-1.5"
+                  />
                 </div>
               </Card>
             </Link>
