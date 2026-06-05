@@ -82,6 +82,12 @@ export function DiscoveryRail({ title, items, loading, emptyHint, source, onItem
                       {l.price_cents > 0 ? `$${(l.price_cents / 100).toFixed(2)}` : "Free"}
                     </span>
                   </div>
+                  <SocialProofBadges
+                    listingId={l.id}
+                    variant="compact"
+                    show={["readers", "followers"]}
+                    className="mt-1.5"
+                  />
                 </div>
               </Card>
             </Link>
