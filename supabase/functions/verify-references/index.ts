@@ -139,7 +139,10 @@ async function llmEval(claim: any, metas: any[], apiKey: string) {
     const p = JSON.parse(jm[0]);
     const v = ['strong','partial','weak','contradiction'].includes(p.supportVerdict) ? p.supportVerdict : 'weak';
     return { id: claim.id, v, c: Math.min(100, Math.max(0, Number(p.confidence) || 50)), r: String(p.reason || '').slice(0, 150) };
-  } catch { return { id: claim.id, v: 'weak', c: 0, r: 'Timeout' }; }
+  } catch (e) {
+    if (e instanceof Error && e.message === "AI_CREDITS_EXHAUSTED") throw e;
+    return { id: claim.id, v: 'weak', c: 0, r: 'Timeout' };
+  }
 }
 
 // ===========================================
