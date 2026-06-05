@@ -536,6 +536,17 @@ export default function BookPublishSettings() {
           </ul>
         </Card>
 
+        {/* Advanced distribution — hidden by default. Most authors stop above. */}
+        <details className="mt-6 group rounded-lg border border-border/60 bg-card/40">
+          <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2 text-sm font-medium hover:bg-muted/30 rounded-lg">
+            <span className="flex items-center gap-2">
+              <ExternalLink className="w-4 h-4 text-muted-foreground" />
+              Publish Everywhere <span className="text-xs font-normal text-muted-foreground">(Advanced — KDP, Gumroad, Shopify, Substack, Patreon, Etsy)</span>
+            </span>
+            <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">▾</span>
+          </summary>
+          <div className="px-2 sm:px-3 pb-3 pt-1 space-y-6">
+
         {/* Bundles */}
         <Card className="mt-6 p-4 sm:p-6">
           <h2 className="text-lg font-semibold flex items-center gap-2"><Package className="w-5 h-5" /> Publish bundles</h2>
