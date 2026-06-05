@@ -494,6 +494,11 @@ function StepWelcome({ onStart, entitlementTier }: { onStart: () => void; entitl
         <Button size="lg" className="w-full mt-6 min-h-12" onClick={onStart}>
           Start Selling <ArrowRight className="h-4 w-4 ml-1" />
         </Button>
+        <div className="mt-3 flex justify-center">
+          <a href="/sell/analytics" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
+            View marketplace analytics →
+          </a>
+        </div>
         {entitlementTier !== "free" && (
           <p className="text-xs text-center text-muted-foreground mt-3">
             <ShieldCheck className="inline h-3 w-3 mr-1" />
