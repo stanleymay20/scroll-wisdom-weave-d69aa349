@@ -4565,6 +4565,16 @@ export type Database = {
         Returns: Json
       }
       get_effective_user_tier: { Args: { _user_id: string }; Returns: string }
+      get_listing_social_proof: {
+        Args: { _listing_ids: string[] }
+        Returns: {
+          downloads: number
+          followers: number
+          listing_id: string
+          readers: number
+          views: number
+        }[]
+      }
       get_my_entitlements: { Args: never; Returns: Json }
       get_my_platform_connections: {
         Args: never
