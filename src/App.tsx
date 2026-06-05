@@ -200,6 +200,7 @@ const App = () => (
                   <Route path="/moderation" element={<AdminRoute><ModerationDashboard /></AdminRoute>} />
                   <Route path="/pricing" element={<Pricing />} />
                   <Route path="/sell" element={withRecovery('Sell', <ProtectedRoute><Sell /></ProtectedRoute>)} />
+                  <Route path="/sell/analytics" element={withRecovery('SellAnalytics', <ProtectedRoute><SellAnalytics /></ProtectedRoute>)} />
                   <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
                   <Route path="/install" element={<Install />} />
                   <Route path="/pwa-test" element={<PWATest />} />
