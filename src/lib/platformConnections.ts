@@ -6,6 +6,8 @@ export type PlatformConnection = {
   platform: PlatformId | string;
   connection_status: "connected" | "expired" | "revoked" | "error";
   external_creator_name: string | null;
+  /** Shopify shops only — prefills the Reconnect input after token expiry. */
+  shop_domain: string | null;
   scopes: string[] | null;
   connected_at: string;
   last_used_at: string | null;

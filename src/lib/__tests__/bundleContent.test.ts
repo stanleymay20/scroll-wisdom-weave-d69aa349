@@ -49,6 +49,19 @@ describe("bundle filename", () => {
     expect(bundleFilename(baseCtx().book, "gumroad")).toBe("my-elite-book-gumroad-bundle.zip");
     expect(bundleFilename({ ...baseCtx().book, title: "Wild! Title??" }, "etsy")).toBe("wild-title-etsy-bundle.zip");
   });
+
+  it("supports shopify (the end-to-end fix for Sell-on-Shopify)", () => {
+    expect(bundleFilename(baseCtx().book, "shopify")).toBe("my-elite-book-shopify-bundle.zip");
+  });
+});
+
+describe("README — platform steps", () => {
+  it("emits shopify-specific upload steps", () => {
+    const r = renderReadme(baseCtx({ platform: "shopify" }), ["book.pdf", "book.epub"]);
+    expect(r).toMatch(/shopify/i);
+    expect(r).toContain("Digital Downloads"); // app needed for file delivery
+    expect(r).toContain("admin.shopify.com");
+  });
 });
 
 describe("front matter", () => {

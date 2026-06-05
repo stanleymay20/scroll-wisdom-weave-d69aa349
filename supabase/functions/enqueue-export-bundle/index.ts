@@ -40,11 +40,11 @@ import {
   type BundleContext, type BundlePlatform, type BundleExtras,
 } from "../_shared/bundle-content.ts";
 
-const EXTERNAL_BUNDLES = new Set<BundlePlatform>(["gumroad", "substack", "patreon", "etsy"]);
+const EXTERNAL_BUNDLES = new Set<BundlePlatform>(["gumroad", "shopify", "substack", "patreon", "etsy"]);
 
 const Body = z.object({
   book_id: z.string().uuid(),
-  bundle_type: z.enum(["kdp", "gumroad", "substack", "patreon", "etsy"]),
+  bundle_type: z.enum(["kdp", "gumroad", "shopify", "substack", "patreon", "etsy"]),
   listing_id: z.string().uuid().optional(),
   options: z.record(z.any()).optional(),
 });
@@ -52,9 +52,9 @@ const Body = z.object({
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 
 // PDF-emitting platforms reuse export-book; markdown-only platforms skip it.
-const PDF_PLATFORMS: BundlePlatform[] = ["kdp", "gumroad", "etsy"];
+const PDF_PLATFORMS: BundlePlatform[] = ["kdp", "gumroad", "shopify", "etsy"];
 // EPUB ships with anything sold as a finished digital product.
-const EPUB_PLATFORMS: BundlePlatform[] = ["gumroad", "etsy"];
+const EPUB_PLATFORMS: BundlePlatform[] = ["gumroad", "shopify", "etsy"];
 
 async function runJob(
   jobId: string, userId: string, bookId: string,

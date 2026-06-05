@@ -5,7 +5,7 @@
 // tests pin the exact wording shipped to creators' Gumroad/Substack/etc.
 // listings and catches regressions before they hit production buyers.
 
-export type BundlePlatform = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
+export type BundlePlatform = "kdp" | "gumroad" | "shopify" | "substack" | "patreon" | "etsy";
 
 export interface BundleBook {
   id: string;
@@ -76,6 +76,7 @@ export interface BundleContext {
 export const PLATFORM_LABEL: Record<BundlePlatform, string> = {
   kdp: "Amazon KDP",
   gumroad: "Gumroad",
+  shopify: "Shopify",
   substack: "Substack",
   patreon: "Patreon",
   etsy: "Etsy",
@@ -84,6 +85,7 @@ export const PLATFORM_LABEL: Record<BundlePlatform, string> = {
 export const PLATFORM_UPLOAD_URL: Record<BundlePlatform, string> = {
   kdp: "https://kdp.amazon.com",
   gumroad: "https://app.gumroad.com/products/new",
+  shopify: "https://admin.shopify.com/store",
   substack: "https://substack.com/dashboard",
   patreon: "https://www.patreon.com/posts/new",
   etsy: "https://www.etsy.com/your/shops/me/tools/listings",
@@ -613,6 +615,13 @@ function platformSteps(platform: BundlePlatform): string[] {
       `3. Upload \`book.pdf\` and \`book.epub\` as the downloadable files.`,
       `4. Add the \`keywords.txt\` entries as tags.`,
       `5. Publish.`,
+    ];
+    case "shopify": return [
+      `1. Sign in to your Shopify admin — your product was auto-created if you used **Publish to Shopify** in ScrollLibrary, otherwise create a new Product.`,
+      `2. Paste \`description.md\` into the body field, set the price, upload \`assets/cover.jpg\` (or \`.png\`) as the primary image and \`assets/social-card.*\` as the secondary gallery image.`,
+      `3. Install the Shopify Digital Downloads app (free, by Shopify) and attach \`book.pdf\` and \`book.epub\` as the download files.`,
+      `4. Add the \`keywords.txt\` entries to product tags.`,
+      `5. Save and make the product Active.`,
     ];
     case "substack": return [
       `1. Open your Substack dashboard and import \`chapters/*.md\` one post per week (see \`publishing-schedule.txt\`).`,
