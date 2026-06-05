@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import type { StoreListing } from "@/lib/storefrontApi";
 import { logRecommendationBatch, logRecommendationEvent, type RecSource } from "@/lib/recommendationFeedback";
+import { SocialProofBadges } from "@/components/storefront/SocialProofBadges";
 
 interface Props {
   title: string;
