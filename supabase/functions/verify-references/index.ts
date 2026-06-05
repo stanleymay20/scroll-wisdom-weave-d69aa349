@@ -130,6 +130,8 @@ async function llmEval(claim: any, metas: any[], apiKey: string) {
         { role: "user", content: `CLAIM (${claim.type}): "${claim.text}"\nSOURCES:\n${citDesc || "None"}\nReturn JSON only.` }
       ], temperature: 0.1, max_tokens: 150 }), signal: AbortSignal.timeout(8000),
     });
+    // Credit exhaustion: throw to terminate the outer evaluation loop and surface 402 to the caller.
+    if (r.status === 402) throw new Error("AI_CREDITS_EXHAUSTED");
     if (!r.ok) return { id: claim.id, v: 'weak', c: 0, r: 'LLM unavailable' };
     const content = (await r.json()).choices?.[0]?.message?.content || '';
     const jm = content.match(/\{[\s\S]*?\}/);
@@ -137,7 +139,10 @@ async function llmEval(claim: any, metas: any[], apiKey: string) {
     const p = JSON.parse(jm[0]);
     const v = ['strong','partial','weak','contradiction'].includes(p.supportVerdict) ? p.supportVerdict : 'weak';
     return { id: claim.id, v, c: Math.min(100, Math.max(0, Number(p.confidence) || 50)), r: String(p.reason || '').slice(0, 150) };
-  } catch { return { id: claim.id, v: 'weak', c: 0, r: 'Timeout' }; }
+  } catch (e) {
+    if (e instanceof Error && e.message === "AI_CREDITS_EXHAUSTED") throw e;
+    return { id: claim.id, v: 'weak', c: 0, r: 'Timeout' };
+  }
 }
 
 // ===========================================
@@ -231,6 +236,7 @@ async function evaluateCoherence(pairs: Array<[any, any]>, apiKey: string) {
             { role: "user", content: `CLAIM A: "${a.text}"\nCLAIM B: "${b.text}"\nAre these internally contradictory? Return JSON only.` }
           ], temperature: 0.1, max_tokens: 150 }), signal: AbortSignal.timeout(8000),
         });
+        if (r.status === 402) throw new Error("AI_CREDITS_EXHAUSTED");
         if (!r.ok) return null;
         const content = (await r.json()).choices?.[0]?.message?.content || '';
         const jm = content.match(/\{[\s\S]*?\}/);
@@ -240,7 +246,10 @@ async function evaluateCoherence(pairs: Array<[any, any]>, apiKey: string) {
           return { claimA: { id: a.id, text: a.text.slice(0, 200) }, claimB: { id: b.id, text: b.text.slice(0, 200) }, conflictType: p.conflictType || 'direct_contradiction', severity: p.severity || 'moderate', explanation: String(p.explanation || '').slice(0, 200) };
         }
         return null;
-      } catch { return null; }
+      } catch (e) {
+        if (e instanceof Error && e.message === "AI_CREDITS_EXHAUSTED") throw e;
+        return null;
+      }
     }));
     conflicts.push(...batchResults.filter(Boolean));
     if (i + 3 < pairs.length) await new Promise(r => setTimeout(r, 300));

@@ -4825,7 +4825,15 @@ BEGIN:`;
       const errText = await response.text();
       lastErr = errText.slice(0, 300);
       console.error(`[GENERATE-CHAPTER] AI gateway error (attempt ${attempt + 1}, model ${activeModel}):`, response.status, lastErr);
-      
+
+      // Credit exhaustion — terminate immediately, never retry. Surface 402 to client.
+      if (response.status === 402) {
+        return new Response(
+          JSON.stringify({ error: "Payment required, please add AI credits to continue.", code: "ai_credits_exhausted" }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
+
       if (response.status === 429) {
         // Rate limited — try falling back to a cheaper/faster model
         currentModelIdx++;

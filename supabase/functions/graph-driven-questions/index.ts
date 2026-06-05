@@ -386,6 +386,12 @@ RULES:
     if (!genResp.ok) {
       const errText = await genResp.text();
       log("AI generation failed", { status: genResp.status });
+      if (genResp.status === 402) {
+        return new Response(
+          JSON.stringify({ error: "Payment required, please add AI credits to continue.", code: "ai_credits_exhausted" }),
+          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+        );
+      }
       return new Response(JSON.stringify({ error: "AI generation failed", detail: errText }), {
         status: genResp.status === 429 ? 429 : 500,
         headers: { ...corsHeaders, "Content-Type": "application/json" },

@@ -35,6 +35,10 @@ ${text.slice(0, 4000)}`;
         messages: [{ role: "user", content: prompt }],
       }),
     });
+    if (r.status === 402) {
+      log("entity extract aborted — AI credits exhausted");
+      throw new Error("AI_CREDITS_EXHAUSTED");
+    }
     if (!r.ok) {
       log("entity extract failed", { status: r.status });
       return [];
