@@ -14,6 +14,7 @@ import { DiscoveryRail } from "@/components/storefront/DiscoveryRail";
 import { ShareDialog } from "@/components/books/ShareDialog";
 import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
 import { SocialProofBadges } from "@/components/storefront/SocialProofBadges";
+import { ReviewsSection } from "@/components/storefront/ReviewsSection";
 
 // Local view type retains existing shape used by the page below.
 interface Data {
@@ -228,8 +229,11 @@ export default function PublicBookPage() {
               <p><span className="font-medium text-foreground">License:</span> {data.license_type}</p>
               <p><span className="font-medium text-foreground">Sample:</span> First {data.sample_chapters} chapter{data.sample_chapters === 1 ? "" : "s"}</p>
             </div>
+            {data.book && <ReviewsSection bookId={data.book.id} listingId={data.id} />}
           </div>
         </div>
+
+
 
         <div className="mt-16">
           {author && (
