@@ -130,6 +130,8 @@ async function llmEval(claim: any, metas: any[], apiKey: string) {
         { role: "user", content: `CLAIM (${claim.type}): "${claim.text}"\nSOURCES:\n${citDesc || "None"}\nReturn JSON only.` }
       ], temperature: 0.1, max_tokens: 150 }), signal: AbortSignal.timeout(8000),
     });
+    // Credit exhaustion: throw to terminate the outer evaluation loop and surface 402 to the caller.
+    if (r.status === 402) throw new Error("AI_CREDITS_EXHAUSTED");
     if (!r.ok) return { id: claim.id, v: 'weak', c: 0, r: 'LLM unavailable' };
     const content = (await r.json()).choices?.[0]?.message?.content || '';
     const jm = content.match(/\{[\s\S]*?\}/);
@@ -231,6 +233,7 @@ async function evaluateCoherence(pairs: Array<[any, any]>, apiKey: string) {
             { role: "user", content: `CLAIM A: "${a.text}"\nCLAIM B: "${b.text}"\nAre these internally contradictory? Return JSON only.` }
           ], temperature: 0.1, max_tokens: 150 }), signal: AbortSignal.timeout(8000),
         });
+        if (r.status === 402) throw new Error("AI_CREDITS_EXHAUSTED");
         if (!r.ok) return null;
         const content = (await r.json()).choices?.[0]?.message?.content || '';
         const jm = content.match(/\{[\s\S]*?\}/);
