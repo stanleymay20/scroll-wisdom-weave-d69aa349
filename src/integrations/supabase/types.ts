@@ -1919,16 +1919,20 @@ export type Database = {
       creator_platform_connections: {
         Row: {
           connection_status: string
+          consecutive_failures: number
           created_at: string
+          disconnected_at: string | null
           encrypted_access_token: string
           encrypted_refresh_token: string | null
           external_creator_id: string | null
           external_creator_name: string | null
           id: string
           last_error: string | null
+          last_success_at: string | null
           last_used_at: string | null
           metadata: Json
           platform: string
+          revoked_at: string | null
           scopes: string[]
           shop_domain: string | null
           token_expires_at: string | null
@@ -1937,16 +1941,20 @@ export type Database = {
         }
         Insert: {
           connection_status?: string
+          consecutive_failures?: number
           created_at?: string
+          disconnected_at?: string | null
           encrypted_access_token: string
           encrypted_refresh_token?: string | null
           external_creator_id?: string | null
           external_creator_name?: string | null
           id?: string
           last_error?: string | null
+          last_success_at?: string | null
           last_used_at?: string | null
           metadata?: Json
           platform: string
+          revoked_at?: string | null
           scopes?: string[]
           shop_domain?: string | null
           token_expires_at?: string | null
@@ -1955,16 +1963,20 @@ export type Database = {
         }
         Update: {
           connection_status?: string
+          consecutive_failures?: number
           created_at?: string
+          disconnected_at?: string | null
           encrypted_access_token?: string
           encrypted_refresh_token?: string | null
           external_creator_id?: string | null
           external_creator_name?: string | null
           id?: string
           last_error?: string | null
+          last_success_at?: string | null
           last_used_at?: string | null
           metadata?: Json
           platform?: string
+          revoked_at?: string | null
           scopes?: string[]
           shop_domain?: string | null
           token_expires_at?: string | null
@@ -2673,6 +2685,7 @@ export type Database = {
         Row: {
           created_at: string
           expires_at: string
+          metadata: Json
           platform: string
           return_url: string | null
           state: string
@@ -2681,6 +2694,7 @@ export type Database = {
         Insert: {
           created_at?: string
           expires_at?: string
+          metadata?: Json
           platform: string
           return_url?: string | null
           state: string
@@ -2689,6 +2703,7 @@ export type Database = {
         Update: {
           created_at?: string
           expires_at?: string
+          metadata?: Json
           platform?: string
           return_url?: string | null
           state?: string
@@ -4561,6 +4576,7 @@ export type Database = {
           last_used_at: string
           platform: string
           scopes: string[]
+          shop_domain: string
         }[]
       }
       get_recommendation_analytics: {
