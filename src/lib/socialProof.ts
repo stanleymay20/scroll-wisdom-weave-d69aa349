@@ -54,15 +54,21 @@ async function flush() {
       downloads: number | string;
       views: number | string;
       followers: number | string;
+      rating_avg: number | string | null;
+      rating_count: number | string | null;
     }>;
     const now = Date.now();
     for (const r of rows) {
+      const ratingAvgRaw = r.rating_avg == null ? null : Number(r.rating_avg);
+      const ratingCount = Number(r.rating_count ?? 0);
       const entry: SocialProof = {
         listing_id: r.listing_id,
         readers: Number(r.readers ?? 0),
         downloads: Number(r.downloads ?? 0),
         views: Number(r.views ?? 0),
         followers: Number(r.followers ?? 0),
+        rating_avg: ratingAvgRaw != null && Number.isFinite(ratingAvgRaw) ? ratingAvgRaw : undefined,
+        rating_count: ratingCount,
       };
       map.set(entry.listing_id, entry);
       cache.set(entry.listing_id, { value: entry, expires: now + CACHE_TTL_MS });
