@@ -53,7 +53,7 @@ export function SocialProofBadges({ listingId, variant = "row", show = DEFAULTS,
           <span key={it.key} className="inline-flex items-center gap-1">
             {i > 0 && <span aria-hidden className="text-muted-foreground/50">·</span>}
             <it.Icon className="h-3 w-3" aria-hidden />
-            <span>{it.label}</span>
+            <span>{LABELS[it.key](it.value)}</span>
           </span>
         ))}
       </div>
