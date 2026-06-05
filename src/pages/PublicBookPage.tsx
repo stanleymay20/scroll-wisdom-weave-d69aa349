@@ -207,6 +207,7 @@ export default function PublicBookPage() {
               </p>
             )}
             <div className="mt-6 text-2xl font-semibold">{price}</div>
+            <SocialProofBadges listingId={data.id} variant="row" className="mt-3" />
             <div className="mt-4 flex flex-wrap gap-3">
               <Button onClick={() => { trackStorefrontEvent(data.id, "cta_click", { cta: "read_sample" }); navigate(`/store/${data.slug}/read`); }}>
                 Read sample
