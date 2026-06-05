@@ -8,7 +8,10 @@ function b64encode(bytes: Uint8Array): string {
   return btoa(s);
 }
 function b64decode(s: string): Uint8Array {
-  const bin = atob(s);
+  // Accept either standard base64 or base64url; tolerate missing padding and whitespace.
+  let t = s.replace(/\s+/g, "").replace(/-/g, "+").replace(/_/g, "/");
+  while (t.length % 4 !== 0) t += "=";
+  const bin = atob(t);
   const out = new Uint8Array(bin.length);
   for (let i = 0; i < bin.length; i++) out[i] = bin.charCodeAt(i);
   return out;
@@ -24,7 +27,9 @@ async function loadKey(): Promise<CryptoKey> {
     throw new Error("PLATFORM_TOKEN_ENCRYPTION_KEY is not valid base64");
   }
   if (keyBytes.length !== 32) {
-    throw new Error("PLATFORM_TOKEN_ENCRYPTION_KEY must decode to 32 bytes");
+    throw new Error(
+      `PLATFORM_TOKEN_ENCRYPTION_KEY must decode to 32 bytes (got ${keyBytes.length})`,
+    );
   }
   return crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
