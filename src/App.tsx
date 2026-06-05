@@ -97,6 +97,7 @@ const PurchasedLibrary = lazy(() => import("./pages/PurchasedLibrary"));
 const CreatorEarnings = lazy(() => import("./pages/CreatorEarnings"));
 const PayoutProfileEditor = lazy(() => import("./pages/PayoutProfileEditor"));
 const Sell = lazy(() => import("./pages/Sell"));
+const SellAnalytics = lazy(() => import("./pages/SellAnalytics"));
 const CollectionPage = lazy(() => import("./pages/CollectionPage"));
 const CreatorIntelligence = lazy(() => import("./pages/CreatorIntelligence"));
 const CreatorBusinessHub = lazy(() => import("./pages/CreatorBusinessHub"));
