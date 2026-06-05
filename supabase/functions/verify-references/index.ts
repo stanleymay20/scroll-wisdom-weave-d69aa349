@@ -246,7 +246,10 @@ async function evaluateCoherence(pairs: Array<[any, any]>, apiKey: string) {
           return { claimA: { id: a.id, text: a.text.slice(0, 200) }, claimB: { id: b.id, text: b.text.slice(0, 200) }, conflictType: p.conflictType || 'direct_contradiction', severity: p.severity || 'moderate', explanation: String(p.explanation || '').slice(0, 200) };
         }
         return null;
-      } catch { return null; }
+      } catch (e) {
+        if (e instanceof Error && e.message === "AI_CREDITS_EXHAUSTED") throw e;
+        return null;
+      }
     }));
     conflicts.push(...batchResults.filter(Boolean));
     if (i + 3 < pairs.length) await new Promise(r => setTimeout(r, 300));
