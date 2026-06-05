@@ -19,6 +19,7 @@ import { publishExternallyOneClick, waitForBundle } from "@/lib/oneClickPublish"
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { Lock } from "lucide-react";
 import { ExportQualityPanel } from "@/components/publish/ExportQualityPanel";
+import { EliteReadinessPanel } from "@/components/publish/EliteReadinessPanel";
 import type { ExportQualityReport } from "@/lib/exportQuality";
 
 type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
@@ -306,6 +307,8 @@ export default function BookPublishSettings() {
           ← Back to book
         </Link>
         <h1 className="text-2xl sm:text-3xl font-bold mt-2 break-words">Publish: {book?.title}</h1>
+
+        {bookId && <div className="mt-6"><EliteReadinessPanel bookId={bookId} /></div>}
 
         {/* Three-step primary path: Price → Cover → Publish on ScrollLibrary */}
         <Card className="mt-6 p-4 sm:p-6 bg-gradient-to-br from-primary/5 via-card to-card border-primary/20">
