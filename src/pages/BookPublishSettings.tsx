@@ -689,6 +689,11 @@ export default function BookPublishSettings() {
           </div>
         </Card>
 
+          </div>
+        </details>
+
+
+
         {/* Serialized publishing */}
         {bookId && book?.user_id && (
           <div className="mt-6">
