@@ -741,6 +741,60 @@ export type Database = {
           },
         ]
       }
+      book_reviews: {
+        Row: {
+          body: string | null
+          book_id: string
+          created_at: string
+          edited_at: string | null
+          helpful_count: number
+          id: string
+          listing_id: string | null
+          rating: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          body?: string | null
+          book_id: string
+          created_at?: string
+          edited_at?: string | null
+          helpful_count?: number
+          id?: string
+          listing_id?: string | null
+          rating: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          body?: string | null
+          book_id?: string
+          created_at?: string
+          edited_at?: string | null
+          helpful_count?: number
+          id?: string
+          listing_id?: string | null
+          rating?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_reviews_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "book_reviews_listing_id_fkey"
+            columns: ["listing_id"]
+            isOneToOne: false
+            referencedRelation: "public_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       book_series: {
         Row: {
           cover_image_url: string | null
@@ -4571,6 +4625,8 @@ export type Database = {
           downloads: number
           followers: number
           listing_id: string
+          rating_avg: number
+          rating_count: number
           readers: number
           views: number
         }[]
@@ -4693,6 +4749,10 @@ export type Database = {
           _user_id: string
         }
         Returns: Json
+      }
+      user_can_review_book: {
+        Args: { _book_id: string; _user_id: string }
+        Returns: boolean
       }
       user_owns_book_purchase: {
         Args: { _book_id: string; _user_id: string }
