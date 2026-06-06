@@ -240,7 +240,13 @@ Deno.serve(async (req) => {
     form.append("price", String(priceCents));
     form.append("description", description);
     // Gumroad v2 expects tags as a repeated array param (tags[]), not a CSV string.
-    for (const tag of tags.slice(0, 10)) form.append("tags[]", String(tag));
+    // Gumroad also rejects tags longer than 20 characters, so trim + dedupe here.
+    const gumroadTags = Array.from(new Set(
+      tags
+        .map((t) => String(t).trim().slice(0, 20))
+        .filter((t) => t.length > 0)
+    )).slice(0, 10);
+    for (const tag of gumroadTags) form.append("tags[]", tag);
 
     const createRes = await fetchWithRetry(`${GUMROAD}/products`, { method: "POST", body: form }, {
       attempts: 3,
