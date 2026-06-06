@@ -180,7 +180,7 @@ async function runJob(
     const ctx: BundleContext = {
       platform: bundleType,
       book: {
-        id: book.id, title: book.title, subtitle: book.subtitle ?? null,
+        id: book.id, title: book.title, subtitle: (listing as any)?.subtitle ?? null,
         description: book.description ?? null,
         cover_image_url: book.cover_image_url ?? null,
         category: book.category ?? null,
