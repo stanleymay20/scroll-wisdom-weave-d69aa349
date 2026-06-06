@@ -221,6 +221,21 @@ export async function publishExternallyOneClick(
       // The edge function refused on policy — surface the specific reason.
       return { status: "unsafe", message: m.replace(/^[^:]*:\s*/, "") || `${platform} safety check failed.` };
     }
+    if (/bundle_required/i.test(m)) {
+      // Edge function couldn't resolve a signed bundle URL (older job missing
+      // bundle_path metadata, or job rotated). Re-queue a fresh bundle and
+      // surface a bundling state — the next click will publish cleanly.
+      try {
+        const jobId = await enqueueBundle(bookId, listingId, platform);
+        return {
+          status: "bundling",
+          job_id: jobId,
+          message: `Regenerating your ${platform === "gumroad" ? "Gumroad" : "Shopify"} bundle so we can embed the download link.`,
+        };
+      } catch {
+        return { status: "failed", message: "Couldn't prepare the bundle. Try again." };
+      }
+    }
     if (/not_connected/i.test(m)) return { status: "not_connected", message: `Connect ${platform === "gumroad" ? "Gumroad" : "Shopify"} first.` };
     if (/expired|revoked/i.test(m)) return { status: "not_connected", message: `${platform === "gumroad" ? "Gumroad" : "Shopify"} connection expired — reconnect.` };
     if (/entitlement|402/i.test(m)) return { status: "failed", message: "Upgrade to Creator to publish externally." };
