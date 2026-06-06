@@ -73,9 +73,15 @@ async function runJob(
     // ai_assistance_level/isbn/dedication/epigraph may not exist on the books
     // table yet — load them best-effort so the elite-bundle fields are
     // optional rather than required.
-    const { data: book } = await sc.from("books")
-      .select("id, title, subtitle, description, cover_image_url, category, book_type, user_id, ai_assistance_level, isbn, dedication, epigraph, academic_mode")
+    // Only select columns that actually exist on `books`. Optional fields
+    // (subtitle, ai_assistance_level, isbn, dedication, epigraph,
+    // academic_mode) are sourced from listing/metadata downstream or treated
+    // as null. Selecting nonexistent columns here previously caused
+    // PostgREST to return an error and the job to fail with "Book not found".
+    const { data: book, error: bookErr } = await sc.from("books")
+      .select("id, title, description, cover_image_url, category, book_type, user_id, academic_level")
       .eq("id", bookId).maybeSingle();
+    if (bookErr) throw new Error(`Book load failed: ${bookErr.message}`);
     if (!book) throw new Error("Book not found");
 
     // Pull the data the safety verifier needs from the DB. Moderation flags
