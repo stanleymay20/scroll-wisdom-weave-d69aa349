@@ -186,11 +186,14 @@ Deno.serve(async (req) => {
     });
 
     // Idempotency: if an existing live/auto row exists, return it instead of creating a duplicate.
+    // Older Gumroad rows may have been marked live before Gumroad actually enabled the product,
+    // so only short-circuit when we can also provide the creator edit URL as a safe fallback.
     const { data: existing } = await admin
       .from("external_publications")
       .select("id, external_url, external_id, status, sync_state")
       .eq("book_id", book.id).eq("platform", "gumroad").maybeSingle();
     if (existing && existing.status === "live" && existing.external_id) {
+      const existingEditUrl = `https://app.gumroad.com/products/${existing.external_id}/edit`;
       await logPublishEvent(admin, {
         user_id: caller, platform: "gumroad", event_type: "publish_completed",
         book_id: book.id, listing_id: listingId,
@@ -202,6 +205,8 @@ Deno.serve(async (req) => {
         ok: true, idempotent: true,
         external_url: existing.external_url,
         external_id: existing.external_id,
+        edit_url: existingEditUrl,
+        note: "Already created on Gumroad. If the public page is not available yet, use the edit page to finish setup and enable it.",
       }, corr);
     }
 
@@ -327,8 +332,8 @@ Deno.serve(async (req) => {
         const pub = new FormData();
         pub.append("access_token", accessToken);
         const pubRes = await fetchWithRetry(
-          `${GUMROAD}/products/${productId}/publish`,
-          { method: "POST", body: pub },
+          `${GUMROAD}/products/${encodeURIComponent(productId)}/enable`,
+          { method: "PUT", body: pub },
           { attempts: 2 },
         );
         const pubJson: any = await pubRes.json().catch(() => ({}));
