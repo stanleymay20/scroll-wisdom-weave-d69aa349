@@ -238,6 +238,68 @@ Deno.serve(async (req) => {
       throw e;
     }
 
+    // ───────────────────────────────────────────────────────────────────
+    // Option-1 "redirect flow": resolve the latest completed Gumroad bundle
+    // up-front and mint a fresh long-lived signed download URL. Gumroad's v2
+    // API has no reliable third-party file-upload endpoint, but it does
+    // accept `custom_receipt` (HTML shown on the post-purchase thank-you
+    // page + receipt email) and `url` (call-to-action URL). We embed our
+    // signed bundle URL in both so buyers get the file immediately after
+    // checkout — no manual file attach on Gumroad required.
+    // ───────────────────────────────────────────────────────────────────
+    let downloadUrl: string | null = null;
+    let bundlePath: string | null = null;
+    let bundleFilename: string | null = null;
+    let resolvedJobId: string | null = null;
+    try {
+      const { data: jobs } = explicitJobId
+        ? await admin.from("export_jobs")
+            .select("id, status, metadata, result_url")
+            .eq("id", explicitJobId).limit(1)
+        : await admin.from("export_jobs")
+            .select("id, status, metadata, result_url")
+            .eq("user_id", caller).eq("book_id", book.id)
+            .eq("bundle_type", "gumroad").eq("status", "completed")
+            .order("created_at", { ascending: false }).limit(1);
+      const job = (jobs ?? [])[0] as any;
+      if (job?.id) {
+        resolvedJobId = job.id;
+        bundlePath = job?.metadata?.bundle_path ?? null;
+        bundleFilename = job?.metadata?.bundle_filename ?? null;
+        if (bundlePath) {
+          const { data: signed } = await admin.storage
+            .from(job?.metadata?.bundle_bucket ?? "exports")
+            .createSignedUrl(bundlePath, 60 * 60 * 24 * 30, bundleFilename ? { download: bundleFilename } : undefined);
+          downloadUrl = signed?.signedUrl ?? null;
+        }
+        // Fall back to the job's existing result_url (7-day signed) so the
+        // first publish after rollout still works for older completed jobs
+        // that don't have bundle_path in metadata yet.
+        if (!downloadUrl && job?.result_url) downloadUrl = String(job.result_url);
+      }
+    } catch (_) { /* non-fatal — we'll still publish as a manual-finalize draft */ }
+
+    if (!downloadUrl) {
+      await admin.from("external_publications").upsert({
+        user_id: caller, book_id: book.id, platform: "gumroad",
+        status: "failed", sync_state: "error",
+        last_error: "bundle_required",
+      }, { onConflict: "book_id,platform" });
+      return jsonResp(409, {
+        error: "bundle_required",
+        message: "Generate the Gumroad bundle first, then retry publish.",
+      }, corr);
+    }
+
+    // Custom receipt HTML — shown to every buyer on Gumroad's post-purchase
+    // page and email. This is our primary fulfilment channel for the redirect
+    // flow. Keep it conservative HTML (Gumroad sanitises aggressively).
+    const safeTitle = title.replace(/[<>&]/g, (m) => ({ "<": "&lt;", ">": "&gt;", "&": "&amp;" }[m]!));
+    const customReceipt =
+      `<p>Thanks for purchasing <strong>${safeTitle}</strong>!</p>` +
+      `<p><a href="${downloadUrl}">Download your bundle (ZIP)</a></p>` +
+      `<p>If the link expires, please contact support and we'll re-issue it.</p>`;
+
     // Build product payload
     const form = new FormData();
     form.append("access_token", accessToken);
@@ -252,6 +314,13 @@ Deno.serve(async (req) => {
         .filter((t) => t.length > 0)
     )).slice(0, 10);
     for (const tag of gumroadTags) form.append("tags[]", tag);
+    // Redirect-flow params. Gumroad ignores unknown fields silently, so we
+    // submit a few well-known variants to maximise compatibility across
+    // product types.
+    form.append("custom_receipt", customReceipt);
+    form.append("url", downloadUrl);
+    form.append("content_url", downloadUrl);
+    form.append("redirect_url", downloadUrl);
 
     const createRes = await fetchWithRetry(`${GUMROAD}/products`, { method: "POST", body: form }, {
       attempts: 3,
