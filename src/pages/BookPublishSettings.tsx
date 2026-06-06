@@ -219,7 +219,7 @@ export default function BookPublishSettings() {
   }
   async function refreshPubs() {
     const { data: ep } = await supabase.from("external_publications")
-      .select("id, platform, external_url, status, published_at")
+      .select("id, platform, external_url, external_id, status, published_at, notes, last_error")
       .eq("book_id", bookId!).order("published_at", { ascending: false });
     setPubs(ep ?? []);
   }
@@ -648,12 +648,18 @@ export default function BookPublishSettings() {
                 <li key={p.id} className="flex items-start justify-between gap-2 rounded-md border border-border p-3 text-sm">
                   <div className="min-w-0 flex-1">
                     <div className="font-medium capitalize">{p.platform}</div>
-                    {p.external_url && (
-                      <a href={p.external_url} target="_blank" rel="noreferrer noopener"
+                    {(() => {
+                      const safeUrl = p.platform === "gumroad" && p.status !== "live" && p.external_id
+                        ? `https://app.gumroad.com/products/${encodeURIComponent(p.external_id)}/edit`
+                        : p.external_url;
+                      return safeUrl ? (
+                      <a href={safeUrl} target="_blank" rel="noreferrer noopener"
                          className="text-xs text-primary hover:underline truncate block mt-0.5">
-                        {p.external_url}
+                        {p.platform === "gumroad" && p.status !== "live" ? "Open Gumroad draft" : safeUrl}
                       </a>
-                    )}
+                      ) : null;
+                    })()}
+                    {(p.notes || p.last_error) && <div className="text-xs text-muted-foreground mt-1">{p.notes || p.last_error}</div>}
                   </div>
                   <span className="text-xs text-muted-foreground capitalize shrink-0 mt-0.5">{p.status}</span>
                 </li>
