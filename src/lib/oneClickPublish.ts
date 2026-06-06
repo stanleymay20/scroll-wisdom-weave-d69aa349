@@ -142,7 +142,7 @@ export async function publishExternallyOneClick(
       .select("external_url, external_id, status, sync_state")
       .eq("book_id", bookId).eq("platform", platform).maybeSingle();
     if (existing && platform === "gumroad" && existing.status === "draft" && existing.external_id) {
-      const editUrl = `https://app.gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit`;
+      const editUrl = `https://gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit`;
       return {
         status: "draft",
         publish: {
@@ -156,7 +156,7 @@ export async function publishExternallyOneClick(
       };
     }
     if (existing && existing.status === "live" && existing.external_id) {
-      const editUrl = platform === "gumroad" ? `https://app.gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit` : undefined;
+      const editUrl = platform === "gumroad" ? `https://gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit` : undefined;
       return {
         status: "published",
         publish: {
