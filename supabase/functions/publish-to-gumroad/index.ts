@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
       .select("id, external_url, external_id, status, sync_state")
       .eq("book_id", book.id).eq("platform", "gumroad").maybeSingle();
     if (existing && existing.status === "live" && existing.external_id) {
-      const existingEditUrl = `https://gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit`;
+      const existingEditUrl = `https://app.gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit`;
       // Validate the cached short_url is still reachable. If the creator
       // deleted/unpublished the product upstream, our 'live' row is stale —
       // fall through and re-create instead of misleading the caller.
@@ -398,7 +398,7 @@ Deno.serve(async (req) => {
     const product = createJson.product ?? {};
     const productId = String(product.id ?? "");
     const productUrl = String(product.short_url ?? product.url ?? "");
-    const editUrl = productId ? `https://gumroad.com/products/${encodeURIComponent(productId)}/edit` : productUrl;
+    const editUrl = productId ? `https://app.gumroad.com/products/${encodeURIComponent(productId)}/edit` : productUrl;
 
     // Best-effort cover image attach (skip silently if it fails)
     if (productId && coverImageUrl) {
@@ -444,6 +444,16 @@ Deno.serve(async (req) => {
     await admin.rpc("record_platform_connection_outcome", {
       _user_id: caller, _platform: "gumroad", _success: true, _error: null,
     });
+
+    if (isPublished && productUrl) {
+      try {
+        const probe = await fetch(productUrl, { method: "HEAD", redirect: "follow" });
+        if (probe.status === 404 || probe.status === 410) {
+          isPublished = false;
+          publishBlockedReason = "Gumroad accepted enable, but the public page is not reachable yet.";
+        }
+      } catch (_) { /* network blip — keep Gumroad's enable result authoritative */ }
+    }
 
     const finalUrl = isPublished ? (productUrl || editUrl) : editUrl;
     const draftNote = publishBlockedReason
