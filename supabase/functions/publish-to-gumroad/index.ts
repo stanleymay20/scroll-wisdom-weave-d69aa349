@@ -315,6 +315,33 @@ Deno.serve(async (req) => {
       } catch (_) { /* non-fatal */ }
     }
 
+    // Gumroad products created via API are 'unpublished' by default — the
+    // short_url returns 404 until the product is explicitly published. Try
+    // to publish; if Gumroad refuses (most commonly because no product file
+    // is attached yet) we keep the row as a draft and steer the creator to
+    // the edit page so they can attach the bundle ZIP + hit Publish.
+    let isPublished = false;
+    let publishBlockedReason: string | null = null;
+    if (productId) {
+      try {
+        const pub = new FormData();
+        pub.append("access_token", accessToken);
+        const pubRes = await fetchWithRetry(
+          `${GUMROAD}/products/${productId}/publish`,
+          { method: "POST", body: pub },
+          { attempts: 2 },
+        );
+        const pubJson: any = await pubRes.json().catch(() => ({}));
+        if (pubRes.ok && pubJson?.success) {
+          isPublished = true;
+        } else {
+          publishBlockedReason = sanitiseError(pubJson?.message || `gumroad_publish_${pubRes.status}`, 200);
+        }
+      } catch (e) {
+        publishBlockedReason = sanitiseError(e, 200);
+      }
+    }
+
     // Note: Gumroad's public v2 API does not reliably support attaching the
     // product file (ZIP) at this time. We surface the edit URL so the creator
     // can drop the bundle file in. This is documented to the user in the UI.
