@@ -83,7 +83,7 @@ Deno.serve(async (req) => {
 
     const { data: book, error: bErr } = await admin
       .from("books")
-      .select("id, user_id, title, description, cover_image_url, category, book_type, ai_assistance_level")
+      .select("id, user_id, title, description, cover_image_url, category, book_type")
       .eq("id", listing.book_id)
       .maybeSingle();
     if (bErr || !book) return jsonResp(404, { error: "book_not_found" }, corr);
