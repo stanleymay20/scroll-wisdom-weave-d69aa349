@@ -53,6 +53,7 @@ export type DirectPublishResult = {
   external_id?: string;
   edit_url?: string;
   bundle_hint?: string | null;
+  download_url?: string | null;
   note?: string;
   idempotent?: boolean;
   /** Stitched into publishing_audit_log + external_publications. Quote this in support tickets. */
@@ -71,18 +72,27 @@ export type DisconnectResult = {
 /** @deprecated use DirectPublishResult */
 export type GumroadPublishResult = DirectPublishResult;
 
+async function invokePublishFunction(functionName: string, body: Record<string, unknown>): Promise<DirectPublishResult> {
+  const { data, error } = await supabase.functions.invoke(functionName, { body });
+  if (!error) return data as DirectPublishResult;
+
+  let details: any = null;
+  const context = (error as any)?.context;
+  try {
+    if (context && typeof context.clone === "function") details = await context.clone().json();
+    else if (context && typeof context.json === "function") details = await context.json();
+  } catch {
+    details = null;
+  }
+  const code = details?.code ?? details?.error;
+  const message = details?.message ?? details?.reason ?? (error as any)?.message ?? "Publish failed";
+  throw new Error(code && !String(message).includes(String(code)) ? `${code}: ${message}` : String(message));
+}
+
 export async function publishToGumroad(listingId: string, exportJobId?: string): Promise<DirectPublishResult> {
-  const { data, error } = await supabase.functions.invoke("publish-to-gumroad", {
-    body: { listing_id: listingId, export_job_id: exportJobId },
-  });
-  if (error) throw new Error((error as any)?.message ?? "Publish failed");
-  return data as DirectPublishResult;
+  return invokePublishFunction("publish-to-gumroad", { listing_id: listingId, export_job_id: exportJobId });
 }
 
 export async function publishToShopify(listingId: string, exportJobId?: string): Promise<DirectPublishResult> {
-  const { data, error } = await supabase.functions.invoke("publish-to-shopify", {
-    body: { listing_id: listingId, export_job_id: exportJobId },
-  });
-  if (error) throw new Error((error as any)?.message ?? "Publish failed");
-  return data as DirectPublishResult;
+  return invokePublishFunction("publish-to-shopify", { listing_id: listingId, export_job_id: exportJobId });
 }
