@@ -194,20 +194,41 @@ Deno.serve(async (req) => {
       .eq("book_id", book.id).eq("platform", "gumroad").maybeSingle();
     if (existing && existing.status === "live" && existing.external_id) {
       const existingEditUrl = `https://gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit`;
+      // Validate the cached short_url is still reachable. If the creator
+      // deleted/unpublished the product upstream, our 'live' row is stale —
+      // fall through and re-create instead of misleading the caller.
+      let upstreamAlive = true;
+      if (existing.external_url) {
+        try {
+          const probe = await fetch(existing.external_url, { method: "HEAD", redirect: "follow" });
+          // 2xx/3xx = live, 404/410 = gone, anything else (incl. network) = assume alive to avoid false re-creates.
+          if (probe.status === 404 || probe.status === 410) upstreamAlive = false;
+        } catch (_) { /* network blip — keep upstreamAlive=true */ }
+      }
+      if (upstreamAlive) {
+        await logPublishEvent(admin, {
+          user_id: caller, platform: "gumroad", event_type: "publish_completed",
+          book_id: book.id, listing_id: listingId,
+          external_id: existing.external_id, external_url: existing.external_url,
+          correlation_id: corr,
+          message: "idempotent", metadata: { idempotent: true },
+        });
+        return jsonResp(200, {
+          ok: true, idempotent: true,
+          external_url: existing.external_url,
+          external_id: existing.external_id,
+          edit_url: existingEditUrl,
+          note: "Already created on Gumroad. If the public page is not available yet, use the edit page to finish setup and enable it.",
+        }, corr);
+      }
+      // Stale row — log and continue to re-create.
       await logPublishEvent(admin, {
-        user_id: caller, platform: "gumroad", event_type: "publish_completed",
-        book_id: book.id, listing_id: listingId,
-        external_id: existing.external_id, external_url: existing.external_url,
+        user_id: caller, platform: "gumroad", event_type: "publish_started",
+        book_id: book.id, listing_id: listingId, severity: "warning",
         correlation_id: corr,
-        message: "idempotent", metadata: { idempotent: true },
+        message: "Stale external_publications row — upstream product missing, re-creating.",
+        metadata: { stale_external_id: existing.external_id },
       });
-      return jsonResp(200, {
-        ok: true, idempotent: true,
-        external_url: existing.external_url,
-        external_id: existing.external_id,
-        edit_url: existingEditUrl,
-        note: "Already created on Gumroad. If the public page is not available yet, use the edit page to finish setup and enable it.",
-      }, corr);
     }
 
     // Mark pending row early so the UI can show "syncing"
