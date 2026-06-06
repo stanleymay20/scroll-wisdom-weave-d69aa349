@@ -141,13 +141,29 @@ export async function publishExternallyOneClick(
       .from("external_publications")
       .select("external_url, external_id, status, sync_state")
       .eq("book_id", bookId).eq("platform", platform).maybeSingle();
+    if (existing && platform === "gumroad" && existing.status === "draft" && existing.external_id) {
+      const editUrl = `https://app.gumroad.com/products/${existing.external_id}/edit`;
+      return {
+        status: "draft",
+        publish: {
+          ok: true, idempotent: true,
+          published: false,
+          external_url: editUrl,
+          external_id: existing.external_id ?? undefined,
+          edit_url: editUrl,
+        },
+        message: "Gumroad draft already exists. Finish setup on Gumroad to make the public page live.",
+      };
+    }
     if (existing && existing.status === "live" && existing.external_id) {
+      const editUrl = platform === "gumroad" ? `https://app.gumroad.com/products/${existing.external_id}/edit` : undefined;
       return {
         status: "published",
         publish: {
           ok: true, idempotent: true,
           external_url: existing.external_url ?? undefined,
           external_id: existing.external_id ?? undefined,
+          edit_url: editUrl,
         },
         message: `Already live on ${platform === "gumroad" ? "Gumroad" : "Shopify"}.`,
       };
