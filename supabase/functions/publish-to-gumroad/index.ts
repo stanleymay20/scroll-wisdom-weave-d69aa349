@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
       .select("id, external_url, external_id, status, sync_state")
       .eq("book_id", book.id).eq("platform", "gumroad").maybeSingle();
     if (existing && existing.status === "live" && existing.external_id) {
-      const existingEditUrl = `https://app.gumroad.com/products/${existing.external_id}/edit`;
+      const existingEditUrl = `https://app.gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit`;
       await logPublishEvent(admin, {
         user_id: caller, platform: "gumroad", event_type: "publish_completed",
         book_id: book.id, listing_id: listingId,
@@ -308,7 +308,7 @@ Deno.serve(async (req) => {
     const product = createJson.product ?? {};
     const productId = String(product.id ?? "");
     const productUrl = String(product.short_url ?? product.url ?? "");
-    const editUrl = productId ? `https://app.gumroad.com/products/${productId}/edit` : productUrl;
+    const editUrl = productId ? `https://app.gumroad.com/products/${encodeURIComponent(productId)}/edit` : productUrl;
 
     // Best-effort cover image attach (skip silently if it fails)
     if (productId && coverImageUrl) {
