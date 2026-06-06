@@ -82,7 +82,7 @@ Deno.serve(async (req) => {
 
     const { data: book } = await admin
       .from("books")
-      .select("id, user_id, title, description, cover_image_url, category, book_type, ai_assistance_level")
+      .select("id, user_id, title, description, cover_image_url, category, book_type")
       .eq("id", listing.book_id).maybeSingle();
     if (!book) return jsonResp(404, { error: "book_not_found" }, corr);
     if (book.user_id !== caller) return jsonResp(403, { error: "not_owner" }, corr);
