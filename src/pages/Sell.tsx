@@ -157,10 +157,19 @@ export default function Sell() {
           .order("created_at", { ascending: false })
           .limit(50);
       };
-      let { data: bs, error: booksErr } = await fetchOwnedBooks();
-      if (booksErr && /57014|timeout|timed out/i.test(String(booksErr.message ?? booksErr.code ?? ""))) {
-        await new Promise((r) => setTimeout(r, 400));
-        ({ data: bs, error: booksErr } = await fetchOwnedBooks());
+      let bs: any[] | null = null;
+      let booksErr: any = null;
+      for (let attempt = 0; attempt < 3; attempt++) {
+        try {
+          const res = await fetchOwnedBooks();
+          bs = res.data; booksErr = res.error;
+        } catch (e) {
+          booksErr = e;
+        }
+        const msg = String(booksErr?.message ?? booksErr?.code ?? booksErr ?? "");
+        const retryable = !!booksErr && /57014|timeout|timed out|network|fetch|load failed/i.test(msg);
+        if (!booksErr || !retryable) break;
+        await new Promise((r) => setTimeout(r, 400 * (attempt + 1)));
       }
       if (booksErr) {
         console.error("[SELL] books load failed:", booksErr);
@@ -214,13 +223,23 @@ export default function Sell() {
         next = { ...next, step: 1 as Step };
       }
 
-      setDraft(next);
-
-      // Payout profile (best-effort)
+      // Payout profile (best-effort) — fetched before final setDraft so we can
+      // step-guard step 3+ when display_name exists but payout is incomplete.
+      let payout: any = null;
       try {
         const { data: pd } = await supabase.functions.invoke("creator-payout-profile", { method: "GET" });
-        if (pd && (pd as any).profile) setPayoutProfile((pd as any).profile);
+        if (pd && (pd as any).profile) payout = (pd as any).profile;
       } catch { /* ignore */ }
+      setPayoutProfile(payout);
+
+      // If user is past payout (step 3+) but payout is incomplete, drop to step 2
+      // so they can finish onboarding before hitting publish-time failures.
+      const payoutComplete = !!(payout?.payout_email && payout?.country_code);
+      if (hasUrlStep && urlStep >= 3 && !payoutComplete) {
+        next = { ...next, step: 2 as Step };
+      }
+
+      setDraft(next);
 
       setLoading(false);
       void trackStorefrontEvent(null, "sell_onboarding_started" as any, { step: next.step, resumed: !!ap });
