@@ -416,26 +416,9 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Note: Gumroad's public v2 API does not reliably support attaching the
-    // product file (ZIP) at this time. We surface the edit URL so the creator
-    // can drop the bundle file in. This is documented to the user in the UI.
-    let bundleHint: string | null = null;
-    try {
-      const jobQ = admin
-        .from("export_jobs")
-        .select("id, result_url, status, created_at")
-        .eq("user_id", caller)
-        .eq("book_id", book.id)
-        .eq("bundle_type", "gumroad")
-        .eq("status", "completed")
-        .order("created_at", { ascending: false })
-        .limit(1);
-      const { data: jobs } = explicitJobId
-        ? await admin.from("export_jobs").select("id, result_url, status").eq("id", explicitJobId).limit(1)
-        : await jobQ;
-      const job = jobs?.[0];
-      if (job?.result_url) bundleHint = job.result_url;
-    } catch (_) { /* non-fatal */ }
+    // Bundle was already resolved upstream and embedded into Gumroad's
+    // custom_receipt + redirect URL fields — no manual file attach needed.
+    const bundleHint: string | null = downloadUrl;
 
     await admin.rpc("record_platform_connection_outcome", {
       _user_id: caller, _platform: "gumroad", _success: true, _error: null,
@@ -443,8 +426,8 @@ Deno.serve(async (req) => {
 
     const finalUrl = isPublished ? (productUrl || editUrl) : editUrl;
     const draftNote = publishBlockedReason
-      ? `Draft created on Gumroad — couldn't auto-publish (${publishBlockedReason}). Attach the bundle ZIP and click Publish on the edit page.`
-      : (bundleHint ? "Auto-created. Attach the gumroad bundle ZIP in the Gumroad edit page." : null);
+      ? `Draft created on Gumroad — auto-publish blocked (${publishBlockedReason}). Open the edit page and click Publish.`
+      : null;
 
     await admin.from("external_publications").upsert({
       user_id: caller, book_id: book.id, platform: "gumroad",
@@ -456,6 +439,18 @@ Deno.serve(async (req) => {
       correlation_id: corr,
       published_at: isPublished ? new Date().toISOString() : null,
       notes: draftNote,
+      metadata: {
+        // Redirect-flow fulfilment artifacts. Keep these so the creator
+        // dashboard + support can re-issue download URLs without rerunning
+        // the entire publish pipeline.
+        download_url: downloadUrl,
+        bundle_path: bundlePath,
+        bundle_filename: bundleFilename,
+        export_job_id: resolvedJobId,
+        download_url_signed_at: new Date().toISOString(),
+        download_url_expires_at: new Date(Date.now() + 30 * 86400_000).toISOString(),
+        fulfilment_mode: "gumroad_redirect",
+      },
     }, { onConflict: "book_id,platform" });
 
     await logTelemetry(admin, "publish_completed", {
@@ -468,7 +463,13 @@ Deno.serve(async (req) => {
       book_id: book.id, listing_id: listingId,
       external_id: productId, external_url: finalUrl,
       correlation_id: corr,
-      metadata: { price_cents: priceCents, has_bundle_hint: !!bundleHint, published: isPublished, publish_blocked_reason: publishBlockedReason },
+      metadata: {
+        price_cents: priceCents,
+        has_bundle_hint: !!bundleHint,
+        published: isPublished,
+        publish_blocked_reason: publishBlockedReason,
+        fulfilment_mode: "gumroad_redirect",
+      },
     });
 
     return jsonResp(200, {
@@ -478,9 +479,10 @@ Deno.serve(async (req) => {
       external_id: productId,
       edit_url: editUrl,
       bundle_hint: bundleHint,
+      download_url: downloadUrl,
       note: isPublished
-        ? "Gumroad product is live."
-        : "Gumroad product created as a draft. Open the edit page, attach your bundle ZIP, then click Publish — the product URL only resolves once published.",
+        ? "Live on Gumroad. Buyers receive your bundle via the post-purchase receipt automatically — no manual file attach needed."
+        : "Gumroad draft created with bundle download embedded in the receipt. Open the edit page and click Publish to go live.",
     }, corr);
   } catch (e) {
     console.error("publish-to-gumroad error", e, { correlation_id: corr });
