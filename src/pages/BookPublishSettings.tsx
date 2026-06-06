@@ -649,13 +649,13 @@ export default function BookPublishSettings() {
                   <div className="min-w-0 flex-1">
                     <div className="font-medium capitalize">{p.platform}</div>
                     {(() => {
-                      const safeUrl = p.platform === "gumroad" && p.status !== "live" && p.external_id
+                      const safeUrl = p.platform === "gumroad" && p.external_id
                         ? `https://gumroad.com/products/${encodeURIComponent(p.external_id)}/edit`
                         : p.external_url;
                       return safeUrl ? (
                       <a href={safeUrl} target="_blank" rel="noreferrer noopener"
                          className="text-xs text-primary hover:underline truncate block mt-0.5">
-                        {p.platform === "gumroad" && p.status !== "live" ? "Open Gumroad draft" : safeUrl}
+                        {p.platform === "gumroad" && p.external_id ? "Open Gumroad product" : safeUrl}
                       </a>
                       ) : null;
                     })()}
