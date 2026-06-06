@@ -186,11 +186,14 @@ Deno.serve(async (req) => {
     });
 
     // Idempotency: if an existing live/auto row exists, return it instead of creating a duplicate.
+    // Older Gumroad rows may have been marked live before Gumroad actually enabled the product,
+    // so only short-circuit when we can also provide the creator edit URL as a safe fallback.
     const { data: existing } = await admin
       .from("external_publications")
       .select("id, external_url, external_id, status, sync_state")
       .eq("book_id", book.id).eq("platform", "gumroad").maybeSingle();
     if (existing && existing.status === "live" && existing.external_id) {
+      const existingEditUrl = `https://gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit`;
       await logPublishEvent(admin, {
         user_id: caller, platform: "gumroad", event_type: "publish_completed",
         book_id: book.id, listing_id: listingId,
@@ -202,6 +205,8 @@ Deno.serve(async (req) => {
         ok: true, idempotent: true,
         external_url: existing.external_url,
         external_id: existing.external_id,
+        edit_url: existingEditUrl,
+        note: "Already created on Gumroad. If the public page is not available yet, use the edit page to finish setup and enable it.",
       }, corr);
     }
 
@@ -240,10 +245,10 @@ Deno.serve(async (req) => {
     form.append("price", String(priceCents));
     form.append("description", description);
     // Gumroad v2 expects tags as a repeated array param (tags[]), not a CSV string.
-    // Gumroad also rejects tags longer than 20 characters, so trim + dedupe here.
+    // Gumroad requires tags under 20 characters, so cap at 19 and dedupe here.
     const gumroadTags = Array.from(new Set(
       tags
-        .map((t) => String(t).trim().slice(0, 20))
+        .map((t) => String(t).trim().slice(0, 19))
         .filter((t) => t.length > 0)
     )).slice(0, 10);
     for (const tag of gumroadTags) form.append("tags[]", tag);
@@ -303,7 +308,7 @@ Deno.serve(async (req) => {
     const product = createJson.product ?? {};
     const productId = String(product.id ?? "");
     const productUrl = String(product.short_url ?? product.url ?? "");
-    const editUrl = productId ? `https://app.gumroad.com/products/${productId}/edit` : productUrl;
+    const editUrl = productId ? `https://gumroad.com/products/${encodeURIComponent(productId)}/edit` : productUrl;
 
     // Best-effort cover image attach (skip silently if it fails)
     if (productId && coverImageUrl) {
@@ -327,8 +332,8 @@ Deno.serve(async (req) => {
         const pub = new FormData();
         pub.append("access_token", accessToken);
         const pubRes = await fetchWithRetry(
-          `${GUMROAD}/products/${productId}/publish`,
-          { method: "POST", body: pub },
+          `${GUMROAD}/products/${encodeURIComponent(productId)}/enable`,
+          { method: "PUT", body: pub },
           { attempts: 2 },
         );
         const pubJson: any = await pubRes.json().catch(() => ({}));

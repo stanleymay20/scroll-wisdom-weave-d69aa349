@@ -29,6 +29,7 @@ export type OneClickStatus =
   | "unsafe"         // sell-safety verifier rejected for this platform
   | "not_connected"  // upstream platform not connected (caller routes to connect)
   | "bundling"       // bundle job queued; caller should poll job_id
+  | "draft"          // upstream product created but still needs manual enable/publish
   | "published"      // upstream product created (idempotent or fresh)
   | "failed";        // hard failure
 
@@ -140,13 +141,29 @@ export async function publishExternallyOneClick(
       .from("external_publications")
       .select("external_url, external_id, status, sync_state")
       .eq("book_id", bookId).eq("platform", platform).maybeSingle();
+    if (existing && platform === "gumroad" && existing.status === "draft" && existing.external_id) {
+      const editUrl = `https://gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit`;
+      return {
+        status: "draft",
+        publish: {
+          ok: true, idempotent: true,
+          published: false,
+          external_url: editUrl,
+          external_id: existing.external_id ?? undefined,
+          edit_url: editUrl,
+        },
+        message: "Gumroad draft already exists. Finish setup on Gumroad to make the public page live.",
+      };
+    }
     if (existing && existing.status === "live" && existing.external_id) {
+      const editUrl = platform === "gumroad" ? `https://gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit` : undefined;
       return {
         status: "published",
         publish: {
           ok: true, idempotent: true,
           external_url: existing.external_url ?? undefined,
           external_id: existing.external_id ?? undefined,
+          edit_url: editUrl,
         },
         message: `Already live on ${platform === "gumroad" ? "Gumroad" : "Shopify"}.`,
       };
@@ -187,11 +204,14 @@ export async function publishExternallyOneClick(
     const publish = platform === "gumroad"
       ? await publishToGumroad(listingId, bundle.id)
       : await publishToShopify(listingId, bundle.id);
+    const isDraft = platform === "gumroad" && publish.published === false;
     return {
-      status: "published",
+      status: isDraft ? "draft" : "published",
       publish,
       correlation_id: (publish as any)?.correlation_id,
-      message: publish.idempotent
+      message: isDraft
+        ? "Gumroad draft created. Finish setup on Gumroad to make the public page live."
+        : publish.idempotent
         ? `Already published to ${platform === "gumroad" ? "Gumroad" : "Shopify"}.`
         : `Published to ${platform === "gumroad" ? "Gumroad" : "Shopify"}.`,
     };

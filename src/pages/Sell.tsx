@@ -849,10 +849,11 @@ function StepLaunch({
         setStage("Creating upstream product…");
         res = await publishExternallyOneClick(listingId, bookId, platform);
       }
-      if (res.status === "published" && res.publish) {
-        toast.success(res.message ?? `Published to ${platform}`);
-        const editUrl = res.publish.edit_url;
-        if (editUrl) window.open(editUrl, "_blank", "noopener");
+      if ((res.status === "published" || res.status === "draft") && res.publish) {
+        if (res.status === "draft") toast.warning(res.message ?? "Draft created — finish setup on Gumroad to make it live.", { duration: 8000 });
+        else toast.success(res.message ?? `Published to ${platform}`);
+        const safeUrl = res.publish.edit_url ?? res.publish.external_url;
+        if (safeUrl) window.open(safeUrl, "_blank", "noopener");
       } else if (res.status === "not_connected") {
         toast.error(res.message ?? `Connect ${platform} first`);
       } else if (res.status === "blocked") {

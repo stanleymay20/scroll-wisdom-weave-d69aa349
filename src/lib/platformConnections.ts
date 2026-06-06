@@ -48,6 +48,7 @@ export async function disconnectPlatform(platform: PlatformId | string): Promise
 
 export type DirectPublishResult = {
   ok: boolean;
+  published?: boolean;
   external_url?: string;
   external_id?: string;
   edit_url?: string;

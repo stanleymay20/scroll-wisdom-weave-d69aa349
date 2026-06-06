@@ -14,7 +14,6 @@ import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { Sparkles, Package, BookOpen, Heart, Store, ShoppingBag, FileText, ExternalLink, CheckCircle2, Zap, ShieldCheck, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
-import { publishToGumroad, publishToShopify } from "@/lib/platformConnections";
 import { publishExternallyOneClick, waitForBundle } from "@/lib/oneClickPublish";
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { Lock } from "lucide-react";
@@ -113,7 +112,7 @@ export default function BookPublishSettings() {
       const { data: s } = await supabase.from("book_series").select("id, title").eq("user_id", user.id);
       setSeries(s ?? []);
       const { data: ep } = await supabase.from("external_publications")
-        .select("id, platform, external_url, status, published_at")
+        .select("id, platform, external_url, external_id, status, published_at, notes, last_error")
         .eq("book_id", bookId).order("published_at", { ascending: false });
       setPubs(ep ?? []);
       setLoading(false);
@@ -220,7 +219,7 @@ export default function BookPublishSettings() {
   }
   async function refreshPubs() {
     const { data: ep } = await supabase.from("external_publications")
-      .select("id, platform, external_url, status, published_at")
+      .select("id, platform, external_url, external_id, status, published_at, notes, last_error")
       .eq("book_id", bookId!).order("published_at", { ascending: false });
     setPubs(ep ?? []);
   }
@@ -246,12 +245,13 @@ export default function BookPublishSettings() {
         setOneClickStage({ platform, label: "Creating upstream product…" });
         res = await publishExternallyOneClick(form.listing_id, bookId, platform);
       }
-      if (res.status === "published" && res.publish) {
-        if (res.publish.idempotent) toast.info(res.message ?? `Already published to ${platform}`);
+      if ((res.status === "published" || res.status === "draft") && res.publish) {
+        if (res.status === "draft") toast.warning(res.message ?? "Draft created — finish setup on Gumroad to make it live.", { duration: 8000 });
+        else if (res.publish.idempotent) toast.info(res.message ?? `Already published to ${platform}`);
         else toast.success(res.message ?? `Published to ${platform}`);
         await refreshPubs();
-        const editUrl = res.publish.edit_url;
-        if (editUrl) window.open(editUrl, "_blank", "noopener");
+        const safeUrl = res.publish.edit_url ?? res.publish.external_url;
+        if (safeUrl) window.open(safeUrl, "_blank", "noopener");
       } else if (res.status === "blocked") {
         toast.error(res.message ?? "Export quality blocked");
       } else if (res.status === "unsafe") {
@@ -648,12 +648,18 @@ export default function BookPublishSettings() {
                 <li key={p.id} className="flex items-start justify-between gap-2 rounded-md border border-border p-3 text-sm">
                   <div className="min-w-0 flex-1">
                     <div className="font-medium capitalize">{p.platform}</div>
-                    {p.external_url && (
-                      <a href={p.external_url} target="_blank" rel="noreferrer noopener"
+                    {(() => {
+                      const safeUrl = p.platform === "gumroad" && p.external_id
+                        ? `https://gumroad.com/products/${encodeURIComponent(p.external_id)}/edit`
+                        : p.external_url;
+                      return safeUrl ? (
+                      <a href={safeUrl} target="_blank" rel="noreferrer noopener"
                          className="text-xs text-primary hover:underline truncate block mt-0.5">
-                        {p.external_url}
+                        {p.platform === "gumroad" && p.external_id ? "Open Gumroad product" : safeUrl}
                       </a>
-                    )}
+                      ) : null;
+                    })()}
+                    {(p.notes || p.last_error) && <div className="text-xs text-muted-foreground mt-1">{p.notes || p.last_error}</div>}
                   </div>
                   <span className="text-xs text-muted-foreground capitalize shrink-0 mt-0.5">{p.status}</span>
                 </li>
