@@ -1,13 +1,9 @@
 // One-click external publish orchestration.
 //
-// The publish-to-X edge function only creates the upstream product — it
-// requires the creator to manually drop the downloadable bundle into the
-// upstream edit page afterwards (Gumroad's v2 API doesn't accept file
-// attachments; Shopify needs the Digital Downloads app). To make the flow
-// genuinely one-click, the client first guarantees a fresh export bundle is
-// ready, *then* creates the upstream product with `export_job_id` pointing
-// at that bundle so the response carries a `bundle_hint` URL the user can
-// hand straight to the upstream merchant.
+// The client first guarantees a fresh export bundle is ready, then calls the
+// upstream publisher with `export_job_id` pointing at that bundle. Gumroad now
+// receives the ZIP through its presigned file API before the product is
+// enabled, with a hosted signed URL retained as a backup/manual fallback.
 //
 // Contract:
 //   1. Quality audit — refuse to publish a book with blockers.
