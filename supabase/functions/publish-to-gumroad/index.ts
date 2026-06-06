@@ -50,6 +50,58 @@ async function logTelemetry(admin: any, type: string, meta: Record<string, unkno
   } catch (_) { /* best-effort */ }
 }
 
+async function uploadBundleToGumroad(
+  accessToken: string,
+  bundleBytes: Uint8Array,
+  filename: string,
+): Promise<{ fileUrl: string; displayName: string; size: number }> {
+  const presign = new FormData();
+  presign.append("access_token", accessToken);
+  presign.append("filename", filename);
+  presign.append("file_size", String(bundleBytes.byteLength));
+  const presignRes = await fetchWithRetry(`${GUMROAD}/files/presign`, { method: "POST", body: presign }, { attempts: 3 });
+  const presignJson: any = await presignRes.json().catch(() => ({}));
+  if (!presignRes.ok || !presignJson?.success || !presignJson?.upload_id || !presignJson?.key || !Array.isArray(presignJson?.parts)) {
+    throw new Error(`gumroad_file_presign_failed: ${sanitiseError(presignJson?.message || `http_${presignRes.status}`, 160)}`);
+  }
+
+  const partSize = 100 * 1024 * 1024;
+  const completed: Array<{ part_number: number; etag: string }> = [];
+  for (let i = 0; i < presignJson.parts.length; i++) {
+    const part = presignJson.parts[i];
+    const partNumber = Number(part?.part_number ?? i + 1);
+    const presignedUrl = String(part?.presigned_url ?? "");
+    if (!partNumber || !presignedUrl) throw new Error("gumroad_file_presign_failed: missing upload part");
+    const start = (partNumber - 1) * partSize;
+    const end = Math.min(start + partSize, bundleBytes.byteLength);
+    const putRes = await fetch(presignedUrl, {
+      method: "PUT",
+      body: bundleBytes.slice(start, end),
+      headers: { "Content-Type": "application/zip" },
+    });
+    const etag = putRes.headers.get("etag") || putRes.headers.get("ETag") || "";
+    if (!putRes.ok || !etag) throw new Error(`gumroad_file_upload_failed: http_${putRes.status}`);
+    completed.push({ part_number: partNumber, etag });
+  }
+
+  const complete = new FormData();
+  complete.append("access_token", accessToken);
+  complete.append("upload_id", String(presignJson.upload_id));
+  complete.append("key", String(presignJson.key));
+  for (const part of completed) {
+    complete.append("parts[][part_number]", String(part.part_number));
+    complete.append("parts[][etag]", part.etag);
+  }
+  const completeRes = await fetchWithRetry(`${GUMROAD}/files/complete`, { method: "POST", body: complete }, { attempts: 3 });
+  const completeJson: any = await completeRes.json().catch(() => ({}));
+  if (!completeRes.ok || !completeJson?.success) {
+    throw new Error(`gumroad_file_complete_failed: ${sanitiseError(completeJson?.message || `http_${completeRes.status}`, 160)}`);
+  }
+  const fileUrl = String(completeJson?.file_url ?? presignJson?.file_url ?? "");
+  if (!fileUrl) throw new Error("gumroad_file_complete_failed: missing file_url");
+  return { fileUrl, displayName: filename, size: bundleBytes.byteLength };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   const corr = correlationId(req);
