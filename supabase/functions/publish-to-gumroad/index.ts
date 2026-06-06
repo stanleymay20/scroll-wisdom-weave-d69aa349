@@ -77,7 +77,6 @@ async function uploadBundleToGumroad(
     const putRes = await fetch(presignedUrl, {
       method: "PUT",
       body: bundleBytes.slice(start, end),
-      headers: { "Content-Type": "application/zip" },
     });
     const etag = putRes.headers.get("etag") || putRes.headers.get("ETag") || "";
     if (!putRes.ok || !etag) throw new Error(`gumroad_file_upload_failed: http_${putRes.status}`);
@@ -558,8 +557,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Bundle was already resolved upstream and embedded into Gumroad's
-    // custom_receipt + redirect URL fields — no manual file attach needed.
+    // Keep our hosted signed URL as a backup fulfilment link even when the
+    // primary Gumroad file attachment succeeds.
     const bundleHint: string | null = downloadUrl;
 
     await admin.rpc("record_platform_connection_outcome", {
