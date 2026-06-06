@@ -465,6 +465,11 @@ async function runJob(
         bundle_schema_version: manifest.bundle_schema_version,
         content_sha256: contentHash,
         included_assets: included,
+        // Stored so downstream publishers (e.g. publish-to-gumroad redirect
+        // flow) can re-issue fresh signed URLs without guessing the path.
+        bundle_path: path,
+        bundle_filename: filename,
+        bundle_bucket: "exports",
         cover_attached: !!cover,
         cover_dimensions: cover && cover.widthPx && cover.heightPx
           ? { width: cover.widthPx, height: cover.heightPx, mime: cover.mime } : null,
