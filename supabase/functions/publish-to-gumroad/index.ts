@@ -193,7 +193,7 @@ Deno.serve(async (req) => {
       .select("id, external_url, external_id, status, sync_state")
       .eq("book_id", book.id).eq("platform", "gumroad").maybeSingle();
     if (existing && existing.status === "live" && existing.external_id) {
-      const existingEditUrl = `https://app.gumroad.com/products/${encodeURIComponent(existing.external_id)}/edit`;
+      const existingEditUrl = "https://app.gumroad.com/products";
       // Validate the cached short_url is still reachable. If the creator
       // deleted/unpublished the product upstream, our 'live' row is stale —
       // fall through and re-create instead of misleading the caller.
@@ -398,7 +398,7 @@ Deno.serve(async (req) => {
     const product = createJson.product ?? {};
     const productId = String(product.id ?? "");
     const productUrl = String(product.short_url ?? product.url ?? "");
-    const editUrl = productId ? `https://app.gumroad.com/products/${encodeURIComponent(productId)}/edit` : productUrl;
+    const editUrl = "https://app.gumroad.com/products";
 
     // Best-effort cover image attach (skip silently if it fails)
     if (productId && coverImageUrl) {
