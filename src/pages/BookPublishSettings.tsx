@@ -14,7 +14,6 @@ import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
 import { Sparkles, Package, BookOpen, Heart, Store, ShoppingBag, FileText, ExternalLink, CheckCircle2, Zap, ShieldCheck, AlertCircle } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
-import { publishToGumroad, publishToShopify } from "@/lib/platformConnections";
 import { publishExternallyOneClick, waitForBundle } from "@/lib/oneClickPublish";
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { Lock } from "lucide-react";
@@ -113,7 +112,7 @@ export default function BookPublishSettings() {
       const { data: s } = await supabase.from("book_series").select("id, title").eq("user_id", user.id);
       setSeries(s ?? []);
       const { data: ep } = await supabase.from("external_publications")
-        .select("id, platform, external_url, status, published_at")
+        .select("id, platform, external_url, external_id, status, published_at, notes, last_error")
         .eq("book_id", bookId).order("published_at", { ascending: false });
       setPubs(ep ?? []);
       setLoading(false);
@@ -247,11 +246,12 @@ export default function BookPublishSettings() {
         res = await publishExternallyOneClick(form.listing_id, bookId, platform);
       }
       if (res.status === "published" && res.publish) {
-        if (res.publish.idempotent) toast.info(res.message ?? `Already published to ${platform}`);
+        if (res.status === "draft") toast.warning(res.message ?? "Draft created — finish setup on Gumroad to make it live.", { duration: 8000 });
+        else if (res.publish.idempotent) toast.info(res.message ?? `Already published to ${platform}`);
         else toast.success(res.message ?? `Published to ${platform}`);
         await refreshPubs();
-        const editUrl = res.publish.edit_url;
-        if (editUrl) window.open(editUrl, "_blank", "noopener");
+        const safeUrl = res.publish.edit_url ?? res.publish.external_url;
+        if (safeUrl) window.open(safeUrl, "_blank", "noopener");
       } else if (res.status === "blocked") {
         toast.error(res.message ?? "Export quality blocked");
       } else if (res.status === "unsafe") {
