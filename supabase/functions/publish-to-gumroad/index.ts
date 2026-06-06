@@ -380,9 +380,31 @@ Deno.serve(async (req) => {
       `<p><a href="${downloadUrl}">Download your bundle (ZIP)</a></p>` +
       `<p>If the link expires, please contact support and we'll re-issue it.</p>`;
 
+    let gumroadFile: { fileUrl: string; displayName: string; size: number } | null = null;
+    let fileUploadError: string | null = null;
+    if (bundleBytes && bundleBytes.byteLength > 0) {
+      try {
+        gumroadFile = await uploadBundleToGumroad(
+          accessToken,
+          bundleBytes,
+          bundleFilename || `${String(book.title ?? "book").replace(/[^a-z0-9._-]+/gi, "-").replace(/^-|-$/g, "") || "book"}-gumroad-bundle.zip`,
+        );
+      } catch (e) {
+        fileUploadError = sanitiseError(e, 200);
+        await logPublishEvent(admin, {
+          user_id: caller, platform: "gumroad", event_type: "publish_retried",
+          book_id: book.id, listing_id: listingId, severity: "warning",
+          correlation_id: corr,
+          message: "Gumroad file upload failed; falling back to receipt download URL.",
+          metadata: { reason: fileUploadError },
+        });
+      }
+    }
+
     // Build product payload
     const form = new FormData();
     form.append("access_token", accessToken);
+    form.append("native_type", "digital");
     form.append("name", title);
     form.append("price", String(priceCents));
     form.append("description", description);
@@ -401,6 +423,10 @@ Deno.serve(async (req) => {
     form.append("url", downloadUrl);
     form.append("content_url", downloadUrl);
     form.append("redirect_url", downloadUrl);
+    if (gumroadFile) {
+      form.append("files[][url]", gumroadFile.fileUrl);
+      form.append("files[][display_name]", gumroadFile.displayName);
+    }
 
     const createRes = await fetchWithRetry(`${GUMROAD}/products`, { method: "POST", body: form }, {
       attempts: 3,
