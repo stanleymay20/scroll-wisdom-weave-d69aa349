@@ -315,6 +315,33 @@ Deno.serve(async (req) => {
       } catch (_) { /* non-fatal */ }
     }
 
+    // Gumroad products created via API are 'unpublished' by default — the
+    // short_url returns 404 until the product is explicitly published. Try
+    // to publish; if Gumroad refuses (most commonly because no product file
+    // is attached yet) we keep the row as a draft and steer the creator to
+    // the edit page so they can attach the bundle ZIP + hit Publish.
+    let isPublished = false;
+    let publishBlockedReason: string | null = null;
+    if (productId) {
+      try {
+        const pub = new FormData();
+        pub.append("access_token", accessToken);
+        const pubRes = await fetchWithRetry(
+          `${GUMROAD}/products/${productId}/publish`,
+          { method: "POST", body: pub },
+          { attempts: 2 },
+        );
+        const pubJson: any = await pubRes.json().catch(() => ({}));
+        if (pubRes.ok && pubJson?.success) {
+          isPublished = true;
+        } else {
+          publishBlockedReason = sanitiseError(pubJson?.message || `gumroad_publish_${pubRes.status}`, 200);
+        }
+      } catch (e) {
+        publishBlockedReason = sanitiseError(e, 200);
+      }
+    }
+
     // Note: Gumroad's public v2 API does not reliably support attaching the
     // product file (ZIP) at this time. We surface the edit URL so the creator
     // can drop the bundle file in. This is documented to the user in the UI.
@@ -340,36 +367,46 @@ Deno.serve(async (req) => {
       _user_id: caller, _platform: "gumroad", _success: true, _error: null,
     });
 
+    const finalUrl = isPublished ? (productUrl || editUrl) : editUrl;
+    const draftNote = publishBlockedReason
+      ? `Draft created on Gumroad — couldn't auto-publish (${publishBlockedReason}). Attach the bundle ZIP and click Publish on the edit page.`
+      : (bundleHint ? "Auto-created. Attach the gumroad bundle ZIP in the Gumroad edit page." : null);
+
     await admin.from("external_publications").upsert({
       user_id: caller, book_id: book.id, platform: "gumroad",
-      external_url: productUrl || editUrl,
+      external_url: finalUrl,
       external_id: productId,
-      status: "live", sync_state: "auto",
-      last_error: null,
+      status: isPublished ? "live" : "draft",
+      sync_state: isPublished ? "auto" : "manual",
+      last_error: isPublished ? null : publishBlockedReason,
       correlation_id: corr,
-      published_at: new Date().toISOString(),
-      notes: bundleHint ? "Auto-created. Attach the gumroad bundle ZIP in the Gumroad edit page." : null,
+      published_at: isPublished ? new Date().toISOString() : null,
+      notes: draftNote,
     }, { onConflict: "book_id,platform" });
 
     await logTelemetry(admin, "publish_completed", {
       platform: "gumroad", listing_id: listingId, book_id: book.id,
-      external_url: productUrl, external_id: productId, correlation_id: corr,
+      external_url: finalUrl, external_id: productId, correlation_id: corr,
+      published: isPublished,
     });
     await logPublishEvent(admin, {
       user_id: caller, platform: "gumroad", event_type: "publish_completed",
       book_id: book.id, listing_id: listingId,
-      external_id: productId, external_url: productUrl || editUrl,
+      external_id: productId, external_url: finalUrl,
       correlation_id: corr,
-      metadata: { price_cents: priceCents, has_bundle_hint: !!bundleHint },
+      metadata: { price_cents: priceCents, has_bundle_hint: !!bundleHint, published: isPublished, publish_blocked_reason: publishBlockedReason },
     });
 
     return jsonResp(200, {
       ok: true,
-      external_url: productUrl || editUrl,
+      published: isPublished,
+      external_url: finalUrl,
       external_id: productId,
       edit_url: editUrl,
       bundle_hint: bundleHint,
-      note: "Gumroad product created. Drop your gumroad export ZIP into the Gumroad edit page to make it downloadable.",
+      note: isPublished
+        ? "Gumroad product is live."
+        : "Gumroad product created as a draft. Open the edit page, attach your bundle ZIP, then click Publish — the product URL only resolves once published.",
     }, corr);
   } catch (e) {
     console.error("publish-to-gumroad error", e, { correlation_id: corr });
