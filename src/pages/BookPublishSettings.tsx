@@ -250,7 +250,9 @@ export default function BookPublishSettings() {
         else if (res.publish.idempotent) toast.info(res.message ?? `Already published to ${platform}`);
         else toast.success(res.message ?? `Published to ${platform}`);
         await refreshPubs();
-        const safeUrl = res.publish.edit_url ?? res.publish.external_url;
+        const safeUrl = platform === "gumroad"
+          ? (res.status === "draft" ? res.publish.edit_url : undefined)
+          : res.publish.external_url;
         if (safeUrl) window.open(safeUrl, "_blank", "noopener");
       } else if (res.status === "blocked") {
         toast.error(res.message ?? "Export quality blocked");
@@ -649,8 +651,8 @@ export default function BookPublishSettings() {
                   <div className="min-w-0 flex-1">
                     <div className="font-medium capitalize">{p.platform}</div>
                     {(() => {
-                      const safeUrl = p.platform === "gumroad" && p.external_id
-                        ? `https://gumroad.com/products/${encodeURIComponent(p.external_id)}/edit`
+                      const safeUrl = p.platform === "gumroad" && p.external_id && p.status !== "live"
+                        ? `https://app.gumroad.com/products/${encodeURIComponent(p.external_id)}/edit`
                         : p.external_url;
                       return safeUrl ? (
                       <a href={safeUrl} target="_blank" rel="noreferrer noopener"
