@@ -650,7 +650,7 @@ export default function BookPublishSettings() {
                     <div className="font-medium capitalize">{p.platform}</div>
                     {(() => {
                       const safeUrl = p.platform === "gumroad" && p.status !== "live" && p.external_id
-                        ? `https://app.gumroad.com/products/${encodeURIComponent(p.external_id)}/edit`
+                        ? `https://gumroad.com/products/${encodeURIComponent(p.external_id)}/edit`
                         : p.external_url;
                       return safeUrl ? (
                       <a href={safeUrl} target="_blank" rel="noreferrer noopener"
