@@ -193,10 +193,10 @@ export async function publishExternallyOneClick(
       publish,
       correlation_id: (publish as any)?.correlation_id,
       message: isDraft
-        ? "Gumroad draft created. Finish setup on Gumroad to make the public page live."
+        ? (publish.note || "Gumroad draft created. Finish setup on Gumroad to make the public page live.")
         : publish.idempotent
         ? `Already published to ${platform === "gumroad" ? "Gumroad" : "Shopify"}.`
-        : `Published to ${platform === "gumroad" ? "Gumroad" : "Shopify"}.`,
+        : (publish.note || `Published to ${platform === "gumroad" ? "Gumroad" : "Shopify"}.`),
     };
   } catch (e: any) {
     const m = String(e?.message ?? "");
