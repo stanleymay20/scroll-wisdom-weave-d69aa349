@@ -250,7 +250,9 @@ export default function BookPublishSettings() {
         else if (res.publish.idempotent) toast.info(res.message ?? `Already published to ${platform}`);
         else toast.success(res.message ?? `Published to ${platform}`);
         await refreshPubs();
-        const safeUrl = platform === "gumroad" ? undefined : res.publish.external_url;
+        const safeUrl = platform === "gumroad"
+          ? (res.status === "draft" ? (res.publish.edit_url || res.publish.external_url) : res.publish.external_url)
+          : res.publish.external_url;
         if (safeUrl) window.open(safeUrl, "_blank", "noopener");
       } else if (res.status === "blocked") {
         toast.error(res.message ?? "Export quality blocked");

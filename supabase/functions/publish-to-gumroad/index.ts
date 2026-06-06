@@ -50,6 +50,57 @@ async function logTelemetry(admin: any, type: string, meta: Record<string, unkno
   } catch (_) { /* best-effort */ }
 }
 
+async function uploadBundleToGumroad(
+  accessToken: string,
+  bundleBytes: Uint8Array,
+  filename: string,
+): Promise<{ fileUrl: string; displayName: string; size: number }> {
+  const presign = new FormData();
+  presign.append("access_token", accessToken);
+  presign.append("filename", filename);
+  presign.append("file_size", String(bundleBytes.byteLength));
+  const presignRes = await fetchWithRetry(`${GUMROAD}/files/presign`, { method: "POST", body: presign }, { attempts: 3 });
+  const presignJson: any = await presignRes.json().catch(() => ({}));
+  if (!presignRes.ok || !presignJson?.success || !presignJson?.upload_id || !presignJson?.key || !Array.isArray(presignJson?.parts)) {
+    throw new Error(`gumroad_file_presign_failed: ${sanitiseError(presignJson?.message || `http_${presignRes.status}`, 160)}`);
+  }
+
+  const partSize = 100 * 1024 * 1024;
+  const completed: Array<{ part_number: number; etag: string }> = [];
+  for (let i = 0; i < presignJson.parts.length; i++) {
+    const part = presignJson.parts[i];
+    const partNumber = Number(part?.part_number ?? i + 1);
+    const presignedUrl = String(part?.presigned_url ?? "");
+    if (!partNumber || !presignedUrl) throw new Error("gumroad_file_presign_failed: missing upload part");
+    const start = (partNumber - 1) * partSize;
+    const end = Math.min(start + partSize, bundleBytes.byteLength);
+    const putRes = await fetch(presignedUrl, {
+      method: "PUT",
+      body: bundleBytes.slice(start, end),
+    });
+    const etag = putRes.headers.get("etag") || putRes.headers.get("ETag") || "";
+    if (!putRes.ok || !etag) throw new Error(`gumroad_file_upload_failed: http_${putRes.status}`);
+    completed.push({ part_number: partNumber, etag });
+  }
+
+  const complete = new FormData();
+  complete.append("access_token", accessToken);
+  complete.append("upload_id", String(presignJson.upload_id));
+  complete.append("key", String(presignJson.key));
+  for (const part of completed) {
+    complete.append("parts[][part_number]", String(part.part_number));
+    complete.append("parts[][etag]", part.etag);
+  }
+  const completeRes = await fetchWithRetry(`${GUMROAD}/files/complete`, { method: "POST", body: complete }, { attempts: 3 });
+  const completeJson: any = await completeRes.json().catch(() => ({}));
+  if (!completeRes.ok || !completeJson?.success) {
+    throw new Error(`gumroad_file_complete_failed: ${sanitiseError(completeJson?.message || `http_${completeRes.status}`, 160)}`);
+  }
+  const fileUrl = String(completeJson?.file_url ?? presignJson?.file_url ?? "");
+  if (!fileUrl) throw new Error("gumroad_file_complete_failed: missing file_url");
+  return { fileUrl, displayName: filename, size: bundleBytes.byteLength };
+}
+
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
   const corr = correlationId(req);
@@ -260,17 +311,17 @@ Deno.serve(async (req) => {
     }
 
     // ───────────────────────────────────────────────────────────────────
-    // Option-1 "redirect flow": resolve the latest completed Gumroad bundle
-    // up-front and mint a fresh long-lived signed download URL. Gumroad's v2
-    // API has no reliable third-party file-upload endpoint, but it does
-    // accept `custom_receipt` (HTML shown on the post-purchase thank-you
-    // page + receipt email) and `url` (call-to-action URL). We embed our
-    // signed bundle URL in both so buyers get the file immediately after
-    // checkout — no manual file attach on Gumroad required.
+    // Resolve the latest completed Gumroad bundle up-front. Primary path:
+    // upload the ZIP through Gumroad's presigned file API and attach it to
+    // the product at creation time so /enable can actually make the public
+    // page live. Fallback path: embed our signed URL in the receipt so the
+    // creator still has a manual-finalize route if Gumroad's file API fails.
     // ───────────────────────────────────────────────────────────────────
     let downloadUrl: string | null = null;
     let bundlePath: string | null = null;
     let bundleFilename: string | null = null;
+    let bundleBytes: Uint8Array | null = null;
+    let bundleBucket = "exports";
     let resolvedJobId: string | null = null;
     try {
       const { data: jobs } = explicitJobId
@@ -287,16 +338,23 @@ Deno.serve(async (req) => {
         resolvedJobId = job.id;
         bundlePath = job?.metadata?.bundle_path ?? null;
         bundleFilename = job?.metadata?.bundle_filename ?? null;
+        bundleBucket = job?.metadata?.bundle_bucket ?? "exports";
         if (bundlePath) {
           const { data: signed } = await admin.storage
-            .from(job?.metadata?.bundle_bucket ?? "exports")
+            .from(bundleBucket)
             .createSignedUrl(bundlePath, 60 * 60 * 24 * 30, bundleFilename ? { download: bundleFilename } : undefined);
           downloadUrl = signed?.signedUrl ?? null;
+          const { data: bundleBlob } = await admin.storage.from(bundleBucket).download(bundlePath);
+          if (bundleBlob) bundleBytes = new Uint8Array(await bundleBlob.arrayBuffer());
         }
         // Fall back to the job's existing result_url (7-day signed) so the
         // first publish after rollout still works for older completed jobs
         // that don't have bundle_path in metadata yet.
         if (!downloadUrl && job?.result_url) downloadUrl = String(job.result_url);
+        if (!bundleBytes && downloadUrl) {
+          const bundleFetch = await fetch(downloadUrl);
+          if (bundleFetch.ok) bundleBytes = new Uint8Array(await bundleFetch.arrayBuffer());
+        }
       }
     } catch (_) { /* non-fatal — we'll still publish as a manual-finalize draft */ }
 
@@ -321,9 +379,31 @@ Deno.serve(async (req) => {
       `<p><a href="${downloadUrl}">Download your bundle (ZIP)</a></p>` +
       `<p>If the link expires, please contact support and we'll re-issue it.</p>`;
 
+    let gumroadFile: { fileUrl: string; displayName: string; size: number } | null = null;
+    let fileUploadError: string | null = null;
+    if (bundleBytes && bundleBytes.byteLength > 0) {
+      try {
+        gumroadFile = await uploadBundleToGumroad(
+          accessToken,
+          bundleBytes,
+          bundleFilename || `${String(book.title ?? "book").replace(/[^a-z0-9._-]+/gi, "-").replace(/^-|-$/g, "") || "book"}-gumroad-bundle.zip`,
+        );
+      } catch (e) {
+        fileUploadError = sanitiseError(e, 200);
+        await logPublishEvent(admin, {
+          user_id: caller, platform: "gumroad", event_type: "publish_retried",
+          book_id: book.id, listing_id: listingId, severity: "warning",
+          correlation_id: corr,
+          message: "Gumroad file upload failed; falling back to receipt download URL.",
+          metadata: { reason: fileUploadError },
+        });
+      }
+    }
+
     // Build product payload
     const form = new FormData();
     form.append("access_token", accessToken);
+    form.append("native_type", "digital");
     form.append("name", title);
     form.append("price", String(priceCents));
     form.append("description", description);
@@ -342,6 +422,10 @@ Deno.serve(async (req) => {
     form.append("url", downloadUrl);
     form.append("content_url", downloadUrl);
     form.append("redirect_url", downloadUrl);
+    if (gumroadFile) {
+      form.append("files[][url]", gumroadFile.fileUrl);
+      form.append("files[][display_name]", gumroadFile.displayName);
+    }
 
     const createRes = await fetchWithRetry(`${GUMROAD}/products`, { method: "POST", body: form }, {
       attempts: 3,
@@ -378,6 +462,43 @@ Deno.serve(async (req) => {
     }
     if (!createRes.ok || !createJson?.success) {
       const reason = sanitiseError(createJson?.message || `gumroad_${createRes.status}`);
+      if (createRes.status === 404) {
+        const manualNote = "Gumroad's product-create API is unavailable for this account. The bundle is ready; open Gumroad, create a digital product, and paste the download URL from this row.";
+        await admin.from("external_publications").upsert({
+          user_id: caller, book_id: book.id, platform: "gumroad",
+          external_url: "https://app.gumroad.com/products",
+          external_id: null,
+          status: "draft", sync_state: "manual",
+          last_error: reason,
+          correlation_id: corr,
+          notes: manualNote,
+          metadata: {
+            download_url: downloadUrl,
+            bundle_path: bundlePath,
+            bundle_filename: bundleFilename,
+            export_job_id: resolvedJobId,
+            download_url_signed_at: new Date().toISOString(),
+            download_url_expires_at: new Date(Date.now() + 30 * 86400_000).toISOString(),
+            fulfilment_mode: "gumroad_manual_fallback",
+            gumroad_file_upload_error: fileUploadError,
+          },
+        }, { onConflict: "book_id,platform" });
+        await logPublishEvent(admin, {
+          user_id: caller, platform: "gumroad", event_type: "publish_failed",
+          book_id: book.id, listing_id: listingId, severity: "warning",
+          message: manualNote, correlation_id: corr,
+          metadata: { http_status: createRes.status, reason, fallback: "manual_dashboard" },
+        });
+        return jsonResp(200, {
+          ok: true,
+          published: false,
+          external_url: "https://app.gumroad.com/products",
+          edit_url: "https://app.gumroad.com/products",
+          bundle_hint: downloadUrl,
+          download_url: downloadUrl,
+          note: manualNote,
+        }, corr);
+      }
       await admin.from("external_publications").upsert({
         user_id: caller, book_id: book.id, platform: "gumroad",
         status: "failed", sync_state: "error", last_error: reason,
@@ -410,11 +531,10 @@ Deno.serve(async (req) => {
       } catch (_) { /* non-fatal */ }
     }
 
-    // Gumroad products created via API are 'unpublished' by default — the
-    // short_url returns 404 until the product is explicitly published. Try
-    // to publish; if Gumroad refuses (most commonly because no product file
-    // is attached yet) we keep the row as a draft and steer the creator to
-    // the edit page so they can attach the bundle ZIP + hit Publish.
+    // Gumroad products created via API are drafts by default — the short_url
+    // returns 404 until /enable succeeds. Because we now attach the ZIP via
+    // Gumroad's file API before enabling, success here should produce a real
+    // public product page. If Gumroad refuses, keep a safe dashboard fallback.
     let isPublished = false;
     let publishBlockedReason: string | null = null;
     if (productId) {
@@ -437,8 +557,8 @@ Deno.serve(async (req) => {
       }
     }
 
-    // Bundle was already resolved upstream and embedded into Gumroad's
-    // custom_receipt + redirect URL fields — no manual file attach needed.
+    // Keep our hosted signed URL as a backup fulfilment link even when the
+    // primary Gumroad file attachment succeeds.
     const bundleHint: string | null = downloadUrl;
 
     await admin.rpc("record_platform_connection_outcome", {
@@ -457,7 +577,7 @@ Deno.serve(async (req) => {
 
     const finalUrl = isPublished ? (productUrl || editUrl) : editUrl;
     const draftNote = publishBlockedReason
-      ? `Draft created on Gumroad — auto-publish blocked (${publishBlockedReason}). Open the edit page and click Publish.`
+      ? `Draft created on Gumroad — auto-publish blocked (${publishBlockedReason}). Open Gumroad and finish publishing from Products.`
       : null;
 
     await admin.from("external_publications").upsert({
@@ -478,9 +598,12 @@ Deno.serve(async (req) => {
         bundle_path: bundlePath,
         bundle_filename: bundleFilename,
         export_job_id: resolvedJobId,
+        gumroad_file_url: gumroadFile?.fileUrl ?? null,
+        gumroad_file_size: gumroadFile?.size ?? null,
+        gumroad_file_upload_error: fileUploadError,
         download_url_signed_at: new Date().toISOString(),
         download_url_expires_at: new Date(Date.now() + 30 * 86400_000).toISOString(),
-        fulfilment_mode: "gumroad_redirect",
+        fulfilment_mode: gumroadFile ? "gumroad_file_upload" : "gumroad_redirect",
       },
     }, { onConflict: "book_id,platform" });
 
@@ -497,9 +620,10 @@ Deno.serve(async (req) => {
       metadata: {
         price_cents: priceCents,
         has_bundle_hint: !!bundleHint,
+        gumroad_file_attached: !!gumroadFile,
         published: isPublished,
         publish_blocked_reason: publishBlockedReason,
-        fulfilment_mode: "gumroad_redirect",
+        fulfilment_mode: gumroadFile ? "gumroad_file_upload" : "gumroad_redirect",
       },
     });
 
@@ -512,8 +636,8 @@ Deno.serve(async (req) => {
       bundle_hint: bundleHint,
       download_url: downloadUrl,
       note: isPublished
-        ? "Live on Gumroad. Buyers receive your bundle via the post-purchase receipt automatically — no manual file attach needed."
-        : "Gumroad draft created with bundle download embedded in the receipt. Open the edit page and click Publish to go live.",
+        ? "Live on Gumroad. The bundle file is attached to the product and the receipt also includes a hosted backup link."
+        : "Gumroad draft created with a hosted bundle link. Open Gumroad Products and click Publish to go live.",
     }, corr);
   } catch (e) {
     console.error("publish-to-gumroad error", e, { correlation_id: corr });
