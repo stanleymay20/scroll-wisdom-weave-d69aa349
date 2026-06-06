@@ -312,17 +312,17 @@ Deno.serve(async (req) => {
     }
 
     // ───────────────────────────────────────────────────────────────────
-    // Option-1 "redirect flow": resolve the latest completed Gumroad bundle
-    // up-front and mint a fresh long-lived signed download URL. Gumroad's v2
-    // API has no reliable third-party file-upload endpoint, but it does
-    // accept `custom_receipt` (HTML shown on the post-purchase thank-you
-    // page + receipt email) and `url` (call-to-action URL). We embed our
-    // signed bundle URL in both so buyers get the file immediately after
-    // checkout — no manual file attach on Gumroad required.
+    // Resolve the latest completed Gumroad bundle up-front. Primary path:
+    // upload the ZIP through Gumroad's presigned file API and attach it to
+    // the product at creation time so /enable can actually make the public
+    // page live. Fallback path: embed our signed URL in the receipt so the
+    // creator still has a manual-finalize route if Gumroad's file API fails.
     // ───────────────────────────────────────────────────────────────────
     let downloadUrl: string | null = null;
     let bundlePath: string | null = null;
     let bundleFilename: string | null = null;
+    let bundleBytes: Uint8Array | null = null;
+    let bundleBucket = "exports";
     let resolvedJobId: string | null = null;
     try {
       const { data: jobs } = explicitJobId
@@ -339,16 +339,23 @@ Deno.serve(async (req) => {
         resolvedJobId = job.id;
         bundlePath = job?.metadata?.bundle_path ?? null;
         bundleFilename = job?.metadata?.bundle_filename ?? null;
+        bundleBucket = job?.metadata?.bundle_bucket ?? "exports";
         if (bundlePath) {
           const { data: signed } = await admin.storage
-            .from(job?.metadata?.bundle_bucket ?? "exports")
+            .from(bundleBucket)
             .createSignedUrl(bundlePath, 60 * 60 * 24 * 30, bundleFilename ? { download: bundleFilename } : undefined);
           downloadUrl = signed?.signedUrl ?? null;
+          const { data: bundleBlob } = await admin.storage.from(bundleBucket).download(bundlePath);
+          if (bundleBlob) bundleBytes = new Uint8Array(await bundleBlob.arrayBuffer());
         }
         // Fall back to the job's existing result_url (7-day signed) so the
         // first publish after rollout still works for older completed jobs
         // that don't have bundle_path in metadata yet.
         if (!downloadUrl && job?.result_url) downloadUrl = String(job.result_url);
+        if (!bundleBytes && downloadUrl) {
+          const bundleFetch = await fetch(downloadUrl);
+          if (bundleFetch.ok) bundleBytes = new Uint8Array(await bundleFetch.arrayBuffer());
+        }
       }
     } catch (_) { /* non-fatal — we'll still publish as a manual-finalize draft */ }
 
