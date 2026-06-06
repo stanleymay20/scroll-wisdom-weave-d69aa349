@@ -29,6 +29,7 @@ export type OneClickStatus =
   | "unsafe"         // sell-safety verifier rejected for this platform
   | "not_connected"  // upstream platform not connected (caller routes to connect)
   | "bundling"       // bundle job queued; caller should poll job_id
+  | "draft"          // upstream product created but still needs manual enable/publish
   | "published"      // upstream product created (idempotent or fresh)
   | "failed";        // hard failure
 
@@ -187,11 +188,14 @@ export async function publishExternallyOneClick(
     const publish = platform === "gumroad"
       ? await publishToGumroad(listingId, bundle.id)
       : await publishToShopify(listingId, bundle.id);
+    const isDraft = platform === "gumroad" && publish.published === false;
     return {
-      status: "published",
+      status: isDraft ? "draft" : "published",
       publish,
       correlation_id: (publish as any)?.correlation_id,
-      message: publish.idempotent
+      message: isDraft
+        ? "Gumroad draft created. Finish setup on Gumroad to make the public page live."
+        : publish.idempotent
         ? `Already published to ${platform === "gumroad" ? "Gumroad" : "Shopify"}.`
         : `Published to ${platform === "gumroad" ? "Gumroad" : "Shopify"}.`,
     };
