@@ -245,7 +245,7 @@ export default function BookPublishSettings() {
         setOneClickStage({ platform, label: "Creating upstream product…" });
         res = await publishExternallyOneClick(form.listing_id, bookId, platform);
       }
-      if (res.status === "published" && res.publish) {
+      if ((res.status === "published" || res.status === "draft") && res.publish) {
         if (res.status === "draft") toast.warning(res.message ?? "Draft created — finish setup on Gumroad to make it live.", { duration: 8000 });
         else if (res.publish.idempotent) toast.info(res.message ?? `Already published to ${platform}`);
         else toast.success(res.message ?? `Published to ${platform}`);
