@@ -655,7 +655,7 @@ export default function BookPublishSettings() {
                       return safeUrl ? (
                       <a href={safeUrl} target="_blank" rel="noreferrer noopener"
                          className="text-xs text-primary hover:underline truncate block mt-0.5">
-                        {p.platform === "gumroad" && p.external_id ? "Open Gumroad product" : safeUrl}
+                        {p.platform === "gumroad" ? "Open Gumroad dashboard" : safeUrl}
                       </a>
                       ) : null;
                     })()}
