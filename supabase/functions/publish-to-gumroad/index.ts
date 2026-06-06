@@ -463,6 +463,43 @@ Deno.serve(async (req) => {
     }
     if (!createRes.ok || !createJson?.success) {
       const reason = sanitiseError(createJson?.message || `gumroad_${createRes.status}`);
+      if (createRes.status === 404) {
+        const manualNote = "Gumroad's product-create API is unavailable for this account. The bundle is ready; open Gumroad, create a digital product, and paste the download URL from this row.";
+        await admin.from("external_publications").upsert({
+          user_id: caller, book_id: book.id, platform: "gumroad",
+          external_url: "https://app.gumroad.com/products",
+          external_id: null,
+          status: "draft", sync_state: "manual",
+          last_error: reason,
+          correlation_id: corr,
+          notes: manualNote,
+          metadata: {
+            download_url: downloadUrl,
+            bundle_path: bundlePath,
+            bundle_filename: bundleFilename,
+            export_job_id: resolvedJobId,
+            download_url_signed_at: new Date().toISOString(),
+            download_url_expires_at: new Date(Date.now() + 30 * 86400_000).toISOString(),
+            fulfilment_mode: "gumroad_manual_fallback",
+            gumroad_file_upload_error: fileUploadError,
+          },
+        }, { onConflict: "book_id,platform" });
+        await logPublishEvent(admin, {
+          user_id: caller, platform: "gumroad", event_type: "publish_failed",
+          book_id: book.id, listing_id: listingId, severity: "warning",
+          message: manualNote, correlation_id: corr,
+          metadata: { http_status: createRes.status, reason, fallback: "manual_dashboard" },
+        });
+        return jsonResp(200, {
+          ok: true,
+          published: false,
+          external_url: "https://app.gumroad.com/products",
+          edit_url: "https://app.gumroad.com/products",
+          bundle_hint: downloadUrl,
+          download_url: downloadUrl,
+          note: manualNote,
+        }, corr);
+      }
       await admin.from("external_publications").upsert({
         user_id: caller, book_id: book.id, platform: "gumroad",
         status: "failed", sync_state: "error", last_error: reason,
@@ -495,11 +532,10 @@ Deno.serve(async (req) => {
       } catch (_) { /* non-fatal */ }
     }
 
-    // Gumroad products created via API are 'unpublished' by default — the
-    // short_url returns 404 until the product is explicitly published. Try
-    // to publish; if Gumroad refuses (most commonly because no product file
-    // is attached yet) we keep the row as a draft and steer the creator to
-    // the edit page so they can attach the bundle ZIP + hit Publish.
+    // Gumroad products created via API are drafts by default — the short_url
+    // returns 404 until /enable succeeds. Because we now attach the ZIP via
+    // Gumroad's file API before enabling, success here should produce a real
+    // public product page. If Gumroad refuses, keep a safe dashboard fallback.
     let isPublished = false;
     let publishBlockedReason: string | null = null;
     if (productId) {
@@ -542,7 +578,7 @@ Deno.serve(async (req) => {
 
     const finalUrl = isPublished ? (productUrl || editUrl) : editUrl;
     const draftNote = publishBlockedReason
-      ? `Draft created on Gumroad — auto-publish blocked (${publishBlockedReason}). Open the edit page and click Publish.`
+      ? `Draft created on Gumroad — auto-publish blocked (${publishBlockedReason}). Open Gumroad and finish publishing from Products.`
       : null;
 
     await admin.from("external_publications").upsert({
@@ -563,9 +599,12 @@ Deno.serve(async (req) => {
         bundle_path: bundlePath,
         bundle_filename: bundleFilename,
         export_job_id: resolvedJobId,
+        gumroad_file_url: gumroadFile?.fileUrl ?? null,
+        gumroad_file_size: gumroadFile?.size ?? null,
+        gumroad_file_upload_error: fileUploadError,
         download_url_signed_at: new Date().toISOString(),
         download_url_expires_at: new Date(Date.now() + 30 * 86400_000).toISOString(),
-        fulfilment_mode: "gumroad_redirect",
+        fulfilment_mode: gumroadFile ? "gumroad_file_upload" : "gumroad_redirect",
       },
     }, { onConflict: "book_id,platform" });
 
@@ -582,9 +621,10 @@ Deno.serve(async (req) => {
       metadata: {
         price_cents: priceCents,
         has_bundle_hint: !!bundleHint,
+        gumroad_file_attached: !!gumroadFile,
         published: isPublished,
         publish_blocked_reason: publishBlockedReason,
-        fulfilment_mode: "gumroad_redirect",
+        fulfilment_mode: gumroadFile ? "gumroad_file_upload" : "gumroad_redirect",
       },
     });
 
@@ -597,8 +637,8 @@ Deno.serve(async (req) => {
       bundle_hint: bundleHint,
       download_url: downloadUrl,
       note: isPublished
-        ? "Live on Gumroad. Buyers receive your bundle via the post-purchase receipt automatically — no manual file attach needed."
-        : "Gumroad draft created with bundle download embedded in the receipt. Open the edit page and click Publish to go live.",
+        ? "Live on Gumroad. The bundle file is attached to the product and the receipt also includes a hosted backup link."
+        : "Gumroad draft created with a hosted bundle link. Open Gumroad Products and click Publish to go live.",
     }, corr);
   } catch (e) {
     console.error("publish-to-gumroad error", e, { correlation_id: corr });
