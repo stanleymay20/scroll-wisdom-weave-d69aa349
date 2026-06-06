@@ -145,3 +145,6 @@ verify_jwt = false
 
 [functions.admin-force-stripe-resync]
 verify_jwt = false
+
+[functions.creator-payout-profile]
+verify_jwt = false
