@@ -1682,6 +1682,187 @@ export type Database = {
           },
         ]
       }
+      creator_asset_files: {
+        Row: {
+          asset_id: string
+          created_at: string
+          creator_user_id: string
+          display_order: number
+          external_url: string | null
+          file_name: string
+          id: string
+          metadata: Json
+          mime_type: string | null
+          size_bytes: number | null
+          storage_bucket: string | null
+          storage_path: string | null
+          updated_at: string
+        }
+        Insert: {
+          asset_id: string
+          created_at?: string
+          creator_user_id: string
+          display_order?: number
+          external_url?: string | null
+          file_name: string
+          id?: string
+          metadata?: Json
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Update: {
+          asset_id?: string
+          created_at?: string
+          creator_user_id?: string
+          display_order?: number
+          external_url?: string | null
+          file_name?: string
+          id?: string
+          metadata?: Json
+          mime_type?: string | null
+          size_bytes?: number | null
+          storage_bucket?: string | null
+          storage_path?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_asset_files_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "creator_assets"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_assets: {
+        Row: {
+          asset_type: string
+          category: string | null
+          cover_url: string | null
+          created_at: string
+          creator_user_id: string
+          currency: string
+          display_order: number
+          funnel_role: string | null
+          id: string
+          metadata: Json
+          price_cents: number
+          pricing_model: string
+          slug: string | null
+          source_book_id: string | null
+          status: string
+          stripe_price_id: string | null
+          summary: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          asset_type: string
+          category?: string | null
+          cover_url?: string | null
+          created_at?: string
+          creator_user_id: string
+          currency?: string
+          display_order?: number
+          funnel_role?: string | null
+          id?: string
+          metadata?: Json
+          price_cents?: number
+          pricing_model?: string
+          slug?: string | null
+          source_book_id?: string | null
+          status?: string
+          stripe_price_id?: string | null
+          summary?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          asset_type?: string
+          category?: string | null
+          cover_url?: string | null
+          created_at?: string
+          creator_user_id?: string
+          currency?: string
+          display_order?: number
+          funnel_role?: string | null
+          id?: string
+          metadata?: Json
+          price_cents?: number
+          pricing_model?: string
+          slug?: string | null
+          source_book_id?: string | null
+          status?: string
+          stripe_price_id?: string | null
+          summary?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_assets_source_book_id_fkey"
+            columns: ["source_book_id"]
+            isOneToOne: true
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      creator_business_events: {
+        Row: {
+          amount_cents: number | null
+          asset_id: string | null
+          creator_user_id: string
+          currency: string | null
+          event_type: string
+          id: string
+          metadata: Json
+          occurred_at: string
+          purchase_id: string | null
+        }
+        Insert: {
+          amount_cents?: number | null
+          asset_id?: string | null
+          creator_user_id: string
+          currency?: string | null
+          event_type: string
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          purchase_id?: string | null
+        }
+        Update: {
+          amount_cents?: number | null
+          asset_id?: string | null
+          creator_user_id?: string
+          currency?: string | null
+          event_type?: string
+          id?: string
+          metadata?: Json
+          occurred_at?: string
+          purchase_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "creator_business_events_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "creator_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "creator_business_events_purchase_id_fkey"
+            columns: ["purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       creator_earnings_ledger: {
         Row: {
           available_at: string | null
@@ -2992,6 +3173,7 @@ export type Database = {
       public_listings: {
         Row: {
           amazon_description: string | null
+          asset_id: string | null
           backend_keywords: string[]
           blurb: string | null
           book_id: string
@@ -3013,6 +3195,7 @@ export type Database = {
         }
         Insert: {
           amazon_description?: string | null
+          asset_id?: string | null
           backend_keywords?: string[]
           blurb?: string | null
           book_id: string
@@ -3034,6 +3217,7 @@ export type Database = {
         }
         Update: {
           amazon_description?: string | null
+          asset_id?: string | null
           backend_keywords?: string[]
           blurb?: string | null
           book_id?: string
@@ -3054,6 +3238,13 @@ export type Database = {
           updated_at?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "public_listings_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "creator_assets"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "public_listings_book_id_fkey"
             columns: ["book_id"]
@@ -3295,6 +3486,103 @@ export type Database = {
             columns: ["listing_id"]
             isOneToOne: false
             referencedRelation: "public_listings"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      purchases: {
+        Row: {
+          amount_cents: number
+          asset_id: string | null
+          asset_type_snapshot: string
+          buyer_email: string | null
+          correlation_id: string | null
+          created_at: string
+          creator_user_id: string | null
+          currency: string
+          current_period_end: string | null
+          id: string
+          metadata: Json
+          parent_purchase_id: string | null
+          pricing_model: string
+          purchased_at: string | null
+          refunded_at: string | null
+          source_book_purchase_id: string | null
+          status: string
+          stripe_payment_intent_id: string | null
+          stripe_session_id: string | null
+          stripe_subscription_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          amount_cents?: number
+          asset_id?: string | null
+          asset_type_snapshot: string
+          buyer_email?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          creator_user_id?: string | null
+          currency?: string
+          current_period_end?: string | null
+          id?: string
+          metadata?: Json
+          parent_purchase_id?: string | null
+          pricing_model?: string
+          purchased_at?: string | null
+          refunded_at?: string | null
+          source_book_purchase_id?: string | null
+          status?: string
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          amount_cents?: number
+          asset_id?: string | null
+          asset_type_snapshot?: string
+          buyer_email?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          creator_user_id?: string | null
+          currency?: string
+          current_period_end?: string | null
+          id?: string
+          metadata?: Json
+          parent_purchase_id?: string | null
+          pricing_model?: string
+          purchased_at?: string | null
+          refunded_at?: string | null
+          source_book_purchase_id?: string | null
+          status?: string
+          stripe_payment_intent_id?: string | null
+          stripe_session_id?: string | null
+          stripe_subscription_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "purchases_asset_id_fkey"
+            columns: ["asset_id"]
+            isOneToOne: false
+            referencedRelation: "creator_assets"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_parent_purchase_id_fkey"
+            columns: ["parent_purchase_id"]
+            isOneToOne: false
+            referencedRelation: "purchases"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "purchases_source_book_purchase_id_fkey"
+            columns: ["source_book_purchase_id"]
+            isOneToOne: false
+            referencedRelation: "book_purchases"
             referencedColumns: ["id"]
           },
         ]
@@ -4690,6 +4978,16 @@ export type Database = {
       get_recommendation_diversity: {
         Args: { _window_days?: number }
         Returns: Json
+      }
+      get_user_asset_entitlements: {
+        Args: { _user_id: string }
+        Returns: {
+          asset_id: string
+          asset_type: string
+          expires_at: string
+          purchase_id: string
+          source: string
+        }[]
       }
       get_user_entitlements: { Args: { _user_id: string }; Returns: Json }
       get_user_recommendation_suppression: {
