@@ -1087,26 +1087,36 @@ serve(async (req) => {
     let isBase64 = false;
 
     // ===== Canonical content audit (non-blocking; powers export metadata) =====
-    let canonicalRendererVersion: string | null = CANONICAL_RENDERER_VERSION;
+    // Books above this chapter count skip the canonical renderer entirely — the
+    // canonical audit + render path burns the 2s edge CPU budget on long books
+    // (30+ chapters) and gets killed before the in-function fallback can fire.
+    // Legacy renderer is the proven, lighter path for large books.
+    const CANONICAL_MAX_CHAPTERS = 18;
+    const skipCanonical = (chapters?.length ?? 0) > CANONICAL_MAX_CHAPTERS;
+    let canonicalRendererVersion: string | null = skipCanonical ? null : CANONICAL_RENDERER_VERSION;
     let exportQualityStatus: string | null = null;
     let exportQualityScore: number | null = null;
-    let canonicalFallbackUsed = false;
-    try {
-      const canonical = parseBookToCanonical(
-        (chapters || []).map((c: any) => ({
-          chapter_number: c.chapter_number,
-          title: c.title,
-          content: c.content,
-        })),
-      );
-      const audit = auditBookForExport(canonical, { hasCover: !!coverImageBytes, bookType: book.book_type });
-      exportQualityStatus = audit.status;
-      exportQualityScore = audit.score;
-      console.log(`[EXPORT] canonical audit status=${audit.status} score=${audit.score} chapters=${canonical.length}`);
-    } catch (e) {
-      canonicalFallbackUsed = true;
-      canonicalRendererVersion = null;
-      console.warn("[EXPORT] canonical parse failed, falling back to legacy renderer", e);
+    let canonicalFallbackUsed = skipCanonical;
+    if (skipCanonical) {
+      console.log(`[EXPORT] skipping canonical path (chapters=${chapters.length} > ${CANONICAL_MAX_CHAPTERS}) — using legacy renderer to stay within CPU budget`);
+    } else {
+      try {
+        const canonical = parseBookToCanonical(
+          (chapters || []).map((c: any) => ({
+            chapter_number: c.chapter_number,
+            title: c.title,
+            content: c.content,
+          })),
+        );
+        const audit = auditBookForExport(canonical, { hasCover: !!coverImageBytes, bookType: book.book_type });
+        exportQualityStatus = audit.status;
+        exportQualityScore = audit.score;
+        console.log(`[EXPORT] canonical audit status=${audit.status} score=${audit.score} chapters=${canonical.length}`);
+      } catch (e) {
+        canonicalFallbackUsed = true;
+        canonicalRendererVersion = null;
+        console.warn("[EXPORT] canonical parse failed, falling back to legacy renderer", e);
+      }
     }
 
 
@@ -1114,14 +1124,19 @@ serve(async (req) => {
     switch (format) {
       case "pdf": {
         let pdfBytes: Uint8Array;
-        try {
-          pdfBytes = await generateCanonicalPDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
-          canonicalFallbackUsed = false;
-          console.log("[EXPORT] canonical PDF render succeeded");
-        } catch (e) {
-          canonicalFallbackUsed = true;
-          console.warn("[EXPORT] canonical PDF render failed, falling back to legacy:", e);
+        if (skipCanonical) {
           pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+          console.log("[EXPORT] legacy PDF render (canonical skipped)");
+        } else {
+          try {
+            pdfBytes = await generateCanonicalPDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+            canonicalFallbackUsed = false;
+            console.log("[EXPORT] canonical PDF render succeeded");
+          } catch (e) {
+            canonicalFallbackUsed = true;
+            console.warn("[EXPORT] canonical PDF render failed, falling back to legacy:", e);
+            pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
+          }
         }
         content = uint8ArrayToBase64(pdfBytes);
         contentType = "application/pdf";
@@ -1129,6 +1144,7 @@ serve(async (req) => {
         isBase64 = true;
         break;
       }
+
 
 
       case "kdp-pdf": {
