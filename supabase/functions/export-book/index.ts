@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { PDFDocument, rgb, StandardFonts } from "https://esm.sh/pdf-lib@1.17.1";
+import { PDFDocument, rgb, StandardFonts, PDFRawStream, pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } from "https://esm.sh/pdf-lib@1.17.1";
 import * as zip from "https://deno.land/x/zipjs@v2.7.32/index.js";
 import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
 import { auditBookForExport } from "../_shared/exportQuality.ts";
@@ -1904,6 +1904,11 @@ async function generatePDF(
     });
   }
 
+  // Book-wide image embedding budget. Passthrough embeds (see embedImageSmart)
+  // cost near-zero CPU, but each embedded image adds ~1MB to the PDF — cap the
+  // total, and strictly limit slow full-decode PNG embeds (alpha/interlaced).
+  const imageBudget = { remaining: 24, slowPng: 3 };
+
   // Chapters
   for (const chapter of chapters) {
     currentChapterTitle = chapter.title;
@@ -1950,8 +1955,25 @@ async function generatePDF(
     
     const { paragraphs, codeBlocks, structuredBlocks, images, customTables, tables: mdTables, headings } = processMarkdownContent(chapterContent);
     
-    // SKIP image fetching/embedding in PDF to avoid CPU timeout — use text placeholders instead
-    const fetchedImages: Map<number, { bytes: Uint8Array; type: 'png' | 'jpg' }> = new Map();
+    // Fetch + embed real images. PNG passthrough embedding reuses the PNG's
+    // own zlib stream (near-zero CPU); budgets guard the 2s edge CPU limit.
+    const fetchedImages: Map<number, EmbeddedImage> = new Map();
+    if (images.length > 0 && imageBudget.remaining > 0) {
+      const candidates = images
+        .map((img, idx) => ({ idx, url: img.url }))
+        .filter((c) => /^(https?:\/\/|data:image)/i.test(c.url))
+        .slice(0, Math.min(8, imageBudget.remaining));
+      const fetched = await Promise.all(candidates.map((c) => fetchImageBytes(c.url)));
+      for (let fi = 0; fi < candidates.length; fi++) {
+        const bytes = fetched[fi];
+        if (!bytes || imageBudget.remaining <= 0) continue;
+        const embedded = await embedImageSmart(pdfDoc, bytes, imageBudget);
+        if (embedded) {
+          fetchedImages.set(candidates[fi].idx, embedded);
+          imageBudget.remaining--;
+        }
+      }
+    }
     
     for (let paraIdx = 0; paraIdx < paragraphs.length; paraIdx++) {
       const paragraph = paragraphs[paraIdx];
@@ -1994,87 +2016,61 @@ async function generatePDF(
         continue;
       }
       
-      // Check if this is an image placeholder (for comics)
+      // Check if this is an image placeholder
       const imageMatch = paragraph.match(/\[IMAGE_(\d+)\]/);
       if (imageMatch) {
         const imgIndex = parseInt(imageMatch[1]);
-        const imgInfo = fetchedImages.get(imgIndex);
+        const em = fetchedImages.get(imgIndex);
         const imgMeta = images[imgIndex];
         
-        if (imgInfo) {
-          // Add new page if needed for image
-          const imgHeight = 300; // Fixed height for comic panels
-          if (y - imgHeight < margin + 30) {
+        if (em) {
+          // Scale to fit page width while maintaining aspect ratio
+          const imgAspect = em.width / em.height;
+          let drawWidth = textWidth;
+          let drawHeight = drawWidth / imgAspect;
+          if (drawHeight > 350) {
+            drawHeight = 350;
+            drawWidth = drawHeight * imgAspect;
+          }
+          if (y - drawHeight < margin + 30) {
             page = pdfDoc.addPage([pageWidth, pageHeight]);
             pageNumber++;
             addPageNumber(page, pageNumber);
             y = pageHeight - margin - 30;
           }
+          const drawX = margin + (textWidth - drawWidth) / 2;
+          drawEmbeddedImage(page, em, drawX, y - drawHeight, drawWidth, drawHeight);
+          y -= drawHeight + 12;
           
-          try {
-            let image;
-            if (imgInfo.type === 'png') {
-              image = await pdfDoc.embedPng(imgInfo.bytes);
-            } else {
-              image = await pdfDoc.embedJpg(imgInfo.bytes);
+          // Caption (wrapped) — wrapText sanitizes internally
+          if (imgMeta?.alt && imgMeta.alt !== 'Image') {
+            const captionLines = wrapText(`Figure: ${imgMeta.alt}`, helvetica, 9, textWidth).slice(0, 3);
+            for (const line of captionLines) {
+              if (y < margin + 30) {
+                page = pdfDoc.addPage([pageWidth, pageHeight]);
+                pageNumber++;
+                addPageNumber(page, pageNumber);
+                y = pageHeight - margin - 30;
+              }
+              page.drawText(line, { x: margin, y, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4) });
+              y -= 12;
             }
-            
-            // Calculate dimensions to fit in page width while maintaining aspect ratio
-            const imgAspect = image.width / image.height;
-            let drawWidth = textWidth;
-            let drawHeight = drawWidth / imgAspect;
-            
-            // Limit max height
-            if (drawHeight > 350) {
-              drawHeight = 350;
-              drawWidth = drawHeight * imgAspect;
-            }
-            
-            // Center the image
-            const drawX = margin + (textWidth - drawWidth) / 2;
-            
-            page.drawImage(image, {
-              x: drawX,
-              y: y - drawHeight,
-              width: drawWidth,
-              height: drawHeight,
-            });
-            
-            y -= drawHeight + 10;
-            
-            // Add caption if available - MUST sanitize
-            if (imgMeta?.alt && imgMeta.alt !== 'Image') {
-              page.drawText(sanitizeForPDF(imgMeta.alt), {
-                x: margin,
-                y,
-                size: 9,
-                font: helvetica,
-                color: rgb(0.4, 0.4, 0.4),
-              });
-              y -= 20;
-            }
-          } catch (error) {
-            console.error(`[EXPORT] Failed to embed image ${imgIndex}:`, error);
-            // Draw placeholder text - MUST sanitize
-            page.drawText(sanitizeForPDF(`[Image: ${imgMeta?.alt || 'Panel'}]`), {
-              x: margin,
-              y,
-              size: 10,
-              font: helvetica,
-              color: rgb(0.6, 0.6, 0.6),
-            });
-            y -= 20;
+            y -= 8;
           }
         } else {
-          // Image not found - draw placeholder - MUST sanitize
-          page.drawText(sanitizeForPDF(`[Image not available: ${imgMeta?.alt || 'Panel'}]`), {
-            x: margin,
-            y,
-            size: 10,
-            font: helvetica,
-            color: rgb(0.6, 0.6, 0.6),
-          });
-          y -= 20;
+          // Image unavailable — draw wrapped placeholder (no page overflow)
+          const placeholderLines = wrapText(`[Image not available: ${imgMeta?.alt || 'Illustration'}]`, helvetica, 10, textWidth).slice(0, 4);
+          for (const line of placeholderLines) {
+            if (y < margin + 30) {
+              page = pdfDoc.addPage([pageWidth, pageHeight]);
+              pageNumber++;
+              addPageNumber(page, pageNumber);
+              y = pageHeight - margin - 30;
+            }
+            page.drawText(line, { x: margin, y, size: 10, font: helvetica, color: rgb(0.6, 0.6, 0.6) });
+            y -= 14;
+          }
+          y -= 6;
         }
         continue;
       }
@@ -2345,14 +2341,23 @@ async function generatePDF(
           const cellFontSize = 8;
           const cellLineHeight = cellFontSize + 3;
           const cellPadding = 6;
-          const headerHeight = 22;
+          
+          // Wrap header cells within their column (no clipping/overflow)
+          const headerCellLines: string[][] = [];
+          let headerMaxLines = 1;
+          for (let i = 0; i < numCols; i++) {
+            const wrapped = wrapText(stripInlineMarkdown((table.headers[i] || '').slice(0, 120)), timesRomanBold, 9, colWidth - 10).slice(0, 3);
+            headerCellLines.push(wrapped);
+            headerMaxLines = Math.max(headerMaxLines, wrapped.length);
+          }
+          const headerHeight = headerMaxLines * 12 + 10;
           
           // Calculate dynamic row heights
           const rowHeights: number[] = [];
           for (const row of table.rows) {
             let maxLines = 1;
             for (let colIdx = 0; colIdx < numCols && colIdx < row.length; colIdx++) {
-              const cellText = stripInlineMarkdown((row[colIdx] || '').slice(0, 80));
+              const cellText = stripInlineMarkdown((row[colIdx] || '').slice(0, 400));
               const wrapped = wrapText(cellText, timesRoman, cellFontSize, colWidth - 10);
               maxLines = Math.max(maxLines, wrapped.length);
             }
@@ -2381,11 +2386,14 @@ async function generatePDF(
           });
           
           for (let i = 0; i < numCols; i++) {
-            const headerText = sanitizeForPDF(stripInlineMarkdown((table.headers[i] || '').slice(0, 40)));
-            page.drawText(headerText, {
-              x: margin + (i * colWidth) + 5, y: y - 12,
-              size: 9, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1),
-            });
+            let hy = y - 12;
+            for (const line of headerCellLines[i]) {
+              page.drawText(line, {
+                x: margin + (i * colWidth) + 5, y: hy,
+                size: 9, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1),
+              });
+              hy -= 12;
+            }
           }
           y -= headerHeight;
           
@@ -2409,7 +2417,7 @@ async function generatePDF(
             }
             
             for (let colIdx = 0; colIdx < row.length && colIdx < numCols; colIdx++) {
-              const cellText = sanitizeForPDF(stripInlineMarkdown((row[colIdx] || '').slice(0, 80)));
+              const cellText = sanitizeForPDF(stripInlineMarkdown((row[colIdx] || '').slice(0, 400)));
               const wrapped = wrapText(cellText, timesRoman, cellFontSize, colWidth - 10);
               let cellY = y - cellLineHeight;
               for (const line of wrapped) {
@@ -2442,14 +2450,23 @@ async function generatePDF(
           const cellFontSize = 8;
           const cellLineHeight = cellFontSize + 3;
           const cellPadding = 6;
-          const headerHeight = 22;
+          
+          // Wrap header cells within their column (no clipping/overflow)
+          const headerCellLines: string[][] = [];
+          let headerMaxLines = 1;
+          for (let i = 0; i < numCols; i++) {
+            const wrapped = wrapText(stripInlineMarkdown((table.headers[i] || '').slice(0, 120)), timesRomanBold, 9, colWidth - 10).slice(0, 3);
+            headerCellLines.push(wrapped);
+            headerMaxLines = Math.max(headerMaxLines, wrapped.length);
+          }
+          const headerHeight = headerMaxLines * 12 + 10;
           
           // Calculate dynamic row heights based on wrapped text
           const rowHeights: number[] = [];
           for (const row of table.rows) {
             let maxLines = 1;
             for (let colIdx = 0; colIdx < numCols && colIdx < row.length; colIdx++) {
-              const cellText = stripInlineMarkdown((row[colIdx] || '').slice(0, 80));
+              const cellText = stripInlineMarkdown((row[colIdx] || '').slice(0, 400));
               const wrapped = wrapText(cellText, timesRoman, cellFontSize, colWidth - 10);
               maxLines = Math.max(maxLines, wrapped.length);
             }
@@ -2482,13 +2499,16 @@ async function generatePDF(
             color: rgb(0.92, 0.92, 0.92),
           });
           
-          // Header text
+          // Header text (wrapped per column)
           for (let i = 0; i < numCols; i++) {
-            const headerText = sanitizeForPDF(stripInlineMarkdown((table.headers[i] || '').slice(0, 40)));
-            page.drawText(headerText, {
-              x: margin + (i * colWidth) + 5, y: y - 12,
-              size: 9, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1),
-            });
+            let hy = y - 12;
+            for (const line of headerCellLines[i]) {
+              page.drawText(line, {
+                x: margin + (i * colWidth) + 5, y: hy,
+                size: 9, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1),
+              });
+              hy -= 12;
+            }
           }
           y -= headerHeight;
           
@@ -2516,7 +2536,7 @@ async function generatePDF(
             
             // Draw cell text with wrapping
             for (let colIdx = 0; colIdx < numCols && colIdx < row.length; colIdx++) {
-              const cellText = sanitizeForPDF(stripInlineMarkdown((row[colIdx] || '').slice(0, 80)));
+              const cellText = sanitizeForPDF(stripInlineMarkdown((row[colIdx] || '').slice(0, 400)));
               const wrapped = wrapText(cellText, timesRoman, cellFontSize, colWidth - 10);
               let cellY = y - cellLineHeight;
               for (const line of wrapped) {
@@ -2715,6 +2735,95 @@ function measureCached(font: any, fontSize: number, word: string): number {
   }
   return v;
 }
+
+// ── Fast image embedding ─────────────────────────────────────────────────
+// pdf-lib's embedPng fully inflates + re-deflates pixel data (~500ms CPU per
+// 1MB image) which blows the 2s edge CPU budget on image-heavy books.
+// For the common case (8-bit non-interlaced RGB/gray/palette PNG, no alpha)
+// we reuse the PNG's own zlib stream directly as the PDF image XObject
+// (/Filter FlateDecode + PNG Predictor 15) — near-zero CPU. JPEGs are
+// already passthrough in pdf-lib.
+interface EmbeddedImage { width: number; height: number; ref?: any; img?: any }
+
+function parsePngForPassthrough(bytes: Uint8Array): {
+  width: number; height: number; bitDepth: number; colorType: number;
+  interlace: number; data: Uint8Array; palette: Uint8Array | null; hasAlpha: boolean;
+} | null {
+  if (bytes.length < 33 || bytes[0] !== 0x89 || bytes[1] !== 0x50 || bytes[2] !== 0x4E || bytes[3] !== 0x47) return null;
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
+  const width = dv.getUint32(16);
+  const height = dv.getUint32(20);
+  const bitDepth = bytes[24], colorType = bytes[25], interlace = bytes[28];
+  const idat: Uint8Array[] = [];
+  let palette: Uint8Array | null = null;
+  let hasAlpha = colorType === 4 || colorType === 6;
+  let off = 8;
+  while (off + 8 <= bytes.length) {
+    const len = dv.getUint32(off);
+    const type = String.fromCharCode(bytes[off + 4], bytes[off + 5], bytes[off + 6], bytes[off + 7]);
+    if (type === 'IDAT') idat.push(bytes.subarray(off + 8, off + 8 + len));
+    else if (type === 'PLTE') palette = bytes.subarray(off + 8, off + 8 + len);
+    else if (type === 'tRNS') hasAlpha = true;
+    else if (type === 'IEND') break;
+    off += 12 + len;
+  }
+  if (idat.length === 0) return null;
+  const total = idat.reduce((s, c) => s + c.length, 0);
+  const data = new Uint8Array(total);
+  let p = 0;
+  for (const c of idat) { data.set(c, p); p += c.length; }
+  return { width, height, bitDepth, colorType, interlace, data, palette, hasAlpha };
+}
+
+async function embedImageSmart(pdfDoc: any, bytes: Uint8Array, budget: { slowPng: number }): Promise<EmbeddedImage | null> {
+  try {
+    // JPEG: pdf-lib embeds the DCT stream as-is — cheap.
+    if (bytes.length > 3 && bytes[0] === 0xFF && bytes[1] === 0xD8) {
+      const img = await pdfDoc.embedJpg(bytes);
+      return { width: img.width, height: img.height, img };
+    }
+    const png = parsePngForPassthrough(bytes);
+    if (png) {
+      const passthroughOk = png.bitDepth === 8 && png.interlace === 0 && !png.hasAlpha &&
+        (png.colorType === 0 || png.colorType === 2 || (png.colorType === 3 && png.palette));
+      if (passthroughOk) {
+        const ctx = pdfDoc.context;
+        const colors = png.colorType === 2 ? 3 : 1;
+        let colorSpace: any = png.colorType === 0 ? 'DeviceGray' : 'DeviceRGB';
+        if (png.colorType === 3 && png.palette) {
+          const lookupRef = ctx.register(PDFRawStream.of(ctx.obj({}), png.palette));
+          colorSpace = ctx.obj(['Indexed', 'DeviceRGB', png.palette.length / 3 - 1, lookupRef]);
+        }
+        const dict = ctx.obj({
+          Type: 'XObject', Subtype: 'Image', Width: png.width, Height: png.height,
+          ColorSpace: colorSpace, BitsPerComponent: 8, Filter: 'FlateDecode',
+          DecodeParms: { Predictor: 15, Colors: colors, BitsPerComponent: 8, Columns: png.width },
+        });
+        const ref = ctx.register(PDFRawStream.of(dict, png.data));
+        return { width: png.width, height: png.height, ref };
+      }
+      // Alpha/interlaced/16-bit PNGs require a full decode — strictly budgeted.
+      if (budget.slowPng > 0) {
+        budget.slowPng--;
+        const img = await pdfDoc.embedPng(bytes);
+        return { width: img.width, height: img.height, img };
+      }
+    }
+  } catch (e) {
+    console.error('[EXPORT] embedImageSmart failed:', e);
+  }
+  return null;
+}
+
+function drawEmbeddedImage(page: any, em: EmbeddedImage, x: number, y: number, w: number, h: number) {
+  if (em.img) {
+    page.drawImage(em.img, { x, y, width: w, height: h });
+  } else if (em.ref) {
+    const name = page.node.newXObject('Image', em.ref);
+    page.pushOperators(pushGraphicsState(), concatTransformationMatrix(w, 0, 0, h, x, y), drawObject(name), popGraphicsState());
+  }
+}
+
 
 function wrapText(text: string, font: any, fontSize: number, maxWidth: number): string[] {
   // Sanitize text for PDF WinAnsi encoding before measuring/wrapping
