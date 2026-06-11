@@ -2666,6 +2666,21 @@ async function generatePDF(
 // embedded fonts never collide; inner key is `${fontSize}|${word}`.
 const fontWidthCache = new WeakMap<object, Map<string, number>>();
 
+function measureCached(font: any, fontSize: number, word: string): number {
+  let cache = fontWidthCache.get(font);
+  if (!cache) {
+    cache = new Map<string, number>();
+    fontWidthCache.set(font, cache);
+  }
+  const key = `${fontSize}|${word}`;
+  let v = cache.get(key);
+  if (v === undefined) {
+    v = font.widthOfTextAtSize(word, fontSize) as number;
+    if (cache.size < 100_000) cache.set(key, v);
+  }
+  return v;
+}
+
 function wrapText(text: string, font: any, fontSize: number, maxWidth: number): string[] {
   // Sanitize text for PDF WinAnsi encoding before measuring/wrapping
   const sanitizedText = sanitizeForPDF(text);
@@ -2678,20 +2693,7 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
   // sums glyph advance widths (no kerning), so width(line + " " + word) ===
   // width(line) + width(" ") + width(word). We measure each word once (memoized)
   // and accumulate numerically — O(n) and identical line breaks.
-  let cache = fontWidthCache.get(font);
-  if (!cache) {
-    cache = new Map<string, number>();
-    fontWidthCache.set(font, cache);
-  }
-  const measure = (w: string): number => {
-    const key = `${fontSize}|${w}`;
-    let v = cache!.get(key);
-    if (v === undefined) {
-      v = font.widthOfTextAtSize(w, fontSize) as number;
-      if (cache!.size < 100_000) cache!.set(key, v);
-    }
-    return v;
-  };
+  const measure = (w: string): number => measureCached(font, fontSize, w);
   const spaceWidth = measure(" ");
 
   let currentLine = "";
