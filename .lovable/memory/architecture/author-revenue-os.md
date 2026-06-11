@@ -18,12 +18,13 @@ ScrollLibrary evolved from book marketplace into Author Revenue OS using a singl
 
 ## Staged ledger migration (critical)
 - **M1**: backfill only. `book_purchases` is system of record. `purchases` is abstraction.
-- **M2**: dual-write — new book checkouts write to both `book_purchases` AND `purchases`. Non-book assets write only to `purchases`. New `record_asset_purchase_ledger` writes non-book rows into existing `creator_earnings_ledger`.
+- **M2 (DONE)**: dual-write via `mirror_book_purchase_to_universal` AFTER INSERT/UPDATE trigger on `book_purchases`. Every book write path (free unlock, paid checkout, webhook flip, refund, admin) auto-mirrors into `purchases` keyed by `source_book_purchase_id`. `creator_business_events.purchase_completed` emitted on first transition to paid (skipped when `metadata.backfilled = true`). `record_asset_purchase_ledger(uuid)` is a safe no-op for `asset_type='book'` or rows with `source_book_purchase_id` — books stay on `record_purchase_ledger`.
+- **M3+**: non-book asset writes go directly to `purchases` and `record_asset_purchase_ledger` will fill in.
 - **M8**: validation window, then ledger reads exclusively from `purchases`. Never hard-cutover the ledger.
 
 ## Milestone order (final)
 M1 asset graph + universal purchases + entitlement RPC + business events (DONE)
-M2 polymorphic checkout + dual-write for books
+M2 dual-write trigger for books + asset ledger stub (DONE)
 M3 digital products UI (`/creator/assets`)
 M4 services + coaching (`creator_asset_bookings`, email confirm, no calendar integrations)
 M5 memberships (`creator_memberships`, `creator_membership_benefits`)
