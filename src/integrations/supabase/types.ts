@@ -5052,6 +5052,10 @@ export type Database = {
         Returns: number
       }
       purge_velocity_buckets: { Args: never; Returns: number }
+      record_asset_purchase_ledger: {
+        Args: { _purchase_id: string }
+        Returns: undefined
+      }
       record_purchase_ledger: { Args: { _purchase_id: string }; Returns: Json }
       set_platform_fee: { Args: { _bps: number }; Returns: Json }
       show_limit: { Args: never; Returns: number }
