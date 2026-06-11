@@ -554,22 +554,55 @@ function drawStyledParagraph(
   let currentX = x;
   let currentY = y;
   let currentPage = page;
-  
+
+  // PERF: the old implementation issued ONE drawText call per word and
+  // measured each word twice with widthOfTextAtSize — hundreds of thousands
+  // of pdf-lib operations for a long book, which blew the 2s edge CPU budget
+  // and bloated the PDF content streams. We now buffer consecutive same-font
+  // words on a line into a single segment and emit ONE drawText per segment
+  // (typically one per line), with memoized word measurements. Identical
+  // visual output: pdf-lib advances by summed glyph widths with no kerning.
+  let segFont: any = null;
+  let segText = "";
+  let segX = 0;
+
+  const flushSegment = () => {
+    if (segText && segFont) {
+      currentPage.drawText(segText, {
+        x: segX,
+        y: currentY,
+        size: fontSize,
+        font: segFont,
+        color,
+      });
+    }
+    segText = "";
+  };
+
   for (const run of runs) {
     const font = run.bold && run.italic ? fonts.boldItalic 
                : run.bold ? fonts.bold 
                : run.italic ? fonts.italic 
                : fonts.regular;
-    
+
+    if (font !== segFont) {
+      flushSegment();
+      segFont = font;
+      segX = currentX;
+    }
+    const spaceWidth = measureCached(font, fontSize, " ");
+
     const words = run.text.split(/\s+/);
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
       if (!word) continue;
-      const wordWithSpace = (currentX > x ? ' ' : '') + word;
-      const wordWidth = font.widthOfTextAtSize(wordWithSpace, fontSize);
+      const needsSpace = currentX > x;
+      const bareWidth = measureCached(font, fontSize, word);
+      const wordWidth = needsSpace ? spaceWidth + bareWidth : bareWidth;
       
       if (currentX + wordWidth > x + maxWidth && currentX > x) {
         // New line
+        flushSegment();
         currentX = x;
         currentY -= lineHeight;
         
@@ -583,19 +616,17 @@ function drawStyledParagraph(
           currentY = (pageHeight || 792) - (margin || 72) - 30;
           currentX = x; // Reset X after page break to prevent text starting mid-line
         }
+        segX = currentX;
+        segText = word;
+        currentX += bareWidth;
+      } else {
+        if (!segText) segX = currentX;
+        segText += needsSpace ? ` ${word}` : word;
+        currentX += wordWidth;
       }
-      
-      const drawWord = currentX > x ? ' ' + word : word;
-      currentPage.drawText(drawWord, {
-        x: currentX,
-        y: currentY,
-        size: fontSize,
-        font,
-        color,
-      });
-      currentX += font.widthOfTextAtSize(drawWord, fontSize);
     }
   }
+  flushSegment();
   
   return { y: currentY - lineHeight, page: currentPage }; // Return next Y position AND current page
 }
