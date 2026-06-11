@@ -3537,7 +3537,8 @@ async function generateEPUB(
     });
     
     // Convert PROPER markdown tables (pipe format) to HTML tables
-    content = content.replace(/(?:(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/g, 
+    // PERF: line-start anchored (^ + m) — see markdownTableRegex note above.
+    content = content.replace(/^(?:(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/gm, 
       (_match: string, boldTitle: string, plainTitle: string, tableContent: string) => {
         const tableName = (boldTitle || plainTitle || '').trim();
         const lines = tableContent.trim().split('\n');
@@ -4039,7 +4040,8 @@ async function generateDOCX(
     });
     
     // Extract PROPER markdown tables (pipe format) for DOCX
-    textContent = textContent.replace(/(?:(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/g,
+    // PERF: line-start anchored (^ + m) — see markdownTableRegex note above.
+    textContent = textContent.replace(/^(?:(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/gm,
       (_match: string, boldTitle: string, plainTitle: string, tableContent: string) => {
         const tableName = (boldTitle || plainTitle || '').trim();
         const lines = tableContent.trim().split('\n');
