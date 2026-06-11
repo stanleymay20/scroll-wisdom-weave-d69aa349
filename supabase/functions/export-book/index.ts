@@ -2662,25 +2662,56 @@ async function generatePDF(
   return pdfDoc.save();
 }
 
+// Per-font memo of measured word widths. Keyed by font object so different
+// embedded fonts never collide; inner key is `${fontSize}|${word}`.
+const fontWidthCache = new WeakMap<object, Map<string, number>>();
+
 function wrapText(text: string, font: any, fontSize: number, maxWidth: number): string[] {
   // Sanitize text for PDF WinAnsi encoding before measuring/wrapping
   const sanitizedText = sanitizeForPDF(text);
   const words = sanitizedText.split(/\s+/);
   const lines: string[] = [];
+
+  // PERF: the old implementation re-measured the ENTIRE growing line for every
+  // word (O(n^2) glyph measurements per paragraph) — that alone blew the 2s
+  // edge CPU budget on 20+ chapter books. pdf-lib's widthOfTextAtSize simply
+  // sums glyph advance widths (no kerning), so width(line + " " + word) ===
+  // width(line) + width(" ") + width(word). We measure each word once (memoized)
+  // and accumulate numerically — O(n) and identical line breaks.
+  let cache = fontWidthCache.get(font);
+  if (!cache) {
+    cache = new Map<string, number>();
+    fontWidthCache.set(font, cache);
+  }
+  const measure = (w: string): number => {
+    const key = `${fontSize}|${w}`;
+    let v = cache!.get(key);
+    if (v === undefined) {
+      v = font.widthOfTextAtSize(w, fontSize) as number;
+      if (cache!.size < 100_000) cache!.set(key, v);
+    }
+    return v;
+  };
+  const spaceWidth = measure(" ");
+
   let currentLine = "";
-  
+  let currentWidth = 0;
+
   for (const word of words) {
-    const testLine = currentLine ? `${currentLine} ${word}` : word;
-    const width = font.widthOfTextAtSize(testLine, fontSize);
-    
-    if (width <= maxWidth) {
-      currentLine = testLine;
+    if (!word) continue;
+    const wordWidth = measure(word);
+    const testWidth = currentLine ? currentWidth + spaceWidth + wordWidth : wordWidth;
+
+    if (testWidth <= maxWidth) {
+      currentLine = currentLine ? `${currentLine} ${word}` : word;
+      currentWidth = testWidth;
     } else {
       if (currentLine) lines.push(currentLine);
       currentLine = word;
+      currentWidth = wordWidth;
     }
   }
-  
+
   if (currentLine) lines.push(currentLine);
   return lines;
 }
