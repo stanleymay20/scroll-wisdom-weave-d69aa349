@@ -329,7 +329,11 @@ function processMarkdownContent(text: string): {
   
   // Extract PROPER markdown tables (pipe format) - this is the new primary format
   // Pattern matches: | header | header |\n|---|---|\n| cell | cell |
-  const markdownTableRegex = /(?:(?:\*\*[^*]+\*\*|\w[^\n]*)\n\n?)?\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+/g;
+  // PERF: anchored to line starts (^ + m flag). Unanchored, the optional title
+  // prefix forced the regex engine to scan-and-backtrack at EVERY character of
+  // the chapter (55% of total export CPU in profiling). Tables always start at
+  // a line start, so this is semantically identical and linear-time.
+  const markdownTableRegex = /^(?:(?:\*\*[^*]+\*\*|\w[^\n]*)\n\n?)?\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+/gm;
   processedText = processedText.replace(markdownTableRegex, (match) => {
     // Extract optional table title (bold text or plain text before the table)
     let tableName = '';
