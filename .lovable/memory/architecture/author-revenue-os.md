@@ -25,7 +25,7 @@ ScrollLibrary evolved from book marketplace into Author Revenue OS using a singl
 ## Milestone order (final)
 M1 asset graph + universal purchases + entitlement RPC + business events (DONE)
 M2 dual-write trigger for books + asset ledger stub (DONE)
-M3 digital products UI (`/creator/assets`)
+M3 digital products UI `/creator/assets` (DONE) — private `creator-assets` storage bucket (path `<creator_user_id>/<asset_id>/<file>`), `emit_creator_asset_event` AFTER trigger writes `asset_created`/`asset_published`/`asset_paused`/`asset_archived` to `creator_business_events`. Non-book types only; books continue via existing publishing pipeline.
 M4 services + coaching (`creator_asset_bookings`, email confirm, no calendar integrations)
 M5 memberships (`creator_memberships`, `creator_membership_benefits`)
 M6 bundles (`creator_bundles`, parent/child purchase rows)
