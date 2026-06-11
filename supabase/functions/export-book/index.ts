@@ -329,7 +329,11 @@ function processMarkdownContent(text: string): {
   
   // Extract PROPER markdown tables (pipe format) - this is the new primary format
   // Pattern matches: | header | header |\n|---|---|\n| cell | cell |
-  const markdownTableRegex = /(?:(?:\*\*[^*]+\*\*|\w[^\n]*)\n\n?)?\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+/g;
+  // PERF: anchored to line starts (^ + m flag). Unanchored, the optional title
+  // prefix forced the regex engine to scan-and-backtrack at EVERY character of
+  // the chapter (55% of total export CPU in profiling). Tables always start at
+  // a line start, so this is semantically identical and linear-time.
+  const markdownTableRegex = /^(?:(?:\*\*[^*]+\*\*|\w[^\n]*)\n\n?)?\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+/gm;
   processedText = processedText.replace(markdownTableRegex, (match) => {
     // Extract optional table title (bold text or plain text before the table)
     let tableName = '';
@@ -554,22 +558,55 @@ function drawStyledParagraph(
   let currentX = x;
   let currentY = y;
   let currentPage = page;
-  
+
+  // PERF: the old implementation issued ONE drawText call per word and
+  // measured each word twice with widthOfTextAtSize — hundreds of thousands
+  // of pdf-lib operations for a long book, which blew the 2s edge CPU budget
+  // and bloated the PDF content streams. We now buffer consecutive same-font
+  // words on a line into a single segment and emit ONE drawText per segment
+  // (typically one per line), with memoized word measurements. Identical
+  // visual output: pdf-lib advances by summed glyph widths with no kerning.
+  let segFont: any = null;
+  let segText = "";
+  let segX = 0;
+
+  const flushSegment = () => {
+    if (segText && segFont) {
+      currentPage.drawText(segText, {
+        x: segX,
+        y: currentY,
+        size: fontSize,
+        font: segFont,
+        color,
+      });
+    }
+    segText = "";
+  };
+
   for (const run of runs) {
     const font = run.bold && run.italic ? fonts.boldItalic 
                : run.bold ? fonts.bold 
                : run.italic ? fonts.italic 
                : fonts.regular;
-    
+
+    if (font !== segFont) {
+      flushSegment();
+      segFont = font;
+      segX = currentX;
+    }
+    const spaceWidth = measureCached(font, fontSize, " ");
+
     const words = run.text.split(/\s+/);
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
       if (!word) continue;
-      const wordWithSpace = (currentX > x ? ' ' : '') + word;
-      const wordWidth = font.widthOfTextAtSize(wordWithSpace, fontSize);
+      const needsSpace = currentX > x;
+      const bareWidth = measureCached(font, fontSize, word);
+      const wordWidth = needsSpace ? spaceWidth + bareWidth : bareWidth;
       
       if (currentX + wordWidth > x + maxWidth && currentX > x) {
         // New line
+        flushSegment();
         currentX = x;
         currentY -= lineHeight;
         
@@ -583,19 +620,17 @@ function drawStyledParagraph(
           currentY = (pageHeight || 792) - (margin || 72) - 30;
           currentX = x; // Reset X after page break to prevent text starting mid-line
         }
+        segX = currentX;
+        segText = word;
+        currentX += bareWidth;
+      } else {
+        if (!segText) segX = currentX;
+        segText += needsSpace ? ` ${word}` : word;
+        currentX += wordWidth;
       }
-      
-      const drawWord = currentX > x ? ' ' + word : word;
-      currentPage.drawText(drawWord, {
-        x: currentX,
-        y: currentY,
-        size: fontSize,
-        font,
-        color,
-      });
-      currentX += font.widthOfTextAtSize(drawWord, fontSize);
     }
   }
+  flushSegment();
   
   return { y: currentY - lineHeight, page: currentPage }; // Return next Y position AND current page
 }
@@ -2666,6 +2701,21 @@ async function generatePDF(
 // embedded fonts never collide; inner key is `${fontSize}|${word}`.
 const fontWidthCache = new WeakMap<object, Map<string, number>>();
 
+function measureCached(font: any, fontSize: number, word: string): number {
+  let cache = fontWidthCache.get(font);
+  if (!cache) {
+    cache = new Map<string, number>();
+    fontWidthCache.set(font, cache);
+  }
+  const key = `${fontSize}|${word}`;
+  let v = cache.get(key);
+  if (v === undefined) {
+    v = font.widthOfTextAtSize(word, fontSize) as number;
+    if (cache.size < 100_000) cache.set(key, v);
+  }
+  return v;
+}
+
 function wrapText(text: string, font: any, fontSize: number, maxWidth: number): string[] {
   // Sanitize text for PDF WinAnsi encoding before measuring/wrapping
   const sanitizedText = sanitizeForPDF(text);
@@ -2678,20 +2728,7 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
   // sums glyph advance widths (no kerning), so width(line + " " + word) ===
   // width(line) + width(" ") + width(word). We measure each word once (memoized)
   // and accumulate numerically — O(n) and identical line breaks.
-  let cache = fontWidthCache.get(font);
-  if (!cache) {
-    cache = new Map<string, number>();
-    fontWidthCache.set(font, cache);
-  }
-  const measure = (w: string): number => {
-    const key = `${fontSize}|${w}`;
-    let v = cache!.get(key);
-    if (v === undefined) {
-      v = font.widthOfTextAtSize(w, fontSize) as number;
-      if (cache!.size < 100_000) cache!.set(key, v);
-    }
-    return v;
-  };
+  const measure = (w: string): number => measureCached(font, fontSize, w);
   const spaceWidth = measure(" ");
 
   let currentLine = "";
@@ -3500,7 +3537,8 @@ async function generateEPUB(
     });
     
     // Convert PROPER markdown tables (pipe format) to HTML tables
-    content = content.replace(/(?:(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/g, 
+    // PERF: line-start anchored (^ + m) — see markdownTableRegex note above.
+    content = content.replace(/^(?:(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/gm, 
       (_match: string, boldTitle: string, plainTitle: string, tableContent: string) => {
         const tableName = (boldTitle || plainTitle || '').trim();
         const lines = tableContent.trim().split('\n');
@@ -4002,7 +4040,8 @@ async function generateDOCX(
     });
     
     // Extract PROPER markdown tables (pipe format) for DOCX
-    textContent = textContent.replace(/(?:(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/g,
+    // PERF: line-start anchored (^ + m) — see markdownTableRegex note above.
+    textContent = textContent.replace(/^(?:(?:\*\*([^*]+)\*\*|([^\n|]+))\n\n?)?(\|[^\n]+\|\n\|[-:| ]+\|\n(?:\|[^\n]+\|\n?)+)/gm,
       (_match: string, boldTitle: string, plainTitle: string, tableContent: string) => {
         const tableName = (boldTitle || plainTitle || '').trim();
         const lines = tableContent.trim().split('\n');
