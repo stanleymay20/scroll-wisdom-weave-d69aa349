@@ -406,8 +406,14 @@ DESIGN REQUIREMENTS:
             });
           }
           if (response.status === 402) {
-            return new Response(JSON.stringify({ error: "Payment required, please add funds to your workspace." }), {
-              status: 402,
+            return new Response(JSON.stringify({
+              error: "PAYMENT_REQUIRED",
+              code: "AI_QUOTA_EXHAUSTED",
+              message: "AI image credits are exhausted. Please add funds to your workspace to generate covers.",
+              fallback: true,
+              imageUrl: null,
+            }), {
+              status: 200,
               headers: { ...corsHeaders, "Content-Type": "application/json" },
             });
           }
