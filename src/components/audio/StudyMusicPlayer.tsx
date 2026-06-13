@@ -482,14 +482,24 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
               variant="ghost"
               size="icon"
               className="h-8 w-8"
-              onClick={() => {
-                stopMusic();
-                setIsOpen(false);
-              }}
-              aria-label="Close"
+              onClick={() => setIsOpen(false)}
+              aria-label={isPlaying ? "Minimize (keep playing)" : "Close"}
+              title={isPlaying ? "Minimize — music keeps playing" : "Close"}
             >
               <X className="h-3.5 w-3.5" />
             </Button>
+            {activeTrack && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-8 w-8 text-muted-foreground"
+                onClick={() => { stopMusic(); setIsOpen(false); }}
+                aria-label="Stop music"
+                title="Stop music"
+              >
+                <span className="text-[10px] font-semibold">STOP</span>
+              </Button>
+            )}
           </div>
         </div>
 
