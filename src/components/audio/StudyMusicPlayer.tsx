@@ -550,7 +550,7 @@ export function StudyMusicPlayer({ className, autoExpand = false }: StudyMusicPl
             exit={{ height: 0 }}
             className="overflow-hidden"
           >
-            <div className="p-2 max-h-72 overflow-y-auto space-y-3">
+            <div className="p-2 max-h-[35vh] sm:max-h-72 overflow-y-auto space-y-3">
               {Object.entries(grouped).map(([category, tracks]) => (
                 <div key={category}>
                   <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-semibold px-1 mb-1">
