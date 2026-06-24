@@ -489,6 +489,8 @@ function processMarkdownContent(text: string): {
 function stripInlineMarkdown(text: string): string {
   if (!text) return "";
   return text
+    .replace(/<br\s*\/?\s*>/gi, " ")
+    .replace(/<[^>]+>/g, "")
     .replace(/\*\*\*([^*]+)\*\*\*/g, "$1") // bold+italic
     .replace(/\*\*([^*]+)\*\*/g, "$1")     // bold
     .replace(/\*([^*]+)\*/g, "$1")         // italic
@@ -3084,8 +3086,29 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
   let currentLine = "";
   let currentWidth = 0;
 
-  for (const word of words) {
-    if (!word) continue;
+  for (const rawWord of words) {
+    if (!rawWord) continue;
+    const wordParts: string[] = [];
+    if (measure(rawWord) > maxWidth) {
+      let part = "";
+      let partWidth = 0;
+      for (const ch of rawWord) {
+        const chWidth = measure(ch);
+        if (part && partWidth + chWidth > maxWidth) {
+          wordParts.push(part);
+          part = ch;
+          partWidth = chWidth;
+        } else {
+          part += ch;
+          partWidth += chWidth;
+        }
+      }
+      if (part) wordParts.push(part);
+    } else {
+      wordParts.push(rawWord);
+    }
+
+    for (const word of wordParts) {
     const wordWidth = measure(word);
     const testWidth = currentLine ? currentWidth + spaceWidth + wordWidth : wordWidth;
 
@@ -3096,6 +3119,7 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
       if (currentLine) lines.push(currentLine);
       currentLine = word;
       currentWidth = wordWidth;
+    }
     }
   }
 
