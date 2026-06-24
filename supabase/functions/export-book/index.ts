@@ -5197,13 +5197,13 @@ function renderCanonicalBlockDocx(
       const numCols = headers.length;
       const colWidth = Math.floor(9000 / numCols);
       const headerCells = headers
-        .map((h) => `<w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="F0F0F0"/></w:tcPr><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>${escapeXml(h)}</w:t></w:r></w:p></w:tc>`)
+        .map((h) => `<w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="F0F0F0"/></w:tcPr><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>${escapeXml(stripInlineMarkdown(h))}</w:t></w:r></w:p></w:tc>`)
         .join("");
       const bodyRows = rows
         .map((row, rowIdx) => {
           const cells: string[] = [];
           for (let c = 0; c < numCols; c++) {
-            const cell = row[c] !== undefined ? row[c] : "";
+            const cell = stripInlineMarkdown(row[c] !== undefined ? row[c] : "");
             const shade = rowIdx % 2 === 1 ? '<w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="FAFAFA"/></w:tcPr>' : "";
             cells.push(`<w:tc>${shade}<w:p><w:r><w:t>${escapeXml(cell)}</w:t></w:r></w:p></w:tc>`);
           }
@@ -5320,12 +5320,12 @@ function renderCanonicalBlockXhtml(
       const rows: string[][] = blk.table?.rows || [];
       if (headers.length === 0) return "";
       const numCols = headers.length;
-      const thead = `<thead><tr>${headers.map((h) => `<th>${escapeXml(h)}</th>`).join("")}</tr></thead>`;
+      const thead = `<thead><tr>${headers.map((h) => `<th>${inlineMdToXhtml(h)}</th>`).join("")}</tr></thead>`;
       const tbody = `<tbody>${rows
         .map((row) => {
           const cells: string[] = [];
           for (let c = 0; c < numCols; c++) {
-            cells.push(`<td>${escapeXml(row[c] !== undefined ? row[c] : "")}</td>`);
+            cells.push(`<td>${inlineMdToXhtml(row[c] !== undefined ? row[c] : "")}</td>`);
           }
           return `<tr>${cells.join("")}</tr>`;
         })
