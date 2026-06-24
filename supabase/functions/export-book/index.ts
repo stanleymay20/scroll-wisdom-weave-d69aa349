@@ -469,6 +469,185 @@ function stripInlineMarkdown(text: string): string {
     .replace(/`([^`]+)`/g, "$1");          // inline code
 }
 
+function drawWrappedLines(
+  page: any,
+  lines: string[],
+  x: number,
+  y: number,
+  size: number,
+  font: any,
+  color: any,
+  lineHeight: number,
+): number {
+  let cursor = y;
+  for (const line of lines) {
+    page.drawText(sanitizeForPDF(line), { x, y: cursor, size, font, color });
+    cursor -= lineHeight;
+  }
+  return cursor;
+}
+
+function normalizeTableRow(row: string[], cols: number): string[] {
+  const cells = row.slice(0, cols);
+  while (cells.length < cols) cells.push("");
+  return cells;
+}
+
+function getWrappedTableRows(
+  rows: string[][],
+  cols: number,
+  font: any,
+  fontSize: number,
+  colWidth: number,
+  maxCellChars: number,
+): { cells: string[][][]; heights: number[] } {
+  const cells: string[][][] = [];
+  const heights: number[] = [];
+  for (const row of rows) {
+    const normalized = normalizeTableRow(row, cols);
+    const wrappedRow = normalized.map((cell) => {
+      const text = stripInlineMarkdown((cell || "").slice(0, maxCellChars));
+      const wrapped = wrapText(text, font, fontSize, Math.max(24, colWidth - 10));
+      return wrapped.length ? wrapped : [""];
+    });
+    cells.push(wrappedRow);
+    heights.push(Math.max(1, ...wrappedRow.map((cell) => cell.length)) * (fontSize + 3) + 8);
+  }
+  return { cells, heights };
+}
+
+function drawPdfTable(
+  input: {
+    page: any;
+    pdfDoc: any;
+    y: number;
+    pageWidth: number;
+    pageHeight: number;
+    margin: number;
+    textWidth: number;
+    headers: string[];
+    rows: string[][];
+    title?: string;
+    fonts: { regular: any; bold: any; helvetica: any };
+    addPageNumber: (page: any, num: number) => void;
+    pageNumberRef: { current: number };
+  },
+): { page: any; y: number } {
+  let { page, y } = input;
+  const {
+    pdfDoc,
+    pageWidth,
+    pageHeight,
+    margin,
+    textWidth,
+    headers,
+    rows,
+    title,
+    fonts,
+    addPageNumber,
+    pageNumberRef,
+  } = input;
+  const safeHeaders = headers.filter((h) => h !== undefined && h !== null).slice(0, 6);
+  if (safeHeaders.length === 0) return { page, y };
+
+  const cols = safeHeaders.length;
+  const colWidth = textWidth / cols;
+  const headerFontSize = cols >= 5 ? 7.5 : 8.5;
+  const cellFontSize = cols >= 5 ? 7 : 8;
+  const headerLineHeight = headerFontSize + 3;
+  const cellLineHeight = cellFontSize + 3;
+  const bottom = margin + 30;
+
+  const headerCells = safeHeaders.map((header) => {
+    const wrapped = wrapText(stripInlineMarkdown((header || "").slice(0, 140)), fonts.bold, headerFontSize, Math.max(24, colWidth - 10));
+    return (wrapped.length ? wrapped : [""]).slice(0, 5);
+  });
+  const headerHeight = Math.max(1, ...headerCells.map((cell) => cell.length)) * headerLineHeight + 10;
+  const wrappedRows = getWrappedTableRows(rows, cols, fonts.regular, cellFontSize, colWidth, 500);
+
+  const drawHeader = () => {
+    page.drawRectangle({
+      x: margin,
+      y: y - headerHeight + 5,
+      width: textWidth,
+      height: headerHeight,
+      color: rgb(0.92, 0.92, 0.94),
+    });
+    for (let c = 0; c < cols; c++) {
+      drawWrappedLines(
+        page,
+        headerCells[c],
+        margin + c * colWidth + 5,
+        y - headerLineHeight,
+        headerFontSize,
+        fonts.bold,
+        rgb(0.1, 0.1, 0.1),
+        headerLineHeight,
+      );
+    }
+    y -= headerHeight;
+  };
+
+  const newPage = () => {
+    page = pdfDoc.addPage([pageWidth, pageHeight]);
+    pageNumberRef.current++;
+    addPageNumber(page, pageNumberRef.current);
+    y = pageHeight - margin - 30;
+  };
+
+  const estimatedFirstPageHeight = Math.min(
+    headerHeight + wrappedRows.heights.slice(0, 3).reduce((sum, h) => sum + h, 0) + 35,
+    pageHeight - margin * 2,
+  );
+  if (y - estimatedFirstPageHeight < bottom) newPage();
+
+  if (title && title !== "Table") {
+    const titleLines = wrapText(stripInlineMarkdown(title), fonts.bold, 10, textWidth);
+    for (const line of titleLines) {
+      if (y < bottom + 18) newPage();
+      page.drawText(sanitizeForPDF(line), { x: margin, y, size: 10, font: fonts.bold, color: rgb(0.1, 0.1, 0.1) });
+      y -= 13;
+    }
+    y -= 4;
+  }
+
+  drawHeader();
+
+  for (let r = 0; r < wrappedRows.cells.length; r++) {
+    const rowHeight = wrappedRows.heights[r];
+    if (y - rowHeight < bottom) {
+      newPage();
+      drawHeader();
+    }
+
+    if (r % 2 === 1) {
+      page.drawRectangle({
+        x: margin,
+        y: y - rowHeight + 5,
+        width: textWidth,
+        height: rowHeight,
+        color: rgb(0.97, 0.97, 0.97),
+      });
+    }
+
+    for (let c = 0; c < cols; c++) {
+      drawWrappedLines(
+        page,
+        wrappedRows.cells[r][c] || [""],
+        margin + c * colWidth + 5,
+        y - cellLineHeight,
+        cellFontSize,
+        fonts.regular,
+        rgb(0.2, 0.2, 0.2),
+        cellLineHeight,
+      );
+    }
+    y -= rowHeight;
+  }
+
+  return { page, y: y - 12 };
+}
+
 function stripMarkdown(text: string): string {
   if (!text) return "";
   return text
