@@ -174,6 +174,33 @@ function parseCustomTableFormat(text: string): { tables: ParsedTable[]; cleanedT
   return { tables, cleanedText };
 }
 
+function stripExportOnlyArtifacts(input: string): string {
+  const out: string[] = [];
+  let skippingFigure = false;
+
+  for (const rawLine of (input || '').replace(/\r\n?/g, '\n').split('\n')) {
+    const line = rawLine.trim();
+
+    if (/^\[FIGURE\b/i.test(line)) {
+      skippingFigure = !line.includes(']');
+      continue;
+    }
+
+    if (skippingFigure) {
+      if (line.includes(']')) skippingFigure = false;
+      continue;
+    }
+
+    if (/^\[(?:Image not available|Image|Illustration)\b[^\]]*\]$/i.test(line)) {
+      continue;
+    }
+
+    out.push(rawLine);
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 // Structured code block interface (ChatGPT-level format)
 interface StructuredCodeBlockData {
   language: string;
@@ -281,10 +308,9 @@ function processMarkdownContent(text: string): {
 } {
   if (!text) return { paragraphs: [], codeBlocks: [], structuredBlocks: [], tables: [], customTables: [], images: [], headings: [] };
   
-  // PRE-CLEAN: Strip raw [FIGURE ...] markers that the chapter generator leaves behind
-  let cleanedInput = text.replace(/\[FIGURE[^\]]*\]/gi, '');
-  // Also strip stray [Image not available: ...] or [Image: ...] placeholders
-  cleanedInput = cleanedInput.replace(/\[Image[^\]]*\]/gi, '');
+  // PRE-CLEAN: Strip raw generation-only figure/image directives that the
+  // chapter generator leaves behind. These are not manuscript content.
+  let cleanedInput = stripExportOnlyArtifacts(text);
   
   const codeBlocks: { lang: string; code: string }[] = [];
   const structuredBlocks: StructuredCodeBlockData[] = [];
