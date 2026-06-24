@@ -1953,6 +1953,11 @@ export default function Reader() {
           chapterId={chapter.id}
           content={chapter.content}
           isOwner={isBookOwner}
+          bookType={book?.book_type}
+          bookTitle={book?.title}
+          chapterTitle={chapter?.title}
+          category={book?.category}
+          language={book?.language || "en"}
           onSave={(newContent) => {
             setShowDirectEditor(false);
             setChapterContentOverride({
