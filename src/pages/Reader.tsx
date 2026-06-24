@@ -1953,10 +1953,10 @@ export default function Reader() {
           chapterId={chapter.id}
           content={chapter.content}
           isOwner={isBookOwner}
-          bookType={book?.book_type}
+          bookType={(book as any)?.book_type}
           bookTitle={book?.title}
           chapterTitle={chapter?.title}
-          category={book?.category}
+          category={(book as any)?.category}
           language={book?.language || "en"}
           onSave={(newContent) => {
             setShowDirectEditor(false);
