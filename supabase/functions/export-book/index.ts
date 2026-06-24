@@ -1648,6 +1648,7 @@ export async function generateCanonicalPDF(
   // --- Render each chapter from canonical blocks ---
   for (const ch of canonical) {
     currentChapterTitle = ch.title;
+    let chapterFigureNum = 0;
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     pageNumberRef.current++;
     addPageNumber(page, pageNumberRef.current);
