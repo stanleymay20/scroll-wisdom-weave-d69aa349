@@ -3320,7 +3320,7 @@ async function generateKDPPDF(
     if (!chapter.content) continue;
 
     // Strip duplicate chapter title from content start (KDP)
-    let kdpChapterContent = chapter.content;
+    let kdpChapterContent = stripExportOnlyArtifacts(chapter.content);
     const kdpTitleVariants = [
       chapter.title,
       `Chapter ${chapter.chapter_number}: ${chapter.title}`,
