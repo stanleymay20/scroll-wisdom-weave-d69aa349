@@ -5324,15 +5324,11 @@ Return ONLY the improved chapter text. No preamble.` },
 
     // had no AI disclosure, which is a credibility and institutional risk.
     // ===========================================
-    const NON_ACADEMIC_PIPELINE_TYPES = ['bestseller', 'text', 'professional', 'reference', 'workbook'];
-    const needsGeneralDisclosure = NON_ACADEMIC_PIPELINE_TYPES.includes(effectiveBookType) && !academicMode;
-    if (needsGeneralDisclosure) {
-      // Only append if not already present (idempotent)
-      const hasDisclosure = /AI-assisted|AI-generated|generated with AI/i.test(finalContent);
-      if (!hasDisclosure) {
-        finalContent += `\n\n---\n\n> **AI-Assisted Content Notice:** This chapter was generated with AI assistance (ScrollLibrary). The content is intended for educational and informational purposes. Verify any factual claims, statistics, or professional advice with authoritative sources before relying on them.\n`;
-      }
-    }
+    // PROFESSIONAL PUBLISHING STANDARD: do not append per-chapter AI disclosure.
+    // Any disclosure belongs once in the front matter (handled by the export
+    // pipeline based on transparency settings), never repeated after every chapter.
+    // Previously appended an "AI-Assisted Content Notice" blockquote here — removed
+    // so the manuscript reads like a professionally edited book.
 
     // Add academic front matter and references (for ALL academic pipelines: text AND illustrated)
     const isAcademicOutput = (academicMode || needsAcademicResearch) && researchResult && researchResult.references.length > 0;
