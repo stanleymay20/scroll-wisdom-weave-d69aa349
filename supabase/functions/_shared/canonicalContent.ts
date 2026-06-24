@@ -70,10 +70,20 @@ const REF_RE = /^\s*\[\^?([^\]]+)\]:\s+(.*)$/;
  * "[FIGURE 1 TYPE: ... DESCRIPTION: ...]".
  */
 function stripExportOnlyArtifacts(input: string): string {
+  let text = input.replace(/\r\n?/g, "\n");
+
+  // Scrub historical AI-disclosure blockquotes that older generation runs
+  // appended after every chapter. Removes an optional leading `---` separator
+  // plus the entire blockquote (header line + any continuation `>` lines).
+  text = text.replace(
+    /(?:^|\n)\s*(?:-{3,}\s*\n\s*)?>\s*\*\*\s*AI[- ]?(?:Assisted|Generated)[^*\n]*\*\*[^\n]*(?:\n>[^\n]*)*/gi,
+    "\n\n",
+  );
+
   const out: string[] = [];
   let skippingFigure = false;
 
-  for (const rawLine of input.replace(/\r\n?/g, "\n").split("\n")) {
+  for (const rawLine of text.split("\n")) {
     const line = rawLine.trim();
 
     if (/^\[FIGURE\b/i.test(line)) {
@@ -92,6 +102,7 @@ function stripExportOnlyArtifacts(input: string): string {
 
     out.push(rawLine);
   }
+
 
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
