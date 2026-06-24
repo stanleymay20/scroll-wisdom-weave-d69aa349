@@ -44,6 +44,11 @@ export function DirectTextEditor({
   isOwner,
   onSave,
   onCancel,
+  bookType,
+  bookTitle,
+  chapterTitle,
+  category,
+  language,
 }: DirectTextEditorProps) {
   const { toast } = useToast();
   const [localContent, setLocalContent] = useState(content);
@@ -52,6 +57,7 @@ export function DirectTextEditor({
   const [imageUrl, setImageUrl] = useState("");
   const [imageAlt, setImageAlt] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [showArtDirector, setShowArtDirector] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Keep a ref in sync with state to avoid stale closures in formatting
