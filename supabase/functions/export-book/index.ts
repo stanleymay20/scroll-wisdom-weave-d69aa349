@@ -11,6 +11,31 @@ try { (zip as any).configure?.({ useWebWorkers: false }); } catch (_) { /* noop 
 
 const CANONICAL_RENDERER_VERSION = "1.0.0";
 
+/**
+ * Detect generation-pipeline placeholder alt text that should never become a
+ * printed caption (e.g. "A clean, two-column visual", "professional infographic
+ * about ...", "Image", or strings under 12 chars). Real authored captions pass
+ * through unchanged.
+ */
+function isPlaceholderAlt(alt: string | null | undefined): boolean {
+  const a = (alt || "").trim();
+  if (!a) return true;
+  if (a.length < 12) return true;
+  if (/^image$/i.test(a)) return true;
+  if (/\b(clean|professional|simple|modern|minimal|abstract)\b.*\b(visual|illustration|graphic|diagram|infographic|image)\b/i.test(a)) return true;
+  if (/^(a|an|the)\s+\w+\s+(visual|illustration|graphic|diagram|infographic|image)\b/i.test(a)) return true;
+  return false;
+}
+
+/** Build a clean book-style caption: "Figure 3. Real description." or null to suppress. */
+function buildFigureCaption(figureNum: number, alt: string | null | undefined): string | null {
+  if (isPlaceholderAlt(alt)) return null;
+  const cleaned = (alt || "").trim().replace(/\s+/g, " ");
+  const punctuated = /[.!?]$/.test(cleaned) ? cleaned : cleaned + ".";
+  return `Figure ${figureNum}. ${punctuated}`;
+}
+
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1623,6 +1648,7 @@ export async function generateCanonicalPDF(
   // --- Render each chapter from canonical blocks ---
   for (const ch of canonical) {
     currentChapterTitle = ch.title;
+    let chapterFigureNum = 0;
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     pageNumberRef.current++;
     addPageNumber(page, pageNumberRef.current);
@@ -1765,12 +1791,20 @@ export async function generateCanonicalPDF(
               ensureRoom(drawHeight + 34);
               drawEmbeddedImage(page, embedded, margin + (textWidth - drawWidth) / 2, y - drawHeight, drawWidth, drawHeight);
               y -= drawHeight + 10;
-              for (const line of wrapText(`Figure: ${alt}`, helvetica, 9, textWidth).slice(0, 3)) {
-                ensureRoom(12);
-                page.drawText(sanitizeForPDF(line), { x: margin, y, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4) });
-                y -= 12;
+              const caption = buildFigureCaption(++chapterFigureNum, alt);
+              if (caption) {
+                for (const line of wrapText(caption, helvetica, 9, textWidth).slice(0, 3)) {
+                  ensureRoom(12);
+                  page.drawText(sanitizeForPDF(line), { x: margin, y, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4) });
+                  y -= 12;
+                }
+                y -= 6;
+              } else {
+                // Placeholder alt — undo the figure number so the next real
+                // caption doesn't skip an index.
+                chapterFigureNum--;
+                y -= 4;
               }
-              y -= 6;
             } else {
               ensureRoom(28);
               const lines = wrapText(`[Image not available: ${alt}]`, helvetica, 9, textWidth - 16).slice(0, 3);
@@ -2286,9 +2320,10 @@ async function generatePDF(
           drawEmbeddedImage(page, em, drawX, y - drawHeight, drawWidth, drawHeight);
           y -= drawHeight + 12;
           
-          // Caption (wrapped) — wrapText sanitizes internally
-          if (imgMeta?.alt && imgMeta.alt !== 'Image') {
-            const captionLines = wrapText(`Figure: ${imgMeta.alt}`, helvetica, 9, textWidth).slice(0, 3);
+          // Caption (wrapped) — suppress generation-placeholder alt text
+          const caption = buildFigureCaption(imgIndex + 1, imgMeta?.alt);
+          if (caption) {
+            const captionLines = wrapText(caption, helvetica, 9, textWidth).slice(0, 3);
             for (const line of captionLines) {
               if (y < margin + 30) {
                 page = pdfDoc.addPage([pageWidth, pageHeight]);

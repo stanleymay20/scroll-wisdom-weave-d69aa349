@@ -70,10 +70,20 @@ const REF_RE = /^\s*\[\^?([^\]]+)\]:\s+(.*)$/;
  * "[FIGURE 1 TYPE: ... DESCRIPTION: ...]".
  */
 function stripExportOnlyArtifacts(input: string): string {
+  let text = input.replace(/\r\n?/g, "\n");
+
+  // Scrub historical AI-disclosure blockquotes that older generation runs
+  // appended after every chapter. Removes an optional leading `---` separator
+  // plus the entire blockquote (header line + any continuation `>` lines).
+  text = text.replace(
+    /(?:^|\n)\s*(?:-{3,}\s*\n\s*)?>\s*\*\*\s*AI[- ]?(?:Assisted|Generated)[^*\n]*\*\*[^\n]*(?:\n>[^\n]*)*/gi,
+    "\n\n",
+  );
+
   const out: string[] = [];
   let skippingFigure = false;
 
-  for (const rawLine of input.replace(/\r\n?/g, "\n").split("\n")) {
+  for (const rawLine of text.split("\n")) {
     const line = rawLine.trim();
 
     if (/^\[FIGURE\b/i.test(line)) {
@@ -92,6 +102,7 @@ function stripExportOnlyArtifacts(input: string): string {
 
     out.push(rawLine);
   }
+
 
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
 }
@@ -194,23 +205,34 @@ export function parseChapterToCanonical(
       continue;
     }
 
-    // List (ordered or unordered)
+    // List (ordered or unordered) — tolerate blank lines between items so that
+    // model output like "1. foo\n\n1. bar\n\n1. baz" still merges into a single
+    // list (otherwise each item becomes its own list and re-numbers to "1.").
     if (OL_RE.test(line) || UL_RE.test(line)) {
       const ordered = OL_RE.test(line);
+      const matcher = ordered ? OL_RE : UL_RE;
       const items: string[] = [];
-      while (
-        i < lines.length &&
-        (ordered ? OL_RE.test(lines[i]) : UL_RE.test(lines[i]))
-      ) {
-        const m = lines[i].match(ordered ? OL_RE : UL_RE);
-        if (m) items.push(m[1]);
-        i++;
+      while (i < lines.length) {
+        const m = lines[i].match(matcher);
+        if (m) {
+          items.push(m[1]);
+          i++;
+          continue;
+        }
+        // Allow a single blank line between items if the next non-blank line
+        // is another list item of the same kind.
+        if (lines[i].trim() === "" && i + 1 < lines.length && matcher.test(lines[i + 1])) {
+          i++;
+          continue;
+        }
+        break;
       }
       blocks.push({ kind: "list", list: { ordered, items } });
       stats.lists++;
       stats.words += items.join(" ").split(/\s+/).filter(Boolean).length;
       continue;
     }
+
 
     // Blank line — flush
     if (line.trim() === "") {
