@@ -1607,14 +1607,18 @@ export async function generateCanonicalPDF(
     y -= 20;
 
     // Strip duplicate chapter title heading at the top if first block matches
-    const blocks = ch.blocks.slice();
-    if (blocks.length > 0 && blocks[0].kind === "heading" && blocks[0].text) {
-      const first = blocks[0].text.toLowerCase().trim();
-      const t = (ch.title || "").toLowerCase().trim();
-      if (first === t || first === `chapter ${ch.chapter_number}: ${t}` || first === `chapter ${ch.chapter_number}`) {
-        blocks.shift();
+    const chapterTitleKey = (ch.title || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const isDuplicateChapterHeading = (text: string | undefined) => {
+      const key = (text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      return key === chapterTitleKey || key === `chapter ${ch.chapter_number}` || key === `chapter ${ch.chapter_number} ${chapterTitleKey}`;
+    };
+    const blocks = ch.blocks.filter((block, idx) => {
+      if (idx > 8) return true;
+      if ((block.kind === "heading" || block.kind === "paragraph") && isDuplicateChapterHeading(block.text)) {
+        return false;
       }
-    }
+      return true;
+    });
 
     for (const block of blocks) {
       try {
