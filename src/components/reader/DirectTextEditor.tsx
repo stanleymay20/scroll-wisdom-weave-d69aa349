@@ -385,8 +385,36 @@ export function DirectTextEditor({
               />
             </PopoverContent>
           </Popover>
+          {/* Improve Chapter Visuals — AI Publishing Art Director */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowArtDirector(true)}
+            title="Improve Chapter Visuals"
+            className="h-8 gap-1.5 px-2 shrink-0 text-primary hover:text-primary"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span className="text-xs hidden sm:inline">Improve Visuals</span>
+          </Button>
         </div>
       </div>
+
+      {/* AI Publishing Art Director sheet */}
+      <ImproveChapterVisuals
+        open={showArtDirector}
+        onOpenChange={setShowArtDirector}
+        chapterContent={localContent}
+        bookType={bookType}
+        bookTitle={bookTitle}
+        chapterTitle={chapterTitle}
+        category={category}
+        language={language}
+        onInsert={(nextContent) => {
+          setLocalContent(nextContent);
+          contentRef.current = nextContent;
+        }}
+      />
+
 
       {/* Editor */}
       <div className="flex-1 overflow-auto p-4">
