@@ -2185,7 +2185,7 @@ async function generatePDF(
     
     // Process content with code block, image, table, and HEADING handling
     // Strip duplicate chapter title from content start (generated content often repeats it)
-    let chapterContent = chapter.content || "";
+    let chapterContent = stripExportOnlyArtifacts(chapter.content || "");
     const titleVariants = [
       chapter.title,
       `Chapter ${chapter.chapter_number}: ${chapter.title}`,
