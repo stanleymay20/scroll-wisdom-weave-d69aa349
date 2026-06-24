@@ -63,6 +63,39 @@ const UL_RE = /^\s*[-*+]\s+(.*)$/;
 const QUOTE_RE = /^>\s?(.*)$/;
 const REF_RE = /^\s*\[\^?([^\]]+)\]:\s+(.*)$/;
 
+/**
+ * Remove generation-only visual directives before structural parsing.
+ * These blocks are prompts for an image pipeline, not manuscript prose; if they
+ * leak into exports they become raw, unpublishable text such as
+ * "[FIGURE 1 TYPE: ... DESCRIPTION: ...]".
+ */
+function stripExportOnlyArtifacts(input: string): string {
+  const out: string[] = [];
+  let skippingFigure = false;
+
+  for (const rawLine of input.replace(/\r\n?/g, "\n").split("\n")) {
+    const line = rawLine.trim();
+
+    if (/^\[FIGURE\b/i.test(line)) {
+      skippingFigure = !line.includes("]");
+      continue;
+    }
+
+    if (skippingFigure) {
+      if (line.includes("]")) skippingFigure = false;
+      continue;
+    }
+
+    if (/^\[(?:Image not available|Image|Illustration)\b[^\]]*\]$/i.test(line)) {
+      continue;
+    }
+
+    out.push(rawLine);
+  }
+
+  return out.join("\n").replace(/\n{3,}/g, "\n\n").trim();
+}
+
 function splitTableRow(line: string): string[] {
   const trimmed = line.replace(/^\||\|$/g, "");
   return trimmed.split("|").map((c) => c.trim());
@@ -75,7 +108,7 @@ export function parseChapterToCanonical(
 ): CanonicalChapter {
   const blocks: CanonicalBlock[] = [];
   const stats = { words: 0, headings: 0, paragraphs: 0, images: 0, tables: 0, codeBlocks: 0, lists: 0 };
-  const text = (content ?? "").replace(/\r\n?/g, "\n");
+  const text = stripExportOnlyArtifacts(content ?? "");
   const lines = text.split("\n");
 
   let i = 0;
