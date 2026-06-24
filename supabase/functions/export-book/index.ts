@@ -4334,7 +4334,7 @@ async function generateDOCX(
   const processedChapters: { chapter: any; processedContent: string[]; imageRefs: { index: number; alt: string }[]; tables: { original: string; headers: string[]; rows: string[][] }[]; structuredCodeBlocks: StructuredCodeBlockData[]; codeBlocks: { lang: string; code: string }[]; headings: { level: number; text: string }[] }[] = [];
   
   for (const chapter of chapters) {
-    const content = chapter.content || "";
+    const content = stripExportOnlyArtifacts(chapter.content || "");
     // Cap images at 5 per chapter to avoid CPU timeout in edge function
     const allImgMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
     const imageMatches = allImgMatches.slice(0, 5);
