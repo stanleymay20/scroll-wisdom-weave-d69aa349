@@ -11,6 +11,31 @@ try { (zip as any).configure?.({ useWebWorkers: false }); } catch (_) { /* noop 
 
 const CANONICAL_RENDERER_VERSION = "1.0.0";
 
+/**
+ * Detect generation-pipeline placeholder alt text that should never become a
+ * printed caption (e.g. "A clean, two-column visual", "professional infographic
+ * about ...", "Image", or strings under 12 chars). Real authored captions pass
+ * through unchanged.
+ */
+function isPlaceholderAlt(alt: string | null | undefined): boolean {
+  const a = (alt || "").trim();
+  if (!a) return true;
+  if (a.length < 12) return true;
+  if (/^image$/i.test(a)) return true;
+  if (/\b(clean|professional|simple|modern|minimal|abstract)\b.*\b(visual|illustration|graphic|diagram|infographic|image)\b/i.test(a)) return true;
+  if (/^(a|an|the)\s+\w+\s+(visual|illustration|graphic|diagram|infographic|image)\b/i.test(a)) return true;
+  return false;
+}
+
+/** Build a clean book-style caption: "Figure 3. Real description." or null to suppress. */
+function buildFigureCaption(figureNum: number, alt: string | null | undefined): string | null {
+  if (isPlaceholderAlt(alt)) return null;
+  const cleaned = (alt || "").trim().replace(/\s+/g, " ");
+  const punctuated = /[.!?]$/.test(cleaned) ? cleaned : cleaned + ".";
+  return `Figure ${figureNum}. ${punctuated}`;
+}
+
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
