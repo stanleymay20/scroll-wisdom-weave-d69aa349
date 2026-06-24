@@ -2320,9 +2320,10 @@ async function generatePDF(
           drawEmbeddedImage(page, em, drawX, y - drawHeight, drawWidth, drawHeight);
           y -= drawHeight + 12;
           
-          // Caption (wrapped) — wrapText sanitizes internally
-          if (imgMeta?.alt && imgMeta.alt !== 'Image') {
-            const captionLines = wrapText(`Figure: ${imgMeta.alt}`, helvetica, 9, textWidth).slice(0, 3);
+          // Caption (wrapped) — suppress generation-placeholder alt text
+          const caption = buildFigureCaption(imgIndex + 1, imgMeta?.alt);
+          if (caption) {
+            const captionLines = wrapText(caption, helvetica, 9, textWidth).slice(0, 3);
             for (const line of captionLines) {
               if (y < margin + 30) {
                 page = pdfDoc.addPage([pageWidth, pageHeight]);
