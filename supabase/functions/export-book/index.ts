@@ -1290,20 +1290,21 @@ serve(async (req) => {
       ...(book.publishing_settings || {}),
       ...(publishingSettingsOverride || {}),
     };
-    // Confidential mode forces invisible + sanitize + no branding.
-    if (pub.confidential_mode) {
-      pub.transparency_mode = 'invisible';
-      pub.sanitize_metadata = true;
-      pub.show_scrolllibrary_branding = false;
-      pub.show_ai_assistance_notice = false;
-      pub.show_powered_by = false;
-    }
-    const showAINotice = pub.transparency_mode !== 'invisible' && pub.show_ai_assistance_notice;
-    const showAILongDisclosure = pub.transparency_mode === 'transparent';
-    const showBranding = !pub.confidential_mode && pub.show_scrolllibrary_branding;
-    const showPoweredBy = !pub.confidential_mode && pub.show_powered_by;
-    const effectivePublisher = pub.publisher_name || (showBranding ? 'ScrollLibrary' : finalAuthorName);
-    const sanitizeMeta = pub.sanitize_metadata;
+    // PROFESSIONAL PUBLISHING STANDARD: never leak AI/ScrollLibrary notices
+    // into the exported manuscript. The finished book belongs to the author;
+    // generation provenance is not part of the published artifact. Force all
+    // disclosure / branding flags off regardless of saved settings.
+    pub.transparency_mode = 'invisible';
+    pub.show_scrolllibrary_branding = false;
+    pub.show_ai_assistance_notice = false;
+    pub.show_powered_by = false;
+    pub.sanitize_metadata = true;
+    const showAINotice = false;
+    const showAILongDisclosure = false;
+    const showBranding = false;
+    const showPoweredBy = false;
+    const effectivePublisher = pub.publisher_name || finalAuthorName;
+    const sanitizeMeta = true;
     const exportContext = { pub, showAINotice, showAILongDisclosure, showBranding, showPoweredBy, effectivePublisher, sanitizeMeta };
 
     // Generate bibliography for ALL books (from chapter refs + book_citations table)
