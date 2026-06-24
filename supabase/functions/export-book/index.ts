@@ -1791,12 +1791,20 @@ export async function generateCanonicalPDF(
               ensureRoom(drawHeight + 34);
               drawEmbeddedImage(page, embedded, margin + (textWidth - drawWidth) / 2, y - drawHeight, drawWidth, drawHeight);
               y -= drawHeight + 10;
-              for (const line of wrapText(`Figure: ${alt}`, helvetica, 9, textWidth).slice(0, 3)) {
-                ensureRoom(12);
-                page.drawText(sanitizeForPDF(line), { x: margin, y, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4) });
-                y -= 12;
+              const caption = buildFigureCaption(++chapterFigureNum, alt);
+              if (caption) {
+                for (const line of wrapText(caption, helvetica, 9, textWidth).slice(0, 3)) {
+                  ensureRoom(12);
+                  page.drawText(sanitizeForPDF(line), { x: margin, y, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4) });
+                  y -= 12;
+                }
+                y -= 6;
+              } else {
+                // Placeholder alt — undo the figure number so the next real
+                // caption doesn't skip an index.
+                chapterFigureNum--;
+                y -= 4;
               }
-              y -= 6;
             } else {
               ensureRoom(28);
               const lines = wrapText(`[Image not available: ${alt}]`, helvetica, 9, textWidth - 16).slice(0, 3);
