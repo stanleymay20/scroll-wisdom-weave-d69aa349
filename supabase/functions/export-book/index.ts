@@ -174,6 +174,33 @@ function parseCustomTableFormat(text: string): { tables: ParsedTable[]; cleanedT
   return { tables, cleanedText };
 }
 
+function stripExportOnlyArtifacts(input: string): string {
+  const out: string[] = [];
+  let skippingFigure = false;
+
+  for (const rawLine of (input || '').replace(/\r\n?/g, '\n').split('\n')) {
+    const line = rawLine.trim();
+
+    if (/^\[FIGURE\b/i.test(line)) {
+      skippingFigure = !line.includes(']');
+      continue;
+    }
+
+    if (skippingFigure) {
+      if (line.includes(']')) skippingFigure = false;
+      continue;
+    }
+
+    if (/^\[(?:Image not available|Image|Illustration)\b[^\]]*\]$/i.test(line)) {
+      continue;
+    }
+
+    out.push(rawLine);
+  }
+
+  return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
+}
+
 // Structured code block interface (ChatGPT-level format)
 interface StructuredCodeBlockData {
   language: string;
@@ -281,10 +308,9 @@ function processMarkdownContent(text: string): {
 } {
   if (!text) return { paragraphs: [], codeBlocks: [], structuredBlocks: [], tables: [], customTables: [], images: [], headings: [] };
   
-  // PRE-CLEAN: Strip raw [FIGURE ...] markers that the chapter generator leaves behind
-  let cleanedInput = text.replace(/\[FIGURE[^\]]*\]/gi, '');
-  // Also strip stray [Image not available: ...] or [Image: ...] placeholders
-  cleanedInput = cleanedInput.replace(/\[Image[^\]]*\]/gi, '');
+  // PRE-CLEAN: Strip raw generation-only figure/image directives that the
+  // chapter generator leaves behind. These are not manuscript content.
+  let cleanedInput = stripExportOnlyArtifacts(text);
   
   const codeBlocks: { lang: string; code: string }[] = [];
   const structuredBlocks: StructuredCodeBlockData[] = [];
@@ -463,10 +489,191 @@ function processMarkdownContent(text: string): {
 function stripInlineMarkdown(text: string): string {
   if (!text) return "";
   return text
+    .replace(/<br\s*\/?\s*>/gi, " ")
+    .replace(/<[^>]+>/g, "")
     .replace(/\*\*\*([^*]+)\*\*\*/g, "$1") // bold+italic
     .replace(/\*\*([^*]+)\*\*/g, "$1")     // bold
     .replace(/\*([^*]+)\*/g, "$1")         // italic
     .replace(/`([^`]+)`/g, "$1");          // inline code
+}
+
+function drawWrappedLines(
+  page: any,
+  lines: string[],
+  x: number,
+  y: number,
+  size: number,
+  font: any,
+  color: any,
+  lineHeight: number,
+): number {
+  let cursor = y;
+  for (const line of lines) {
+    page.drawText(sanitizeForPDF(line), { x, y: cursor, size, font, color });
+    cursor -= lineHeight;
+  }
+  return cursor;
+}
+
+function normalizeTableRow(row: string[], cols: number): string[] {
+  const cells = row.slice(0, cols);
+  while (cells.length < cols) cells.push("");
+  return cells;
+}
+
+function getWrappedTableRows(
+  rows: string[][],
+  cols: number,
+  font: any,
+  fontSize: number,
+  colWidth: number,
+  maxCellChars: number,
+): { cells: string[][][]; heights: number[] } {
+  const cells: string[][][] = [];
+  const heights: number[] = [];
+  for (const row of rows) {
+    const normalized = normalizeTableRow(row, cols);
+    const wrappedRow = normalized.map((cell) => {
+      const text = stripInlineMarkdown((cell || "").slice(0, maxCellChars));
+      const wrapped = wrapText(text, font, fontSize, Math.max(24, colWidth - 10));
+      return wrapped.length ? wrapped : [""];
+    });
+    cells.push(wrappedRow);
+    heights.push(Math.max(1, ...wrappedRow.map((cell) => cell.length)) * (fontSize + 3) + 8);
+  }
+  return { cells, heights };
+}
+
+function drawPdfTable(
+  input: {
+    page: any;
+    pdfDoc: any;
+    y: number;
+    pageWidth: number;
+    pageHeight: number;
+    margin: number;
+    textWidth: number;
+    headers: string[];
+    rows: string[][];
+    title?: string;
+    fonts: { regular: any; bold: any; helvetica: any };
+    addPageNumber: (page: any, num: number) => void;
+    pageNumberRef: { current: number };
+  },
+): { page: any; y: number } {
+  let { page, y } = input;
+  const {
+    pdfDoc,
+    pageWidth,
+    pageHeight,
+    margin,
+    textWidth,
+    headers,
+    rows,
+    title,
+    fonts,
+    addPageNumber,
+    pageNumberRef,
+  } = input;
+  const safeHeaders = headers.filter((h) => h !== undefined && h !== null).slice(0, 6);
+  if (safeHeaders.length === 0) return { page, y };
+
+  const cols = safeHeaders.length;
+  const colWidth = textWidth / cols;
+  const headerFontSize = cols >= 5 ? 7.5 : 8.5;
+  const cellFontSize = cols >= 5 ? 7 : 8;
+  const headerLineHeight = headerFontSize + 3;
+  const cellLineHeight = cellFontSize + 3;
+  const bottom = margin + 30;
+
+  const headerCells = safeHeaders.map((header) => {
+    const wrapped = wrapText(stripInlineMarkdown((header || "").slice(0, 140)), fonts.bold, headerFontSize, Math.max(24, colWidth - 10));
+    return (wrapped.length ? wrapped : [""]).slice(0, 5);
+  });
+  const headerHeight = Math.max(1, ...headerCells.map((cell) => cell.length)) * headerLineHeight + 10;
+  const wrappedRows = getWrappedTableRows(rows, cols, fonts.regular, cellFontSize, colWidth, 500);
+
+  const drawHeader = () => {
+    page.drawRectangle({
+      x: margin,
+      y: y - headerHeight + 5,
+      width: textWidth,
+      height: headerHeight,
+      color: rgb(0.92, 0.92, 0.94),
+    });
+    for (let c = 0; c < cols; c++) {
+      drawWrappedLines(
+        page,
+        headerCells[c],
+        margin + c * colWidth + 5,
+        y - headerLineHeight,
+        headerFontSize,
+        fonts.bold,
+        rgb(0.1, 0.1, 0.1),
+        headerLineHeight,
+      );
+    }
+    y -= headerHeight;
+  };
+
+  const newPage = () => {
+    page = pdfDoc.addPage([pageWidth, pageHeight]);
+    pageNumberRef.current++;
+    addPageNumber(page, pageNumberRef.current);
+    y = pageHeight - margin - 30;
+  };
+
+  const estimatedFirstPageHeight = Math.min(
+    headerHeight + wrappedRows.heights.slice(0, 3).reduce((sum, h) => sum + h, 0) + 35,
+    pageHeight - margin * 2,
+  );
+  if (y - estimatedFirstPageHeight < bottom) newPage();
+
+  if (title && title !== "Table") {
+    const titleLines = wrapText(stripInlineMarkdown(title), fonts.bold, 10, textWidth);
+    for (const line of titleLines) {
+      if (y < bottom + 18) newPage();
+      page.drawText(sanitizeForPDF(line), { x: margin, y, size: 10, font: fonts.bold, color: rgb(0.1, 0.1, 0.1) });
+      y -= 13;
+    }
+    y -= 4;
+  }
+
+  drawHeader();
+
+  for (let r = 0; r < wrappedRows.cells.length; r++) {
+    const rowHeight = wrappedRows.heights[r];
+    if (y - rowHeight < bottom) {
+      newPage();
+      drawHeader();
+    }
+
+    if (r % 2 === 1) {
+      page.drawRectangle({
+        x: margin,
+        y: y - rowHeight + 5,
+        width: textWidth,
+        height: rowHeight,
+        color: rgb(0.97, 0.97, 0.97),
+      });
+    }
+
+    for (let c = 0; c < cols; c++) {
+      drawWrappedLines(
+        page,
+        wrappedRows.cells[r][c] || [""],
+        margin + c * colWidth + 5,
+        y - cellLineHeight,
+        cellFontSize,
+        fonts.regular,
+        rgb(0.2, 0.2, 0.2),
+        cellLineHeight,
+      );
+    }
+    y -= rowHeight;
+  }
+
+  return { page, y: y - 12 };
 }
 
 function stripMarkdown(text: string): string {
@@ -1410,6 +1617,8 @@ export async function generateCanonicalPDF(
     }
   };
 
+  const imageBudget = { remaining: 16, slowPng: 2 };
+
   // --- Render each chapter from canonical blocks ---
   for (const ch of canonical) {
     currentChapterTitle = ch.title;
@@ -1426,14 +1635,18 @@ export async function generateCanonicalPDF(
     y -= 20;
 
     // Strip duplicate chapter title heading at the top if first block matches
-    const blocks = ch.blocks.slice();
-    if (blocks.length > 0 && blocks[0].kind === "heading" && blocks[0].text) {
-      const first = blocks[0].text.toLowerCase().trim();
-      const t = (ch.title || "").toLowerCase().trim();
-      if (first === t || first === `chapter ${ch.chapter_number}: ${t}` || first === `chapter ${ch.chapter_number}`) {
-        blocks.shift();
+    const chapterTitleKey = (ch.title || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+    const isDuplicateChapterHeading = (text: string | undefined) => {
+      const key = (text || "").toLowerCase().replace(/[^a-z0-9]+/g, " ").trim();
+      return key === chapterTitleKey || key === `chapter ${ch.chapter_number}` || key === `chapter ${ch.chapter_number} ${chapterTitleKey}`;
+    };
+    const blocks = ch.blocks.filter((block, idx) => {
+      if (idx > 8) return true;
+      if ((block.kind === "heading" || block.kind === "paragraph") && isDuplicateChapterHeading(block.text)) {
+        return false;
       }
-    }
+      return true;
+    });
 
     for (const block of blocks) {
       try {
@@ -1512,33 +1725,63 @@ export async function generateCanonicalPDF(
           case "table": {
             const header = block.table?.header || [];
             const rows = block.table?.rows || [];
-            const cols = Math.max(1, header.length);
-            const colW = textWidth / cols;
-            const cellH = 16;
-            ensureRoom(cellH * (rows.length + 1) + 8);
-            // Header
-            for (let c = 0; c < cols; c++) {
-              page.drawRectangle({ x: margin + c * colW, y: y - cellH + 4, width: colW, height: cellH, color: rgb(0.92, 0.92, 0.94) });
-              page.drawText(sanitizeForPDF((header[c] || "").slice(0, 40)), { x: margin + c * colW + 4, y: y - 8, size: 9, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1) });
-            }
-            y -= cellH;
-            for (const row of rows) {
-              ensureRoom(cellH);
-              for (let c = 0; c < cols; c++) {
-                page.drawText(sanitizeForPDF((row[c] || "").slice(0, 60)), { x: margin + c * colW + 4, y: y - 8, size: 9, font: timesRoman, color: rgb(0.2, 0.2, 0.2) });
-              }
-              y -= cellH;
-            }
-            y -= 6;
+            const rendered = drawPdfTable({
+              page,
+              pdfDoc,
+              y,
+              pageWidth,
+              pageHeight,
+              margin,
+              textWidth,
+              headers: header,
+              rows,
+              fonts: { regular: timesRoman, bold: timesRomanBold, helvetica },
+              addPageNumber,
+              pageNumberRef,
+            });
+            page = rendered.page;
+            y = rendered.y;
             break;
           }
           case "image": {
-            // Skip remote fetch in canonical v1 (parity with legacy: legacy also skips images in PDF body)
-            const alt = block.image?.alt || block.image?.src || "image";
-            ensureRoom(28);
-            page.drawRectangle({ x: margin, y: y - 24, width: textWidth, height: 28, color: rgb(0.97, 0.97, 0.98), borderColor: rgb(0.85, 0.85, 0.88), borderWidth: 0.5 });
-            page.drawText(sanitizeForPDF(`[Image: ${alt}]`), { x: margin + 8, y: y - 14, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.45) });
-            y -= 36;
+            const alt = block.image?.alt || "Image";
+            const src = block.image?.src || "";
+            let embedded: EmbeddedImage | null = null;
+            if (src && imageBudget.remaining > 0 && /^(https?:\/\/|data:image)/i.test(src)) {
+              const bytes = await fetchImageBytes(src, 3000);
+              if (bytes) embedded = await embedImageSmart(pdfDoc, bytes, imageBudget);
+              if (embedded) imageBudget.remaining--;
+            }
+
+            if (embedded) {
+              const imgAspect = embedded.width / embedded.height;
+              let drawWidth = textWidth;
+              let drawHeight = drawWidth / imgAspect;
+              if (drawHeight > 320) {
+                drawHeight = 320;
+                drawWidth = drawHeight * imgAspect;
+              }
+              ensureRoom(drawHeight + 34);
+              drawEmbeddedImage(page, embedded, margin + (textWidth - drawWidth) / 2, y - drawHeight, drawWidth, drawHeight);
+              y -= drawHeight + 10;
+              for (const line of wrapText(`Figure: ${alt}`, helvetica, 9, textWidth).slice(0, 3)) {
+                ensureRoom(12);
+                page.drawText(sanitizeForPDF(line), { x: margin, y, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4) });
+                y -= 12;
+              }
+              y -= 6;
+            } else {
+              ensureRoom(28);
+              const lines = wrapText(`[Image not available: ${alt}]`, helvetica, 9, textWidth - 16).slice(0, 3);
+              const boxH = Math.max(28, lines.length * 12 + 12);
+              page.drawRectangle({ x: margin, y: y - boxH + 4, width: textWidth, height: boxH, color: rgb(0.97, 0.97, 0.98), borderColor: rgb(0.85, 0.85, 0.88), borderWidth: 0.5 });
+              let phY = y - 12;
+              for (const line of lines) {
+                page.drawText(sanitizeForPDF(line), { x: margin + 8, y: phY, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.45) });
+                phY -= 12;
+              }
+              y -= boxH + 8;
+            }
             break;
           }
           case "callout": {
@@ -2843,8 +3086,29 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
   let currentLine = "";
   let currentWidth = 0;
 
-  for (const word of words) {
-    if (!word) continue;
+  for (const rawWord of words) {
+    if (!rawWord) continue;
+    const wordParts: string[] = [];
+    if (measure(rawWord) > maxWidth) {
+      let part = "";
+      let partWidth = 0;
+      for (const ch of rawWord) {
+        const chWidth = measure(ch);
+        if (part && partWidth + chWidth > maxWidth) {
+          wordParts.push(part);
+          part = ch;
+          partWidth = chWidth;
+        } else {
+          part += ch;
+          partWidth += chWidth;
+        }
+      }
+      if (part) wordParts.push(part);
+    } else {
+      wordParts.push(rawWord);
+    }
+
+    for (const word of wordParts) {
     const wordWidth = measure(word);
     const testWidth = currentLine ? currentWidth + spaceWidth + wordWidth : wordWidth;
 
@@ -2855,6 +3119,7 @@ function wrapText(text: string, font: any, fontSize: number, maxWidth: number): 
       if (currentLine) lines.push(currentLine);
       currentLine = word;
       currentWidth = wordWidth;
+    }
     }
   }
 
@@ -4956,13 +5221,13 @@ function renderCanonicalBlockDocx(
       const numCols = headers.length;
       const colWidth = Math.floor(9000 / numCols);
       const headerCells = headers
-        .map((h) => `<w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="F0F0F0"/></w:tcPr><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>${escapeXml(h)}</w:t></w:r></w:p></w:tc>`)
+        .map((h) => `<w:tc><w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="F0F0F0"/></w:tcPr><w:p><w:r><w:rPr><w:b/></w:rPr><w:t>${escapeXml(stripInlineMarkdown(h))}</w:t></w:r></w:p></w:tc>`)
         .join("");
       const bodyRows = rows
         .map((row, rowIdx) => {
           const cells: string[] = [];
           for (let c = 0; c < numCols; c++) {
-            const cell = row[c] !== undefined ? row[c] : "";
+            const cell = stripInlineMarkdown(row[c] !== undefined ? row[c] : "");
             const shade = rowIdx % 2 === 1 ? '<w:tcPr><w:shd w:val="clear" w:color="auto" w:fill="FAFAFA"/></w:tcPr>' : "";
             cells.push(`<w:tc>${shade}<w:p><w:r><w:t>${escapeXml(cell)}</w:t></w:r></w:p></w:tc>`);
           }
@@ -5079,12 +5344,12 @@ function renderCanonicalBlockXhtml(
       const rows: string[][] = blk.table?.rows || [];
       if (headers.length === 0) return "";
       const numCols = headers.length;
-      const thead = `<thead><tr>${headers.map((h) => `<th>${escapeXml(h)}</th>`).join("")}</tr></thead>`;
+      const thead = `<thead><tr>${headers.map((h) => `<th>${inlineMdToXhtml(h)}</th>`).join("")}</tr></thead>`;
       const tbody = `<tbody>${rows
         .map((row) => {
           const cells: string[] = [];
           for (let c = 0; c < numCols; c++) {
-            cells.push(`<td>${escapeXml(row[c] !== undefined ? row[c] : "")}</td>`);
+            cells.push(`<td>${inlineMdToXhtml(row[c] !== undefined ? row[c] : "")}</td>`);
           }
           return `<tr>${cells.join("")}</tr>`;
         })
