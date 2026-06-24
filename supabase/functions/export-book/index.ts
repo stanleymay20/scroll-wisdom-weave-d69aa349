@@ -1589,6 +1589,8 @@ export async function generateCanonicalPDF(
     }
   };
 
+  const imageBudget = { remaining: 16, slowPng: 2 };
+
   // --- Render each chapter from canonical blocks ---
   for (const ch of canonical) {
     currentChapterTitle = ch.title;
@@ -1691,33 +1693,63 @@ export async function generateCanonicalPDF(
           case "table": {
             const header = block.table?.header || [];
             const rows = block.table?.rows || [];
-            const cols = Math.max(1, header.length);
-            const colW = textWidth / cols;
-            const cellH = 16;
-            ensureRoom(cellH * (rows.length + 1) + 8);
-            // Header
-            for (let c = 0; c < cols; c++) {
-              page.drawRectangle({ x: margin + c * colW, y: y - cellH + 4, width: colW, height: cellH, color: rgb(0.92, 0.92, 0.94) });
-              page.drawText(sanitizeForPDF((header[c] || "").slice(0, 40)), { x: margin + c * colW + 4, y: y - 8, size: 9, font: timesRomanBold, color: rgb(0.1, 0.1, 0.1) });
-            }
-            y -= cellH;
-            for (const row of rows) {
-              ensureRoom(cellH);
-              for (let c = 0; c < cols; c++) {
-                page.drawText(sanitizeForPDF((row[c] || "").slice(0, 60)), { x: margin + c * colW + 4, y: y - 8, size: 9, font: timesRoman, color: rgb(0.2, 0.2, 0.2) });
-              }
-              y -= cellH;
-            }
-            y -= 6;
+            const rendered = drawPdfTable({
+              page,
+              pdfDoc,
+              y,
+              pageWidth,
+              pageHeight,
+              margin,
+              textWidth,
+              headers: header,
+              rows,
+              fonts: { regular: timesRoman, bold: timesRomanBold, helvetica },
+              addPageNumber,
+              pageNumberRef,
+            });
+            page = rendered.page;
+            y = rendered.y;
             break;
           }
           case "image": {
-            // Skip remote fetch in canonical v1 (parity with legacy: legacy also skips images in PDF body)
-            const alt = block.image?.alt || block.image?.src || "image";
-            ensureRoom(28);
-            page.drawRectangle({ x: margin, y: y - 24, width: textWidth, height: 28, color: rgb(0.97, 0.97, 0.98), borderColor: rgb(0.85, 0.85, 0.88), borderWidth: 0.5 });
-            page.drawText(sanitizeForPDF(`[Image: ${alt}]`), { x: margin + 8, y: y - 14, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.45) });
-            y -= 36;
+            const alt = block.image?.alt || "Image";
+            const src = block.image?.src || "";
+            let embedded: EmbeddedImage | null = null;
+            if (src && imageBudget.remaining > 0 && /^(https?:\/\/|data:image)/i.test(src)) {
+              const bytes = await fetchImageBytes(src);
+              if (bytes) embedded = await embedImageSmart(pdfDoc, bytes, imageBudget);
+              if (embedded) imageBudget.remaining--;
+            }
+
+            if (embedded) {
+              const imgAspect = embedded.width / embedded.height;
+              let drawWidth = textWidth;
+              let drawHeight = drawWidth / imgAspect;
+              if (drawHeight > 320) {
+                drawHeight = 320;
+                drawWidth = drawHeight * imgAspect;
+              }
+              ensureRoom(drawHeight + 34);
+              drawEmbeddedImage(page, embedded, margin + (textWidth - drawWidth) / 2, y - drawHeight, drawWidth, drawHeight);
+              y -= drawHeight + 10;
+              for (const line of wrapText(`Figure: ${alt}`, helvetica, 9, textWidth).slice(0, 3)) {
+                ensureRoom(12);
+                page.drawText(sanitizeForPDF(line), { x: margin, y, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.4) });
+                y -= 12;
+              }
+              y -= 6;
+            } else {
+              ensureRoom(28);
+              const lines = wrapText(`[Image not available: ${alt}]`, helvetica, 9, textWidth - 16).slice(0, 3);
+              const boxH = Math.max(28, lines.length * 12 + 12);
+              page.drawRectangle({ x: margin, y: y - boxH + 4, width: textWidth, height: boxH, color: rgb(0.97, 0.97, 0.98), borderColor: rgb(0.85, 0.85, 0.88), borderWidth: 0.5 });
+              let phY = y - 12;
+              for (const line of lines) {
+                page.drawText(sanitizeForPDF(line), { x: margin + 8, y: phY, size: 9, font: helvetica, color: rgb(0.4, 0.4, 0.45) });
+                phY -= 12;
+              }
+              y -= boxH + 8;
+            }
             break;
           }
           case "callout": {
