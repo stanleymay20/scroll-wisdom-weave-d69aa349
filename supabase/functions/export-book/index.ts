@@ -3836,7 +3836,7 @@ async function generateEPUB(
   
   for (const item of chapterItems) {
     try {
-    let content = item.chapter.content || "";
+    let content = stripExportOnlyArtifacts(item.chapter.content || "");
     
     // FIRST: Detect plain-text headings (legacy content without ## markers)
     content = content.replace(/\n\n([A-Z][A-Za-z0-9 :&,\-–—']{2,75})\n\n/g, (match: string, line: string) => {
