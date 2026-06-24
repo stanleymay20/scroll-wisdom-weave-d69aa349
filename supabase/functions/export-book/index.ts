@@ -1290,20 +1290,21 @@ serve(async (req) => {
       ...(book.publishing_settings || {}),
       ...(publishingSettingsOverride || {}),
     };
-    // Confidential mode forces invisible + sanitize + no branding.
-    if (pub.confidential_mode) {
-      pub.transparency_mode = 'invisible';
-      pub.sanitize_metadata = true;
-      pub.show_scrolllibrary_branding = false;
-      pub.show_ai_assistance_notice = false;
-      pub.show_powered_by = false;
-    }
-    const showAINotice = pub.transparency_mode !== 'invisible' && pub.show_ai_assistance_notice;
-    const showAILongDisclosure = pub.transparency_mode === 'transparent';
-    const showBranding = !pub.confidential_mode && pub.show_scrolllibrary_branding;
-    const showPoweredBy = !pub.confidential_mode && pub.show_powered_by;
-    const effectivePublisher = pub.publisher_name || (showBranding ? 'ScrollLibrary' : finalAuthorName);
-    const sanitizeMeta = pub.sanitize_metadata;
+    // PROFESSIONAL PUBLISHING STANDARD: never leak AI/ScrollLibrary notices
+    // into the exported manuscript. The finished book belongs to the author;
+    // generation provenance is not part of the published artifact. Force all
+    // disclosure / branding flags off regardless of saved settings.
+    pub.transparency_mode = 'invisible';
+    pub.show_scrolllibrary_branding = false;
+    pub.show_ai_assistance_notice = false;
+    pub.show_powered_by = false;
+    pub.sanitize_metadata = true;
+    const showAINotice = false;
+    const showAILongDisclosure = false;
+    const showBranding = false;
+    const showPoweredBy = false;
+    const effectivePublisher = pub.publisher_name || finalAuthorName;
+    const sanitizeMeta = true;
     const exportContext = { pub, showAINotice, showAILongDisclosure, showBranding, showPoweredBy, effectivePublisher, sanitizeMeta };
 
     // Generate bibliography for ALL books (from chapter refs + book_citations table)
@@ -2184,7 +2185,7 @@ async function generatePDF(
     
     // Process content with code block, image, table, and HEADING handling
     // Strip duplicate chapter title from content start (generated content often repeats it)
-    let chapterContent = chapter.content || "";
+    let chapterContent = stripExportOnlyArtifacts(chapter.content || "");
     const titleVariants = [
       chapter.title,
       `Chapter ${chapter.chapter_number}: ${chapter.title}`,
@@ -3319,7 +3320,7 @@ async function generateKDPPDF(
     if (!chapter.content) continue;
 
     // Strip duplicate chapter title from content start (KDP)
-    let kdpChapterContent = chapter.content;
+    let kdpChapterContent = stripExportOnlyArtifacts(chapter.content);
     const kdpTitleVariants = [
       chapter.title,
       `Chapter ${chapter.chapter_number}: ${chapter.title}`,
@@ -3835,7 +3836,7 @@ async function generateEPUB(
   
   for (const item of chapterItems) {
     try {
-    let content = item.chapter.content || "";
+    let content = stripExportOnlyArtifacts(item.chapter.content || "");
     
     // FIRST: Detect plain-text headings (legacy content without ## markers)
     content = content.replace(/\n\n([A-Z][A-Za-z0-9 :&,\-–—']{2,75})\n\n/g, (match: string, line: string) => {
@@ -4333,7 +4334,7 @@ async function generateDOCX(
   const processedChapters: { chapter: any; processedContent: string[]; imageRefs: { index: number; alt: string }[]; tables: { original: string; headers: string[]; rows: string[][] }[]; structuredCodeBlocks: StructuredCodeBlockData[]; codeBlocks: { lang: string; code: string }[]; headings: { level: number; text: string }[] }[] = [];
   
   for (const chapter of chapters) {
-    const content = chapter.content || "";
+    const content = stripExportOnlyArtifacts(chapter.content || "");
     // Cap images at 5 per chapter to avoid CPU timeout in edge function
     const allImgMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
     const imageMatches = allImgMatches.slice(0, 5);
