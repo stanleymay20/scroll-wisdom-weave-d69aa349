@@ -1746,7 +1746,7 @@ export async function generateCanonicalPDF(
             const src = block.image?.src || "";
             let embedded: EmbeddedImage | null = null;
             if (src && imageBudget.remaining > 0 && /^(https?:\/\/|data:image)/i.test(src)) {
-              const bytes = await fetchImageBytes(src);
+              const bytes = await fetchImageBytes(src, 3000);
               if (bytes) embedded = await embedImageSmart(pdfDoc, bytes, imageBudget);
               if (embedded) imageBudget.remaining--;
             }
