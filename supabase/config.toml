@@ -148,3 +148,6 @@ verify_jwt = false
 
 [functions.creator-payout-profile]
 verify_jwt = false
+
+[functions.art-director-analyze]
+verify_jwt = false

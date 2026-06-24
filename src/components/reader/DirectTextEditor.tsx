@@ -18,10 +18,11 @@ import {
 import { 
   Save, X, Bold, Italic, Underline, 
   List, ListOrdered, Heading1, Heading2,
-  Loader2, Edit3, ImagePlus, Link, Upload
+  Loader2, Edit3, ImagePlus, Link, Upload, Sparkles
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { ImproveChapterVisuals } from "./ImproveChapterVisuals";
 
 interface DirectTextEditorProps {
   chapterId: string;
@@ -29,6 +30,12 @@ interface DirectTextEditorProps {
   isOwner: boolean;
   onSave: (newContent: string) => void;
   onCancel: () => void;
+  // Optional book context — enables the AI Art Director when provided
+  bookType?: string;
+  bookTitle?: string;
+  chapterTitle?: string;
+  category?: string;
+  language?: string;
 }
 
 export function DirectTextEditor({
@@ -37,6 +44,11 @@ export function DirectTextEditor({
   isOwner,
   onSave,
   onCancel,
+  bookType,
+  bookTitle,
+  chapterTitle,
+  category,
+  language,
 }: DirectTextEditorProps) {
   const { toast } = useToast();
   const [localContent, setLocalContent] = useState(content);
@@ -45,6 +57,7 @@ export function DirectTextEditor({
   const [imageUrl, setImageUrl] = useState("");
   const [imageAlt, setImageAlt] = useState("");
   const [isUploading, setIsUploading] = useState(false);
+  const [showArtDirector, setShowArtDirector] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // Keep a ref in sync with state to avoid stale closures in formatting
@@ -372,8 +385,36 @@ export function DirectTextEditor({
               />
             </PopoverContent>
           </Popover>
+          {/* Improve Chapter Visuals — AI Publishing Art Director */}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setShowArtDirector(true)}
+            title="Improve Chapter Visuals"
+            className="h-8 gap-1.5 px-2 shrink-0 text-primary hover:text-primary"
+          >
+            <Sparkles className="h-4 w-4" />
+            <span className="text-xs hidden sm:inline">Improve Visuals</span>
+          </Button>
         </div>
       </div>
+
+      {/* AI Publishing Art Director sheet */}
+      <ImproveChapterVisuals
+        open={showArtDirector}
+        onOpenChange={setShowArtDirector}
+        chapterContent={localContent}
+        bookType={bookType}
+        bookTitle={bookTitle}
+        chapterTitle={chapterTitle}
+        category={category}
+        language={language}
+        onInsert={(nextContent) => {
+          setLocalContent(nextContent);
+          contentRef.current = nextContent;
+        }}
+      />
+
 
       {/* Editor */}
       <div className="flex-1 overflow-auto p-4">
