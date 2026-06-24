@@ -18,10 +18,11 @@ import {
 import { 
   Save, X, Bold, Italic, Underline, 
   List, ListOrdered, Heading1, Heading2,
-  Loader2, Edit3, ImagePlus, Link, Upload
+  Loader2, Edit3, ImagePlus, Link, Upload, Sparkles
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
+import { ImproveChapterVisuals } from "./ImproveChapterVisuals";
 
 interface DirectTextEditorProps {
   chapterId: string;
@@ -29,6 +30,12 @@ interface DirectTextEditorProps {
   isOwner: boolean;
   onSave: (newContent: string) => void;
   onCancel: () => void;
+  // Optional book context — enables the AI Art Director when provided
+  bookType?: string;
+  bookTitle?: string;
+  chapterTitle?: string;
+  category?: string;
+  language?: string;
 }
 
 export function DirectTextEditor({
