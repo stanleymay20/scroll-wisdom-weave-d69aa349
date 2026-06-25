@@ -328,6 +328,42 @@ function titleHeight(text: string, font: import("npm:pdf-lib@1.17.1").PDFFont, s
   return Math.max(1, lines) * lineHeight;
 }
 
+function normalizeAuthors(v: unknown): Array<{ name: string; role?: string }> {
+  if (!v) return [];
+  if (Array.isArray(v)) {
+    return v.map((a) => {
+      if (typeof a === "string") return { name: a };
+      const o = a as Record<string, unknown>;
+      return {
+        name: String(o.display_name ?? o.name ?? o.full_name ?? "—"),
+        role: (o.author_role ?? o.role) as string | undefined,
+      };
+    }).filter((a) => a.name && a.name !== "—" || true);
+  }
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    if (o.name || o.display_name) return [{ name: String(o.display_name ?? o.name), role: o.role as string }];
+  }
+  return [];
+}
+
+function normalizeHolders(v: unknown): string[] {
+  if (!v) return [];
+  if (Array.isArray(v)) {
+    return v.map((h) => {
+      if (typeof h === "string") return h;
+      const o = h as Record<string, unknown>;
+      return String(o.display_name ?? o.name ?? o.copyright_holder ?? "—");
+    }).filter(Boolean);
+  }
+  if (typeof v === "object") {
+    const o = v as Record<string, unknown>;
+    const name = o.copyright_holder ?? o.display_name ?? o.name;
+    if (name) return [String(name)];
+  }
+  return [];
+}
+
 function chunk(s: string, n: number): string[] {
   const out: string[] = [];
   for (let i = 0; i < s.length; i += n) out.push(s.slice(i, i + n));
