@@ -1391,6 +1391,7 @@ serve(async (req) => {
           book_id: bookId,
           publication_id: canonicalPublicationId,
           user_id: user.id,
+          actor_kind: "user",
           action: "export_metadata_override_attempt",
           allowed: false,
           reason: "client_attempted_to_override_protected_publication_fields",
