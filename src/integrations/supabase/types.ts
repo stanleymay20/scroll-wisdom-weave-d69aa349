@@ -5665,6 +5665,14 @@ export type Database = {
       }
     }
     Functions: {
+      _phase1_backfill_works: {
+        Args: never
+        Returns: {
+          books_processed: number
+          pubs_created: number
+          works_created: number
+        }[]
+      }
       admin_set_creator_entitlement: {
         Args: {
           _expires_at?: string
