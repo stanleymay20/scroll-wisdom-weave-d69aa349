@@ -16,6 +16,7 @@ import { EPIE_LAYERS, type CertificationTier } from "@/lib/epie";
 import { Loader2, Sparkles, ShieldCheck } from "lucide-react";
 import CitationManager from "@/components/citations/CitationManager";
 import DesignSystemPanel from "@/components/publish/DesignSystemPanel";
+import TypographyReport from "@/components/publish/TypographyReport";
 
 interface Audit {
   id: string;
