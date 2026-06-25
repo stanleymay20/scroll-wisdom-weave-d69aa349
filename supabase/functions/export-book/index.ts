@@ -1165,8 +1165,24 @@ serve(async (req) => {
       ? ALL_FORMATS 
       : (TIER_FORMATS[userPlan as keyof typeof TIER_FORMATS] || TIER_FORMATS.free);
 
-    const { bookId, format, authorName, isbn, isAcademicMode, academicMode, citationStyle, kdpTrimSize, kdpBleed, publishingSettings: publishingSettingsOverride } = await req.json();
-    
+    const rawBody = await req.json();
+    const {
+      bookId,
+      format,
+      isAcademicMode,
+      academicMode,
+      citationStyle,
+      kdpTrimSize,
+      kdpBleed,
+      publishingSettings: publishingSettingsOverride,
+      // PROTECTED identity fields — captured ONLY to detect tampering.
+      // Their values are NEVER fed into the renderer.
+      authorName: _clientAuthorName,
+      isbn: _clientIsbn,
+    } = rawBody ?? {};
+    const clientPublisherName: string | undefined = publishingSettingsOverride?.publisher_name;
+    const clientPublisherImprint: string | undefined = publishingSettingsOverride?.publisher_imprint;
+
     // Support both param names (client sends isAcademicMode, legacy sends academicMode)
     const resolvedAcademicMode = isAcademicMode || academicMode || false;
 
