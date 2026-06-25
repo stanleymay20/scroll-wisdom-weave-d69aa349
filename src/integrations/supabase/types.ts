@@ -14,6 +14,90 @@ export type Database = {
   }
   public: {
     Tables: {
+      ai_attribution_ledger: {
+        Row: {
+          approved_at: string | null
+          approved_by: string | null
+          chapter_id: string | null
+          correlation_id: string | null
+          cost_cents: number | null
+          created_at: string
+          final_editor_id: string | null
+          human_review_status: Database["public"]["Enums"]["ai_review_status"]
+          id: string
+          input_tokens: number | null
+          model_name: string | null
+          model_provider: string | null
+          model_version: string | null
+          operation: string | null
+          output_tokens: number | null
+          owner_approved: boolean
+          prompt_hash: string | null
+          publication_id: string | null
+          purpose: string | null
+          work_id: string | null
+        }
+        Insert: {
+          approved_at?: string | null
+          approved_by?: string | null
+          chapter_id?: string | null
+          correlation_id?: string | null
+          cost_cents?: number | null
+          created_at?: string
+          final_editor_id?: string | null
+          human_review_status?: Database["public"]["Enums"]["ai_review_status"]
+          id?: string
+          input_tokens?: number | null
+          model_name?: string | null
+          model_provider?: string | null
+          model_version?: string | null
+          operation?: string | null
+          output_tokens?: number | null
+          owner_approved?: boolean
+          prompt_hash?: string | null
+          publication_id?: string | null
+          purpose?: string | null
+          work_id?: string | null
+        }
+        Update: {
+          approved_at?: string | null
+          approved_by?: string | null
+          chapter_id?: string | null
+          correlation_id?: string | null
+          cost_cents?: number | null
+          created_at?: string
+          final_editor_id?: string | null
+          human_review_status?: Database["public"]["Enums"]["ai_review_status"]
+          id?: string
+          input_tokens?: number | null
+          model_name?: string | null
+          model_provider?: string | null
+          model_version?: string | null
+          operation?: string | null
+          output_tokens?: number | null
+          owner_approved?: boolean
+          prompt_hash?: string | null
+          publication_id?: string | null
+          purpose?: string | null
+          work_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ai_attribution_ledger_publication_id_fkey"
+            columns: ["publication_id"]
+            isOneToOne: false
+            referencedRelation: "publications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ai_attribution_ledger_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       ai_usage_tracking: {
         Row: {
           created_at: string
@@ -375,6 +459,82 @@ export type Database = {
           x_url?: string | null
         }
         Relationships: []
+      }
+      authorship_audit_log: {
+        Row: {
+          action: string
+          actor_kind: string
+          allowed: boolean
+          book_id: string | null
+          correlation_id: string | null
+          created_at: string
+          field_name: string | null
+          id: string
+          metadata: Json
+          new_value: Json | null
+          old_value: Json | null
+          publication_id: string | null
+          reason: string | null
+          user_id: string | null
+          work_id: string | null
+        }
+        Insert: {
+          action: string
+          actor_kind?: string
+          allowed?: boolean
+          book_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: Json | null
+          old_value?: Json | null
+          publication_id?: string | null
+          reason?: string | null
+          user_id?: string | null
+          work_id?: string | null
+        }
+        Update: {
+          action?: string
+          actor_kind?: string
+          allowed?: boolean
+          book_id?: string | null
+          correlation_id?: string | null
+          created_at?: string
+          field_name?: string | null
+          id?: string
+          metadata?: Json
+          new_value?: Json | null
+          old_value?: Json | null
+          publication_id?: string | null
+          reason?: string | null
+          user_id?: string | null
+          work_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "authorship_audit_log_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "authorship_audit_log_publication_id_fkey"
+            columns: ["publication_id"]
+            isOneToOne: false
+            referencedRelation: "publications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "authorship_audit_log_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       book_audits: {
         Row: {
@@ -882,12 +1042,16 @@ export type Database = {
           cover_image_url: string | null
           created_at: string
           creator_id: string | null
+          current_publication_id: string | null
           description: string | null
           id: string
           is_featured: boolean | null
           is_published: boolean | null
           language: string | null
           organization_id: string | null
+          publish_lock_reason: string | null
+          publish_locked_at: string | null
+          publish_locked_by: string | null
           publishing_settings: Json
           source_content_hash: string | null
           source_document_name: string | null
@@ -898,6 +1062,7 @@ export type Database = {
           total_chapters: number | null
           updated_at: string
           user_id: string
+          work_id: string | null
         }
         Insert: {
           academic_level?: string | null
@@ -907,12 +1072,16 @@ export type Database = {
           cover_image_url?: string | null
           created_at?: string
           creator_id?: string | null
+          current_publication_id?: string | null
           description?: string | null
           id?: string
           is_featured?: boolean | null
           is_published?: boolean | null
           language?: string | null
           organization_id?: string | null
+          publish_lock_reason?: string | null
+          publish_locked_at?: string | null
+          publish_locked_by?: string | null
           publishing_settings?: Json
           source_content_hash?: string | null
           source_document_name?: string | null
@@ -923,6 +1092,7 @@ export type Database = {
           total_chapters?: number | null
           updated_at?: string
           user_id: string
+          work_id?: string | null
         }
         Update: {
           academic_level?: string | null
@@ -932,12 +1102,16 @@ export type Database = {
           cover_image_url?: string | null
           created_at?: string
           creator_id?: string | null
+          current_publication_id?: string | null
           description?: string | null
           id?: string
           is_featured?: boolean | null
           is_published?: boolean | null
           language?: string | null
           organization_id?: string | null
+          publish_lock_reason?: string | null
+          publish_locked_at?: string | null
+          publish_locked_by?: string | null
           publishing_settings?: Json
           source_content_hash?: string | null
           source_document_name?: string | null
@@ -948,13 +1122,28 @@ export type Database = {
           total_chapters?: number | null
           updated_at?: string
           user_id?: string
+          work_id?: string | null
         }
         Relationships: [
+          {
+            foreignKeyName: "books_current_publication_id_fkey"
+            columns: ["current_publication_id"]
+            isOneToOne: false
+            referencedRelation: "publications"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "books_organization_id_fkey"
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "books_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
             referencedColumns: ["id"]
           },
         ]
@@ -2406,6 +2595,98 @@ export type Database = {
           },
         ]
       }
+      exports: {
+        Row: {
+          book_id: string | null
+          certificate_id: string | null
+          client_metadata: Json
+          exported_at: string
+          exported_by: string
+          file_hash: string | null
+          format: string
+          id: string
+          integrity_level: Database["public"]["Enums"]["publication_integrity"]
+          provider_id: string
+          public_key_id: string | null
+          publication_id: string | null
+          renderer_version: string | null
+          scrolllibrary_version: string | null
+          signature_algorithm: string | null
+          signature_value: string | null
+          watermark: Json
+          work_id: string | null
+        }
+        Insert: {
+          book_id?: string | null
+          certificate_id?: string | null
+          client_metadata?: Json
+          exported_at?: string
+          exported_by: string
+          file_hash?: string | null
+          format: string
+          id?: string
+          integrity_level?: Database["public"]["Enums"]["publication_integrity"]
+          provider_id: string
+          public_key_id?: string | null
+          publication_id?: string | null
+          renderer_version?: string | null
+          scrolllibrary_version?: string | null
+          signature_algorithm?: string | null
+          signature_value?: string | null
+          watermark?: Json
+          work_id?: string | null
+        }
+        Update: {
+          book_id?: string | null
+          certificate_id?: string | null
+          client_metadata?: Json
+          exported_at?: string
+          exported_by?: string
+          file_hash?: string | null
+          format?: string
+          id?: string
+          integrity_level?: Database["public"]["Enums"]["publication_integrity"]
+          provider_id?: string
+          public_key_id?: string | null
+          publication_id?: string | null
+          renderer_version?: string | null
+          scrolllibrary_version?: string | null
+          signature_algorithm?: string | null
+          signature_value?: string | null
+          watermark?: Json
+          work_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "exports_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exports_certificate_id_fkey"
+            columns: ["certificate_id"]
+            isOneToOne: false
+            referencedRelation: "publication_certificates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exports_publication_id_fkey"
+            columns: ["publication_id"]
+            isOneToOne: false
+            referencedRelation: "publications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "exports_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       external_publications: {
         Row: {
           book_id: string
@@ -2994,6 +3275,7 @@ export type Database = {
           id: string
           metadata: Json
           name: string
+          org_type: string | null
           plan: string
           slug: string
           updated_at: string
@@ -3005,6 +3287,7 @@ export type Database = {
           id?: string
           metadata?: Json
           name: string
+          org_type?: string | null
           plan?: string
           slug: string
           updated_at?: string
@@ -3016,12 +3299,77 @@ export type Database = {
           id?: string
           metadata?: Json
           name?: string
+          org_type?: string | null
           plan?: string
           slug?: string
           updated_at?: string
           verbose_audit?: boolean
         }
         Relationships: []
+      }
+      ownership_transfers: {
+        Row: {
+          accepted_at: string | null
+          cancelled_at: string | null
+          expires_at: string
+          from_rights_holder_id: string
+          id: string
+          reason: string | null
+          requested_at: string
+          requested_by: string
+          status: Database["public"]["Enums"]["ownership_transfer_status"]
+          to_rights_holder_id: string
+          work_id: string
+        }
+        Insert: {
+          accepted_at?: string | null
+          cancelled_at?: string | null
+          expires_at?: string
+          from_rights_holder_id: string
+          id?: string
+          reason?: string | null
+          requested_at?: string
+          requested_by: string
+          status?: Database["public"]["Enums"]["ownership_transfer_status"]
+          to_rights_holder_id: string
+          work_id: string
+        }
+        Update: {
+          accepted_at?: string | null
+          cancelled_at?: string | null
+          expires_at?: string
+          from_rights_holder_id?: string
+          id?: string
+          reason?: string | null
+          requested_at?: string
+          requested_by?: string
+          status?: Database["public"]["Enums"]["ownership_transfer_status"]
+          to_rights_holder_id?: string
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "ownership_transfers_from_rights_holder_id_fkey"
+            columns: ["from_rights_holder_id"]
+            isOneToOne: false
+            referencedRelation: "rights_holders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ownership_transfers_to_rights_holder_id_fkey"
+            columns: ["to_rights_holder_id"]
+            isOneToOne: false
+            referencedRelation: "rights_holders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "ownership_transfers_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       platform_config: {
         Row: {
@@ -3257,6 +3605,176 @@ export type Database = {
             columns: ["series_id"]
             isOneToOne: false
             referencedRelation: "book_series"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      publication_certificates: {
+        Row: {
+          authors_snapshot: Json
+          content_hash: string
+          id: string
+          issued_at: string
+          issuer: string
+          public_key_id: string | null
+          publication_id: string
+          revocation_reason: string | null
+          revoked_at: string | null
+          rights_holders_snapshot: Json
+          scrolllibrary_version: string | null
+          signature_algorithm: string
+          signature_value: string | null
+          work_id: string
+        }
+        Insert: {
+          authors_snapshot?: Json
+          content_hash: string
+          id?: string
+          issued_at?: string
+          issuer?: string
+          public_key_id?: string | null
+          publication_id: string
+          revocation_reason?: string | null
+          revoked_at?: string | null
+          rights_holders_snapshot?: Json
+          scrolllibrary_version?: string | null
+          signature_algorithm?: string
+          signature_value?: string | null
+          work_id: string
+        }
+        Update: {
+          authors_snapshot?: Json
+          content_hash?: string
+          id?: string
+          issued_at?: string
+          issuer?: string
+          public_key_id?: string | null
+          publication_id?: string
+          revocation_reason?: string | null
+          revoked_at?: string | null
+          rights_holders_snapshot?: Json
+          scrolllibrary_version?: string | null
+          signature_algorithm?: string
+          signature_value?: string | null
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "publication_certificates_publication_id_fkey"
+            columns: ["publication_id"]
+            isOneToOne: false
+            referencedRelation: "publications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "publication_certificates_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      publications: {
+        Row: {
+          certificate_id: string | null
+          content_hash: string | null
+          created_at: string
+          edition_kind: Database["public"]["Enums"]["publication_edition_kind"]
+          id: string
+          integrity_level: Database["public"]["Enums"]["publication_integrity"]
+          language: string
+          notes: string | null
+          parent_publication_id: string | null
+          published_at: string | null
+          published_by: string | null
+          semver_major: number
+          semver_minor: number
+          semver_patch: number
+          snapshot: Json
+          status: Database["public"]["Enums"]["publication_status"]
+          superseded_by_publication_id: string | null
+          unpublish_reason: string | null
+          unpublished_at: string | null
+          updated_at: string
+          version: string
+          work_id: string
+        }
+        Insert: {
+          certificate_id?: string | null
+          content_hash?: string | null
+          created_at?: string
+          edition_kind?: Database["public"]["Enums"]["publication_edition_kind"]
+          id?: string
+          integrity_level?: Database["public"]["Enums"]["publication_integrity"]
+          language?: string
+          notes?: string | null
+          parent_publication_id?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          semver_major?: number
+          semver_minor?: number
+          semver_patch?: number
+          snapshot?: Json
+          status?: Database["public"]["Enums"]["publication_status"]
+          superseded_by_publication_id?: string | null
+          unpublish_reason?: string | null
+          unpublished_at?: string | null
+          updated_at?: string
+          version?: string
+          work_id: string
+        }
+        Update: {
+          certificate_id?: string | null
+          content_hash?: string | null
+          created_at?: string
+          edition_kind?: Database["public"]["Enums"]["publication_edition_kind"]
+          id?: string
+          integrity_level?: Database["public"]["Enums"]["publication_integrity"]
+          language?: string
+          notes?: string | null
+          parent_publication_id?: string | null
+          published_at?: string | null
+          published_by?: string | null
+          semver_major?: number
+          semver_minor?: number
+          semver_patch?: number
+          snapshot?: Json
+          status?: Database["public"]["Enums"]["publication_status"]
+          superseded_by_publication_id?: string | null
+          unpublish_reason?: string | null
+          unpublished_at?: string | null
+          updated_at?: string
+          version?: string
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "publications_certificate_fk"
+            columns: ["certificate_id"]
+            isOneToOne: false
+            referencedRelation: "publication_certificates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "publications_parent_publication_id_fkey"
+            columns: ["parent_publication_id"]
+            isOneToOne: false
+            referencedRelation: "publications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "publications_superseded_by_publication_id_fkey"
+            columns: ["superseded_by_publication_id"]
+            isOneToOne: false
+            referencedRelation: "publications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "publications_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
             referencedColumns: ["id"]
           },
         ]
@@ -4033,6 +4551,132 @@ export type Database = {
             columns: ["book_id"]
             isOneToOne: false
             referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rights_history: {
+        Row: {
+          change_action: Database["public"]["Enums"]["rights_change_action"]
+          change_reason: string | null
+          changed_by: string | null
+          created_at: string
+          effective_from: string
+          effective_to: string | null
+          id: string
+          language: string
+          rights_class: Database["public"]["Enums"]["rights_class"]
+          rights_holder_id: string
+          rights_scope: Json
+          superseded_by_id: string | null
+          territory: string
+          work_id: string
+        }
+        Insert: {
+          change_action: Database["public"]["Enums"]["rights_change_action"]
+          change_reason?: string | null
+          changed_by?: string | null
+          created_at?: string
+          effective_from: string
+          effective_to?: string | null
+          id?: string
+          language?: string
+          rights_class: Database["public"]["Enums"]["rights_class"]
+          rights_holder_id: string
+          rights_scope?: Json
+          superseded_by_id?: string | null
+          territory?: string
+          work_id: string
+        }
+        Update: {
+          change_action?: Database["public"]["Enums"]["rights_change_action"]
+          change_reason?: string | null
+          changed_by?: string | null
+          created_at?: string
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          language?: string
+          rights_class?: Database["public"]["Enums"]["rights_class"]
+          rights_holder_id?: string
+          rights_scope?: Json
+          superseded_by_id?: string | null
+          territory?: string
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rights_history_rights_holder_id_fkey"
+            columns: ["rights_holder_id"]
+            isOneToOne: false
+            referencedRelation: "rights_holders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rights_history_superseded_by_id_fkey"
+            columns: ["superseded_by_id"]
+            isOneToOne: false
+            referencedRelation: "rights_history"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "rights_history_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      rights_holders: {
+        Row: {
+          country_code: string | null
+          created_at: string
+          display_name: string
+          holder_type: Database["public"]["Enums"]["rights_holder_type"]
+          id: string
+          legal_name: string | null
+          metadata: Json
+          organization_id: string | null
+          updated_at: string
+          user_id: string | null
+          verified: boolean
+          verified_at: string | null
+        }
+        Insert: {
+          country_code?: string | null
+          created_at?: string
+          display_name: string
+          holder_type: Database["public"]["Enums"]["rights_holder_type"]
+          id?: string
+          legal_name?: string | null
+          metadata?: Json
+          organization_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+          verified?: boolean
+          verified_at?: string | null
+        }
+        Update: {
+          country_code?: string | null
+          created_at?: string
+          display_name?: string
+          holder_type?: Database["public"]["Enums"]["rights_holder_type"]
+          id?: string
+          legal_name?: string | null
+          metadata?: Json
+          organization_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+          verified?: boolean
+          verified_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "rights_holders_organization_id_fkey"
+            columns: ["organization_id"]
+            isOneToOne: false
+            referencedRelation: "organizations"
             referencedColumns: ["id"]
           },
         ]
@@ -4816,6 +5460,191 @@ export type Database = {
         }
         Relationships: []
       }
+      work_authors: {
+        Row: {
+          author_role: Database["public"]["Enums"]["work_author_role"]
+          biography: string | null
+          contribution_percentage: number | null
+          created_at: string
+          display_name: string
+          id: string
+          photo_url: string | null
+          sort_order: number
+          updated_at: string
+          user_id: string | null
+          verified: boolean
+          verified_at: string | null
+          work_id: string
+        }
+        Insert: {
+          author_role?: Database["public"]["Enums"]["work_author_role"]
+          biography?: string | null
+          contribution_percentage?: number | null
+          created_at?: string
+          display_name: string
+          id?: string
+          photo_url?: string | null
+          sort_order?: number
+          updated_at?: string
+          user_id?: string | null
+          verified?: boolean
+          verified_at?: string | null
+          work_id: string
+        }
+        Update: {
+          author_role?: Database["public"]["Enums"]["work_author_role"]
+          biography?: string | null
+          contribution_percentage?: number | null
+          created_at?: string
+          display_name?: string
+          id?: string
+          photo_url?: string | null
+          sort_order?: number
+          updated_at?: string
+          user_id?: string | null
+          verified?: boolean
+          verified_at?: string | null
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_authors_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      work_rights: {
+        Row: {
+          created_at: string
+          created_by: string | null
+          effective_from: string
+          effective_to: string | null
+          id: string
+          language: string
+          rights_class: Database["public"]["Enums"]["rights_class"]
+          rights_holder_id: string
+          rights_scope: Json
+          source_contract_ref: string | null
+          territory: string
+          updated_at: string
+          work_id: string
+        }
+        Insert: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          language?: string
+          rights_class: Database["public"]["Enums"]["rights_class"]
+          rights_holder_id: string
+          rights_scope?: Json
+          source_contract_ref?: string | null
+          territory?: string
+          updated_at?: string
+          work_id: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string | null
+          effective_from?: string
+          effective_to?: string | null
+          id?: string
+          language?: string
+          rights_class?: Database["public"]["Enums"]["rights_class"]
+          rights_holder_id?: string
+          rights_scope?: Json
+          source_contract_ref?: string | null
+          territory?: string
+          updated_at?: string
+          work_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "work_rights_rights_holder_id_fkey"
+            columns: ["rights_holder_id"]
+            isOneToOne: false
+            referencedRelation: "rights_holders"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "work_rights_work_id_fkey"
+            columns: ["work_id"]
+            isOneToOne: false
+            referencedRelation: "works"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      works: {
+        Row: {
+          created_at: string
+          created_by: string
+          current_publication_id: string | null
+          description: string | null
+          id: string
+          original_language: string
+          owner_rights_holder_id: string
+          publish_lock_reason: string | null
+          publish_locked_at: string | null
+          publish_locked_by: string | null
+          subject_codes: Json
+          title: string
+          updated_at: string
+          work_type: string
+        }
+        Insert: {
+          created_at?: string
+          created_by: string
+          current_publication_id?: string | null
+          description?: string | null
+          id?: string
+          original_language?: string
+          owner_rights_holder_id: string
+          publish_lock_reason?: string | null
+          publish_locked_at?: string | null
+          publish_locked_by?: string | null
+          subject_codes?: Json
+          title: string
+          updated_at?: string
+          work_type?: string
+        }
+        Update: {
+          created_at?: string
+          created_by?: string
+          current_publication_id?: string | null
+          description?: string | null
+          id?: string
+          original_language?: string
+          owner_rights_holder_id?: string
+          publish_lock_reason?: string | null
+          publish_locked_at?: string | null
+          publish_locked_by?: string | null
+          subject_codes?: Json
+          title?: string
+          updated_at?: string
+          work_type?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "works_current_publication_fk"
+            columns: ["current_publication_id"]
+            isOneToOne: false
+            referencedRelation: "publications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "works_owner_rights_holder_id_fkey"
+            columns: ["owner_rights_holder_id"]
+            isOneToOne: false
+            referencedRelation: "rights_holders"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
     }
     Views: {
       recommendation_rail_metrics: {
@@ -4890,6 +5719,10 @@ export type Database = {
           score: number
           views: number
         }[]
+      }
+      ensure_individual_rights_holder: {
+        Args: { _display_name?: string; _user_id: string }
+        Returns: string
       }
       get_admin_user_metrics: { Args: never; Returns: Json }
       get_book_elite_readiness: { Args: { _book_id: string }; Returns: Json }
@@ -5084,14 +5917,76 @@ export type Database = {
         Args: { _book_id: string; _user_id: string }
         Returns: boolean
       }
+      verify_export_public: { Args: { _export_id: string }; Returns: Json }
     }
     Enums: {
+      ai_review_status: "pending" | "accepted" | "rejected" | "modified"
       app_role: "admin" | "moderator" | "user"
       competency_level:
         | "knowledge_verified"
         | "applied_competency"
         | "professional_integration"
         | "mastery"
+      ownership_transfer_status:
+        | "pending"
+        | "accepted"
+        | "cancelled"
+        | "expired"
+        | "rejected"
+      publication_edition_kind:
+        | "original"
+        | "translation"
+        | "revision"
+        | "adaptation"
+        | "student_edition"
+        | "executive_edition"
+        | "audiobook_edition"
+        | "print_edition"
+      publication_integrity:
+        | "verified_published"
+        | "draft_export"
+        | "collaborative_draft"
+        | "private_review"
+        | "internal_preview"
+      publication_status:
+        | "draft"
+        | "internal_review"
+        | "external_review"
+        | "approved"
+        | "published"
+        | "archived"
+        | "retracted"
+        | "superseded"
+      rights_change_action: "grant" | "revoke" | "transfer" | "expire" | "amend"
+      rights_class:
+        | "attribution"
+        | "integrity"
+        | "name_protection"
+        | "copyright_holder"
+        | "publisher"
+        | "distributor"
+        | "licensing"
+        | "royalties"
+        | "pricing"
+        | "subsidiary_rights"
+        | "audiobook_rights"
+        | "translation_rights"
+        | "film_rights"
+      rights_holder_type:
+        | "individual"
+        | "organization"
+        | "publisher"
+        | "institution"
+        | "government"
+        | "nonprofit"
+        | "research_institute"
+      work_author_role:
+        | "primary"
+        | "co_author"
+        | "ghostwriter"
+        | "translator"
+        | "editor_credit"
+        | "contributor"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -5219,12 +6114,80 @@ export type CompositeTypes<
 export const Constants = {
   public: {
     Enums: {
+      ai_review_status: ["pending", "accepted", "rejected", "modified"],
       app_role: ["admin", "moderator", "user"],
       competency_level: [
         "knowledge_verified",
         "applied_competency",
         "professional_integration",
         "mastery",
+      ],
+      ownership_transfer_status: [
+        "pending",
+        "accepted",
+        "cancelled",
+        "expired",
+        "rejected",
+      ],
+      publication_edition_kind: [
+        "original",
+        "translation",
+        "revision",
+        "adaptation",
+        "student_edition",
+        "executive_edition",
+        "audiobook_edition",
+        "print_edition",
+      ],
+      publication_integrity: [
+        "verified_published",
+        "draft_export",
+        "collaborative_draft",
+        "private_review",
+        "internal_preview",
+      ],
+      publication_status: [
+        "draft",
+        "internal_review",
+        "external_review",
+        "approved",
+        "published",
+        "archived",
+        "retracted",
+        "superseded",
+      ],
+      rights_change_action: ["grant", "revoke", "transfer", "expire", "amend"],
+      rights_class: [
+        "attribution",
+        "integrity",
+        "name_protection",
+        "copyright_holder",
+        "publisher",
+        "distributor",
+        "licensing",
+        "royalties",
+        "pricing",
+        "subsidiary_rights",
+        "audiobook_rights",
+        "translation_rights",
+        "film_rights",
+      ],
+      rights_holder_type: [
+        "individual",
+        "organization",
+        "publisher",
+        "institution",
+        "government",
+        "nonprofit",
+        "research_institute",
+      ],
+      work_author_role: [
+        "primary",
+        "co_author",
+        "ghostwriter",
+        "translator",
+        "editor_credit",
+        "contributor",
       ],
     },
   },
