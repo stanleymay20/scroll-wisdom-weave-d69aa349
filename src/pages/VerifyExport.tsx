@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ShieldCheck, ShieldAlert, ExternalLink } from "lucide-react";
+import { PublicationCertificateButton } from "@/components/work/PublicationCertificateButton";
 
 interface VerifyResult {
   verified: boolean;
