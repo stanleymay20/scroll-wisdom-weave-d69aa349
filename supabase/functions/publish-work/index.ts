@@ -47,9 +47,32 @@ Deno.serve(async (req) => {
       : { data: [] as Array<{ id: string; display_name: string; holder_type: string; country_code: string | null }> };
 
     let chapters: Array<{ id: string; chapter_number: number; title: string }> = [];
+    let chaptersForGuard: Array<{ id: string; chapter_number: number; title: string; content: string }> = [];
     if (book?.id) {
-      const { data: ch } = await sc.from("chapters").select("id, chapter_number, title").eq("book_id", book.id).order("chapter_number");
-      chapters = ch ?? [];
+      const { data: ch } = await sc
+        .from("chapters")
+        .select("id, chapter_number, title, content")
+        .eq("book_id", book.id)
+        .order("chapter_number");
+      chapters = (ch ?? []).map((c) => ({ id: c.id, chapter_number: c.chapter_number, title: c.title }));
+      chaptersForGuard = (ch ?? []).map((c) => ({
+        id: c.id, chapter_number: c.chapter_number, title: c.title ?? "", content: c.content ?? "",
+      }));
+    }
+
+    // P0 Typography & Pagination Guard — refuse certification with blockers.
+    const guard = runPublicationGuard(chaptersForGuard);
+    if (!guard.publicationReady && !body.override_typography_blockers) {
+      await logAuthorshipEvent(sc, {
+        workId: body.work_id, bookId: book?.id ?? null, userId: auth.userId,
+        action: "denied", allowed: false, reason: "typography_blockers",
+        metadata: { blockerCount: guard.report.blockerCount, score: guard.report.validationScore },
+      });
+      return json({
+        error: "publication_blocked",
+        reason: "typography_blockers",
+        validation_report: guard.report,
+      }, 409);
     }
 
     // Freeze design snapshot (Phase 2.1 — Publisher Design System).
