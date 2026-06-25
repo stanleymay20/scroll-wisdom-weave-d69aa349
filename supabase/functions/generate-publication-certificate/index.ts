@@ -188,7 +188,7 @@ Deno.serve(async (req) => {
     const rightX = MARGIN + colW + colGap;
     const rowY = y;
 
-    metaPair(page, leftX, rowY, "Publisher", c.issuer ?? "—", sans, serif, muted, ink);
+    metaPair(page, leftX, rowY, "Publisher", prettyIssuer(c.issuer), sans, serif, muted, ink);
     metaPair(page, rightX, rowY, "Issued", fmtDate(c.issued_at), sans, serif, muted, ink);
 
     const rowY2 = rowY - 44;
@@ -381,8 +381,15 @@ function humanIntegrity(level: string | null | undefined): string {
   switch (level) {
     case "certified": return "Certified";
     case "verified": return "Verified";
+    case "verified_published": return "Verified · Published";
     case "standard": return "Standard";
     case "draft": return "Draft";
-    default: return level ?? "—";
+    default: return (level ?? "—").replace(/_/g, " ").replace(/\b\w/g, (m) => m.toUpperCase());
   }
+}
+
+function prettyIssuer(s: string | null | undefined): string {
+  if (!s) return "—";
+  if (s.toLowerCase() === "scrolllibrary") return "ScrollLibrary";
+  return s;
 }
