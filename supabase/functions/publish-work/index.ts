@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
       sc.from("works").select("id, title, original_language").eq("id", body.work_id).maybeSingle(),
       sc.from("work_authors").select("user_id, display_name, author_role, sort_order, contribution_percentage").eq("work_id", body.work_id).order("sort_order"),
       sc.from("work_rights").select("rights_holder_id, rights_class, rights_scope, territory, language").eq("work_id", body.work_id),
-      sc.from("books").select("id, title").eq("work_id", body.work_id).maybeSingle(),
+      sc.from("books").select("id, title, design_settings").eq("work_id", body.work_id).maybeSingle(),
     ]);
     if (!work) return json({ error: "work_not_found" }, 404);
 
@@ -50,6 +50,19 @@ Deno.serve(async (req) => {
       chapters = ch ?? [];
     }
 
+    // Freeze design snapshot (Phase 2.1 — Publisher Design System).
+    const design_snapshot = (book?.design_settings as Record<string, unknown> | null) ?? null;
+
+    // Freeze citations snapshot (Phase 2.1 — Evidence & Citation Engine).
+    let citations_snapshot: unknown[] = [];
+    if (book?.id) {
+      const { data: cites } = await sc
+        .from("book_citations")
+        .select("id, citation_key, source_type, citation_text, authors, publisher, container_title, volume, issue, pages, doi, isbn, url, accessed_at, publication_date, confidence")
+        .eq("book_id", book.id);
+      citations_snapshot = cites ?? [];
+    }
+
     const snapshot = {
       title: work.title,
       language: work.original_language ?? body.language,
@@ -57,6 +70,8 @@ Deno.serve(async (req) => {
       rights_holders: holders ?? [],
       rights: rights ?? [],
       chapters,
+      design: design_snapshot,
+      citations: citations_snapshot,
       frozen_at: new Date().toISOString(),
     };
 
@@ -91,6 +106,7 @@ Deno.serve(async (req) => {
         status: "published",
         integrity_level: body.integrity_level,
         snapshot,
+        design_snapshot,
         content_hash: contentHash,
         published_at: new Date().toISOString(),
         published_by: auth.userId,

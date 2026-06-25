@@ -627,37 +627,82 @@ export type Database = {
       }
       book_citations: {
         Row: {
+          accessed_at: string | null
           author: string | null
+          authors: Json
           book_id: string
           chapter_id: string | null
+          citation_key: string
           citation_text: string
           citation_type: string | null
+          confidence: string
+          container_title: string | null
           created_at: string
+          doi: string | null
           id: string
+          isbn: string | null
+          issue: string | null
+          notes: string | null
+          pages: string | null
           publication_date: string | null
+          publisher: string | null
+          source_type: string | null
           source_url: string | null
+          updated_at: string
+          url: string | null
+          volume: string | null
         }
         Insert: {
+          accessed_at?: string | null
           author?: string | null
+          authors?: Json
           book_id: string
           chapter_id?: string | null
+          citation_key: string
           citation_text: string
           citation_type?: string | null
+          confidence?: string
+          container_title?: string | null
           created_at?: string
+          doi?: string | null
           id?: string
+          isbn?: string | null
+          issue?: string | null
+          notes?: string | null
+          pages?: string | null
           publication_date?: string | null
+          publisher?: string | null
+          source_type?: string | null
           source_url?: string | null
+          updated_at?: string
+          url?: string | null
+          volume?: string | null
         }
         Update: {
+          accessed_at?: string | null
           author?: string | null
+          authors?: Json
           book_id?: string
           chapter_id?: string | null
+          citation_key?: string
           citation_text?: string
           citation_type?: string | null
+          confidence?: string
+          container_title?: string | null
           created_at?: string
+          doi?: string | null
           id?: string
+          isbn?: string | null
+          issue?: string | null
+          notes?: string | null
+          pages?: string | null
           publication_date?: string | null
+          publisher?: string | null
+          source_type?: string | null
           source_url?: string | null
+          updated_at?: string
+          url?: string | null
+          volume?: string | null
         }
         Relationships: [
           {
@@ -1044,6 +1089,7 @@ export type Database = {
           creator_id: string | null
           current_publication_id: string | null
           description: string | null
+          design_settings: Json
           id: string
           is_featured: boolean | null
           is_published: boolean | null
@@ -1074,6 +1120,7 @@ export type Database = {
           creator_id?: string | null
           current_publication_id?: string | null
           description?: string | null
+          design_settings?: Json
           id?: string
           is_featured?: boolean | null
           is_published?: boolean | null
@@ -1104,6 +1151,7 @@ export type Database = {
           creator_id?: string | null
           current_publication_id?: string | null
           description?: string | null
+          design_settings?: Json
           id?: string
           is_featured?: boolean | null
           is_published?: boolean | null
@@ -3680,6 +3728,7 @@ export type Database = {
           certificate_id: string | null
           content_hash: string | null
           created_at: string
+          design_snapshot: Json | null
           edition_kind: Database["public"]["Enums"]["publication_edition_kind"]
           id: string
           integrity_level: Database["public"]["Enums"]["publication_integrity"]
@@ -3704,6 +3753,7 @@ export type Database = {
           certificate_id?: string | null
           content_hash?: string | null
           created_at?: string
+          design_snapshot?: Json | null
           edition_kind?: Database["public"]["Enums"]["publication_edition_kind"]
           id?: string
           integrity_level?: Database["public"]["Enums"]["publication_integrity"]
@@ -3728,6 +3778,7 @@ export type Database = {
           certificate_id?: string | null
           content_hash?: string | null
           created_at?: string
+          design_snapshot?: Json | null
           edition_kind?: Database["public"]["Enums"]["publication_edition_kind"]
           id?: string
           integrity_level?: Database["public"]["Enums"]["publication_integrity"]

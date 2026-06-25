@@ -14,6 +14,8 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { EPIE_LAYERS, type CertificationTier } from "@/lib/epie";
 import { Loader2, Sparkles, ShieldCheck } from "lucide-react";
+import CitationManager from "@/components/citations/CitationManager";
+import DesignSystemPanel from "@/components/publish/DesignSystemPanel";
 
 interface Audit {
   id: string;
@@ -126,6 +128,13 @@ export default function PublishingCommandCenter() {
             ))}
           </div>
         </Card>
+      )}
+
+      {bookId && (
+        <div className="grid gap-6 lg:grid-cols-2">
+          <DesignSystemPanel bookId={bookId} />
+          <CitationManager bookId={bookId} />
+        </div>
       )}
 
       <div>
