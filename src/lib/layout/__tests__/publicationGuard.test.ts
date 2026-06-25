@@ -14,7 +14,7 @@ import {
   runPublicationGuard,
   DEFAULT_TYPOGRAPHY,
   contentHeightPt,
-} from "../../supabase/functions/_shared/layout/index.ts";
+} from "../../../../supabase/functions/_shared/layout/index.ts";
 
 const T = DEFAULT_TYPOGRAPHY;
 const PAGE_H = contentHeightPt(T);
