@@ -204,7 +204,7 @@ Deno.serve(async (req) => {
     // ---- Content hash ------------------------------------------------------
     sectionLabel(page, "CONTENT HASH (SHA-256)", MARGIN, y, sans, muted);
     y -= 16;
-    const hashLines = chunk(c.content_hash, 32);
+    const hashLines = chunk(c.content_hash ?? "—", 32);
     for (const line of hashLines) {
       page.drawText(line, { x: MARGIN, y, size: 11, font: mono, color: ink });
       y -= 14;
