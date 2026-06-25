@@ -1,132 +1,75 @@
-# Phase 2.1 — Evidence & Citation Engine + Publisher Design System
+# P0 Typography & Pagination Guard — Phased Build
 
-Two slices shipped together so the next exported PDF gains both **trust** (verifiable sources) and **professional appearance** (publisher-grade typography). Everything is additive — existing books, reader, editor, library, and exports keep working unchanged.
+This is a large engine. To ship safely without breaking the 5,695-line `export-book` function, I'll deliver it in three phases. Phase 1 is the highest-leverage slice (block model + validator + publication gate). Phases 2–3 swap renderers over once the validator is trusted.
 
----
+## Phase 1 — Block model, validator, publication gate (ship this turn)
 
-## Slice A — Evidence & Citation Engine
+Goal: every export is **validated** against the typography rules before download, and Publication Ready is gated on a clean report. The current PDF renderer still runs, but it now feeds the validator and cannot pass certification with blockers.
 
-### Goal
-Turn `book_citations` into a first-class evidence ledger covering 10 source types, with structured fields, an in-app manager, an inline `[cite:key]` renderer, and an auto-generated References section in every export.
+New module: `supabase/functions/_shared/layout/`
 
-### Source types supported
-`journal_article`, `book`, `government_report`, `company_report`, `white_paper`, `news_article`, `standard`, `regulation`, `website`, `dataset`
+```text
+layout/
+  blocks.ts          // Semantic block types + factory
+  parseBlocks.ts     // Markdown → SemanticBlock[]
+  measure.ts         // Deterministic height/width measurement (pt)
+  pagination.ts      // Bin-packing with keep-together/keep-with-next
+  headingRules.ts
+  widowOrphan.ts
+  figureRules.ts
+  tableRules.ts
+  listRules.ts
+  keepTogether.ts
+  typography.ts      // Tokens: leading, scale, margins, trim sizes
+  pageValidator.ts   // Runs all rules → ValidationReport
+  publicationGuard.ts// Blocker check + "Publication Ready" verdict
+  index.ts           // Public API
+```
 
-### Data model (additive migration)
-Extend `book_citations` with:
-- `source_type` (enum, default `journal_article`) — already had `type`, normalize via migration
-- `authors jsonb` — `[{ family, given, orcid? }]`
-- `publisher text`, `container_title text` (journal/site/agency name)
-- `volume text`, `issue text`, `pages text`
-- `doi text`, `isbn text`, `url text`, `accessed_at date`
-- `confidence` (enum: `verified`, `unverified`, `requires_review`, default `unverified`)
-- `citation_key text` — short stable handle authors type inline (e.g. `kahneman1979`)
-- `notes text`
-- Unique `(book_id, citation_key)`; GRANTs + RLS preserved (author-only write, public read on published books)
+Mirror under `src/lib/layout/` (re-exports the pure parts) for the UI report.
 
-Backfill: populate `source_type` from existing `type`, derive `citation_key` from first author + year.
+Block types (all 18 listed in the spec): Chapter, Section, Heading, Paragraph, BulletList, NumberedList, Figure, FigureCaption, Table, TableCaption, Quote, Callout, CodeBlock, Sidebar, Checklist, Glossary, Reference, Appendix. Each exposes: `height`, `width`, `keepTogether`, `keepWithNext`, `pageBreakBefore`, `pageBreakAfter`, `minimumLines`, `maximumSplit`, `priority`.
 
-### Edge functions
-- `upsert-citation` — author-scoped write, validates DOI/ISBN format, dedupes by DOI or `(authors+year+title)`.
-- `import-citations` — paste BibTeX / RIS / CSL-JSON, batch-validate, return preview before commit.
-- `verify-citation` — optional DOI/Crossref + ISBN/OpenLibrary lookup to flip `confidence → verified`.
-- `generate-references` (already exists) — refactor to **read from `book_citations` first**, only call Perplexity when the author opts into "suggest missing sources".
+Rules wired in Phase 1 (all return structured `{ severity, pageNumber, blockId, ruleViolated }`):
+- HeadingNotLast, HeadingKeepWithNext (≥3 body lines), ChapterStartsNewPage
+- ParagraphWidow / ParagraphOrphan (min 2 lines, configurable)
+- FigureAtomic, FigureCaptionAttached
+- TableAtomicSmall, TableRepeatHeader, TableNoSplitInRow
+- ListAtomicOrSplitBetweenItems, ListHeadingWithFirstItem
+- QuoteAtomic, CalloutAtomic, ChecklistHeaderAttached
+- GlossaryEntryAtomic, ReferenceEntryAtomic
+- ConsistentChapterTopMargin
+- PageNumberingMonotonic, RunningHeaderConsistent
 
-### Frontend
-- `src/components/citations/CitationManager.tsx` — table of citations per book, add/edit/import, confidence chips, DOI verify button.
-- `src/components/citations/CitationPicker.tsx` — slash-command in the editor (`/cite`) inserts `[cite:key]`.
-- `src/lib/citationRender.tsx` — replaces `[cite:key]` in chapter content with a numbered superscript link; hover shows full APA/Chicago/Harvard/IEEE preview (style chosen per book).
-- Reader: footnote drawer lists all cited sources on the current page.
+Wire-in: `supabase/functions/export-book/index.ts` calls `validatePublication(blocks, pageMap)` right after rendering. If `severity === 'blocker'` and the caller is the `publish-work` certification path (header `x-publication-gate: 1`), the export is rejected with the structured report. Direct downloads still succeed but include `validation_report` in the response so the UI can show warnings.
 
-### Export integration
-- `export-publication` resolves citations from the **Publication snapshot** (never request payload), formats them in the book's chosen style, and emits a "References" section at the end (plus per-chapter endnotes if the author enables it).
+Publication gate: `supabase/functions/publish-work/index.ts` calls the same validator over the rendered draft *before* minting the certificate. Any blocker → `409 publication_blocked` with the issue list. This is what enforces "Publication Ready".
 
-### Acceptance gate (Slice A)
-- Existing chapters render unchanged when they contain no `[cite:...]` markers.
-- Adding a citation never mutates other books.
-- References section appears in PDF exports with correct numbering.
-- Unverified citations are visually flagged in the Manager (no flag leaks to readers).
-- Non-authors cannot write to `book_citations`.
+UI (`src/components/publish/TypographyReport.tsx`): renders the report from `validation_report`. Overall score, grouped by Heading / Paragraph / Figure / Table / Citation / Layout / Typography. Click an issue → opens reader at the offending page/block.
 
----
+Tests under `supabase/functions/_shared/layout/__tests__/`:
+- `headingRules.test.ts`, `widowOrphan.test.ts`, `figureRules.test.ts`, `tableRules.test.ts`, `listRules.test.ts`, `pageValidator.test.ts`, `publicationGuard.test.ts`. Fixtures cover every "Coverage" case in the spec.
 
-## Slice B — Publisher Design System
+## Phase 2 — Layout-driven PDF renderer
 
-### Goal
-A single typography + layout system that every export consumes, so PDFs look like they came from a real publisher instead of a generic generator.
+Replace the ad-hoc page-flow loop inside `export-book` with a renderer that walks the `Page[]` produced by `pagination.ts`. Same output format, deterministic breaks, no more orphaned headings in practice. Validator becomes a regression net rather than the primary defense.
 
-### Design tokens (`supabase/functions/_shared/publisherDesign.ts`)
-Shared by all current/future export functions:
-- **Type scale**: display serif (titles), text serif (body), sans (UI/captions). Default pairing: *Spectral* + *Inter*. Authors can pick from 3 curated pairings (Editorial, Academic, Modern).
-- **Page master**: US Letter + A5 + 6×9 trim, mirrored inner/outer margins, baseline grid (14pt).
-- **Spacing scale**: 4/8/12/16/24/32/48.
-- **Color**: ink `#111`, rule `#999`, accent (per-book), muted `#666` — all token-driven.
+## Phase 3 — EPUB / DOCX / KDP parity
 
-### Page elements (rendered by `export-publication`)
-- Chapter opener: drop folio, oversized chapter number, rule, epigraph slot.
-- Running header: book title (verso) / chapter title (recto); suppressed on chapter openers.
-- Running footer: page number centered or outer-aligned.
-- Pull quote, callout box, key-takeaway box, executive-summary block — all parsed from markdown directives:
-  - `> [!pullquote] …`
-  - `> [!callout] …`
-  - `> [!key] …`
-  - `> [!summary] …`
-- Figure + table styling: numbered captions ("Figure 3.2 — …"), consistent rule weights, auto-fit to text width.
-- Widow/orphan control: minimum 2 lines at top/bottom; heading + next paragraph kept together.
-- Heading hierarchy: H1 (chapter), H2 (section), H3 (subsection) only — H4+ rendered as run-in bold.
+Reuse the same block tree to drive CSS page-break hints (EPUB), `w:keepNext`/`w:keepLines` (DOCX), and KDP trim-aware pagination. Single source of truth for typography tokens across all four exporters.
 
-### Frontend
-- `src/components/publish/DesignSystemPanel.tsx` — author picks pairing, trim size, accent color, running-header style. Live preview thumbnail.
-- Persisted on `books.design_settings jsonb` (additive column, default = "Editorial").
-- Snapshot copied into Publication on publish (immutable after).
+## Technical notes
 
-### Export integration
-- `export-publication` and the existing `generate-publication-certificate` share `_shared/publisherDesign.ts` so the certificate already proves the typography stack (Phase 2 Slice 0 → 2.1 continuity).
-- New `_shared/pdfBlocks.ts` with reusable renderers: `drawChapterOpener`, `drawRunningHeader`, `drawCallout`, `drawPullQuote`, `drawFigure`, `drawTable`, `drawReferences`.
+- Measurement is font-metric based (pdf-lib's `widthOfTextAtSize` + leading), so it's deterministic in the Edge runtime — no headless browser.
+- Trim sizes and leading come from `publisherDesign.ts` so design presets feed straight into the layout engine.
+- The validator is **pure** (blocks + page map in, report out) so it runs identically in edge + browser, which is what lets the UI re-render the same report without a round trip.
+- All identity is still pulled from the Publication Snapshot (Phase 1 of the Authorship Guard) — the layout engine never sees client-supplied metadata.
+- Phase 1 is additive: no existing renderer code is deleted, so a regression in the validator can't break exports — only block certification.
 
-### Acceptance gate (Slice B)
-- Books with no design settings fall back to "Editorial" defaults — no migration required for existing books.
-- Chapter openers, headers, footers, and page numbers appear in every PDF export.
-- Pull quotes / callouts render distinctly from body text.
-- No widow/orphan in a 50-page smoke test export.
-- Design settings on Publication snapshot are immutable (write attempts after publish are rejected by the existing authorship guard).
+## Out of scope this phase
 
----
+- Hyphenation / justification quality (Phase 2 with renderer rewrite)
+- Image DPI checks (already covered by Art Director)
+- Index generation
 
-## Out of scope for Phase 2.1 (TODO markers only)
-- Figure/table generation engine → Phase 2.2
-- Asset provenance + citation freezing → Phase 2.3
-- PDF/A, EPUB 3, Kindle, print-ready, a11y compliance → Phase 2.4
-- Publication Readiness Score → Phase 2.5
-- Domain event bus, export provider registry, asymmetric signatures, org inheritance, work lineage UI → carried from Phase 1 backlog
-
----
-
-## Files to create / edit (high level)
-
-**Migrations**
-- `book_citations` schema extension + backfill
-- `books.design_settings jsonb`
-- `publications.design_snapshot jsonb` (immutable)
-
-**Edge functions**
-- new: `upsert-citation`, `import-citations`, `verify-citation`
-- refactored: `generate-references`, `export-publication`, `generate-publication-certificate`
-- new shared: `_shared/publisherDesign.ts`, `_shared/pdfBlocks.ts`, `_shared/citationFormat.ts`
-
-**Frontend**
-- new: `src/components/citations/{CitationManager,CitationPicker}.tsx`
-- new: `src/components/publish/DesignSystemPanel.tsx`
-- new: `src/lib/citationRender.tsx`, `src/lib/citationStyles.ts`
-- edit: editor surface (slash menu), reader (footnote drawer), `PublishingCommandCenter` (mount the two new panels)
-
----
-
-## Ship order
-1. Migrations + shared modules (`publisherDesign`, `pdfBlocks`, `citationFormat`).
-2. Citation Manager + Picker + inline renderer (reader works end-to-end).
-3. Design System Panel + Publication snapshot.
-4. Wire `export-publication` to consume both; regenerate certificate using shared design tokens.
-5. Smoke-test export of an existing book → diff against pre-2.1 PDF for regression.
-
-Reply **"Approved — ship Phase 2.1"** and I'll start with the migrations and shared modules.
+Reply **"Approved — ship Phase 1"** and I'll create the layout module, validator, publication gate, UI report, and tests in a single batch.
