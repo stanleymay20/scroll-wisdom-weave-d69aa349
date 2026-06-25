@@ -132,11 +132,15 @@ export default function PublishingCommandCenter() {
       )}
 
       {bookId && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <DesignSystemPanel bookId={bookId} />
-          <CitationManager bookId={bookId} />
-        </div>
+        <>
+          <TypographyReport bookId={bookId} />
+          <div className="grid gap-6 lg:grid-cols-2">
+            <DesignSystemPanel bookId={bookId} />
+            <CitationManager bookId={bookId} />
+          </div>
+        </>
       )}
+
 
       <div>
         <h2 className="text-lg font-semibold mb-3 text-foreground">Intelligence Layers</h2>
