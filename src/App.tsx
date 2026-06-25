@@ -78,6 +78,7 @@ const AdminEntitlements = lazy(() => import("./pages/AdminEntitlements"));
 const Organizations = lazy(() => import("./pages/Organizations"));
 const OrgAnalytics = lazy(() => import("./pages/OrgAnalytics"));
 const VerifyLookup = lazy(() => import("./pages/VerifyLookup"));
+const VerifyExport = lazy(() => import("./pages/VerifyExport"));
 const CitationGraph = lazy(() => import("./pages/CitationGraph"));
 const StudySession = lazy(() => import("./pages/StudySession"));
 const PublishingCommandCenter = lazy(() => import("./pages/PublishingCommandCenter"));
@@ -234,6 +235,7 @@ const App = () => (
                   <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
                   <Route path="/organizations/analytics" element={<ProtectedRoute><OrgAnalytics /></ProtectedRoute>} />
                   <Route path="/verify-certificate" element={<VerifyLookup />} />
+                  <Route path="/verify/:exportId" element={<VerifyExport />} />
                   <Route path="/book/:bookId/citation-graph" element={withRecovery('CitationGraph', <ProtectedRoute><CitationGraph /></ProtectedRoute>)} />
                   <Route path="/study" element={withRecovery('StudySession', <ProtectedRoute><StudySession /></ProtectedRoute>)} />
                   <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />
