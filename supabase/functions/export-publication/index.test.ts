@@ -29,9 +29,10 @@ Deno.test("stripProtectedExportFields removes spoofable identity fields", () => 
   assert(!("distribution_channels" in clean));
   assert(!("content_hash" in clean));
   assert(!("certificate_id" in clean));
-  assertEquals(clean.publication_id, "abc");
-  assertEquals(clean.format, "pdf");
-  assertEquals(clean.safe_passthrough, "ok");
+  const c = clean as Record<string, unknown>;
+  assertEquals(c.publication_id, "abc");
+  assertEquals(c.format, "pdf");
+  assertEquals(c.safe_passthrough, "ok");
 });
 
 Deno.test("stripProtectedExportFields handles empty payload", () => {
