@@ -49,7 +49,7 @@ const DEFAULT: WorkCapabilities = {
 };
 
 export function useWorkCapabilities(workId: string | null | undefined): WorkCapabilities {
-  const { user } = useAuth();
+  const { user } = useSubscription();
 
   const { data, isLoading } = useQuery({
     queryKey: ["work-capabilities", workId, user?.id],
