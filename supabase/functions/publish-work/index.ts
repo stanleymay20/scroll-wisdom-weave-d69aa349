@@ -106,6 +106,7 @@ Deno.serve(async (req) => {
         status: "published",
         integrity_level: body.integrity_level,
         snapshot,
+        design_snapshot,
         content_hash: contentHash,
         published_at: new Date().toISOString(),
         published_by: auth.userId,
