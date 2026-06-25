@@ -147,14 +147,14 @@ Deno.serve(async (req) => {
     y -= 40;
     sectionLabel(page, "AUTHORSHIP", MARGIN, y, sans, muted);
     y -= 18;
-    const authors = (c.authors_snapshot ?? []).filter(Boolean);
+    const authors = normalizeAuthors(c.authors_snapshot);
     if (authors.length === 0) {
       page.drawText("—", { x: MARGIN, y, size: 12, font: serif, color: ink });
       y -= 16;
     } else {
       for (const a of authors) {
-        const role = a.author_role && a.author_role !== "primary" ? `  (${a.author_role})` : "";
-        page.drawText(a.display_name + role, { x: MARGIN, y, size: 13, font: serif, color: ink });
+        const role = a.role && a.role !== "primary" ? `  (${a.role})` : "";
+        page.drawText(a.name + role, { x: MARGIN, y, size: 13, font: serif, color: ink });
         y -= 18;
       }
     }
@@ -163,13 +163,13 @@ Deno.serve(async (req) => {
     y -= 20;
     sectionLabel(page, "RIGHTS HOLDER", MARGIN, y, sans, muted);
     y -= 18;
-    const holders = (c.rights_holders_snapshot ?? []).filter(Boolean);
+    const holders = normalizeHolders(c.rights_holders_snapshot);
     if (holders.length === 0) {
       page.drawText("—", { x: MARGIN, y, size: 12, font: serif, color: ink });
       y -= 16;
     } else {
       for (const h of holders) {
-        page.drawText(`© ${h.display_name}`, { x: MARGIN, y, size: 13, font: serif, color: ink });
+        page.drawText(`© ${h}`, { x: MARGIN, y, size: 13, font: serif, color: ink });
         y -= 18;
       }
     }
