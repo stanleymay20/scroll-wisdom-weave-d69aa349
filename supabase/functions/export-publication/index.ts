@@ -10,6 +10,8 @@ import { preflight, requireUser, validateBody, json, serverError, serviceClient,
 import { hasCapability, denyResponse } from "../_shared/permissions.ts";
 import { logAuthorshipEvent } from "../_shared/authorshipGuard.ts";
 import { resolvePublication, stripProtectedExportFields } from "../_shared/publicationSnapshot.ts";
+import { buildReferencesSection, type CitationRecord } from "../_shared/citationFormat.ts";
+import { resolveDesign } from "../_shared/publisherDesign.ts";
 
 const Body = z.object({
   publication_id: z.string().uuid(),
@@ -41,6 +43,12 @@ Deno.serve(async (req) => {
     // CRITICAL: discard any spoofable author/copyright/publisher/etc.
     const cleanClientMeta = stripProtectedExportFields(raw as Record<string, unknown>);
 
+    // Resolve design + citations from the snapshot (NEVER from client input).
+    const snap = pub.snapshot as Record<string, unknown>;
+    const design = resolveDesign(snap.design as never);
+    const citations = (snap.citations as CitationRecord[] | undefined) ?? [];
+    const references = buildReferencesSection(citations, design.citation_style);
+
     const canonical = {
       title: pub.title,
       authors: pub.authors,
@@ -51,6 +59,8 @@ Deno.serve(async (req) => {
       integrity_level: pub.integrity_level,
       published_at: pub.published_at,
       language: pub.language,
+      design,
+      references,
     };
 
     // File hash placeholder — a real renderer fills this from the rendered bytes.
