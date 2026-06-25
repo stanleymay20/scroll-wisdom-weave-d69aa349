@@ -12,6 +12,7 @@ const Body = z.object({
   language: z.string().default("en"),
   integrity_level: z.enum(["draft", "standard", "verified", "certified"]).default("standard"),
   notes: z.string().max(2000).optional(),
+  override_typography_blockers: z.boolean().default(false),
 });
 
 Deno.serve(async (req) => {
