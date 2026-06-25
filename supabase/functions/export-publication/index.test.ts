@@ -39,3 +39,26 @@ Deno.test("stripProtectedExportFields handles empty payload", () => {
   const clean = stripProtectedExportFields({});
   assertEquals(Object.keys(clean).length, 0);
 });
+
+Deno.test("stripProtectedExportFields removes title / edition / version / manifest_hash", () => {
+  const clean = stripProtectedExportFields({
+    title: "Spoofed Title",
+    subtitle: "Spoofed Subtitle",
+    edition: "999th",
+    version: "9.9.9",
+    language: "xx",
+    manifest_hash: "0xdead",
+    integrity_level: "fake-high",
+    publisher_imprint: "Fake Imprint",
+    keep_me: true,
+  });
+  assert(!("title" in clean));
+  assert(!("subtitle" in clean));
+  assert(!("edition" in clean));
+  assert(!("version" in clean));
+  assert(!("language" in clean));
+  assert(!("manifest_hash" in clean));
+  assert(!("integrity_level" in clean));
+  assert(!("publisher_imprint" in clean));
+  assertEquals((clean as Record<string, unknown>).keep_me, true);
+});

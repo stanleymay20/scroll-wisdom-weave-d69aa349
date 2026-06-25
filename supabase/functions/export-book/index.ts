@@ -1165,8 +1165,24 @@ serve(async (req) => {
       ? ALL_FORMATS 
       : (TIER_FORMATS[userPlan as keyof typeof TIER_FORMATS] || TIER_FORMATS.free);
 
-    const { bookId, format, authorName, isbn, isAcademicMode, academicMode, citationStyle, kdpTrimSize, kdpBleed, publishingSettings: publishingSettingsOverride } = await req.json();
-    
+    const rawBody = await req.json();
+    const {
+      bookId,
+      format,
+      isAcademicMode,
+      academicMode,
+      citationStyle,
+      kdpTrimSize,
+      kdpBleed,
+      publishingSettings: publishingSettingsOverride,
+      // PROTECTED identity fields — captured ONLY to detect tampering.
+      // Their values are NEVER fed into the renderer.
+      authorName: _clientAuthorName,
+      isbn: _clientIsbn,
+    } = rawBody ?? {};
+    const clientPublisherName: string | undefined = publishingSettingsOverride?.publisher_name;
+    const clientPublisherImprint: string | undefined = publishingSettingsOverride?.publisher_imprint;
+
     // Support both param names (client sends isAcademicMode, legacy sends academicMode)
     const resolvedAcademicMode = isAcademicMode || academicMode || false;
 
@@ -1292,14 +1308,113 @@ serve(async (req) => {
       ? await fetchImageBytes(book.cover_image_url) 
       : null;
     
-    const finalAuthorName = authorName || book.author_ai_agent || "Unknown Author";
+    // ===== CANONICAL IDENTITY (Publication Snapshot is the only source of truth) =====
+    // Phase 1 invariant: Export = render(PublicationSnapshot). Client-supplied
+    // author / ISBN / publisher are NEVER trusted. If a client tries to spoof
+    // them, we log a tampering attempt and continue with canonical values.
+    let canonicalAuthorName: string | null = null;
+    let canonicalIsbn: string | null = null;
+    let canonicalPublisher: string | null = null;
+    let canonicalImprint: string | null = null;
+    let canonicalTitle: string = book.title || "Untitled";
+    let canonicalVersion: string | null = null;
+    let canonicalCertificateId: string | null = null;
+    let canonicalLanguage: string | null = null;
+    let canonicalPublicationId: string | null = null;
+    let canonicalWorkId: string | null = (book as any).work_id || null;
+
+    if ((book as any).current_publication_id) {
+      const { data: pub } = await supabase
+        .from("publications")
+        .select("id, work_id, version, certificate_id, language, snapshot")
+        .eq("id", (book as any).current_publication_id)
+        .maybeSingle();
+      if (pub) {
+        canonicalPublicationId = pub.id;
+        canonicalWorkId = pub.work_id;
+        canonicalVersion = pub.version;
+        canonicalCertificateId = pub.certificate_id;
+        canonicalLanguage = pub.language;
+        const snap: any = pub.snapshot || {};
+        canonicalTitle = snap.title || canonicalTitle;
+        if (Array.isArray(snap.authors) && snap.authors.length > 0) {
+          canonicalAuthorName = snap.authors
+            .slice()
+            .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+            .map((a: any) => a.display_name)
+            .filter(Boolean)
+            .join(", ") || null;
+        }
+        if (Array.isArray(snap.rights_holders) && snap.rights_holders.length > 0) {
+          canonicalPublisher = snap.rights_holders[0]?.display_name || null;
+        }
+        canonicalIsbn = snap.isbn || snap.isbn_13 || null;
+        canonicalImprint = snap.publisher_imprint || null;
+      }
+    }
+
+    // Fallbacks when no published snapshot exists yet (draft export).
+    if (!canonicalAuthorName && canonicalWorkId) {
+      const { data: wa } = await supabase
+        .from("work_authors")
+        .select("display_name, sort_order")
+        .eq("work_id", canonicalWorkId)
+        .order("sort_order", { ascending: true });
+      if (wa && wa.length > 0) {
+        canonicalAuthorName = wa.map((a: any) => a.display_name).filter(Boolean).join(", ") || null;
+      }
+    }
+    if (!canonicalAuthorName) {
+      canonicalAuthorName = (book as any).author_ai_agent || "Unknown Author";
+    }
+
+    // Tampering detection: log any client attempt to override protected fields.
+    const tamperedFields: Record<string, { client: unknown; canonical: unknown }> = {};
+    const norm = (s: unknown) => (typeof s === "string" ? s.trim() : s);
+    if (_clientAuthorName && norm(_clientAuthorName) !== norm(canonicalAuthorName)) {
+      tamperedFields.author = { client: _clientAuthorName, canonical: canonicalAuthorName };
+    }
+    if (_clientIsbn && canonicalIsbn && norm(_clientIsbn) !== norm(canonicalIsbn)) {
+      tamperedFields.isbn = { client: _clientIsbn, canonical: canonicalIsbn };
+    }
+    if (clientPublisherName && canonicalPublisher && norm(clientPublisherName) !== norm(canonicalPublisher)) {
+      tamperedFields.publisher = { client: clientPublisherName, canonical: canonicalPublisher };
+    }
+    if (clientPublisherImprint && canonicalImprint && norm(clientPublisherImprint) !== norm(canonicalImprint)) {
+      tamperedFields.publisher_imprint = { client: clientPublisherImprint, canonical: canonicalImprint };
+    }
+    if (Object.keys(tamperedFields).length > 0) {
+      console.warn(`[EXPORT][TAMPER] book=${bookId} user=${user.id} fields=${Object.keys(tamperedFields).join(",")}`);
+      try {
+        await supabase.from("authorship_audit_log").insert({
+          work_id: canonicalWorkId,
+          book_id: bookId,
+          publication_id: canonicalPublicationId,
+          user_id: user.id,
+          actor_kind: "user",
+          action: "export_metadata_override_attempt",
+          allowed: false,
+          reason: "client_attempted_to_override_protected_publication_fields",
+          metadata: { format, fields: tamperedFields },
+        } as any);
+      } catch (logErr) {
+        console.warn("[EXPORT][TAMPER] audit log failed:", logErr);
+      }
+    }
+
+    // Apply canonical values — client overrides are now permanently discarded.
+    const finalAuthorName = canonicalAuthorName!;
+    const isbn = canonicalIsbn ?? undefined;
     const publishingIdentifier = isbn && isValidISBN(isbn) ? isbn : generateSPC(bookId);
-    const isISBN = isbn && isValidISBN(isbn);
+    const isISBN = !!(isbn && isValidISBN(isbn));
     const year = new Date().getFullYear();
+    // Overwrite book.title so downstream renderers (which read book.title)
+    // pick up the canonical publication title.
+    book.title = canonicalTitle;
 
     // ===== AUTHORSHIP & DISCLOSURE SETTINGS =====
     // Default: invisible mode (no AI/ScrollLibrary references anywhere in export).
-    // Per-export overrides take precedence over book-level saved settings.
+    // Protected publisher fields are taken ONLY from the canonical snapshot.
     const DEFAULT_PUB_SETTINGS = {
       transparency_mode: 'invisible' as 'invisible' | 'assisted' | 'transparent',
       show_scrolllibrary_branding: false,
@@ -1310,15 +1425,23 @@ serve(async (req) => {
       sanitize_metadata: true,
       confidential_mode: false,
     };
+    // Strip protected publisher fields from any client override before merging.
+    const safeOverride: Record<string, unknown> = { ...(publishingSettingsOverride || {}) };
+    delete safeOverride.publisher_name;
+    delete safeOverride.publisher_imprint;
+    const savedSettings: Record<string, unknown> = { ...((book as any).publishing_settings || {}) };
+    delete savedSettings.publisher_name;
+    delete savedSettings.publisher_imprint;
     const pub = {
       ...DEFAULT_PUB_SETTINGS,
-      ...(book.publishing_settings || {}),
-      ...(publishingSettingsOverride || {}),
+      ...savedSettings,
+      ...safeOverride,
+      // Canonical publisher always wins.
+      publisher_name: canonicalPublisher,
+      publisher_imprint: canonicalImprint,
     };
     // PROFESSIONAL PUBLISHING STANDARD: never leak AI/ScrollLibrary notices
-    // into the exported manuscript. The finished book belongs to the author;
-    // generation provenance is not part of the published artifact. Force all
-    // disclosure / branding flags off regardless of saved settings.
+    // into the exported manuscript. Force all disclosure / branding flags off.
     pub.transparency_mode = 'invisible';
     pub.show_scrolllibrary_branding = false;
     pub.show_ai_assistance_notice = false;
@@ -1330,7 +1453,20 @@ serve(async (req) => {
     const showPoweredBy = false;
     const effectivePublisher = pub.publisher_name || finalAuthorName;
     const sanitizeMeta = true;
-    const exportContext = { pub, showAINotice, showAILongDisclosure, showBranding, showPoweredBy, effectivePublisher, sanitizeMeta };
+    const exportContext = {
+      pub, showAINotice, showAILongDisclosure, showBranding, showPoweredBy,
+      effectivePublisher, sanitizeMeta,
+      canonical: {
+        title: canonicalTitle,
+        author: finalAuthorName,
+        publisher: canonicalPublisher,
+        version: canonicalVersion,
+        certificate_id: canonicalCertificateId,
+        language: canonicalLanguage,
+        publication_id: canonicalPublicationId,
+        work_id: canonicalWorkId,
+      },
+    };
 
     // Generate bibliography for ALL books (from chapter refs + book_citations table)
     let bibliography = generateBibliography(chapters, effectiveCitationStyle);
