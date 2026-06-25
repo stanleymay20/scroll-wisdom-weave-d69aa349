@@ -12,7 +12,7 @@ Deno.serve(async (req) => {
     if (!exportId) return json({ error: "missing_export_id" }, 400);
 
     const sc = serviceClient();
-    const { data, error } = await sc.rpc("verify_export_public", { p_export_id: exportId });
+    const { data, error } = await sc.rpc("verify_export_public", { _export_id: exportId });
     if (error) throw error;
     if (!data) return json({ verified: false, reason: "not_found" }, 404);
 
