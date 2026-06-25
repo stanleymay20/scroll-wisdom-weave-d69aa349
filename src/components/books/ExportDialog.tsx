@@ -8,27 +8,21 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { 
-  Download, 
-  FileText, 
-  BookOpen, 
-  File, 
-  Loader2, 
-  CheckCircle2, 
-  Shield, 
+import {
+  Download,
+  FileText,
+  BookOpen,
+  File,
+  Loader2,
+  CheckCircle2,
+  Shield,
   AlertCircle,
   Image as ImageIcon,
   GraduationCap,
   XCircle,
   Store,
   Lock,
-  EyeOff,
-  Eye,
-  Sparkles,
-  ChevronDown,
-  ChevronUp,
 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -73,10 +67,26 @@ const KDP_TRIM_SIZES = [
   { value: '8.5x11', label: '8.5" × 11"', desc: 'Full size' },
 ];
 
-export function ExportDialog({ 
-  bookId, 
-  title, 
-  hasGeneratedChapters, 
+// Read-only identity resolved from the canonical Publication Snapshot.
+// This is informational ONLY — the server always uses snapshot values
+// regardless of what (if anything) the client renders here.
+interface CanonicalIdentity {
+  title: string;
+  authors: string;
+  publisher: string | null;
+  copyright: string | null;
+  version: string | null;
+  edition: string | null;
+  language: string | null;
+  certificate_id: string | null;
+  isbn: string | null;
+  published_at: string | null;
+}
+
+export function ExportDialog({
+  bookId,
+  title,
+  hasGeneratedChapters,
   coverImageUrl,
   authorName: defaultAuthorName,
   isAcademicMode = false,
@@ -86,47 +96,33 @@ export function ExportDialog({
   chapters = []
 }: ExportDialogProps) {
   const [isExporting, setIsExporting] = useState<ExportFormat | null>(null);
-  const [authorName, setAuthorName] = useState(defaultAuthorName || "");
-  const [isbn, setIsbn] = useState("");
   const [isOpen, setIsOpen] = useState(false);
   const [kdpTrimSize, setKdpTrimSize] = useState('6x9');
   const [kdpBleed, setKdpBleed] = useState(false);
-  // Authorship & disclosure
-  type TransparencyMode = 'invisible' | 'assisted' | 'transparent';
-  const [transparencyMode, setTransparencyMode] = useState<TransparencyMode>('invisible');
-  const [showBranding, setShowBranding] = useState(false);
-  const [showPoweredBy, setShowPoweredBy] = useState(false);
-  const [confidentialMode, setConfidentialMode] = useState(false);
-  const [publisherName, setPublisherName] = useState('');
-  const [publisherImprint, setPublisherImprint] = useState('');
-  const [sanitizeMetadata, setSanitizeMetadata] = useState(true);
-  const [authorshipExpanded, setAuthorshipExpanded] = useState(false);
-  const [savingAuthorship, setSavingAuthorship] = useState(false);
+  const [identity, setIdentity] = useState<CanonicalIdentity | null>(null);
   const { toast } = useToast();
   const { t } = useLanguage();
-  
+
   const entitlements = useEntitlements();
   const { user } = useSubscription();
   const isAuthenticated = !!user;
   const canExport = entitlements.canExport || entitlements.canDownload;
-  
-  // Determine which formats this user can actually use
+
   const allowedFormats: ExportFormat[] = (entitlements.isAdmin || entitlements.isProphet)
     ? ["pdf", "epub", "docx", "kdp-pdf"]
     : (TIER_FORMAT_ACCESS[entitlements.tier] || TIER_FORMAT_ACCESS.free);
 
   const [comicValidation, setComicValidation] = useState<ComicValidationResult | null>(null);
   const [selectedFormat, setSelectedFormat] = useState<ExportFormat>('pdf');
-  
+
   const contentValidation = useMemo<ExportValidationResult>(() => {
     if (!hasGeneratedChapters || chapters.length === 0) {
       return { valid: true, issues: [], canProceed: true };
     }
-    // For KDP, validate as PDF
     const validateFormat = selectedFormat === 'kdp-pdf' ? 'pdf' : selectedFormat;
     return validateContentForExport(chapters, bookType, validateFormat as "pdf" | "epub" | "docx");
   }, [chapters, bookType, selectedFormat, hasGeneratedChapters]);
-  
+
   useEffect(() => {
     if (bookType === 'comic' && chapterContents.length > 0) {
       const allContent = chapterContents.join('\n\n');
@@ -137,61 +133,74 @@ export function ExportDialog({
 
   const isComicBlocked = bookType === 'comic' && comicValidation && !comicValidation.canExport;
 
-  useEffect(() => {
-    if (defaultAuthorName) {
-      setAuthorName(defaultAuthorName);
-    }
-  }, [defaultAuthorName]);
-
-  // Load saved publishing_settings when dialog opens
+  // Load canonical Publication identity (read-only)
   useEffect(() => {
     if (!isOpen || !bookId) return;
     let cancelled = false;
     (async () => {
-      const { data } = await supabase
+      const { data: book } = await supabase
         .from('books')
-        .select('publishing_settings')
+        .select('title, author_ai_agent, work_id, current_publication_id')
         .eq('id', bookId)
         .maybeSingle();
-      if (cancelled || !data?.publishing_settings) return;
-      const s: any = data.publishing_settings;
-      setTransparencyMode((s.transparency_mode as TransparencyMode) || 'invisible');
-      setShowBranding(!!s.show_scrolllibrary_branding);
-      setShowPoweredBy(!!s.show_powered_by);
-      setConfidentialMode(!!s.confidential_mode);
-      setPublisherName(s.publisher_name || '');
-      setPublisherImprint(s.publisher_imprint || '');
-      setSanitizeMetadata(s.sanitize_metadata !== false);
+      if (!book || cancelled) return;
+
+      let resolved: CanonicalIdentity = {
+        title: book.title || title,
+        authors: defaultAuthorName || (book as any).author_ai_agent || 'Unknown Author',
+        publisher: null,
+        copyright: null,
+        version: null,
+        edition: null,
+        language: null,
+        certificate_id: null,
+        isbn: null,
+        published_at: null,
+      };
+
+      if ((book as any).current_publication_id) {
+        const { data: pub } = await supabase
+          .from('publications')
+          .select('version, certificate_id, language, snapshot, published_at')
+          .eq('id', (book as any).current_publication_id)
+          .maybeSingle();
+        if (pub) {
+          const snap: any = pub.snapshot || {};
+          resolved.version = pub.version;
+          resolved.certificate_id = pub.certificate_id;
+          resolved.language = (pub as any).language || null;
+          resolved.published_at = (pub as any).published_at || null;
+          resolved.title = snap.title || resolved.title;
+          if (Array.isArray(snap.authors) && snap.authors.length) {
+            resolved.authors = snap.authors
+              .slice()
+              .sort((a: any, b: any) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+              .map((a: any) => a.display_name)
+              .filter(Boolean)
+              .join(', ');
+          }
+          if (Array.isArray(snap.rights_holders) && snap.rights_holders.length) {
+            resolved.publisher = snap.rights_holders[0]?.display_name || null;
+            resolved.copyright = resolved.publisher;
+          }
+          resolved.isbn = snap.isbn || snap.isbn_13 || null;
+          resolved.edition = snap.edition || null;
+        }
+      } else if ((book as any).work_id) {
+        const { data: authors } = await supabase
+          .from('work_authors')
+          .select('display_name, sort_order')
+          .eq('work_id', (book as any).work_id)
+          .order('sort_order', { ascending: true });
+        if (authors && authors.length) {
+          resolved.authors = authors.map((a: any) => a.display_name).filter(Boolean).join(', ');
+        }
+      }
+
+      if (!cancelled) setIdentity(resolved);
     })();
     return () => { cancelled = true; };
-  }, [isOpen, bookId]);
-
-  const buildPublishingSettings = () => ({
-    transparency_mode: transparencyMode,
-    show_scrolllibrary_branding: !confidentialMode && showBranding,
-    show_ai_assistance_notice: transparencyMode !== 'invisible',
-    show_powered_by: !confidentialMode && showPoweredBy,
-    publisher_name: publisherName.trim() || null,
-    publisher_imprint: publisherImprint.trim() || null,
-    sanitize_metadata: confidentialMode ? true : sanitizeMetadata,
-    confidential_mode: confidentialMode,
-  });
-
-  const saveAuthorshipSettings = async () => {
-    setSavingAuthorship(true);
-    try {
-      const { error } = await supabase
-        .from('books')
-        .update({ publishing_settings: buildPublishingSettings() } as any)
-        .eq('id', bookId);
-      if (error) throw error;
-      toast({ title: 'Saved', description: 'Authorship & disclosure settings saved.' });
-    } catch (e) {
-      toast({ title: 'Save failed', description: e instanceof Error ? e.message : 'Could not save', variant: 'destructive' });
-    } finally {
-      setSavingAuthorship(false);
-    }
-  };
+  }, [isOpen, bookId, title, defaultAuthorName]);
 
   const handleExport = async (format: ExportFormat) => {
     if (!isAuthenticated) {
@@ -202,28 +211,22 @@ export function ExportDialog({
       toast({ title: t('export.noChapters'), description: t('export.noChaptersDesc'), variant: "destructive" });
       return;
     }
-    // Cover is optional — backend handles gracefully without it
-    if (!authorName.trim()) {
-      toast({ title: t('export.authorRequired'), description: t('export.authorRequiredDesc'), variant: "destructive" });
-      return;
-    }
 
     setIsExporting(format);
     try {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session?.access_token) throw new Error("No active session. Please sign in again.");
 
+      // SECURITY: never send authorName / isbn / publisher / copyright / version
+      // / certificate_id from the client. The server resolves all identity from
+      // the immutable Publication Snapshot and ignores any client overrides.
       const body: Record<string, unknown> = {
         bookId,
         format,
-        authorName: authorName.trim(),
-        isbn: isbn.trim() || undefined,
         isAcademicMode,
         citationStyle,
-        publishingSettings: buildPublishingSettings(),
       };
 
-      // Add KDP-specific params
       if (format === 'kdp-pdf') {
         body.kdpTrimSize = kdpTrimSize;
         body.kdpBleed = kdpBleed;
@@ -274,7 +277,14 @@ export function ExportDialog({
 
   const hasCover = !!coverImageUrl;
   const canProceed = hasGeneratedChapters && !isComicBlocked && isAuthenticated;
-  const isReady = canProceed && canExport && authorName.trim() && contentValidation.canProceed;
+  const isReady = canProceed && canExport && contentValidation.canProceed;
+
+  const IdentityRow = ({ label, value }: { label: string; value: string | null | undefined }) => (
+    <div className="flex items-baseline justify-between gap-3 py-1">
+      <span className="text-[10px] uppercase tracking-wide text-muted-foreground/70 shrink-0">{label}</span>
+      <span className="text-xs font-medium text-foreground text-right truncate">{value || '—'}</span>
+    </div>
+  );
 
   return (
     <Dialog open={isOpen} onOpenChange={setIsOpen}>
@@ -288,7 +298,7 @@ export function ExportDialog({
         <DialogHeader>
           <DialogTitle className="text-lg">{t('export.title')}</DialogTitle>
           <DialogDescription className="text-sm truncate">
-            Download "{title}"
+            Download "{identity?.title || title}"
           </DialogDescription>
         </DialogHeader>
 
@@ -304,7 +314,7 @@ export function ExportDialog({
             )}
           </div>
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{title}</p>
+            <p className="text-sm font-medium truncate">{identity?.title || title}</p>
             <p className={`text-xs flex items-center gap-1 mt-0.5 ${hasCover ? 'text-green-600 dark:text-green-400' : 'text-muted-foreground'}`}>
               {hasCover ? <CheckCircle2 className="h-3 w-3" /> : <AlertCircle className="h-3 w-3" />}
               {hasCover ? t('export.coverIncluded') : t('export.coverNeeded')}
@@ -312,30 +322,30 @@ export function ExportDialog({
           </div>
         </div>
 
-        {/* Author + ISBN in compact layout */}
-        <div className="space-y-3">
-          <div className="space-y-1.5">
-            <Label htmlFor="author-name" className="text-xs font-medium">{t('export.authorName')} *</Label>
-            <Input
-              id="author-name"
-              value={authorName}
-              onChange={(e) => setAuthorName(e.target.value)}
-              placeholder={t('export.authorPlaceholder')}
-              className="h-9 text-sm"
-            />
+        {/* Publication Identity — READ ONLY (Phase 1 invariant) */}
+        <div className="rounded-lg border border-border/40 bg-muted/20 p-3">
+          <div className="flex items-center gap-2 mb-2">
+            <Lock className="h-3.5 w-3.5 text-primary" />
+            <span className="text-xs font-semibold">Publication Identity</span>
+            <Badge variant="outline" className="text-[10px] px-1.5 py-0 text-muted-foreground">
+              Read-only
+            </Badge>
           </div>
-          <div className="space-y-1.5">
-            <Label htmlFor="isbn" className="text-xs font-medium text-muted-foreground">
-              {t('export.isbn')} ({t('export.isbnOptional')})
-            </Label>
-            <Input
-              id="isbn"
-              value={isbn}
-              onChange={(e) => setIsbn(e.target.value)}
-              placeholder={t('export.isbnPlaceholder')}
-              className="h-9 text-sm font-mono"
-            />
+          <div className="divide-y divide-border/30">
+            <IdentityRow label="Title" value={identity?.title || title} />
+            <IdentityRow label="Authors" value={identity?.authors} />
+            <IdentityRow label="Copyright" value={identity?.copyright} />
+            <IdentityRow label="Publisher" value={identity?.publisher} />
+            <IdentityRow label="Version" value={identity?.version} />
+            <IdentityRow label="Edition" value={identity?.edition} />
+            <IdentityRow label="Language" value={identity?.language} />
+            <IdentityRow label="ISBN" value={identity?.isbn} />
+            <IdentityRow label="Certificate ID" value={identity?.certificate_id} />
           </div>
+          <p className="text-[10px] text-muted-foreground/70 mt-2 leading-relaxed">
+            These fields come from the immutable Publication Snapshot. To change them, edit the
+            work's authorship & rights, then publish a new version.
+          </p>
         </div>
 
         {/* Academic badge */}
@@ -348,130 +358,14 @@ export function ExportDialog({
           </div>
         )}
 
-        {/* Authorship & Disclosure */}
-        <div className="rounded-lg border border-border/40 bg-muted/20">
-          <button
-            type="button"
-            onClick={() => setAuthorshipExpanded(v => !v)}
-            className="w-full flex items-center justify-between p-3 text-left"
-          >
-            <div className="flex items-center gap-2">
-              {transparencyMode === 'invisible' ? (
-                <EyeOff className="h-4 w-4 text-primary" />
-              ) : transparencyMode === 'transparent' ? (
-                <Eye className="h-4 w-4 text-primary" />
-              ) : (
-                <Sparkles className="h-4 w-4 text-primary" />
-              )}
-              <div>
-                <p className="text-xs font-semibold">Authorship & Disclosure</p>
-                <p className="text-[10px] text-muted-foreground">
-                  {confidentialMode
-                    ? 'Confidential — fully sanitized, no AI/branding'
-                    : transparencyMode === 'invisible'
-                    ? 'Invisible — no AI references, publisher-clean'
-                    : transparencyMode === 'assisted'
-                    ? 'Assisted — single line on copyright page'
-                    : 'Transparent — full AI collaboration disclosure'}
-                </p>
-              </div>
-            </div>
-            {authorshipExpanded ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
-          </button>
-
-          {authorshipExpanded && (
-            <div className="px-3 pb-3 space-y-3 border-t border-border/40 pt-3">
-              <div className="space-y-1.5">
-                <Label className="text-xs font-medium">Transparency mode</Label>
-                <Select value={transparencyMode} onValueChange={(v) => setTransparencyMode(v as TransparencyMode)} disabled={confidentialMode}>
-                  <SelectTrigger className="h-9 text-xs">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="invisible">
-                      <span className="font-medium">Invisible</span>
-                      <span className="text-muted-foreground ml-2">— no AI references anywhere</span>
-                    </SelectItem>
-                    <SelectItem value="assisted">
-                      <span className="font-medium">Assisted writing</span>
-                      <span className="text-muted-foreground ml-2">— single line on copyright page</span>
-                    </SelectItem>
-                    <SelectItem value="transparent">
-                      <span className="font-medium">Transparent collaboration</span>
-                      <span className="text-muted-foreground ml-2">— full AI disclosure</span>
-                    </SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">Publisher (optional)</Label>
-                  <Input
-                    value={publisherName}
-                    onChange={(e) => setPublisherName(e.target.value)}
-                    placeholder="e.g. Acme Press"
-                    className="h-8 text-xs text-foreground caret-foreground"
-                  />
-                </div>
-                <div className="space-y-1">
-                  <Label className="text-[10px] text-muted-foreground">Imprint (optional)</Label>
-                  <Input
-                    value={publisherImprint}
-                    onChange={(e) => setPublisherImprint(e.target.value)}
-                    placeholder="e.g. Trade Books"
-                    className="h-8 text-xs text-foreground caret-foreground"
-                  />
-                </div>
-              </div>
-
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-xs">Show "Created with ScrollLibrary"</Label>
-                  <p className="text-[10px] text-muted-foreground">Visible branding on title/copyright pages</p>
-                </div>
-                <Switch checked={showBranding} onCheckedChange={setShowBranding} disabled={confidentialMode} />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-xs">Show "Powered by ScrollLibrary"</Label>
-                  <p className="text-[10px] text-muted-foreground">Subtle footer line</p>
-                </div>
-                <Switch checked={showPoweredBy} onCheckedChange={setShowPoweredBy} disabled={confidentialMode} />
-              </div>
-              <div className="flex items-center justify-between">
-                <div>
-                  <Label className="text-xs">Sanitize file metadata</Label>
-                  <p className="text-[10px] text-muted-foreground">Removes generator/producer fingerprints</p>
-                </div>
-                <Switch checked={sanitizeMetadata} onCheckedChange={setSanitizeMetadata} disabled={confidentialMode} />
-              </div>
-              <div className="flex items-center justify-between rounded-md bg-background p-2">
-                <div>
-                  <Label className="text-xs flex items-center gap-1.5"><Shield className="h-3.5 w-3.5 text-primary" /> Confidential / Ghostwriting mode</Label>
-                  <p className="text-[10px] text-muted-foreground">Forces invisible + sanitized + no branding</p>
-                </div>
-                <Switch checked={confidentialMode} onCheckedChange={setConfidentialMode} />
-              </div>
-
-              <div className="flex justify-end">
-                <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={saveAuthorshipSettings} disabled={savingAuthorship}>
-                  {savingAuthorship ? <Loader2 className="h-3 w-3 animate-spin mr-1" /> : null}
-                  Save as default for this book
-                </Button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Format buttons */}
+        {/* Export Options — the ONLY editable section */}
         <div className="space-y-2">
           <Label className="text-xs font-medium">{t('export.format')}</Label>
           <div className="grid gap-1.5">
             {formats.map(({ format, label, icon: Icon, description, badge }) => {
               const formatHasErrors = !contentValidation.canProceed;
               const isFormatLocked = !allowedFormats.includes(format);
-              
+
               return (
                 <Button
                   key={format}
@@ -498,7 +392,7 @@ export function ExportDialog({
                       });
                     }
                   }}
-                  disabled={isExporting !== null || !canProceed || !authorName.trim()}
+                  disabled={isExporting !== null || !canProceed}
                 >
                   {isExporting === format ? (
                     <Loader2 className="h-4 w-4 mr-2.5 animate-spin flex-shrink-0" />
@@ -528,7 +422,7 @@ export function ExportDialog({
           </div>
         </div>
 
-        {/* KDP Settings — only shown when KDP format is about to be used */}
+        {/* KDP Settings — Export Option, not identity */}
         {selectedFormat === 'kdp-pdf' && (
           <div className="space-y-3 p-3 rounded-lg bg-muted/30 border border-border/40">
             <div className="flex items-center gap-2">
@@ -590,7 +484,6 @@ export function ExportDialog({
           </p>
         )}
 
-        {/* Comic blocker */}
         {isComicBlocked && comicValidation && (
           <div className="p-2.5 rounded-lg bg-destructive/5 border border-destructive/20">
             <p className="text-xs font-medium text-destructive mb-1">Comic export blocked</p>
@@ -603,22 +496,20 @@ export function ExportDialog({
           </div>
         )}
 
-        {/* Upgrade nudge for free users */}
         {!canExport && !entitlements.isPaid && !entitlements.isAdmin && !entitlements.isProphet && !entitlements.isPremium && !entitlements.isScrollStudent && (
           <p className="text-xs text-amber-600 dark:text-amber-400 flex items-center gap-1.5">
             <AlertCircle className="h-3.5 w-3.5" /> {t('export.upgradeForExport')}
           </p>
         )}
 
-        {/* Disclaimer */}
         <div className="flex items-start gap-2 pt-1">
           <Shield className="h-3.5 w-3.5 text-muted-foreground/60 flex-shrink-0 mt-0.5" />
           <p className="text-[11px] leading-relaxed text-muted-foreground/70">
-            Content is AI-generated. Review for accuracy before publishing or distributing. You are responsible for any use of exported materials.
+            Every export is rendered from the immutable Publication Snapshot. Identity fields above
+            cannot be changed at export time. Review content for accuracy before distributing.
           </p>
         </div>
 
-        {/* Ready indicator */}
         {isReady && (
           <div className="flex justify-center">
             <span className="inline-flex items-center gap-1.5 text-xs font-medium text-green-600 dark:text-green-400">
