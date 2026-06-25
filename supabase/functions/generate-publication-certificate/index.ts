@@ -196,8 +196,8 @@ Deno.serve(async (req) => {
     metaPair(page, rightX, rowY2, "Language", (pub.language ?? "—").toUpperCase(), sans, serif, muted, ink);
 
     const rowY3 = rowY2 - 44;
-    metaPair(page, leftX, rowY3, "Signature algorithm", c.signature_algorithm, sans, mono, muted, ink, 11);
-    metaPair(page, rightX, rowY3, "Public key ID", c.public_key_id, sans, mono, muted, ink, 11);
+    metaPair(page, leftX, rowY3, "Signature algorithm", c.signature_algorithm ?? "—", sans, mono, muted, ink, 11);
+    metaPair(page, rightX, rowY3, "Public key ID", c.public_key_id ?? "—", sans, mono, muted, ink, 11);
 
     y = rowY3 - 44;
 
