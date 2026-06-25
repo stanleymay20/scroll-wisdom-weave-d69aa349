@@ -49,15 +49,19 @@ export interface ResolvedPublication {
  */
 export function stripProtectedExportFields<T extends Record<string, unknown>>(payload: T): T {
   const forbidden = new Set([
-    "author", "authors", "author_name", "author_names",
+    "title", "subtitle",
+    "author", "authors", "author_name", "author_names", "author_order",
     "copyright", "copyright_holder", "copyright_holder_name",
-    "publisher", "publisher_name",
+    "publisher", "publisher_name", "publisher_imprint", "imprint",
     "isbn", "isbn_10", "isbn_13",
     "price", "pricing", "currency", "list_price",
     "distribution", "distribution_channels",
     "rights_holder", "rights_holders",
-    "publication_version", "version",
-    "content_hash", "signature_value", "certificate_id",
+    "publication_version", "version", "edition", "language",
+    "publication_date", "published_at",
+    "integrity_level",
+    "content_hash", "manifest_hash",
+    "signature_value", "certificate_id",
   ]);
   const clean: Record<string, unknown> = {};
   for (const [k, v] of Object.entries(payload ?? {})) {
