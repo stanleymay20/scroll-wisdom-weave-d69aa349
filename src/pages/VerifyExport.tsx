@@ -4,6 +4,7 @@ import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { ShieldCheck, ShieldAlert, ExternalLink } from "lucide-react";
+import { PublicationCertificateButton } from "@/components/work/PublicationCertificateButton";
 
 interface VerifyResult {
   verified: boolean;
@@ -112,6 +113,14 @@ export default function VerifyExport() {
             {state.data.publisher && <Field label="Publisher" value={state.data.publisher} />}
             {state.data.copyright_holder && <Field label="Copyright" value={`© ${state.data.copyright_holder}`} />}
             <Field label="Content hash (SHA-256)" value={state.data.content_hash} mono />
+            {state.data.certificate_id && (
+              <div className="pt-4">
+                <PublicationCertificateButton
+                  certificateId={state.data.certificate_id}
+                  filenameHint={`publication-certificate-${(state.data.title ?? "untitled").toLowerCase().replace(/[^a-z0-9]+/g, "-").slice(0, 60)}-v${state.data.version ?? ""}`}
+                />
+              </div>
+            )}
             <div className="pt-4 border-t border-border text-xs text-muted-foreground flex items-center gap-1">
               <Link to="/docs/verification" className="inline-flex items-center gap-1 hover:underline">
                 How verification works <ExternalLink className="w-3 h-3" />
