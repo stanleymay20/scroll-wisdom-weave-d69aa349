@@ -4,6 +4,7 @@
 import { preflight, requireUser, validateBody, json, forbidden, serverError, serviceClient, z } from "../_shared/http.ts";
 import { hasCapability, denyResponse } from "../_shared/permissions.ts";
 import { logAuthorshipEvent } from "../_shared/authorshipGuard.ts";
+import { runPublicationGuard } from "../_shared/layout/index.ts";
 
 const Body = z.object({
   work_id: z.string().uuid(),
@@ -11,6 +12,7 @@ const Body = z.object({
   language: z.string().default("en"),
   integrity_level: z.enum(["draft", "standard", "verified", "certified"]).default("standard"),
   notes: z.string().max(2000).optional(),
+  override_typography_blockers: z.boolean().default(false),
 });
 
 Deno.serve(async (req) => {
@@ -45,9 +47,32 @@ Deno.serve(async (req) => {
       : { data: [] as Array<{ id: string; display_name: string; holder_type: string; country_code: string | null }> };
 
     let chapters: Array<{ id: string; chapter_number: number; title: string }> = [];
+    let chaptersForGuard: Array<{ id: string; chapter_number: number; title: string; content: string }> = [];
     if (book?.id) {
-      const { data: ch } = await sc.from("chapters").select("id, chapter_number, title").eq("book_id", book.id).order("chapter_number");
-      chapters = ch ?? [];
+      const { data: ch } = await sc
+        .from("chapters")
+        .select("id, chapter_number, title, content")
+        .eq("book_id", book.id)
+        .order("chapter_number");
+      chapters = (ch ?? []).map((c) => ({ id: c.id, chapter_number: c.chapter_number, title: c.title }));
+      chaptersForGuard = (ch ?? []).map((c) => ({
+        id: c.id, chapter_number: c.chapter_number, title: c.title ?? "", content: c.content ?? "",
+      }));
+    }
+
+    // P0 Typography & Pagination Guard — refuse certification with blockers.
+    const guard = runPublicationGuard(chaptersForGuard);
+    if (!guard.publicationReady && !body.override_typography_blockers) {
+      await logAuthorshipEvent(sc, {
+        workId: body.work_id, bookId: book?.id ?? null, userId: auth.userId,
+        action: "denied", allowed: false, reason: "typography_blockers",
+        metadata: { blockerCount: guard.report.blockerCount, score: guard.report.validationScore },
+      });
+      return json({
+        error: "publication_blocked",
+        reason: "typography_blockers",
+        validation_report: guard.report,
+      }, 409);
     }
 
     // Freeze design snapshot (Phase 2.1 — Publisher Design System).

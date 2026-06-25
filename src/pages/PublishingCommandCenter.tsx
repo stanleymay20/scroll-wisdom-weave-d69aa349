@@ -16,6 +16,7 @@ import { EPIE_LAYERS, type CertificationTier } from "@/lib/epie";
 import { Loader2, Sparkles, ShieldCheck } from "lucide-react";
 import CitationManager from "@/components/citations/CitationManager";
 import DesignSystemPanel from "@/components/publish/DesignSystemPanel";
+import TypographyReport from "@/components/publish/TypographyReport";
 
 interface Audit {
   id: string;
@@ -131,11 +132,15 @@ export default function PublishingCommandCenter() {
       )}
 
       {bookId && (
-        <div className="grid gap-6 lg:grid-cols-2">
-          <DesignSystemPanel bookId={bookId} />
-          <CitationManager bookId={bookId} />
-        </div>
+        <>
+          <TypographyReport bookId={bookId} />
+          <div className="grid gap-6 lg:grid-cols-2">
+            <DesignSystemPanel bookId={bookId} />
+            <CitationManager bookId={bookId} />
+          </div>
+        </>
       )}
+
 
       <div>
         <h2 className="text-lg font-semibold mb-3 text-foreground">Intelligence Layers</h2>
