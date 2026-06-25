@@ -4,6 +4,7 @@
 import { preflight, requireUser, validateBody, json, forbidden, serverError, serviceClient, z } from "../_shared/http.ts";
 import { hasCapability, denyResponse } from "../_shared/permissions.ts";
 import { logAuthorshipEvent } from "../_shared/authorshipGuard.ts";
+import { runPublicationGuard } from "../_shared/layout/index.ts";
 
 const Body = z.object({
   work_id: z.string().uuid(),
