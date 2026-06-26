@@ -191,7 +191,7 @@ ${isMasteryMode ? 'Include at least 1 Tier 4 integrity-weighted question.' : 'Ti
           "Content-Type": "application/json",
         },
         body: JSON.stringify({
-          model: "google/gemini-2.5-flash",
+          model: "google/gemini-2.5-flash-lite",
           messages: quizMessages,
           tools: [
             {

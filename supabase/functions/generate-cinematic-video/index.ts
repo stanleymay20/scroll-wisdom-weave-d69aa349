@@ -147,7 +147,7 @@ serve(async (req) => {
     // ── Phase 1: Generate photorealistic cinematic script ────
     if (!scenePlan) {
       const visualTypes = VISUAL_TYPES_BY_BOOK[resolvedType] || VISUAL_TYPES_BY_BOOK.standard;
-      const model = "google/gemini-2.5-flash";
+      const model = "google/gemini-2.5-flash-lite";
 
       const systemPrompt = `You are an Academy Award-winning cinematographer and documentary director. You combine the visual mastery of Roger Deakins, the storytelling of David Attenborough, and the conceptual brilliance of a TED Talk.
 

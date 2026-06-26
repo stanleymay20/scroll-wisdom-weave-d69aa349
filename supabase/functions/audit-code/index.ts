@@ -8,7 +8,7 @@ const corsHeaders = {
 // ============================================================
 // AUDIT PROVENANCE — Locked model + prompt version
 // ============================================================
-const STO_AUDIT_MODEL = "google/gemini-2.5-flash";
+const STO_AUDIT_MODEL = "google/gemini-2.5-flash-lite";
 const STO_PROMPT_VERSION = "v1.1"; // v1.1: Input normalization + mandatory output enforcement
 
 const log = (step: string, details?: any) => {

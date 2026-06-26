@@ -56,7 +56,7 @@ Return STRICT JSON, no markdown fences.`;
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${LOVABLE_API_KEY}` },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-flash-lite",
         messages: [{ role: "user", content: prompt }],
       }),
     });

@@ -74,7 +74,7 @@ ${JSON.stringify(metrics, null, 2)}`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-flash-lite",
         messages: [
           { role: "system", content: "You output only valid JSON. No prose. No code fences." },
           { role: "user", content: prompt },
