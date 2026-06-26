@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { routeChat } from "../_shared/ai-router.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -408,70 +409,53 @@ Respond as JSON:
   "tierConstraintConfirmation": "No LLM tier escalation used. Editorial improvements performed strictly within user tier constraints."
 }`;
 
-    // Retry with model fallback: primary → flash-lite → error
-    const FALLBACK_MODELS = [AUDIT_MODEL, "google/gemini-2.5-flash-lite"];
+    // S1: route via shared AI Router. 402/403 stop immediately. Only 429/5xx retry (bounded).
+    // No tier escalation loop — if AUDIT_MODEL fails non-retryably, surface the error.
     const auditMessages = [
       { role: "system", content: "You are the Chief Editorial Governance Layer for ScrollLibrary operating under Constitution v4.0. No tier escalation. No hallucinated sources. No artificial inflation. No mechanical phrase farming. Score honestly against textbook benchmarks. Maximize intellectual quality within fixed computational constraints. Output valid JSON only." },
       { role: "user", content: auditPrompt },
     ];
 
-    let aiResponse: Response | null = null;
-    let usedModel = AUDIT_MODEL;
+    const correlationId = crypto.randomUUID();
+    log("AI attempt via router", { model: AUDIT_MODEL, correlationId, auditId: auditRecord.id.slice(0, 8) });
 
-    for (let attempt = 0; attempt < FALLBACK_MODELS.length; attempt++) {
-      const model = FALLBACK_MODELS[attempt];
-      log("AI attempt", { attempt: attempt + 1, model });
+    const routed = await routeChat({
+      task: "editorial_audit",
+      model: AUDIT_MODEL,
+      messages: auditMessages,
+      temperature: 0.1,
+      workId: bookId,           // book id == work proxy for now; ledger accepts null
+      correlationId,
+      allowCache: false,        // editorial audits should not cache
+    }, {
+      apiKey: LOVABLE_API_KEY,
+      supabaseUrl: SUPABASE_URL,
+      supabaseServiceKey: SUPABASE_SERVICE_ROLE_KEY,
+    });
 
-      const resp = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${LOVABLE_API_KEY}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ model, messages: auditMessages, temperature: 0.1 }),
+    if (!routed.ok) {
+      await supabase.from("book_audits").update({ status: "failed" }).eq("id", auditRecord.id);
+      log("AI router gave up", { errorCode: routed.errorCode, status: routed.status, retried: routed.retried, correlationId });
+      const httpStatus = routed.errorCode === "PAYMENT_REQUIRED" ? 402
+        : routed.errorCode === "RATE_LIMITED" ? 429
+        : routed.errorCode === "FORBIDDEN" ? 403
+        : routed.errorCode === "CIRCUIT_OPEN" ? 503
+        : 500;
+      const userMsg = routed.errorCode === "PAYMENT_REQUIRED"
+        ? "AI credits temporarily exhausted. Please try again in a few minutes."
+        : routed.errorCode === "RATE_LIMITED"
+        ? "Rate limited. Try again in a few minutes."
+        : routed.errorCode === "CIRCUIT_OPEN"
+        ? "Audit model temporarily unavailable. Try again in 60 seconds."
+        : `Editorial audit failed: ${routed.message.slice(0, 120)}`;
+      return new Response(JSON.stringify({ error: userMsg, code: routed.errorCode, correlationId }), {
+        status: httpStatus, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
-
-      if (resp.ok) {
-        aiResponse = resp;
-        usedModel = model;
-        break;
-      }
-
-      const status = resp.status;
-      await resp.text();
-      log("AI error", { status, model, attempt: attempt + 1 });
-
-      // For 402/429, try fallback model before giving up
-      if ((status === 402 || status === 429) && attempt < FALLBACK_MODELS.length - 1) {
-        log("Falling back to cheaper model", { next: FALLBACK_MODELS[attempt + 1] });
-        await new Promise(r => setTimeout(r, 2000));
-        continue;
-      }
-
-      // Last attempt failed
-      await supabase.from("book_audits").update({ status: "failed" }).eq("id", auditRecord.id);
-      if (status === 429) {
-        return new Response(JSON.stringify({ error: "Rate limited. Try again in a few minutes." }), {
-          status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      if (status === 402) {
-        return new Response(JSON.stringify({ error: "AI quota temporarily exhausted. Please try again in a few minutes." }), {
-          status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
-      }
-      throw new Error(`AI error: ${status}`);
     }
 
-    if (!aiResponse) {
-      await supabase.from("book_audits").update({ status: "failed" }).eq("id", auditRecord.id);
-      throw new Error("All AI models failed");
-    }
-
-    log("AI success", { model: usedModel });
-
-    const aiData = await aiResponse.json();
-    const rawContent = aiData.choices?.[0]?.message?.content || "";
+    const usedModel = routed.model;
+    const rawContent = routed.text;
+    log("AI success via router", { model: usedModel, costCents: routed.costCents, tokens: routed.inputTokens + routed.outputTokens, correlationId });
 
     // ============================================================
     // ROBUST JSON PARSER — Multi-strategy extraction (ported from STO audit)

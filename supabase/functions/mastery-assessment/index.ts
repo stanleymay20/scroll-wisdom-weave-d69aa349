@@ -797,7 +797,7 @@ Each question must have exactly ${optionCount} options.`;
         "Content-Type": "application/json",
       },
       body: JSON.stringify({
-        model: "google/gemini-2.5-flash",
+        model: "google/gemini-2.5-flash-lite",
         messages: [
           { role: "system", content: `You are the ScrollLibrary Mastery Engine v3 — ${profile.identity}. Generate intellectually rigorous, format-diversified assessment questions. Every question must follow its assigned format and use distractors from the concept graph.` },
           { role: "user", content: batchPrompt },

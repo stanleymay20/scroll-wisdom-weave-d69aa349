@@ -196,7 +196,7 @@ serve(async (req) => {
 
     const resolvedType = bookType || "standard";
     const model = tier === "prophet_tier" || tier === "premium"
-      ? "google/gemini-2.5-flash"
+      ? "google/gemini-2.5-flash-lite"
       : "google/gemini-2.5-flash-lite";
 
     const videoContract = getBookTypeVideoContract(resolvedType);
