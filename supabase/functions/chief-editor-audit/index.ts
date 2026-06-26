@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { routeChat } from "../_shared/ai-router.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -453,12 +454,8 @@ Respond as JSON:
     }
 
     const usedModel = routed.model;
-    const rawContentRouted = routed.text;
-
-    log("AI success", { model: usedModel });
-
-    const aiData = await aiResponse.json();
-    const rawContent = aiData.choices?.[0]?.message?.content || "";
+    const rawContent = routed.text;
+    log("AI success via router", { model: usedModel, costCents: routed.costCents, tokens: routed.inputTokens + routed.outputTokens, correlationId });
 
     // ============================================================
     // ROBUST JSON PARSER — Multi-strategy extraction (ported from STO audit)
