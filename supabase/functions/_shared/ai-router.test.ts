@@ -28,7 +28,7 @@ function jsonOk(text = "hello") {
   );
 }
 
-Deno.test("402 stops immediately — no retry, no credit burn", async () => {
+Deno.test({ name: "402 stops immediately — no retry, no credit burn", sanitizeOps: false, sanitizeResources: false }, async () => {
   __resetProBreaker();
   let calls = 0;
   const fetchImpl = (async () => {
@@ -46,7 +46,7 @@ Deno.test("402 stops immediately — no retry, no credit burn", async () => {
   assertEquals(calls, 1, "402 must NOT retry");
 });
 
-Deno.test("403 stops immediately — no retry", async () => {
+Deno.test({ name: "403 stops immediately — no retry", sanitizeOps: false, sanitizeResources: false }, async () => {
   __resetProBreaker();
   let calls = 0;
   const fetchImpl = (async () => {
@@ -64,7 +64,7 @@ Deno.test("403 stops immediately — no retry", async () => {
   assertEquals(calls, 1, "403 must NOT retry");
 });
 
-Deno.test("400 stops immediately — no retry", async () => {
+Deno.test({ name: "400 stops immediately — no retry", sanitizeOps: false, sanitizeResources: false }, async () => {
   __resetProBreaker();
   let calls = 0;
   const fetchImpl = (async () => {
@@ -81,7 +81,7 @@ Deno.test("400 stops immediately — no retry", async () => {
   if (!res.ok) assertEquals(res.errorCode, "BAD_REQUEST");
 });
 
-Deno.test("429 retries with backoff, max 2 retries (3 total attempts)", async () => {
+Deno.test({ name: "429 retries with backoff, max 2 retries (3 total attempts)", sanitizeOps: false, sanitizeResources: false }, async () => {
   __resetProBreaker();
   let calls = 0;
   const fetchImpl = (async () => {
@@ -99,7 +99,7 @@ Deno.test("429 retries with backoff, max 2 retries (3 total attempts)", async ()
   if (!res.ok) assertEquals(res.errorCode, "RATE_LIMITED");
 });
 
-Deno.test("5xx retries then succeeds on the third attempt", async () => {
+Deno.test({ name: "5xx retries then succeeds on the third attempt", sanitizeOps: false, sanitizeResources: false }, async () => {
   __resetProBreaker();
   let calls = 0;
   const fetchImpl = (async () => {
@@ -117,7 +117,7 @@ Deno.test("5xx retries then succeeds on the third attempt", async () => {
   if (res.ok) assertEquals(res.text, "ok-third");
 });
 
-Deno.test("gemini-2.5-pro circuit breaker opens after 3 consecutive failures and refuses next call", async () => {
+Deno.test({ name: "gemini-2.5-pro circuit breaker opens after 3 consecutive failures and refuses next call", sanitizeOps: false, sanitizeResources: false }, async () => {
   __resetProBreaker();
   let calls = 0;
   const fetchImpl = (async () => {
@@ -146,7 +146,7 @@ Deno.test("gemini-2.5-pro circuit breaker opens after 3 consecutive failures and
   if (!res.ok) assertEquals(res.errorCode, "CIRCUIT_OPEN");
 });
 
-Deno.test("in-memory cache returns identical text without a second network call", async () => {
+Deno.test({ name: "in-memory cache returns identical text without a second network call", sanitizeOps: false, sanitizeResources: false }, async () => {
   __resetProBreaker();
   let calls = 0;
   const fetchImpl = (async () => {
