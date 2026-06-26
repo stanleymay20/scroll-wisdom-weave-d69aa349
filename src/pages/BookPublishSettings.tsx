@@ -310,6 +310,18 @@ export default function BookPublishSettings() {
         </Link>
         <h1 className="text-2xl sm:text-3xl font-bold mt-2 break-words">Publish: {book?.title}</h1>
 
+        {/* Two-stage lifecycle explainer — Publishing ≠ Listing */}
+        <Card className="mt-4 p-4 sm:p-5 border-border/60 bg-muted/30">
+          <div className="text-sm font-medium">Publishing and listing are two separate steps.</div>
+          <ul className="mt-2 space-y-1.5 text-xs sm:text-sm text-muted-foreground">
+            <li><span className="font-medium text-foreground">Publishing</span> makes the work immutable and verifiable — it mints a certified Publication with a content hash and a downloadable certificate.</li>
+            <li><span className="font-medium text-foreground">Listing</span> makes it commercially discoverable on the storefront. You control price, slug, samples, and visibility below.</li>
+          </ul>
+          <div className="mt-2 text-xs text-muted-foreground">
+            A published work stays private until you flip <span className="font-medium text-foreground">Public on storefront</span>.
+          </div>
+        </Card>
+
         {bookId && <div className="mt-6"><EliteReadinessPanel bookId={bookId} /></div>}
 
         {/* Three-step primary path: Price → Cover → Publish on ScrollLibrary */}
