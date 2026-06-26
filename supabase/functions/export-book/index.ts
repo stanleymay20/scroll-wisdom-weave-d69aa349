@@ -1602,7 +1602,75 @@ serve(async (req) => {
         throw new Error(`Unsupported format: ${format}`);
     }
 
-    
+    // ===== Immutable export event (S4 — Export Integrity) =====
+    // Every successful render writes a row to `exports` + `authorship_audit_log`.
+    // Hash is computed over the raw rendered bytes (deterministic for identical
+    // input). Failure here is logged but never fails the user's download.
+    let exportEventId: string | null = null;
+    let exportFileHash: string | null = null;
+    const correlationId = req.headers.get("x-correlation-id") || crypto.randomUUID();
+    try {
+      const rawBytes: Uint8Array = isBase64
+        ? Uint8Array.from(atob(content), (c) => c.charCodeAt(0))
+        : new TextEncoder().encode(content);
+      const byteSize = rawBytes.byteLength;
+      const hashBuf = await crypto.subtle.digest("SHA-256", rawBytes);
+      exportFileHash = Array.from(new Uint8Array(hashBuf))
+        .map((b) => b.toString(16).padStart(2, "0")).join("");
+
+      const integrityLevel = canonicalPublicationId ? "published_export" : "draft_export";
+      const { data: expRow, error: expErr } = await supabase.from("exports").insert({
+        publication_id: canonicalPublicationId,
+        certificate_id: canonicalCertificateId,
+        work_id: canonicalWorkId,
+        book_id: bookId,
+        exported_by: user.id,
+        provider_id: "scrolllibrary.export-book",
+        format,
+        integrity_level: integrityLevel,
+        file_hash: exportFileHash,
+        signature_algorithm: "sha256",
+        signature_value: exportFileHash, // TODO(phase2): ed25519 signing
+        public_key_id: "phase1-hash-only",
+        renderer_version: canonicalRendererVersion || "legacy",
+        scrolllibrary_version: "export-book@phase1",
+        watermark: {},
+        client_metadata: {
+          correlation_id: correlationId,
+          byte_size: byteSize,
+          filename,
+          content_type: contentType,
+          canonical_fallback_used: canonicalFallbackUsed,
+          export_quality_status: exportQualityStatus,
+          export_quality_score: exportQualityScore,
+        },
+      }).select("id").single();
+
+      if (expErr) {
+        console.warn("[EXPORT] exports insert failed (non-fatal):", expErr);
+      } else if (expRow) {
+        exportEventId = expRow.id;
+        await supabase.from("authorship_audit_log").insert({
+          work_id: canonicalWorkId,
+          book_id: bookId,
+          publication_id: canonicalPublicationId,
+          user_id: user.id,
+          actor_kind: "user",
+          action: "export",
+          allowed: true,
+          correlation_id: correlationId,
+          metadata: {
+            export_id: expRow.id,
+            format,
+            file_hash: exportFileHash,
+            byte_size: byteSize,
+            renderer: canonicalRendererVersion || "legacy",
+          },
+        } as any);
+      }
+    } catch (e) {
+      console.warn("[EXPORT] export event logging failed (non-fatal):", e);
+    }
 
     return new Response(
       JSON.stringify({
@@ -1615,6 +1683,11 @@ serve(async (req) => {
         export_quality_status: exportQualityStatus,
         export_quality_score: exportQualityScore,
         canonical_fallback_used: canonicalFallbackUsed,
+        // S4 — immutable export event
+        export_id: exportEventId,
+        export_file_hash: exportFileHash,
+        correlation_id: correlationId,
+        verify_url: exportEventId ? `/verify/${exportEventId}` : null,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
