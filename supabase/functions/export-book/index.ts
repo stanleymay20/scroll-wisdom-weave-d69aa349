@@ -4,6 +4,8 @@ import { PDFDocument, rgb, StandardFonts, PDFRawStream, pushGraphicsState, popGr
 import * as zip from "https://deno.land/x/zipjs@v2.7.32/index.js";
 import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
 import { auditBookForExport } from "../_shared/exportQuality.ts";
+import { computeSha256Hex, decodeExportPayload } from "../_shared/export/hash.ts";
+import { recordExportEvent } from "../_shared/export/audit.ts";
 
 // Disable zip.js web workers — Deno edge runtime + test runner leak worker
 // timers otherwise (no Worker pool to clean up).
@@ -1610,64 +1612,29 @@ serve(async (req) => {
     let exportFileHash: string | null = null;
     const correlationId = req.headers.get("x-correlation-id") || crypto.randomUUID();
     try {
-      const rawBytes: Uint8Array = isBase64
-        ? Uint8Array.from(atob(content), (c) => c.charCodeAt(0))
-        : new TextEncoder().encode(content);
+      const rawBytes = decodeExportPayload(content, isBase64);
       const byteSize = rawBytes.byteLength;
-      const hashBuf = await crypto.subtle.digest("SHA-256", rawBytes);
-      exportFileHash = Array.from(new Uint8Array(hashBuf))
-        .map((b) => b.toString(16).padStart(2, "0")).join("");
+      exportFileHash = await computeSha256Hex(rawBytes);
 
-      const integrityLevel = canonicalPublicationId ? "published_export" : "draft_export";
-      const { data: expRow, error: expErr } = await supabase.from("exports").insert({
-        publication_id: canonicalPublicationId,
-        certificate_id: canonicalCertificateId,
-        work_id: canonicalWorkId,
-        book_id: bookId,
-        exported_by: user.id,
-        provider_id: "scrolllibrary.export-book",
+      const result = await recordExportEvent({
+        supabase,
+        bookId,
+        userId: user.id,
         format,
-        integrity_level: integrityLevel,
-        file_hash: exportFileHash,
-        signature_algorithm: "sha256",
-        signature_value: exportFileHash, // TODO(phase2): ed25519 signing
-        public_key_id: "phase1-hash-only",
-        renderer_version: canonicalRendererVersion || "legacy",
-        scrolllibrary_version: "export-book@phase1",
-        watermark: {},
-        client_metadata: {
-          correlation_id: correlationId,
-          byte_size: byteSize,
-          filename,
-          content_type: contentType,
-          canonical_fallback_used: canonicalFallbackUsed,
-          export_quality_status: exportQualityStatus,
-          export_quality_score: exportQualityScore,
-        },
-      }).select("id").single();
-
-      if (expErr) {
-        console.warn("[EXPORT] exports insert failed (non-fatal):", expErr);
-      } else if (expRow) {
-        exportEventId = expRow.id;
-        await supabase.from("authorship_audit_log").insert({
-          work_id: canonicalWorkId,
-          book_id: bookId,
-          publication_id: canonicalPublicationId,
-          user_id: user.id,
-          actor_kind: "user",
-          action: "export",
-          allowed: true,
-          correlation_id: correlationId,
-          metadata: {
-            export_id: expRow.id,
-            format,
-            file_hash: exportFileHash,
-            byte_size: byteSize,
-            renderer: canonicalRendererVersion || "legacy",
-          },
-        } as any);
-      }
+        filename,
+        contentType,
+        fileHash: exportFileHash,
+        byteSize,
+        correlationId,
+        canonicalPublicationId,
+        canonicalCertificateId,
+        canonicalWorkId,
+        canonicalRendererVersion,
+        canonicalFallbackUsed,
+        exportQualityStatus,
+        exportQualityScore,
+      });
+      exportEventId = result.exportEventId;
     } catch (e) {
       console.warn("[EXPORT] export event logging failed (non-fatal):", e);
     }
