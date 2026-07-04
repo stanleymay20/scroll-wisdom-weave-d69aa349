@@ -24,15 +24,33 @@ export default function PurchasedLibrary() {
 
   useEffect(() => {
     (async () => {
-      const { data: { user } } = await supabase.auth.getUser();
-      if (!user) { navigate("/auth?redirect=/account/library/purchases"); return; }
-      const { data } = await supabase
-        .from("book_purchases")
-        .select("id, status, amount_cents, currency, purchased_at, created_at, listing:public_listings(slug), book:books(id, title, cover_image_url)")
-        .eq("buyer_user_id", user.id)
-        .order("created_at", { ascending: false });
-      setRows((data ?? []) as any);
-      setLoading(false);
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) { navigate("/auth?redirect=/account/library/purchases"); return; }
+        const { data, error } = await supabase
+          .from("book_purchases")
+          .select("id, status, amount_cents, currency, purchased_at, created_at, listing:public_listings(slug), book:books(id, title, cover_image_url)")
+          .eq("buyer_user_id", user.id)
+          .order("created_at", { ascending: false });
+        if (error) {
+          // Storefront tables aren't provisioned in this environment (live prod).
+          // Missing-relation and permission-denied errors degrade to an empty library.
+          const code = (error as any).code ?? "";
+          const msg = error.message ?? "";
+          const missing =
+            code === "42P01" || code === "PGRST205" || code === "PGRST202" ||
+            /does not exist|schema cache|permission denied/i.test(msg);
+          if (!missing) console.error("[PurchasedLibrary] load error", error);
+          setRows([]);
+        } else {
+          setRows((data ?? []) as any);
+        }
+      } catch (e) {
+        console.error("[PurchasedLibrary] unexpected error", e);
+        setRows([]);
+      } finally {
+        setLoading(false);
+      }
     })();
   }, [navigate]);
 
