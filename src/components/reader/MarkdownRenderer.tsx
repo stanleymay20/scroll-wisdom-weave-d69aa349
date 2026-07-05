@@ -6,6 +6,15 @@ import { ComputationalEvidencePanel } from "./ComputationalEvidencePanel";
 import { FigureRenderer, type RenderMode } from "./FigureRenderer";
 import { parseEvidenceBlocks, type ParsedEvidenceBlock } from "@/lib/computationalEvidence";
 
+// DOMPurify config that keeps embedded SVG diagrams and sandboxed iframes intact
+// while stripping scripts, event handlers, and dangerous URLs.
+const SANITIZE_CONFIG = {
+  USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
+  ADD_TAGS: ['iframe'],
+  ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'sandbox', 'loading', 'referrerpolicy'],
+} as const;
+const sanitizeHtml = (dirty: string) => DOMPurify.sanitize(dirty, SANITIZE_CONFIG as any) as unknown as string;
+
 // Import common languages for syntax highlighting
 import javascript from 'highlight.js/lib/languages/javascript';
 import typescript from 'highlight.js/lib/languages/typescript';
@@ -425,7 +434,19 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/<!--STRUCTURED_CODE_BLOCK_(\d+)-->/g, '___STRUCTURED_CODE_BLOCK_$1___');
     html = html.replace(/<!--EVIDENCE_BLOCK_(\d+)-->/g, '___EVIDENCE_BLOCK_$1___');
     html = html.replace(/<!--FIGURE_MARKER_(\d+)-->/g, '___FIGURE_MARKER_$1___');
-    
+
+    // Preserve embedded raw HTML/SVG blocks (svg, iframe, video, audio, details, figure)
+    // so authored diagrams and embeds survive HTML entity escaping below.
+    // DOMPurify sanitises the final output.
+    const protectedHtmlBlocks: string[] = [];
+    html = html.replace(
+      /<(svg|iframe|video|audio|details|figure)\b[\s\S]*?<\/\1>/gi,
+      (m) => {
+        protectedHtmlBlocks.push(m);
+        return `___RAW_HTML_BLOCK_${protectedHtmlBlocks.length - 1}___`;
+      },
+    );
+
     // Escape HTML entities first
     html = html
       .replace(/&/g, '&amp;')
@@ -436,6 +457,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/___STRUCTURED_CODE_BLOCK_(\d+)___/g, '<!--STRUCTURED_CODE_BLOCK_$1-->');
     html = html.replace(/___EVIDENCE_BLOCK_(\d+)___/g, '<!--EVIDENCE_BLOCK_$1-->');
     html = html.replace(/___FIGURE_MARKER_(\d+)___/g, '<!--FIGURE_MARKER_$1-->');
+    html = html.replace(/___RAW_HTML_BLOCK_(\d+)___/g, (_, i) => protectedHtmlBlocks[parseInt(i, 10)] ?? '');
 
     // NOTE: Fenced code block placeholders (\x02FENCED_CODE_N\x03) are restored
     // AFTER paragraph splitting to prevent \n\n inside <pre> from being split.
@@ -709,7 +731,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
         <div 
           ref={containerRef}
           className={`markdown-content max-w-none ${className}`}
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderedContent) }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(renderedContent) }}
         />
       );
     }
@@ -724,7 +746,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           <div 
             key={`html-${i}`}
             className="markdown-content max-w-none"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlPart) }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(htmlPart) }}
           />
         );
       }
