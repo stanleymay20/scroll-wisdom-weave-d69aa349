@@ -6,6 +6,15 @@ import { ComputationalEvidencePanel } from "./ComputationalEvidencePanel";
 import { FigureRenderer, type RenderMode } from "./FigureRenderer";
 import { parseEvidenceBlocks, type ParsedEvidenceBlock } from "@/lib/computationalEvidence";
 
+// DOMPurify config that keeps embedded SVG diagrams and sandboxed iframes intact
+// while stripping scripts, event handlers, and dangerous URLs.
+const SANITIZE_CONFIG: DOMPurify.Config = {
+  USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
+  ADD_TAGS: ['iframe'],
+  ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'sandbox', 'loading', 'referrerpolicy'],
+};
+const sanitizeHtml = (dirty: string) => DOMPurify.sanitize(dirty, SANITIZE_CONFIG) as string;
+
 // Import common languages for syntax highlighting
 import javascript from 'highlight.js/lib/languages/javascript';
 import typescript from 'highlight.js/lib/languages/typescript';
