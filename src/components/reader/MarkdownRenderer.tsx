@@ -8,12 +8,12 @@ import { parseEvidenceBlocks, type ParsedEvidenceBlock } from "@/lib/computation
 
 // DOMPurify config that keeps embedded SVG diagrams and sandboxed iframes intact
 // while stripping scripts, event handlers, and dangerous URLs.
-const SANITIZE_CONFIG: DOMPurify.Config = {
+const SANITIZE_CONFIG = {
   USE_PROFILES: { html: true, svg: true, svgFilters: true, mathMl: true },
   ADD_TAGS: ['iframe'],
   ADD_ATTR: ['allow', 'allowfullscreen', 'frameborder', 'scrolling', 'sandbox', 'loading', 'referrerpolicy'],
-};
-const sanitizeHtml = (dirty: string) => DOMPurify.sanitize(dirty, SANITIZE_CONFIG) as string;
+} as const;
+const sanitizeHtml = (dirty: string) => DOMPurify.sanitize(dirty, SANITIZE_CONFIG as any) as unknown as string;
 
 // Import common languages for syntax highlighting
 import javascript from 'highlight.js/lib/languages/javascript';
