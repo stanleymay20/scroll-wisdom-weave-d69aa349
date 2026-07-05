@@ -425,7 +425,19 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/<!--STRUCTURED_CODE_BLOCK_(\d+)-->/g, '___STRUCTURED_CODE_BLOCK_$1___');
     html = html.replace(/<!--EVIDENCE_BLOCK_(\d+)-->/g, '___EVIDENCE_BLOCK_$1___');
     html = html.replace(/<!--FIGURE_MARKER_(\d+)-->/g, '___FIGURE_MARKER_$1___');
-    
+
+    // Preserve embedded raw HTML/SVG blocks (svg, iframe, video, audio, details, figure)
+    // so authored diagrams and embeds survive HTML entity escaping below.
+    // DOMPurify sanitises the final output.
+    const protectedHtmlBlocks: string[] = [];
+    html = html.replace(
+      /<(svg|iframe|video|audio|details|figure)\b[\s\S]*?<\/\1>/gi,
+      (m) => {
+        protectedHtmlBlocks.push(m);
+        return `___RAW_HTML_BLOCK_${protectedHtmlBlocks.length - 1}___`;
+      },
+    );
+
     // Escape HTML entities first
     html = html
       .replace(/&/g, '&amp;')
@@ -436,6 +448,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     html = html.replace(/___STRUCTURED_CODE_BLOCK_(\d+)___/g, '<!--STRUCTURED_CODE_BLOCK_$1-->');
     html = html.replace(/___EVIDENCE_BLOCK_(\d+)___/g, '<!--EVIDENCE_BLOCK_$1-->');
     html = html.replace(/___FIGURE_MARKER_(\d+)___/g, '<!--FIGURE_MARKER_$1-->');
+    html = html.replace(/___RAW_HTML_BLOCK_(\d+)___/g, (_, i) => protectedHtmlBlocks[parseInt(i, 10)] ?? '');
 
     // NOTE: Fenced code block placeholders (\x02FENCED_CODE_N\x03) are restored
     // AFTER paragraph splitting to prevent \n\n inside <pre> from being split.
