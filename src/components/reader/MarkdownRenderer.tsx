@@ -731,7 +731,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
         <div 
           ref={containerRef}
           className={`markdown-content max-w-none ${className}`}
-          dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(renderedContent) }}
+          dangerouslySetInnerHTML={{ __html: sanitizeHtml(renderedContent) }}
         />
       );
     }
@@ -746,7 +746,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
           <div 
             key={`html-${i}`}
             className="markdown-content max-w-none"
-            dangerouslySetInnerHTML={{ __html: DOMPurify.sanitize(htmlPart) }}
+            dangerouslySetInnerHTML={{ __html: sanitizeHtml(htmlPart) }}
           />
         );
       }
