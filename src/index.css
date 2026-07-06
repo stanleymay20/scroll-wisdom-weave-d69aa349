@@ -437,14 +437,16 @@
   }
 }
 
-/* Book card hover effect */
+/* Book card hover effect — soft float */
 .book-card-hover {
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.3s ease;
+  border-color: hsl(var(--border));
 }
 
 .book-card-hover:hover {
-  transform: translateY(-8px) scale(1.02);
+  transform: translateY(-6px);
   box-shadow: var(--shadow-hover);
+  border-color: hsl(var(--primary) / 0.35);
 }
 
 /* ===== CONTRACT 5.2: SAFE-AREA UTILITIES ===== */
