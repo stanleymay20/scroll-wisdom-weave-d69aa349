@@ -14,67 +14,67 @@
 }
 @layer base {
   :root {
-    /* Default: Light theme — Academic Blue */
-    --background: 0 0% 100%;
-    --foreground: 215 25% 15%;
+    /* Default: Light theme — Academic Blue (watercolor library) */
+    --background: 214 60% 97%;
+    --foreground: 218 40% 14%;
 
-    --card: 210 30% 97%;
-    --card-foreground: 215 25% 15%;
+    --card: 0 0% 100%;
+    --card-foreground: 218 40% 14%;
 
-    --popover: 210 30% 98%;
-    --popover-foreground: 215 25% 15%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 218 40% 14%;
 
-    --primary: 215 65% 50%;
+    --primary: 218 78% 46%;
     --primary-foreground: 0 0% 100%;
 
-    --secondary: 210 20% 93%;
-    --secondary-foreground: 215 25% 15%;
+    --secondary: 214 45% 93%;
+    --secondary-foreground: 218 40% 14%;
 
-    --muted: 210 15% 93%;
-    --muted-foreground: 215 15% 45%;
+    --muted: 214 40% 94%;
+    --muted-foreground: 218 20% 42%;
 
-    --accent: 215 55% 42%;
+    --accent: 218 78% 46%;
     --accent-foreground: 0 0% 100%;
 
     --destructive: 0 72% 51%;
     --destructive-foreground: 0 0% 100%;
 
-    --border: 210 15% 88%;
-    --input: 210 15% 88%;
-    --ring: 215 65% 50%;
+    --border: 214 40% 88%;
+    --input: 214 40% 88%;
+    --ring: 218 78% 46%;
 
-    --radius: 0.75rem;
+    --radius: 1rem;
 
     /* Custom ScrollLibrary tokens — blue palette */
-    --scroll-gold: 215 65% 50%;
-    --scroll-gold-light: 215 70% 60%;
-    --scroll-gold-dark: 215 60% 40%;
-    --scroll-indigo: 210 25% 96%;
-    --scroll-indigo-deep: 210 30% 94%;
-    --scroll-cream: 215 25% 15%;
-    --scroll-cream-dark: 215 20% 25%;
-    --scroll-bronze: 215 45% 35%;
+    --scroll-gold: 218 78% 46%;
+    --scroll-gold-light: 214 85% 60%;
+    --scroll-gold-dark: 220 70% 36%;
+    --scroll-indigo: 214 50% 95%;
+    --scroll-indigo-deep: 214 55% 92%;
+    --scroll-cream: 218 40% 14%;
+    --scroll-cream-dark: 218 35% 22%;
+    --scroll-bronze: 220 60% 32%;
 
-    /* Gradients — blue */
-    --gradient-gold: linear-gradient(135deg, hsl(215 65% 50%), hsl(215 55% 42%));
-    --gradient-hero: linear-gradient(180deg, hsl(210 30% 97%) 0%, hsl(210 25% 94%) 100%);
-    --gradient-card: linear-gradient(145deg, hsl(210 30% 97%) 0%, hsl(210 25% 94%) 100%);
-    --gradient-glow: radial-gradient(ellipse at center, hsl(215 65% 50% / 0.12) 0%, transparent 70%);
+    /* Gradients — soft watercolor blue */
+    --gradient-gold: linear-gradient(135deg, hsl(218 78% 50%), hsl(220 70% 40%));
+    --gradient-hero: linear-gradient(180deg, hsl(214 65% 97%) 0%, hsl(214 55% 92%) 100%);
+    --gradient-card: linear-gradient(160deg, hsl(0 0% 100%) 0%, hsl(214 55% 97%) 100%);
+    --gradient-glow: radial-gradient(ellipse at center, hsl(218 78% 55% / 0.14) 0%, transparent 70%);
 
-    /* Shadows */
-    --shadow-gold: 0 0 40px hsl(215 65% 50% / 0.2);
-    --shadow-card: 0 10px 40px -10px hsl(215 20% 70% / 0.25);
-    --shadow-hover: 0 20px 60px -15px hsl(215 65% 50% / 0.25);
+    /* Shadows — soft, longer, blue-tinted */
+    --shadow-gold: 0 0 40px hsl(218 78% 50% / 0.22);
+    --shadow-card: 0 20px 50px -20px hsl(218 60% 40% / 0.18), 0 4px 12px -4px hsl(218 40% 40% / 0.08);
+    --shadow-hover: 0 30px 70px -20px hsl(218 78% 46% / 0.28);
 
     /* Sidebar */
-    --sidebar-background: 210 25% 96%;
-    --sidebar-foreground: 215 25% 15%;
-    --sidebar-primary: 215 65% 50%;
+    --sidebar-background: 214 55% 96%;
+    --sidebar-foreground: 218 40% 14%;
+    --sidebar-primary: 218 78% 46%;
     --sidebar-primary-foreground: 0 0% 100%;
-    --sidebar-accent: 210 15% 93%;
-    --sidebar-accent-foreground: 215 25% 15%;
-    --sidebar-border: 210 15% 88%;
-    --sidebar-ring: 215 65% 50%;
+    --sidebar-accent: 214 45% 92%;
+    --sidebar-accent-foreground: 218 40% 14%;
+    --sidebar-border: 214 40% 86%;
+    --sidebar-ring: 218 78% 46%;
   }
 
   .dark {
@@ -437,14 +437,16 @@
   }
 }
 
-/* Book card hover effect */
+/* Book card hover effect — soft float */
 .book-card-hover {
-  transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.5s cubic-bezier(0.22, 1, 0.36, 1), border-color 0.3s ease;
+  border-color: hsl(var(--border));
 }
 
 .book-card-hover:hover {
-  transform: translateY(-8px) scale(1.02);
+  transform: translateY(-6px);
   box-shadow: var(--shadow-hover);
+  border-color: hsl(var(--primary) / 0.35);
 }
 
 /* ===== CONTRACT 5.2: SAFE-AREA UTILITIES ===== */
