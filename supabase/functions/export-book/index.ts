@@ -2575,35 +2575,38 @@ async function generatePDF(
           });
           y -= 15;
           
-          // Code content — render line by line with page break support
+          // Code content — render line by line with page break support (with monospace wrap)
           for (const codeLine of codeLines) {
-            if (y < margin + 30) {
-              page = pdfDoc.addPage([pageWidth, pageHeight]);
-              pageNumber++;
-              pageNumberRef.current = pageNumber;
-              addPageNumber(page, pageNumber);
-              y = pageHeight - margin - 30;
-            }
-            
-            // Draw line background for non-rectangle mode
-            if (!fitsOnPage) {
-              page.drawRectangle({
-                x: margin - 5,
-                y: y - 3,
-                width: textWidth + 10,
-                height: 14,
-                color: rgb(0.95, 0.95, 0.95),
+            const wrappedLines = wrapMonospaceLine((codeLine || "").replace(/\t/g, "  "), courier, 9, textWidth);
+            for (const wl of wrappedLines) {
+              if (y < margin + 30) {
+                page = pdfDoc.addPage([pageWidth, pageHeight]);
+                pageNumber++;
+                pageNumberRef.current = pageNumber;
+                addPageNumber(page, pageNumber);
+                y = pageHeight - margin - 30;
+              }
+
+              // Draw line background for non-rectangle mode
+              if (!fitsOnPage) {
+                page.drawRectangle({
+                  x: margin - 5,
+                  y: y - 3,
+                  width: textWidth + 10,
+                  height: 14,
+                  color: rgb(0.95, 0.95, 0.95),
+                });
+              }
+
+              page.drawText(sanitizeForPDF(wl), {
+                x: margin,
+                y,
+                size: 9,
+                font: courier,
+                color: rgb(0.2, 0.2, 0.2),
               });
+              y -= 12;
             }
-            
-            page.drawText(sanitizeForPDF(codeLine.slice(0, 100)), {
-              x: margin,
-              y,
-              size: 9,
-              font: courier,
-              color: rgb(0.2, 0.2, 0.2),
-            });
-            y -= 12;
           }
           y -= 10;
           continue;
@@ -2667,31 +2670,34 @@ async function generatePDF(
           // Code content — render line by line with page break support
           y -= 5;
           for (const codeLine of codeLines) {
-            if (y < margin + 30) {
-              page = pdfDoc.addPage([pageWidth, pageHeight]);
-              pageNumber++;
-              pageNumberRef.current = pageNumber;
-              addPageNumber(page, pageNumber);
-              y = pageHeight - margin - 30;
+            const wrappedLines = wrapMonospaceLine((codeLine || "").replace(/\t/g, "  "), courier, 9, textWidth);
+            for (const wl of wrappedLines) {
+              if (y < margin + 30) {
+                page = pdfDoc.addPage([pageWidth, pageHeight]);
+                pageNumber++;
+                pageNumberRef.current = pageNumber;
+                addPageNumber(page, pageNumber);
+                y = pageHeight - margin - 30;
+              }
+
+              // Per-line dark background
+              page.drawRectangle({
+                x: margin - 5,
+                y: y - 3,
+                width: textWidth + 10,
+                height: 14,
+                color: rgb(0.12, 0.12, 0.15),
+              });
+
+              page.drawText(sanitizeForPDF(wl), {
+                x: margin,
+                y,
+                size: 9,
+                font: courier,
+                color: rgb(0.9, 0.9, 0.9),
+              });
+              y -= 12;
             }
-            
-            // Per-line dark background
-            page.drawRectangle({
-              x: margin - 5,
-              y: y - 3,
-              width: textWidth + 10,
-              height: 14,
-              color: rgb(0.12, 0.12, 0.15),
-            });
-            
-            page.drawText(sanitizeForPDF(codeLine.slice(0, 100)), {
-              x: margin,
-              y,
-              size: 9,
-              font: courier,
-              color: rgb(0.9, 0.9, 0.9),
-            });
-            y -= 12;
           }
           y -= 5;
           
@@ -2715,22 +2721,25 @@ async function generatePDF(
             y -= 15;
             
             for (const outLine of block.output.split('\n')) {
-              if (y < margin + 30) {
-                page = pdfDoc.addPage([pageWidth, pageHeight]);
-                pageNumber++;
-                pageNumberRef.current = pageNumber;
-                addPageNumber(page, pageNumber);
-                y = pageHeight - margin - 30;
+              const wrappedOut = wrapMonospaceLine((outLine || "").replace(/\t/g, "  "), courier, 9, textWidth);
+              for (const wl of wrappedOut) {
+                if (y < margin + 30) {
+                  page = pdfDoc.addPage([pageWidth, pageHeight]);
+                  pageNumber++;
+                  pageNumberRef.current = pageNumber;
+                  addPageNumber(page, pageNumber);
+                  y = pageHeight - margin - 30;
+                }
+                page.drawRectangle({
+                  x: margin - 5, y: y - 3, width: textWidth + 10, height: 14,
+                  color: rgb(0.08, 0.10, 0.08),
+                });
+                page.drawText(sanitizeForPDF(wl), {
+                  x: margin, y, size: 9, font: courier,
+                  color: rgb(0.4, 0.9, 0.4),
+                });
+                y -= 12;
               }
-              page.drawRectangle({
-                x: margin - 5, y: y - 3, width: textWidth + 10, height: 14,
-                color: rgb(0.08, 0.10, 0.08),
-              });
-              page.drawText(sanitizeForPDF(outLine.slice(0, 100)), {
-                x: margin, y, size: 9, font: courier,
-                color: rgb(0.4, 0.9, 0.4),
-              });
-              y -= 12;
             }
             y -= 5;
           }
@@ -3279,6 +3288,41 @@ function drawEmbeddedImage(page: any, em: EmbeddedImage, x: number, y: number, w
   }
 }
 
+
+/**
+ * Monospace-safe line wrap for code/output blocks.
+ * Wraps by character width using the font's fixed advance, preserving leading
+ * indentation on continuation lines. Replaces the old `.slice(0, 100)` hard
+ * truncation that silently dropped everything past column 100.
+ */
+function wrapMonospaceLine(line: string, font: any, fontSize: number, maxWidth: number): string[] {
+  if (!line) return [""];
+  const charW = font.widthOfTextAtSize("M", fontSize) || (fontSize * 0.6);
+  const maxChars = Math.max(20, Math.floor(maxWidth / charW));
+  if (line.length <= maxChars) return [line];
+  const indentMatch = line.match(/^(\s*)/);
+  const indent = indentMatch ? indentMatch[1] : "";
+  const contIndent = (indent + "  ").slice(0, Math.max(0, maxChars - 4));
+  const out: string[] = [];
+  let remaining = line;
+  let first = true;
+  while (remaining.length > 0) {
+    const budget = first ? maxChars : Math.max(1, maxChars - contIndent.length);
+    if (remaining.length <= budget) {
+      out.push(first ? remaining : contIndent + remaining);
+      break;
+    }
+    const chunk = remaining.slice(0, budget);
+    out.push(first ? chunk : contIndent + chunk);
+    remaining = remaining.slice(budget);
+    first = false;
+    if (out.length > 200) { // hard safety cap
+      out.push(contIndent + "… [line truncated]");
+      break;
+    }
+  }
+  return out;
+}
 
 function wrapText(text: string, font: any, fontSize: number, maxWidth: number): string[] {
   // Sanitize text for PDF WinAnsi encoding before measuring/wrapping
