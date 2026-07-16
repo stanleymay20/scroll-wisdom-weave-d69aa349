@@ -5269,6 +5269,59 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
       console.warn("[SCROLLVISION] Auto-trigger error (ignored):", String(visionErr));
     }
 
+    // S6a auto-references: wire generate-references for non-academic chapters
+    // that have real content and no existing references. Fire-and-forget so we
+    // don't block the response. Academic mode already populates references via
+    // researchResult above, so we skip that path here.
+    try {
+      const bookIdForRefs = chapter?.book_id;
+      const trimmedForRefs = (finalContent || "").trim();
+      if (!academicMode && chapterId && bookIdForRefs && trimmedForRefs.length >= 400) {
+        const { data: existingRefRow } = await supabase
+          .from("chapters")
+          .select("chapter_references")
+          .eq("id", chapterId)
+          .maybeSingle();
+        const existingRefs = existingRefRow?.chapter_references;
+        const hasRefs = Array.isArray(existingRefs) && existingRefs.length > 0;
+        if (!hasRefs) {
+          const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
+          const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+          console.log(`[GENERATE-REFERENCES] Auto-triggering for chapter ${chapterId.slice(0,8)}...`);
+          fetch(`${SUPABASE_URL}/functions/v1/generate-references`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${SERVICE_KEY}`,
+              apikey: SERVICE_KEY,
+            },
+            body: JSON.stringify({
+              topic: chapterTitle,
+              category: category || 'general',
+              chapterContent: trimmedForRefs.slice(0, 4000),
+            }),
+          })
+            .then(async (r) => {
+              const j = await r.json().catch(() => ({}));
+              const refs = Array.isArray(j?.references) ? j.references : [];
+              if (refs.length > 0) {
+                await supabase
+                  .from("chapters")
+                  .update({ chapter_references: refs })
+                  .eq("id", chapterId);
+                console.log(`[GENERATE-REFERENCES] Attached ${refs.length} refs to chapter ${chapterId.slice(0,8)}`);
+              } else {
+                console.log(`[GENERATE-REFERENCES] No refs returned for chapter ${chapterId.slice(0,8)} (likely no PERPLEXITY_API_KEY)`);
+              }
+            })
+            .catch((e) => console.warn("[GENERATE-REFERENCES] Auto-attach failed:", String(e)));
+        }
+      }
+    } catch (refErr) {
+      console.warn("[GENERATE-REFERENCES] Auto-trigger error (ignored):", String(refErr));
+    }
+
+
     return new Response(JSON.stringify({
       success: true,
       wordCount: actualWordCount,
