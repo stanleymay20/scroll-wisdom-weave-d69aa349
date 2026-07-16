@@ -427,6 +427,43 @@ function processMarkdownContent(text: string): {
     }
     return match;
   });
+
+  // FALLBACK table parser — catches loose pipe tables that the strict regex above
+  // rejected (missing separator row, non-standard title, extra whitespace, etc.).
+  // Previously these fell through untouched and shipped as raw "| a | b |" text.
+  // Heuristic: 3+ consecutive lines each containing at least 2 pipe characters.
+  const fallbackTableRegex = /(?:^[^\n]*\|[^\n]*\|[^\n]*\n){3,}/gm;
+  processedText = processedText.replace(fallbackTableRegex, (match) => {
+    const rawLines = match.split('\n').filter((l: string) => l.includes('|'));
+    if (rawLines.length < 3) return match;
+    // Drop separator-style rows (only dashes/colons/pipes/spaces)
+    const isSeparator = (l: string) => /^[\s|:\-]+$/.test(l) && /-/.test(l);
+    const rows = rawLines.filter((l: string) => !isSeparator(l));
+    if (rows.length < 2) return match;
+    const parseCells = (l: string) => {
+      const parts = l.split('|');
+      // Trim leading/trailing empty parts from pipe-bounded rows
+      if (parts.length && parts[0].trim() === '') parts.shift();
+      if (parts.length && parts[parts.length - 1].trim() === '') parts.pop();
+      return parts.map((c: string) => stripInlineMarkdown(c.trim()));
+    };
+    const headers = parseCells(rows[0]);
+    if (headers.length < 2) return match;
+    const dataRows: string[][] = [];
+    for (let i = 1; i < rows.length; i++) {
+      const cells = parseCells(rows[i]);
+      if (cells.length === 0) continue;
+      // Normalize row length to header count (pad or truncate)
+      while (cells.length < headers.length) cells.push('');
+      if (cells.length > headers.length) cells.length = headers.length;
+      dataRows.push(cells);
+    }
+    if (dataRows.length === 0) return match;
+    tables.push({ name: 'Table', headers, rows: dataRows });
+    return `[MD_TABLE_${tables.length - 1}]\n`;
+  });
+
+
   
   
   // EXTRACT HEADINGS - preserve them as structured data with placeholders
