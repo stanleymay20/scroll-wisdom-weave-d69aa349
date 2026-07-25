@@ -80,7 +80,7 @@ export default function PublishabilityQAPanel({ bookId }: Props) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
-    setReport((data as QAReportRow) ?? null);
+    setReport((data as unknown as QAReportRow) ?? null);
     setLoading(false);
   };
 
