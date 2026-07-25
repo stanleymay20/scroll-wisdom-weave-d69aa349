@@ -17,6 +17,7 @@ import { Loader2, Sparkles, ShieldCheck } from "lucide-react";
 import CitationManager from "@/components/citations/CitationManager";
 import DesignSystemPanel from "@/components/publish/DesignSystemPanel";
 import TypographyReport from "@/components/publish/TypographyReport";
+import PublishabilityQAPanel from "@/components/publish/PublishabilityQAPanel";
 
 interface Audit {
   id: string;
@@ -133,6 +134,7 @@ export default function PublishingCommandCenter() {
 
       {bookId && (
         <>
+          <PublishabilityQAPanel bookId={bookId} />
           <TypographyReport bookId={bookId} />
           <div className="grid gap-6 lg:grid-cols-2">
             <DesignSystemPanel bookId={bookId} />

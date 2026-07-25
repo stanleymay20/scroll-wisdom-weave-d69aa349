@@ -946,6 +946,56 @@ export type Database = {
           },
         ]
       }
+      book_qa_reports: {
+        Row: {
+          blocker_count: number
+          book_id: string
+          created_at: string
+          created_by: string | null
+          id: string
+          info_count: number
+          issues: Json
+          score: number
+          status: string
+          totals: Json
+          warning_count: number
+        }
+        Insert: {
+          blocker_count?: number
+          book_id: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          info_count?: number
+          issues?: Json
+          score?: number
+          status: string
+          totals?: Json
+          warning_count?: number
+        }
+        Update: {
+          blocker_count?: number
+          book_id?: string
+          created_at?: string
+          created_by?: string | null
+          id?: string
+          info_count?: number
+          issues?: Json
+          score?: number
+          status?: string
+          totals?: Json
+          warning_count?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_qa_reports_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       book_reviews: {
         Row: {
           body: string | null
