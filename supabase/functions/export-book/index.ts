@@ -549,16 +549,97 @@ function processMarkdownContent(text: string): {
 }
 
 
-// Strip inline markdown formatting (bold/italic markers) from text — used for table cells & plain rendering
+// ---------------------------------------------------------------------------
+// LaTeX → Unicode/plain-text best-effort converter.
+// The reader renders math via KaTeX, but PDF/EPUB/DOCX pipelines don't ship a
+// math engine. Rather than leak raw `\alpha`, `$x^2$`, `\frac{a}{b}` into the
+// export, we normalise the most common tokens to Unicode / ASCII fallbacks.
+// Delimiters supported: $$...$$, $...$, \(...\), \[...\].
+// ---------------------------------------------------------------------------
+const LATEX_SYMBOLS: Record<string, string> = {
+  alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", varepsilon: "ε",
+  zeta: "ζ", eta: "η", theta: "θ", vartheta: "ϑ", iota: "ι", kappa: "κ",
+  lambda: "λ", mu: "μ", nu: "ν", xi: "ξ", pi: "π", varpi: "ϖ", rho: "ρ",
+  varrho: "ϱ", sigma: "σ", varsigma: "ς", tau: "τ", upsilon: "υ", phi: "φ",
+  varphi: "ϕ", chi: "χ", psi: "ψ", omega: "ω",
+  Gamma: "Γ", Delta: "Δ", Theta: "Θ", Lambda: "Λ", Xi: "Ξ", Pi: "Π",
+  Sigma: "Σ", Upsilon: "Υ", Phi: "Φ", Psi: "Ψ", Omega: "Ω",
+  times: "×", div: "÷", pm: "±", mp: "∓", cdot: "·", cdots: "⋯", ldots: "…",
+  leq: "≤", geq: "≥", neq: "≠", approx: "≈", equiv: "≡", sim: "∼",
+  infty: "∞", partial: "∂", nabla: "∇", forall: "∀", exists: "∃",
+  in: "∈", notin: "∉", subset: "⊂", supset: "⊃", cup: "∪", cap: "∩",
+  emptyset: "∅", sum: "∑", prod: "∏", int: "∫", oint: "∮",
+  sqrt: "√", propto: "∝", to: "→", rightarrow: "→", leftarrow: "←",
+  Rightarrow: "⇒", Leftarrow: "⇐", leftrightarrow: "↔", mapsto: "↦",
+  langle: "⟨", rangle: "⟩", lceil: "⌈", rceil: "⌉", lfloor: "⌊", rfloor: "⌋",
+  hbar: "ℏ", ell: "ℓ", Re: "ℜ", Im: "ℑ", aleph: "ℵ",
+  quad: " ", qquad: "  ", ",": " ", ";": " ", ":": " ", "!": "",
+};
+const SUP_MAP: Record<string, string> = {
+  "0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹",
+  "+":"⁺","-":"⁻","=":"⁼","(":"⁽",")":"⁾","n":"ⁿ","i":"ⁱ",
+};
+const SUB_MAP: Record<string, string> = {
+  "0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉",
+  "+":"₊","-":"₋","=":"₌","(":"₍",")":"₎",
+  a:"ₐ",e:"ₑ",h:"ₕ",i:"ᵢ",j:"ⱼ",k:"ₖ",l:"ₗ",m:"ₘ",n:"ₙ",o:"ₒ",p:"ₚ",r:"ᵣ",s:"ₛ",t:"ₜ",u:"ᵤ",v:"ᵥ",x:"ₓ",
+};
+function mapChars(s: string, table: Record<string, string>): string {
+  let out = ""; let ok = true;
+  for (const ch of s) { if (table[ch]) out += table[ch]; else { ok = false; break; } }
+  return ok ? out : s;
+}
+function convertLatexBody(body: string): string {
+  let s = body;
+  // \frac{a}{b} → (a)/(b)
+  for (let i = 0; i < 4; i++) {
+    s = s.replace(/\\d?frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, "($1)/($2)");
+  }
+  // \sqrt{x} → √(x)
+  s = s.replace(/\\sqrt\s*\{([^{}]+)\}/g, "√($1)");
+  // \text{...} → ...
+  s = s.replace(/\\(?:text|mathrm|mathbf|mathit|operatorname)\s*\{([^{}]*)\}/g, "$1");
+  // Symbols
+  s = s.replace(/\\([A-Za-z]+)/g, (_m, name) =>
+    Object.prototype.hasOwnProperty.call(LATEX_SYMBOLS, name) ? LATEX_SYMBOLS[name] : name
+  );
+  // Superscripts/subscripts (single char or braced)
+  s = s.replace(/\^\{([^{}]+)\}/g, (_m, inner) => { const u = mapChars(inner, SUP_MAP); return u === inner ? `^(${inner})` : u; });
+  s = s.replace(/\^([A-Za-z0-9+\-=()])/g, (_m, ch) => SUP_MAP[ch] || `^${ch}`);
+  s = s.replace(/_\{([^{}]+)\}/g, (_m, inner) => { const u = mapChars(inner, SUB_MAP); return u === inner ? `_(${inner})` : u; });
+  s = s.replace(/_([A-Za-z0-9+\-=()])/g, (_m, ch) => SUB_MAP[ch] || `_${ch}`);
+  // Strip stray braces
+  s = s.replace(/[{}]/g, "");
+  return s.replace(/\s+/g, " ").trim();
+}
+function latexToPlain(text: string): string {
+  if (!text || (text.indexOf("\\") < 0 && text.indexOf("$") < 0)) return text;
+  let s = text;
+  // Display math first
+  s = s.replace(/\$\$([\s\S]+?)\$\$/g, (_m, body) => convertLatexBody(body));
+  s = s.replace(/\\\[([\s\S]+?)\\\]/g, (_m, body) => convertLatexBody(body));
+  // Inline math
+  s = s.replace(/\\\(([\s\S]+?)\\\)/g, (_m, body) => convertLatexBody(body));
+  s = s.replace(/(?<!\\)\$([^$\n]+?)\$/g, (_m, body) => convertLatexBody(body));
+  // Escaped dollar
+  s = s.replace(/\\\$/g, "$");
+  return s;
+}
+
+// Strip inline markdown formatting (bold/italic markers) from text — used for table cells & plain rendering.
+// The bold/italic patterns MUST be lazy (`.+?`) rather than `[^*]+`, otherwise
+// content like `**A* Search**` never matches and leaks raw asterisks into the
+// export. Bold runs first so italic pass sees a clean string.
 function stripInlineMarkdown(text: string): string {
   if (!text) return "";
-  return text
+  let s = latexToPlain(text)
     .replace(/<br\s*\/?\s*>/gi, " ")
     .replace(/<[^>]+>/g, "")
-    .replace(/\*\*\*([^*]+)\*\*\*/g, "$1") // bold+italic
-    .replace(/\*\*([^*]+)\*\*/g, "$1")     // bold
-    .replace(/\*([^*]+)\*/g, "$1")         // italic
-    .replace(/`([^`]+)`/g, "$1");          // inline code
+    .replace(/\*\*\*([^\n]+?)\*\*\*/g, "$1") // bold+italic
+    .replace(/\*\*([^\n]+?)\*\*/g, "$1")     // bold
+    .replace(/(^|[^\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\w)/g, "$1$2") // italic (word-boundary aware)
+    .replace(/`([^`]+)`/g, "$1");            // inline code
+  return s;
 }
 
 function drawWrappedLines(
