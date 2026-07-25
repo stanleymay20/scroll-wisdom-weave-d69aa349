@@ -4410,6 +4410,8 @@ async function generateEPUB(
     });
     
     // Convert bold and italic markdown to HTML (MUST happen before inline code)
+    // Normalise LaTeX first so `$x^2$`, `\alpha`, `\frac{a}{b}` don't leak into the HTML/EPUB body.
+    content = latexToPlain(content);
     content = content.replace(/\*\*\*([^\n]+?)\*\*\*/g, '<strong><em>$1</em></strong>');
     content = content.replace(/\*\*([^\n]+?)\*\*/g, '<strong>$1</strong>');
     content = content.replace(/(^|[^\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\w)/g, '$1<em>$2</em>');
