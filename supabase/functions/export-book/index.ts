@@ -843,25 +843,26 @@ interface StyledRun {
 
 function parseStyledRuns(text: string): StyledRun[] {
   const runs: StyledRun[] = [];
-  // Robust parser: handle ***bold+italic***, **bold**, *italic*, lone * as literal text
-  let remaining = text;
+  // Robust parser: handle ***bold+italic***, **bold**, *italic*, lone * as literal text.
+  // Uses lazy `.+?` (not `[^*]+`) so `**A* Search**` matches correctly.
+  let remaining = latexToPlain(text);
   while (remaining.length > 0) {
     // Try bold+italic first
-    const biMatch = remaining.match(/^\*\*\*([^*]+)\*\*\*/);
+    const biMatch = remaining.match(/^\*\*\*([^\n]+?)\*\*\*/);
     if (biMatch) {
       runs.push({ text: biMatch[1], bold: true, italic: true });
       remaining = remaining.slice(biMatch[0].length);
       continue;
     }
     // Try bold
-    const bMatch = remaining.match(/^\*\*([^*]+)\*\*/);
+    const bMatch = remaining.match(/^\*\*([^\n]+?)\*\*/);
     if (bMatch) {
       runs.push({ text: bMatch[1], bold: true, italic: false });
       remaining = remaining.slice(bMatch[0].length);
       continue;
     }
-    // Try italic (requires closing *)
-    const iMatch = remaining.match(/^\*([^*]+)\*/);
+    // Try italic — require non-space right after `*` and closing `*` not followed by word char
+    const iMatch = remaining.match(/^\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\w)/);
     if (iMatch) {
       runs.push({ text: iMatch[1], bold: false, italic: true });
       remaining = remaining.slice(iMatch[0].length);
