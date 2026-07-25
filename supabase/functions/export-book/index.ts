@@ -5667,7 +5667,8 @@ function inlineMdToXhtml(text: string): string {
   // Escape first, then convert bold/italic markdown to safe XHTML.
   // Order matters: ** before *, __ before _.
   let s = escapeXml(text || "");
-  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  s = s.replace(/\*\*\*([^\n]+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+  s = s.replace(/\*\*([^\n]+?)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
   s = s.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
   s = s.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
