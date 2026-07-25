@@ -4410,8 +4410,9 @@ async function generateEPUB(
     });
     
     // Convert bold and italic markdown to HTML (MUST happen before inline code)
-    content = content.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    content = content.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    content = content.replace(/\*\*\*([^\n]+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    content = content.replace(/\*\*([^\n]+?)\*\*/g, '<strong>$1</strong>');
+    content = content.replace(/(^|[^\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\w)/g, '$1<em>$2</em>');
     content = content.replace(/__([^_]+)__/g, '<strong>$1</strong>');
     content = content.replace(/_([^_]+)_/g, '<em>$1</em>');
     
