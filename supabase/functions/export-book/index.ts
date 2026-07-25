@@ -5666,7 +5666,7 @@ function renderCanonicalBlockDocx(
 function inlineMdToXhtml(text: string): string {
   // Escape first, then convert bold/italic markdown to safe XHTML.
   // Order matters: ** before *, __ before _.
-  let s = escapeXml(text || "");
+  let s = escapeXml(latexToPlain(text || ""));
   s = s.replace(/\*\*\*([^\n]+?)\*\*\*/g, "<strong><em>$1</em></strong>");
   s = s.replace(/\*\*([^\n]+?)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
