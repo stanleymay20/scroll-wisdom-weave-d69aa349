@@ -549,16 +549,97 @@ function processMarkdownContent(text: string): {
 }
 
 
-// Strip inline markdown formatting (bold/italic markers) from text — used for table cells & plain rendering
+// ---------------------------------------------------------------------------
+// LaTeX → Unicode/plain-text best-effort converter.
+// The reader renders math via KaTeX, but PDF/EPUB/DOCX pipelines don't ship a
+// math engine. Rather than leak raw `\alpha`, `$x^2$`, `\frac{a}{b}` into the
+// export, we normalise the most common tokens to Unicode / ASCII fallbacks.
+// Delimiters supported: $$...$$, $...$, \(...\), \[...\].
+// ---------------------------------------------------------------------------
+const LATEX_SYMBOLS: Record<string, string> = {
+  alpha: "α", beta: "β", gamma: "γ", delta: "δ", epsilon: "ε", varepsilon: "ε",
+  zeta: "ζ", eta: "η", theta: "θ", vartheta: "ϑ", iota: "ι", kappa: "κ",
+  lambda: "λ", mu: "μ", nu: "ν", xi: "ξ", pi: "π", varpi: "ϖ", rho: "ρ",
+  varrho: "ϱ", sigma: "σ", varsigma: "ς", tau: "τ", upsilon: "υ", phi: "φ",
+  varphi: "ϕ", chi: "χ", psi: "ψ", omega: "ω",
+  Gamma: "Γ", Delta: "Δ", Theta: "Θ", Lambda: "Λ", Xi: "Ξ", Pi: "Π",
+  Sigma: "Σ", Upsilon: "Υ", Phi: "Φ", Psi: "Ψ", Omega: "Ω",
+  times: "×", div: "÷", pm: "±", mp: "∓", cdot: "·", cdots: "⋯", ldots: "…",
+  leq: "≤", geq: "≥", neq: "≠", approx: "≈", equiv: "≡", sim: "∼",
+  infty: "∞", partial: "∂", nabla: "∇", forall: "∀", exists: "∃",
+  in: "∈", notin: "∉", subset: "⊂", supset: "⊃", cup: "∪", cap: "∩",
+  emptyset: "∅", sum: "∑", prod: "∏", int: "∫", oint: "∮",
+  sqrt: "√", propto: "∝", to: "→", rightarrow: "→", leftarrow: "←",
+  Rightarrow: "⇒", Leftarrow: "⇐", leftrightarrow: "↔", mapsto: "↦",
+  langle: "⟨", rangle: "⟩", lceil: "⌈", rceil: "⌉", lfloor: "⌊", rfloor: "⌋",
+  hbar: "ℏ", ell: "ℓ", Re: "ℜ", Im: "ℑ", aleph: "ℵ",
+  quad: " ", qquad: "  ", ",": " ", ";": " ", ":": " ", "!": "",
+};
+const SUP_MAP: Record<string, string> = {
+  "0":"⁰","1":"¹","2":"²","3":"³","4":"⁴","5":"⁵","6":"⁶","7":"⁷","8":"⁸","9":"⁹",
+  "+":"⁺","-":"⁻","=":"⁼","(":"⁽",")":"⁾","n":"ⁿ","i":"ⁱ",
+};
+const SUB_MAP: Record<string, string> = {
+  "0":"₀","1":"₁","2":"₂","3":"₃","4":"₄","5":"₅","6":"₆","7":"₇","8":"₈","9":"₉",
+  "+":"₊","-":"₋","=":"₌","(":"₍",")":"₎",
+  a:"ₐ",e:"ₑ",h:"ₕ",i:"ᵢ",j:"ⱼ",k:"ₖ",l:"ₗ",m:"ₘ",n:"ₙ",o:"ₒ",p:"ₚ",r:"ᵣ",s:"ₛ",t:"ₜ",u:"ᵤ",v:"ᵥ",x:"ₓ",
+};
+function mapChars(s: string, table: Record<string, string>): string {
+  let out = ""; let ok = true;
+  for (const ch of s) { if (table[ch]) out += table[ch]; else { ok = false; break; } }
+  return ok ? out : s;
+}
+function convertLatexBody(body: string): string {
+  let s = body;
+  // \frac{a}{b} → (a)/(b)
+  for (let i = 0; i < 4; i++) {
+    s = s.replace(/\\d?frac\s*\{([^{}]+)\}\s*\{([^{}]+)\}/g, "($1)/($2)");
+  }
+  // \sqrt{x} → √(x)
+  s = s.replace(/\\sqrt\s*\{([^{}]+)\}/g, "√($1)");
+  // \text{...} → ...
+  s = s.replace(/\\(?:text|mathrm|mathbf|mathit|operatorname)\s*\{([^{}]*)\}/g, "$1");
+  // Symbols
+  s = s.replace(/\\([A-Za-z]+)/g, (_m, name) =>
+    Object.prototype.hasOwnProperty.call(LATEX_SYMBOLS, name) ? LATEX_SYMBOLS[name] : name
+  );
+  // Superscripts/subscripts (single char or braced)
+  s = s.replace(/\^\{([^{}]+)\}/g, (_m, inner) => { const u = mapChars(inner, SUP_MAP); return u === inner ? `^(${inner})` : u; });
+  s = s.replace(/\^([A-Za-z0-9+\-=()])/g, (_m, ch) => SUP_MAP[ch] || `^${ch}`);
+  s = s.replace(/_\{([^{}]+)\}/g, (_m, inner) => { const u = mapChars(inner, SUB_MAP); return u === inner ? `_(${inner})` : u; });
+  s = s.replace(/_([A-Za-z0-9+\-=()])/g, (_m, ch) => SUB_MAP[ch] || `_${ch}`);
+  // Strip stray braces
+  s = s.replace(/[{}]/g, "");
+  return s.replace(/\s+/g, " ").trim();
+}
+function latexToPlain(text: string): string {
+  if (!text || (text.indexOf("\\") < 0 && text.indexOf("$") < 0)) return text;
+  let s = text;
+  // Display math first
+  s = s.replace(/\$\$([\s\S]+?)\$\$/g, (_m, body) => convertLatexBody(body));
+  s = s.replace(/\\\[([\s\S]+?)\\\]/g, (_m, body) => convertLatexBody(body));
+  // Inline math
+  s = s.replace(/\\\(([\s\S]+?)\\\)/g, (_m, body) => convertLatexBody(body));
+  s = s.replace(/(?<!\\)\$([^$\n]+?)\$/g, (_m, body) => convertLatexBody(body));
+  // Escaped dollar
+  s = s.replace(/\\\$/g, "$");
+  return s;
+}
+
+// Strip inline markdown formatting (bold/italic markers) from text — used for table cells & plain rendering.
+// The bold/italic patterns MUST be lazy (`.+?`) rather than `[^*]+`, otherwise
+// content like `**A* Search**` never matches and leaks raw asterisks into the
+// export. Bold runs first so italic pass sees a clean string.
 function stripInlineMarkdown(text: string): string {
   if (!text) return "";
-  return text
+  let s = latexToPlain(text)
     .replace(/<br\s*\/?\s*>/gi, " ")
     .replace(/<[^>]+>/g, "")
-    .replace(/\*\*\*([^*]+)\*\*\*/g, "$1") // bold+italic
-    .replace(/\*\*([^*]+)\*\*/g, "$1")     // bold
-    .replace(/\*([^*]+)\*/g, "$1")         // italic
-    .replace(/`([^`]+)`/g, "$1");          // inline code
+    .replace(/\*\*\*([^\n]+?)\*\*\*/g, "$1") // bold+italic
+    .replace(/\*\*([^\n]+?)\*\*/g, "$1")     // bold
+    .replace(/(^|[^\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\w)/g, "$1$2") // italic (word-boundary aware)
+    .replace(/`([^`]+)`/g, "$1");            // inline code
+  return s;
 }
 
 function drawWrappedLines(
@@ -762,25 +843,26 @@ interface StyledRun {
 
 function parseStyledRuns(text: string): StyledRun[] {
   const runs: StyledRun[] = [];
-  // Robust parser: handle ***bold+italic***, **bold**, *italic*, lone * as literal text
-  let remaining = text;
+  // Robust parser: handle ***bold+italic***, **bold**, *italic*, lone * as literal text.
+  // Uses lazy `.+?` (not `[^*]+`) so `**A* Search**` matches correctly.
+  let remaining = latexToPlain(text);
   while (remaining.length > 0) {
     // Try bold+italic first
-    const biMatch = remaining.match(/^\*\*\*([^*]+)\*\*\*/);
+    const biMatch = remaining.match(/^\*\*\*([^\n]+?)\*\*\*/);
     if (biMatch) {
       runs.push({ text: biMatch[1], bold: true, italic: true });
       remaining = remaining.slice(biMatch[0].length);
       continue;
     }
     // Try bold
-    const bMatch = remaining.match(/^\*\*([^*]+)\*\*/);
+    const bMatch = remaining.match(/^\*\*([^\n]+?)\*\*/);
     if (bMatch) {
       runs.push({ text: bMatch[1], bold: true, italic: false });
       remaining = remaining.slice(bMatch[0].length);
       continue;
     }
-    // Try italic (requires closing *)
-    const iMatch = remaining.match(/^\*([^*]+)\*/);
+    // Try italic — require non-space right after `*` and closing `*` not followed by word char
+    const iMatch = remaining.match(/^\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\w)/);
     if (iMatch) {
       runs.push({ text: iMatch[1], bold: false, italic: true });
       remaining = remaining.slice(iMatch[0].length);
@@ -4328,8 +4410,11 @@ async function generateEPUB(
     });
     
     // Convert bold and italic markdown to HTML (MUST happen before inline code)
-    content = content.replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
-    content = content.replace(/\*([^*]+)\*/g, '<em>$1</em>');
+    // Normalise LaTeX first so `$x^2$`, `\alpha`, `\frac{a}{b}` don't leak into the HTML/EPUB body.
+    content = latexToPlain(content);
+    content = content.replace(/\*\*\*([^\n]+?)\*\*\*/g, '<strong><em>$1</em></strong>');
+    content = content.replace(/\*\*([^\n]+?)\*\*/g, '<strong>$1</strong>');
+    content = content.replace(/(^|[^\w*])\*(?!\s)([^*\n]+?)(?<!\s)\*(?!\w)/g, '$1<em>$2</em>');
     content = content.replace(/__([^_]+)__/g, '<strong>$1</strong>');
     content = content.replace(/_([^_]+)_/g, '<em>$1</em>');
     
@@ -5583,8 +5668,9 @@ function renderCanonicalBlockDocx(
 function inlineMdToXhtml(text: string): string {
   // Escape first, then convert bold/italic markdown to safe XHTML.
   // Order matters: ** before *, __ before _.
-  let s = escapeXml(text || "");
-  s = s.replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>");
+  let s = escapeXml(latexToPlain(text || ""));
+  s = s.replace(/\*\*\*([^\n]+?)\*\*\*/g, "<strong><em>$1</em></strong>");
+  s = s.replace(/\*\*([^\n]+?)\*\*/g, "<strong>$1</strong>");
   s = s.replace(/__([^_]+)__/g, "<strong>$1</strong>");
   s = s.replace(/(^|[\s(])\*([^*\n]+)\*(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
   s = s.replace(/(^|[\s(])_([^_\n]+)_(?=[\s).,;:!?]|$)/g, "$1<em>$2</em>");
