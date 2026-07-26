@@ -50,6 +50,14 @@ interface ExportDialogProps {
 
 type ExportFormat = "pdf" | "epub" | "docx" | "kdp-pdf";
 
+function getFilenameFromDisposition(disposition: string | null): string | null {
+  if (!disposition) return null;
+  const utfMatch = disposition.match(/filename\*=UTF-8''([^;]+)/i);
+  if (utfMatch?.[1]) return decodeURIComponent(utfMatch[1]);
+  const plainMatch = disposition.match(/filename="?([^";]+)"?/i);
+  return plainMatch?.[1] || null;
+}
+
 // Tier-level format access — mirrors server-side TIER_FORMATS in export-book/index.ts
 const TIER_FORMAT_ACCESS: Record<string, ExportFormat[]> = {
   free: ["pdf"],
@@ -232,12 +240,55 @@ export function ExportDialog({
         body.kdpBleed = kdpBleed;
       }
 
-      const response = await supabase.functions.invoke("export-book", { body });
+      const { data: sessionData } = await supabase.auth.getSession();
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+      const publishableKey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_KEY as string | undefined;
+      if (!supabaseUrl || !publishableKey) throw new Error("Export service is not configured");
+      const accessToken = sessionData.session?.access_token;
+      if (!accessToken) throw new Error("Please sign in again before exporting");
 
-      if (response.error) throw new Error(response.error.message);
-      if (response.data?.error) throw new Error(response.data.error);
+      const rawResponse = await fetch(`${supabaseUrl}/functions/v1/export-book`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          apikey: publishableKey,
+          Authorization: `Bearer ${accessToken}`,
+          "x-scroll-export-response": "binary",
+        },
+        body: JSON.stringify(body),
+      });
 
-      const { content, filename, contentType, downloadUrl, download_url } = response.data;
+      const responseContentType = rawResponse.headers.get("Content-Type") || "";
+      if (!rawResponse.ok) {
+        if (responseContentType.includes("application/json")) {
+          const errorPayload = await rawResponse.json().catch(() => null);
+          throw new Error(errorPayload?.error || errorPayload?.message || `Export failed (${rawResponse.status})`);
+        }
+        const errorText = await rawResponse.text().catch(() => "");
+        throw new Error(errorText || `Export failed (${rawResponse.status})`);
+      }
+
+      if (!responseContentType.includes("application/json")) {
+        const blob = await rawResponse.blob();
+        const filename = getFilenameFromDisposition(rawResponse.headers.get("Content-Disposition")) || `${title}.${format === "epub" ? "epub" : format === "docx" ? "docx" : "pdf"}`;
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement("a");
+        link.href = url;
+        link.download = filename;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+
+        toast({ title: t('export.complete'), description: t('export.downloaded').replace('{filename}', filename) });
+        setIsOpen(false);
+        return;
+      }
+
+      const responseData = await rawResponse.json();
+      if (responseData?.error) throw new Error(responseData.error);
+
+      const { content, filename, contentType, downloadUrl, download_url } = responseData;
       const signedDownloadUrl = downloadUrl || download_url;
       if (signedDownloadUrl) {
         const link = document.createElement("a");
@@ -254,7 +305,7 @@ export function ExportDialog({
       }
 
       let blobContent: BlobPart;
-      if (response.data.isBase64) {
+      if (responseData.isBase64) {
         const binaryString = atob(content);
         const bytes = new Uint8Array(binaryString.length);
         for (let i = 0; i < binaryString.length; i++) bytes[i] = binaryString.charCodeAt(i);
