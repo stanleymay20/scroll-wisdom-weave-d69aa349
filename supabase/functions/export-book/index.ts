@@ -4,7 +4,7 @@ import { PDFDocument, rgb, StandardFonts, PDFRawStream, pushGraphicsState, popGr
 import * as zip from "https://deno.land/x/zipjs@v2.7.32/index.js";
 import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
 import { auditBookForExport } from "../_shared/exportQuality.ts";
-import { computeSha256Hex, decodeExportPayload } from "../_shared/export/hash.ts";
+import { computeSha256Hex } from "../_shared/export/hash.ts";
 import { recordExportEvent } from "../_shared/export/audit.ts";
 
 // Disable zip.js web workers — Deno edge runtime + test runner leak worker
@@ -12,6 +12,8 @@ import { recordExportEvent } from "../_shared/export/audit.ts";
 try { (zip as any).configure?.({ useWebWorkers: false }); } catch (_) { /* noop */ }
 
 const CANONICAL_RENDERER_VERSION = "1.0.0";
+const INLINE_EXPORT_MAX_BYTES = 1_500_000;
+const EXPORT_DOWNLOAD_URL_TTL_SECONDS = 60 * 30;
 
 /**
  * Detect generation-pipeline placeholder alt text that should never become a
@@ -1181,10 +1183,21 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
   const chunkSize = 8192;
   let binary = '';
   for (let i = 0; i < bytes.length; i += chunkSize) {
-    const chunk = bytes.slice(i, i + chunkSize);
-    binary += String.fromCharCode.apply(null, Array.from(chunk));
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
+}
+
+function buildExportStoragePath(userId: string, bookId: string, correlationId: string, filename: string): string {
+  const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
+  return `${userId}/${bookId}/${correlationId}/${safeFilename}`;
+}
+
+function getPdfImageBudget(chapterCount: number, defaultRemaining: number, defaultSlowPng: number): { remaining: number; slowPng: number } {
+  if (chapterCount > 28) return { remaining: Math.min(defaultRemaining, 6), slowPng: 0 };
+  if (chapterCount > 18) return { remaining: Math.min(defaultRemaining, 10), slowPng: Math.min(defaultSlowPng, 1) };
+  return { remaining: defaultRemaining, slowPng: defaultSlowPng };
 }
 
 // Check if content has academic references
@@ -1615,10 +1628,14 @@ serve(async (req) => {
 
     
 
-    let content: string;
+    let content: string | null = null;
     let contentType: string;
     let filename: string;
     let isBase64 = false;
+    let renderedBytes: Uint8Array | null = null;
+    let downloadUrl: string | null = null;
+    let storagePath: string | null = null;
+    const correlationId = req.headers.get("x-correlation-id") || crypto.randomUUID();
 
     // ===== Canonical content audit (non-blocking; powers export metadata) =====
     // Books above this chapter count skip the canonical renderer entirely — the
@@ -1672,10 +1689,9 @@ serve(async (req) => {
             pdfBytes = await generatePDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
           }
         }
-        content = uint8ArrayToBase64(pdfBytes);
+        renderedBytes = pdfBytes;
         contentType = "application/pdf";
         filename = `${sanitizeFilename(book.title)}.pdf`;
-        isBase64 = true;
         break;
       }
 
@@ -1685,10 +1701,9 @@ serve(async (req) => {
         const trimSize = KDP_TRIM_SIZES[kdpTrimSize || '6x9'] || KDP_TRIM_SIZES['6x9'];
         const useBleed = kdpBleed === true;
         const pdfBytes = await generateKDPPDF(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, trimSize, useBleed, exportContext);
-        content = uint8ArrayToBase64(pdfBytes);
+        renderedBytes = pdfBytes;
         contentType = "application/pdf";
         filename = `${sanitizeFilename(book.title)}_KDP.pdf`;
-        isBase64 = true;
         break;
       }
       
@@ -1703,10 +1718,9 @@ serve(async (req) => {
           console.warn("[EXPORT] canonical EPUB render failed, falling back to legacy — canonical_epub_export_fallback_used:", e);
           epubBytes = await generateEPUB(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
         }
-        content = uint8ArrayToBase64(new Uint8Array(epubBytes));
+        renderedBytes = new Uint8Array(epubBytes);
         contentType = "application/epub+zip";
         filename = `${sanitizeFilename(book.title)}.epub`;
-        isBase64 = true;
         break;
       }
       
@@ -1721,10 +1735,9 @@ serve(async (req) => {
           console.warn("[EXPORT] canonical DOCX render failed, falling back to legacy — canonical_docx_export_fallback_used:", e);
           docxBytes = await generateDOCX(book, chapters, finalAuthorName, publishingIdentifier, isISBN, year, coverImageBytes, isAcademicExport, effectiveCitationStyle, bibliography, exportContext);
         }
-        content = uint8ArrayToBase64(new Uint8Array(docxBytes));
+        renderedBytes = new Uint8Array(docxBytes);
         contentType = "application/vnd.openxmlformats-officedocument.wordprocessingml.document";
         filename = `${sanitizeFilename(book.title)}.docx`;
-        isBase64 = true;
         break;
       }
       
@@ -1736,13 +1749,44 @@ serve(async (req) => {
     // Every successful render writes a row to `exports` + `authorship_audit_log`.
     // Hash is computed over the raw rendered bytes (deterministic for identical
     // input). Failure here is logged but never fails the user's download.
+    if (!renderedBytes) {
+      throw new Error("Export renderer produced no file content");
+    }
+
+    const byteSize = renderedBytes.byteLength;
+    if (byteSize > INLINE_EXPORT_MAX_BYTES) {
+      storagePath = buildExportStoragePath(user.id, bookId, correlationId, filename);
+      const { error: uploadError } = await supabase.storage
+        .from("exports")
+        .upload(storagePath, renderedBytes, {
+          contentType,
+          cacheControl: "3600",
+          upsert: true,
+        });
+      if (uploadError) {
+        console.error("[EXPORT] storage upload failed:", uploadError);
+        throw new Error("Export was rendered but could not be prepared for download");
+      }
+
+      const { data: signedUrlData, error: signedUrlError } = await supabase.storage
+        .from("exports")
+        .createSignedUrl(storagePath, EXPORT_DOWNLOAD_URL_TTL_SECONDS, { download: filename });
+      if (signedUrlError || !signedUrlData?.signedUrl) {
+        console.error("[EXPORT] signed URL creation failed:", signedUrlError);
+        throw new Error("Export was rendered but could not be prepared for download");
+      }
+      downloadUrl = signedUrlData.signedUrl;
+      isBase64 = false;
+      console.log(`[EXPORT] rendered file stored for signed download (${Math.round(byteSize / 1024)}KB)`);
+    } else {
+      content = uint8ArrayToBase64(renderedBytes);
+      isBase64 = true;
+    }
+
     let exportEventId: string | null = null;
     let exportFileHash: string | null = null;
-    const correlationId = req.headers.get("x-correlation-id") || crypto.randomUUID();
     try {
-      const rawBytes = decodeExportPayload(content, isBase64);
-      const byteSize = rawBytes.byteLength;
-      exportFileHash = await computeSha256Hex(rawBytes);
+      exportFileHash = await computeSha256Hex(renderedBytes);
 
       const result = await recordExportEvent({
         supabase,
@@ -1771,9 +1815,13 @@ serve(async (req) => {
       JSON.stringify({
         success: true,
         content,
+          downloadUrl,
+          download_url: downloadUrl,
         contentType,
         filename,
         isBase64,
+          byte_size: byteSize,
+          storage_path: storagePath,
         canonical_renderer_version: canonicalRendererVersion,
         export_quality_status: exportQualityStatus,
         export_quality_score: exportQualityScore,
@@ -1947,7 +1995,7 @@ export async function generateCanonicalPDF(
     }
   };
 
-  const imageBudget = { remaining: 16, slowPng: 2 };
+  const imageBudget = getPdfImageBudget(canonical.length, 16, 2);
 
   // --- Render each chapter from canonical blocks ---
   for (const ch of canonical) {
@@ -2489,7 +2537,7 @@ async function generatePDF(
   // Book-wide image embedding budget. Passthrough embeds (see embedImageSmart)
   // cost near-zero CPU, but each embedded image adds ~1MB to the PDF — cap the
   // total, and strictly limit slow full-decode PNG embeds (alpha/interlaced).
-  const imageBudget = { remaining: 24, slowPng: 3 };
+  const imageBudget = getPdfImageBudget(chapters.length, 24, 3);
 
   // Chapters
   for (const chapter of chapters) {
