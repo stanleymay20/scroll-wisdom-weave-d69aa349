@@ -139,7 +139,7 @@ export default function ModerationDashboard() {
         status,
         reviewed_by: user?.id,
         reviewed_at: new Date().toISOString(),
-      })
+      } as never)
       .eq("id", report.id);
 
     if (error) {
