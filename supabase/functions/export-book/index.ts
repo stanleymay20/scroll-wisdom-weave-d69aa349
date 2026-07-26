@@ -1756,7 +1756,7 @@ serve(async (req) => {
 
     const byteSize = renderedBytes.byteLength;
     const wantsDirectBinary = req.headers.get(DIRECT_BINARY_EXPORT_HEADER) === "binary";
-    if (wantsDirectBinary) {
+    if (wantsDirectBinary && byteSize > INLINE_EXPORT_MAX_BYTES) {
       console.log(`[EXPORT] returning direct binary response (${Math.round(byteSize / 1024)}KB) to avoid worker memory pressure`);
       return new Response(renderedBytes, {
         headers: {
