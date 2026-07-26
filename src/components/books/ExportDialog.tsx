@@ -270,7 +270,9 @@ export function ExportDialog({
 
       if (!responseContentType.includes("application/json")) {
         const blob = await rawResponse.blob();
+        if (blob.size < 1024) throw new Error("Export returned an invalid file. Please try again.");
         const filename = getFilenameFromDisposition(rawResponse.headers.get("Content-Disposition")) || `${title}.${format === "epub" ? "epub" : format === "docx" ? "docx" : "pdf"}`;
+
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
