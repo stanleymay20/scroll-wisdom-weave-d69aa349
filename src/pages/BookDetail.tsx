@@ -358,7 +358,7 @@ export default function BookDetail() {
                   isUpdatingPublish={isUpdatingPublish} isDeleting={isDeleting} deleteDialogOpen={deleteDialogOpen}
                   onTogglePublish={handleTogglePublish} onUpdateBookType={handleUpdateBookType}
                   onArchive={handleArchiveBook} onDelete={handleDeleteBook} onDeleteDialogChange={setDeleteDialogOpen}
-                  onChaptersChange={setChapters} onBookUpdate={(updates) => { if (updates.preface !== undefined) setBook(prev => prev ? { ...prev, description: updates.preface || null } : null); }}
+                  onChaptersChange={setChapters} onBookUpdate={(updates) => { setBook(prev => prev ? { ...prev, ...(updates.preface !== undefined ? { description: updates.preface || null } : {}), ...(updates.title !== undefined ? { title: updates.title } : {}) } : null); }}
                 />
               )}
 
@@ -429,7 +429,7 @@ export default function BookDetail() {
                 isUpdatingPublish={isUpdatingPublish} isDeleting={isDeleting} deleteDialogOpen={deleteDialogOpen}
                 onTogglePublish={handleTogglePublish} onUpdateBookType={handleUpdateBookType}
                 onArchive={handleArchiveBook} onDelete={handleDeleteBook} onDeleteDialogChange={setDeleteDialogOpen}
-                onChaptersChange={setChapters} onBookUpdate={(updates) => { if (updates.preface !== undefined) setBook(prev => prev ? { ...prev, description: updates.preface || null } : null); }}
+                onChaptersChange={setChapters} onBookUpdate={(updates) => { setBook(prev => prev ? { ...prev, ...(updates.preface !== undefined ? { description: updates.preface || null } : {}), ...(updates.title !== undefined ? { title: updates.title } : {}) } : null); }}
               />
             </div>
           )}

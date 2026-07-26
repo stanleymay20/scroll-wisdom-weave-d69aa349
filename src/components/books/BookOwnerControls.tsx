@@ -125,7 +125,7 @@ export function BookOwnerControls({
 
       {/* Sell this book — fast path into the creator onboarding wizard */}
 
-      <div className={`flex items-center gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5 ${isMobile ? "" : "mt-6"}`}>
+      <div className="flex items-center gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5 mt-4">
         <DollarSign className="h-5 w-5 text-primary shrink-0" aria-hidden />
         <div className="flex-1 min-w-0">
           <div className="font-medium text-foreground">Sell this book</div>
