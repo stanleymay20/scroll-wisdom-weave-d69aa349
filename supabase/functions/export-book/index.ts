@@ -204,9 +204,18 @@ function parseCustomTableFormat(text: string): { tables: ParsedTable[]; cleanedT
   return { tables, cleanedText };
 }
 
-function stripExportOnlyArtifacts(input: string): string {
+const CODE_LABEL_LANGS = "PYTHON|JS|JAVASCRIPT|TYPESCRIPT|TS|JAVA|C|CPP|C\\+\\+|CSHARP|C#|GO|RUST|RUBY|PHP|SQL|BASH|SHELL|SH|R|MATLAB|SWIFT|KOTLIN|SCALA|HTML|CSS|JSON|YAML|XML|PSEUDOCODE|CODE";
+
+function stripExportOnlyArtifacts(input: string, bookTitle?: string): string {
   const out: string[] = [];
   let skippingFigure = false;
+
+  const norm = (s: string) =>
+    s.replace(/^#{1,6}\s*/, "").replace(/\*\*/g, "").replace(/[^a-z0-9]+/gi, " ").trim().toLowerCase();
+  const titleKey = bookTitle ? norm(bookTitle) : "";
+  let seenTitleHeading = false;
+
+  const labelRe = new RegExp(`^\\[(${CODE_LABEL_LANGS})\\]\\s*[:\\-–]?\\s*(.*)$`, "i");
 
   for (const rawLine of (input || '').replace(/\r\n?/g, '\n').split('\n')) {
     const line = rawLine.trim();
@@ -225,11 +234,27 @@ function stripExportOnlyArtifacts(input: string): string {
       continue;
     }
 
+    // Drop leaked language markers like "[PYTHON]: Title" -> bold caption (or nothing)
+    const labelMatch = line.match(labelRe);
+    if (labelMatch) {
+      const caption = (labelMatch[2] || "").trim();
+      if (caption) out.push(`**${caption.replace(/\*\*/g, "")}**`);
+      continue;
+    }
+
+    // Remove a duplicated book-title heading repeated inside chapter content
+    if (titleKey && /^#{1,6}\s+/.test(line) && norm(line) === titleKey) {
+      if (seenTitleHeading) continue;
+      seenTitleHeading = true;
+      continue;
+    }
+
     out.push(rawLine);
   }
 
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
+
 
 // Structured code block interface (ChatGPT-level format)
 interface StructuredCodeBlockData {
@@ -2516,17 +2541,25 @@ async function generatePDF(
   });
   y -= 50;
   
+  const tocEntries: { pg: any; y: number; key: string; titleWidth: number }[] = [];
   for (const chapter of chapters) {
     // Avoid "Chapter X: Chapter X: Title" duplication — check if title already has prefix
     const titleText = /^chapter\s+\d+/i.test(chapter.title)
       ? chapter.title
       : `Chapter ${chapter.chapter_number}: ${chapter.title}`;
-    page.drawText(sanitizeForPDF(titleText), {
+    const safeTitle = sanitizeForPDF(titleText);
+    page.drawText(safeTitle, {
       x: margin,
       y,
       size: 12,
       font: timesRoman,
       color: rgb(0.2, 0.2, 0.2),
+    });
+    tocEntries.push({
+      pg: page,
+      y,
+      key: String(chapter.id ?? chapter.chapter_number),
+      titleWidth: timesRoman.widthOfTextAtSize(safeTitle, 12),
     });
     y -= 24;
     if (y < margin + 50) {
@@ -2536,6 +2569,7 @@ async function generatePDF(
       y = pageHeight - margin - 50;
     }
   }
+
   
   // Add Bibliography/References entry to TOC if we have any
   if (bibliography.length > 0) {
@@ -2555,12 +2589,15 @@ async function generatePDF(
   const imageBudget = getPdfImageBudget(chapters.length, 24, 3);
 
   // Chapters
+  const chapterStartPages = new Map<string, number>();
   for (const chapter of chapters) {
     currentChapterTitle = chapter.title;
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     pageNumber++;
+    chapterStartPages.set(String(chapter.id ?? chapter.chapter_number), pageNumber);
     addPageNumber(page, pageNumber);
     y = pageHeight - margin - 50;
+
     
     page.drawText(`CHAPTER ${chapter.chapter_number}`, {
       x: margin,
@@ -2586,7 +2623,7 @@ async function generatePDF(
     
     // Process content with code block, image, table, and HEADING handling
     // Strip duplicate chapter title from content start (generated content often repeats it)
-    let chapterContent = stripExportOnlyArtifacts(chapter.content || "");
+    let chapterContent = stripExportOnlyArtifacts(chapter.content || "", book?.title);
     const titleVariants = [
       chapter.title,
       `Chapter ${chapter.chapter_number}: ${chapter.title}`,
@@ -3260,6 +3297,37 @@ async function generatePDF(
     }
   }
 
+  // Back-fill Table of Contents page numbers with dot leaders
+  for (const entry of tocEntries) {
+    const pnum = chapterStartPages.get(entry.key);
+    if (!pnum) continue;
+    const label = String(pnum);
+    const labelWidth = timesRoman.widthOfTextAtSize(label, 12);
+    const startX = margin + entry.titleWidth + 6;
+    const endX = pageWidth - margin - labelWidth - 6;
+    if (endX > startX) {
+      const dotWidth = timesRoman.widthOfTextAtSize(".", 12) || 3;
+      const dots = ".".repeat(Math.max(0, Math.floor((endX - startX) / dotWidth)));
+      if (dots) {
+        entry.pg.drawText(dots, {
+          x: startX,
+          y: entry.y,
+          size: 12,
+          font: timesRoman,
+          color: rgb(0.65, 0.65, 0.65),
+        });
+      }
+    }
+    entry.pg.drawText(label, {
+      x: pageWidth - margin - labelWidth,
+      y: entry.y,
+      size: 12,
+      font: timesRoman,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+  }
+
+
   // Bibliography/References section for ALL books with citations
   if (bibliography.length > 0) {
     page = pdfDoc.addPage([pageWidth, pageHeight]);
@@ -3776,7 +3844,7 @@ async function generateKDPPDF(
     if (!chapter.content) continue;
 
     // Strip duplicate chapter title from content start (KDP)
-    let kdpChapterContent = stripExportOnlyArtifacts(chapter.content);
+    let kdpChapterContent = stripExportOnlyArtifacts(chapter.content, book?.title);
     const kdpTitleVariants = [
       chapter.title,
       `Chapter ${chapter.chapter_number}: ${chapter.title}`,
@@ -4292,7 +4360,7 @@ async function generateEPUB(
   
   for (const item of chapterItems) {
     try {
-    let content = stripExportOnlyArtifacts(item.chapter.content || "");
+    let content = stripExportOnlyArtifacts(item.chapter.content || "", book?.title);
     
     // FIRST: Detect plain-text headings (legacy content without ## markers)
     content = content.replace(/\n\n([A-Z][A-Za-z0-9 :&,\-–—']{2,75})\n\n/g, (match: string, line: string) => {
@@ -4793,7 +4861,7 @@ async function generateDOCX(
   const processedChapters: { chapter: any; processedContent: string[]; imageRefs: { index: number; alt: string }[]; tables: { original: string; headers: string[]; rows: string[][] }[]; structuredCodeBlocks: StructuredCodeBlockData[]; codeBlocks: { lang: string; code: string }[]; headings: { level: number; text: string }[] }[] = [];
   
   for (const chapter of chapters) {
-    const content = stripExportOnlyArtifacts(chapter.content || "");
+    const content = stripExportOnlyArtifacts(chapter.content || "", book?.title);
     // Cap images at 5 per chapter to avoid CPU timeout in edge function
     const allImgMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
     const imageMatches = allImgMatches.slice(0, 5);
