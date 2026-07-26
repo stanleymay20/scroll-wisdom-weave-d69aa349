@@ -270,8 +270,8 @@ export function ExportDialog({
 
       if (!responseContentType.includes("application/json")) {
         const blob = await rawResponse.blob();
-        if (blob.size < 1024) throw new Error("Export returned an invalid file. Please try again.");
         const filename = getFilenameFromDisposition(rawResponse.headers.get("Content-Disposition")) || `${title}.${format === "epub" ? "epub" : format === "docx" ? "docx" : "pdf"}`;
+        await assertValidExportBlob(blob, filename);
 
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
@@ -295,10 +295,12 @@ export function ExportDialog({
       if (signedDownloadUrl) {
         // Fetch into a blob so mobile browsers reliably save the real file
         // (cross-origin `download` attributes are ignored on iOS Safari).
-        const fileResponse = await fetch(signedDownloadUrl);
+        // `cache: "no-store"` prevents any service worker / HTTP cache replay.
+        const fileResponse = await fetch(signedDownloadUrl, { cache: "no-store" });
         if (!fileResponse.ok) throw new Error("Export file could not be downloaded. Please try again.");
         const blob = await fileResponse.blob();
-        if (blob.size < 1024) throw new Error("Export returned an invalid file. Please try again.");
+        await assertValidExportBlob(blob, filename);
+
         const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
         link.href = url;
