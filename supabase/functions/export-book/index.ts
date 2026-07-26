@@ -3315,7 +3315,17 @@ function measureCached(font: any, fontSize: number, word: string): number {
   const key = `${fontSize}|${word}`;
   let v = cache.get(key);
   if (v === undefined) {
-    v = font.widthOfTextAtSize(word, fontSize) as number;
+    try {
+      v = font.widthOfTextAtSize(word, fontSize) as number;
+    } catch {
+      // Last-resort WinAnsi guard — never let an unencodable glyph kill the export
+      const safe = sanitizeForPDF(word);
+      try {
+        v = font.widthOfTextAtSize(safe, fontSize) as number;
+      } catch {
+        v = safe.length * fontSize * 0.5;
+      }
+    }
     if (cache.size < 100_000) cache.set(key, v);
   }
   return v;
