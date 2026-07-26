@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Trash2, Archive, Network, DollarSign, ArrowRight } from "lucide-react";
+import { Loader2, Trash2, Archive, Network, DollarSign, ArrowRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -12,6 +13,9 @@ import {
 import { ChapterManagement } from "@/components/books";
 import { ScormExportDialog } from "@/components/export/ScormExportDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+
 
 interface BookData {
   id: string;
