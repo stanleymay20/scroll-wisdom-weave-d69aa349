@@ -47,7 +47,7 @@ interface BookOwnerControlsProps {
   onDelete: () => void;
   onDeleteDialogChange: (open: boolean) => void;
   onChaptersChange: (chapters: ChapterData[]) => void;
-  onBookUpdate: (updates: { preface?: string }) => void;
+  onBookUpdate: (updates: { preface?: string; title?: string }) => void;
 }
 
 export function BookOwnerControls({
@@ -58,6 +58,28 @@ export function BookOwnerControls({
   const { t } = useLanguage();
 
   const idSuffix = isMobile ? "-mobile" : "";
+
+  const [titleDraft, setTitleDraft] = useState(book.title);
+  const [isRenaming, setIsRenaming] = useState(false);
+
+  useEffect(() => { setTitleDraft(book.title); }, [book.title]);
+
+  const trimmedTitle = titleDraft.trim();
+  const canRename = trimmedTitle.length >= 2 && trimmedTitle !== book.title && !isRenaming;
+
+  const handleRename = async () => {
+    if (!canRename) return;
+    setIsRenaming(true);
+    const { error } = await supabase.from("books").update({ title: trimmedTitle }).eq("id", book.id);
+    setIsRenaming(false);
+    if (error) {
+      toast({ title: "Rename failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    onBookUpdate({ title: trimmedTitle });
+    toast({ title: "Book renamed", description: `Now titled "${trimmedTitle}".` });
+  };
+
 
   return (
     <>
