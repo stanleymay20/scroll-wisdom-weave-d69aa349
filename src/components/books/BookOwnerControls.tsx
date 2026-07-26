@@ -1,7 +1,8 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Trash2, Archive, Network, DollarSign, ArrowRight } from "lucide-react";
+import { Loader2, Trash2, Archive, Network, DollarSign, ArrowRight, Pencil } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
 import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
@@ -12,6 +13,9 @@ import {
 import { ChapterManagement } from "@/components/books";
 import { ScormExportDialog } from "@/components/export/ScormExportDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { supabase } from "@/integrations/supabase/client";
+import { toast } from "@/hooks/use-toast";
+
 
 interface BookData {
   id: string;
@@ -43,7 +47,7 @@ interface BookOwnerControlsProps {
   onDelete: () => void;
   onDeleteDialogChange: (open: boolean) => void;
   onChaptersChange: (chapters: ChapterData[]) => void;
-  onBookUpdate: (updates: { preface?: string }) => void;
+  onBookUpdate: (updates: { preface?: string; title?: string }) => void;
 }
 
 export function BookOwnerControls({
@@ -54,6 +58,28 @@ export function BookOwnerControls({
   const { t } = useLanguage();
 
   const idSuffix = isMobile ? "-mobile" : "";
+
+  const [titleDraft, setTitleDraft] = useState(book.title);
+  const [isRenaming, setIsRenaming] = useState(false);
+
+  useEffect(() => { setTitleDraft(book.title); }, [book.title]);
+
+  const trimmedTitle = titleDraft.trim();
+  const canRename = trimmedTitle.length >= 2 && trimmedTitle !== book.title && !isRenaming;
+
+  const handleRename = async () => {
+    if (!canRename) return;
+    setIsRenaming(true);
+    const { error } = await supabase.from("books").update({ title: trimmedTitle }).eq("id", book.id);
+    setIsRenaming(false);
+    if (error) {
+      toast({ title: "Rename failed", description: error.message, variant: "destructive" });
+      return;
+    }
+    onBookUpdate({ title: trimmedTitle });
+    toast({ title: "Book renamed", description: `Now titled "${trimmedTitle}".` });
+  };
+
 
   return (
     <>
@@ -76,8 +102,30 @@ export function BookOwnerControls({
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Rename book */}
+      <div className={`p-4 rounded-xl bg-muted/30 border border-border/50 ${isMobile ? "" : "mt-6"}`}>
+        <Label htmlFor={`book-title${idSuffix}`} className="text-foreground font-medium">Book title</Label>
+        <p className="text-sm text-muted-foreground mt-1 mb-3">Rename this book at any time — chapters and progress stay intact.</p>
+        <div className={`flex gap-2 ${isMobile ? "flex-col" : "items-center"}`}>
+          <Input
+            id={`book-title${idSuffix}`}
+            value={titleDraft}
+            onChange={(e) => setTitleDraft(e.target.value)}
+            onKeyDown={(e) => { if (e.key === "Enter") handleRename(); }}
+            maxLength={200}
+            disabled={isRenaming}
+            className="flex-1 text-foreground caret-foreground bg-background/50"
+          />
+          <Button size="sm" onClick={handleRename} disabled={!canRename}>
+            {isRenaming ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Pencil className="h-4 w-4 mr-2" />}
+            Save
+          </Button>
+        </div>
+      </div>
+
       {/* Sell this book — fast path into the creator onboarding wizard */}
-      <div className={`flex items-center gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5 ${isMobile ? "" : "mt-6"}`}>
+
+      <div className="flex items-center gap-3 p-4 rounded-xl border border-primary/30 bg-primary/5 mt-4">
         <DollarSign className="h-5 w-5 text-primary shrink-0" aria-hidden />
         <div className="flex-1 min-w-0">
           <div className="font-medium text-foreground">Sell this book</div>
