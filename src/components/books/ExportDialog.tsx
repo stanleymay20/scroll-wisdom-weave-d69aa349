@@ -237,7 +237,22 @@ export function ExportDialog({
       if (response.error) throw new Error(response.error.message);
       if (response.data?.error) throw new Error(response.data.error);
 
-      const { content, filename, contentType } = response.data;
+      const { content, filename, contentType, downloadUrl, download_url } = response.data;
+      const signedDownloadUrl = downloadUrl || download_url;
+      if (signedDownloadUrl) {
+        const link = document.createElement("a");
+        link.href = signedDownloadUrl;
+        link.download = filename;
+        link.rel = "noopener noreferrer";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+
+        toast({ title: t('export.complete'), description: t('export.downloaded').replace('{filename}', filename) });
+        setIsOpen(false);
+        return;
+      }
+
       let blobContent: BlobPart;
       if (response.data.isBase64) {
         const binaryString = atob(content);
