@@ -2541,17 +2541,25 @@ async function generatePDF(
   });
   y -= 50;
   
+  const tocEntries: { pg: any; y: number; key: string; titleWidth: number }[] = [];
   for (const chapter of chapters) {
     // Avoid "Chapter X: Chapter X: Title" duplication — check if title already has prefix
     const titleText = /^chapter\s+\d+/i.test(chapter.title)
       ? chapter.title
       : `Chapter ${chapter.chapter_number}: ${chapter.title}`;
-    page.drawText(sanitizeForPDF(titleText), {
+    const safeTitle = sanitizeForPDF(titleText);
+    page.drawText(safeTitle, {
       x: margin,
       y,
       size: 12,
       font: timesRoman,
       color: rgb(0.2, 0.2, 0.2),
+    });
+    tocEntries.push({
+      pg: page,
+      y,
+      key: String(chapter.id ?? chapter.chapter_number),
+      titleWidth: timesRoman.widthOfTextAtSize(safeTitle, 12),
     });
     y -= 24;
     if (y < margin + 50) {
@@ -2561,6 +2569,7 @@ async function generatePDF(
       y = pageHeight - margin - 50;
     }
   }
+
   
   // Add Bibliography/References entry to TOC if we have any
   if (bibliography.length > 0) {
