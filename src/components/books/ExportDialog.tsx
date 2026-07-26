@@ -291,18 +291,26 @@ export function ExportDialog({
       const { content, filename, contentType, downloadUrl, download_url } = responseData;
       const signedDownloadUrl = downloadUrl || download_url;
       if (signedDownloadUrl) {
+        // Fetch into a blob so mobile browsers reliably save the real file
+        // (cross-origin `download` attributes are ignored on iOS Safari).
+        const fileResponse = await fetch(signedDownloadUrl);
+        if (!fileResponse.ok) throw new Error("Export file could not be downloaded. Please try again.");
+        const blob = await fileResponse.blob();
+        if (blob.size < 1024) throw new Error("Export returned an invalid file. Please try again.");
+        const url = URL.createObjectURL(blob);
         const link = document.createElement("a");
-        link.href = signedDownloadUrl;
+        link.href = url;
         link.download = filename;
-        link.rel = "noopener noreferrer";
         document.body.appendChild(link);
         link.click();
         document.body.removeChild(link);
+        URL.revokeObjectURL(url);
 
         toast({ title: t('export.complete'), description: t('export.downloaded').replace('{filename}', filename) });
         setIsOpen(false);
         return;
       }
+
 
       // Guard: never write a file from a missing/invalid payload (this is what
       // produced 4-byte "null" downloads).
