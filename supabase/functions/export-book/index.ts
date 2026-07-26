@@ -2611,7 +2611,7 @@ async function generatePDF(
     
     // Process content with code block, image, table, and HEADING handling
     // Strip duplicate chapter title from content start (generated content often repeats it)
-    let chapterContent = stripExportOnlyArtifacts(chapter.content || "");
+    let chapterContent = stripExportOnlyArtifacts(chapter.content || "", book?.title);
     const titleVariants = [
       chapter.title,
       `Chapter ${chapter.chapter_number}: ${chapter.title}`,
@@ -3801,7 +3801,7 @@ async function generateKDPPDF(
     if (!chapter.content) continue;
 
     // Strip duplicate chapter title from content start (KDP)
-    let kdpChapterContent = stripExportOnlyArtifacts(chapter.content);
+    let kdpChapterContent = stripExportOnlyArtifacts(chapter.content, book?.title);
     const kdpTitleVariants = [
       chapter.title,
       `Chapter ${chapter.chapter_number}: ${chapter.title}`,
@@ -4317,7 +4317,7 @@ async function generateEPUB(
   
   for (const item of chapterItems) {
     try {
-    let content = stripExportOnlyArtifacts(item.chapter.content || "");
+    let content = stripExportOnlyArtifacts(item.chapter.content || "", book?.title);
     
     // FIRST: Detect plain-text headings (legacy content without ## markers)
     content = content.replace(/\n\n([A-Z][A-Za-z0-9 :&,\-–—']{2,75})\n\n/g, (match: string, line: string) => {
@@ -4818,7 +4818,7 @@ async function generateDOCX(
   const processedChapters: { chapter: any; processedContent: string[]; imageRefs: { index: number; alt: string }[]; tables: { original: string; headers: string[]; rows: string[][] }[]; structuredCodeBlocks: StructuredCodeBlockData[]; codeBlocks: { lang: string; code: string }[]; headings: { level: number; text: string }[] }[] = [];
   
   for (const chapter of chapters) {
-    const content = stripExportOnlyArtifacts(chapter.content || "");
+    const content = stripExportOnlyArtifacts(chapter.content || "", book?.title);
     // Cap images at 5 per chapter to avoid CPU timeout in edge function
     const allImgMatches = [...content.matchAll(/!\[([^\]]*)\]\(([^)]+)\)/g)];
     const imageMatches = allImgMatches.slice(0, 5);
