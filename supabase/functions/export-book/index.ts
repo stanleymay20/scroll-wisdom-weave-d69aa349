@@ -949,7 +949,9 @@ function drawStyledParagraph(
     }
     const spaceWidth = measureCached(font, fontSize, " ");
 
-    const words = run.text.split(/\s+/);
+    // WinAnsi guard: pdf-lib standard fonts throw on any non-Latin-1 glyph
+    // (e.g. "ᵢ" U+1D62 from LaTeX subscripts). Sanitize before measure + draw.
+    const words = sanitizeForPDF(run.text).split(/\s+/);
     for (let i = 0; i < words.length; i++) {
       const word = words[i];
       if (!word) continue;
