@@ -161,20 +161,12 @@ export default defineConfig(({ mode }) => ({
             },
           },
           {
-            // Downloaded export files (PDF/EPUB/DOCX) - CacheFirst
-            urlPattern: /\.pdf$|\.epub$|\.docx$/i,
-            handler: "CacheFirst",
-            options: {
-              cacheName: "exports-cache",
-              expiration: {
-                maxEntries: 50,
-                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
-              },
-              cacheableResponse: {
-                statuses: [0, 200],
-              },
-            },
+            // Export downloads (signed storage URLs / direct binary) - NEVER cache.
+            // Caching these can replay a stale or truncated file on later exports.
+            urlPattern: /\/storage\/v1\/object\/(sign|authenticated)\/exports\/|\.pdf(\?|$)|\.epub(\?|$)|\.docx(\?|$)/i,
+            handler: "NetworkOnly",
           },
+
           {
             // Images (covers, illustrations) - CacheFirst
             urlPattern: /\.(?:png|jpg|jpeg|svg|gif|webp)$/i,
