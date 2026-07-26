@@ -497,7 +497,7 @@ export function KnowledgeGraphPanel({
         const currentScore = Number((existing as any)[bloomField] || 0);
         const newScore = Math.min(100, currentScore + (avgQuality * 3));
         await supabase.from('competency_profile')
-          .update({ [bloomField]: newScore, total_attempts: (existing.total_attempts || 0) + 1, last_updated: new Date().toISOString() })
+          .update({ [bloomField]: newScore, total_attempts: (existing.total_attempts || 0) + 1, last_updated: new Date().toISOString() } as never)
           .eq('id', existing.id);
       } else {
         await supabase.from('competency_profile').insert({
@@ -505,7 +505,7 @@ export function KnowledgeGraphPanel({
           domain: 'general',
           [bloomField]: avgQuality * 3,
           total_attempts: 1,
-        });
+        } as never);
       }
 
       setThinkSaved(true);

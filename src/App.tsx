@@ -172,7 +172,7 @@ const App = () => (
               <Sonner />
             <OfflineIndicator />
             <PWAUpdateNotification />
-            <BrowserRouter future={{ v7_startTransition: true, v7_relativeSplatPath: true }}>
+            <BrowserRouter>
               {/* PHASE 7: Per-navigation telemetry (logs route changes + dwell time) */}
               <RouteTelemetry />
               {/* Phase 2.1d.1: first-touch attribution beacon for store/reader routes */}
