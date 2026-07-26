@@ -3297,6 +3297,37 @@ async function generatePDF(
     }
   }
 
+  // Back-fill Table of Contents page numbers with dot leaders
+  for (const entry of tocEntries) {
+    const pnum = chapterStartPages.get(entry.key);
+    if (!pnum) continue;
+    const label = String(pnum);
+    const labelWidth = timesRoman.widthOfTextAtSize(label, 12);
+    const startX = margin + entry.titleWidth + 6;
+    const endX = pageWidth - margin - labelWidth - 6;
+    if (endX > startX) {
+      const dotWidth = timesRoman.widthOfTextAtSize(".", 12) || 3;
+      const dots = ".".repeat(Math.max(0, Math.floor((endX - startX) / dotWidth)));
+      if (dots) {
+        entry.pg.drawText(dots, {
+          x: startX,
+          y: entry.y,
+          size: 12,
+          font: timesRoman,
+          color: rgb(0.65, 0.65, 0.65),
+        });
+      }
+    }
+    entry.pg.drawText(label, {
+      x: pageWidth - margin - labelWidth,
+      y: entry.y,
+      size: 12,
+      font: timesRoman,
+      color: rgb(0.2, 0.2, 0.2),
+    });
+  }
+
+
   // Bibliography/References section for ALL books with citations
   if (bibliography.length > 0) {
     page = pdfDoc.addPage([pageWidth, pageHeight]);
