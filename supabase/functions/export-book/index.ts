@@ -1027,6 +1027,13 @@ const _pdfCharMap: Record<string, string> = {
   '\u03C9': 'omega', '\u03A9': 'Omega', '\u2211': 'sum', '\u220F': 'product', '\u221A': 'sqrt',
   '\u222B': 'integral', '\u2202': 'd', '\u2206': 'delta', '\u2207': 'nabla',
   '\u2122': '(TM)', '\u2120': '(SM)', '\u2117': '(P)',
+  // Subscript/superscript letters (LaTeX x_i, a_n, etc.) — WinAnsi cannot encode these
+  '\u1D62': 'i', '\u2C7C': 'j', '\u2096': 'k', '\u2099': 'n', '\u2098': 'm', '\u2090': 'a',
+  '\u2091': 'e', '\u2092': 'o', '\u2093': 'x', '\u2095': 'h', '\u209C': 't', '\u209A': 'p',
+  '\u209B': 's', '\u1D63': 'r', '\u1D64': 'u', '\u1D65': 'v', '\u2097': 'l',
+  '\u1D2C': 'A', '\u1D43': 'a', '\u1D47': 'b', '\u1D9C': 'c', '\u1D48': 'd', '\u1D49': 'e',
+  '\u1D57': 't', '\u02B0': 'h', '\u02B2': 'j', '\u02E1': 'l', '\u207F': 'n', '\u02B3': 'r',
+  '\u02E2': 's', '\u02B7': 'w', '\u02E3': 'x', '\u02B8': 'y',
 };
 
 function sanitizeForPDF(text: string): string {
