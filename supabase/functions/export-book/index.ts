@@ -14,6 +14,7 @@ try { (zip as any).configure?.({ useWebWorkers: false }); } catch (_) { /* noop 
 const CANONICAL_RENDERER_VERSION = "1.0.0";
 const INLINE_EXPORT_MAX_BYTES = 1_500_000;
 const EXPORT_DOWNLOAD_URL_TTL_SECONDS = 60 * 30;
+const DIRECT_BINARY_EXPORT_HEADER = "x-scroll-export-response";
 
 /**
  * Detect generation-pipeline placeholder alt text that should never become a
@@ -1754,6 +1755,20 @@ serve(async (req) => {
     }
 
     const byteSize = renderedBytes.byteLength;
+    const wantsDirectBinary = req.headers.get(DIRECT_BINARY_EXPORT_HEADER) === "binary";
+    if (wantsDirectBinary && byteSize > INLINE_EXPORT_MAX_BYTES) {
+      console.log(`[EXPORT] returning direct binary response (${Math.round(byteSize / 1024)}KB) to avoid worker memory pressure`);
+      return new Response(renderedBytes, {
+        headers: {
+          ...corsHeaders,
+          "Content-Type": contentType,
+          "Content-Disposition": `attachment; filename="${filename.replace(/"/g, "'")}"`,
+          "Access-Control-Expose-Headers": "Content-Disposition, X-Export-Byte-Size",
+          "X-Export-Byte-Size": String(byteSize),
+        },
+      });
+    }
+
     if (byteSize > INLINE_EXPORT_MAX_BYTES) {
       storagePath = buildExportStoragePath(user.id, bookId, correlationId, filename);
       const { error: uploadError } = await supabase.storage
