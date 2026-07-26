@@ -2589,12 +2589,15 @@ async function generatePDF(
   const imageBudget = getPdfImageBudget(chapters.length, 24, 3);
 
   // Chapters
+  const chapterStartPages = new Map<string, number>();
   for (const chapter of chapters) {
     currentChapterTitle = chapter.title;
     page = pdfDoc.addPage([pageWidth, pageHeight]);
     pageNumber++;
+    chapterStartPages.set(String(chapter.id ?? chapter.chapter_number), pageNumber);
     addPageNumber(page, pageNumber);
     y = pageHeight - margin - 50;
+
     
     page.drawText(`CHAPTER ${chapter.chapter_number}`, {
       x: margin,
