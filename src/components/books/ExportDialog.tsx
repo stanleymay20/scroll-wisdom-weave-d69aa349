@@ -58,6 +58,27 @@ function getFilenameFromDisposition(disposition: string | null): string | null {
   return plainMatch?.[1] || null;
 }
 
+/**
+ * Guards against writing a corrupt/placeholder file to disk (this is what
+ * produced 4-byte "null" downloads). Validates size + file magic bytes.
+ */
+async function assertValidExportBlob(blob: Blob, filename: string): Promise<void> {
+  if (!blob || blob.size < 1024) {
+    throw new Error("Export returned an invalid file. Please try again.");
+  }
+  const header = new Uint8Array(await blob.slice(0, 4).arrayBuffer());
+  const sig = String.fromCharCode(...header);
+  const lower = filename.toLowerCase();
+  const isPdf = lower.endsWith(".pdf");
+  const isZip = lower.endsWith(".epub") || lower.endsWith(".docx");
+  if (isPdf && sig !== "%PDF") {
+    throw new Error("Export produced a corrupt PDF. Please try again.");
+  }
+  if (isZip && !(header[0] === 0x50 && header[1] === 0x4b)) {
+    throw new Error("Export produced a corrupt file. Please try again.");
+  }
+}
+
 // Tier-level format access — mirrors server-side TIER_FORMATS in export-book/index.ts
 const TIER_FORMAT_ACCESS: Record<string, ExportFormat[]> = {
   free: ["pdf"],
