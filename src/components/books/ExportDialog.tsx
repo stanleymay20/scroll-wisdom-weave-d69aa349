@@ -304,6 +304,12 @@ export function ExportDialog({
         return;
       }
 
+      // Guard: never write a file from a missing/invalid payload (this is what
+      // produced 4-byte "null" downloads).
+      if (typeof content !== "string" || content.length === 0) {
+        throw new Error("Export returned no file content. Please try again.");
+      }
+
       let blobContent: BlobPart;
       if (responseData.isBase64) {
         const binaryString = atob(content);
@@ -315,6 +321,7 @@ export function ExportDialog({
       }
 
       const blob = new Blob([blobContent], { type: contentType });
+
       const url = URL.createObjectURL(blob);
       const link = document.createElement("a");
       link.href = url;
