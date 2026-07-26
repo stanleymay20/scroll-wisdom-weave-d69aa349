@@ -1184,7 +1184,7 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
   let binary = '';
   for (let i = 0; i < bytes.length; i += chunkSize) {
     const chunk = bytes.subarray(i, i + chunkSize);
-    binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
+    binary += String.fromCharCode(...chunk);
   }
   return btoa(binary);
 }
@@ -1192,6 +1192,12 @@ function uint8ArrayToBase64(bytes: Uint8Array): string {
 function buildExportStoragePath(userId: string, bookId: string, correlationId: string, filename: string): string {
   const safeFilename = filename.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120);
   return `${userId}/${bookId}/${correlationId}/${safeFilename}`;
+}
+
+function getPdfImageBudget(chapterCount: number): { remaining: number; slowPng: number } {
+  if (chapterCount > 28) return { remaining: 6, slowPng: 0 };
+  if (chapterCount > 18) return { remaining: 10, slowPng: 1 };
+  return { remaining: 24, slowPng: 3 };
 }
 
 // Check if content has academic references
@@ -1989,7 +1995,7 @@ export async function generateCanonicalPDF(
     }
   };
 
-  const imageBudget = { remaining: 16, slowPng: 2 };
+  const imageBudget = getPdfImageBudget(canonical.length);
 
   // --- Render each chapter from canonical blocks ---
   for (const ch of canonical) {
@@ -2531,7 +2537,7 @@ async function generatePDF(
   // Book-wide image embedding budget. Passthrough embeds (see embedImageSmart)
   // cost near-zero CPU, but each embedded image adds ~1MB to the PDF — cap the
   // total, and strictly limit slow full-decode PNG embeds (alpha/interlaced).
-  const imageBudget = { remaining: 24, slowPng: 3 };
+  const imageBudget = getPdfImageBudget(chapters.length);
 
   // Chapters
   for (const chapter of chapters) {
