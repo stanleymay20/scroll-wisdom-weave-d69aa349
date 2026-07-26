@@ -204,9 +204,18 @@ function parseCustomTableFormat(text: string): { tables: ParsedTable[]; cleanedT
   return { tables, cleanedText };
 }
 
-function stripExportOnlyArtifacts(input: string): string {
+const CODE_LABEL_LANGS = "PYTHON|JS|JAVASCRIPT|TYPESCRIPT|TS|JAVA|C|CPP|C\\+\\+|CSHARP|C#|GO|RUST|RUBY|PHP|SQL|BASH|SHELL|SH|R|MATLAB|SWIFT|KOTLIN|SCALA|HTML|CSS|JSON|YAML|XML|PSEUDOCODE|CODE";
+
+function stripExportOnlyArtifacts(input: string, bookTitle?: string): string {
   const out: string[] = [];
   let skippingFigure = false;
+
+  const norm = (s: string) =>
+    s.replace(/^#{1,6}\s*/, "").replace(/\*\*/g, "").replace(/[^a-z0-9]+/gi, " ").trim().toLowerCase();
+  const titleKey = bookTitle ? norm(bookTitle) : "";
+  let seenTitleHeading = false;
+
+  const labelRe = new RegExp(`^\\[(${CODE_LABEL_LANGS})\\]\\s*[:\\-–]?\\s*(.*)$`, "i");
 
   for (const rawLine of (input || '').replace(/\r\n?/g, '\n').split('\n')) {
     const line = rawLine.trim();
@@ -225,11 +234,27 @@ function stripExportOnlyArtifacts(input: string): string {
       continue;
     }
 
+    // Drop leaked language markers like "[PYTHON]: Title" -> bold caption (or nothing)
+    const labelMatch = line.match(labelRe);
+    if (labelMatch) {
+      const caption = (labelMatch[2] || "").trim();
+      if (caption) out.push(`**${caption.replace(/\*\*/g, "")}**`);
+      continue;
+    }
+
+    // Remove a duplicated book-title heading repeated inside chapter content
+    if (titleKey && /^#{1,6}\s+/.test(line) && norm(line) === titleKey) {
+      if (seenTitleHeading) continue;
+      seenTitleHeading = true;
+      continue;
+    }
+
     out.push(rawLine);
   }
 
   return out.join('\n').replace(/\n{3,}/g, '\n\n').trim();
 }
+
 
 // Structured code block interface (ChatGPT-level format)
 interface StructuredCodeBlockData {
