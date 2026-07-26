@@ -1194,10 +1194,10 @@ function buildExportStoragePath(userId: string, bookId: string, correlationId: s
   return `${userId}/${bookId}/${correlationId}/${safeFilename}`;
 }
 
-function getPdfImageBudget(chapterCount: number): { remaining: number; slowPng: number } {
-  if (chapterCount > 28) return { remaining: 6, slowPng: 0 };
-  if (chapterCount > 18) return { remaining: 10, slowPng: 1 };
-  return { remaining: 24, slowPng: 3 };
+function getPdfImageBudget(chapterCount: number, defaultRemaining: number, defaultSlowPng: number): { remaining: number; slowPng: number } {
+  if (chapterCount > 28) return { remaining: Math.min(defaultRemaining, 6), slowPng: 0 };
+  if (chapterCount > 18) return { remaining: Math.min(defaultRemaining, 10), slowPng: Math.min(defaultSlowPng, 1) };
+  return { remaining: defaultRemaining, slowPng: defaultSlowPng };
 }
 
 // Check if content has academic references
@@ -1995,7 +1995,7 @@ export async function generateCanonicalPDF(
     }
   };
 
-  const imageBudget = getPdfImageBudget(canonical.length);
+  const imageBudget = getPdfImageBudget(canonical.length, 16, 2);
 
   // --- Render each chapter from canonical blocks ---
   for (const ch of canonical) {
@@ -2537,7 +2537,7 @@ async function generatePDF(
   // Book-wide image embedding budget. Passthrough embeds (see embedImageSmart)
   // cost near-zero CPU, but each embedded image adds ~1MB to the PDF — cap the
   // total, and strictly limit slow full-decode PNG embeds (alpha/interlaced).
-  const imageBudget = getPdfImageBudget(chapters.length);
+  const imageBudget = getPdfImageBudget(chapters.length, 24, 3);
 
   // Chapters
   for (const chapter of chapters) {
