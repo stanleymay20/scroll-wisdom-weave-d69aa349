@@ -117,7 +117,7 @@ export default function ModerationDashboard() {
         moderated_at: new Date().toISOString(),
         action,
         notes: actionNotes,
-      })
+      } as never)
       .eq("id", item.id);
 
     if (error) {
