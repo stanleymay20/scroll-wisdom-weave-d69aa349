@@ -2768,10 +2768,18 @@ async function generatePDF(
           y -= 10;
           
           const codeLines = block.code.split('\n');
-          
+
+          // Pre-compute wrapped visual lines so the background rectangle is
+          // sized from the ACTUAL rendered height (not the raw line count).
+          const wrappedLineGroups = codeLines.map((codeLine) =>
+            wrapMonospaceLine((codeLine || "").replace(/\t/g, "  "), courier, 9, textWidth)
+          );
+          const totalVisualLines = wrappedLineGroups.reduce((sum, g) => sum + Math.max(1, g.length), 0);
+
           // If code fits on current page, draw background rectangle + code
           // Otherwise render line-by-line with page breaks
-          const codeHeight = codeLines.length * 12 + 30;
+          const codeHeight = totalVisualLines * 12 + 30;
+
           const fitsOnPage = (y - codeHeight) >= (margin + 30);
           
           if (fitsOnPage) {
