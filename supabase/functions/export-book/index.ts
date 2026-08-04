@@ -2812,9 +2812,9 @@ async function generatePDF(
           y -= 15;
           
           // Code content — render line by line with page break support (with monospace wrap)
-          for (const codeLine of codeLines) {
-            const wrappedLines = wrapMonospaceLine((codeLine || "").replace(/\t/g, "  "), courier, 9, textWidth);
+          for (const wrappedLines of wrappedLineGroups) {
             for (const wl of wrappedLines) {
+
               if (y < margin + 30) {
                 page = pdfDoc.addPage([pageWidth, pageHeight]);
                 pageNumber++;
