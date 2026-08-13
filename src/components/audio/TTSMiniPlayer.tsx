@@ -36,6 +36,7 @@ import { useAudioReliability, AUDIO_CHUNK_SIZES } from "@/hooks/useAudioReliabil
 import { audioPositionManager } from "@/lib/audioPositionPersistence";
 import { useGlobalAudio } from "@/contexts/AudioContext";
 import { cn } from "@/lib/utils";
+import { cancelBrowserSpeech, estimateSpeechSeconds, isBrowserSpeechSupported, speakChunk } from "@/lib/tts/browserSpeech";
 
 // OpenAI TTS voices
 const OPENAI_VOICES = [
@@ -52,6 +53,8 @@ const TTS_REQUEST_TIMEOUT_MS = 15000;
 const TTS_PLAYBACK_START_TIMEOUT_MS = 10000;
 const SESSION_LOOKUP_TIMEOUT_MS = 1500;
 const AUDIO_UNLOCK_TIMEOUT_MS = 300;
+/** Sentinel returned instead of a blob URL when narration must use the device voice. */
+const DEVICE_VOICE_URL = "device-voice:";
 
 interface TTSChunkPayload {
   audioContent: string;
@@ -218,6 +221,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   // Track if playback was blocked by browser autoplay policy
   const autoplayBlockedRef = useRef(false);
   const transportModeRef = useRef<"direct" | "sdk">("direct");
+  // Device (browser SpeechSynthesis) fallback when the provider is out of credits/down
+  const [deviceVoiceActive, setDeviceVoiceActive] = useState(false);
+  const deviceVoiceRef = useRef(false);
   const { toast } = useToast();
   const entitlements = useEntitlements();
   const { audioRef, update: updateGlobalAudio, stopAndClear: stopGlobalAudio, registerControls } = useGlobalAudio();
@@ -377,6 +383,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
   const resetPlaybackState = useCallback((nextError: string | null = null) => {
     stopRef.current = true;
+    cancelBrowserSpeech();
     pauseRequestedRef.current = false;
     autoplayBlockedRef.current = false;
     audioUnlockedRef.current = false;
@@ -510,6 +517,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
         return parsePayload(data);
       } catch (directFetchError) {
+        if ((directFetchError as { fallback?: boolean })?.fallback === true) throw directFetchError;
         transportModeRef.current = "sdk";
         console.warn("[TTS] Direct fetch failed, falling back to SDK invoke", directFetchError);
       }
@@ -529,6 +537,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   }, [language, selectedVoice]);
 
   const fetchChunkAudioUrl = useCallback(async (chunk: string, retries = 2): Promise<string | null> => {
+    // Once the provider signalled fallback, stop hitting the network entirely.
+    if (deviceVoiceRef.current) return DEVICE_VOICE_URL;
+
     for (let attempt = 0; attempt <= retries; attempt++) {
       if (stopRef.current) return null;
 
@@ -541,6 +552,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         activeBlobUrlsRef.current.push(url);
         return url;
       } catch (err) {
+        if ((err as { fallback?: boolean })?.fallback === true) {
+          if (!isBrowserSpeechSupported()) return null;
+          console.warn("[TTS] Provider unavailable — switching to device voice");
+          deviceVoiceRef.current = true;
+          if (isMountedRef.current) setDeviceVoiceActive(true);
+          return DEVICE_VOICE_URL;
+        }
+
         console.error(`[TTS] Chunk fetch error (attempt ${attempt + 1}):`, err);
 
         if (attempt < retries) {
@@ -859,11 +878,58 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     });
   }, [ensureAudioElement, onPlayingChange, onAudioRefChange, toast, audioReliability, mediaSession]);
 
+  /** Speak a chunk with the device voice, preserving the same state contract as playUrl. */
+  const playDeviceVoice = useCallback(async (text: string): Promise<boolean> => {
+    if (stopRef.current) return false;
+
+    const ok = await speakChunk({
+      text,
+      volume,
+      rate: playbackSpeedRef.current,
+      isCancelled: () => stopRef.current || pauseRequestedRef.current,
+      onStart: () => {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsPlaying(true);
+          setError(null);
+        }
+        audioReliability.setState('playing');
+        mediaSession.setPlaybackState('playing');
+        onPlayingChange?.(true);
+      },
+      onProgress: (pct) => {
+        if (isMountedRef.current) setProgress(pct);
+      },
+    });
+
+    // Keep elapsed/estimated time flowing for sentence sync
+    const secs = estimateSpeechSeconds(text, playbackSpeedRef.current);
+    cumulativeTimeRef.current += secs;
+    onCumulativeTimeChange?.(cumulativeTimeRef.current);
+    totalAudioSecsRef.current += secs;
+    totalAudioCharsRef.current += text.length;
+    endedChunkCountRef.current++;
+    if (totalAudioCharsRef.current > 0 && fullTextLengthRef.current > 0) {
+      onEstimatedDurationChange?.(
+        (totalAudioSecsRef.current / totalAudioCharsRef.current) * fullTextLengthRef.current
+      );
+    }
+
+    if (stopRef.current || pauseRequestedRef.current) {
+      if (isMountedRef.current) setIsPlaying(false);
+      onPlayingChange?.(false);
+      return false;
+    }
+
+    return ok;
+  }, [volume, audioReliability, mediaSession, onPlayingChange, onCumulativeTimeChange, onEstimatedDurationChange]);
+
   // Full stop: destroys playback entirely, resets all state
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
     pauseRequestedRef.current = false;
+    cancelBrowserSpeech();
     resetPlaybackState();
     mediaSession.deactivate();
     
@@ -895,6 +961,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     pausedAtChunkRef.current = pauseChunkIndex;
     pauseRequestedRef.current = true;
     stopRef.current = true;
+    cancelBrowserSpeech();
     
     if (audioRef.current) {
       try {
@@ -1017,7 +1084,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           audioReliability.setState('playing');
         }
 
-        const success = await playUrl(url);
+        const success = url === DEVICE_VOICE_URL
+          ? await playDeviceVoice(chunks[i])
+          : await playUrl(url);
         if (!success) {
           completedPlayback = false;
           break;
@@ -1057,7 +1126,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         audioReliability.setState('idle');
       }
     }
-  }, [fetchChunkAudioUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, unlockAudio, mode, bookId, chapterId, autoContinue, onChapterComplete]);
+  }, [fetchChunkAudioUrl, playUrl, playDeviceVoice, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, unlockAudio, mode, bookId, chapterId, autoContinue, onChapterComplete]);
 
   // Keep the ref in sync so resumeFromPosition always calls the latest version
   generateSpeechFromChunksRef.current = generateSpeechFromChunks;
@@ -1065,6 +1134,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
     // Reset transport mode so each new generation attempt tries direct fetch first
     transportModeRef.current = "direct";
+    deviceVoiceRef.current = false;
+    setDeviceVoiceActive(false);
     // CRITICAL: Do NOT call resetPlaybackState() here — it calls audio.load()
     // which revokes the user-gesture unlock on mobile browsers.
     // Instead, do lightweight cleanup that preserves the audio element state.
@@ -1212,7 +1283,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           mediaSession.setPlaybackState('playing');
         }
 
-        const success = await playUrl(currentUrl);
+        const success = currentUrl === DEVICE_VOICE_URL
+          ? await playDeviceVoice(chunks[i])
+          : await playUrl(currentUrl);
         
         if (!success) {
           completedPlayback = false;
@@ -1272,7 +1345,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         audioReliability.setState('idle');
       }
     }
-  }, [sanitizeText, chunkText, cleanupBlobUrls, playUrl, toast, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability, resetPlaybackState, audioRef, onCumulativeTimeChange, onEstimatedDurationChange, onAudioRefChange, fetchChunkAudioUrl, mode, bookId, chapterId]);
+  }, [sanitizeText, chunkText, cleanupBlobUrls, playUrl, playDeviceVoice, toast, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability, resetPlaybackState, audioRef, onCumulativeTimeChange, onEstimatedDurationChange, onAudioRefChange, fetchChunkAudioUrl, mode, bookId, chapterId]);
 
   // Stop on stopKey change (page navigation)
   useEffect(() => {
@@ -1435,6 +1508,19 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         </div>
       )}
       
+      {/* Non-blocking notice: narration is using the on-device voice */}
+      {deviceVoiceActive && (
+        <span
+          role="status"
+          aria-live="polite"
+          className="hidden sm:inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600"
+          title="Premium voice unavailable — using your device's built-in voice"
+        >
+          <Mic className="h-3 w-3" />
+          Device voice
+        </span>
+      )}
+
       {/* CONTRACT 5: Show "Resuming" indicator after interruption */}
       {audioReliability.wasInterrupted && !isPlaying && !isLoading && (
         <Button
