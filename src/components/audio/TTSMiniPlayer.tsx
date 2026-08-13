@@ -36,6 +36,7 @@ import { useAudioReliability, AUDIO_CHUNK_SIZES } from "@/hooks/useAudioReliabil
 import { audioPositionManager } from "@/lib/audioPositionPersistence";
 import { useGlobalAudio } from "@/contexts/AudioContext";
 import { cn } from "@/lib/utils";
+import { cancelBrowserSpeech, estimateSpeechSeconds, isBrowserSpeechSupported, speakChunk } from "@/lib/tts/browserSpeech";
 
 // OpenAI TTS voices
 const OPENAI_VOICES = [
@@ -52,6 +53,8 @@ const TTS_REQUEST_TIMEOUT_MS = 15000;
 const TTS_PLAYBACK_START_TIMEOUT_MS = 10000;
 const SESSION_LOOKUP_TIMEOUT_MS = 1500;
 const AUDIO_UNLOCK_TIMEOUT_MS = 300;
+/** Sentinel returned instead of a blob URL when narration must use the device voice. */
+const DEVICE_VOICE_URL = "device-voice:";
 
 interface TTSChunkPayload {
   audioContent: string;
@@ -218,6 +221,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   // Track if playback was blocked by browser autoplay policy
   const autoplayBlockedRef = useRef(false);
   const transportModeRef = useRef<"direct" | "sdk">("direct");
+  // Device (browser SpeechSynthesis) fallback when the provider is out of credits/down
+  const [deviceVoiceActive, setDeviceVoiceActive] = useState(false);
+  const deviceVoiceRef = useRef(false);
   const { toast } = useToast();
   const entitlements = useEntitlements();
   const { audioRef, update: updateGlobalAudio, stopAndClear: stopGlobalAudio, registerControls } = useGlobalAudio();
@@ -510,6 +516,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
         return parsePayload(data);
       } catch (directFetchError) {
+        if ((directFetchError as { fallback?: boolean })?.fallback === true) throw directFetchError;
         transportModeRef.current = "sdk";
         console.warn("[TTS] Direct fetch failed, falling back to SDK invoke", directFetchError);
       }
@@ -529,6 +536,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   }, [language, selectedVoice]);
 
   const fetchChunkAudioUrl = useCallback(async (chunk: string, retries = 2): Promise<string | null> => {
+    // Once the provider signalled fallback, stop hitting the network entirely.
+    if (deviceVoiceRef.current) return DEVICE_VOICE_URL;
+
     for (let attempt = 0; attempt <= retries; attempt++) {
       if (stopRef.current) return null;
 
@@ -541,6 +551,14 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         activeBlobUrlsRef.current.push(url);
         return url;
       } catch (err) {
+        if ((err as { fallback?: boolean })?.fallback === true) {
+          if (!isBrowserSpeechSupported()) return null;
+          console.warn("[TTS] Provider unavailable — switching to device voice");
+          deviceVoiceRef.current = true;
+          if (isMountedRef.current) setDeviceVoiceActive(true);
+          return DEVICE_VOICE_URL;
+        }
+
         console.error(`[TTS] Chunk fetch error (attempt ${attempt + 1}):`, err);
 
         if (attempt < retries) {
