@@ -383,6 +383,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
 
   const resetPlaybackState = useCallback((nextError: string | null = null) => {
     stopRef.current = true;
+    cancelBrowserSpeech();
     pauseRequestedRef.current = false;
     autoplayBlockedRef.current = false;
     audioUnlockedRef.current = false;
@@ -877,11 +878,58 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     });
   }, [ensureAudioElement, onPlayingChange, onAudioRefChange, toast, audioReliability, mediaSession]);
 
+  /** Speak a chunk with the device voice, preserving the same state contract as playUrl. */
+  const playDeviceVoice = useCallback(async (text: string): Promise<boolean> => {
+    if (stopRef.current) return false;
+
+    const ok = await speakChunk({
+      text,
+      volume,
+      rate: playbackSpeedRef.current,
+      isCancelled: () => stopRef.current || pauseRequestedRef.current,
+      onStart: () => {
+        if (isMountedRef.current) {
+          setIsLoading(false);
+          setIsPlaying(true);
+          setError(null);
+        }
+        audioReliability.setState('playing');
+        mediaSession.setPlaybackState('playing');
+        onPlayingChange?.(true);
+      },
+      onProgress: (pct) => {
+        if (isMountedRef.current) setProgress(pct);
+      },
+    });
+
+    // Keep elapsed/estimated time flowing for sentence sync
+    const secs = estimateSpeechSeconds(text, playbackSpeedRef.current);
+    cumulativeTimeRef.current += secs;
+    onCumulativeTimeChange?.(cumulativeTimeRef.current);
+    totalAudioSecsRef.current += secs;
+    totalAudioCharsRef.current += text.length;
+    endedChunkCountRef.current++;
+    if (totalAudioCharsRef.current > 0 && fullTextLengthRef.current > 0) {
+      onEstimatedDurationChange?.(
+        (totalAudioSecsRef.current / totalAudioCharsRef.current) * fullTextLengthRef.current
+      );
+    }
+
+    if (stopRef.current || pauseRequestedRef.current) {
+      if (isMountedRef.current) setIsPlaying(false);
+      onPlayingChange?.(false);
+      return false;
+    }
+
+    return ok;
+  }, [volume, audioReliability, mediaSession, onPlayingChange, onCumulativeTimeChange, onEstimatedDurationChange]);
+
   // Full stop: destroys playback entirely, resets all state
   const stop = useCallback(() => {
     if (isStoppingRef.current) return;
     isStoppingRef.current = true;
     pauseRequestedRef.current = false;
+    cancelBrowserSpeech();
     resetPlaybackState();
     mediaSession.deactivate();
     
@@ -913,6 +961,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
     pausedAtChunkRef.current = pauseChunkIndex;
     pauseRequestedRef.current = true;
     stopRef.current = true;
+    cancelBrowserSpeech();
     
     if (audioRef.current) {
       try {
@@ -1035,7 +1084,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           audioReliability.setState('playing');
         }
 
-        const success = await playUrl(url);
+        const success = url === DEVICE_VOICE_URL
+          ? await playDeviceVoice(chunks[i])
+          : await playUrl(url);
         if (!success) {
           completedPlayback = false;
           break;
@@ -1075,7 +1126,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         audioReliability.setState('idle');
       }
     }
-  }, [fetchChunkAudioUrl, playUrl, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, unlockAudio, mode, bookId, chapterId, autoContinue, onChapterComplete]);
+  }, [fetchChunkAudioUrl, playUrl, playDeviceVoice, mediaSession, onChunkPlaybackInfo, onCumulativeTimeChange, onEstimatedDurationChange, audioReliability, resetPlaybackState, unlockAudio, mode, bookId, chapterId, autoContinue, onChapterComplete]);
 
   // Keep the ref in sync so resumeFromPosition always calls the latest version
   generateSpeechFromChunksRef.current = generateSpeechFromChunks;
@@ -1290,7 +1341,7 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         audioReliability.setState('idle');
       }
     }
-  }, [sanitizeText, chunkText, cleanupBlobUrls, playUrl, toast, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability, resetPlaybackState, audioRef, onCumulativeTimeChange, onEstimatedDurationChange, onAudioRefChange, fetchChunkAudioUrl, mode, bookId, chapterId]);
+  }, [sanitizeText, chunkText, cleanupBlobUrls, playUrl, playDeviceVoice, toast, mediaSession, unlockAudio, autoContinue, onChapterComplete, audioReliability, resetPlaybackState, audioRef, onCumulativeTimeChange, onEstimatedDurationChange, onAudioRefChange, fetchChunkAudioUrl, mode, bookId, chapterId]);
 
   // Stop on stopKey change (page navigation)
   useEffect(() => {
