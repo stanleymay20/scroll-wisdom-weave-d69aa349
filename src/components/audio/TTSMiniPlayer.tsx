@@ -1508,6 +1508,19 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
         </div>
       )}
       
+      {/* Non-blocking notice: narration is using the on-device voice */}
+      {deviceVoiceActive && (
+        <span
+          role="status"
+          aria-live="polite"
+          className="hidden sm:inline-flex items-center gap-1 rounded-full border border-amber-500/40 bg-amber-500/10 px-2 py-0.5 text-[10px] font-medium text-amber-600"
+          title="Premium voice unavailable — using your device's built-in voice"
+        >
+          <Mic className="h-3 w-3" />
+          Device voice
+        </span>
+      )}
+
       {/* CONTRACT 5: Show "Resuming" indicator after interruption */}
       {audioReliability.wasInterrupted && !isPlaying && !isLoading && (
         <Button
