@@ -1134,6 +1134,8 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
   const generateSpeech = useCallback(async (textToRead: string, isSelection = false) => {
     // Reset transport mode so each new generation attempt tries direct fetch first
     transportModeRef.current = "direct";
+    deviceVoiceRef.current = false;
+    setDeviceVoiceActive(false);
     // CRITICAL: Do NOT call resetPlaybackState() here — it calls audio.load()
     // which revokes the user-gesture unlock on mobile browsers.
     // Instead, do lightweight cleanup that preserves the audio element state.
@@ -1281,7 +1283,9 @@ export const TTSMiniPlayer = forwardRef<HTMLDivElement, TTSMiniPlayerProps>(func
           mediaSession.setPlaybackState('playing');
         }
 
-        const success = await playUrl(currentUrl);
+        const success = currentUrl === DEVICE_VOICE_URL
+          ? await playDeviceVoice(chunks[i])
+          : await playUrl(currentUrl);
         
         if (!success) {
           completedPlayback = false;
