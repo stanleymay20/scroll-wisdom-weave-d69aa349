@@ -74,9 +74,6 @@ interface EligibilityResult {
 
 interface CertificateRequest {
   bookId: string;
-  userId: string;
-  userName: string;
-  userEmail?: string;
   requestedType?: 'completion' | 'mastery';
 }
 
@@ -210,27 +207,20 @@ function evaluateEligibility(progress: BookProgress): EligibilityResult {
 // Certificate Generation (6A Authority)
 // ============================================================
 
-function generateCertificateNumber(): string {
-  const timestamp = Date.now().toString(36).toUpperCase();
-  const random = Math.random().toString(36).substring(2, 8).toUpperCase();
-  return `SL-CERT-${timestamp}-${random}`;
+function randomHex(bytes: number): string {
+  const buffer = crypto.getRandomValues(new Uint8Array(bytes));
+  return Array.from(buffer, (value) => value.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
-function generateVerificationHash(data: {
-  bookId: string;
-  certificateNumber: string;
-  issuedAt: string;
-  certificateType: string;
-}): string {
-  // Simple hash for demo - in production use crypto
-  const str = `${data.bookId}|${data.certificateNumber}|${data.issuedAt}|${data.certificateType}`;
-  let hash = 0;
-  for (let i = 0; i < str.length; i++) {
-    const char = str.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
-    hash = hash & hash;
-  }
-  return Math.abs(hash).toString(16).toUpperCase().padStart(8, '0');
+function generateCertificateNumber(): string {
+  const timestamp = Date.now().toString(36).toUpperCase();
+  return `SL-CERT-${timestamp}-${randomHex(8)}`;
+}
+
+function generateVerificationHash(): string {
+  // High-entropy verification token. Legacy 8-character hashes remain readable,
+  // but every newly issued certificate receives a 256-bit token.
+  return randomHex(32);
 }
 
 // ============================================================
@@ -270,14 +260,24 @@ Deno.serve(async (req) => {
     }
 
     const body: CertificateRequest = await req.json();
-    const { bookId, userName, userEmail, requestedType } = body;
+    const { bookId, requestedType } = body;
 
-    if (!bookId || !userName) {
+    if (!bookId) {
       return new Response(
         JSON.stringify({ error: 'Missing required fields', code: 'INVALID_REQUEST' }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    const { data: recipientProfile } = await supabase
+      .from('profiles')
+      .select('full_name')
+      .or(`user_id.eq.${user.id},id.eq.${user.id}`)
+      .maybeSingle();
+    const recipientName = recipientProfile?.full_name?.trim()
+      || user.email?.split('@')[0]
+      || 'ScrollLibrary learner';
+    const recipientEmail = user.email ?? null;
 
     console.log(`[validate-certificate] Processing for user ${user.id}, book ${bookId}`);
 
@@ -550,8 +550,8 @@ Deno.serve(async (req) => {
             issuedAt: existingCert.issued_at,
             issuer: CERTIFICATE_ISSUER,
             recipient: {
-              name: userName,
-              email: userEmail,
+              name: recipientName,
+              email: recipientEmail,
             },
             book: {
               id: bookId,
@@ -571,12 +571,7 @@ Deno.serve(async (req) => {
     const certificateNumber = generateCertificateNumber();
     const issuedAt = new Date().toISOString();
 
-    const verificationHash = generateVerificationHash({
-      bookId,
-      certificateNumber,
-      issuedAt,
-      certificateType: eligibility.certificateType!,
-    });
+    const verificationHash = generateVerificationHash();
 
     // Store certificate in database
     const { data: certificate, error: certError } = await supabase
@@ -590,8 +585,8 @@ Deno.serve(async (req) => {
         verification_hash: verificationHash,
         metadata: {
           schemaVersion: CERTIFICATE_SCHEMA_VERSION,
-          recipientName: userName,
-          recipientEmail: userEmail,
+          recipientName,
+          recipientEmail,
           bookTitle: book.title,
           issuer: CERTIFICATE_ISSUER,
           integrityScore: eligibility.integrityScore,
@@ -628,7 +623,7 @@ Deno.serve(async (req) => {
                 certificateType: raceCert.certificate_type,
                 issuedAt: raceCert.issued_at,
                 issuer: CERTIFICATE_ISSUER,
-                recipient: { name: userName, email: userEmail },
+                recipient: { name: recipientName, email: recipientEmail },
                 book: { id: bookId, title: book.title },
                 integrityScore: eligibility.integrityScore,
               },
@@ -658,8 +653,8 @@ Deno.serve(async (req) => {
           verificationHash,
           issuer: CERTIFICATE_ISSUER,
           recipient: {
-            name: userName,
-            email: userEmail,
+            name: recipientName,
+            email: recipientEmail,
           },
           book: {
             id: bookId,
