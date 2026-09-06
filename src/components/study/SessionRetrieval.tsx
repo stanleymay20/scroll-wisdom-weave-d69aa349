@@ -21,8 +21,23 @@ const PROMPTS = [
   (label: string) => `When would **${label}** *not* apply? Name a counter-case.`,
 ];
 
+function PromptText({ prompt }: { prompt: string }) {
+  return (
+    <>
+      {prompt.split('**').map((segment, index) =>
+        index % 2 === 1 ? (
+          <strong key={`${index}-${segment}`} className="text-primary">
+            {segment}
+          </strong>
+        ) : (
+          segment
+        ),
+      )}
+    </>
+  );
+}
+
 export function SessionRetrieval({ weakConcepts, onComplete }: SessionRetrievalProps) {
-  // Pad to at least 3 prompts even if weakConcepts is short
   const queue = weakConcepts.length > 0
     ? weakConcepts
     : [{ id: 'gen-1', label: 'a key idea from this book', mastery: 0 }];
@@ -38,7 +53,6 @@ export function SessionRetrieval({ weakConcepts, onComplete }: SessionRetrievalP
     const next = [...scores, score];
     if (index + 1 >= total) {
       const avg = next.reduce((a, b) => a + b, 0) / next.length;
-      // Collect unique real concept IDs that the learner actually engaged with
       const touchedConceptIds = Array.from(
         new Set(
           Array.from({ length: total }, (_, i) => queue[i % queue.length]?.id).filter(
@@ -76,12 +90,9 @@ export function SessionRetrieval({ weakConcepts, onComplete }: SessionRetrievalP
                 <div className="text-[10px] uppercase tracking-wider text-muted-foreground mb-2">
                   Weak concept · mastery {Math.round((current.mastery || 0) * 100)}%
                 </div>
-                <p
-                  className="text-base sm:text-lg text-foreground leading-relaxed"
-                  dangerouslySetInnerHTML={{
-                    __html: prompt.replace(/\*\*(.*?)\*\*/g, '<strong class="text-primary">$1</strong>'),
-                  }}
-                />
+                <p className="text-base sm:text-lg text-foreground leading-relaxed">
+                  <PromptText prompt={prompt} />
+                </p>
               </div>
 
               <div>
