@@ -1,0 +1,32 @@
+name: Fix ISBN validator SQL
+on:
+  push:
+    branches: [main]
+    paths:
+      - scripts/fix-isbn-validator-sql.mjs
+      - .github/workflows/fix-isbn-validator-sql.yml
+permissions:
+  contents: write
+jobs:
+  apply:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+      - uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+      - run: node scripts/fix-isbn-validator-sql.mjs
+      - name: Commit validator repair
+        run: |
+          if git diff --quiet; then exit 1; fi
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/migrations/20260906213000_publishing_identity_and_isbn_registry.sql supabase/migrations/20260906235000_live_publication_schema_convergence.sql
+          git commit -m "fix(db): use valid PostgreSQL ISBN substring calls"
+          git pull --rebase origin main
+          git push origin HEAD:main
