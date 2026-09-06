@@ -3,34 +3,48 @@ import App from "./App.tsx";
 import "./index.css";
 import { initGlobalErrorHandlers } from "@/lib/errorNotifier";
 
-// Initialize global error handlers before rendering
+interface ScrollLibraryWindow extends Window {
+  __removeSplash?: () => void;
+}
+
+function getSupabaseProjectRef(): string | null {
+  const explicitRef = import.meta.env.VITE_SUPABASE_PROJECT_ID?.trim();
+  if (explicitRef) return explicitRef;
+
+  const url = import.meta.env.VITE_SUPABASE_URL?.trim();
+  if (!url) return null;
+
+  try {
+    const [projectRef] = new URL(url).hostname.split('.');
+    return projectRef || null;
+  } catch {
+    return null;
+  }
+}
+
 initGlobalErrorHandlers();
 
-// PRE-MOUNT: only purge auth payload when JSON itself is unparseable.
-// Never remove based on shape — Supabase may evolve token formats and the
-// refresh_token can still recover an "odd-looking" session. Persistence is
-// expected to last until the user explicitly signs out.
+// Purge only an unparseable auth payload for the active environment.
 try {
-  const STORAGE_KEY = 'sb-dxourcpvgfampcquzaqw-auth-token';
-  const raw = localStorage.getItem(STORAGE_KEY);
-  if (raw) {
-    try {
-      JSON.parse(raw);
-    } catch {
-      console.warn('[pre-mount] Removing unparseable auth token payload');
-      localStorage.removeItem(STORAGE_KEY);
+  const projectRef = getSupabaseProjectRef();
+  if (projectRef) {
+    const storageKey = `sb-${projectRef}-auth-token`;
+    const raw = localStorage.getItem(storageKey);
+    if (raw) {
+      try {
+        JSON.parse(raw);
+      } catch {
+        console.warn('[pre-mount] Removing unparseable auth token payload');
+        localStorage.removeItem(storageKey);
+      }
     }
   }
 } catch {
-  // localStorage unavailable (private mode) — let supabase-js handle it.
+  // localStorage unavailable — let supabase-js handle it.
 }
-
-// Service worker registration is now handled by usePWAUpdate hook
-// This ensures proper React lifecycle management for update notifications
 
 createRoot(document.getElementById("root")!).render(<App />);
 
-// Remove pre-hydration splash once React has mounted
 requestAnimationFrame(() => {
-  (window as any).__removeSplash?.();
+  (window as ScrollLibraryWindow).__removeSplash?.();
 });
