@@ -15,6 +15,7 @@ export type PublicationStage =
   | "repairing"
   | "evidence-verification"
   | "publishability-qa"
+  | "production-render"
   | "certified"
   | "blocked";
 
@@ -67,6 +68,26 @@ interface QAResponse {
   error?: string;
 }
 
+interface ProductionResponse {
+  passed?: boolean;
+  status?: "ready" | "needs_review" | "blocked";
+  score?: number;
+  fileHash?: string;
+  metrics?: {
+    byteSize?: number;
+    pageCount?: number;
+    pagesWithoutContentStreams?: number;
+  };
+  issues?: Array<{
+    severity?: string;
+    code?: string;
+    message?: string;
+    page?: number;
+  }>;
+  authority?: string;
+  error?: string;
+}
+
 interface FinalizationResponse {
   ready?: boolean;
   jobStatus?: string | null;
@@ -92,6 +113,12 @@ export interface PublicationPipelineResult {
   publishability: {
     status: string | null;
     score: number | null;
+  };
+  production: {
+    status: string | null;
+    score: number | null;
+    fileHash: string | null;
+    pageCount: number | null;
   };
 }
 
@@ -272,6 +299,38 @@ async function repairFromAudit(
   return { improved, failed };
 }
 
+async function certifyProductionRender(bookId: string): Promise<ProductionResponse> {
+  const { data, error } = await supabase.functions.invoke("certify-production-render", {
+    body: { bookId },
+  });
+
+  if (error) {
+    return {
+      passed: false,
+      status: "blocked",
+      error: `Production render certification failed: ${error.message}`,
+    };
+  }
+
+  const production = (data || {}) as ProductionResponse;
+  if (production.error) {
+    return {
+      ...production,
+      passed: false,
+      status: "blocked",
+    };
+  }
+  if (typeof production.passed !== "boolean") {
+    return {
+      ...production,
+      passed: false,
+      status: "blocked",
+      error: "Production render certification returned no authoritative verdict.",
+    };
+  }
+  return production;
+}
+
 async function finalizePublicationCertification(bookId: string): Promise<FinalizationResponse> {
   const { data, error } = await supabase.functions.invoke("finalize-publication-certification", {
     body: { bookId },
@@ -301,6 +360,7 @@ function emptyResult(book: EvidenceBook, blockers: string[]): PublicationPipelin
       repairedChapters: 0,
     },
     publishability: { status: null, score: null },
+    production: { status: null, score: null, fileHash: null, pageCount: null },
   };
 }
 
@@ -326,6 +386,21 @@ function finalEvidenceBlockers(
     );
   }
   return blockers;
+}
+
+function productionBlockers(production: ProductionResponse): string[] {
+  if (production.passed === true && production.status === "ready") return [];
+
+  const issueMessages = (production.issues || [])
+    .filter((issue) => issue.severity === "blocker" || issue.severity === "warning")
+    .map((issue) => {
+      const location = issue.page ? ` (page ${issue.page})` : "";
+      return `Production ${issue.code || "render issue"}${location}: ${issue.message || "rendered artifact did not pass certification"}`;
+    });
+
+  if (issueMessages.length > 0) return issueMessages;
+  if (production.error) return [production.error];
+  return [`Production render certification is ${production.status || "incomplete"}.`];
 }
 
 export async function runPublicationQualityPipeline({
@@ -431,17 +506,24 @@ export async function runPublicationQualityPipeline({
         `Publishability QA is ${qa.report?.status || "incomplete"}${qa.report?.score != null ? ` (${qa.report.score}/100)` : ""}.`,
       ];
 
+  report(onStage, "production-render", "Rendering the canonical PDF and inspecting the actual production artifact…");
+  const production = await certifyProductionRender(bookId);
+
   // Local gate results remain useful diagnostics, but the final readiness bit is
   // owned by the server and re-checked against the current persisted manuscript.
   const blockers = [
     ...finalEditorialBlockers(audit, repairDiagnostics),
     ...finalEvidenceBlockers(evidence, chapters.length),
     ...qaBlockers,
+    ...productionBlockers(production),
   ];
   const uniqueBlockers = [...new Set(blockers)];
 
   const finalization = await finalizePublicationCertification(bookId);
-  const ready = finalization.ready === true;
+  // Defense in depth during producer/gate rollout: even before the DB migration
+  // reaches an environment, the browser will never display READY unless the
+  // server-owned production producer also returned PASS for this run.
+  const ready = finalization.ready === true && production.passed === true && production.status === "ready";
   const finalBlockers = ready
     ? []
     : uniqueBlockers.length > 0
@@ -452,8 +534,8 @@ export async function runPublicationQualityPipeline({
     onStage,
     ready ? "certified" : "blocked",
     ready
-      ? "Publication candidate passed current server-attested editorial, evidence, and publishability gates."
-      : "Draft is complete, but publication certification is blocked by unresolved or stale quality evidence.",
+      ? "Publication candidate passed current server-attested editorial, evidence, publishability, and canonical PDF production gates."
+      : "Draft is complete, but publication certification is blocked by unresolved, stale, or failed quality/production evidence.",
   );
 
   return {
@@ -474,6 +556,12 @@ export async function runPublicationQualityPipeline({
     publishability: {
       status: qa.report?.status ?? null,
       score: qa.report?.score ?? null,
+    },
+    production: {
+      status: production.status ?? null,
+      score: production.score ?? null,
+      fileHash: production.fileHash ?? null,
+      pageCount: production.metrics?.pageCount ?? null,
     },
   };
 }
