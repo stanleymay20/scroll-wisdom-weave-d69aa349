@@ -83,6 +83,20 @@ export default defineConfig(({ mode }) => ({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
+        // Keep the application shell available offline, but don't force every
+        // heavyweight optional tool into the install/update payload. These
+        // chunks are cached on demand by js-chunks-cache below.
+        globIgnores: [
+          "assets/CodePlayground-*.js",
+          "assets/LearningDeckGenerator-*.js",
+          "assets/mermaid.core-*.js",
+          "assets/cynefin-*.js",
+          "assets/cytoscape.esm-*.js",
+          "assets/pdf-*.js",
+          "assets/RadarChart-*.js",
+          "assets/*Diagram-*.js",
+          "assets/diagram-*.js",
+        ],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
           // ===== DO NOT CACHE: Auth, Stripe, Generation, Export endpoints =====
@@ -105,6 +119,24 @@ export default defineConfig(({ mode }) => ({
             // Export endpoints - NEVER cache the function call itself
             urlPattern: /\/functions\/v1\/export-book/i,
             handler: "NetworkOnly",
+          },
+
+          // Heavy optional JS chunks are fetched only when a feature is used,
+          // then retained for fast repeat/offline use instead of being forced
+          // into every service-worker install.
+          {
+            urlPattern: /\/assets\/.*\.js$/i,
+            handler: "StaleWhileRevalidate",
+            options: {
+              cacheName: "js-chunks-cache",
+              expiration: {
+                maxEntries: 150,
+                maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+              },
+              cacheableResponse: {
+                statuses: [0, 200],
+              },
+            },
           },
 
           // ===== NetworkFirst with short timeout for user-specific data =====
