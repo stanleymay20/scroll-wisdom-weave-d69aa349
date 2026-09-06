@@ -1,7 +1,10 @@
+import { useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronRight, CheckCircle2, Loader2, Sparkles, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { useToast } from "@/hooks/use-toast";
+import { runPublicationQualityPipeline } from "@/lib/publicationPipeline";
 
 interface ChapterData {
   id: string;
@@ -21,24 +24,72 @@ interface ChapterListProps {
   generationProgress: { current: number; total: number };
   qualityStage?: string | null;
   onGenerateChapter: (chapter: ChapterData, e: React.MouseEvent) => void;
-  onGenerateAll: () => void;
+  onGenerateAll: () => Promise<void> | void;
   onNavigateToChapter: (chapter: ChapterData) => void;
 }
 
 export function ChapterList({
   bookId, chapters, isOwner, generatingChapterId, isGeneratingAll, generationProgress,
-  qualityStage, onGenerateChapter, onGenerateAll, onNavigateToChapter,
+  qualityStage: qualityStageOverride, onGenerateChapter, onGenerateAll, onNavigateToChapter,
 }: ChapterListProps) {
   const { t } = useLanguage();
-  const isQualityReview = Boolean(qualityStage);
+  const { toast } = useToast();
+  const [isQualityReview, setIsQualityReview] = useState(false);
+  const [localQualityStage, setLocalQualityStage] = useState<string | null>(null);
+  const qualityStage = qualityStageOverride || localQualityStage;
+  const isBusy = isGeneratingAll || isQualityReview;
+
+  const handleGenerateAllAndCertify = async () => {
+    if (isBusy) return;
+
+    await onGenerateAll();
+
+    setIsQualityReview(true);
+    setLocalQualityStage("Preparing the completed draft for independent publication review…");
+
+    try {
+      const result = await runPublicationQualityPipeline({
+        bookId,
+        maxRevisionPasses: 2,
+        onStage: (_stage, message) => setLocalQualityStage(message),
+      });
+
+      if (result.ready) {
+        toast({
+          title: "Publication candidate verified",
+          description: `Editorial ${result.editorial.score ?? "—"}/100 · evidence and publishability gates passed.`,
+        });
+      } else {
+        toast({
+          title: "Draft complete — certification blocked",
+          description: result.blockers.slice(0, 2).join(" ") || "Quality gates found issues that still require review.",
+          variant: "destructive",
+        });
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "Publication review failed";
+      setLocalQualityStage(`Quality review stopped: ${message}`);
+      toast({
+        title: "Draft complete — quality review incomplete",
+        description: message,
+        variant: "destructive",
+      });
+    } finally {
+      setIsQualityReview(false);
+    }
+  };
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-display text-2xl font-bold">{t('book.tableOfContents')}</h2>
-        {isOwner && chapters.some(ch => !ch.is_generated) && (
-          <Button variant="hero" onClick={onGenerateAll} disabled={isGeneratingAll || generatingChapterId !== null}>
-            {isGeneratingAll ? (
+        {isOwner && (chapters.some(ch => !ch.is_generated) || isQualityReview) && (
+          <Button
+            variant="hero"
+            onClick={handleGenerateAllAndCertify}
+            disabled={isBusy || generatingChapterId !== null}
+          >
+            {isBusy ? (
               <>
                 <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                 {isQualityReview
@@ -52,7 +103,7 @@ export function ChapterList({
         )}
       </div>
 
-      {isGeneratingAll && (
+      {isBusy && (
         <div className="mb-6 p-4 rounded-xl bg-gradient-card border border-primary/30" aria-live="polite">
           <div className="flex items-center justify-between mb-2 gap-4">
             <span className="text-sm font-medium text-primary">
