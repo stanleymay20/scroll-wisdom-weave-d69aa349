@@ -58,7 +58,10 @@ export function ChapterList({
   const qualityStage = qualityStageOverride || localQualityStage;
   const isBusy = isGeneratingAll || isQualityReview;
 
-  // Load latest generation job so an interrupted session can resume
+  // Load latest generation job so an interrupted session can resume.
+  // Fail closed: if loading errors, log only a safe diagnostic code, leave
+  // latestJob null, and still mark the job loaded so manual chapter controls
+  // remain usable.
   useEffect(() => {
     if (!isOwner || !bookId) {
       setJobLoaded(true);
@@ -66,7 +69,7 @@ export function ChapterList({
     }
     let cancelled = false;
     void (async () => {
-      const { data } = await supabase
+      const { data, error } = await supabase
         .from("generation_jobs")
         .select("id, status")
         .eq("book_id", bookId)
@@ -74,7 +77,15 @@ export function ChapterList({
         .limit(1)
         .maybeSingle();
       if (cancelled) return;
-      setLatestJob(data ? { id: data.id as string, status: data.status as JobStatus } : null);
+      if (error) {
+        console.warn(
+          "[ChapterList] generation_jobs load failed:",
+          error.code ?? "unknown",
+        );
+        setLatestJob(null);
+      } else {
+        setLatestJob(data ? { id: data.id as string, status: data.status as JobStatus } : null);
+      }
       setJobLoaded(true);
     })();
     return () => { cancelled = true; };
