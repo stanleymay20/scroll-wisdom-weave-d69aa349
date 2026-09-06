@@ -1,4 +1,5 @@
 import { isValidIsbn13, normalizeIsbn13 } from "./isbn.ts";
+import { isScrollIdentifier } from "./scroll-identity.ts";
 
 export type DistributionProductForm = "paperback" | "hardcover" | "epub";
 
@@ -10,6 +11,7 @@ export interface OnixContributor {
 export interface OnixProductInput {
   recordReference: string;
   notificationType?: string;
+  proprietaryProductId?: string | null;
   isbn13: string;
   title: string;
   subtitle?: string | null;
@@ -76,7 +78,6 @@ export function onixProductForm(form: DistributionProductForm): {
     case "hardcover":
       return { productForm: "BB", requiredWarengruppePrefix: "1" };
     case "paperback":
-      // VLB distinguishes a paperback (B131) from a Taschenbuch (B133).
       return { productForm: "BC", productFormDetail: "B131", requiredWarengruppePrefix: "1" };
     case "epub":
       return { productForm: "EA", productFormDetail: "E101", requiredWarengruppePrefix: "9" };
@@ -109,6 +110,10 @@ export function validateOnixProduct(input: OnixProductInput): OnixValidationIssu
   requireText("title", "TITLE_REQUIRED");
   requireText("publisherName", "PUBLISHER_REQUIRED");
   requireText("senderName", "SENDER_REQUIRED");
+
+  if (input.proprietaryProductId && !isScrollIdentifier(input.proprietaryProductId, "SLP")) {
+    issues.push({ field: "proprietaryProductId", code: "SCROLL_PRODUCT_ID_INVALID", message: "Scroll proprietary product identifier must be a valid SLP identifier" });
+  }
 
   if (!isValidIsbn13(input.isbn13)) {
     issues.push({ field: "isbn13", code: "INVALID_ISBN13", message: "A valid ISBN-13 is required" });
@@ -202,6 +207,13 @@ export function renderOnix31Product(input: OnixProductInput): string {
     "  <Product>",
     `    <RecordReference>${xml(input.recordReference.trim())}</RecordReference>`,
     `    <NotificationType>${xml(input.notificationType || "03")}</NotificationType>`,
+    ...(input.proprietaryProductId ? [
+      "    <ProductIdentifier>",
+      "      <ProductIDType>01</ProductIDType>",
+      "      <IDTypeName>ScrollLibrary Product ID</IDTypeName>",
+      `      <IDValue>${xml(input.proprietaryProductId)}</IDValue>`,
+      "    </ProductIdentifier>",
+    ] : []),
     "    <ProductIdentifier>",
     "      <ProductIDType>15</ProductIDType>",
     `      <IDValue>${isbn}</IDValue>`,
