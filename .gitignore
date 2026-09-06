@@ -7,10 +7,24 @@ yarn-error.log*
 pnpm-debug.log*
 lerna-debug.log*
 
+# Dependencies and build output
 node_modules
 dist
 dist-ssr
 *.local
+
+# Local environment files — commit .env.example only
+.env
+.env.*
+!.env.example
+
+# Keep Bun as the single dependency-resolution source
+package-lock.json
+bun.lockb
+
+# Supabase CLI local state
+supabase/.temp/
+supabase/.branches/
 
 # Editor directories and files
 .vscode/*
