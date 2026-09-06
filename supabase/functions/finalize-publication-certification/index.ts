@@ -19,7 +19,10 @@ import {
   enforceRateLimit,
 } from "../_shared/http.ts";
 
-const BodySchema = z.object({ bookId: z.string().uuid() });
+const BodySchema = z.object({
+  bookId: z.string().uuid(),
+  mode: z.enum(["evaluate", "interrupted"]).optional().default("evaluate"),
+});
 
 Deno.serve(async (req) => {
   const pf = preflight(req);
@@ -31,7 +34,7 @@ Deno.serve(async (req) => {
 
     const parsed = await validateBody(req, BodySchema);
     if (parsed instanceof Response) return parsed;
-    const { bookId } = parsed;
+    const { bookId, mode } = parsed;
 
     const rate = enforceRateLimit({
       name: "finalize-publication-certification",
