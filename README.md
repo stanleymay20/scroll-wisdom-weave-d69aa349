@@ -1,73 +1,51 @@
-# Welcome to your Lovable project
+# Scroll Wisdom Weave / ScrollLibrary
 
-## Project info
+A React + TypeScript reading, learning, publishing, and creator platform backed by Supabase.
 
-**URL**: https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID
+## Requirements
 
-## How can I edit this code?
+- Bun 1.2.23
+- A Supabase project
 
-There are several ways of editing your application.
+## Local setup
 
-**Use Lovable**
-
-Simply visit the [Lovable Project](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and start prompting.
-
-Changes made via Lovable will be committed automatically to this repo.
-
-**Use your preferred IDE**
-
-If you want to work locally using your own IDE, you can clone this repo and push changes. Pushed changes will also be reflected in Lovable.
-
-The only requirement is having Node.js & npm installed - [install with nvm](https://github.com/nvm-sh/nvm#installing-and-updating)
-
-Follow these steps:
-
-```sh
-# Step 1: Clone the repository using the project's Git URL.
-git clone <YOUR_GIT_URL>
-
-# Step 2: Navigate to the project directory.
-cd <YOUR_PROJECT_NAME>
-
-# Step 3: Install the necessary dependencies.
-npm i
-
-# Step 4: Start the development server with auto-reloading and an instant preview.
-npm run dev
+```bash
+cp .env.example .env
+bun install --frozen-lockfile
+bun run dev
 ```
 
-**Edit a file directly in GitHub**
+Fill `.env` with the client-side Supabase project URL and publishable/anon key. Never place a service-role or other server secret in a `VITE_` variable.
 
-- Navigate to the desired file(s).
-- Click the "Edit" button (pencil icon) at the top right of the file view.
-- Make your changes and commit the changes.
+## Quality gates
 
-**Use GitHub Codespaces**
+Run the same checks enforced on `main`:
 
-- Navigate to the main page of your repository.
-- Click on the "Code" button (green button) near the top right.
-- Select the "Codespaces" tab.
-- Click on "New codespace" to launch a new Codespace environment.
-- Edit files directly within the Codespace and commit and push your changes once you're done.
+```bash
+bun run typecheck
+bun run lint
+bun run test
+bun run build
+```
 
-## What technologies are used for this project?
+Or run them sequentially with:
 
-This project is built with:
+```bash
+bun run ci
+```
 
-- Vite
-- TypeScript
-- React
-- shadcn-ui
-- Tailwind CSS
+CI installs dependencies from `bun.lock` with `--frozen-lockfile` so dependency resolution is reproducible.
 
-## How can I deploy this project?
+## Supabase
 
-Simply open [Lovable](https://lovable.dev/projects/REPLACE_WITH_PROJECT_ID) and click on Share -> Publish.
+- Migrations and Edge Functions live under `supabase/`.
+- `supabase/config.toml` is local/function configuration; production deployment should select its target project explicitly.
+- Functions with `verify_jwt = false` must authenticate the caller, verify a provider signature, or be intentionally public.
+- Local CLI state under `supabase/.temp/` and `supabase/.branches/` is ignored.
 
-## Can I connect a custom domain to my Lovable project?
+## Security expectations
 
-Yes, you can!
-
-To connect a domain, navigate to Project > Settings > Domains and click Connect Domain.
-
-Read more here: [Setting up a custom domain](https://docs.lovable.dev/features/custom-domain#custom-domain)
+- Local `.env` files are ignored. Commit only `.env.example`.
+- Render user-controlled text through React or sanitize it explicitly; do not inject unsanitized HTML.
+- Restrict external URLs derived from user/API data to safe protocols.
+- Never expose service-role or secret keys in browser code.
