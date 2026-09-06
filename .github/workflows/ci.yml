@@ -50,6 +50,17 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run test
 
+  migration-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - name: Reject destructive migrations in hardened migration era
+        run: bun scripts/check-migration-safety.mjs
+
   edge-functions:
     runs-on: ubuntu-latest
     timeout-minutes: 15
