@@ -2,7 +2,7 @@
  * CitationManager — Phase 2.1 Evidence & Citation Engine UI.
  * Authors can list, add, edit, delete, and verify structured citations.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -60,17 +60,32 @@ export function CitationManager({ bookId, design }: Props) {
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
   const style = resolveDesign(design).citation_style;
 
-  const load = async () => {
+  const load = useCallback(async (isCurrent: () => boolean = () => true) => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("book_citations")
       .select("*")
       .eq("book_id", bookId)
       .order("created_at", { ascending: false });
+
+    if (!isCurrent()) return;
+
+    if (error) {
+      setRows([]);
+      setLoading(false);
+      toast({ title: "Citation load failed", description: error.message, variant: "destructive" });
+      return;
+    }
+
     setRows((data ?? []) as unknown as CitationRecord[]);
     setLoading(false);
-  };
-  useEffect(() => { load(); }, [bookId]);
+  }, [bookId, toast]);
+
+  useEffect(() => {
+    let active = true;
+    void load(() => active);
+    return () => { active = false; };
+  }, [load]);
 
   const startEdit = (rec?: CitationRecord) => {
     if (!rec) { setEditing({ ...EMPTY }); return; }
