@@ -36,6 +36,11 @@ Deno.serve(async (req) => {
 
     const sc = serviceClient();
 
+    // Capture before loading any publication-relevant inputs used by the audit.
+    // The post-load hash below must match this value, preventing stale/mixed
+    // cover/type/chapter reads from being certified after a concurrent edit.
+    const scopeBefore = await captureBookScopeHash(sc, bookId);
+
     // Live historically used creator_id. Query only stable legacy columns first
     // so this function can run before the additive books.user_id migration lands.
     const { data: book, error: bookErr } = await sc
@@ -73,9 +78,6 @@ Deno.serve(async (req) => {
         .from("user_roles").select("role").eq("user_id", auth.userId).eq("role", "admin").maybeSingle();
       if (!adminRow) return forbidden("Not the owner of this book");
     }
-
-    // Bind the deterministic audit to the exact manuscript state it inspects.
-    const scopeBefore = await captureBookScopeHash(sc, bookId);
 
     const { data: chapters, error: chErr } = await sc
       .from("chapters")
