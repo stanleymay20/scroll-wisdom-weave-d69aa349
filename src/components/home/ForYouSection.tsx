@@ -46,33 +46,48 @@ export function ForYouSection() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    fetchBooks();
-  }, [selectedCategory]);
+    let cancelled = false;
+    const category = selectedCategory;
 
-  const fetchBooks = async () => {
-    setLoading(true);
-    try {
-      let query = supabase
-        .from("books")
-        .select("id, title, category, cover_image_url, description, created_at")
-        .eq("is_published", true)
-        .order("created_at", { ascending: false })
-        .limit(8);
+    const fetchBooks = async () => {
+      setLoading(true);
+      try {
+        let query = supabase
+          .from("books")
+          .select("id, title, category, cover_image_url, description, created_at")
+          .eq("is_published", true)
+          .order("created_at", { ascending: false })
+          .limit(8);
 
-      if (selectedCategory !== "All") {
-        const variants = categoryFilter(selectedCategory);
-        // Use .in() to match any variant of the category name
-        query = query.in("category", variants);
+        if (category !== "All") {
+          const variants = categoryFilter(category);
+          // Use .in() to match any variant of the category name
+          query = query.in("category", variants);
+        }
+
+        const { data, error } = await query;
+        if (error) throw error;
+
+        if (!cancelled) {
+          setBooks(data || []);
+        }
+      } catch {
+        if (!cancelled) {
+          setBooks([]);
+        }
+      } finally {
+        if (!cancelled) {
+          setLoading(false);
+        }
       }
+    };
 
-      const { data } = await query;
-      setBooks(data || []);
-    } catch {
-      setBooks([]);
-    } finally {
-      setLoading(false);
-    }
-  };
+    void fetchBooks();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedCategory]);
 
   // Format category for display
   const formatCategory = (cat: string) => {
