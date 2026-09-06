@@ -9,7 +9,7 @@
  * The report is persisted server-side in `book_qa_reports`; on mount we load
  * the most recent one, and the "Run audit" button appends a new snapshot.
  */
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -71,20 +71,34 @@ export default function PublishabilityQAPanel({ bookId }: Props) {
   const [loading, setLoading] = useState(true);
   const [running, setRunning] = useState(false);
 
-  const loadLatest = async () => {
+  const loadLatest = useCallback(async (isCurrent: () => boolean = () => true) => {
     setLoading(true);
-    const { data } = await supabase
+    const { data, error } = await supabase
       .from("book_qa_reports")
       .select("*")
       .eq("book_id", bookId)
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+
+    if (!isCurrent()) return;
+
+    if (error) {
+      setReport(null);
+      setLoading(false);
+      toast({ title: "QA report load failed", description: error.message, variant: "destructive" });
+      return;
+    }
+
     setReport((data as unknown as QAReportRow) ?? null);
     setLoading(false);
-  };
+  }, [bookId, toast]);
 
-  useEffect(() => { loadLatest(); }, [bookId]);
+  useEffect(() => {
+    let active = true;
+    void loadLatest(() => active);
+    return () => { active = false; };
+  }, [loadLatest]);
 
   const runAudit = async () => {
     setRunning(true);
