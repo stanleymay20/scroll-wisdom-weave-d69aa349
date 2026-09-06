@@ -49,8 +49,18 @@ export interface BundleExtras {
   dedication?: string | null;
   /** Optional epigraph for the front matter (quote + attribution). */
   epigraph?: { text: string; attribution?: string | null } | null;
-  /** Optional ISBN for the copyright page. */
+  /** Format-specific ISBN selected from the immutable Publication snapshot. */
   isbn?: string | null;
+  /** Canonical publisher legal/registrant name. */
+  publisherName?: string | null;
+  /** Canonical imprint displayed on the book. */
+  publisherImprint?: string | null;
+  /** All frozen ISBN-13 assignments keyed by product form. */
+  isbnByFormat?: Record<string, string> | null;
+  /** Identifier strategy for the target product (own/platform/KDP free/unassigned). */
+  identifierStrategy?: string | null;
+  /** Distribution scope frozen into the publication identity. */
+  distributionScope?: string | null;
 }
 
 export interface BundleChapter {
@@ -137,7 +147,7 @@ function cleanProse(s: string | null | undefined, maxLen = 6000): string {
 export function renderFrontMatter(ctx: BundleContext): string {
   const { book, listing, author, extras } = ctx;
   const year = new Date(ctx.generatedAt).getUTCFullYear();
-  const publisher = "ScrollLibrary";
+  const publisher = extras?.publisherImprint || extras?.publisherName || "Independent publisher";
   const lines: string[] = [];
 
   lines.push(`# ${book.title}`);
@@ -161,7 +171,7 @@ export function renderFrontMatter(ctx: BundleContext): string {
 
   lines.push(`## Copyright`, ``);
   lines.push(`© ${year} ${author?.display_name ?? "The Author"}. All rights reserved.`, ``);
-  lines.push(`Published via ${publisher}.`, ``);
+  lines.push(`Published by ${publisher}.`, ``);
   lines.push(`License: ${humanLicense(listing?.license_type)}.`, ``);
   if (extras?.isbn) lines.push(`ISBN: ${extras.isbn}`, ``);
   if (book.id) lines.push(`Reference: SPC-SL-${year}-${book.id.slice(0, 8).toUpperCase()}`, ``);
@@ -589,6 +599,12 @@ export function renderReadme(ctx: BundleContext, includedAssets: string[]): stri
   lines.push(`**Upload destination:** ${PLATFORM_UPLOAD_URL[platform]}`, ``);
   lines.push(`**Price:** ${priceLabel(listing?.price_cents ?? null, listing?.currency ?? null)}`, ``);
   lines.push(`**License:** ${humanLicense(listing?.license_type)}`, ``);
+  const publisher = ctx.extras?.publisherImprint || ctx.extras?.publisherName;
+  if (publisher) lines.push(`**Publisher / imprint:** ${publisher}`, ``);
+  if (ctx.extras?.isbn) lines.push(`**ISBN-13 for this bundle:** ${ctx.extras.isbn}`, ``);
+  if (platform === "kdp" && ctx.extras?.identifierStrategy === "kdp_free") {
+    lines.push(`**ISBN strategy:** Amazon KDP free ISBN — assigned during KDP submission; imprint shown by Amazon as Independently published.`, ``);
+  }
   if (ctx.correlationId) lines.push(`**Support reference:** ${ctx.correlationId}`, ``);
 
   lines.push(`## Bundle contents`, ``);
@@ -702,10 +718,15 @@ export interface BundleManifest {
   content_sha256: string | null;
   bundle_schema_version: string;
   author: { display_name: string | null; bio_preview: string | null } | null;
+  publisher: { publisher_name: string | null; imprint_name: string | null };
+  isbn13: string | null;
+  isbn_by_format: Record<string, string>;
+  identifier_strategy: string | null;
+  distribution_scope: string | null;
   pricing: { amount_cents: number; currency: string; label: string };
 }
 
-const BUNDLE_SCHEMA_VERSION = "2.0.0";
+const BUNDLE_SCHEMA_VERSION = "3.0.0";
 
 export function renderManifest(ctx: BundleContext): BundleManifest {
   const kw = renderKeywords(ctx.listing, ctx.book);
@@ -738,6 +759,14 @@ export function renderManifest(ctx: BundleContext): BundleManifest {
         bio_preview: ctx.author.bio ? cleanProse(ctx.author.bio, 200) : null,
       }
       : null,
+    publisher: {
+      publisher_name: ctx.extras?.publisherName ?? null,
+      imprint_name: ctx.extras?.publisherImprint ?? null,
+    },
+    isbn13: ctx.extras?.isbn ?? null,
+    isbn_by_format: ctx.extras?.isbnByFormat ?? {},
+    identifier_strategy: ctx.extras?.identifierStrategy ?? null,
+    distribution_scope: ctx.extras?.distributionScope ?? null,
     pricing: {
       amount_cents: Number(ctx.listing?.price_cents ?? 0) || 0,
       currency: (ctx.listing?.currency ?? "usd").toLowerCase(),

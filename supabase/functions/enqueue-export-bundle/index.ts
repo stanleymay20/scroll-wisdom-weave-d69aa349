@@ -39,6 +39,7 @@ import {
   renderAiDisclosure, PLATFORM_LABEL, slugify,
   type BundleContext, type BundlePlatform, type BundleExtras,
 } from "../_shared/bundle-content.ts";
+import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
 
 const EXTERNAL_BUNDLES = new Set<BundlePlatform>(["gumroad", "shopify", "substack", "patreon", "etsy"]);
 
@@ -79,7 +80,7 @@ async function runJob(
     // as null. Selecting nonexistent columns here previously caused
     // PostgREST to return an error and the job to fail with "Book not found".
     const { data: book, error: bookErr } = await sc.from("books")
-      .select("id, title, description, cover_image_url, category, book_type, user_id, academic_level")
+      .select("id, title, description, cover_image_url, category, book_type, user_id, academic_level, current_publication_id, ai_assistance_level, dedication, epigraph")
       .eq("id", bookId).maybeSingle();
     if (bookErr) throw new Error(`Book load failed: ${bookErr.message}`);
     if (!book) throw new Error("Book not found");
@@ -119,7 +120,23 @@ async function runJob(
       .select("display_name, bio, website_url, x_url, linkedin_url, avatar_url")
       .eq("user_id", userId).maybeSingle();
 
-    await timer.stop("fetch_book", { metadata: { chapters: chapterList.length } });
+    // Distribution bundles are generated only from an immutable published
+    // snapshot. Draft exports remain available through export-book, but a KDP/
+    // storefront bundle must not carry mutable or browser-supplied identity.
+    if (!book.current_publication_id) {
+      throw new Error("Publish and certify this book before building a distribution bundle.");
+    }
+    const { data: publication, error: publicationErr } = await sc
+      .from("publications")
+      .select("id,status,snapshot,content_hash")
+      .eq("id", book.current_publication_id)
+      .eq("status", "published")
+      .maybeSingle();
+    if (publicationErr) throw new Error(`Publication load failed: ${publicationErr.message}`);
+    if (!publication) throw new Error("The current Publication snapshot is missing or not published.");
+    const publicationSnapshot = (publication.snapshot ?? {}) as Record<string, unknown>;
+
+    await timer.stop("fetch_book", { metadata: { chapters: chapterList.length, publication_id: publication.id } });
 
     // ─── Quality gate (structural + content + style) ──────────────────
     const canonical = parseBookToCanonical(chapterList);
@@ -166,11 +183,25 @@ async function runJob(
       .join("\n\n---\n\n");
     const contentHash = sourceForHash ? await sha256Hex(sourceForHash) : null;
 
-    // Elite extras: AI disclosure level, ISBN, dedication, epigraph. All
-    // optional — the renderer skips sections that aren't supplied.
+    // Publication identity comes only from the immutable snapshot. KDP gets
+    // the paperback ISBN; digital bundles get the EPUB ISBN. Never reuse a print
+    // ISBN for a separately sold EPUB product.
+    const bundleExportFormat = bundleType === "kdp" ? "kdp-pdf" : "epub";
+    const publisherIdentity = publisherFromPublicationSnapshot(publicationSnapshot);
+    const isbnByFormat = publicationSnapshot.isbn_by_format && typeof publicationSnapshot.isbn_by_format === "object"
+      ? publicationSnapshot.isbn_by_format as Record<string, string>
+      : {};
+    const identifierStrategy = bundleType === "kdp"
+      ? (publicationSnapshot.print_identifier_strategy as string | undefined)
+      : (publicationSnapshot.ebook_identifier_strategy as string | undefined);
     const extras: BundleExtras = {
       aiAssistanceLevel: (book as any).ai_assistance_level ?? null,
-      isbn: (book as any).isbn ?? null,
+      isbn: isbnForPublicationSnapshot(publicationSnapshot, bundleExportFormat),
+      publisherName: publisherIdentity.publisherName,
+      publisherImprint: publisherIdentity.imprintName,
+      isbnByFormat,
+      identifierStrategy: identifierStrategy ?? null,
+      distributionScope: typeof publicationSnapshot.distribution_scope === "string" ? publicationSnapshot.distribution_scope : null,
       dedication: (book as any).dedication ?? null,
       epigraph: typeof (book as any).epigraph === "object"
         ? ((book as any).epigraph as { text: string; attribution?: string | null })

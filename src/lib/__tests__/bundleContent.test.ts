@@ -223,7 +223,7 @@ describe("patreon csv", () => {
 describe("manifest", () => {
   it("includes schema version + integrity hash + price", () => {
     const m = renderManifest(baseCtx());
-    expect(m.bundle_schema_version).toBe("2.0.0");
+    expect(m.bundle_schema_version).toBe("3.0.0");
     expect(m.content_sha256).toBe("deadbeef".repeat(8));
     expect(m.chapters).toBe(3);
     expect(m.pricing.amount_cents).toBe(999);

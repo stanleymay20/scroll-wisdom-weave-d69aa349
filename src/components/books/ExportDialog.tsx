@@ -208,11 +208,20 @@ export function ExportDialog({
               .filter(Boolean)
               .join(', ');
           }
-          if (Array.isArray(snap.rights_holders) && snap.rights_holders.length) {
+          const publisher = snap.publisher && typeof snap.publisher === "object" && !Array.isArray(snap.publisher)
+            ? snap.publisher
+            : null;
+          resolved.publisher = publisher?.imprint_name || publisher?.publisher_name || snap.publisher_imprint || snap.publisher_name || null;
+          // Legacy snapshots may not have a dedicated publisher object. Rights
+          // holder fallback is display-only and never used as canonical publisher
+          // when the new publishing identity exists.
+          if (!resolved.publisher && Array.isArray(snap.rights_holders) && snap.rights_holders.length) {
             resolved.publisher = snap.rights_holders[0]?.display_name || null;
-            resolved.copyright = resolved.publisher;
           }
-          resolved.isbn = snap.isbn || snap.isbn_13 || null;
+          resolved.copyright = Array.isArray(snap.rights_holders) && snap.rights_holders.length
+            ? snap.rights_holders[0]?.display_name || resolved.publisher
+            : resolved.publisher;
+          resolved.isbn = snap.isbn_by_format?.paperback || snap.isbn_by_format?.hardcover || snap.isbn || snap.isbn_13 || null;
           resolved.edition = snap.edition || null;
         }
       } else if ((book as any).work_id) {

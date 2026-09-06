@@ -6,6 +6,7 @@ import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
 import { auditBookForExport } from "../_shared/exportQuality.ts";
 import { computeSha256Hex } from "../_shared/export/hash.ts";
 import { recordExportEvent } from "../_shared/export/audit.ts";
+import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
 
 // Disable zip.js web workers — Deno edge runtime + test runner leak worker
 // timers otherwise (no Worker pool to clean up).
@@ -1514,11 +1515,15 @@ serve(async (req) => {
             .filter(Boolean)
             .join(", ") || null;
         }
-        if (Array.isArray(snap.rights_holders) && snap.rights_holders.length > 0) {
+        const publisherIdentity = publisherFromPublicationSnapshot(snap);
+        canonicalPublisher = publisherIdentity.publisherName;
+        canonicalImprint = publisherIdentity.imprintName;
+        // Backward-compatible display fallback for old snapshots only. A rights
+        // holder is not treated as publisher once dedicated publisher identity exists.
+        if (!canonicalPublisher && !canonicalImprint && Array.isArray(snap.rights_holders) && snap.rights_holders.length > 0) {
           canonicalPublisher = snap.rights_holders[0]?.display_name || null;
         }
-        canonicalIsbn = snap.isbn || snap.isbn_13 || null;
-        canonicalImprint = snap.publisher_imprint || null;
+        canonicalIsbn = isbnForPublicationSnapshot(snap, format);
       }
     }
 
