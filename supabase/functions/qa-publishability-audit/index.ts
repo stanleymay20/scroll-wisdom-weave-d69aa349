@@ -34,18 +34,37 @@ Deno.serve(async (req) => {
 
     const sc = serviceClient();
 
-    // Ownership check. Live historically used creator_id; newer schemas also
-    // expose user_id. Accept either owner column so QA remains safe during
-    // additive schema promotion.
+    // Live historically used creator_id. Query only stable legacy columns first
+    // so this function can run before the additive books.user_id migration lands.
     const { data: book, error: bookErr } = await sc
       .from("books")
-      .select("id, user_id, creator_id, cover_image_url, book_type")
+      .select("id, creator_id, cover_image_url, book_type")
       .eq("id", bookId)
       .maybeSingle();
     if (bookErr) return serverError(bookErr);
     if (!book) return badRequest("Book not found");
 
-    const isOwner = book.user_id === auth.userId || book.creator_id === auth.userId;
+    let isOwner = book.creator_id === auth.userId;
+
+    // Newer/imported records may rely on user_id with creator_id null. Query the
+    // newer column separately so a legacy schema that does not have user_id does
+    // not make the entire ownership lookup fail.
+    if (!isOwner && book.creator_id == null) {
+      const { data: modernOwner, error: modernOwnerErr } = await sc
+        .from("books")
+        .select("user_id")
+        .eq("id", bookId)
+        .maybeSingle();
+
+      if (!modernOwnerErr) {
+        isOwner = modernOwner?.user_id === auth.userId;
+      } else {
+        const missingUserIdColumn = modernOwnerErr.code === "42703"
+          || /user_id.*does not exist|column .*user_id/i.test(modernOwnerErr.message ?? "");
+        if (!missingUserIdColumn) return serverError(modernOwnerErr);
+      }
+    }
+
     if (!isOwner) {
       // admin bypass
       const { data: adminRow } = await sc
