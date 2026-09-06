@@ -25,7 +25,26 @@ const BodySchema = z.object({
   mode: z.enum(["evaluate", "interrupted"]).optional().default("evaluate"),
 });
 
-type GateName = "structural" | "production";
+type GateName = "structural" | "rights" | "production";
+type ProducerName = "structural" | "rights";
+
+type ProducerOutcome = {
+  passed: boolean;
+  status: string;
+  error: string | null;
+  source: "current_attestation" | "producer" | "not_run";
+};
+
+const PRODUCERS: Record<ProducerName, { path: string; label: string }> = {
+  structural: {
+    path: "cross-chapter-consistency-audit",
+    label: "Structural consistency audit",
+  },
+  rights: {
+    path: "certify-asset-rights",
+    label: "Asset rights certification",
+  },
+};
 
 async function latestGatePassed(
   sc: ReturnType<typeof serviceClient>,
@@ -49,11 +68,12 @@ async function latestGatePassed(
   return data?.status === "passed";
 }
 
-async function invokeConsistencyProducer(req: Request, bookId: string): Promise<{
-  passed: boolean;
-  status: string;
-  error: string | null;
-}> {
+async function invokeGateProducer(
+  req: Request,
+  bookId: string,
+  producer: ProducerName,
+): Promise<ProducerOutcome> {
+  const config = PRODUCERS[producer];
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
   const authHeader = req.headers.get("Authorization");
@@ -62,12 +82,13 @@ async function invokeConsistencyProducer(req: Request, bookId: string): Promise<
     return {
       passed: false,
       status: "blocked",
-      error: "Structural consistency producer is not configured.",
+      error: `${config.label} producer is not configured.`,
+      source: "producer",
     };
   }
 
   try {
-    const response = await fetch(`${supabaseUrl}/functions/v1/cross-chapter-consistency-audit`, {
+    const response = await fetch(`${supabaseUrl}/functions/v1/${config.path}`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -82,7 +103,8 @@ async function invokeConsistencyProducer(req: Request, bookId: string): Promise<
       return {
         passed: false,
         status: "blocked",
-        error: payload?.error || payload?.message || `Structural consistency audit failed (${response.status}).`,
+        error: payload?.error || payload?.message || `${config.label} failed (${response.status}).`,
+        source: "producer",
       };
     }
 
@@ -90,14 +112,28 @@ async function invokeConsistencyProducer(req: Request, bookId: string): Promise<
       passed: payload?.passed === true && payload?.status === "ready",
       status: typeof payload?.status === "string" ? payload.status : "blocked",
       error: typeof payload?.error === "string" ? payload.error : null,
+      source: "producer",
     };
   } catch (error) {
     return {
       passed: false,
       status: "blocked",
       error: error instanceof Error ? error.message : String(error),
+      source: "producer",
     };
   }
+}
+
+async function getBookScopeHash(
+  sc: ReturnType<typeof serviceClient>,
+  bookId: string,
+): Promise<string | null> {
+  const { data, error } = await sc.rpc(
+    "compute_book_publication_hash",
+    { p_book_id: bookId },
+  );
+  if (error) throw error;
+  return typeof data === "string" && data.length > 0 ? data : null;
 }
 
 Deno.serve(async (req) => {
@@ -208,33 +244,70 @@ Deno.serve(async (req) => {
 
     const chapterCount = chapters?.length ?? 0;
     const generatedCount = (chapters ?? []).filter(
-      (chapter) => chapter.is_generated === true && typeof chapter.content === "string" && chapter.content.trim().length > 0,
+      (chapter) => chapter.is_generated === true
+        && typeof chapter.content === "string"
+        && chapter.content.trim().length > 0,
     ).length;
     const completeManuscript = chapterCount > 0 && generatedCount === chapterCount;
 
-    // The consistency producer is server-owned. Invoke it only for a complete
-    // manuscript; incomplete manuscripts already fail readiness and should not
-    // spend model tokens. The producer itself binds its verdict to the exact hash.
-    const consistency = completeManuscript
-      ? await invokeConsistencyProducer(req, bookId)
-      : {
-          passed: false,
-          status: "blocked",
-          error: "All chapters must be generated before structural consistency certification.",
-        };
+    const initialScopeHash = await getBookScopeHash(sc, bookId);
+    let initialStructuralPassed = false;
+    let initialRightsPassed = false;
 
-    const { data: scopeHash, error: scopeHashErr } = await sc.rpc(
-      "compute_book_publication_hash",
-      { p_book_id: bookId },
-    );
-    if (scopeHashErr) return serverError(scopeHashErr);
+    if (initialScopeHash) {
+      [initialStructuralPassed, initialRightsPassed] = await Promise.all([
+        latestGatePassed(sc, bookId, initialScopeHash, "structural"),
+        latestGatePassed(sc, bookId, initialScopeHash, "rights"),
+      ]);
+    }
+
+    let consistency: ProducerOutcome = initialStructuralPassed
+      ? { passed: true, status: "ready", error: null, source: "current_attestation" }
+      : { passed: false, status: "blocked", error: null, source: "not_run" };
+    let rights: ProducerOutcome = initialRightsPassed
+      ? { passed: true, status: "ready", error: null, source: "current_attestation" }
+      : { passed: false, status: "blocked", error: null, source: "not_run" };
+
+    if (completeManuscript) {
+      // Only run producers whose current-hash PASS is missing. This avoids paying
+      // for the semantic consistency model every time an already-certified job is
+      // merely re-read, while still rerunning after edits or a latest BLOCKED row.
+      if (!initialStructuralPassed) {
+        consistency = await invokeGateProducer(req, bookId, "structural");
+      }
+      if (!initialRightsPassed) {
+        rights = await invokeGateProducer(req, bookId, "rights");
+      }
+    } else {
+      consistency = {
+        passed: false,
+        status: "blocked",
+        error: "All chapters must be generated before structural consistency certification.",
+        source: "not_run",
+      };
+      rights = {
+        passed: false,
+        status: "blocked",
+        error: "All chapters must be generated before publication-rights certification.",
+        source: "not_run",
+      };
+    }
+
+    // Producers are not allowed to mutate publication scope, but another actor may
+    // edit the book concurrently. Recompute and refuse READY if the scope changed.
+    const finalScopeHash = await getBookScopeHash(sc, bookId);
+    const scopeStable = Boolean(initialScopeHash)
+      && initialScopeHash === finalScopeHash;
 
     let structuralPassed = false;
+    let rightsPassed = false;
     let productionPassed = false;
-    if (typeof scopeHash === "string" && scopeHash.length > 0) {
-      [structuralPassed, productionPassed] = await Promise.all([
-        latestGatePassed(sc, bookId, scopeHash, "structural"),
-        latestGatePassed(sc, bookId, scopeHash, "production"),
+
+    if (scopeStable && finalScopeHash) {
+      [structuralPassed, rightsPassed, productionPassed] = await Promise.all([
+        latestGatePassed(sc, bookId, finalScopeHash, "structural"),
+        latestGatePassed(sc, bookId, finalScopeHash, "rights"),
+        latestGatePassed(sc, bookId, finalScopeHash, "production"),
       ]);
     }
 
@@ -248,10 +321,14 @@ Deno.serve(async (req) => {
 
     // Defense in depth during rollout: even if an environment still has an older
     // has_current_publication_attestations() definition, this endpoint refuses
-    // READY unless current-hash structural AND production attestations pass.
+    // READY unless current-hash structural, rights, and production attestations
+    // all pass and no concurrent publication-scope change occurred.
     const desiredReady = completeManuscript
+      && scopeStable
       && consistency.passed
+      && rights.passed
       && structuralPassed
+      && rightsPassed
       && productionPassed
       && attestationReady === true;
 
@@ -264,6 +341,19 @@ Deno.serve(async (req) => {
       .maybeSingle();
     if (jobErr) return serverError(jobErr);
 
+    const diagnostics = {
+      scopeStable,
+      structuralPassed,
+      rightsPassed,
+      productionPassed,
+      consistencyStatus: consistency.status,
+      consistencyError: consistency.error,
+      consistencySource: consistency.source,
+      rightsStatus: rights.status,
+      rightsError: rights.error,
+      rightsSource: rights.source,
+    };
+
     if (!job) {
       // The trust verdict exists independently of workflow telemetry. Imported or
       // manually managed books may legitimately have no generation job.
@@ -273,10 +363,7 @@ Deno.serve(async (req) => {
         checkedAt,
         chapterCount,
         generatedCount,
-        structuralPassed,
-        productionPassed,
-        consistencyStatus: consistency.status,
-        consistencyError: consistency.error,
+        ...diagnostics,
         authority: "server_attestations",
       });
     }
@@ -295,16 +382,14 @@ Deno.serve(async (req) => {
         error_code: desiredReady ? null : "QUALITY_GATE_REQUIRED",
         error_message: desiredReady
           ? null
-          : "Current server-attested editorial, evidence, structural, publishability, and production gates are required before completion.",
+          : "Current server-attested editorial, evidence, structural, rights, publishability, and production gates are required before completion.",
         metadata: {
           ...previousMetadata,
           publicationQuality: {
             ready: desiredReady,
             authority: "server_attestations",
             checkedAt,
-            structuralPassed,
-            productionPassed,
-            consistencyStatus: consistency.status,
+            ...diagnostics,
           },
         },
       })
@@ -314,8 +399,8 @@ Deno.serve(async (req) => {
     if (updateErr) return serverError(updateErr);
 
     // The generation_jobs trigger independently recomputes readiness on a
-    // completed transition. Read back its stored verdict so a manuscript edit in
-    // the gap between the readiness RPC and UPDATE cannot produce a false PASS.
+    // completed transition. Read back its stored verdict so a manuscript/media
+    // edit in the gap between the readiness RPC and UPDATE cannot produce a PASS.
     const storedQuality = updated?.metadata && typeof updated.metadata === "object"
       ? (updated.metadata as Record<string, unknown>).publicationQuality
       : null;
@@ -324,7 +409,9 @@ Deno.serve(async (req) => {
       : false;
     const ready = updated?.status === "completed"
       && storedReady
+      && scopeStable
       && structuralPassed
+      && rightsPassed
       && productionPassed;
 
     return json({
@@ -333,10 +420,7 @@ Deno.serve(async (req) => {
       checkedAt,
       chapterCount,
       generatedCount,
-      structuralPassed,
-      productionPassed,
-      consistencyStatus: consistency.status,
-      consistencyError: consistency.error,
+      ...diagnostics,
       authority: "server_attestations",
     });
   } catch (e) {
