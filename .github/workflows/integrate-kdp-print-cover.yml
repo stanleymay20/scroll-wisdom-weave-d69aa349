@@ -29,7 +29,7 @@ jobs:
           fi
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add supabase/functions/enqueue-export-bundle/index.ts
-          git commit -m "feat(kdp): ship full-wrap print cover in bundle"
+          git add supabase/functions/enqueue-export-bundle/index.ts supabase/functions/_shared/kdp-print-cover.ts
+          git commit -m "fix(kdp): align print cover with canonical KDP geometry"
           git pull --rebase origin main
           git push origin HEAD:main
