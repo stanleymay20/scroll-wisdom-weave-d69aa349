@@ -106,10 +106,12 @@ jobs:
           deno check supabase/functions/export-book/index.ts
           deno check supabase/functions/distribution-metadata/index.ts
           deno check supabase/functions/export-onix/index.ts
+          deno check supabase/functions/resolve-scroll-id/index.ts
           deno check supabase/functions/scrollvision-retrieve/index.ts
       - name: Test publication trust engines
         run: |
           deno test supabase/functions/_shared/isbn_test.ts
+          deno test supabase/functions/_shared/scroll-identity_test.ts
           deno test supabase/functions/_shared/onix_test.ts
           deno test supabase/functions/_shared/structuralConsistency_test.ts
           deno test supabase/functions/_shared/assetRights_test.ts
