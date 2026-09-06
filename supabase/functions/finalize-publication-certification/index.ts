@@ -25,6 +25,81 @@ const BodySchema = z.object({
   mode: z.enum(["evaluate", "interrupted"]).optional().default("evaluate"),
 });
 
+type GateName = "structural" | "production";
+
+async function latestGatePassed(
+  sc: ReturnType<typeof serviceClient>,
+  bookId: string,
+  scopeHash: string,
+  gate: GateName,
+): Promise<boolean> {
+  const { data, error } = await sc
+    .from("publication_gate_attestations")
+    .select("status")
+    .eq("book_id", bookId)
+    .eq("gate", gate)
+    .eq("scope", "book")
+    .eq("scope_hash", scopeHash)
+    .order("created_at", { ascending: false })
+    .order("id", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (error) throw error;
+  return data?.status === "passed";
+}
+
+async function invokeConsistencyProducer(req: Request, bookId: string): Promise<{
+  passed: boolean;
+  status: string;
+  error: string | null;
+}> {
+  const supabaseUrl = Deno.env.get("SUPABASE_URL");
+  const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+  const authHeader = req.headers.get("Authorization");
+
+  if (!supabaseUrl || !serviceKey || !authHeader) {
+    return {
+      passed: false,
+      status: "blocked",
+      error: "Structural consistency producer is not configured.",
+    };
+  }
+
+  try {
+    const response = await fetch(`${supabaseUrl}/functions/v1/cross-chapter-consistency-audit`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        apikey: serviceKey,
+        Authorization: authHeader,
+      },
+      body: JSON.stringify({ bookId }),
+    });
+
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      return {
+        passed: false,
+        status: "blocked",
+        error: payload?.error || payload?.message || `Structural consistency audit failed (${response.status}).`,
+      };
+    }
+
+    return {
+      passed: payload?.passed === true && payload?.status === "ready",
+      status: typeof payload?.status === "string" ? payload.status : "blocked",
+      error: typeof payload?.error === "string" ? payload.error : null,
+    };
+  } catch (error) {
+    return {
+      passed: false,
+      status: "blocked",
+      error: error instanceof Error ? error.message : String(error),
+    };
+  }
+}
+
 Deno.serve(async (req) => {
   const pf = preflight(req);
   if (pf) return pf;
@@ -76,12 +151,13 @@ Deno.serve(async (req) => {
     }
 
     if (!authorized) {
-      const { data: adminRow } = await sc
+      const { data: adminRow, error: adminErr } = await sc
         .from("user_roles")
         .select("role")
         .eq("user_id", auth.userId)
         .eq("role", "admin")
         .maybeSingle();
+      if (adminErr) return serverError(adminErr);
       authorized = !!adminRow;
     }
     if (!authorized) return forbidden("Not the owner of this book");
@@ -124,12 +200,6 @@ Deno.serve(async (req) => {
       });
     }
 
-    const { data: attestationReady, error: readinessErr } = await sc.rpc(
-      "has_current_publication_attestations",
-      { p_book_id: bookId },
-    );
-    if (readinessErr) return serverError(readinessErr);
-
     const { data: chapters, error: chapterErr } = await sc
       .from("chapters")
       .select("id, is_generated, content")
@@ -140,9 +210,50 @@ Deno.serve(async (req) => {
     const generatedCount = (chapters ?? []).filter(
       (chapter) => chapter.is_generated === true && typeof chapter.content === "string" && chapter.content.trim().length > 0,
     ).length;
+    const completeManuscript = chapterCount > 0 && generatedCount === chapterCount;
+
+    // The consistency producer is server-owned. Invoke it only for a complete
+    // manuscript; incomplete manuscripts already fail readiness and should not
+    // spend model tokens. The producer itself binds its verdict to the exact hash.
+    const consistency = completeManuscript
+      ? await invokeConsistencyProducer(req, bookId)
+      : {
+          passed: false,
+          status: "blocked",
+          error: "All chapters must be generated before structural consistency certification.",
+        };
+
+    const { data: scopeHash, error: scopeHashErr } = await sc.rpc(
+      "compute_book_publication_hash",
+      { p_book_id: bookId },
+    );
+    if (scopeHashErr) return serverError(scopeHashErr);
+
+    let structuralPassed = false;
+    let productionPassed = false;
+    if (typeof scopeHash === "string" && scopeHash.length > 0) {
+      [structuralPassed, productionPassed] = await Promise.all([
+        latestGatePassed(sc, bookId, scopeHash, "structural"),
+        latestGatePassed(sc, bookId, scopeHash, "production"),
+      ]);
+    }
+
+    const { data: attestationReady, error: readinessErr } = await sc.rpc(
+      "has_current_publication_attestations",
+      { p_book_id: bookId },
+    );
+    if (readinessErr) return serverError(readinessErr);
 
     const checkedAt = new Date().toISOString();
-    const desiredReady = attestationReady === true;
+
+    // Defense in depth during rollout: even if an environment still has an older
+    // has_current_publication_attestations() definition, this endpoint refuses
+    // READY unless current-hash structural AND production attestations pass.
+    const desiredReady = completeManuscript
+      && consistency.passed
+      && structuralPassed
+      && productionPassed
+      && attestationReady === true;
 
     const { data: job, error: jobErr } = await sc
       .from("generation_jobs")
@@ -162,6 +273,10 @@ Deno.serve(async (req) => {
         checkedAt,
         chapterCount,
         generatedCount,
+        structuralPassed,
+        productionPassed,
+        consistencyStatus: consistency.status,
+        consistencyError: consistency.error,
         authority: "server_attestations",
       });
     }
@@ -180,13 +295,16 @@ Deno.serve(async (req) => {
         error_code: desiredReady ? null : "QUALITY_GATE_REQUIRED",
         error_message: desiredReady
           ? null
-          : "Current server-attested publication gates are required before completion.",
+          : "Current server-attested editorial, evidence, structural, publishability, and production gates are required before completion.",
         metadata: {
           ...previousMetadata,
           publicationQuality: {
             ready: desiredReady,
             authority: "server_attestations",
             checkedAt,
+            structuralPassed,
+            productionPassed,
+            consistencyStatus: consistency.status,
           },
         },
       })
@@ -204,7 +322,10 @@ Deno.serve(async (req) => {
     const storedReady = storedQuality && typeof storedQuality === "object"
       ? (storedQuality as Record<string, unknown>).ready === true
       : false;
-    const ready = updated?.status === "completed" && storedReady;
+    const ready = updated?.status === "completed"
+      && storedReady
+      && structuralPassed
+      && productionPassed;
 
     return json({
       ready,
@@ -212,6 +333,10 @@ Deno.serve(async (req) => {
       checkedAt,
       chapterCount,
       generatedCount,
+      structuralPassed,
+      productionPassed,
+      consistencyStatus: consistency.status,
+      consistencyError: consistency.error,
       authority: "server_attestations",
     });
   } catch (e) {
