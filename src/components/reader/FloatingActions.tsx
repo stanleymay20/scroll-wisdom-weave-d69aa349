@@ -1,24 +1,29 @@
 /**
  * Floating Actions Component
- * 
+ *
  * Fixed mobile-safe floating action buttons for reader.
  * Uses a collapsed FAB pattern to prevent overlap with content.
  */
 
-import { useState } from "react";
+import { lazy, Suspense, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
-import { 
-  MessageCircle, 
-  GraduationCap, 
-  Code2, 
-  BookOpen, 
+import {
+  MessageCircle,
+  GraduationCap,
+  Code2,
+  BookOpen,
   Presentation,
   Video,
   X
 } from "lucide-react";
 import { FEATURES } from "@/lib/config";
-import { LearningDeckGenerator } from "@/components/decks";
+
+const LearningDeckGenerator = lazy(() =>
+  import("@/components/decks/LearningDeckGenerator").then((module) => ({
+    default: module.LearningDeckGenerator,
+  })),
+);
 
 interface FloatingActionsProps {
   bookId: string;
@@ -71,9 +76,9 @@ export function FloatingActions({
   ].filter(Boolean).length;
 
   return (
-    <div 
+    <div
       className="fixed z-[60]"
-      style={{ 
+      style={{
         bottom: "calc(env(safe-area-inset-bottom) + 5rem)",
         right: "max(1rem, env(safe-area-inset-right))"
       }}
@@ -90,7 +95,7 @@ export function FloatingActions({
               className="fixed inset-0 bg-background/60 backdrop-blur-sm -z-10 md:hidden"
               onClick={() => setIsExpanded(false)}
             />
-            
+
             <motion.div
               initial={{ opacity: 0, scale: 0.8, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -162,16 +167,18 @@ export function FloatingActions({
                   </Button>
                 )}
 
-                {/* VLD-1.0: Learning Deck Generator - PMF gated */}
+                {/* VLD-1.0: Learning Deck Generator - load only when the tool menu opens. */}
                 {FEATURES.enableLearningDecks && (
-                <LearningDeckGenerator
-                  bookId={bookId}
-                  bookTitle={bookTitle}
-                  userId={userId}
-                  totalChapters={totalChapters}
-                  currentChapter={currentChapter}
-                  variant="inline"
-                />
+                  <Suspense fallback={null}>
+                    <LearningDeckGenerator
+                      bookId={bookId}
+                      bookTitle={bookTitle}
+                      userId={userId}
+                      totalChapters={totalChapters}
+                      currentChapter={currentChapter}
+                      variant="inline"
+                    />
+                  </Suspense>
                 )}
 
                 {/* Comic Reader button - PMF gated */}
@@ -215,8 +222,8 @@ export function FloatingActions({
       <motion.button
         onClick={() => setIsExpanded(!isExpanded)}
         className={`relative w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all ${
-          isExpanded 
-            ? 'bg-destructive text-destructive-foreground rotate-45' 
+          isExpanded
+            ? 'bg-destructive text-destructive-foreground rotate-45'
             : 'bg-primary text-primary-foreground'
         }`}
         whileTap={{ scale: 0.9 }}
