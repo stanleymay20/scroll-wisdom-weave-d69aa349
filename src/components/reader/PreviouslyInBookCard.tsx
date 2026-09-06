@@ -1,6 +1,6 @@
 /**
  * Previously In This Book Card
- * 
+ *
  * Shows a summary of what happened in previous chapters
  * to help returning readers remember context.
  */
@@ -23,25 +23,51 @@ interface ChapterSummary {
   summary: string;
 }
 
-export function PreviouslyInBookCard({ 
-  bookId, 
+function extractSummary(content: string, maxLength: number): string {
+  const cleaned = content
+    .replace(/#{1,6}\s*/g, '')
+    .replace(/\*\*([^*]+)\*\*/g, '$1')
+    .replace(/\*([^*]+)\*/g, '$1')
+    .replace(/```[\s\S]*?```/g, '')
+    .replace(/`[^`]+`/g, '')
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
+    .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
+    .trim();
+
+  const sentences = cleaned.split(/(?<=[.!?])\s+/).filter((sentence) => sentence.length > 20);
+  let summary = '';
+
+  for (const sentence of sentences.slice(0, 3)) {
+    if ((summary + sentence).length > maxLength) break;
+    summary += (summary ? ' ' : '') + sentence;
+  }
+
+  return summary || `${cleaned.slice(0, maxLength)}${cleaned.length > maxLength ? '...' : ''}`;
+}
+
+export function PreviouslyInBookCard({
+  bookId,
   currentChapter,
-  bookTitle = "this book"
+  bookTitle = "this book",
 }: PreviouslyInBookCardProps) {
   const [isExpanded, setIsExpanded] = useState(false);
   const [summaries, setSummaries] = useState<ChapterSummary[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [isDismissed, setIsDismissed] = useState(false);
 
-  // Don't show for chapter 1
-  if (currentChapter <= 1) return null;
-
   useEffect(() => {
+    if (currentChapter <= 1) {
+      setSummaries([]);
+      setIsLoading(false);
+      return;
+    }
+
+    let cancelled = false;
+
     const fetchPreviousChapters = async () => {
       setIsLoading(true);
       try {
-        // Fetch previous 2-3 chapters for context
-        const { data } = await supabase
+        const { data, error } = await supabase
           .from('chapters')
           .select('chapter_number, title, content')
           .eq('book_id', bookId)
@@ -49,50 +75,36 @@ export function PreviouslyInBookCard({
           .order('chapter_number', { ascending: false })
           .limit(3);
 
-        if (data && data.length > 0) {
-          const chapterSummaries = data.reverse().map(chapter => ({
+        if (error) throw error;
+        if (cancelled) return;
+
+        const chapterSummaries = (data ?? [])
+          .slice()
+          .reverse()
+          .map((chapter) => ({
             chapterNumber: chapter.chapter_number,
             title: chapter.title,
             summary: extractSummary(chapter.content || '', 120),
           }));
-          setSummaries(chapterSummaries);
-        }
+
+        setSummaries(chapterSummaries);
       } catch (err) {
-        console.error('[PreviouslyInBook] Error fetching chapters:', err);
+        if (!cancelled) {
+          console.error('[PreviouslyInBook] Error fetching chapters:', err);
+          setSummaries([]);
+        }
       } finally {
-        setIsLoading(false);
+        if (!cancelled) setIsLoading(false);
       }
     };
 
-    fetchPreviousChapters();
+    void fetchPreviousChapters();
+    return () => {
+      cancelled = true;
+    };
   }, [bookId, currentChapter]);
 
-  // Extract a meaningful summary from chapter content
-  const extractSummary = (content: string, maxLength: number): string => {
-    // Remove markdown formatting
-    let cleaned = content
-      .replace(/#{1,6}\s*/g, '')
-      .replace(/\*\*([^*]+)\*\*/g, '$1')
-      .replace(/\*([^*]+)\*/g, '$1')
-      .replace(/```[\s\S]*?```/g, '')
-      .replace(/`[^`]+`/g, '')
-      .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
-      .replace(/!\[[^\]]*\]\([^)]+\)/g, '')
-      .trim();
-
-    // Get first meaningful sentences
-    const sentences = cleaned.split(/(?<=[.!?])\s+/).filter(s => s.length > 20);
-    let summary = '';
-    
-    for (const sentence of sentences.slice(0, 3)) {
-      if ((summary + sentence).length > maxLength) break;
-      summary += (summary ? ' ' : '') + sentence;
-    }
-
-    return summary || cleaned.slice(0, maxLength) + '...';
-  };
-
-  if (isLoading || summaries.length === 0 || isDismissed) return null;
+  if (currentChapter <= 1 || isLoading || summaries.length === 0 || isDismissed) return null;
 
   return (
     <AnimatePresence>
@@ -102,7 +114,6 @@ export function PreviouslyInBookCard({
         exit={{ opacity: 0, y: -10 }}
         className="mb-6 rounded-lg border border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 overflow-hidden"
       >
-        {/* Header - always visible */}
         <button
           onClick={() => setIsExpanded(!isExpanded)}
           className="w-full flex items-center justify-between p-4 hover:bg-primary/5 transition-colors"
@@ -124,7 +135,6 @@ export function PreviouslyInBookCard({
           </div>
         </button>
 
-        {/* Expanded content */}
         <AnimatePresence>
           {isExpanded && (
             <motion.div
@@ -136,7 +146,7 @@ export function PreviouslyInBookCard({
             >
               <div className="px-4 pb-4 space-y-3">
                 {summaries.map((chapter) => (
-                  <div 
+                  <div
                     key={chapter.chapterNumber}
                     className="p-3 rounded-md bg-background/50 border border-border/30"
                   >
@@ -154,13 +164,13 @@ export function PreviouslyInBookCard({
                     </p>
                   </div>
                 ))}
-                
+
                 <div className="flex justify-end pt-2">
                   <Button
                     variant="ghost"
                     size="sm"
-                    onClick={(e) => {
-                      e.stopPropagation();
+                    onClick={(event) => {
+                      event.stopPropagation();
                       setIsDismissed(true);
                     }}
                     className="text-xs text-muted-foreground hover:text-foreground"
