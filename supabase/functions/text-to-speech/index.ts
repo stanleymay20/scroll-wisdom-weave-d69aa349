@@ -13,11 +13,17 @@ const TIER_TTS_LIMITS: Record<string, number> = {
   free: 5,
   student: 30,
   premium: 60,
-  prophet_tier: 300, // Capped for economic sustainability (was unlimited)
+  prophet_tier: 300,
 };
 
 const OPENAI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as const;
 type OpenAIVoice = typeof OPENAI_VOICES[number];
+
+type TtsReservation = {
+  allowed: boolean;
+  minutes_used: number;
+  remaining_minutes: number;
+};
 
 serve(async (req) => {
   console.log("[TTS] Request received");
@@ -25,6 +31,8 @@ serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
+
+  let refundReservation: (() => Promise<void>) | null = null;
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -34,95 +42,41 @@ serve(async (req) => {
       throw new Error("Supabase configuration is missing");
     }
 
-    // Service role client for DB operations and auth verification
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
       auth: { persistSession: false },
     });
 
-    // Authenticate user - try getUser first (most reliable), then getClaims as fallback
+    // Paid provider access is authenticated-only. Anonymous callers must never
+    // be able to consume OpenAI TTS without durable per-user quota accounting.
     const authHeader = req.headers.get("Authorization");
-    let userId: string | null = null;
-
-    if (authHeader?.startsWith("Bearer ")) {
-      const token = authHeader.replace("Bearer ", "");
-      
-      // Try getUser first - works reliably with user JWTs
-      const { data: userData, error: userError } = await supabase.auth.getUser(token);
-      
-      if (!userError && userData?.user?.id) {
-        userId = userData.user.id;
-        console.log(`[TTS] Authenticated via getUser: ${userId.slice(0, 8)}...`);
-      } else {
-        // Token might be the anon key (no user session) - allow with free tier
-        console.log("[TTS] No valid user session, proceeding as anonymous with free limits");
-      }
-    } else {
-      console.log("[TTS] No auth header, proceeding as anonymous");
+    if (!authHeader?.startsWith("Bearer ")) {
+      return new Response(
+        JSON.stringify({ error: "Authentication required for premium voice synthesis." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
-    // Get user's plan and enforce limits (only for authenticated users)
-    let userPlan = "free";
-    let monthlyLimit = TIER_TTS_LIMITS.free;
-    let currentUsage = 0;
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    let usageRow: any = null;
+    const token = authHeader.replace("Bearer ", "");
+    const { data: userData, error: userError } = await supabase.auth.getUser(token);
+    const userId = !userError ? userData?.user?.id ?? null : null;
 
-    let isAdmin = false;
-
-    if (userId) {
-      // Check admin role - admins bypass all limits
-      const { data: roleData } = await supabase
-        .from("user_roles")
-        .select("role")
-        .eq("user_id", userId)
-        .eq("role", "admin")
-        .maybeSingle();
-
-      isAdmin = !!roleData;
-
-      const { data: profile } = await supabase
-        .from("profiles")
-        .select("plan")
-        .eq("user_id", userId)
-        .single();
-
-      userPlan = profile?.plan || "free";
-      monthlyLimit = isAdmin ? -1 : (TIER_TTS_LIMITS[userPlan] ?? TIER_TTS_LIMITS.free);
-
-      if (isAdmin) {
-        console.log(`[TTS] Admin user - bypassing limits`);
-      }
-
-      const { data: usage } = await supabase
-        .from("tts_usage")
-        .select("minutes_used")
-        .eq("user_id", userId)
-        .eq("month", currentMonth)
-        .maybeSingle();
-
-      usageRow = usage;
-      currentUsage = usage?.minutes_used ?? 0;
-
-      if (!isAdmin && monthlyLimit > 0 && currentUsage >= monthlyLimit) {
-        console.log(`[TTS] Monthly limit reached: ${currentUsage}/${monthlyLimit} min (${userPlan})`);
-        const gate = gateDenied("AUDIO_LIMIT_REACHED", {
-          message: `Your audio listening minutes are exhausted (${monthlyLimit} min for ${userPlan}). Upgrade to keep listening.`,
-          currentPlan: userPlan,
-          usage: { audioMinutesUsed: currentUsage, audioMinutesLimit: monthlyLimit },
-        });
-        await recordGateEvent(supabase, {
-          user_id: userId, feature: "tts", reason: gate.reason, allowed: false,
-          plan: userPlan, usage_snapshot: { used: currentUsage, limit: monthlyLimit },
-        });
-        return gateResponse(gate, corsHeaders);
-      }
+    if (!userId) {
+      console.warn("[TTS] Invalid or expired user session");
+      return new Response(
+        JSON.stringify({ error: "Authentication required for premium voice synthesis." }),
+        { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
     }
 
-    // Parse request body
+    console.log(`[TTS] Authenticated user: ${userId.slice(0, 8)}...`);
+
+    // Parse and clean text before quota reservation so the exact charge is known
+    // before any paid provider call is attempted.
     const body = await req.json();
     console.log("[TTS] Request params:", { textLength: body.text?.length, voice: body.voice });
 
     const { text, voice = "alloy", language = "en" } = body;
+    void language;
 
     if (!text) {
       return new Response(
@@ -139,7 +93,6 @@ serve(async (req) => {
       );
     }
 
-    // Limit and clean text
     const maxLength = 4096;
     const truncatedText = text.length > maxLength ? text.slice(0, maxLength) : text;
 
@@ -165,14 +118,105 @@ serve(async (req) => {
       );
     }
 
-    // Validate voice
     const selectedVoice: OpenAIVoice = OPENAI_VOICES.includes(voice as OpenAIVoice)
       ? (voice as OpenAIVoice)
       : "alloy";
 
-    console.log(`[TTS] Generating speech: ${cleanedText.length} chars, voice: ${selectedVoice}`);
+    const currentMonth = new Date().toISOString().slice(0, 7);
+    const estimatedMinutes = Math.max(1, Math.ceil(cleanedText.length / 750));
 
-    // Call OpenAI TTS API with retry
+    // Canonical authority comes from user_roles. profiles.role is legacy and is
+    // intentionally never consulted.
+    const { data: roleData } = await supabase
+      .from("user_roles")
+      .select("role")
+      .eq("user_id", userId)
+      .eq("role", "admin")
+      .maybeSingle();
+    const isAdmin = !!roleData;
+
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("plan")
+      .or(`user_id.eq.${userId},id.eq.${userId}`)
+      .maybeSingle();
+
+    const userPlan = profile?.plan || "free";
+    const monthlyLimit = isAdmin ? -1 : (TIER_TTS_LIMITS[userPlan] ?? TIER_TTS_LIMITS.free);
+
+    if (isAdmin) {
+      console.log("[TTS] Admin user - unlimited quota, usage still tracked");
+    }
+
+    // Atomic reservation closes both single-request overshoot and concurrent
+    // request races. Browser roles cannot execute this RPC directly.
+    const { data: reservationData, error: reservationError } = await supabase.rpc(
+      "reserve_tts_minutes",
+      {
+        _user_id: userId,
+        _month: currentMonth,
+        _minutes: estimatedMinutes,
+        _limit: monthlyLimit,
+      },
+    );
+
+    if (reservationError) {
+      console.error("[TTS] Quota reservation failed:", reservationError);
+      return new Response(
+        JSON.stringify({ error: "Unable to verify audio usage right now. Please try again." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    const reservation = (Array.isArray(reservationData) ? reservationData[0] : reservationData) as TtsReservation | null;
+
+    if (!reservation) {
+      console.error("[TTS] Quota reservation returned no result");
+      return new Response(
+        JSON.stringify({ error: "Unable to verify audio usage right now. Please try again." }),
+        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } },
+      );
+    }
+
+    if (!reservation.allowed) {
+      console.log(`[TTS] Monthly limit would be exceeded: ${reservation.minutes_used}/${monthlyLimit} min (${userPlan})`);
+      const gate = gateDenied("AUDIO_LIMIT_REACHED", {
+        message: `This request exceeds your remaining audio allowance (${monthlyLimit} min for ${userPlan}). Upgrade to keep listening.`,
+        currentPlan: userPlan,
+        usage: { audioMinutesUsed: reservation.minutes_used, audioMinutesLimit: monthlyLimit },
+      });
+      await recordGateEvent(supabase, {
+        user_id: userId,
+        feature: "tts",
+        reason: gate.reason,
+        allowed: false,
+        plan: userPlan,
+        usage_snapshot: {
+          used: reservation.minutes_used,
+          limit: monthlyLimit,
+          requested: estimatedMinutes,
+          remaining: reservation.remaining_minutes,
+        },
+      });
+      return gateResponse(gate, corsHeaders);
+    }
+
+    let reservationActive = true;
+    refundReservation = async () => {
+      if (!reservationActive) return;
+      reservationActive = false;
+      const { error: releaseError } = await supabase.rpc("release_tts_minutes", {
+        _user_id: userId,
+        _month: currentMonth,
+        _minutes: estimatedMinutes,
+      });
+      if (releaseError) {
+        console.error("[TTS] Failed to refund quota reservation:", releaseError);
+      }
+    };
+
+    console.log(`[TTS] Generating speech: ${cleanedText.length} chars, voice: ${selectedVoice}, reserved: ${estimatedMinutes} min`);
+
     let response: Response | null = null;
     let lastError = "";
     const maxRetries = 2;
@@ -203,7 +247,6 @@ serve(async (req) => {
         try {
           const parsed = JSON.parse(errorData);
           if (response.status === 429) {
-            // Check if it's a quota exhaustion (not retryable) vs rate limit (retryable)
             if (parsed.error?.code === "insufficient_quota" || parsed.error?.type === "insufficient_quota") {
               msg = "TTS service quota exhausted. The API key needs additional credits. Please contact support.";
               lastError = msg;
@@ -241,34 +284,28 @@ serve(async (req) => {
     }
 
     if (!response || !response.ok) {
-      // Detect provider quota exhaustion / billing issues — these are NOT user faults.
-      // Return 200 with a fallback signal so the client can use the browser's
-      // SpeechSynthesis API instead of crashing on a non-2xx response.
+      await refundReservation();
+
       const isQuotaExhausted =
         /quota|insufficient|billing|credits/i.test(lastError || "") ||
         response?.status === 402;
-      const isProviderDown =
-        response?.status === 503 || response?.status === 500 || !response;
+      const isProviderDown = response?.status === 503 || response?.status === 500 || !response;
 
       if (isQuotaExhausted || isProviderDown) {
-        if (userId) {
-          await recordGateEvent(supabase, {
-            user_id: userId,
-            feature: "tts",
-            reason: isQuotaExhausted ? "SERVICE_UNAVAILABLE" : "SERVICE_UNAVAILABLE",
-            allowed: false,
-            plan: userPlan,
-            usage_snapshot: { providerStatus: response?.status ?? 0, lastError },
-          });
-        }
+        await recordGateEvent(supabase, {
+          user_id: userId,
+          feature: "tts",
+          reason: "SERVICE_UNAVAILABLE",
+          allowed: false,
+          plan: userPlan,
+          usage_snapshot: { providerStatus: response?.status ?? 0, lastError },
+        });
         return new Response(
           JSON.stringify({
             success: false,
             fallback: true,
             reason: isQuotaExhausted ? "PROVIDER_QUOTA_EXHAUSTED" : "PROVIDER_UNAVAILABLE",
-            error: isQuotaExhausted
-              ? "Premium voice is temporarily unavailable. Using your device voice."
-              : "Premium voice is temporarily unavailable. Using your device voice.",
+            error: "Premium voice is temporarily unavailable. Using your device voice.",
           }),
           { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } },
         );
@@ -280,34 +317,14 @@ serve(async (req) => {
       );
     }
 
-    // Encode audio to base64
     const audioBuffer = await response.arrayBuffer();
     console.log(`[TTS] Received ${audioBuffer.byteLength} bytes`);
 
     const base64Audio = base64Encode(audioBuffer);
 
-    // Track usage in tts_usage table (only for authenticated users)
-    const estimatedMinutes = Math.ceil(cleanedText.length / 750);
-
-    if (userId) {
-      if (usageRow) {
-        await supabase
-          .from("tts_usage")
-          .update({ minutes_used: currentUsage + estimatedMinutes })
-          .eq("user_id", userId)
-          .eq("month", currentMonth);
-      } else {
-        await supabase
-          .from("tts_usage")
-          .insert({
-            user_id: userId,
-            month: currentMonth,
-            minutes_used: estimatedMinutes,
-          });
-      }
-    }
-
-    console.log(`[TTS] Success. Usage: ${currentUsage + estimatedMinutes}/${monthlyLimit} min`);
+    // Successful provider generation consumes the reservation. There is no
+    // second direct tts_usage write here; the database reservation is canonical.
+    console.log(`[TTS] Success. Usage: ${reservation.minutes_used}/${monthlyLimit} min`);
 
     return new Response(
       JSON.stringify({
@@ -318,11 +335,19 @@ serve(async (req) => {
         method: "openai-tts",
         charCount: cleanedText.length,
         minutesUsed: estimatedMinutes,
-        remainingMinutes: monthlyLimit - currentUsage - estimatedMinutes,
+        totalMinutesUsed: reservation.minutes_used,
+        remainingMinutes: reservation.remaining_minutes,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
   } catch (error) {
+    if (refundReservation) {
+      try {
+        await refundReservation();
+      } catch (refundError) {
+        console.error("[TTS] Reservation refund failed during exception handling:", refundError);
+      }
+    }
     console.error("[TTS] Error:", error);
     return new Response(
       JSON.stringify({ error: "TTS service error. Please try again later." }),
