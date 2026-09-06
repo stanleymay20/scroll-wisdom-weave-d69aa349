@@ -93,10 +93,13 @@ jobs:
           deno check supabase/functions/generate-references/index.ts
           deno check supabase/functions/verify-references/index.ts
           deno check supabase/functions/qa-publishability-audit/index.ts
+          deno check supabase/functions/cross-chapter-consistency-audit/index.ts
           deno check supabase/functions/certify-production-render/index.ts
           deno check supabase/functions/finalize-publication-certification/index.ts
-      - name: Test post-render production artifact audit
-        run: deno test supabase/functions/_shared/productionArtifactAudit_test.ts
+      - name: Test publication trust engines
+        run: |
+          deno test supabase/functions/_shared/structuralConsistency_test.ts
+          deno test supabase/functions/_shared/productionArtifactAudit_test.ts
 
   build:
     runs-on: ubuntu-latest
