@@ -9,7 +9,9 @@ const prohibited = [
   ["DROP COLUMN", /\bDROP\s+COLUMN\b/i],
   ["RENAME COLUMN", /\bRENAME\s+COLUMN\b/i],
   ["ALTER COLUMN ... TYPE", /\bALTER\s+COLUMN\b[\s\S]{0,160}?\bTYPE\b/i],
-  ["TRUNCATE", /\bTRUNCATE\b/i],
+  // Match actual TRUNCATE statements, not privilege revocations such as
+  // "REVOKE ... TRUNCATE ..." used to harden browser roles.
+  ["TRUNCATE", /(?:^|;)\s*TRUNCATE\b/im],
   ["DELETE FROM", /\bDELETE\s+FROM\b/i],
 ];
 
