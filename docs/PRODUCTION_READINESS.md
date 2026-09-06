@@ -9,7 +9,7 @@ ScrollLibrary is eligible for a GA decision only when every required control bel
 | Compile and unit correctness | CI `typecheck`, `lint`, `test`, `edge-functions` | None |
 | Database change safety | CI `migration-safety` | Staging migration run and Supabase security/performance advisor results |
 | Browser journeys | CI `e2e` against deterministic local services | Staging smoke run for auth, checkout, generation, export, account deletion, and administrative authorization |
-| Supply-chain security | CI audits production dependencies, reviews dependency diffs, scans committed secrets, and runs `CodeQL` | Review/acceptance of any platform security alerts; development-tool advisories remain visible for scheduled upgrade work |
+| Supply-chain security | CI audits the locked production dependency graph, scans committed secrets, and runs `CodeQL` | Enable GitHub Dependency Graph/Dependabot and review any platform security alerts; development-tool advisories remain visible for scheduled upgrade work |
 | Performance regression | `build` enforces bundle budgets | Staging Web Vitals and load-test report |
 | Artifact provenance | `dist/release.json` and commit-addressed CI artifact | Deployment record containing commit SHA, artifact digest, environment, actor, and timestamp |
 | Recovery | Not safely automatable from source control | Successful backup restore rehearsal and rollback exercise |
