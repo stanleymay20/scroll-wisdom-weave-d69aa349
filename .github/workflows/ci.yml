@@ -87,6 +87,9 @@ jobs:
           deno check supabase/functions/validate-certificate/index.ts
           deno check supabase/functions/verify-certificate/index.ts
           deno check supabase/functions/export-certificate/index.ts
+      - name: Type-check ScrollUniversity Edge Functions
+        run: |
+          deno check supabase/functions/university-provision-users/index.ts
       - name: Type-check publication pipeline Edge Functions
         run: |
           deno check supabase/functions/generate-book/index.ts
