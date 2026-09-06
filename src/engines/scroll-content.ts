@@ -25,12 +25,12 @@ export {
 } from '@/components/generate';
 
 // ─── Reader / Editor Components ──────────────────────────
-export {
-  MarkdownRenderer,
-  ChapterEditor,
-  DirectTextEditor,
-  StructuredCodeBlock,
-} from '@/components/reader';
+// Direct exports preserve route-level lazy loading. Importing the reader barrel
+// here would eagerly pull optional reader tools into the main application chunk.
+export { MarkdownRenderer } from '@/components/reader/MarkdownRenderer';
+export { ChapterEditor } from '@/components/reader/ChapterEditor';
+export { DirectTextEditor } from '@/components/reader/DirectTextEditor';
+export { StructuredCodeBlock } from '@/components/reader/StructuredCodeBlock';
 
 // ─── Chapter Management ─────────────────────────────────
 export { ChapterManagement } from '@/components/books/ChapterManagement';
