@@ -3,6 +3,7 @@
 // caches them in scrollvision_assets, and links them to a chapter.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { evaluateAssetRights } from "../_shared/assetRights.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -73,6 +74,27 @@ type Candidate = {
   relevance_score: number;
 };
 
+function publicationSafeCandidate(candidate: Candidate): boolean {
+  const decision = evaluateAssetRights({
+    source: candidate.source,
+    sourceUrl: candidate.source_url,
+    imageUrl: candidate.image_url,
+    license: candidate.license,
+    attribution: candidate.attribution,
+  });
+
+  if (!decision.allowed) {
+    log("candidate rejected by rights policy", {
+      source: candidate.source,
+      sourceId: candidate.source_id,
+      license: candidate.license,
+      code: decision.code,
+    });
+  }
+
+  return decision.allowed;
+}
+
 async function searchWikimedia(entity: string, limit = 3): Promise<Candidate[]> {
   const url =
     "https://commons.wikimedia.org/w/api.php?" +
@@ -103,7 +125,7 @@ async function searchWikimedia(entity: string, limit = 3): Promise<Candidate[]> 
       const license = meta.LicenseShortName?.value || meta.License?.value || "Unknown";
       const artist = (meta.Artist?.value ?? "").replace(/<[^>]+>/g, "").trim();
       const credit = (meta.Credit?.value ?? "").replace(/<[^>]+>/g, "").trim();
-      out.push({
+      const candidate: Candidate = {
         source: "wikimedia",
         source_id: String(p.pageid),
         source_url: `https://commons.wikimedia.org/?curid=${p.pageid}`,
@@ -118,7 +140,8 @@ async function searchWikimedia(entity: string, limit = 3): Promise<Candidate[]> 
         entity,
         query: entity,
         relevance_score: 0.7,
-      });
+      };
+      if (publicationSafeCandidate(candidate)) out.push(candidate);
     }
     return out;
   } catch (e) {
@@ -145,7 +168,15 @@ async function searchMet(entity: string, limit = 2): Promise<Candidate[]> {
       if (!or.ok) continue;
       const o = await or.json();
       if (!o.primaryImage && !o.primaryImageSmall) continue;
-      out.push({
+
+      // The Met API can return imaged objects that are not public-domain Open
+      // Access assets. Do not infer publication permission from the museum host.
+      if (o.isPublicDomain !== true) {
+        log("met candidate rejected: not public domain", { objectId: o.objectID });
+        continue;
+      }
+
+      const candidate: Candidate = {
         source: "met_museum",
         source_id: String(o.objectID),
         source_url: o.objectURL,
@@ -156,12 +187,13 @@ async function searchMet(entity: string, limit = 2): Promise<Candidate[]> {
           .filter(Boolean)
           .join(" · ")
           .slice(0, 500),
-        license: o.isPublicDomain ? "Public Domain (CC0)" : "Met Museum Open Access",
+        license: "Public Domain (CC0)",
         attribution: `${o.artistDisplayName || "Unknown"} — The Metropolitan Museum of Art`,
         entity,
         query: entity,
-        relevance_score: o.isPublicDomain ? 0.85 : 0.75,
-      });
+        relevance_score: 0.85,
+      };
+      if (publicationSafeCandidate(candidate)) out.push(candidate);
     }
     return out;
   } catch (e) {
@@ -241,7 +273,7 @@ serve(async (req) => {
       }),
     );
 
-    // 3. Rank: prefer public domain, larger images, met before wikimedia stubs
+    // 3. Rank trusted rights-cleared candidates: prefer public domain/CC0.
     allCandidates.sort((a, b) => {
       const ap = (a.license?.includes("Public Domain") || a.license?.includes("CC0")) ? 0.1 : 0;
       const bp = (b.license?.includes("Public Domain") || b.license?.includes("CC0")) ? 0.1 : 0;
@@ -254,6 +286,12 @@ serve(async (req) => {
     const linkedAssets: Array<{ id: string; entity: string }> = [];
     for (let i = 0; i < picked.length; i++) {
       const c = picked[i];
+
+      // Defense in depth: candidates are filtered at source, but re-evaluate
+      // immediately before persistence so future source adapters cannot bypass
+      // publication-rights policy accidentally.
+      if (!publicationSafeCandidate(c)) continue;
+
       const hash = await sha256(`${c.source}|${c.source_id}|${c.image_url}`);
 
       const { data: existing } = await supabase
