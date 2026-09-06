@@ -188,7 +188,8 @@ function packageOpf(input: EpubInput, bookId: string, manifestItems: string, spi
   const title = escXml(input.book.title || "Untitled");
   const author = escXml(input.author?.display_name || "Unknown");
   const lang = escXml(input.language || "en");
-  const subtitle = input.listing?.subtitle ? `<meta property="dcterms:alternative">${escXml(input.listing.subtitle)}</meta>` : "";
+  const canonicalSubtitle = input.book.subtitle ?? input.listing?.subtitle ?? null;
+  const subtitle = canonicalSubtitle ? `<meta property="dcterms:alternative">${escXml(canonicalSubtitle)}</meta>` : "";
   const description = escXml(input.listing?.amazon_description || input.listing?.blurb || input.book.description || "");
   const modified = new Date(input.generatedAt).toISOString().replace(/\.\d+Z$/, "Z");
 

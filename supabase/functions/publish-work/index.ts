@@ -60,6 +60,15 @@ Deno.serve(async (req) => {
     if (!work) return json({ error: "work_not_found" }, 404);
     if (!book?.id) return json({ error: "publication_blocked", reason: "book_record_required" }, 409);
 
+    // Subtitle is bibliographic identity, not mutable storefront decoration.
+    // Freeze exactly the subtitle that was covered by the publication hash.
+    const { data: listingIdentity, error: listingIdentityErr } = await sc
+      .from("public_listings")
+      .select("subtitle")
+      .eq("book_id", book.id)
+      .maybeSingle();
+    if (listingIdentityErr) return serverError(listingIdentityErr);
+
     // Pull display_name for each rights holder. Rights holders remain distinct
     // from publisher/imprint identity; a copyright owner is not automatically a publisher.
     const holderIds = [...new Set((rights ?? []).map((r) => r.rights_holder_id).filter(Boolean))];
@@ -252,6 +261,7 @@ Deno.serve(async (req) => {
     const printCompatibilityIsbn = isbnByFormat.paperback ?? isbnByFormat.hardcover ?? null;
     const snapshot = {
       title: work.title,
+      subtitle: listingIdentity?.subtitle ?? null,
       language: publishingProfile.publication_language || work.original_language || body.language,
       edition: publishingProfile.edition_label,
       publisher: publisherSnapshot,

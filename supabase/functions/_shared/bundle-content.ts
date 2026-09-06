@@ -737,7 +737,7 @@ export function renderManifest(ctx: BundleContext): BundleManifest {
   );
   return {
     title: ctx.book.title,
-    subtitle: ctx.listing?.subtitle ?? ctx.book.subtitle ?? "",
+    subtitle: ctx.book.subtitle ?? ctx.listing?.subtitle ?? "",
     description_long: renderLongDescription(ctx),
     description_short: renderShortDescription(ctx),
     keywords: kw.keywords,
