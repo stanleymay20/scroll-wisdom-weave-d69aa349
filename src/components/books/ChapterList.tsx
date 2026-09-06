@@ -103,11 +103,10 @@ export function ChapterList({
       });
 
       if (result.ready) {
+        // The pipeline owns the final database verdict and metadata.
+        // Only update local state so the UI reflects certification; do not
+        // overwrite any publication-quality metadata persisted by the pipeline.
         if (latestJob) {
-          await supabase
-            .from("generation_jobs")
-            .update({ status: "completed", completed_at: new Date().toISOString() })
-            .eq("id", latestJob.id);
           setLatestJob({ ...latestJob, status: "completed" });
         }
         toast({
@@ -115,6 +114,11 @@ export function ChapterList({
           description: `Editorial ${result.editorial.score ?? "—"}/100 · evidence and publishability gates passed.`,
         });
       } else {
+        // Pipeline already persisted the partial verdict; surface the manual
+        // Retry publication review action without a reload by updating local state.
+        if (latestJob) {
+          setLatestJob({ ...latestJob, status: "partial" });
+        }
         toast({
           title: "Draft complete — certification blocked",
           description: result.blockers.slice(0, 2).join(" ") || "Quality gates found issues that still require review.",
@@ -124,6 +128,31 @@ export function ChapterList({
     } catch (error) {
       const message = error instanceof Error ? error.message : "Publication review failed";
       setLocalQualityStage(`Quality review stopped: ${message}`);
+
+      // Fail closed: the pipeline threw before persisting a verdict, so mark
+      // the in-flight job partial so no automatic expensive retry loop occurs
+      // and the manual Retry action stays visible. Do not store the raw
+      // upstream exception in the database.
+      if (latestJob && (latestJob.status === "pending" || latestJob.status === "generating")) {
+        const { error: updateError } = await supabase
+          .from("generation_jobs")
+          .update({
+            status: "partial",
+            completed_at: null,
+            error_code: "QUALITY_PIPELINE_ERROR",
+            error_message:
+              "Publication quality review stopped before certification completed.",
+          })
+          .eq("id", latestJob.id);
+        if (updateError) {
+          console.warn(
+            "[ChapterList] generation_jobs partial-mark failed:",
+            updateError.code ?? "unknown",
+          );
+        }
+        setLatestJob({ ...latestJob, status: "partial" });
+      }
+
       toast({
         title: "Draft complete — quality review incomplete",
         description: message,
