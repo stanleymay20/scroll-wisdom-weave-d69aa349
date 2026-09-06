@@ -67,6 +67,13 @@ interface QAResponse {
   error?: string;
 }
 
+interface FinalizationResponse {
+  ready?: boolean;
+  jobStatus?: string | null;
+  authority?: string;
+  error?: string;
+}
+
 export interface PublicationPipelineResult {
   ready: boolean;
   blockers: string[];
@@ -265,52 +272,20 @@ async function repairFromAudit(
   return { improved, failed };
 }
 
-async function updateGenerationJob(
-  bookId: string,
-  ready: boolean,
-  chapterCount: number,
-  blockers: string[],
-) {
-  const { data: job, error: jobError } = await supabase
-    .from("generation_jobs")
-    .select("id, metadata")
-    .eq("book_id", bookId)
-    .order("created_at", { ascending: false })
-    .limit(1)
-    .maybeSingle();
+async function finalizePublicationCertification(bookId: string): Promise<FinalizationResponse> {
+  const { data, error } = await supabase.functions.invoke("finalize-publication-certification", {
+    body: { bookId },
+  });
+  if (error) throw new Error(`Final publication certification failed: ${error.message}`);
 
-  if (jobError) {
-    throw new Error(`Unable to load generation job for publication status: ${jobError.message}`);
+  const finalization = (data || {}) as FinalizationResponse;
+  if (finalization.error) {
+    throw new Error(`Final publication certification failed: ${finalization.error}`);
   }
-  if (!job) return;
-
-  const previousMetadata =
-    job.metadata && typeof job.metadata === "object" && !Array.isArray(job.metadata)
-      ? job.metadata
-      : {};
-
-  const { error: updateError } = await supabase
-    .from("generation_jobs")
-    .update({
-      status: ready ? "completed" : "partial",
-      current_chapter: chapterCount,
-      completed_at: new Date().toISOString(),
-      error_code: ready ? null : "QUALITY_GATE_FAILED",
-      error_message: ready ? null : blockers.slice(0, 6).join(" | ").slice(0, 1000),
-      metadata: {
-        ...previousMetadata,
-        publicationQuality: {
-          ready,
-          blockers: blockers.slice(0, 20),
-          checkedAt: new Date().toISOString(),
-        },
-      },
-    })
-    .eq("id", job.id);
-
-  if (updateError) {
-    throw new Error(`Unable to persist publication status: ${updateError.message}`);
+  if (typeof finalization.ready !== "boolean") {
+    throw new Error("Final publication certification returned no authoritative verdict.");
   }
+  return finalization;
 }
 
 function emptyResult(book: EvidenceBook, blockers: string[]): PublicationPipelineResult {
@@ -378,7 +353,7 @@ export async function runPublicationQualityPipeline({
         ? "No generated chapters are available for publication review."
         : `Only ${generated.length}/${chapters.length} chapters are generated.`,
     ];
-    await updateGenerationJob(bookId, false, generated.length, incompleteBlockers);
+    await finalizePublicationCertification(bookId);
     report(onStage, "blocked", incompleteBlockers[0]);
     return emptyResult(book, incompleteBlockers);
   }
@@ -456,30 +431,34 @@ export async function runPublicationQualityPipeline({
         `Publishability QA is ${qa.report?.status || "incomplete"}${qa.report?.score != null ? ` (${qa.report.score}/100)` : ""}.`,
       ];
 
-  // Certification is based exclusively on the latest manuscript state. Earlier
-  // repair/evidence failures are diagnostics, not permanent blockers after a
-  // subsequent independent check proves that they are resolved.
+  // Local gate results remain useful diagnostics, but the final readiness bit is
+  // owned by the server and re-checked against the current persisted manuscript.
   const blockers = [
     ...finalEditorialBlockers(audit, repairDiagnostics),
     ...finalEvidenceBlockers(evidence, chapters.length),
     ...qaBlockers,
   ];
   const uniqueBlockers = [...new Set(blockers)];
-  const ready = Boolean(audit.certificationEligible && uniqueBlockers.length === 0 && qaReady);
 
-  await updateGenerationJob(bookId, ready, chapters.length, uniqueBlockers);
+  const finalization = await finalizePublicationCertification(bookId);
+  const ready = finalization.ready === true;
+  const finalBlockers = ready
+    ? []
+    : uniqueBlockers.length > 0
+      ? uniqueBlockers
+      : ["The manuscript changed after quality checks or current server attestations are incomplete. Run publication review again."];
 
   report(
     onStage,
     ready ? "certified" : "blocked",
     ready
-      ? "Publication candidate passed editorial, evidence, and publishability gates."
-      : "Draft is complete, but publication certification is blocked by unresolved quality issues.",
+      ? "Publication candidate passed current server-attested editorial, evidence, and publishability gates."
+      : "Draft is complete, but publication certification is blocked by unresolved or stale quality evidence.",
   );
 
   return {
     ready,
-    blockers: uniqueBlockers,
+    blockers: finalBlockers,
     revisionPasses,
     editorial: {
       eligible: Boolean(audit.certificationEligible),
