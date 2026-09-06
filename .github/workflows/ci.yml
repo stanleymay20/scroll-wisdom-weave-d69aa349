@@ -119,6 +119,7 @@ jobs:
           deno test supabase/functions/_shared/structuralConsistency_test.ts
           deno test supabase/functions/_shared/assetRights_test.ts
           deno test supabase/functions/_shared/productionArtifactAudit_test.ts
+          deno test supabase/functions/_shared/kdp-print-cover_test.ts
 
   build:
     runs-on: ubuntu-latest
