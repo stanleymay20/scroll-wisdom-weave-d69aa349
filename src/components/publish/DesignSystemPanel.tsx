@@ -3,7 +3,7 @@
  * Lets the author choose a typography pairing, trim size, accent, header style.
  * Persists to `books.design_settings`. Snapshot is frozen on publish.
  */
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -31,24 +31,39 @@ export function DesignSystemPanel({ bookId, locked = false, onChange }: Props) {
   const [design, setDesign] = useState<DesignSettings>(resolveDesign(null));
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const onChangeRef = useRef(onChange);
+
+  useEffect(() => {
+    onChangeRef.current = onChange;
+  }, [onChange]);
 
   useEffect(() => {
     let cancelled = false;
+    setLoading(true);
+
     (async () => {
-      const { data } = await supabase.from("books").select("design_settings").eq("id", bookId).maybeSingle();
+      const { data, error } = await supabase.from("books").select("design_settings").eq("id", bookId).maybeSingle();
       if (cancelled) return;
+
+      if (error) {
+        toast({ title: "Design load failed", description: error.message, variant: "destructive" });
+        setLoading(false);
+        return;
+      }
+
       const resolved = resolveDesign(data?.design_settings as Partial<DesignSettings> | null);
       setDesign(resolved);
-      onChange?.(resolved);
+      onChangeRef.current?.(resolved);
       setLoading(false);
     })();
+
     return () => { cancelled = true; };
-  }, [bookId]);
+  }, [bookId, toast]);
 
   const update = (patch: Partial<DesignSettings>) => {
     const next = { ...design, ...patch };
     setDesign(next);
-    onChange?.(next);
+    onChangeRef.current?.(next);
   };
 
   const applyPreset = (preset: DesignPreset) => update({ preset, ...PRESETS[preset] });
