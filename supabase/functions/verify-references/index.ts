@@ -339,7 +339,12 @@ serve(async (req) => {
     const emptyResp = { totalClaims: 0, analyzedClaims: 0, strong: 0, partial: 0, weak: 0, contradiction: 0, avgSupportScore: 0, unsupportedEmpiricalClaims: 0, contradictions: 0, strongPct: 0, uncitedClaimsPct: 0, analysisComplete: false, verdictLabel: 'Analysis Incomplete' };
     const emptyCoherence = { totalClaimsAnalyzed: 0, conflicts: [], conflictCount: 0, criticalConflicts: 0, coherenceScore: 100, coherenceVerdict: 'Analysis Incomplete', analysisComplete: false };
 
-    if (!Array.isArray(references) || !references.length) return json({ success: true, references: [], metrics: { total: 0, verifiedPct: 0 }, tier: { tier: "non-compliant", label: "No References" }, semanticIntegrityReport: { totalCitations: 0, strong: 0, moderate: 0, weak: 0, ornamental: 0, averageScore: 0, empiricalClaimsUnsupported: 0, ornamentalPct: 0 }, claimIntegrityReport: emptyResp, epistemicCoherenceReport: emptyCoherence });
+    if (!Array.isArray(references) || !references.length) {
+      // analysisComplete is false on both reports here, so the evidence gate cannot pass.
+      const blocked = await attestEvidence(false, { certificationBlocked: false, hardFailures: [], claimAnalysisComplete: false, coherenceAnalysisComplete: false, verifiedPct: 0 });
+      if (blocked) return blocked;
+      return json({ success: true, references: [], metrics: { total: 0, verifiedPct: 0 }, tier: { tier: "non-compliant", label: "No References" }, semanticIntegrityReport: { totalCitations: 0, strong: 0, moderate: 0, weak: 0, ornamental: 0, averageScore: 0, empiricalClaimsUnsupported: 0, ornamentalPct: 0 }, claimIntegrityReport: emptyResp, epistemicCoherenceReport: emptyCoherence });
+    }
 
     // Detect citation style
     const citStyle = chapterContent ? detectStyle(chapterContent) : 'APA';
