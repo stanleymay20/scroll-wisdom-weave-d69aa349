@@ -5,10 +5,14 @@ import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 
 // https://vitejs.dev/config/
-export default defineConfig(({ mode }) => ({
+export default defineConfig(({ mode }) => {
+  const buildTime = process.env.BUILD_TIME ?? new Date().toISOString();
+  const buildId = process.env.VITE_BUILD_ID ?? process.env.GITHUB_SHA ?? `local-${buildTime}`;
+
+  return ({
   define: {
-    __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
-    __BUILD_ID__: JSON.stringify(`${new Date().toISOString()}`),
+    __BUILD_TIME__: JSON.stringify(buildTime),
+    __BUILD_ID__: JSON.stringify(buildId),
   },
   server: {
     host: "::",
@@ -274,4 +278,5 @@ export default defineConfig(({ mode }) => ({
       "@": path.resolve(__dirname, "./src"),
     },
   },
-}));
+  });
+});
