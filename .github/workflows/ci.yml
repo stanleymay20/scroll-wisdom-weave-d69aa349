@@ -12,52 +12,50 @@ concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  BUN_VERSION: 1.2.23
+
 jobs:
-  quality:
+  typecheck:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 10
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Setup Bun
-        uses: oven-sh/setup-bun@v2
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
         with:
-          bun-version: 1.2.23
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
 
-      - name: Install locked dependencies
-        run: bun install --frozen-lockfile
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run lint
 
-      - name: Typecheck
-        id: typecheck
-        continue-on-error: true
-        run: bun run typecheck
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run test
 
-      - name: Lint
-        id: lint
-        continue-on-error: true
-        run: bun run lint
-
-      - name: Test
-        id: test
-        continue-on-error: true
-        run: bun run test
-
-      - name: Production build
-        id: build
-        continue-on-error: true
-        run: bun run build
-
-      - name: Enforce quality gates
-        if: always()
-        env:
-          TYPECHECK: ${{ steps.typecheck.outcome }}
-          LINT: ${{ steps.lint.outcome }}
-          TEST: ${{ steps.test.outcome }}
-          BUILD: ${{ steps.build.outcome }}
-        run: |
-          printf 'typecheck=%s\nlint=%s\ntest=%s\nbuild=%s\n' "$TYPECHECK" "$LINT" "$TEST" "$BUILD"
-          test "$TYPECHECK" = success
-          test "$LINT" = success
-          test "$TEST" = success
-          test "$BUILD" = success
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+      - run: bun install --frozen-lockfile
+      - run: bun run build
