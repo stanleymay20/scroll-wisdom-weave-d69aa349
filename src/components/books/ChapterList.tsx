@@ -33,7 +33,7 @@ export function ChapterList({
   const isQualityReview = Boolean(qualityStage);
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-display text-2xl font-bold">{t('book.tableOfContents')}</h2>
         {isOwner && chapters.some(ch => !ch.is_generated) && (
