@@ -13,13 +13,27 @@ const prohibited = [
   ["DELETE FROM", /\bDELETE\s+FROM\b/i],
 ];
 
-const files = (await readdir(migrationDir))
+const allFiles = (await readdir(migrationDir))
   .filter((file) => /^\d{14}.*\.sql$/i.test(file))
-  .filter((file) => file.slice(0, 14) >= hardenedBaseline)
   .sort();
 
 const failures = [];
-for (const file of files) {
+const byVersion = new Map();
+for (const file of allFiles) {
+  const version = file.slice(0, 14);
+  const existing = byVersion.get(version) || [];
+  existing.push(file);
+  byVersion.set(version, existing);
+}
+
+for (const [version, versionFiles] of byVersion) {
+  if (versionFiles.length > 1) {
+    failures.push(`duplicate migration version ${version}: ${versionFiles.join(", ")}`);
+  }
+}
+
+const hardenedFiles = allFiles.filter((file) => file.slice(0, 14) >= hardenedBaseline);
+for (const file of hardenedFiles) {
   const sql = await readFile(path.join(migrationDir, file), "utf8");
   for (const [label, pattern] of prohibited) {
     if (pattern.test(sql)) failures.push(`${file}: ${label}`);
@@ -27,10 +41,13 @@ for (const file of files) {
 }
 
 if (failures.length > 0) {
-  console.error("Unsafe migration operations detected in the hardened migration era:");
+  console.error("Migration safety gate failed:");
   for (const failure of failures) console.error(`  - ${failure}`);
-  console.error("Use an additive/backfill-compatible migration or document and isolate the production transition instead.");
+  console.error("Use unique migration versions and additive/backfill-compatible schema changes.");
   process.exit(1);
 }
 
-console.log(`Migration safety gate passed for ${files.length} hardened migration(s).`);
+console.log(
+  `Migration safety gate passed for ${allFiles.length} migration(s); ` +
+  `${hardenedFiles.length} hardened-era migration(s) scanned for destructive SQL.`,
+);
