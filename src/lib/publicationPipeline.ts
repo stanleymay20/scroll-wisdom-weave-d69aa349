@@ -114,12 +114,11 @@ function buildRepairPlan(audit: AuditResponse): Map<number, string[]> {
   for (const suggestion of audit.chapterSuggestions || []) {
     if (!suggestion.chapterNumber) continue;
     const improvements = (suggestion.improvements || []).filter(Boolean);
-    if (improvements.length > 0) {
-      plan.set(suggestion.chapterNumber, [
-        ...(plan.get(suggestion.chapterNumber) || []),
-        ...improvements,
-      ]);
-    }
+    if (improvements.length === 0) continue;
+    plan.set(suggestion.chapterNumber, [
+      ...(plan.get(suggestion.chapterNumber) || []),
+      ...improvements,
+    ]);
   }
 
   for (const penalty of audit.penalties || []) {
@@ -314,7 +313,7 @@ async function updateGenerationJob(
   }
 }
 
-function emptyResult(book: EvidenceBook, blockers: string[], generatedCount: number): PublicationPipelineResult {
+function emptyResult(book: EvidenceBook, blockers: string[]): PublicationPipelineResult {
   return {
     ready: false,
     blockers,
@@ -328,6 +327,30 @@ function emptyResult(book: EvidenceBook, blockers: string[], generatedCount: num
     },
     publishability: { status: null, score: null },
   };
+}
+
+function finalEditorialBlockers(
+  audit: AuditResponse,
+  repairDiagnostics: string[],
+): string[] {
+  if (audit.certificationEligible) return [];
+  const blockers = audit.certificationBlockers?.filter(Boolean) || [];
+  return blockers.length > 0
+    ? [...blockers, ...repairDiagnostics]
+    : ["Chief Editor certification threshold was not reached.", ...repairDiagnostics];
+}
+
+function finalEvidenceBlockers(
+  evidence: EvidenceResult,
+  chapterCount: number,
+): string[] {
+  const blockers = [...evidence.blockers];
+  if (evidence.required && evidence.passed < chapterCount) {
+    blockers.push(
+      `Evidence verification passed ${evidence.passed}/${chapterCount} chapters; every chapter must pass for publication certification.`,
+    );
+  }
+  return blockers;
 }
 
 export async function runPublicationQualityPipeline({
@@ -357,27 +380,29 @@ export async function runPublicationQualityPipeline({
     ];
     await updateGenerationJob(bookId, false, generated.length, incompleteBlockers);
     report(onStage, "blocked", incompleteBlockers[0]);
-    return emptyResult(book, incompleteBlockers, generated.length);
+    return emptyResult(book, incompleteBlockers);
   }
 
-  const blockers: string[] = [];
-
   if (evidenceRequired(book)) {
-    report(onStage, "research", "Research director is grounding chapters in traceable academic sources…");
+    report(onStage, "research", "Research director is grounding chapters in traceable sources…");
   }
   report(onStage, "evidence-verification", "Verifying citations, claims, and evidence integrity…");
   let evidence = await verifyPublicationEvidence(book, chapters, true);
-  blockers.push(...evidence.blockers);
 
+  // Evidence repair can rewrite chapters, so always reload before editorial review.
   chapters = await loadEvidenceChapters(bookId);
 
   report(onStage, "editorial-audit", "Chief Editor is auditing the evidence-grounded manuscript…");
   let audit = await runEditorialAudit(bookId);
   let revisionPasses = 0;
+  const repairDiagnostics: string[] = [];
 
   while (!audit.certificationEligible && revisionPasses < maxRevisionPasses) {
     const plan = buildRepairPlan(audit);
-    if (plan.size === 0) break;
+    if (plan.size === 0) {
+      repairDiagnostics.push("Chief Editor found certification blockers but supplied no repairable chapter plan.");
+      break;
+    }
 
     revisionPasses++;
     report(
@@ -388,11 +413,11 @@ export async function runPublicationQualityPipeline({
 
     const repair = await repairFromAudit(book, chapters, audit);
     if (repair.improved === 0) {
-      blockers.push("Automatic editorial repair could not improve any flagged chapter.");
+      repairDiagnostics.push("Automatic editorial repair could not improve any flagged chapter.");
       break;
     }
     if (repair.failed > 0) {
-      blockers.push(`${repair.failed} chapter repair(s) failed during pass ${revisionPasses}.`);
+      repairDiagnostics.push(`${repair.failed} chapter repair(s) failed during pass ${revisionPasses}.`);
     }
 
     chapters = await loadEvidenceChapters(bookId);
@@ -400,18 +425,17 @@ export async function runPublicationQualityPipeline({
     audit = await runEditorialAudit(bookId);
   }
 
-  if (!audit.certificationEligible) {
-    blockers.push(...(audit.certificationBlockers || ["Chief Editor certification threshold was not reached."]));
-  }
-
+  // Editorial rewrites may change factual claims or citation placement. The final
+  // evidence verdict must therefore REPLACE the earlier verdict rather than be
+  // appended to it; otherwise a repaired book can remain blocked by stale errors.
   if (revisionPasses > 0 && evidence.checked > 0) {
     report(onStage, "evidence-verification", "Re-verifying evidence after editorial changes…");
     chapters = await loadEvidenceChapters(bookId);
-    const finalEvidence: EvidenceResult = await verifyPublicationEvidence(book, chapters, false);
-    blockers.push(...finalEvidence.blockers);
+    const repairedCount = evidence.repaired;
+    const finalEvidence = await verifyPublicationEvidence(book, chapters, false);
     evidence = {
       ...finalEvidence,
-      repaired: evidence.repaired,
+      repaired: repairedCount,
     };
   }
 
@@ -426,14 +450,23 @@ export async function runPublicationQualityPipeline({
 
   const qaBlockerCount = qa.report?.blockerCount ?? qa.report?.blocker_count ?? 0;
   const qaReady = qa.report?.status === "ready" && qaBlockerCount === 0;
-  if (!qaReady) {
-    blockers.push(
-      `Publishability QA is ${qa.report?.status || "incomplete"}${qa.report?.score != null ? ` (${qa.report.score}/100)` : ""}.`,
-    );
-  }
+  const qaBlockers = qaReady
+    ? []
+    : [
+        `Publishability QA is ${qa.report?.status || "incomplete"}${qa.report?.score != null ? ` (${qa.report.score}/100)` : ""}.`,
+      ];
 
+  // Certification is based exclusively on the latest manuscript state. Earlier
+  // repair/evidence failures are diagnostics, not permanent blockers after a
+  // subsequent independent check proves that they are resolved.
+  const blockers = [
+    ...finalEditorialBlockers(audit, repairDiagnostics),
+    ...finalEvidenceBlockers(evidence, chapters.length),
+    ...qaBlockers,
+  ];
   const uniqueBlockers = [...new Set(blockers)];
   const ready = Boolean(audit.certificationEligible && uniqueBlockers.length === 0 && qaReady);
+
   await updateGenerationJob(bookId, ready, chapters.length, uniqueBlockers);
 
   report(
