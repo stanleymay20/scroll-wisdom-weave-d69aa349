@@ -41,6 +41,7 @@ import {
 } from "../_shared/bundle-content.ts";
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
 import { buildKdpPrintCoverPdf, getPdfPageCount, type KdpPaperType, type KdpTrimSize } from "../_shared/kdp-print-cover.ts";
+import { requireKdpFrontCoverResolution, type KdpCoverResolutionAssessment } from "../_shared/kdp-cover-resolution.ts";
 
 const EXTERNAL_BUNDLES = new Set<BundlePlatform>(["gumroad", "shopify", "substack", "patreon", "etsy"]);
 
@@ -267,6 +268,7 @@ async function runJob(
     // values never enter this path.
     let kdpPrintCover: Awaited<ReturnType<typeof buildKdpPrintCoverPdf>> | null = null;
     let kdpSourcePageCount: number | null = null;
+    let kdpCoverResolution: KdpCoverResolutionAssessment | null = null;
     if (bundleType === "kdp") {
       if (!mainPdf) throw new Error("KDP interior PDF is required before cover composition.");
       if (!cover) throw new Error("KDP_PRINT_COVER_REQUIRED");
@@ -274,6 +276,7 @@ async function runJob(
       const supportedTrims = new Set<KdpTrimSize>(["5x8", "5.25x8", "5.5x8.5", "6x9", "7x10", "8.5x11"]);
       const requestedTrim = String(options.trim_size ?? "6x9") as KdpTrimSize;
       if (!supportedTrims.has(requestedTrim)) throw new Error("INVALID_KDP_TRIM_SIZE");
+      kdpCoverResolution = requireKdpFrontCoverResolution(cover.widthPx, cover.heightPx, requestedTrim);
 
       const supportedPaper = new Set<KdpPaperType>(["white", "cream", "groundwood", "standard_color", "premium_color"]);
       const requestedPaper = String(options.paper_type ?? "white") as KdpPaperType;
@@ -327,6 +330,7 @@ async function runJob(
           trim_size: requestedTrim,
           paper_type: requestedPaper,
           spine_width_in: kdpPrintCover.geometry.spineWidthIn,
+          cover_effective_dpi: kdpCoverResolution.effectiveDpi,
           barcode_mode: barcodeMode,
           spine_text_rendered: kdpPrintCover.spineTextRendered,
         },
@@ -594,6 +598,7 @@ async function runJob(
           spine_width_in: kdpPrintCover.geometry.spineWidthIn,
           total_width_in: kdpPrintCover.geometry.totalWidthIn,
           total_height_in: kdpPrintCover.geometry.totalHeightIn,
+          cover_resolution: kdpCoverResolution,
           barcode_mode: kdpPrintCover.barcodeMode,
           isbn13: kdpPrintCover.isbn13,
           spine_text_rendered: kdpPrintCover.spineTextRendered,
