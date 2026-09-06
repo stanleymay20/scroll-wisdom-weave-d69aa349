@@ -44,6 +44,13 @@ const isPlaceholderChapter = (chapter: ChapterData) =>
 const isCompleteChapter = (chapter: ChapterData) =>
   chapter.is_generated === true && Boolean(chapter.content && chapter.content.trim().length > 0);
 
+const isJobStatus = (value: unknown): value is JobStatus =>
+  value === "pending"
+  || value === "generating"
+  || value === "completed"
+  || value === "failed"
+  || value === "partial";
+
 export function ChapterList({
   bookId, chapters, isOwner, generatingChapterId, isGeneratingAll, generationProgress,
   qualityStage: qualityStageOverride, onGenerateChapter, onGenerateAll, onNavigateToChapter,
@@ -129,28 +136,22 @@ export function ChapterList({
       const message = error instanceof Error ? error.message : "Publication review failed";
       setLocalQualityStage(`Quality review stopped: ${message}`);
 
-      // Fail closed: the pipeline threw before persisting a verdict, so mark
-      // the in-flight job partial so no automatic expensive retry loop occurs
-      // and the manual Retry action stays visible. Do not store the raw
-      // upstream exception in the database.
+      // Workflow state is server-owned. Ask the finalizer to mark an interrupted
+      // review partial; if that request itself fails, keep the UI fail-closed
+      // locally and never fall back to a browser database mutation.
       if (latestJob && (latestJob.status === "pending" || latestJob.status === "generating")) {
-        const { error: updateError } = await supabase
-          .from("generation_jobs")
-          .update({
-            status: "partial",
-            completed_at: null,
-            error_code: "QUALITY_PIPELINE_ERROR",
-            error_message:
-              "Publication quality review stopped before certification completed.",
-          })
-          .eq("id", latestJob.id);
-        if (updateError) {
-          console.warn(
-            "[ChapterList] generation_jobs partial-mark failed:",
-            updateError.code ?? "unknown",
-          );
+        const { data: interrupted, error: interruptError } = await supabase.functions.invoke(
+          "finalize-publication-certification",
+          { body: { bookId, mode: "interrupted" } },
+        );
+        if (interruptError || interrupted?.error) {
+          console.warn("[ChapterList] server interruption finalization failed");
         }
-        setLatestJob({ ...latestJob, status: "partial" });
+        const serverStatus = interrupted?.jobStatus;
+        setLatestJob({
+          ...latestJob,
+          status: isJobStatus(serverStatus) ? serverStatus : "partial",
+        });
       }
 
       toast({
@@ -244,7 +245,6 @@ export function ChapterList({
           </Button>
         ) : null}
       </div>
-
 
       {isBusy && (
         <div className="mb-6 p-4 rounded-xl bg-gradient-card border border-primary/30" aria-live="polite">
