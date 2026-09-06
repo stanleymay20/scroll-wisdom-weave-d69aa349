@@ -1,9 +1,10 @@
 // finalize-publication-certification
 // ---------------------------------
 // Final server-authoritative publication verdict for the current persisted book.
-// The browser may orchestrate quality checks, but it never decides readiness.
+// The browser may orchestrate quality checks, but it never decides readiness or
+// writes publication workflow state directly.
 //
-// POST { bookId: uuid } -> { ready, jobStatus, checkedAt }
+// POST { bookId: uuid, mode?: "evaluate" | "interrupted" }
 
 import "https://deno.land/std@0.224.0/dotenv/load.ts";
 import {
@@ -19,7 +20,10 @@ import {
   enforceRateLimit,
 } from "../_shared/http.ts";
 
-const BodySchema = z.object({ bookId: z.string().uuid() });
+const BodySchema = z.object({
+  bookId: z.string().uuid(),
+  mode: z.enum(["evaluate", "interrupted"]).optional().default("evaluate"),
+});
 
 Deno.serve(async (req) => {
   const pf = preflight(req);
@@ -31,7 +35,7 @@ Deno.serve(async (req) => {
 
     const parsed = await validateBody(req, BodySchema);
     if (parsed instanceof Response) return parsed;
-    const { bookId } = parsed;
+    const { bookId, mode } = parsed;
 
     const rate = enforceRateLimit({
       name: "finalize-publication-certification",
@@ -81,6 +85,44 @@ Deno.serve(async (req) => {
       authorized = !!adminRow;
     }
     if (!authorized) return forbidden("Not the owner of this book");
+
+    if (mode === "interrupted") {
+      const { data: job, error: jobErr } = await sc
+        .from("generation_jobs")
+        .select("id")
+        .eq("book_id", bookId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (jobErr) return serverError(jobErr);
+
+      if (!job) {
+        return json({
+          ready: false,
+          jobStatus: null,
+          authority: "server_interrupted",
+        });
+      }
+
+      const { data: updated, error: updateErr } = await sc
+        .from("generation_jobs")
+        .update({
+          status: "partial",
+          completed_at: null,
+          error_code: "QUALITY_PIPELINE_ERROR",
+          error_message: "Publication quality review stopped before certification completed.",
+        })
+        .eq("id", job.id)
+        .select("status")
+        .single();
+      if (updateErr) return serverError(updateErr);
+
+      return json({
+        ready: false,
+        jobStatus: updated?.status ?? "partial",
+        authority: "server_interrupted",
+      });
+    }
 
     const { data: attestationReady, error: readinessErr } = await sc.rpc(
       "has_current_publication_attestations",
