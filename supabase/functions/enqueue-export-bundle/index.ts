@@ -248,7 +248,11 @@ async function runJob(
     await sc.from("export_jobs").update({ progress: 45 }).eq("id", jobId);
 
     // ─── Cover (robust) ─────────────────────────────────────────────────
-    const coverSeed = (listing as any)?.cover_override_url || book.cover_image_url || null;
+    // KDP print output must use the canonical cover bound into the publication
+    // hash/rights provenance. Mutable storefront overrides are never print authority.
+    const coverSeed = bundleType === "kdp"
+      ? (book.cover_image_url || null)
+      : ((listing as any)?.cover_override_url || book.cover_image_url || null);
     const cover = coverSeed ? await fetchImageAsset(coverSeed) : null;
     await timer.stop("cover", {
       metadata: {
@@ -262,6 +266,7 @@ async function runJob(
     // immutable Publication identity. Browser-supplied ISBN/publisher/author
     // values never enter this path.
     let kdpPrintCover: Awaited<ReturnType<typeof buildKdpPrintCoverPdf>> | null = null;
+    let kdpSourcePageCount: number | null = null;
     if (bundleType === "kdp") {
       if (!mainPdf) throw new Error("KDP interior PDF is required before cover composition.");
       if (!cover) throw new Error("KDP_PRINT_COVER_REQUIRED");
@@ -275,6 +280,7 @@ async function runJob(
       if (!supportedPaper.has(requestedPaper)) throw new Error("INVALID_KDP_PAPER_TYPE");
 
       const pageCount = await getPdfPageCount(mainPdf);
+      kdpSourcePageCount = pageCount;
       const paperbackIsbn = isbnForPublicationSnapshot(publicationSnapshot, "kdp-pdf");
       const printStrategy = typeof publicationSnapshot.print_identifier_strategy === "string"
         ? publicationSnapshot.print_identifier_strategy
@@ -316,7 +322,8 @@ async function runJob(
       await timer.stop("kdp_cover", {
         metadata: {
           bytes: kdpPrintCover.bytes.byteLength,
-          page_count: pageCount,
+          source_page_count: pageCount,
+          kdp_page_count: kdpPrintCover.geometry.effectivePageCount,
           trim_size: requestedTrim,
           paper_type: requestedPaper,
           spine_width_in: kdpPrintCover.geometry.spineWidthIn,
@@ -580,7 +587,8 @@ async function runJob(
           ? { width: cover.widthPx, height: cover.heightPx, mime: cover.mime } : null,
         kdp_print_cover: kdpPrintCover ? {
           attached: true,
-          page_count: await getPdfPageCount(mainPdf!),
+          source_page_count: kdpSourcePageCount,
+          kdp_page_count: kdpPrintCover.geometry.effectivePageCount,
           trim_size: options.trim_size ?? "6x9",
           paper_type: options.paper_type ?? "white",
           spine_width_in: kdpPrintCover.geometry.spineWidthIn,

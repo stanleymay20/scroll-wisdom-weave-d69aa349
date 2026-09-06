@@ -5,6 +5,8 @@ export type KdpPaperType = "white" | "cream" | "groundwood" | "standard_color" |
 export type KdpTrimSize = "5x8" | "5.25x8" | "5.5x8.5" | "6x9" | "7x10" | "8.5x11";
 
 export interface KdpCoverGeometry {
+  sourcePageCount: number;
+  effectivePageCount: number;
   trimWidthIn: number;
   trimHeightIn: number;
   bleedIn: number;
@@ -96,12 +98,14 @@ export function computeKdpCoverGeometry(
   paperType: KdpPaperType,
 ): KdpCoverGeometry {
   if (!Number.isInteger(pageCount) || pageCount < 1) throw new Error("INVALID_PAGE_COUNT");
+  const effectivePageCount = pageCount % 2 === 0 ? pageCount : pageCount + 1;
+  if (effectivePageCount < 24) throw new Error("KDP_MIN_PAGE_COUNT_24");
   const trim = TRIMS[trimSize];
   if (!trim) throw new Error("INVALID_TRIM_SIZE");
   const perPage = SPINE_PER_PAGE_IN[paperType];
   if (!perPage) throw new Error("INVALID_PAPER_TYPE");
 
-  const spineWidthIn = pageCount * perPage;
+  const spineWidthIn = effectivePageCount * perPage;
   assertFinitePositive(spineWidthIn, "spine_width");
   const backTrimLeftIn = KDP_BLEED_IN;
   const backTrimRightIn = backTrimLeftIn + trim.width;
@@ -115,9 +119,11 @@ export function computeKdpCoverGeometry(
   // Amazon permits spine text only on sufficiently long books, but text also
   // needs 0.0625" clearance from both folds and at least a 7pt readable font.
   const usableSpinePt = (spineWidthIn - 2 * KDP_SPINE_TEXT_FOLD_CLEARANCE_IN) * PT_PER_IN;
-  const spineTextAllowed = pageCount > 79 && usableSpinePt >= 7;
+  const spineTextAllowed = effectivePageCount > 79 && usableSpinePt >= 7;
 
   return {
+    sourcePageCount: pageCount,
+    effectivePageCount,
     trimWidthIn: trim.width,
     trimHeightIn: trim.height,
     bleedIn: KDP_BLEED_IN,
