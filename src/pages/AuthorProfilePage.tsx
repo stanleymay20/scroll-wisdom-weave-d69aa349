@@ -5,6 +5,7 @@ import { SEO } from "@/components/SEO";
 import { Card } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { storefrontApi, type StoreCollection } from "@/lib/storefrontApi";
+import { getSafeExternalUrl } from "@/lib/safeExternalUrl";
 import { FollowAuthorButton } from "@/components/storefront/FollowAuthorButton";
 import { Badge } from "@/components/ui/badge";
 import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
@@ -45,6 +46,10 @@ export default function AuthorProfilePage() {
   if (loading) return <ResponsiveShell><div className="container mx-auto max-w-4xl p-8"><Skeleton className="h-64" /></div></ResponsiveShell>;
   if (!author) return <ResponsiveShell><div className="container mx-auto max-w-4xl p-8"><h1>Author not found</h1></div></ResponsiveShell>;
 
+  const websiteUrl = getSafeExternalUrl(author.website_url);
+  const linkedinUrl = getSafeExternalUrl(author.linkedin_url);
+  const xUrl = getSafeExternalUrl(author.x_url);
+
   return (
     <ResponsiveShell>
     <div className="min-h-screen bg-background">
@@ -63,9 +68,9 @@ export default function AuthorProfilePage() {
             <FollowAuthorButton authorUserId={author.user_id} className="mt-3" />
             {author.bio && <p className="text-muted-foreground mt-4 whitespace-pre-line">{author.bio}</p>}
             <div className="mt-3 flex gap-4 text-sm">
-              {author.website_url && <a href={author.website_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">Website</a>}
-              {author.linkedin_url && <a href={author.linkedin_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">LinkedIn</a>}
-              {author.x_url && <a href={author.x_url} target="_blank" rel="noreferrer" className="text-primary hover:underline">X</a>}
+              {websiteUrl && <a href={websiteUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">Website</a>}
+              {linkedinUrl && <a href={linkedinUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">LinkedIn</a>}
+              {xUrl && <a href={xUrl} target="_blank" rel="noopener noreferrer" className="text-primary hover:underline">X</a>}
             </div>
           </div>
         </Card>
