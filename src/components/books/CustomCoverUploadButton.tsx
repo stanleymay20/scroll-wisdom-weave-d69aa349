@@ -37,6 +37,18 @@ export function CustomCoverUploadButton({
       return;
     }
 
+    const rightsConfirmed = window.confirm(
+      "Publication rights confirmation:\n\nI confirm that I created/own this cover, or I have sufficient permission or license to publish and commercially distribute it.\n\nChoose OK only if this is true.",
+    );
+    if (!rightsConfirmed) {
+      toast({
+        title: "Cover not uploaded",
+        description: "A custom cover can only be activated after publication rights are confirmed.",
+      });
+      if (inputRef.current) inputRef.current.value = "";
+      return;
+    }
+
     setBusy(true);
     try {
       const ext = (file.name.split(".").pop() || "jpg").toLowerCase();
@@ -48,14 +60,27 @@ export function CustomCoverUploadButton({
 
       const { data: { publicUrl } } = supabase.storage.from("book-images").getPublicUrl(path);
 
-      const { error: dbErr } = await supabase
-        .from("books")
-        .update({ cover_image_url: publicUrl })
-        .eq("id", bookId);
-      if (dbErr) throw dbErr;
+      // The browser does not write cover_image_url or provenance directly. The
+      // server validates ownership + storage path, records the rights attestation,
+      // then activates this exact URL on the book.
+      const { data, error } = await supabase.functions.invoke("register-custom-cover", {
+        body: {
+          bookId,
+          assetUrl: publicUrl,
+          confirmPublicationRights: true,
+        },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      if (typeof data?.coverUrl !== "string" || !data.coverUrl) {
+        throw new Error("Server did not confirm the registered cover URL.");
+      }
 
-      onUploaded(publicUrl);
-      toast({ title: "Cover updated", description: "Your custom cover is live." });
+      onUploaded(data.coverUrl);
+      toast({
+        title: "Cover updated",
+        description: "Your custom cover is active and its publication-rights attestation was recorded.",
+      });
     } catch (err) {
       console.error("Cover upload failed", err);
       toast({
