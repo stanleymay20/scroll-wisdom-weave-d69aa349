@@ -52,13 +52,13 @@ jobs:
 
   edge-functions:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
-      - name: Install Node type dependencies used by Stripe declarations
+      - name: Install Node type dependencies used by Edge Function declarations
         run: bun install --frozen-lockfile
       - uses: denoland/setup-deno@v2
         with:
@@ -69,6 +69,15 @@ jobs:
           deno check supabase/functions/customer-portal/index.ts
           deno check supabase/functions/check-subscription/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
+      - name: Type-check publication pipeline Edge Functions
+        run: |
+          deno check supabase/functions/generate-book/index.ts
+          deno check supabase/functions/generate-chapter/index.ts
+          deno check supabase/functions/chief-editor-audit/index.ts
+          deno check supabase/functions/deep-research/index.ts
+          deno check supabase/functions/generate-references/index.ts
+          deno check supabase/functions/verify-references/index.ts
+          deno check supabase/functions/qa-publishability-audit/index.ts
 
   build:
     runs-on: ubuntu-latest
