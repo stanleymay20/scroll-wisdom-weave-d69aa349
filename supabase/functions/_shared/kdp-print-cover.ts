@@ -71,6 +71,39 @@ const SPINE_PER_PAGE_IN: Record<KdpPaperType, number> = {
   premium_color: 0.002347,
 };
 
+const PAGE_LIMITS_DEFAULT: Record<KdpPaperType, { min: number; max: number }> = {
+  white: { min: 24, max: 828 },
+  cream: { min: 24, max: 776 },
+  groundwood: { min: 24, max: 812 },
+  standard_color: { min: 72, max: 600 },
+  premium_color: { min: 24, max: 828 },
+};
+
+const PAGE_LIMITS_8_5_X_11: Record<KdpPaperType, { min: number; max: number }> = {
+  white: { min: 24, max: 590 },
+  cream: { min: 24, max: 550 },
+  groundwood: { min: 24, max: 578 },
+  standard_color: { min: 72, max: 600 },
+  premium_color: { min: 24, max: 590 },
+};
+
+export function getKdpPaperbackPageLimits(trimSize: KdpTrimSize, paperType: KdpPaperType) {
+  const table = trimSize === "8.5x11" ? PAGE_LIMITS_8_5_X_11 : PAGE_LIMITS_DEFAULT;
+  const limit = table[paperType];
+  if (!limit) throw new Error("INVALID_KDP_PRINT_COMBINATION");
+  return { ...limit };
+}
+
+export function requireKdpPaperbackPageCount(pageCount: number, trimSize: KdpTrimSize, paperType: KdpPaperType): number {
+  if (!Number.isInteger(pageCount) || pageCount < 1) throw new Error("INVALID_PAGE_COUNT");
+  const effectivePageCount = pageCount % 2 === 0 ? pageCount : pageCount + 1;
+  const { min, max } = getKdpPaperbackPageLimits(trimSize, paperType);
+  if (effectivePageCount < min || effectivePageCount > max) {
+    throw new Error("KDP_PAGE_COUNT_OUT_OF_RANGE:" + effectivePageCount + ":allowed_" + min + "_" + max);
+  }
+  return effectivePageCount;
+}
+
 const EAN_L: Record<string, string> = {
   "0": "0001101", "1": "0011001", "2": "0010011", "3": "0111101", "4": "0100011",
   "5": "0110001", "6": "0101111", "7": "0111011", "8": "0110111", "9": "0001011",
@@ -98,12 +131,11 @@ export function computeKdpCoverGeometry(
   paperType: KdpPaperType,
 ): KdpCoverGeometry {
   if (!Number.isInteger(pageCount) || pageCount < 1) throw new Error("INVALID_PAGE_COUNT");
-  const effectivePageCount = pageCount % 2 === 0 ? pageCount : pageCount + 1;
-  if (effectivePageCount < 24) throw new Error("KDP_MIN_PAGE_COUNT_24");
   const trim = TRIMS[trimSize];
   if (!trim) throw new Error("INVALID_TRIM_SIZE");
   const perPage = SPINE_PER_PAGE_IN[paperType];
   if (!perPage) throw new Error("INVALID_PAPER_TYPE");
+  const effectivePageCount = requireKdpPaperbackPageCount(pageCount, trimSize, paperType);
 
   const spineWidthIn = effectivePageCount * perPage;
   assertFinitePositive(spineWidthIn, "spine_width");
