@@ -9,7 +9,7 @@ const corsHeaders = {
 
 type PlanTier = "free" | "student" | "premium" | "prophet_tier";
 
-const PRODUCT_TO_TIER: Record<string, PlanTier> = {
+const PRODUCT_TO_TIER: Record<string, Exclude<PlanTier, "free">> = {
   prod_TaQU3ILEUpbXOT: "premium",
   prod_U0fmlf14TPlMKj: "prophet_tier",
   prod_TaQWA7MSUntiMy: "prophet_tier", // legacy institutional product
@@ -69,21 +69,25 @@ serve(async (req) => {
       const customerId = customers.data[0]?.id ?? null;
 
       if (customerId) {
+        // A creator may also hold a generation-plan subscription. Never let an
+        // unrelated creator product masquerade as a free generation plan merely
+        // because Stripe returned it first.
         const subscriptions = await stripe.subscriptions.list({
           customer: customerId,
           status: "active",
-          limit: 1,
+          limit: 20,
         });
 
-        const subscription = subscriptions.data[0];
-        if (subscription) {
+        for (const subscription of subscriptions.data) {
           const productId = String(subscription.items.data[0]?.price?.product ?? "");
-          const tier = PRODUCT_TO_TIER[productId] ?? "free";
+          const tier = PRODUCT_TO_TIER[productId];
+          if (!tier) continue;
+
           const subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
           await syncProfilePlan(tier);
           return response({
             subscribed: true,
-            product_id: productId || null,
+            product_id: productId,
             subscription_end: subscriptionEnd,
             tier,
           });
@@ -93,8 +97,8 @@ serve(async (req) => {
       logStep("Stripe unavailable; checking server-owned local state");
     }
 
-    // Manual/admin grants are a deliberate fallback. A missing or broken local
-    // row must never grant entitlement and must never leak a database error.
+    // Manual/admin grants and webhook-synchronized plan state are a deliberate
+    // fallback. Creator entitlement rows live in their own authority domain.
     const { data: localSub, error: localError } = await supabaseClient
       .from("subscriptions")
       .select("tier,status,current_period_end")
@@ -108,22 +112,19 @@ serve(async (req) => {
       return response({ subscribed: false, tier: "free" });
     }
 
-    if (localSub?.tier && localSub.tier !== "free") {
+    const allowedLocalTiers = new Set<PlanTier>(["student", "premium", "prophet_tier"]);
+    if (typeof localSub?.tier === "string" && allowedLocalTiers.has(localSub.tier as PlanTier)) {
       const endDate = localSub.current_period_end;
       const isValid = !endDate || new Date(endDate).getTime() > Date.now();
       if (isValid) {
-        const tier = (localSub.tier in { student: true, premium: true, prophet_tier: true }
-          ? localSub.tier
-          : "free") as PlanTier;
-        if (tier !== "free") {
-          await syncProfilePlan(tier);
-          return response({
-            subscribed: true,
-            product_id: null,
-            subscription_end: endDate,
-            tier,
-          });
-        }
+        const tier = localSub.tier as PlanTier;
+        await syncProfilePlan(tier);
+        return response({
+          subscribed: true,
+          product_id: null,
+          subscription_end: endDate,
+          tier,
+        });
       }
     }
 
