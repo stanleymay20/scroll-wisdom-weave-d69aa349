@@ -129,28 +129,27 @@ export function ChapterList({
       const message = error instanceof Error ? error.message : "Publication review failed";
       setLocalQualityStage(`Quality review stopped: ${message}`);
 
-      // Fail closed: the pipeline threw before persisting a verdict, so mark
-      // the in-flight job partial so no automatic expensive retry loop occurs
-      // and the manual Retry action stays visible. Do not store the raw
-      // upstream exception in the database.
+      // Fail closed: the pipeline threw before persisting a verdict. The server
+      // owns marking the in-flight job partial (browser never writes
+      // generation_jobs); log only a safe diagnostic if that invocation fails.
       if (latestJob && (latestJob.status === "pending" || latestJob.status === "generating")) {
-        const { error: updateError } = await supabase
-          .from("generation_jobs")
-          .update({
-            status: "partial",
-            completed_at: null,
-            error_code: "QUALITY_PIPELINE_ERROR",
-            error_message:
-              "Publication quality review stopped before certification completed.",
-          })
-          .eq("id", latestJob.id);
-        if (updateError) {
+        const { data: interruptResult, error: interruptError } = await supabase.functions.invoke(
+          "finalize-publication-certification",
+          { body: { bookId, mode: "interrupted" } },
+        );
+        if (interruptError) {
           console.warn(
-            "[ChapterList] generation_jobs partial-mark failed:",
-            updateError.code ?? "unknown",
+            "[ChapterList] interrupted-mode finalize failed:",
+            interruptError.message ?? "unknown",
           );
         }
-        setLatestJob({ ...latestJob, status: "partial" });
+        const returnedStatus = !interruptError && interruptResult?.jobStatus;
+        setLatestJob({
+          ...latestJob,
+          status: returnedStatus === "partial" || returnedStatus === "failed"
+            ? returnedStatus
+            : "partial",
+        });
       }
 
       toast({
