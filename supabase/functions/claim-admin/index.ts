@@ -24,22 +24,53 @@ serve(async (req) => {
       return json({ error: "Method not allowed" }, 405);
     }
 
-    const adminClaimCode = Deno.env.get("ADMIN_CLAIM_CODE");
-    if (!adminClaimCode) {
-      return json(
-        {
-          error: "Admin claim not configured. Set ADMIN_CLAIM_CODE secret first.",
-          code: "not_configured",
-        },
-        400,
-      );
-    }
-
-    // Authenticate before parsing body to keep brute-force surface small.
+    // Authenticate before exposing any bootstrap state or parsing a claim code.
     const auth = await requireUser(req);
     if (auth instanceof Response) return auth;
 
-    // Aggressive per-user limit — claim attempts should be rare.
+    const admin = serviceClient();
+
+    // Existing admins never need to re-claim; return an idempotent success.
+    const { data: existing, error: existingError } = await admin
+      .from("user_roles")
+      .select("id")
+      .eq("user_id", auth.userId)
+      .eq("role", "admin")
+      .maybeSingle();
+
+    if (existingError) {
+      console.error("[claim-admin] role lookup failed", existingError);
+      return serverError(new Error("Unable to verify admin state"));
+    }
+
+    if (existing) {
+      return json({ success: true, message: "Already admin" });
+    }
+
+    // Bootstrap is one-time only. Once any canonical admin exists, the shared
+    // claim secret is permanently out of the authorization path. Further role
+    // grants must be performed by an authenticated canonical admin through
+    // user_roles/admin tooling.
+    const { data: anyAdmin, error: anyAdminError } = await admin
+      .from("user_roles")
+      .select("id")
+      .eq("role", "admin")
+      .limit(1)
+      .maybeSingle();
+
+    if (anyAdminError) {
+      console.error("[claim-admin] bootstrap-state lookup failed", anyAdminError);
+      return serverError(new Error("Unable to verify admin bootstrap state"));
+    }
+
+    if (anyAdmin) {
+      console.warn("[claim-admin] bootstrap claim rejected after initialization", {
+        userId: auth.userId,
+      });
+      return forbidden("Admin bootstrap is closed");
+    }
+
+    // Aggressive per-user limit — first-admin bootstrap attempts should be rare.
     const limited = enforceRateLimit({
       name: "claim-admin",
       key: auth.userId,
@@ -51,23 +82,24 @@ serve(async (req) => {
     const body = await validateBody(req, ClaimSchema);
     if (body instanceof Response) return body;
 
-    // Constant-time comparison to defeat timing attacks.
-    if (!safeEqual(body.code, adminClaimCode)) {
-      console.warn("[claim-admin] invalid code attempt", { userId: auth.userId });
-      return forbidden("Invalid claim code");
+    const adminClaimCode = Deno.env.get("ADMIN_CLAIM_CODE");
+    if (!adminClaimCode) {
+      return json(
+        {
+          error: "Admin bootstrap is not configured.",
+          code: "not_configured",
+        },
+        400,
+      );
     }
 
-    const admin = serviceClient();
-
-    const { data: existing } = await admin
-      .from("user_roles")
-      .select("id")
-      .eq("user_id", auth.userId)
-      .eq("role", "admin")
-      .maybeSingle();
-
-    if (existing) {
-      return json({ success: true, message: "Already admin" });
+    // Constant-time comparison to defeat timing attacks during the one-time
+    // bootstrap window.
+    if (!safeEqual(body.code, adminClaimCode)) {
+      console.warn("[claim-admin] invalid bootstrap code attempt", {
+        userId: auth.userId,
+      });
+      return forbidden("Invalid claim code");
     }
 
     const { error: insertError } = await admin
@@ -79,7 +111,7 @@ serve(async (req) => {
       return serverError(new Error("Failed to grant admin"));
     }
 
-    console.log("[claim-admin] admin granted", { userId: auth.userId });
+    console.log("[claim-admin] initial admin granted", { userId: auth.userId });
     return json({ success: true, message: "Admin access granted" });
   } catch (err) {
     console.error("[claim-admin] unexpected error", err);
