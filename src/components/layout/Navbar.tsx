@@ -14,31 +14,62 @@ import { useSubscription } from "@/contexts/SubscriptionContext";
 import logo from "@/assets/logo.png";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
+interface NavProfile {
+  full_name: string | null;
+  avatar_url: string | null;
+}
+
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [profile, setProfile] = useState<any>(null);
+  const [profile, setProfile] = useState<NavProfile | null>(null);
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useLanguage();
   const { isAdmin } = useIsAdmin();
   const { user } = useSubscription();
+  const userId = user?.id ?? null;
   const lastUserIdRef = useRef<string | null>(null);
 
-  // Fetch profile only when user ID actually changes
+  // Fetch profile only when the authenticated user ID actually changes.
+  // Cancel stale responses so a rapid account/session change cannot paint
+  // the previous user's profile into the navbar.
   useEffect(() => {
-    if (user?.id && user.id !== lastUserIdRef.current) {
-      lastUserIdRef.current = user.id;
-      fetchProfile(user.id);
-    } else if (!user) {
+    let cancelled = false;
+
+    if (!userId) {
       lastUserIdRef.current = null;
       setProfile(null);
+      return () => {
+        cancelled = true;
+      };
     }
-  }, [user?.id]);
 
-  const fetchProfile = async (userId: string) => {
-    const { data } = await supabase.from("profiles").select("full_name, avatar_url").or(`user_id.eq.${userId},id.eq.${userId}`).maybeSingle();
-    if (data) setProfile(data);
-  };
+    if (userId === lastUserIdRef.current) {
+      return () => {
+        cancelled = true;
+      };
+    }
+
+    lastUserIdRef.current = userId;
+
+    const loadProfile = async () => {
+      const { data } = await supabase
+        .from("profiles")
+        .select("full_name, avatar_url")
+        .or(`user_id.eq.${userId},id.eq.${userId}`)
+        .maybeSingle();
+
+      if (!cancelled) {
+        setProfile(data ?? null);
+      }
+    };
+
+    void loadProfile();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [userId]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -81,7 +112,7 @@ export function Navbar() {
                   <Button variant="ghost" className="relative h-10 w-10 rounded-full ring-2 ring-transparent hover:ring-primary/20 transition-all">
                     <Avatar className="h-9 w-9 border border-border">
                       <AvatarImage src={profile?.avatar_url || ""} />
-                      <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">{getInitials(profile?.full_name)}</AvatarFallback>
+                      <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">{getInitials(profile?.full_name ?? null)}</AvatarFallback>
                     </Avatar>
                   </Button>
                 </DropdownMenuTrigger>
