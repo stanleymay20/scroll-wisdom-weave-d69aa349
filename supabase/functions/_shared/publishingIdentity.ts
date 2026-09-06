@@ -1,4 +1,4 @@
-import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
+type PublishingIdentityDb = { from: (table: string) => any };
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "./isbn.ts";
 
 export interface ResolvedPublishingIdentity {
@@ -37,7 +37,7 @@ const emptyIdentity = (): ResolvedPublishingIdentity => ({
  * publisher/ISBN values never enter this path.
  */
 export async function resolvePrepublicationIdentity(
-  sc: SupabaseClient,
+  sc: PublishingIdentityDb,
   bookId: string,
   exportFormat: string,
 ): Promise<ResolvedPublishingIdentity> {

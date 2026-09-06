@@ -7,6 +7,7 @@ import { auditBookForExport } from "../_shared/exportQuality.ts";
 import { computeSha256Hex } from "../_shared/export/hash.ts";
 import { recordExportEvent } from "../_shared/export/audit.ts";
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
+import { resolvePrepublicationIdentity } from "../_shared/publishingIdentity.ts";
 
 // Disable zip.js web workers — Deno edge runtime + test runner leak worker
 // timers otherwise (no Worker pool to clean up).
@@ -1524,6 +1525,20 @@ serve(async (req) => {
           canonicalPublisher = snap.rights_holders[0]?.display_name || null;
         }
         canonicalIsbn = isbnForPublicationSnapshot(snap, format);
+      }
+    }
+
+    // Before an immutable Publication exists, production certification must
+    // render the exact publisher/imprint + format-specific ISBN configuration
+    // that is already part of the bound publication hash. Otherwise a PDF could
+    // pass certification and later gain different publication identity metadata.
+    if (!canonicalPublicationId) {
+      const prepublicationIdentity = await resolvePrepublicationIdentity(supabase, bookId, format);
+      if (prepublicationIdentity.configured) {
+        canonicalPublisher = prepublicationIdentity.publisherName;
+        canonicalImprint = prepublicationIdentity.publisherImprint;
+        canonicalIsbn = prepublicationIdentity.isbnForExport;
+        canonicalLanguage = prepublicationIdentity.language;
       }
     }
 

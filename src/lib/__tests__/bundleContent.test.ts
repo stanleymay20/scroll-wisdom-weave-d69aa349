@@ -41,6 +41,14 @@ const baseCtx = (overrides: Partial<BundleContext> = {}): BundleContext => ({
   generatedAt: "2026-06-04T12:00:00.000Z",
   correlationId: "corr-abc",
   contentHash: "deadbeef".repeat(8),
+  extras: {
+    publisherName: "ScrollLibrary Publishing",
+    publisherImprint: "ScrollLibrary Press",
+    isbn: "9780306406157",
+    isbnByFormat: { paperback: "9780306406157" },
+    identifierStrategy: "platform_isbn",
+    distributionScope: "global",
+  },
   ...overrides,
 });
 
@@ -69,13 +77,21 @@ describe("front matter", () => {
     const md = renderFrontMatter(baseCtx());
     expect(md).toContain("# My Elite Book");
     expect(md).toContain("© 2026 Stanley May");
-    expect(md).toContain("Published via ScrollLibrary");
+    expect(md).toContain("Published by ScrollLibrary Press.");
+    expect(md).toContain("ISBN: 9780306406157");
     expect(md).toContain("## Table of contents");
     expect(md).toContain("Chapter 01 — Beginnings");
     expect(md).toContain("Chapter 02 — Middle");
     expect(md).toContain("## About the author");
     expect(md).toContain("SHA-256");
     expect(md).toContain("deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef");
+  });
+
+  it("never claims ScrollLibrary as publisher when no canonical publisher is present", () => {
+    const ctx = baseCtx({ extras: null });
+    const md = renderFrontMatter(ctx);
+    expect(md).toContain("Published by Independent publisher.");
+    expect(md).not.toContain("ScrollLibrary Press");
   });
 
   it("omits the author section when there is no bio", () => {

@@ -10,7 +10,7 @@
 //   https://www.w3.org/TR/epub-33/
 //   https://www.w3.org/TR/epub-packages-33/
 
-import type JSZip from "https://esm.sh/jszip@3.10.1";
+import type JSZip from "npm:jszip@3.10.1";
 import type { BundleChapter, BundleBook, BundleListing, BundleAuthor } from "./bundle-content.ts";
 
 export interface EpubInput {

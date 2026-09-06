@@ -288,6 +288,16 @@ Deno.serve(async (req) => {
         if (!platform || platform.scope !== "platform" || platform.verified !== true) {
           return badRequest("Selected platform imprint is not verified");
         }
+        const { count: availablePool, error: poolErr } = await sc
+          .from("isbn_inventory")
+          .select("id", { count: "exact", head: true })
+          .eq("imprint_id", platform.id)
+          .eq("source", "platform_pool")
+          .eq("status", "available");
+        if (poolErr) return serverError(poolErr);
+        if (!availablePool) {
+          return badRequest("ScrollLibrary Press ISBN inventory is currently unavailable");
+        }
         imprintId = platform.id;
       } else {
         if (!body.publisherName || !body.imprintName || body.confirmAgencyMatch !== true) {

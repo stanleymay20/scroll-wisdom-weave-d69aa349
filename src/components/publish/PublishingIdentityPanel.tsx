@@ -240,11 +240,11 @@ export function PublishingIdentityPanel({ bookId }: Props) {
         <div className="rounded-lg bg-primary/10 p-2"><BookKey className="h-5 w-5 text-primary" /></div>
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-lg font-semibold">Publisher & ISBN identity</h2>
+            <h2 className="text-lg font-semibold">Publishing Identity</h2>
             {profileSaved && <Badge variant="secondary"><CheckCircle2 className="mr-1 h-3 w-3" />Saved</Badge>}
           </div>
           <p className="mt-1 text-sm text-muted-foreground">
-            This identity is frozen into the publication record and reused by PDF, EPUB and distribution bundles. ScrollLibrary validates and allocates real ISBNs; it never manufactures ISBN numbers.
+            Choose who is publisher of record. Publish with ScrollLibrary Press when its verified publisher range is active, use ISBNs registered to your own imprint, or choose Amazon’s KDP-only free ISBN. ScrollLibrary never manufactures or resells ISBNs.
           </p>
         </div>
         <Button variant="ghost" size="icon" onClick={() => void load()} aria-label="Refresh publishing identity">
@@ -257,8 +257,8 @@ export function PublishingIdentityPanel({ bookId }: Props) {
         <Select value={mode} onValueChange={(value) => setMode(value as PublisherMode)}>
           <SelectTrigger className="mt-1"><SelectValue /></SelectTrigger>
           <SelectContent>
-            <SelectItem value="own_imprint">My registered publisher / imprint</SelectItem>
-            <SelectItem value="platform_imprint" disabled={(data?.platformImprints.length ?? 0) === 0}>Verified ScrollLibrary publishing imprint</SelectItem>
+            <SelectItem value="own_imprint">Use my own ISBN / registered imprint</SelectItem>
+            <SelectItem value="platform_imprint" disabled={!(data?.platformImprints.some((row) => row.availableIsbns > 0) ?? false)}>Publish with ScrollLibrary Press — ISBN included</SelectItem>
             <SelectItem value="kdp_independent">Amazon KDP free ISBN — KDP only</SelectItem>
           </SelectContent>
         </Select>
@@ -287,7 +287,7 @@ export function PublishingIdentityPanel({ bookId }: Props) {
             <SelectTrigger><SelectValue placeholder="Select a verified imprint" /></SelectTrigger>
             <SelectContent>
               {(data?.platformImprints ?? []).map((row) => (
-                <SelectItem key={row.id} value={row.id}>{row.imprint_name} — {row.publisher_name} ({row.availableIsbns} ISBNs available)</SelectItem>
+                <SelectItem key={row.id} value={row.id} disabled={row.availableIsbns <= 0}>{row.imprint_name} — {row.publisher_name} ({row.availableIsbns} ISBNs available)</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -298,7 +298,7 @@ export function PublishingIdentityPanel({ bookId }: Props) {
           )}
           {(data?.platformImprints.length ?? 0) === 0 && (
             <div className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
-              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />No verified platform imprint/ISBN pool is configured. An administrator must load ISBNs obtained from an authorized ISBN agency before this option can be used.
+              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />ScrollLibrary Press is not yet activated as publisher of record. A verified publisher registration and legitimate ISBN inventory from the authorized ISBN agency must be loaded before “ISBN included” can be offered.
             </div>
           )}
         </div>

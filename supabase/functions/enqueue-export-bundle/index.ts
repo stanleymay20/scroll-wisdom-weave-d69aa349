@@ -17,7 +17,7 @@
 //   * Step-by-step platform README so the upload flow is one-glance obvious.
 //   * Filename: `<book-slug>-<platform>-bundle.zip` (no UUIDs in the URL).
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import JSZip from "https://esm.sh/jszip@3.10.1";
+import JSZip from "npm:jszip@3.10.1";
 import {
   preflight, json, badRequest, serverError, unauthorized,
   requireUser, validateBody, z, serviceClient,
@@ -139,7 +139,7 @@ async function runJob(
     await timer.stop("fetch_book", { metadata: { chapters: chapterList.length, publication_id: publication.id } });
 
     // ─── Quality gate (structural + content + style) ──────────────────
-    const canonical = parseBookToCanonical(chapterList);
+    const canonical = parseBookToCanonical(chapterList.map((chapter) => ({ ...chapter, title: chapter.title ?? "" })));
     const audit = auditBookForExport(canonical, {
       hasCover: !!(book.cover_image_url || (listing as any)?.cover_override_url),
       bookType: book.book_type ?? null,
