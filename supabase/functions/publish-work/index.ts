@@ -5,6 +5,7 @@ import { preflight, requireUser, validateBody, json, serverError, serviceClient,
 import { hasCapability, denyResponse } from "../_shared/permissions.ts";
 import { logAuthorshipEvent } from "../_shared/authorshipGuard.ts";
 import { runPublicationGuard } from "../_shared/layout/index.ts";
+import { newScrollIdentifier } from "../_shared/scroll-identity.ts";
 
 const Body = z.object({
   work_id: z.string().uuid(),
@@ -52,13 +53,17 @@ Deno.serve(async (req) => {
 
     // Resolve current Work + authors + rights → freeze into a snapshot.
     const [{ data: work }, { data: authors }, { data: rights }, { data: book }] = await Promise.all([
-      sc.from("works").select("id, title, original_language").eq("id", body.work_id).maybeSingle(),
+      sc.from("works").select("id, title, original_language, scroll_work_id").eq("id", body.work_id).maybeSingle(),
       sc.from("work_authors").select("user_id, display_name, author_role, sort_order, contribution_percentage").eq("work_id", body.work_id).order("sort_order"),
       sc.from("work_rights").select("rights_holder_id, rights_class, rights_scope, territory, language").eq("work_id", body.work_id),
       sc.from("books").select("id, title, design_settings").eq("work_id", body.work_id).maybeSingle(),
     ]);
     if (!work) return json({ error: "work_not_found" }, 404);
     if (!book?.id) return json({ error: "publication_blocked", reason: "book_record_required" }, 409);
+    if (typeof work.scroll_work_id !== "string" || !work.scroll_work_id.startsWith("SLW-")) {
+      return json({ error: "publication_blocked", reason: "scroll_work_identity_required" }, 409);
+    }
+    const scrollEditionId = newScrollIdentifier("SLE");
 
     // Subtitle is bibliographic identity, not mutable storefront decoration.
     // Freeze exactly the subtitle that was covered by the publication hash.
@@ -260,6 +265,8 @@ Deno.serve(async (req) => {
 
     const printCompatibilityIsbn = isbnByFormat.paperback ?? isbnByFormat.hardcover ?? null;
     const snapshot = {
+      scroll_work_id: work.scroll_work_id,
+      scroll_edition_id: scrollEditionId,
       title: work.title,
       subtitle: listingIdentity?.subtitle ?? null,
       language: publishingProfile.publication_language || work.original_language || body.language,
@@ -318,6 +325,8 @@ Deno.serve(async (req) => {
       .from("publications")
       .insert({
         work_id: body.work_id,
+        book_id: book.id,
+        scroll_edition_id: scrollEditionId,
         edition_kind: body.edition_kind,
         language: publishingProfile.publication_language || body.language,
         version,
@@ -331,7 +340,7 @@ Deno.serve(async (req) => {
         published_by: auth.userId,
         notes: body.notes ?? null,
       })
-      .select("id, version, content_hash")
+      .select("id, version, content_hash, scroll_edition_id")
       .single();
     if (pubErr) throw pubErr;
 
@@ -340,6 +349,15 @@ Deno.serve(async (req) => {
       p_publication_id: pub.id,
     });
     if (lockErr) return serverError(lockErr);
+
+    // Materialize the proprietary SLW → SLE → SLP graph only after ISBN
+    // assignments have been locked to this publication. This mapping never
+    // creates or substitutes an ISBN; it links external identifiers to SLP.
+    const { data: scrollIdentity, error: scrollIdentityErr } = await sc.rpc(
+      "materialize_scroll_publication_identity",
+      { p_publication_id: pub.id },
+    );
+    if (scrollIdentityErr) return serverError(scrollIdentityErr);
 
     const { data: cert, error: certErr } = await sc
       .from("publication_certificates")
@@ -392,6 +410,9 @@ Deno.serve(async (req) => {
         content_hash: contentHash,
         publisher_mode: publishingProfile.publisher_mode,
         identifier_product_forms: identifiers.map((i) => i.product_form),
+        scroll_work_id: work.scroll_work_id,
+        scroll_edition_id: pub.scroll_edition_id,
+        scroll_products: scrollIdentity,
       },
     });
 
@@ -402,6 +423,7 @@ Deno.serve(async (req) => {
       content_hash: contentHash,
       published_at: publishedAt,
       publisher: publisherSnapshot,
+      scroll_identity: scrollIdentity,
       identifiers,
     });
   } catch (e) {
