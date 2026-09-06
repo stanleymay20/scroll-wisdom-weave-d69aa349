@@ -7,7 +7,8 @@
 
 ALTER TABLE public.tts_usage ENABLE ROW LEVEL SECURITY;
 
-REVOKE INSERT, UPDATE, DELETE ON TABLE public.tts_usage FROM anon, authenticated;
+REVOKE SELECT, INSERT, UPDATE, DELETE ON TABLE public.tts_usage FROM anon;
+REVOKE INSERT, UPDATE, DELETE ON TABLE public.tts_usage FROM authenticated;
 GRANT SELECT ON TABLE public.tts_usage TO authenticated;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE public.tts_usage TO service_role;
 
