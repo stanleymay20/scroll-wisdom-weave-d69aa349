@@ -14,99 +14,41 @@ function replaceOnce(source, needle, replacement, label) {
   return source.slice(0, first) + replacement + source.slice(first + needle.length);
 }
 
-await patch("src/pages/BookPublishSettings.tsx", (source) => {
-  source = replaceOnce(
-    source,
-    'import { EliteReadinessPanel } from "@/components/publish/EliteReadinessPanel";\n',
-    'import { EliteReadinessPanel } from "@/components/publish/EliteReadinessPanel";\nimport { PublishingIdentityPanel } from "@/components/publish/PublishingIdentityPanel";\n',
-    "BookPublishSettings import",
-  );
-  source = replaceOnce(
-    source,
-    '{bookId && <div className="mt-6"><EliteReadinessPanel bookId={bookId} /></div>}\n',
-    '{bookId && <div className="mt-6"><EliteReadinessPanel bookId={bookId} /></div>}\n        {bookId && <div className="mt-6"><PublishingIdentityPanel bookId={bookId} /></div>}\n',
-    "BookPublishSettings identity panel",
-  );
-  return source;
-});
-
-await patch("src/components/books/ExportDialog.tsx", (source) => replaceOnce(
+await patch("supabase/functions/_shared/epub-builder.ts", (source) => replaceOnce(
   source,
-  `          if (Array.isArray(snap.rights_holders) && snap.rights_holders.length) {\n            resolved.publisher = snap.rights_holders[0]?.display_name || null;\n            resolved.copyright = resolved.publisher;\n          }\n          resolved.isbn = snap.isbn || snap.isbn_13 || null;\n          resolved.edition = snap.edition || null;`,
-  `          const publisher = snap.publisher && typeof snap.publisher === "object" && !Array.isArray(snap.publisher)\n            ? snap.publisher\n            : null;\n          resolved.publisher = publisher?.imprint_name || publisher?.publisher_name || snap.publisher_imprint || snap.publisher_name || null;\n          // Legacy snapshots may not have a dedicated publisher object. Rights\n          // holder fallback is display-only and never used as canonical publisher\n          // when the new publishing identity exists.\n          if (!resolved.publisher && Array.isArray(snap.rights_holders) && snap.rights_holders.length) {\n            resolved.publisher = snap.rights_holders[0]?.display_name || null;\n          }\n          resolved.copyright = Array.isArray(snap.rights_holders) && snap.rights_holders.length\n            ? snap.rights_holders[0]?.display_name || resolved.publisher\n            : resolved.publisher;\n          resolved.isbn = snap.isbn_by_format?.paperback || snap.isbn_by_format?.hardcover || snap.isbn || snap.isbn_13 || null;\n          resolved.edition = snap.edition || null;`,
-  "ExportDialog canonical publisher",
+  'import type JSZip from "https://esm.sh/jszip@3.10.1";',
+  'import type JSZip from "npm:jszip@3.10.1";',
+  "EPUB JSZip Deno import",
 ));
-
-await patch("supabase/functions/_shared/bundle-content.ts", (source) => {
-  source = replaceOnce(
-    source,
-    `  /** Optional ISBN for the copyright page. */\n  isbn?: string | null;\n}`,
-    `  /** Format-specific ISBN selected from the immutable Publication snapshot. */\n  isbn?: string | null;\n  /** Canonical publisher legal/registrant name. */\n  publisherName?: string | null;\n  /** Canonical imprint displayed on the book. */\n  publisherImprint?: string | null;\n  /** All frozen ISBN-13 assignments keyed by product form. */\n  isbnByFormat?: Record<string, string> | null;\n  /** Identifier strategy for the target product (own/platform/KDP free/unassigned). */\n  identifierStrategy?: string | null;\n  /** Distribution scope frozen into the publication identity. */\n  distributionScope?: string | null;\n}`,
-    "BundleExtras identity fields",
-  );
-  source = replaceOnce(
-    source,
-    `  const publisher = "ScrollLibrary";`,
-    `  const publisher = extras?.publisherImprint || extras?.publisherName || "Independent publisher";`,
-    "front matter publisher",
-  );
-  source = replaceOnce(
-    source,
-    `  lines.push(\`Published via \${publisher}.\`, \`\`);`,
-    `  lines.push(\`Published by \${publisher}.\`, \`\`);`,
-    "front matter published by",
-  );
-  source = replaceOnce(
-    source,
-    `  author: { display_name: string | null; bio_preview: string | null } | null;\n  pricing: { amount_cents: number; currency: string; label: string };`,
-    `  author: { display_name: string | null; bio_preview: string | null } | null;\n  publisher: { publisher_name: string | null; imprint_name: string | null };\n  isbn13: string | null;\n  isbn_by_format: Record<string, string>;\n  identifier_strategy: string | null;\n  distribution_scope: string | null;\n  pricing: { amount_cents: number; currency: string; label: string };`,
-    "manifest identity shape",
-  );
-  source = replaceOnce(
-    source,
-    `const BUNDLE_SCHEMA_VERSION = "2.0.0";`,
-    `const BUNDLE_SCHEMA_VERSION = "3.0.0";`,
-    "bundle schema version",
-  );
-  source = replaceOnce(
-    source,
-    `    author: ctx.author\n      ? {\n        display_name: ctx.author.display_name ?? null,\n        bio_preview: ctx.author.bio ? cleanProse(ctx.author.bio, 200) : null,\n      }\n      : null,\n    pricing: {`,
-    `    author: ctx.author\n      ? {\n        display_name: ctx.author.display_name ?? null,\n        bio_preview: ctx.author.bio ? cleanProse(ctx.author.bio, 200) : null,\n      }\n      : null,\n    publisher: {\n      publisher_name: ctx.extras?.publisherName ?? null,\n      imprint_name: ctx.extras?.publisherImprint ?? null,\n    },\n    isbn13: ctx.extras?.isbn ?? null,\n    isbn_by_format: ctx.extras?.isbnByFormat ?? {},\n    identifier_strategy: ctx.extras?.identifierStrategy ?? null,\n    distribution_scope: ctx.extras?.distributionScope ?? null,\n    pricing: {`,
-    "manifest identity values",
-  );
-  source = replaceOnce(
-    source,
-    `  lines.push(\`**License:** \${humanLicense(listing?.license_type)}\`, \`\`);\n  if (ctx.correlationId) lines.push(\`**Support reference:** \${ctx.correlationId}\`, \`\`);`,
-    `  lines.push(\`**License:** \${humanLicense(listing?.license_type)}\`, \`\`);\n  const publisher = ctx.extras?.publisherImprint || ctx.extras?.publisherName;\n  if (publisher) lines.push(\`**Publisher / imprint:** \${publisher}\`, \`\`);\n  if (ctx.extras?.isbn) lines.push(\`**ISBN-13 for this bundle:** \${ctx.extras.isbn}\`, \`\`);\n  if (platform === "kdp" && ctx.extras?.identifierStrategy === "kdp_free") {\n    lines.push(\`**ISBN strategy:** Amazon KDP free ISBN — assigned during KDP submission; imprint shown by Amazon as Independently published.\`, \`\`);\n  }\n  if (ctx.correlationId) lines.push(\`**Support reference:** \${ctx.correlationId}\`, \`\`);`,
-    "README publishing identity",
-  );
-  return source;
-});
 
 await patch("supabase/functions/enqueue-export-bundle/index.ts", (source) => {
   source = replaceOnce(
     source,
-    `} from "../_shared/bundle-content.ts";\n`,
-    `} from "../_shared/bundle-content.ts";\nimport { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";\n`,
-    "bundle ISBN helper import",
+    'import JSZip from "https://esm.sh/jszip@3.10.1";',
+    'import JSZip from "npm:jszip@3.10.1";',
+    "bundle JSZip Deno import",
   );
   source = replaceOnce(
     source,
-    `.select("id, title, description, cover_image_url, category, book_type, user_id, academic_level")`,
-    `.select("id, title, description, cover_image_url, category, book_type, user_id, academic_level, current_publication_id, ai_assistance_level, dedication, epigraph")`,
-    "bundle book canonical fields",
+    "    const canonical = parseBookToCanonical(chapterList);",
+    "    const canonical = parseBookToCanonical(chapterList.map((chapter) => ({ ...chapter, title: chapter.title ?? \"\" })));",
+    "bundle canonical nullable chapter title",
+  );
+  return source;
+});
+
+await patch("supabase/functions/_shared/publishingIdentity.ts", (source) => {
+  source = replaceOnce(
+    source,
+    'import type { SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";\n',
+    'type PublishingIdentityDb = { from: (table: string) => any };\n',
+    "publishing identity DB client type",
   );
   source = replaceOnce(
     source,
-    `    const { data: author } = await sc.from("author_profiles")\n      .select("display_name, bio, website_url, x_url, linkedin_url, avatar_url")\n      .eq("user_id", userId).maybeSingle();\n\n    await timer.stop("fetch_book", { metadata: { chapters: chapterList.length } });`,
-    `    const { data: author } = await sc.from("author_profiles")\n      .select("display_name, bio, website_url, x_url, linkedin_url, avatar_url")\n      .eq("user_id", userId).maybeSingle();\n\n    // Distribution bundles are generated only from an immutable published\n    // snapshot. Draft exports remain available through export-book, but a KDP/\n    // storefront bundle must not carry mutable or browser-supplied identity.\n    if (!book.current_publication_id) {\n      throw new Error("Publish and certify this book before building a distribution bundle.");\n    }\n    const { data: publication, error: publicationErr } = await sc\n      .from("publications")\n      .select("id,status,snapshot,content_hash")\n      .eq("id", book.current_publication_id)\n      .eq("status", "published")\n      .maybeSingle();\n    if (publicationErr) throw new Error(\`Publication load failed: \${publicationErr.message}\`);\n    if (!publication) throw new Error("The current Publication snapshot is missing or not published.");\n    const publicationSnapshot = (publication.snapshot ?? {}) as Record<string, unknown>;\n\n    await timer.stop("fetch_book", { metadata: { chapters: chapterList.length, publication_id: publication.id } });`,
-    "bundle published snapshot load",
-  );
-  source = replaceOnce(
-    source,
-    `    // Elite extras: AI disclosure level, ISBN, dedication, epigraph. All\n    // optional — the renderer skips sections that aren't supplied.\n    const extras: BundleExtras = {\n      aiAssistanceLevel: (book as any).ai_assistance_level ?? null,\n      isbn: (book as any).isbn ?? null,\n      dedication: (book as any).dedication ?? null,\n      epigraph: typeof (book as any).epigraph === "object"\n        ? ((book as any).epigraph as { text: string; attribution?: string | null })\n        : null,\n    };`,
-    `    // Publication identity comes only from the immutable snapshot. KDP gets\n    // the paperback ISBN; digital bundles get the EPUB ISBN. Never reuse a print\n    // ISBN for a separately sold EPUB product.\n    const bundleExportFormat = bundleType === "kdp" ? "kdp-pdf" : "epub";\n    const publisherIdentity = publisherFromPublicationSnapshot(publicationSnapshot);\n    const isbnByFormat = publicationSnapshot.isbn_by_format && typeof publicationSnapshot.isbn_by_format === "object"\n      ? publicationSnapshot.isbn_by_format as Record<string, string>\n      : {};\n    const identifierStrategy = bundleType === "kdp"\n      ? (publicationSnapshot.print_identifier_strategy as string | undefined)\n      : (publicationSnapshot.ebook_identifier_strategy as string | undefined);\n    const extras: BundleExtras = {\n      aiAssistanceLevel: (book as any).ai_assistance_level ?? null,\n      isbn: isbnForPublicationSnapshot(publicationSnapshot, bundleExportFormat),\n      publisherName: publisherIdentity.publisherName,\n      publisherImprint: publisherIdentity.imprintName,\n      isbnByFormat,\n      identifierStrategy: identifierStrategy ?? null,\n      distributionScope: typeof publicationSnapshot.distribution_scope === "string" ? publicationSnapshot.distribution_scope : null,\n      dedication: (book as any).dedication ?? null,\n      epigraph: typeof (book as any).epigraph === "object"\n        ? ((book as any).epigraph as { text: string; attribution?: string | null })\n        : null,\n    };`,
-    "bundle canonical identity extras",
+    "  sc: SupabaseClient,",
+    "  sc: PublishingIdentityDb,",
+    "publishing identity resolver client parameter",
   );
   return source;
 });
@@ -114,40 +56,83 @@ await patch("supabase/functions/enqueue-export-bundle/index.ts", (source) => {
 await patch("supabase/functions/export-book/index.ts", (source) => {
   source = replaceOnce(
     source,
-    `import { recordExportEvent } from "../_shared/export/audit.ts";\n`,
-    `import { recordExportEvent } from "../_shared/export/audit.ts";\nimport { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";\n`,
-    "export-book ISBN helper import",
+    'import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";\n',
+    'import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";\nimport { resolvePrepublicationIdentity } from "../_shared/publishingIdentity.ts";\n',
+    "export prepublication identity import",
   );
   source = replaceOnce(
     source,
-    `        if (Array.isArray(snap.rights_holders) && snap.rights_holders.length > 0) {\n          canonicalPublisher = snap.rights_holders[0]?.display_name || null;\n        }\n        canonicalIsbn = snap.isbn || snap.isbn_13 || null;\n        canonicalImprint = snap.publisher_imprint || null;`,
-    `        const publisherIdentity = publisherFromPublicationSnapshot(snap);\n        canonicalPublisher = publisherIdentity.publisherName;\n        canonicalImprint = publisherIdentity.imprintName;\n        // Backward-compatible display fallback for old snapshots only. A rights\n        // holder is not treated as publisher once dedicated publisher identity exists.\n        if (!canonicalPublisher && !canonicalImprint && Array.isArray(snap.rights_holders) && snap.rights_holders.length > 0) {\n          canonicalPublisher = snap.rights_holders[0]?.display_name || null;\n        }\n        canonicalIsbn = isbnForPublicationSnapshot(snap, format);`,
-    "export-book format-specific identity",
+    `    }\n\n    // Fallbacks when no published snapshot exists yet (draft export).`,
+    `    }\n\n    // Before an immutable Publication exists, production certification must\n    // render the exact publisher/imprint + format-specific ISBN configuration\n    // that is already part of the bound publication hash. Otherwise a PDF could\n    // pass certification and later gain different publication identity metadata.\n    if (!canonicalPublicationId) {\n      const prepublicationIdentity = await resolvePrepublicationIdentity(supabase, bookId, format);\n      if (prepublicationIdentity.configured) {\n        canonicalPublisher = prepublicationIdentity.publisherName;\n        canonicalImprint = prepublicationIdentity.publisherImprint;\n        canonicalIsbn = prepublicationIdentity.isbnForExport;\n        canonicalLanguage = prepublicationIdentity.language;\n      }\n    }\n\n    // Fallbacks when no published snapshot exists yet (draft export).`,
+    "export prepublication identity resolution",
   );
   return source;
 });
 
-await patch("src/lib/__tests__/bundleContent.test.ts", (source) => replaceOnce(
-  source,
-  `expect(m.bundle_schema_version).toBe("2.0.0");`,
-  `expect(m.bundle_schema_version).toBe("3.0.0");`,
-  "bundle schema test",
-));
-
-await patch(".github/workflows/ci.yml", (source) => {
+await patch("src/lib/__tests__/bundleContent.test.ts", (source) => {
   source = replaceOnce(
     source,
-    `          deno check supabase/functions/generate-book/index.ts\n          deno check supabase/functions/generate-chapter/index.ts\n`,
-    `          deno check supabase/functions/generate-book/index.ts\n          deno check supabase/functions/generate-chapter/index.ts\n          deno check supabase/functions/publishing-identity/index.ts\n          deno check supabase/functions/publish-work/index.ts\n          deno check supabase/functions/enqueue-export-bundle/index.ts\n          deno check supabase/functions/export-book/index.ts\n`,
-    "CI publishing identity functions",
+    '  contentHash: "deadbeef".repeat(8),\n  ...overrides,',
+    '  contentHash: "deadbeef".repeat(8),\n  extras: {\n    publisherName: "ScrollLibrary Publishing",\n    publisherImprint: "ScrollLibrary Press",\n    isbn: "9780306406157",\n    isbnByFormat: { paperback: "9780306406157" },\n    identifierStrategy: "platform_isbn",\n    distributionScope: "global",\n  },\n  ...overrides,',
+    "bundle test canonical publisher fixture",
   );
   source = replaceOnce(
     source,
-    `          deno test supabase/functions/_shared/structuralConsistency_test.ts\n`,
-    `          deno test supabase/functions/_shared/isbn_test.ts\n          deno test supabase/functions/_shared/structuralConsistency_test.ts\n`,
-    "CI ISBN tests",
+    '    expect(md).toContain("Published via ScrollLibrary");',
+    '    expect(md).toContain("Published by ScrollLibrary Press.");\n    expect(md).toContain("ISBN: 9780306406157");',
+    "bundle front matter publisher assertion",
+  );
+  source = replaceOnce(
+    source,
+    '  it("omits the author section when there is no bio", () => {',
+    '  it("never claims ScrollLibrary as publisher when no canonical publisher is present", () => {\n    const ctx = baseCtx({ extras: null });\n    const md = renderFrontMatter(ctx);\n    expect(md).toContain("Published by Independent publisher.");\n    expect(md).not.toContain("ScrollLibrary Press");\n  });\n\n  it("omits the author section when there is no bio", () => {',
+    "bundle independent publisher safety test",
   );
   return source;
 });
 
-console.log("Publishing identity close-loop patch applied successfully.");
+await patch("src/components/publish/PublishingIdentityPanel.tsx", (source) => {
+  source = replaceOnce(
+    source,
+    '<h2 className="text-lg font-semibold">Publisher & ISBN identity</h2>',
+    '<h2 className="text-lg font-semibold">Publishing Identity</h2>',
+    "publishing identity panel title",
+  );
+  source = replaceOnce(
+    source,
+    '            This identity is frozen into the publication record and reused by PDF, EPUB and distribution bundles. ScrollLibrary validates and allocates real ISBNs; it never manufactures ISBN numbers.',
+    '            Choose who is publisher of record. Publish with ScrollLibrary Press when its verified publisher range is active, use ISBNs registered to your own imprint, or choose Amazon’s KDP-only free ISBN. ScrollLibrary never manufactures or resells ISBNs.',
+    "publishing identity explanatory copy",
+  );
+  source = replaceOnce(
+    source,
+    '<SelectItem value="own_imprint">My registered publisher / imprint</SelectItem>\n            <SelectItem value="platform_imprint" disabled={(data?.platformImprints.length ?? 0) === 0}>Verified ScrollLibrary publishing imprint</SelectItem>',
+    '<SelectItem value="own_imprint">Use my own ISBN / registered imprint</SelectItem>\n            <SelectItem value="platform_imprint" disabled={!(data?.platformImprints.some((row) => row.availableIsbns > 0) ?? false)}>Publish with ScrollLibrary Press — ISBN included</SelectItem>',
+    "publishing route product wording",
+  );
+  source = replaceOnce(
+    source,
+    '<SelectItem key={row.id} value={row.id}>{row.imprint_name} — {row.publisher_name} ({row.availableIsbns} ISBNs available)</SelectItem>',
+    '<SelectItem key={row.id} value={row.id} disabled={row.availableIsbns <= 0}>{row.imprint_name} — {row.publisher_name} ({row.availableIsbns} ISBNs available)</SelectItem>',
+    "disable empty platform ISBN inventory",
+  );
+  source = replaceOnce(
+    source,
+    '<AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />No verified platform imprint/ISBN pool is configured. An administrator must load ISBNs obtained from an authorized ISBN agency before this option can be used.',
+    '<AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />ScrollLibrary Press is not yet activated as publisher of record. A verified publisher registration and legitimate ISBN inventory from the authorized ISBN agency must be loaded before “ISBN included” can be offered.',
+    "platform imprint unavailable copy",
+  );
+  return source;
+});
+
+await patch("supabase/functions/publishing-identity/index.ts", (source) => {
+  source = replaceOnce(
+    source,
+    `        if (!platform || platform.scope !== "platform" || platform.verified !== true) {\n          return badRequest("Selected platform imprint is not verified");\n        }\n        imprintId = platform.id;`,
+    `        if (!platform || platform.scope !== "platform" || platform.verified !== true) {\n          return badRequest("Selected platform imprint is not verified");\n        }\n        const { count: availablePool, error: poolErr } = await sc\n          .from("isbn_inventory")\n          .select("id", { count: "exact", head: true })\n          .eq("imprint_id", platform.id)\n          .eq("source", "platform_pool")\n          .eq("status", "available");\n        if (poolErr) return serverError(poolErr);\n        if (!availablePool) {\n          return badRequest("ScrollLibrary Press ISBN inventory is currently unavailable");\n        }\n        imprintId = platform.id;`,
+    "platform route requires available ISBN inventory",
+  );
+  return source;
+});
+
+console.log("Publishing identity release-gate repairs applied successfully.");
