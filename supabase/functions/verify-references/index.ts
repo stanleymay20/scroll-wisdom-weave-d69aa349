@@ -545,6 +545,23 @@ serve(async (req) => {
     };
 
     log("Done", { tier, hf: hf.length, verdict: claimReport.verdictLabel, coherence: coherenceReport.coherenceVerdict, citStyle, artifactId: hashHex });
-    return json({ success: true, references: results, metrics, semanticIntegrityReport: semReport, claimIntegrityReport: claimReport, epistemicCoherenceReport: coherenceReport, tier: { tier, label: tLabel, met, unmet }, hardFailures: hf, certificationBlocked: hf.length > 0, citationStyle: citStyle, standard: "ScrollVerified™ 2026 — Institutional Epistemic Integrity Certified", auditArtifact });
+
+    const certificationBlocked = hf.length > 0;
+    const evidencePassed = certificationBlocked !== true
+      && hf.length === 0
+      && claimReport.analysisComplete !== false
+      && coherenceReport.analysisComplete !== false;
+    const attBlocked = await attestEvidence(evidencePassed, {
+      certificationBlocked,
+      hardFailures: hf.slice(0, 20),
+      claimAnalysisComplete: claimReport.analysisComplete !== false,
+      coherenceAnalysisComplete: coherenceReport.analysisComplete !== false,
+      verifiedPct: metrics.verifiedPct,
+      artifactId: auditArtifact.artifactId,
+      integrityHash: auditArtifact.integrityHash,
+    });
+    if (attBlocked) return attBlocked;
+
+    return json({ success: true, references: results, metrics, semanticIntegrityReport: semReport, claimIntegrityReport: claimReport, epistemicCoherenceReport: coherenceReport, tier: { tier, label: tLabel, met, unmet }, hardFailures: hf, certificationBlocked, citationStyle: citStyle, standard: "ScrollVerified™ 2026 — Institutional Epistemic Integrity Certified", auditArtifact });
   } catch (e) { const m = e instanceof Error ? e.message : String(e); log("ERR", { m }); return json({ error: m }, 500); }
 });
