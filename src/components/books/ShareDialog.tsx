@@ -24,8 +24,13 @@ export function ShareDialog({ title, bookId, description }: ShareDialogProps) {
   const { toast } = useToast();
   const { t } = useLanguage();
   
-  const bookUrl = `${window.location.origin}/book/${bookId}`;
+  const bookUrl = `${window.location.origin}/book/${encodeURIComponent(bookId)}`;
   const shareText = t('share.checkOut').replace('{title}', title);
+
+  const openShareWindow = (url: string) => {
+    const opened = window.open(url, "_blank", "noopener,noreferrer,width=550,height=420");
+    if (opened) opened.opener = null;
+  };
   
   const copyToClipboard = async () => {
     try {
@@ -40,17 +45,17 @@ export function ShareDialog({ title, bookId, description }: ShareDialogProps) {
   
   const shareToTwitter = () => {
     const url = `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(bookUrl)}`;
-    window.open(url, "_blank", "width=550,height=420");
+    openShareWindow(url);
   };
   
   const shareToFacebook = () => {
     const url = `https://www.facebook.com/sharer/sharer.php?u=${encodeURIComponent(bookUrl)}`;
-    window.open(url, "_blank", "width=550,height=420");
+    openShareWindow(url);
   };
   
   const shareToLinkedIn = () => {
     const url = `https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(bookUrl)}`;
-    window.open(url, "_blank", "width=550,height=420");
+    openShareWindow(url);
   };
   
   const shareViaEmail = () => {
