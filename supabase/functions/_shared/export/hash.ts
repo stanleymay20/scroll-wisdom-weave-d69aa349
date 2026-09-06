@@ -7,7 +7,11 @@
  */
 
 export async function computeSha256Hex(bytes: Uint8Array): Promise<string> {
-  const hashBuf = await crypto.subtle.digest("SHA-256", bytes);
+  // Deno 2.9's WebCrypto typings require an ArrayBuffer-backed BufferSource.
+  // Copying into a fresh Uint8Array guarantees a concrete ArrayBuffer while
+  // preserving the exact byte sequence used by the export integrity hash.
+  const input = new Uint8Array(bytes).buffer;
+  const hashBuf = await crypto.subtle.digest("SHA-256", input);
   return Array.from(new Uint8Array(hashBuf))
     .map((b) => b.toString(16).padStart(2, "0"))
     .join("");
