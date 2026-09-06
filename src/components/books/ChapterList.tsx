@@ -19,6 +19,7 @@ interface ChapterListProps {
   generatingChapterId: string | null;
   isGeneratingAll: boolean;
   generationProgress: { current: number; total: number };
+  qualityStage?: string | null;
   onGenerateChapter: (chapter: ChapterData, e: React.MouseEvent) => void;
   onGenerateAll: () => void;
   onNavigateToChapter: (chapter: ChapterData) => void;
@@ -26,18 +27,24 @@ interface ChapterListProps {
 
 export function ChapterList({
   bookId, chapters, isOwner, generatingChapterId, isGeneratingAll, generationProgress,
-  onGenerateChapter, onGenerateAll, onNavigateToChapter,
+  qualityStage, onGenerateChapter, onGenerateAll, onNavigateToChapter,
 }: ChapterListProps) {
   const { t } = useLanguage();
+  const isQualityReview = Boolean(qualityStage);
 
   return (
-    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+    <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-display text-2xl font-bold">{t('book.tableOfContents')}</h2>
         {isOwner && chapters.some(ch => !ch.is_generated) && (
           <Button variant="hero" onClick={onGenerateAll} disabled={isGeneratingAll || generatingChapterId !== null}>
             {isGeneratingAll ? (
-              <><Loader2 className="h-4 w-4 mr-2 animate-spin" />{t('book.generatingProgress')} {generationProgress.current}/{generationProgress.total}</>
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                {isQualityReview
+                  ? "Quality review"
+                  : `${t('book.generatingProgress')} ${generationProgress.current}/${generationProgress.total}`}
+              </>
             ) : (
               <><Sparkles className="h-4 w-4 mr-2" />{t('book.generateAllChapters')}</>
             )}
@@ -46,15 +53,32 @@ export function ChapterList({
       </div>
 
       {isGeneratingAll && (
-        <div className="mb-6 p-4 rounded-xl bg-gradient-card border border-primary/30">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-sm font-medium text-primary">{t('book.generatingChapters')}</span>
-            <span className="text-sm text-muted-foreground">{generationProgress.current} / {generationProgress.total} {t('book.complete')}</span>
+        <div className="mb-6 p-4 rounded-xl bg-gradient-card border border-primary/30" aria-live="polite">
+          <div className="flex items-center justify-between mb-2 gap-4">
+            <span className="text-sm font-medium text-primary">
+              {isQualityReview ? "Publication quality pipeline" : t('book.generatingChapters')}
+            </span>
+            {!isQualityReview && (
+              <span className="text-sm text-muted-foreground">
+                {generationProgress.current} / {generationProgress.total} {t('book.complete')}
+              </span>
+            )}
           </div>
           <div className="w-full h-2 bg-muted rounded-full overflow-hidden">
-            <motion.div className="h-full bg-gradient-to-r from-primary to-primary-light" initial={{ width: 0 }} animate={{ width: `${(generationProgress.current / generationProgress.total) * 100}%` }} transition={{ duration: 0.5 }} />
+            <motion.div
+              className="h-full bg-gradient-to-r from-primary to-primary-light"
+              initial={{ width: 0 }}
+              animate={{
+                width: isQualityReview
+                  ? "100%"
+                  : `${generationProgress.total > 0 ? (generationProgress.current / generationProgress.total) * 100 : 0}%`,
+              }}
+              transition={{ duration: 0.5 }}
+            />
           </div>
-          <p className="mt-2 text-xs text-muted-foreground">{t('book.generationNote')}</p>
+          <p className="mt-2 text-xs text-muted-foreground">
+            {qualityStage || t('book.generationNote')}
+          </p>
         </div>
       )}
 
