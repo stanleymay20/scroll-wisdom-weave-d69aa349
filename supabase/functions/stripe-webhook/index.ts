@@ -20,6 +20,14 @@ const logStep = (step: string, details?: Record<string, unknown>) => {
   console.log(`[STRIPE-WEBHOOK] ${step}${detailsStr}`);
 };
 
+type WebhookClaim = {
+  claimed: boolean;
+  terminal?: boolean;
+  in_flight?: boolean;
+  status: string;
+  attempts: number;
+};
+
 serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: corsHeaders });
 
@@ -65,46 +73,71 @@ serve(async (req) => {
 
     logStep("Processing event", { type: event.type, id: event.id, corr });
 
-    // ---- Idempotency: persist webhook event as source of truth ----
-    // Insert; on conflict, fetch existing and bump attempts.
-    const { data: existingWebhook } = await supabase
-      .from("stripe_webhook_events")
-      .select("status, attempts")
-      .eq("stripe_event_id", event.id)
-      .maybeSingle();
+    // ---- Idempotency: atomically claim this Stripe event ----
+    // A database advisory lock serializes concurrent deliveries for the same
+    // event id. Only the worker that receives claimed=true may execute money or
+    // entitlement side effects. Terminal duplicates and concurrent in-flight
+    // deliveries acknowledge 200 without processing the event twice.
+    const { data: claimData, error: claimError } = await supabase.rpc(
+      "claim_stripe_webhook_event",
+      {
+        _stripe_event_id: event.id,
+        _event_type: event.type,
+        _payload: event as unknown as Record<string, unknown>,
+        _correlation_id: corr,
+      },
+    );
 
-    if (existingWebhook?.status === "processed" || existingWebhook?.status === "replayed") {
-      logStep("Duplicate webhook ignored", { id: event.id, status: existingWebhook.status });
+    if (claimError) {
+      logStep("Webhook claim failed", { id: event.id, error: claimError.message });
+      await logFinancialEvent(supabase, {
+        event_type: "webhook_claim_failed", severity: "critical", actor: "webhook",
+        correlation_id: corr, stripe_event_id: event.id,
+        payload: { type: event.type, error: claimError.message },
+      });
+      throw new Error("Unable to claim Stripe webhook event");
+    }
+
+    const webhookClaim = claimData as WebhookClaim | null;
+    if (!webhookClaim) {
+      throw new Error("Stripe webhook claim returned no result");
+    }
+
+    if (!webhookClaim.claimed) {
+      const duplicateKind = webhookClaim.terminal ? "terminal" : "in_flight";
+      logStep("Duplicate webhook ignored", {
+        id: event.id,
+        status: webhookClaim.status,
+        duplicateKind,
+        attempts: webhookClaim.attempts,
+      });
       await logFinancialEvent(supabase, {
         event_type: "webhook_duplicate_skipped", severity: "info", actor: "webhook",
-        correlation_id: corr, stripe_event_id: event.id, payload: { type: event.type },
+        correlation_id: corr, stripe_event_id: event.id,
+        payload: {
+          type: event.type,
+          status: webhookClaim.status,
+          duplicate_kind: duplicateKind,
+          attempts: webhookClaim.attempts,
+        },
       });
-      return new Response(JSON.stringify({ received: true, deduped: true }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json" }, status: 200,
+      return new Response(JSON.stringify({
+        received: true,
+        deduped: true,
+        status: webhookClaim.status,
+        duplicate_kind: duplicateKind,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "x-correlation-id": corr },
+        status: 200,
       });
     }
 
-    if (existingWebhook) {
-      await supabase.from("stripe_webhook_events").update({
-        status: "processing",
-        attempts: (existingWebhook.attempts ?? 0) + 1,
-        correlation_id: corr,
-        updated_at: new Date().toISOString(),
-      }).eq("stripe_event_id", event.id);
-    } else {
-      await supabase.from("stripe_webhook_events").insert({
-        stripe_event_id: event.id,
-        event_type: event.type,
-        payload: event as unknown as Record<string, unknown>,
-        status: "processing",
-        attempts: 1,
-        correlation_id: corr,
-      });
-    }
+    const attemptsAfter = Math.max(1, Number(webhookClaim.attempts ?? 1));
 
     await logFinancialEvent(supabase, {
       event_type: "webhook_received", severity: "info", actor: "webhook",
-      correlation_id: corr, stripe_event_id: event.id, payload: { type: event.type },
+      correlation_id: corr, stripe_event_id: event.id,
+      payload: { type: event.type, attempts: attemptsAfter },
     });
 
     // ---- Plan mapping ----
@@ -170,7 +203,6 @@ serve(async (req) => {
       if (error || !users?.users) return null;
       return users.users.find((u) => u.email === email) || null;
     };
-
 
     let processedOk = true;
     let processError: string | null = null;
@@ -295,7 +327,6 @@ serve(async (req) => {
           }
           break;
         }
-
 
         case "checkout.session.expired":
         case "checkout.session.async_payment_failed": {
@@ -449,7 +480,6 @@ serve(async (req) => {
           break;
         }
 
-
         case "invoice.payment_failed": {
           const invoice = event.data.object as Stripe.Invoice;
           let userId: string | null = null;
@@ -472,7 +502,6 @@ serve(async (req) => {
               logStep("Grace period sync failed", { error: e instanceof Error ? e.message : String(e) });
             }
           }
-
 
           // Phase 2.1d.1 — threshold-driven severity for subscription failure spikes
           const sinceIso = new Date(Date.now() - 5 * 60_000).toISOString();
@@ -518,7 +547,6 @@ serve(async (req) => {
     // Finalize webhook event record. Terminal failures after >=3 attempts
     // are dead-lettered for the reliability dashboard's DLQ view.
     const isFatal = !processedOk;
-    const attemptsAfter = (existingWebhook?.attempts ?? 0) + 1;
     const deadLetter = isFatal && attemptsAfter >= 3;
     await supabase.from("stripe_webhook_events").update({
       status: deadLetter ? "dead_lettered" : (processedOk ? "processed" : "failed"),
