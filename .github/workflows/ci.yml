@@ -94,11 +94,14 @@ jobs:
           deno check supabase/functions/verify-references/index.ts
           deno check supabase/functions/qa-publishability-audit/index.ts
           deno check supabase/functions/cross-chapter-consistency-audit/index.ts
+          deno check supabase/functions/certify-asset-rights/index.ts
           deno check supabase/functions/certify-production-render/index.ts
           deno check supabase/functions/finalize-publication-certification/index.ts
+          deno check supabase/functions/scrollvision-retrieve/index.ts
       - name: Test publication trust engines
         run: |
           deno test supabase/functions/_shared/structuralConsistency_test.ts
+          deno test supabase/functions/_shared/assetRights_test.ts
           deno test supabase/functions/_shared/productionArtifactAudit_test.ts
 
   build:
