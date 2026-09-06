@@ -1,7 +1,7 @@
 import { useState, forwardRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { 
-  X, ExternalLink, Copy, CheckCircle2, AlertTriangle, 
+import {
+  X, ExternalLink, Copy, CheckCircle2, AlertTriangle,
   BookOpen, FileText, GraduationCap, Link2, Database,
   ChevronDown, ChevronUp, Shield, Clock
 } from "lucide-react";
@@ -10,15 +10,16 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { useToast } from "@/hooks/use-toast";
-import { 
-  AcademicSource, 
-  CitationStyle, 
-  formatBibliographyEntry, 
+import {
+  AcademicSource,
+  CitationStyle,
+  formatBibliographyEntry,
   formatInTextCitation,
   getCitationConfidence,
-  formatConfidenceLabel 
+  formatConfidenceLabel
 } from "@/lib/citations";
 import { cn } from "@/lib/utils";
+import { openSafeExternalUrl } from "@/lib/safeExternalUrl";
 
 interface DeepResearchPanelProps {
   isOpen: boolean;
@@ -109,6 +110,17 @@ export const DeepResearchPanel = forwardRef<
     });
   };
 
+  const handleOpenSource = (source: AcademicSource) => {
+    const target = source.doi ? `https://doi.org/${source.doi}` : source.url;
+    if (!openSafeExternalUrl(target)) {
+      toast({
+        title: "Link blocked",
+        description: "This source URL is not a valid http or https address.",
+        variant: "destructive",
+      });
+    }
+  };
+
   return (
     <AnimatePresence>
       {isOpen && (
@@ -150,7 +162,7 @@ export const DeepResearchPanel = forwardRef<
             <p className="text-xs text-muted-foreground mb-3">
               {formatConfidenceLabel(metadata.confidenceScore)}
             </p>
-            
+
             {/* Progress bar */}
             <div className="h-2 bg-muted rounded-full overflow-hidden">
               <motion.div
@@ -176,9 +188,9 @@ export const DeepResearchPanel = forwardRef<
             <p className="text-xs text-muted-foreground mb-2">Databases Queried</p>
             <div className="flex flex-wrap gap-2">
               {metadata.databasesCovered.map((db) => (
-                <Badge 
-                  key={db} 
-                  variant="outline" 
+                <Badge
+                  key={db}
+                  variant="outline"
                   className={cn("text-[10px]", DATABASE_COLORS[db] || '')}
                 >
                   {db}
@@ -209,9 +221,9 @@ export const DeepResearchPanel = forwardRef<
             <div className="p-4 space-y-3">
               <div className="flex items-center justify-between mb-2">
                 <span className="text-sm font-medium">{citationStyle} References ({sources.length})</span>
-                <Button 
-                  variant="outline" 
-                  size="sm" 
+                <Button
+                  variant="outline"
+                  size="sm"
                   onClick={handleCopyAllReferences}
                   className="text-xs"
                 >
@@ -231,8 +243,8 @@ export const DeepResearchPanel = forwardRef<
                     layout
                     className={cn(
                       "p-3 rounded-lg border transition-colors",
-                      source.verified 
-                        ? "bg-card border-border hover:border-green-500/50" 
+                      source.verified
+                        ? "bg-card border-border hover:border-green-500/50"
                         : "bg-muted/50 border-border/50"
                     )}
                   >
@@ -248,19 +260,19 @@ export const DeepResearchPanel = forwardRef<
                           confidence === 'partial' ? "text-yellow-500" : "text-muted-foreground"
                         )} />
                       </div>
-                      
+
                       <div className="flex-1 min-w-0">
                         <div className="flex items-start justify-between gap-2">
                           <h4 className="text-sm font-medium line-clamp-2">{source.title}</h4>
                           <TooltipProvider>
                             <Tooltip>
                               <TooltipTrigger asChild>
-                                <Badge 
-                                  variant="outline" 
+                                <Badge
+                                  variant="outline"
                                   className={cn(
                                     "text-[10px] flex-shrink-0",
                                     confidence === 'verified' ? "border-green-500/50 text-green-400" :
-                                    confidence === 'partial' ? "border-yellow-500/50 text-yellow-400" : 
+                                    confidence === 'partial' ? "border-yellow-500/50 text-yellow-400" :
                                     "border-red-500/50 text-red-400"
                                   )}
                                 >
@@ -276,15 +288,15 @@ export const DeepResearchPanel = forwardRef<
                             </Tooltip>
                           </TooltipProvider>
                         </div>
-                        
+
                         <p className="text-xs text-muted-foreground mt-1">
                           {source.authors.slice(0, 3).join(', ')}
                           {source.authors.length > 3 && ' et al.'} ({source.year})
                         </p>
-                        
+
                         <div className="flex items-center gap-2 mt-2 flex-wrap">
-                          <Badge 
-                            variant="outline" 
+                          <Badge
+                            variant="outline"
                             className={cn("text-[10px]", DATABASE_COLORS[source.database] || '')}
                           >
                             {source.database}
@@ -361,10 +373,7 @@ export const DeepResearchPanel = forwardRef<
                             <Button
                               variant="ghost"
                               size="sm"
-                              onClick={() => window.open(
-                                source.doi ? `https://doi.org/${source.doi}` : source.url,
-                                '_blank'
-                              )}
+                              onClick={() => handleOpenSource(source)}
                               className="h-7 text-xs"
                             >
                               <ExternalLink className="h-3 w-3 mr-1" />
