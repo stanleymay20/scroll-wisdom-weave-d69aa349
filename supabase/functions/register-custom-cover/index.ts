@@ -12,6 +12,9 @@ import {
   enforceRateLimit,
 } from "../_shared/http.ts";
 
+const MAX_CUSTOM_COVER_BYTES = 5 * 1024 * 1024;
+const ALLOWED_COVER_TYPES = new Set(["image/jpeg", "image/png", "image/webp"]);
+
 const BodySchema = z.object({
   bookId: z.string().uuid(),
   assetUrl: z.string().url(),
@@ -29,6 +32,45 @@ function isOwnedCoverStorageUrl(assetUrl: string, supabaseUrl: string, userId: s
   } catch {
     return false;
   }
+}
+
+async function inspectStoredCover(assetUrl: string): Promise<{
+  ok: true;
+  contentType: string;
+  byteSize: number;
+} | {
+  ok: false;
+  message: string;
+}> {
+  let response: Response;
+  try {
+    response = await fetch(assetUrl, {
+      method: "HEAD",
+      cache: "no-store",
+      redirect: "error",
+    });
+  } catch {
+    return { ok: false, message: "Uploaded cover could not be inspected in storage." };
+  }
+
+  if (!response.ok) {
+    return { ok: false, message: `Uploaded cover is not accessible in storage (${response.status}).` };
+  }
+
+  const contentType = (response.headers.get("content-type") || "")
+    .split(";", 1)[0]
+    .trim()
+    .toLowerCase();
+  if (!ALLOWED_COVER_TYPES.has(contentType)) {
+    return { ok: false, message: "Custom covers must be JPEG, PNG, or WebP images." };
+  }
+
+  const byteSize = Number(response.headers.get("content-length") || "0");
+  if (!Number.isFinite(byteSize) || byteSize <= 0 || byteSize > MAX_CUSTOM_COVER_BYTES) {
+    return { ok: false, message: "Custom cover size could not be verified or exceeds the 5 MB limit." };
+  }
+
+  return { ok: true, contentType, byteSize };
 }
 
 Deno.serve(async (req) => {
@@ -93,6 +135,9 @@ Deno.serve(async (req) => {
       return badRequest("Cover URL must be an uploaded book-images cover owned by this user and book.");
     }
 
+    const inspected = await inspectStoredCover(body.assetUrl);
+    if (!inspected.ok) return badRequest(inspected.message);
+
     const now = new Date().toISOString();
     const { error: provenanceErr } = await sc
       .from("book_asset_provenance")
@@ -112,6 +157,8 @@ Deno.serve(async (req) => {
         metadata: {
           attestation: "I created/own this cover or have sufficient permission/license to publish and commercially distribute it.",
           attestedAt: now,
+          contentType: inspected.contentType,
+          byteSize: inspected.byteSize,
         },
       }, {
         onConflict: "book_id,asset_role,asset_url",
@@ -130,6 +177,8 @@ Deno.serve(async (req) => {
       success: true,
       coverUrl: updated.cover_image_url,
       provenance: "user_attested_publication_rights",
+      contentType: inspected.contentType,
+      byteSize: inspected.byteSize,
       authority: "server_cover_provenance",
     });
   } catch (error) {
