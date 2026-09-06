@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { toast } from "sonner";
-import { RefreshCw, ShieldCheck, CreditCard, Crown, Wallet, TrendingUp, Ban } from "lucide-react";
+import { RefreshCw, ShieldCheck, Crown, Wallet, TrendingUp, Ban } from "lucide-react";
 
 interface OverviewRow {
   active_creators: number;
@@ -76,34 +76,50 @@ export function AdminEntitlementsTab() {
   const [search, setSearch] = useState("");
   const [tierFilter, setTierFilter] = useState<string>("");
 
-  const load = async () => {
+  const load = useCallback(async (searchValue = "", tierValue = "") => {
     setRefreshing(true);
     const sb = supabase as any;
-    const [overviewRes, rowsRes, analyticsRes] = await Promise.all([
-      sb.from("admin_creator_subscription_overview").select("*").maybeSingle(),
-      sb.rpc("admin_get_creator_entitlements", {
-        _search: search || null,
-        _tier: tierFilter || null,
-        _payment_status: null,
-        _limit: 50,
-        _offset: 0,
-      }),
-      sb.rpc("admin_get_creator_subscription_analytics", { _days: 30 }),
-    ]);
 
-    setOverview((overviewRes.data as OverviewRow) || null);
-    setRows((rowsRes.data as CreatorEntitlementRow[]) || []);
-    setAnalytics((analyticsRes.data as AnalyticsRow) || null);
-    setLoading(false);
-    setRefreshing(false);
-  };
+    try {
+      const [overviewRes, rowsRes, analyticsRes] = await Promise.all([
+        sb.from("admin_creator_subscription_overview").select("*").maybeSingle(),
+        sb.rpc("admin_get_creator_entitlements", {
+          _search: searchValue || null,
+          _tier: tierValue || null,
+          _payment_status: null,
+          _limit: 50,
+          _offset: 0,
+        }),
+        sb.rpc("admin_get_creator_subscription_analytics", { _days: 30 }),
+      ]);
 
-  useEffect(() => { load(); }, []);
+      const firstError = overviewRes.error || rowsRes.error || analyticsRes.error;
+      if (firstError) throw firstError;
+
+      setOverview((overviewRes.data as OverviewRow) || null);
+      setRows((rowsRes.data as CreatorEntitlementRow[]) || []);
+      setAnalytics((analyticsRes.data as AnalyticsRow) || null);
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Failed to load creator entitlements");
+    } finally {
+      setLoading(false);
+      setRefreshing(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
 
   const totalCount = useMemo(() => rows[0]?.total_count || rows.length || 0, [rows]);
 
   const loadDetail = async (userId: string) => {
-    const { data } = await (supabase as any).rpc("admin_get_creator_entitlement_detail", { _target_user_id: userId });
+    const { data, error } = await (supabase as any).rpc("admin_get_creator_entitlement_detail", { _target_user_id: userId });
+    if (error) {
+      toast.error(error.message || "Failed to load entitlement detail");
+      setDetail(null);
+      return;
+    }
     setDetail(data);
   };
 
@@ -116,7 +132,7 @@ export function AdminEntitlementsTab() {
     });
     if (error) return toast.error(error.message || "Override failed");
     toast.success(`Tier updated to ${tier}`);
-    await load();
+    await load(search, tierFilter);
   };
 
   const requestResync = async (userId: string) => {
@@ -124,7 +140,7 @@ export function AdminEntitlementsTab() {
     const { data, error } = await supabase.functions.invoke("admin-force-stripe-resync", { body: { user_id: userId } });
     if (error) return toast.error(error.message || "Stripe resync failed", { id: `sync-${userId}` });
     toast.success(`Resynced as ${data?.tier || "unknown"}`, { id: `sync-${userId}` });
-    await load();
+    await load(search, tierFilter);
     if (selected?.user_id === userId) await loadDetail(userId);
   };
 
@@ -135,7 +151,7 @@ export function AdminEntitlementsTab() {
           <h2 className="text-xl font-semibold">Entitlements & subscriptions</h2>
           <p className="text-sm text-muted-foreground">Creator subscription oversight, Stripe sync state, grace periods, and publishing access.</p>
         </div>
-        <Button variant="outline" size="sm" onClick={load} disabled={refreshing}>
+        <Button variant="outline" size="sm" onClick={() => load(search, tierFilter)} disabled={refreshing}>
           <RefreshCw className={`h-4 w-4 mr-2 ${refreshing ? "animate-spin" : ""}`} /> Refresh
         </Button>
       </div>
@@ -185,7 +201,7 @@ export function AdminEntitlementsTab() {
             <Button size="sm" variant={tierFilter === "" ? "default" : "outline"} onClick={() => setTierFilter("")}>All</Button>
             <Button size="sm" variant={tierFilter === "creator" ? "default" : "outline"} onClick={() => setTierFilter("creator")}>Creator</Button>
             <Button size="sm" variant={tierFilter === "creator_pro" ? "default" : "outline"} onClick={() => setTierFilter("creator_pro")}>Pro</Button>
-            <Button size="sm" onClick={load}>Apply</Button>
+            <Button size="sm" onClick={() => load(search, tierFilter)}>Apply</Button>
           </div>
 
           <ScrollArea className="w-full"><div className="min-w-[1100px] space-y-2">
