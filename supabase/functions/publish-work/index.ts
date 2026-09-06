@@ -11,13 +11,13 @@ const Body = z.object({
   work_id: z.string().uuid(),
   edition_kind: z.string().default("primary"),
   language: z.string().default("en"),
-  integrity_level: z.enum(["draft", "standard", "verified", "certified"]).default("standard"),
   notes: z.string().max(2000).optional(),
   override_typography_blockers: z.boolean().default(false),
 });
 
 type Service = ReturnType<typeof serviceClient>;
 type PublicationGate = "structural" | "rights" | "production";
+const PUBLISHED_INTEGRITY = "verified_published" as const;
 
 async function latestGatePassed(sc: Service, bookId: string, scopeHash: string, gate: PublicationGate): Promise<boolean> {
   const { data, error } = await sc
@@ -332,7 +332,7 @@ Deno.serve(async (req) => {
         version,
         semver_major: major, semver_minor: minor, semver_patch: patch,
         status: "approved",
-        integrity_level: body.integrity_level,
+        integrity_level: PUBLISHED_INTEGRITY,
         snapshot,
         design_snapshot,
         content_hash: contentHash,
@@ -406,7 +406,7 @@ Deno.serve(async (req) => {
       userId: auth.userId, action: "publish", allowed: true,
       metadata: {
         version,
-        integrity_level: body.integrity_level,
+        integrity_level: PUBLISHED_INTEGRITY,
         content_hash: contentHash,
         publisher_mode: publishingProfile.publisher_mode,
         identifier_product_forms: identifiers.map((i) => i.product_form),
