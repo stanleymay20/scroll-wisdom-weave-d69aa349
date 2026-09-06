@@ -58,6 +58,9 @@ interface QAResponse {
   report?: {
     status?: "ready" | "needs_review" | "blocked";
     score?: number;
+    blockerCount?: number;
+    warningCount?: number;
+    // Backward compatibility for any older deployed response shape.
     blocker_count?: number;
     warning_count?: number;
   };
@@ -269,7 +272,7 @@ async function updateGenerationJob(
   chapterCount: number,
   blockers: string[],
 ) {
-  const { data: job } = await supabase
+  const { data: job, error: jobError } = await supabase
     .from("generation_jobs")
     .select("id, metadata")
     .eq("book_id", bookId)
@@ -277,6 +280,9 @@ async function updateGenerationJob(
     .limit(1)
     .maybeSingle();
 
+  if (jobError) {
+    throw new Error(`Unable to load generation job for publication status: ${jobError.message}`);
+  }
   if (!job) return;
 
   const previousMetadata =
@@ -284,7 +290,7 @@ async function updateGenerationJob(
       ? job.metadata
       : {};
 
-  await supabase
+  const { error: updateError } = await supabase
     .from("generation_jobs")
     .update({
       status: ready ? "completed" : "partial",
@@ -302,6 +308,10 @@ async function updateGenerationJob(
       },
     })
     .eq("id", job.id);
+
+  if (updateError) {
+    throw new Error(`Unable to persist publication status: ${updateError.message}`);
+  }
 }
 
 function emptyResult(book: EvidenceBook, blockers: string[], generatedCount: number): PublicationPipelineResult {
@@ -414,7 +424,8 @@ export async function runPublicationQualityPipeline({
   const qa = (qaData || {}) as QAResponse;
   if (qa.error) throw new Error(`Publishability QA failed: ${qa.error}`);
 
-  const qaReady = qa.report?.status === "ready" && (qa.report?.blocker_count || 0) === 0;
+  const qaBlockerCount = qa.report?.blockerCount ?? qa.report?.blocker_count ?? 0;
+  const qaReady = qa.report?.status === "ready" && qaBlockerCount === 0;
   if (!qaReady) {
     blockers.push(
       `Publishability QA is ${qa.report?.status || "incomplete"}${qa.report?.score != null ? ` (${qa.report.score}/100)` : ""}.`,
