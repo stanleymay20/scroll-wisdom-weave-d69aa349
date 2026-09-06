@@ -271,11 +271,80 @@ serve(async (req) => {
     if (ae || !user) return json({ error: "Invalid auth" }, 401);
     log("Auth", { u: user.id.slice(0, 8) });
 
-    const { references, bookCategory = "general", chapterContent = "" } = await req.json();
+    const body = await req.json();
+    let { references, bookCategory = "general", chapterContent = "" } = body;
+    const bookId: string | undefined = typeof body.bookId === "string" ? body.bookId : undefined;
+    const chapterId: string | undefined = typeof body.chapterId === "string" ? body.chapterId : undefined;
+
+    // ===========================================
+    // TRUSTED PUBLICATION MODE
+    // When bookId + chapterId are supplied, the caller payload is NOT trusted:
+    // references/content/category are re-loaded from the database, and a
+    // publication gate attestation is issued at the end. Legacy ad-hoc mode
+    // (no ids) never produces an attestation.
+    // ===========================================
+    const trustedMode = !!(bookId && chapterId);
+    if (trustedMode) {
+      const { data: chapter, error: chErr } = await sb
+        .from("chapters")
+        .select("id, book_id, content, chapter_references")
+        .eq("id", chapterId)
+        .maybeSingle();
+      if (chErr) return json({ error: "Chapter lookup failed" }, 500);
+      if (!chapter) return json({ error: "Chapter not found" }, 404);
+      if (chapter.book_id !== bookId) return json({ error: "Chapter does not belong to this book" }, 400);
+
+      const { data: book, error: bkErr } = await sb
+        .from("books")
+        .select("id, user_id, creator_id, category")
+        .eq("id", bookId)
+        .maybeSingle();
+      if (bkErr) return json({ error: "Book lookup failed" }, 500);
+      if (!book) return json({ error: "Book not found" }, 404);
+
+      let authorized = book.user_id === user.id || book.creator_id === user.id;
+      if (!authorized) {
+        const { data: adminRow } = await sb
+          .from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
+        authorized = !!adminRow;
+      }
+      if (!authorized) return json({ error: "Not authorized for this book" }, 403);
+
+      // Override caller-supplied payload with persisted values
+      references = Array.isArray(chapter.chapter_references) ? chapter.chapter_references : [];
+      chapterContent = chapter.content || "";
+      bookCategory = book.category || "general";
+      log("Trusted mode", { book: bookId.slice(0, 8), chapter: chapterId.slice(0, 8), refs: references.length });
+    }
+
+    // Records the evidence gate attestation for trusted publication mode only.
+    // Returns a Response when the attestation fails (fail closed).
+    const attestEvidence = async (passed: boolean, artifact: Record<string, unknown>): Promise<Response | null> => {
+      if (!trustedMode) return null;
+      const { error: attErr } = await sb.rpc("record_publication_gate_attestation", {
+        p_book_id: bookId,
+        p_user_id: user.id,
+        p_gate: "evidence",
+        p_status: passed ? "passed" : "blocked",
+        p_artifact: artifact,
+        p_source_record_id: null,
+        p_chapter_id: chapterId,
+      });
+      if (attErr) { log("Attestation error", { m: attErr.message }); return json({ error: `Failed to record evidence attestation: ${attErr.message}` }, 500); }
+      return null;
+    };
+
+
+
     const emptyResp = { totalClaims: 0, analyzedClaims: 0, strong: 0, partial: 0, weak: 0, contradiction: 0, avgSupportScore: 0, unsupportedEmpiricalClaims: 0, contradictions: 0, strongPct: 0, uncitedClaimsPct: 0, analysisComplete: false, verdictLabel: 'Analysis Incomplete' };
     const emptyCoherence = { totalClaimsAnalyzed: 0, conflicts: [], conflictCount: 0, criticalConflicts: 0, coherenceScore: 100, coherenceVerdict: 'Analysis Incomplete', analysisComplete: false };
 
-    if (!Array.isArray(references) || !references.length) return json({ success: true, references: [], metrics: { total: 0, verifiedPct: 0 }, tier: { tier: "non-compliant", label: "No References" }, semanticIntegrityReport: { totalCitations: 0, strong: 0, moderate: 0, weak: 0, ornamental: 0, averageScore: 0, empiricalClaimsUnsupported: 0, ornamentalPct: 0 }, claimIntegrityReport: emptyResp, epistemicCoherenceReport: emptyCoherence });
+    if (!Array.isArray(references) || !references.length) {
+      // analysisComplete is false on both reports here, so the evidence gate cannot pass.
+      const blocked = await attestEvidence(false, { certificationBlocked: false, hardFailures: [], claimAnalysisComplete: false, coherenceAnalysisComplete: false, verifiedPct: 0 });
+      if (blocked) return blocked;
+      return json({ success: true, references: [], metrics: { total: 0, verifiedPct: 0 }, tier: { tier: "non-compliant", label: "No References" }, semanticIntegrityReport: { totalCitations: 0, strong: 0, moderate: 0, weak: 0, ornamental: 0, averageScore: 0, empiricalClaimsUnsupported: 0, ornamentalPct: 0 }, claimIntegrityReport: emptyResp, epistemicCoherenceReport: emptyCoherence });
+    }
 
     // Detect citation style
     const citStyle = chapterContent ? detectStyle(chapterContent) : 'APA';
@@ -476,6 +545,23 @@ serve(async (req) => {
     };
 
     log("Done", { tier, hf: hf.length, verdict: claimReport.verdictLabel, coherence: coherenceReport.coherenceVerdict, citStyle, artifactId: hashHex });
-    return json({ success: true, references: results, metrics, semanticIntegrityReport: semReport, claimIntegrityReport: claimReport, epistemicCoherenceReport: coherenceReport, tier: { tier, label: tLabel, met, unmet }, hardFailures: hf, certificationBlocked: hf.length > 0, citationStyle: citStyle, standard: "ScrollVerified™ 2026 — Institutional Epistemic Integrity Certified", auditArtifact });
+
+    const certificationBlocked = hf.length > 0;
+    const evidencePassed = certificationBlocked !== true
+      && hf.length === 0
+      && claimReport.analysisComplete !== false
+      && coherenceReport.analysisComplete !== false;
+    const attBlocked = await attestEvidence(evidencePassed, {
+      certificationBlocked,
+      hardFailures: hf.slice(0, 20),
+      claimAnalysisComplete: claimReport.analysisComplete !== false,
+      coherenceAnalysisComplete: coherenceReport.analysisComplete !== false,
+      verifiedPct: metrics.verifiedPct,
+      artifactId: auditArtifact.artifactId,
+      integrityHash: auditArtifact.integrityHash,
+    });
+    if (attBlocked) return attBlocked;
+
+    return json({ success: true, references: results, metrics, semanticIntegrityReport: semReport, claimIntegrityReport: claimReport, epistemicCoherenceReport: coherenceReport, tier: { tier, label: tLabel, met, unmet }, hardFailures: hf, certificationBlocked, citationStyle: citStyle, standard: "ScrollVerified™ 2026 — Institutional Epistemic Integrity Certified", auditArtifact });
   } catch (e) { const m = e instanceof Error ? e.message : String(e); log("ERR", { m }); return json({ error: m }, 500); }
 });

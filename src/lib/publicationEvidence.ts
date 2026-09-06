@@ -240,6 +240,8 @@ async function verifyChapterReferences(
       references,
       bookCategory: book.category,
       chapterContent: chapter.content || "",
+      bookId: book.id,
+      chapterId: chapter.id,
     },
   });
 

@@ -828,6 +828,34 @@ Respond as JSON array: [{"chapter": 1, "concepts": 15, "examples": ["loss aversi
     }
 
     // ============================================================
+    // STEP 4B: Server-side publication gate attestation (editorial)
+    // Fail closed — never report success without a recorded attestation.
+    // ============================================================
+    const { error: attestError } = await supabase.rpc("record_publication_gate_attestation", {
+      p_book_id: bookId,
+      p_user_id: user.id,
+      p_gate: "editorial",
+      p_status: certificationEligible ? "passed" : "blocked",
+      p_artifact: {
+        overallScore,
+        structuralScore,
+        academicScore,
+        pedagogicalScore,
+        certificationBlockers: certificationBlockers.slice(0, 20),
+        model: AUDIT_MODEL,
+        promptVersion: AUDIT_PROMPT_VERSION,
+      },
+      p_source_record_id: auditRecord.id,
+      p_chapter_id: null,
+    });
+
+    if (attestError) {
+      log("Attestation error", { error: attestError.message });
+      throw new Error(`Failed to record editorial attestation: ${attestError.message}`);
+    }
+
+
+    // ============================================================
     // STEP 5: Audit Telemetry
     // ============================================================
     const durationMs = Date.now() - auditStartTime;

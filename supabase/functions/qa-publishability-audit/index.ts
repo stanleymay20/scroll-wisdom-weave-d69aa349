@@ -105,6 +105,24 @@ Deno.serve(async (req) => {
       .single();
     if (insErr) return serverError(insErr);
 
+    // Server-side publication gate attestation (qa). Fail closed.
+    const qaPassed = report.status === "ready" && report.blockerCount === 0;
+    const { error: attestErr } = await sc.rpc("record_publication_gate_attestation", {
+      p_book_id: bookId,
+      p_user_id: auth.userId,
+      p_gate: "qa",
+      p_status: qaPassed ? "passed" : "blocked",
+      p_artifact: {
+        status: report.status,
+        score: report.score,
+        blockerCount: report.blockerCount,
+        warningCount: report.warningCount,
+      },
+      p_source_record_id: inserted.id,
+      p_chapter_id: null,
+    });
+    if (attestErr) return serverError(attestErr);
+
     return json({ id: inserted.id, report });
   } catch (e) {
     return serverError(e);
