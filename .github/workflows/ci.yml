@@ -104,10 +104,13 @@ jobs:
           deno check supabase/functions/publish-work/index.ts
           deno check supabase/functions/enqueue-export-bundle/index.ts
           deno check supabase/functions/export-book/index.ts
+          deno check supabase/functions/distribution-metadata/index.ts
+          deno check supabase/functions/export-onix/index.ts
           deno check supabase/functions/scrollvision-retrieve/index.ts
       - name: Test publication trust engines
         run: |
           deno test supabase/functions/_shared/isbn_test.ts
+          deno test supabase/functions/_shared/onix_test.ts
           deno test supabase/functions/_shared/structuralConsistency_test.ts
           deno test supabase/functions/_shared/assetRights_test.ts
           deno test supabase/functions/_shared/productionArtifactAudit_test.ts
