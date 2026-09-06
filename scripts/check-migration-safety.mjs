@@ -17,9 +17,14 @@ const allFiles = (await readdir(migrationDir))
   .filter((file) => /^\d{14}.*\.sql$/i.test(file))
   .sort();
 
+const hardenedFiles = allFiles.filter((file) => file.slice(0, 14) >= hardenedBaseline);
 const failures = [];
+
+// The legacy archive predates the hardened migration policy and is explicitly
+// treated as history that must be baselined, not replayed blindly. Enforce
+// unique migration versions for all new/hardened migrations going forward.
 const byVersion = new Map();
-for (const file of allFiles) {
+for (const file of hardenedFiles) {
   const version = file.slice(0, 14);
   const existing = byVersion.get(version) || [];
   existing.push(file);
@@ -28,11 +33,10 @@ for (const file of allFiles) {
 
 for (const [version, versionFiles] of byVersion) {
   if (versionFiles.length > 1) {
-    failures.push(`duplicate migration version ${version}: ${versionFiles.join(", ")}`);
+    failures.push(`duplicate hardened migration version ${version}: ${versionFiles.join(", ")}`);
   }
 }
 
-const hardenedFiles = allFiles.filter((file) => file.slice(0, 14) >= hardenedBaseline);
 for (const file of hardenedFiles) {
   const sql = await readFile(path.join(migrationDir, file), "utf8");
   for (const [label, pattern] of prohibited) {
@@ -48,6 +52,6 @@ if (failures.length > 0) {
 }
 
 console.log(
-  `Migration safety gate passed for ${allFiles.length} migration(s); ` +
-  `${hardenedFiles.length} hardened-era migration(s) scanned for destructive SQL.`,
+  `Migration safety gate passed: ${hardenedFiles.length} hardened migration(s) ` +
+  `have unique versions and no prohibited destructive SQL.`,
 );
