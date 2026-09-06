@@ -19,7 +19,25 @@ Deno.test("KDP 6x9 white-paper geometry follows page-count spine formula", () =>
   approx(geometry.spineWidthIn, 300 * 0.002252);
   approx(geometry.totalWidthIn, 0.125 + 6 + (300 * 0.002252) + 6 + 0.125);
   approx(geometry.totalHeightIn, 9.25);
+  assert(geometry.sourcePageCount === 300 && geometry.effectivePageCount === 300, "even page count should remain unchanged");
   assert(geometry.spineTextAllowed, "300-page paperback should allow safe spine text");
+});
+
+Deno.test("KDP odd manuscript page count rounds up before spine calculation", () => {
+  const geometry = computeKdpCoverGeometry(299, "6x9", "white");
+  assert(geometry.sourcePageCount === 299, "source page count should be retained for audit metadata");
+  assert(geometry.effectivePageCount === 300, "KDP page count should round odd manuscripts up to even");
+  approx(geometry.spineWidthIn, 300 * 0.002252);
+});
+
+Deno.test("KDP cover rejects manuscripts below the 24-page minimum", () => {
+  let rejected = false;
+  try {
+    computeKdpCoverGeometry(23, "6x9", "white");
+  } catch (error) {
+    rejected = error instanceof Error && error.message === "KDP_MIN_PAGE_COUNT_24";
+  }
+  assert(rejected, "sub-24-page KDP paperback must be rejected");
 });
 
 Deno.test("short/thin books omit spine text when 7pt cannot fit safely", () => {
