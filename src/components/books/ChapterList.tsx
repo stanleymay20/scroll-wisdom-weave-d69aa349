@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
 import { ChevronRight, CheckCircle2, Loader2, Sparkles, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -28,6 +28,8 @@ interface ChapterListProps {
   onNavigateToChapter: (chapter: ChapterData) => void;
 }
 
+const OUTLINE_PLACEHOLDER = "Full chapter content is being generated";
+
 export function ChapterList({
   bookId, chapters, isOwner, generatingChapterId, isGeneratingAll, generationProgress,
   qualityStage: qualityStageOverride, onGenerateChapter, onGenerateAll, onNavigateToChapter,
@@ -36,11 +38,12 @@ export function ChapterList({
   const { toast } = useToast();
   const [isQualityReview, setIsQualityReview] = useState(false);
   const [localQualityStage, setLocalQualityStage] = useState<string | null>(null);
+  const autoStartedRef = useRef(false);
   const qualityStage = qualityStageOverride || localQualityStage;
   const isBusy = isGeneratingAll || isQualityReview;
 
-  const handleGenerateAllAndCertify = async () => {
-    if (isBusy) return;
+  const handleGenerateAllAndCertify = useCallback(async () => {
+    if (isGeneratingAll || isQualityReview) return;
 
     await onGenerateAll();
 
@@ -77,7 +80,22 @@ export function ChapterList({
     } finally {
       setIsQualityReview(false);
     }
-  };
+  }, [bookId, isGeneratingAll, isQualityReview, onGenerateAll, toast]);
+
+  useEffect(() => {
+    if (!isOwner || autoStartedRef.current || isBusy || chapters.length === 0) return;
+
+    const isFreshOutline = chapters.every(
+      (chapter) =>
+        !chapter.is_generated &&
+        Boolean(chapter.content?.includes(OUTLINE_PLACEHOLDER)),
+    );
+
+    if (!isFreshOutline) return;
+
+    autoStartedRef.current = true;
+    void handleGenerateAllAndCertify();
+  }, [chapters, handleGenerateAllAndCertify, isBusy, isOwner]);
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
