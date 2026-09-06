@@ -98,7 +98,13 @@ export function requireKdpPaperbackPageCount(pageCount: number, trimSize: KdpTri
   if (!Number.isInteger(pageCount) || pageCount < 1) throw new Error("INVALID_PAGE_COUNT");
   const effectivePageCount = pageCount % 2 === 0 ? pageCount : pageCount + 1;
   const { min, max } = getKdpPaperbackPageLimits(trimSize, paperType);
-  if (effectivePageCount < min || effectivePageCount > max) {
+  // The source PDF must satisfy KDP's minimum itself. Rounding an odd source
+  // count is only valid for cover/spine geometry and must never turn an
+  // otherwise ineligible manuscript into an eligible one.
+  if (pageCount < min) {
+    throw new Error("KDP_PAGE_COUNT_OUT_OF_RANGE:" + pageCount + ":allowed_" + min + "_" + max);
+  }
+  if (effectivePageCount > max) {
     throw new Error("KDP_PAGE_COUNT_OUT_OF_RANGE:" + effectivePageCount + ":allowed_" + min + "_" + max);
   }
   return effectivePageCount;
