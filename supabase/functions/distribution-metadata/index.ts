@@ -13,7 +13,6 @@ import {
 } from "../_shared/http.ts";
 
 const ProductForm = z.enum(["paperback", "hardcover", "epub"]);
-const NullableText = z.string().trim().nullable().optional();
 const NullablePrice = z.number().int().min(0).nullable().optional();
 const NullableTax = z.number().min(0).max(100).nullable().optional();
 
@@ -160,6 +159,8 @@ Deno.serve(async (req) => {
     const wgError = validateWarengruppe(body.productForm, body.warengruppeCode);
     if (wgError) return badRequest(wgError);
 
+    const currency = (body.currency ?? "EUR").toUpperCase();
+    const priceCountry = (body.priceCountry ?? "DE").toUpperCase();
     const payload = {
       book_id: body.bookId,
       owner_user_id: access.book?.user_id ?? access.book?.creator_id ?? auth.userId,
@@ -172,13 +173,13 @@ Deno.serve(async (req) => {
       publishing_status: body.publishingStatus ?? null,
       price_type: body.priceType ?? null,
       price_cents: body.priceCents ?? null,
-      currency: body.currency.toUpperCase(),
-      price_country: body.priceCountry.toUpperCase(),
+      currency,
+      price_country: priceCountry,
       tax_rate_code: body.taxRateCode ?? null,
       tax_rate_percent: body.taxRatePercent ?? null,
       unpriced_item_type: body.unpricedItemType ?? null,
-      thema_codes: body.themaCodes,
-      keywords: body.keywords,
+      thema_codes: body.themaCodes ?? [],
+      keywords: body.keywords ?? [],
     };
 
     const { error: saveErr } = await sc
