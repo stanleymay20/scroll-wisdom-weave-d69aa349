@@ -74,13 +74,24 @@ Deno.serve(async (req) => {
 
     const { data: publication, error: publicationErr } = await sc
       .from("publications")
-      .select("id,status,version,snapshot,published_at")
+      .select("id,status,version,snapshot,published_at,scroll_edition_id")
       .eq("id", access.book.current_publication_id)
       .eq("status", "published")
       .maybeSingle();
     if (publicationErr) throw publicationErr;
     if (!publication) {
       return json({ error: "PUBLISHED_SNAPSHOT_REQUIRED", message: "The current immutable Publication snapshot is unavailable." }, 409);
+    }
+
+    const { data: product, error: productErr } = await sc
+      .from("publication_products")
+      .select("id,scroll_product_id,product_form")
+      .eq("publication_id", publication.id)
+      .eq("product_form", body.productForm)
+      .maybeSingle();
+    if (productErr) throw productErr;
+    if (!product?.scroll_product_id) {
+      return json({ error: "SCROLL_PRODUCT_ID_REQUIRED", message: `The ${body.productForm} publication product identity has not been materialized.` }, 409);
     }
 
     const snapshot = (publication.snapshot ?? {}) as Record<string, unknown>;
@@ -128,8 +139,9 @@ Deno.serve(async (req) => {
     const publisherName = publisher.publisherName ?? "";
 
     const onixInput: OnixProductInput = {
-      recordReference: `scrolllibrary:${publication.id}:${body.productForm}`,
+      recordReference: product.scroll_product_id,
       notificationType: "03",
+      proprietaryProductId: product.scroll_product_id,
       isbn13,
       title,
       subtitle,
@@ -174,6 +186,8 @@ Deno.serve(async (req) => {
         "Content-Disposition": `attachment; filename="${filename}"`,
         "X-ONIX-Release": "3.1",
         "X-Publication-ID": publication.id,
+        "X-Scroll-Edition-ID": publication.scroll_edition_id ?? "",
+        "X-Scroll-Product-ID": product.scroll_product_id,
       },
     });
   } catch (error) {
