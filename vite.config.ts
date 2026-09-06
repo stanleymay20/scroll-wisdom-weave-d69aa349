@@ -83,9 +83,9 @@ export default defineConfig(({ mode }) => ({
         skipWaiting: true,
         clientsClaim: true,
         globPatterns: ["**/*.{js,css,html,ico,png,svg,woff,woff2}"],
-        // Keep the application shell available offline, but don't force every
-        // heavyweight optional tool into the install/update payload. These
-        // chunks are cached on demand by js-chunks-cache below.
+        // Keep the application shell available offline, but don't force lazy
+        // routes and heavyweight optional tools into every install/update.
+        // They are cached on first use by js-chunks-cache below.
         globIgnores: [
           "assets/CodePlayground-*.js",
           "assets/LearningDeckGenerator-*.js",
@@ -96,6 +96,10 @@ export default defineConfig(({ mode }) => ({
           "assets/RadarChart-*.js",
           "assets/*Diagram-*.js",
           "assets/diagram-*.js",
+          "assets/{Auth,NotFound,BookDetail,Explore,Library,Profile,Settings,Reader,Generate,Dashboard,About,Contact,Support,Help,PrivacyPolicy,TermsOfService,ModerationDashboard,Pricing,AdminPanel,Install,PWATest,Diagnostics,CertificateVerify,CertificateStatus,Certificates,OrganizationVerify,VerificationDocs,TrustWhitepaper,AccountDelete,CertificateTest,LaunchChecklist,HowCertificationWorks,InstitutionalReadiness,HealthCheck,AdminRecovery,PMFDashboard,AuditDashboard,Upload,MasteryDashboard,MasteryModel,QuickLearn,ExperimentReport,AdminOps,AdminEntitlements,Organizations,OrgAnalytics,VerifyLookup,VerifyExport,CitationGraph,StudySession,PublishingCommandCenter,Cognition,DataExport,Storefront,PublicBookPage,PublicSampleReader,AuthorProfilePage,SeriesPage,BookPublishSettings,AuthorProfileEditor,ExportJobsPage,PurchaseSuccess,FullBookReader,PurchasedLibrary,CreatorEarnings,PayoutProfileEditor,Sell,SellAnalytics,CollectionPage,CreatorIntelligence,CreatorBusinessHub,CreatorAssets}-*.js",
+          "assets/{ContentComparison,CategoryCards,ForYouSection,GetInspiredSection,HowItWorks,WhyDifferent,PlatformClarification,FAQSection,FinalCTA,InstantMasteryModal,ScrollTriggerBanner}-*.js",
+          "assets/{DiagnosticsPanel,ReEngagementBanner,PWAInstallPrompt,GlobalAudioPlayer,CookieConsent,OnboardingDialog}-*.js",
+          "assets/{InteractiveQA,FlashcardGenerator,VoiceConversation,ComicReaderMode,ChapterVideoGenerator,DeepResearchPanel}-*.js",
         ],
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
         runtimeCaching: [
@@ -121,9 +125,8 @@ export default defineConfig(({ mode }) => ({
             handler: "NetworkOnly",
           },
 
-          // Heavy optional JS chunks are fetched only when a feature is used,
-          // then retained for fast repeat/offline use instead of being forced
-          // into every service-worker install.
+          // Lazy JS is fetched only when a route/feature is used, then retained
+          // for fast repeat/offline use instead of front-loading the entire app.
           {
             urlPattern: /\/assets\/.*\.js$/i,
             handler: "StaleWhileRevalidate",
