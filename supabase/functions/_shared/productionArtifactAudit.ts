@@ -28,7 +28,10 @@ export interface ProductionArtifactReport {
   metrics: ProductionArtifactMetrics;
 }
 
-const MIN_PDF_BYTES = 1024;
+// File size is only a corruption floor, not a quality proxy. A standards-valid,
+// parseable one-page PDF can legitimately be below 1 KiB; structural checks below
+// are the authoritative evidence of a usable artifact.
+const MIN_PDF_BYTES = 256;
 const MIN_PAGE_POINTS = 144; // 2 inches — anything smaller is not a plausible book page.
 const MAX_PAGE_POINTS = 2000;
 
@@ -68,7 +71,7 @@ export async function auditRenderedPdf(bytes: Uint8Array): Promise<ProductionArt
     issues.push({
       severity: "blocker",
       code: "pdf_too_small",
-      message: `Rendered PDF is only ${bytes.length} bytes and is not a credible publication artifact.`,
+      message: `Rendered PDF is only ${bytes.length} bytes and is too small to be structurally plausible.`,
     });
   }
 
