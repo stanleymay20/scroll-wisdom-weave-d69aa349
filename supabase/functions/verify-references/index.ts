@@ -271,7 +271,52 @@ serve(async (req) => {
     if (ae || !user) return json({ error: "Invalid auth" }, 401);
     log("Auth", { u: user.id.slice(0, 8) });
 
-    const { references, bookCategory = "general", chapterContent = "" } = await req.json();
+    const body = await req.json();
+    let { references, bookCategory = "general", chapterContent = "" } = body;
+    const bookId: string | undefined = typeof body.bookId === "string" ? body.bookId : undefined;
+    const chapterId: string | undefined = typeof body.chapterId === "string" ? body.chapterId : undefined;
+
+    // ===========================================
+    // TRUSTED PUBLICATION MODE
+    // When bookId + chapterId are supplied, the caller payload is NOT trusted:
+    // references/content/category are re-loaded from the database, and a
+    // publication gate attestation is issued at the end. Legacy ad-hoc mode
+    // (no ids) never produces an attestation.
+    // ===========================================
+    const trustedMode = !!(bookId && chapterId);
+    if (trustedMode) {
+      const { data: chapter, error: chErr } = await sb
+        .from("chapters")
+        .select("id, book_id, content, chapter_references")
+        .eq("id", chapterId)
+        .maybeSingle();
+      if (chErr) return json({ error: "Chapter lookup failed" }, 500);
+      if (!chapter) return json({ error: "Chapter not found" }, 404);
+      if (chapter.book_id !== bookId) return json({ error: "Chapter does not belong to this book" }, 400);
+
+      const { data: book, error: bkErr } = await sb
+        .from("books")
+        .select("id, user_id, creator_id, category")
+        .eq("id", bookId)
+        .maybeSingle();
+      if (bkErr) return json({ error: "Book lookup failed" }, 500);
+      if (!book) return json({ error: "Book not found" }, 404);
+
+      let authorized = book.user_id === user.id || book.creator_id === user.id;
+      if (!authorized) {
+        const { data: adminRow } = await sb
+          .from("user_roles").select("role").eq("user_id", user.id).eq("role", "admin").maybeSingle();
+        authorized = !!adminRow;
+      }
+      if (!authorized) return json({ error: "Not authorized for this book" }, 403);
+
+      // Override caller-supplied payload with persisted values
+      references = Array.isArray(chapter.chapter_references) ? chapter.chapter_references : [];
+      chapterContent = chapter.content || "";
+      bookCategory = book.category || "general";
+      log("Trusted mode", { book: bookId.slice(0, 8), chapter: chapterId.slice(0, 8), refs: references.length });
+    }
+
     const emptyResp = { totalClaims: 0, analyzedClaims: 0, strong: 0, partial: 0, weak: 0, contradiction: 0, avgSupportScore: 0, unsupportedEmpiricalClaims: 0, contradictions: 0, strongPct: 0, uncitedClaimsPct: 0, analysisComplete: false, verdictLabel: 'Analysis Incomplete' };
     const emptyCoherence = { totalClaimsAnalyzed: 0, conflicts: [], conflictCount: 0, criticalConflicts: 0, coherenceScore: 100, coherenceVerdict: 'Analysis Incomplete', analysisComplete: false };
 
