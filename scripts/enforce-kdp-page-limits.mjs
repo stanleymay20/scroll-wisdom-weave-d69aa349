@@ -55,7 +55,7 @@ export function requireKdpPaperbackPageCount(pageCount: number, trimSize: KdpTri
   const effectivePageCount = pageCount % 2 === 0 ? pageCount : pageCount + 1;
   const { min, max } = getKdpPaperbackPageLimits(trimSize, paperType);
   if (effectivePageCount < min || effectivePageCount > max) {
-    throw new Error(`KDP_PAGE_COUNT_OUT_OF_RANGE:${effectivePageCount}:allowed_${min}_${max}`);
+    throw new Error("KDP_PAGE_COUNT_OUT_OF_RANGE:" + effectivePageCount + ":allowed_" + min + "_" + max);
   }
   return effectivePageCount;
 }
