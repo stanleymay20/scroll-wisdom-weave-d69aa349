@@ -1,10 +1,11 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { motion } from "framer-motion";
-import { ChevronRight, CheckCircle2, Loader2, Sparkles, RefreshCw } from "lucide-react";
+import { ChevronRight, CheckCircle2, Loader2, Sparkles, RefreshCw, ShieldAlert } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { runPublicationQualityPipeline } from "@/lib/publicationPipeline";
+import { supabase } from "@/integrations/supabase/client";
 
 interface ChapterData {
   id: string;
@@ -28,7 +29,20 @@ interface ChapterListProps {
   onNavigateToChapter: (chapter: ChapterData) => void;
 }
 
+type JobStatus = "pending" | "generating" | "completed" | "failed" | "partial";
+
+interface LatestJob {
+  id: string;
+  status: JobStatus;
+}
+
 const OUTLINE_PLACEHOLDER = "Full chapter content is being generated";
+
+const isPlaceholderChapter = (chapter: ChapterData) =>
+  !chapter.is_generated && Boolean(chapter.content?.includes(OUTLINE_PLACEHOLDER));
+
+const isCompleteChapter = (chapter: ChapterData) =>
+  chapter.is_generated === true && Boolean(chapter.content && chapter.content.trim().length > 0);
 
 export function ChapterList({
   bookId, chapters, isOwner, generatingChapterId, isGeneratingAll, generationProgress,
@@ -38,15 +52,35 @@ export function ChapterList({
   const { toast } = useToast();
   const [isQualityReview, setIsQualityReview] = useState(false);
   const [localQualityStage, setLocalQualityStage] = useState<string | null>(null);
+  const [latestJob, setLatestJob] = useState<LatestJob | null>(null);
+  const [jobLoaded, setJobLoaded] = useState(false);
   const autoStartedRef = useRef(false);
   const qualityStage = qualityStageOverride || localQualityStage;
   const isBusy = isGeneratingAll || isQualityReview;
 
-  const handleGenerateAllAndCertify = useCallback(async () => {
-    if (isGeneratingAll || isQualityReview) return;
+  // Load latest generation job so an interrupted session can resume
+  useEffect(() => {
+    if (!isOwner || !bookId) {
+      setJobLoaded(true);
+      return;
+    }
+    let cancelled = false;
+    void (async () => {
+      const { data } = await supabase
+        .from("generation_jobs")
+        .select("id, status")
+        .eq("book_id", bookId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (cancelled) return;
+      setLatestJob(data ? { id: data.id as string, status: data.status as JobStatus } : null);
+      setJobLoaded(true);
+    })();
+    return () => { cancelled = true; };
+  }, [bookId, isOwner]);
 
-    await onGenerateAll();
-
+  const runQualityReview = useCallback(async () => {
     setIsQualityReview(true);
     setLocalQualityStage("Preparing the completed draft for independent publication review…");
 
@@ -58,6 +92,13 @@ export function ChapterList({
       });
 
       if (result.ready) {
+        if (latestJob) {
+          await supabase
+            .from("generation_jobs")
+            .update({ status: "completed", completed_at: new Date().toISOString() })
+            .eq("id", latestJob.id);
+          setLatestJob({ ...latestJob, status: "completed" });
+        }
         toast({
           title: "Publication candidate verified",
           description: `Editorial ${result.editorial.score ?? "—"}/100 · evidence and publishability gates passed.`,
@@ -80,28 +121,71 @@ export function ChapterList({
     } finally {
       setIsQualityReview(false);
     }
-  }, [bookId, isGeneratingAll, isQualityReview, onGenerateAll, toast]);
+  }, [bookId, latestJob, toast]);
+
+  const handleGenerateAllAndCertify = useCallback(async () => {
+    if (isGeneratingAll || isQualityReview) return;
+
+    await onGenerateAll();
+
+    // Fail closed: verify every chapter really exists with content before reviewing
+    setLocalQualityStage("Verifying every chapter is complete…");
+    const { data: verifyRows, error: verifyError } = await supabase
+      .from("chapters")
+      .select("id, is_generated, content")
+      .eq("book_id", bookId);
+
+    const incomplete = verifyError
+      ? -1
+      : (verifyRows ?? []).filter(
+          (row) => row.is_generated !== true || !row.content || row.content.trim().length === 0,
+        ).length;
+
+    if (verifyError || incomplete !== 0 || (verifyRows ?? []).length === 0) {
+      const description = verifyError
+        ? "Could not confirm that every chapter finished. Publication review was not started."
+        : `${incomplete > 0 ? incomplete : "Some"} chapter(s) are still incomplete. Publication review was not started — you can resume generation.`;
+      setLocalQualityStage(`Publication review blocked: ${description}`);
+      toast({ title: "Publication review blocked", description, variant: "destructive" });
+      return;
+    }
+
+    await runQualityReview();
+  }, [bookId, isGeneratingAll, isQualityReview, onGenerateAll, runQualityReview, toast]);
 
   useEffect(() => {
-    if (!isOwner || autoStartedRef.current || isBusy || chapters.length === 0) return;
+    if (!isOwner || !jobLoaded || autoStartedRef.current || isBusy || chapters.length === 0) return;
+    if (!latestJob) return; // never auto-generate a manual/imported book
+    if (latestJob.status !== "pending" && latestJob.status !== "generating") return;
 
-    const isFreshOutline = chapters.every(
-      (chapter) =>
-        !chapter.is_generated &&
-        Boolean(chapter.content?.includes(OUTLINE_PLACEHOLDER)),
-    );
+    const ungenerated = chapters.filter((chapter) => !isCompleteChapter(chapter));
+    const resumableOutline = ungenerated.length > 0 && ungenerated.every(isPlaceholderChapter);
+    const awaitingReview = ungenerated.length === 0;
 
-    if (!isFreshOutline) return;
+    if (!resumableOutline && !awaitingReview) return;
 
     autoStartedRef.current = true;
-    void handleGenerateAllAndCertify();
-  }, [chapters, handleGenerateAllAndCertify, isBusy, isOwner]);
+    if (awaitingReview) {
+      void runQualityReview();
+    } else {
+      void handleGenerateAllAndCertify();
+    }
+  }, [chapters, handleGenerateAllAndCertify, runQualityReview, isBusy, isOwner, jobLoaded, latestJob]);
+
+  const allGenerated = chapters.length > 0 && chapters.every(isCompleteChapter);
+  const showRetryReview =
+    isOwner && allGenerated && !isBusy &&
+    (latestJob?.status === "partial" || latestJob?.status === "failed");
 
   return (
     <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
       <div className="flex items-center justify-between mb-6">
         <h2 className="font-display text-2xl font-bold">{t('book.tableOfContents')}</h2>
-        {isOwner && (chapters.some(ch => !ch.is_generated) || isQualityReview) && (
+        {showRetryReview ? (
+          <Button variant="gold-outline" onClick={() => void runQualityReview()}>
+            <ShieldAlert className="h-4 w-4 mr-2" />Retry publication review
+          </Button>
+        ) : isOwner && (chapters.some(ch => !ch.is_generated) || isQualityReview) ? (
           <Button
             variant="hero"
             onClick={handleGenerateAllAndCertify}
@@ -118,8 +202,9 @@ export function ChapterList({
               <><Sparkles className="h-4 w-4 mr-2" />{t('book.generateAllChapters')}</>
             )}
           </Button>
-        )}
+        ) : null}
       </div>
+
 
       {isBusy && (
         <div className="mb-6 p-4 rounded-xl bg-gradient-card border border-primary/30" aria-live="polite">
