@@ -317,6 +317,25 @@ serve(async (req) => {
       log("Trusted mode", { book: bookId.slice(0, 8), chapter: chapterId.slice(0, 8), refs: references.length });
     }
 
+    // Records the evidence gate attestation for trusted publication mode only.
+    // Returns a Response when the attestation fails (fail closed).
+    const attestEvidence = async (passed: boolean, artifact: Record<string, unknown>): Promise<Response | null> => {
+      if (!trustedMode) return null;
+      const { error: attErr } = await sb.rpc("record_publication_gate_attestation", {
+        p_book_id: bookId,
+        p_user_id: user.id,
+        p_gate: "evidence",
+        p_status: passed ? "passed" : "blocked",
+        p_artifact: artifact,
+        p_source_record_id: null,
+        p_chapter_id: chapterId,
+      });
+      if (attErr) { log("Attestation error", { m: attErr.message }); return json({ error: `Failed to record evidence attestation: ${attErr.message}` }, 500); }
+      return null;
+    };
+
+
+
     const emptyResp = { totalClaims: 0, analyzedClaims: 0, strong: 0, partial: 0, weak: 0, contradiction: 0, avgSupportScore: 0, unsupportedEmpiricalClaims: 0, contradictions: 0, strongPct: 0, uncitedClaimsPct: 0, analysisComplete: false, verdictLabel: 'Analysis Incomplete' };
     const emptyCoherence = { totalClaimsAnalyzed: 0, conflicts: [], conflictCount: 0, criticalConflicts: 0, coherenceScore: 100, coherenceVerdict: 'Analysis Incomplete', analysisComplete: false };
 
