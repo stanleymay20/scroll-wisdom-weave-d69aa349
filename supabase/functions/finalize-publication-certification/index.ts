@@ -85,6 +85,49 @@ Deno.serve(async (req) => {
     }
     if (!authorized) return forbidden("Not the owner of this book");
 
+    // Interrupted mode: the browser's quality review stopped before a verdict
+    // could be reached. The server owns marking the latest job partial so the
+    // browser never writes generation_jobs directly. Only status/completion/
+    // safe error fields are touched — never metadata, current_chapter, or identity.
+    if (mode === "interrupted") {
+      const { data: latestJob, error: latestJobErr } = await sc
+        .from("generation_jobs")
+        .select("id")
+        .eq("book_id", bookId)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (latestJobErr) return serverError(latestJobErr);
+
+      if (!latestJob) {
+        return json({
+          ready: false,
+          jobStatus: null,
+          authority: "server_interrupted",
+        });
+      }
+
+      const { data: interrupted, error: interruptedErr } = await sc
+        .from("generation_jobs")
+        .update({
+          status: "partial",
+          completed_at: null,
+          error_code: "QUALITY_PIPELINE_ERROR",
+          error_message:
+            "Publication quality review stopped before certification completed.",
+        })
+        .eq("id", latestJob.id)
+        .select("status")
+        .single();
+      if (interruptedErr) return serverError(interruptedErr);
+
+      return json({
+        ready: false,
+        jobStatus: interrupted?.status ?? "partial",
+        authority: "server_interrupted",
+      });
+    }
+
     const { data: attestationReady, error: readinessErr } = await sc.rpc(
       "has_current_publication_attestations",
       { p_book_id: bookId },
