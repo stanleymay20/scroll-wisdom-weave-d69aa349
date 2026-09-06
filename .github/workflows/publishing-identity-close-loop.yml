@@ -5,6 +5,7 @@ on:
     branches: [main]
     paths:
       - scripts/apply-publishing-identity-close-loop.mjs
+      - .github/workflows/publishing-identity-close-loop.yml
 
 permissions:
   contents: write
