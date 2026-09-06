@@ -88,6 +88,9 @@ jobs:
         run: |
           deno check supabase/functions/generate-book/index.ts
           deno check supabase/functions/generate-chapter/index.ts
+          deno check supabase/functions/generate-cover/index.ts
+          deno check supabase/functions/generate-cover-raw/index.ts
+          deno check supabase/functions/register-custom-cover/index.ts
           deno check supabase/functions/chief-editor-audit/index.ts
           deno check supabase/functions/deep-research/index.ts
           deno check supabase/functions/generate-references/index.ts
