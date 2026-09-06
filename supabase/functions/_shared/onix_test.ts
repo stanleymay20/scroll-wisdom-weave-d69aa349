@@ -2,7 +2,8 @@ import { onixProductForm, renderOnix31Product, toOnixLanguageCode, validateOnixP
 
 function base(overrides: Record<string, unknown> = {}) {
   return {
-    recordReference: "scrolllibrary:publication:paperback",
+    recordReference: "SLP-0123456789ABCDEF0123456789ABCDEF",
+    proprietaryProductId: "SLP-0123456789ABCDEF0123456789ABCDEF",
     isbn13: "9780306406157",
     title: "The Code Behind Money",
     subtitle: "A Practical Guide",
@@ -28,10 +29,13 @@ function base(overrides: Record<string, unknown> = {}) {
   };
 }
 
-Deno.test("renders VLB-shaped ONIX 3.1 paperback metadata", () => {
+Deno.test("renders VLB-shaped ONIX 3.1 metadata with Scroll Product ID plus ISBN", () => {
   const output = renderOnix31Product(base());
   const required = [
     '<ONIXMessage release="3.1" xmlns="http://ns.editeur.org/onix/3.1/reference">',
+    "<ProductIDType>01</ProductIDType>",
+    "<IDTypeName>ScrollLibrary Product ID</IDTypeName>",
+    "<IDValue>SLP-0123456789ABCDEF0123456789ABCDEF</IDValue>",
     "<ProductIDType>15</ProductIDType>",
     "<IDValue>9780306406157</IDValue>",
     "<ProductForm>BC</ProductForm>",
@@ -52,6 +56,16 @@ Deno.test("renders VLB-shaped ONIX 3.1 paperback metadata", () => {
   ];
   for (const needle of required) {
     if (!output.includes(needle)) throw new Error(`missing ONIX field: ${needle}`);
+  }
+});
+
+Deno.test("rejects malformed Scroll Product IDs without confusing them with ISBN", () => {
+  const issues = validateOnixProduct(base({ proprietaryProductId: "9780306406157" }) as any);
+  if (!issues.some((issue) => issue.code === "SCROLL_PRODUCT_ID_INVALID")) {
+    throw new Error("ISBN-shaped proprietary ID was not rejected");
+  }
+  if (issues.some((issue) => issue.code === "INVALID_ISBN13")) {
+    throw new Error("valid ISBN should remain independently valid");
   }
 });
 
