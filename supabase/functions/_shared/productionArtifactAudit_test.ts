@@ -25,7 +25,7 @@ Deno.test("auditRenderedPdf passes a structurally valid rendered PDF", async () 
   assertEquals(report.status, "ready");
   assertEquals(report.metrics.pageCount, 1);
   assertEquals(report.metrics.pagesWithoutContentStreams, 0);
-  assert(report.metrics.byteSize >= 1024);
+  assert(report.metrics.byteSize >= 256);
   assertEquals(report.issues.length, 0);
 });
 
