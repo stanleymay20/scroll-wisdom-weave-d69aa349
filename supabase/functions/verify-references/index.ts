@@ -308,7 +308,7 @@ serve(async (req) => {
     }
 
     // Phase 3: Empirical detection
-    const empParas = chapterContent ? paras.filter(p => EMP_IND.some(i => p.toLowerCase().includes(i))) : [];
+    const empParas = chapterContent ? paras.filter((p: string) => EMP_IND.some(i => p.toLowerCase().includes(i))) : [];
     let empUnsup = 0;
     for (const ep of empParas) { const ci = results.filter(r => ep.includes(r.authors?.[0] || r.author || r.title || "")); if (!ci.length || !ci.some((c: any) => c.semanticSupport?.score >= 50)) empUnsup++; }
 
