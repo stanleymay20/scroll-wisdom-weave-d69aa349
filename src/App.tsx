@@ -8,16 +8,12 @@ import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
 import { AudioProvider } from "@/contexts/AudioContext";
 import React, { useEffect, Suspense, lazy } from "react";
-import { PWAInstallPrompt, OfflineIndicator } from "@/components/pwa";
+import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
 import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
-import { ErrorBoundary, SectionErrorBoundary } from "@/components/ErrorBoundary";
+import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ErrorBoundaryWithRecovery } from "@/components/ErrorBoundaryWithRecovery";
-import { DiagnosticsPanel } from "@/components/system/DiagnosticsPanel";
-import { ReEngagementBanner } from "@/components/gamification/ReEngagementBanner";
-import { GlobalAudioPlayer } from "@/components/audio/GlobalAudioPlayer";
 import { createLogger, setTraceId } from "@/lib/logger";
 import { notifyError } from "@/lib/errorNotifier";
-import { SkeletonPage } from "@/components/ui/page-shell";
 import { InlineSplash } from "@/components/brand";
 import { initContract5 } from "@/lib/contract5";
 import { installChunkReloadGuard } from "@/lib/chunkReloadGuard";
@@ -27,13 +23,13 @@ import { GlobalAttributionBeacon } from "@/components/observability/AttributionB
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
 
-// Eager load critical pages
+// Keep only the homepage eager. Every route-only surface is loaded on demand so
+// it cannot inflate first-paint JavaScript for users who never visit that route.
 import Index from "./pages/Index";
-import Auth from "./pages/Auth";
-import NotFound from "./pages/NotFound";
-import BookDetail from "./pages/BookDetail";
 
-// Lazy load non-critical pages for performance
+const Auth = lazy(() => import("./pages/Auth"));
+const NotFound = lazy(() => import("./pages/NotFound"));
+const BookDetail = lazy(() => import("./pages/BookDetail"));
 const Explore = lazy(() => import("./pages/Explore"));
 const Library = lazy(() => import("./pages/Library"));
 const Profile = lazy(() => import("./pages/Profile"));
@@ -104,7 +100,11 @@ const CreatorIntelligence = lazy(() => import("./pages/CreatorIntelligence"));
 const CreatorBusinessHub = lazy(() => import("./pages/CreatorBusinessHub"));
 const CreatorAssets = lazy(() => import("./pages/CreatorAssets"));
 
-// Lazy load legal components
+// Global enhancements are useful but do not need to block first paint.
+const DiagnosticsPanel = lazy(() => import("./components/system/DiagnosticsPanel").then(m => ({ default: m.DiagnosticsPanel })));
+const ReEngagementBanner = lazy(() => import("./components/gamification/ReEngagementBanner").then(m => ({ default: m.ReEngagementBanner })));
+const GlobalAudioPlayer = lazy(() => import("./components/audio/GlobalAudioPlayer").then(m => ({ default: m.GlobalAudioPlayer })));
+const PWAInstallPrompt = lazy(() => import("./components/pwa/PWAInstallPrompt").then(m => ({ default: m.PWAInstallPrompt })));
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
 const OnboardingDialog = lazy(() => import("./components/onboarding/OnboardingDialog").then(m => ({ default: m.OnboardingDialog })));
 
@@ -167,121 +167,117 @@ const App = () => (
         <SubscriptionProvider>
           <SettingsProvider>
             <AudioProvider>
-            <TooltipProvider>
-              <Toaster />
-              <Sonner />
-            <OfflineIndicator />
-            <PWAUpdateNotification />
-            <BrowserRouter>
-              {/* PHASE 7: Per-navigation telemetry (logs route changes + dwell time) */}
-              <RouteTelemetry />
-              {/* Phase 2.1d.1: first-touch attribution beacon for store/reader routes */}
-              <GlobalAttributionBeacon />
-              {/* PERFORMANCE: Use InlineSplash for branded visual feedback during lazy load */}
-              {/* Inner ErrorBoundary keeps page crashes from killing the whole shell */}
-              <ErrorBoundary context="Routes">
-              <Suspense fallback={<InlineSplash />}>
-                <Routes>
-                  {/* Critical routes - eager loaded */}
-                  <Route path="/" element={<Index />} />
-                  <Route path="/auth" element={<Auth />} />
-                  
-                  {/* Feature routes - lazy loaded */}
-                  <Route path="/explore" element={<Explore />} />
-                  <Route path="/generate" element={withRecovery('Generate', <ProtectedRoute><Generate /></ProtectedRoute>)} />
-                  <Route path="/library" element={withRecovery('Library', <ProtectedRoute><Library /></ProtectedRoute>)} />
-                  <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
-                  <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
-                  <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
-                  <Route path="/about" element={<About />} />
-                  <Route path="/contact" element={<Contact />} />
-                  <Route path="/help" element={<Help />} />
-                  <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
-                  <Route path="/privacy" element={<PrivacyPolicy />} />
-                  <Route path="/terms" element={<TermsOfService />} />
-                  <Route path="/moderation" element={<AdminRoute><ModerationDashboard /></AdminRoute>} />
-                  <Route path="/pricing" element={<Pricing />} />
-                  <Route path="/sell" element={withRecovery('Sell', <ProtectedRoute><Sell /></ProtectedRoute>)} />
-                  <Route path="/sell/analytics" element={withRecovery('SellAnalytics', <ProtectedRoute><SellAnalytics /></ProtectedRoute>)} />
-                  <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
-                  <Route path="/install" element={<Install />} />
-                  <Route path="/pwa-test" element={<PWATest />} />
-                  <Route path="/diagnostics" element={<AdminRoute><Diagnostics /></AdminRoute>} />
-                  <Route path="/book/:id" element={withRecovery('BookDetail', <BookDetail />)} />
-                  <Route path="/book/:bookId/certificate" element={withRecovery('CertificateStatus', <CertificateStatus />)} />
-                  <Route path="/read/:bookId/:chapterId" element={withRecovery('Reader', <Reader />)} />
-                  <Route path="/certificate/:certificateNumber" element={<CertificateVerify />} />
-                  <Route path="/verify" element={<OrganizationVerify />} />
-                  <Route path="/docs/verification" element={<VerificationDocs />} />
-                  <Route path="/docs/how-certification-works" element={<HowCertificationWorks />} />
-                  <Route path="/docs/trust-whitepaper" element={<TrustWhitepaper />} />
-                  <Route path="/account/delete" element={<ProtectedRoute><AccountDelete /></ProtectedRoute>} />
-                  <Route path="/delete-account" element={<ProtectedRoute><AccountDelete /></ProtectedRoute>} />
-                  <Route path="/certificate-test" element={<CertificateTest />} />
-                  <Route path="/certificates" element={<Certificates />} />
-                  <Route path="/launch-checklist" element={<AdminRoute><LaunchChecklist /></AdminRoute>} />
-                  <Route path="/docs/institutional-readiness" element={<InstitutionalReadiness />} />
-                  <Route path="/health-check" element={<AdminRoute><HealthCheck /></AdminRoute>} />
-                  <Route path="/admin-recovery" element={<ProtectedRoute><AdminRecovery /></ProtectedRoute>} />
-                  <Route path="/pmf" element={<AdminRoute><PMFDashboard /></AdminRoute>} />
-                  <Route path="/audit-dashboard" element={<AdminRoute><AuditDashboard /></AdminRoute>} />
-                  <Route path="/upload" element={withRecovery('Upload', <ProtectedRoute><UploadPage /></ProtectedRoute>)} />
-                  <Route path="/dashboard/mastery" element={withRecovery('MasteryDashboard', <ProtectedRoute><MasteryDashboard /></ProtectedRoute>)} />
-                  <Route path="/docs/mastery-model" element={<MasteryModel />} />
-                  <Route path="/quick-learn" element={withRecovery('QuickLearn', <QuickLearn />)} />
-                  <Route path="/experiments" element={<AdminRoute><ExperimentReport /></AdminRoute>} />
-                  <Route path="/admin/ops" element={<AdminRoute><AdminOps /></AdminRoute>} />
-                  <Route path="/admin/entitlements" element={<AdminRoute><AdminEntitlements /></AdminRoute>} />
-                  <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
-                  <Route path="/organizations/analytics" element={<ProtectedRoute><OrgAnalytics /></ProtectedRoute>} />
-                  <Route path="/verify-certificate" element={<VerifyLookup />} />
-                  <Route path="/verify/:exportId" element={<VerifyExport />} />
-                  <Route path="/book/:bookId/citation-graph" element={withRecovery('CitationGraph', <ProtectedRoute><CitationGraph /></ProtectedRoute>)} />
-                  <Route path="/study" element={withRecovery('StudySession', <ProtectedRoute><StudySession /></ProtectedRoute>)} />
-                  <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />
-                  <Route path="/account/data-export" element={<ProtectedRoute><DataExport /></ProtectedRoute>} />
-                  <Route path="/book/:bookId/publishing" element={withRecovery('PublishingCommandCenter', <ProtectedRoute><PublishingCommandCenter /></ProtectedRoute>)} />
-                  
-                  {/* Storefront (public) */}
-                  <Route path="/store" element={withRecovery('Storefront', <Storefront />)} />
-                  <Route path="/store/:slug" element={withRecovery('PublicBookPage', <PublicBookPage />)} />
-                  <Route path="/store/:slug/read" element={withRecovery('PublicSampleReader', <PublicSampleReader />)} />
-                  <Route path="/authors/:slug" element={withRecovery('AuthorProfile', <AuthorProfilePage />)} />
-                  <Route path="/series/:slug" element={withRecovery('Series', <SeriesPage />)} />
-                  <Route path="/book/:bookId/publish" element={withRecovery('BookPublishSettings', <ProtectedRoute><BookPublishSettings /></ProtectedRoute>)} />
-                  <Route path="/account/author" element={withRecovery('AuthorProfileEditor', <ProtectedRoute><AuthorProfileEditor /></ProtectedRoute>)} />
-                  <Route path="/account/exports" element={withRecovery('ExportJobs', <ProtectedRoute><ExportJobsPage /></ProtectedRoute>)} />
-                  <Route path="/store/:slug/success" element={withRecovery('PurchaseSuccess', <PurchaseSuccess />)} />
-                  <Route path="/store/:slug/read-full" element={withRecovery('FullBookReader', <ProtectedRoute><FullBookReader /></ProtectedRoute>)} />
-                  <Route path="/account/library/purchases" element={withRecovery('PurchasedLibrary', <ProtectedRoute><PurchasedLibrary /></ProtectedRoute>)} />
-                  <Route path="/account/earnings" element={withRecovery('CreatorEarnings', <ProtectedRoute><CreatorEarnings /></ProtectedRoute>)} />
-                  <Route path="/account/payouts" element={withRecovery('PayoutProfile', <ProtectedRoute><PayoutProfileEditor /></ProtectedRoute>)} />
-                  <Route path="/collections/:owner/:slug" element={withRecovery('CollectionPage', <CollectionPage />)} />
-                  <Route path="/account/intelligence" element={withRecovery('CreatorIntelligence', <ProtectedRoute><CreatorIntelligence /></ProtectedRoute>)} />
-                  <Route path="/creator/business" element={withRecovery('CreatorBusinessHub', <ProtectedRoute><CreatorBusinessHub /></ProtectedRoute>)} />
-                  <Route path="/creator/assets" element={withRecovery('CreatorAssets', <ProtectedRoute><CreatorAssets /></ProtectedRoute>)} />
-                  
-                  {/* 404 - eager loaded */}
-                  <Route path="*" element={<NotFound />} />
-                </Routes>
-              </Suspense>
-              </ErrorBoundary>
-              <ReEngagementBanner />
-              <PWAInstallPrompt />
-              <GlobalAudioPlayer />
-              <DiagnosticsPanel />
-              <Suspense fallback={null}>
-                <CookieConsent />
-                <OnboardingDialog />
-              </Suspense>
-            </BrowserRouter>
-          </TooltipProvider>
+              <TooltipProvider>
+                <Toaster />
+                <Sonner />
+                <OfflineIndicator />
+                <PWAUpdateNotification />
+                <BrowserRouter>
+                  {/* PHASE 7: Per-navigation telemetry (logs route changes + dwell time) */}
+                  <RouteTelemetry />
+                  {/* Phase 2.1d.1: first-touch attribution beacon for store/reader routes */}
+                  <GlobalAttributionBeacon />
+                  {/* Inner ErrorBoundary keeps page crashes from killing the whole shell */}
+                  <ErrorBoundary context="Routes">
+                    <Suspense fallback={<InlineSplash />}>
+                      <Routes>
+                        <Route path="/" element={<Index />} />
+                        <Route path="/auth" element={<Auth />} />
+                        <Route path="/explore" element={<Explore />} />
+                        <Route path="/generate" element={withRecovery('Generate', <ProtectedRoute><Generate /></ProtectedRoute>)} />
+                        <Route path="/library" element={withRecovery('Library', <ProtectedRoute><Library /></ProtectedRoute>)} />
+                        <Route path="/profile" element={<ProtectedRoute><Profile /></ProtectedRoute>} />
+                        <Route path="/settings" element={<ProtectedRoute><Settings /></ProtectedRoute>} />
+                        <Route path="/support" element={<ProtectedRoute><Support /></ProtectedRoute>} />
+                        <Route path="/about" element={<About />} />
+                        <Route path="/contact" element={<Contact />} />
+                        <Route path="/help" element={<Help />} />
+                        <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
+                        <Route path="/privacy" element={<PrivacyPolicy />} />
+                        <Route path="/terms" element={<TermsOfService />} />
+                        <Route path="/moderation" element={<AdminRoute><ModerationDashboard /></AdminRoute>} />
+                        <Route path="/pricing" element={<Pricing />} />
+                        <Route path="/sell" element={withRecovery('Sell', <ProtectedRoute><Sell /></ProtectedRoute>)} />
+                        <Route path="/sell/analytics" element={withRecovery('SellAnalytics', <ProtectedRoute><SellAnalytics /></ProtectedRoute>)} />
+                        <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
+                        <Route path="/install" element={<Install />} />
+                        <Route path="/pwa-test" element={<PWATest />} />
+                        <Route path="/diagnostics" element={<AdminRoute><Diagnostics /></AdminRoute>} />
+                        <Route path="/book/:id" element={withRecovery('BookDetail', <BookDetail />)} />
+                        <Route path="/book/:bookId/certificate" element={withRecovery('CertificateStatus', <CertificateStatus />)} />
+                        <Route path="/read/:bookId/:chapterId" element={withRecovery('Reader', <Reader />)} />
+                        <Route path="/certificate/:certificateNumber" element={<CertificateVerify />} />
+                        <Route path="/verify" element={<OrganizationVerify />} />
+                        <Route path="/docs/verification" element={<VerificationDocs />} />
+                        <Route path="/docs/how-certification-works" element={<HowCertificationWorks />} />
+                        <Route path="/docs/trust-whitepaper" element={<TrustWhitepaper />} />
+                        <Route path="/account/delete" element={<ProtectedRoute><AccountDelete /></ProtectedRoute>} />
+                        <Route path="/delete-account" element={<ProtectedRoute><AccountDelete /></ProtectedRoute>} />
+                        <Route path="/certificate-test" element={<CertificateTest />} />
+                        <Route path="/certificates" element={<Certificates />} />
+                        <Route path="/launch-checklist" element={<AdminRoute><LaunchChecklist /></AdminRoute>} />
+                        <Route path="/docs/institutional-readiness" element={<InstitutionalReadiness />} />
+                        <Route path="/health-check" element={<AdminRoute><HealthCheck /></AdminRoute>} />
+                        <Route path="/admin-recovery" element={<ProtectedRoute><AdminRecovery /></ProtectedRoute>} />
+                        <Route path="/pmf" element={<AdminRoute><PMFDashboard /></AdminRoute>} />
+                        <Route path="/audit-dashboard" element={<AdminRoute><AuditDashboard /></AdminRoute>} />
+                        <Route path="/upload" element={withRecovery('Upload', <ProtectedRoute><UploadPage /></ProtectedRoute>)} />
+                        <Route path="/dashboard/mastery" element={withRecovery('MasteryDashboard', <ProtectedRoute><MasteryDashboard /></ProtectedRoute>)} />
+                        <Route path="/docs/mastery-model" element={<MasteryModel />} />
+                        <Route path="/quick-learn" element={withRecovery('QuickLearn', <QuickLearn />)} />
+                        <Route path="/experiments" element={<AdminRoute><ExperimentReport /></AdminRoute>} />
+                        <Route path="/admin/ops" element={<AdminRoute><AdminOps /></AdminRoute>} />
+                        <Route path="/admin/entitlements" element={<AdminRoute><AdminEntitlements /></AdminRoute>} />
+                        <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
+                        <Route path="/organizations/analytics" element={<ProtectedRoute><OrgAnalytics /></ProtectedRoute>} />
+                        <Route path="/verify-certificate" element={<VerifyLookup />} />
+                        <Route path="/verify/:exportId" element={<VerifyExport />} />
+                        <Route path="/book/:bookId/citation-graph" element={withRecovery('CitationGraph', <ProtectedRoute><CitationGraph /></ProtectedRoute>)} />
+                        <Route path="/study" element={withRecovery('StudySession', <ProtectedRoute><StudySession /></ProtectedRoute>)} />
+                        <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />
+                        <Route path="/account/data-export" element={<ProtectedRoute><DataExport /></ProtectedRoute>} />
+                        <Route path="/book/:bookId/publishing" element={withRecovery('PublishingCommandCenter', <ProtectedRoute><PublishingCommandCenter /></ProtectedRoute>)} />
+
+                        {/* Storefront (public) */}
+                        <Route path="/store" element={withRecovery('Storefront', <Storefront />)} />
+                        <Route path="/store/:slug" element={withRecovery('PublicBookPage', <PublicBookPage />)} />
+                        <Route path="/store/:slug/read" element={withRecovery('PublicSampleReader', <PublicSampleReader />)} />
+                        <Route path="/authors/:slug" element={withRecovery('AuthorProfile', <AuthorProfilePage />)} />
+                        <Route path="/series/:slug" element={withRecovery('Series', <SeriesPage />)} />
+                        <Route path="/book/:bookId/publish" element={withRecovery('BookPublishSettings', <ProtectedRoute><BookPublishSettings /></ProtectedRoute>)} />
+                        <Route path="/account/author" element={withRecovery('AuthorProfileEditor', <ProtectedRoute><AuthorProfileEditor /></ProtectedRoute>)} />
+                        <Route path="/account/exports" element={withRecovery('ExportJobs', <ProtectedRoute><ExportJobsPage /></ProtectedRoute>)} />
+                        <Route path="/store/:slug/success" element={withRecovery('PurchaseSuccess', <PurchaseSuccess />)} />
+                        <Route path="/store/:slug/read-full" element={withRecovery('FullBookReader', <ProtectedRoute><FullBookReader /></ProtectedRoute>)} />
+                        <Route path="/account/library/purchases" element={withRecovery('PurchasedLibrary', <ProtectedRoute><PurchasedLibrary /></ProtectedRoute>)} />
+                        <Route path="/account/earnings" element={withRecovery('CreatorEarnings', <ProtectedRoute><CreatorEarnings /></ProtectedRoute>)} />
+                        <Route path="/account/payouts" element={withRecovery('PayoutProfile', <ProtectedRoute><PayoutProfileEditor /></ProtectedRoute>)} />
+                        <Route path="/collections/:owner/:slug" element={withRecovery('CollectionPage', <CollectionPage />)} />
+                        <Route path="/account/intelligence" element={withRecovery('CreatorIntelligence', <ProtectedRoute><CreatorIntelligence /></ProtectedRoute>)} />
+                        <Route path="/creator/business" element={withRecovery('CreatorBusinessHub', <ProtectedRoute><CreatorBusinessHub /></ProtectedRoute>)} />
+                        <Route path="/creator/assets" element={withRecovery('CreatorAssets', <ProtectedRoute><CreatorAssets /></ProtectedRoute>)} />
+
+                        <Route path="*" element={<NotFound />} />
+                      </Routes>
+                    </Suspense>
+                  </ErrorBoundary>
+
+                  <Suspense fallback={null}>
+                    <ReEngagementBanner />
+                    <PWAInstallPrompt />
+                    <GlobalAudioPlayer />
+                    <DiagnosticsPanel />
+                    <CookieConsent />
+                    <OnboardingDialog />
+                  </Suspense>
+                </BrowserRouter>
+              </TooltipProvider>
             </AudioProvider>
-        </SettingsProvider>
-      </SubscriptionProvider>
-    </LanguageProvider>
-  </QueryClientProvider>
-</ErrorBoundary>
+          </SettingsProvider>
+        </SubscriptionProvider>
+      </LanguageProvider>
+    </QueryClientProvider>
+  </ErrorBoundary>
 );
 
 export default App;
