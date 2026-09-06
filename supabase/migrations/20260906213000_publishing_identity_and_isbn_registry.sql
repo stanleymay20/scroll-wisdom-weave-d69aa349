@@ -29,15 +29,15 @@ DECLARE
   i integer;
   expected integer;
 BEGIN
-  IF pg_catalog.length(v) <> 13 OR pg_catalog.substring(v FROM 1 FOR 3) NOT IN ('978', '979') THEN
+  IF pg_catalog.length(v) <> 13 OR pg_catalog.substr(v, 1, 3) NOT IN ('978', '979') THEN
     RETURN false;
   END IF;
 
   FOR i IN 1..12 LOOP
-    total := total + (pg_catalog.substring(v FROM i FOR 1)::integer * CASE WHEN i % 2 = 1 THEN 1 ELSE 3 END);
+    total := total + (pg_catalog.substr(v, i, 1)::integer * CASE WHEN i % 2 = 1 THEN 1 ELSE 3 END);
   END LOOP;
   expected := (10 - (total % 10)) % 10;
-  RETURN expected = pg_catalog.substring(v FROM 13 FOR 1)::integer;
+  RETURN expected = pg_catalog.substr(v, 13, 1)::integer;
 EXCEPTION WHEN others THEN
   RETURN false;
 END;
