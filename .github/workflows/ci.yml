@@ -80,8 +80,9 @@ jobs:
           deno check supabase/functions/customer-portal/index.ts
           deno check supabase/functions/check-subscription/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
-      - name: Type-check metered usage Edge Functions
+      - name: Type-check authority and metered usage Edge Functions
         run: |
+          deno check supabase/functions/claim-admin/index.ts
           deno check supabase/functions/text-to-speech/index.ts
       - name: Type-check publication pipeline Edge Functions
         run: |
