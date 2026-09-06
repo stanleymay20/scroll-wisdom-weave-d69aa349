@@ -307,8 +307,8 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
 
     console.log(`[GENERATE-BOOK] Book ${book.id.slice(0, 8)}... saved`);
 
-    // Create generation job for progress tracking
-    const { data: genJob } = await supabase.from("generation_jobs").insert({
+    // Create generation job for progress tracking (required correctness primitive)
+    const { data: genJob, error: genJobError } = await supabase.from("generation_jobs").insert({
       user_id: user.id,
       book_id: book.id,
       status: 'generating',
@@ -317,8 +317,15 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       metadata: { bookType: effectiveBookType, model: generationModel, language },
     }).select('id').single();
 
-    const jobId = genJob?.id;
-    console.log(`[GENERATE-BOOK] Job ${jobId?.slice(0, 8)}... created`);
+    if (genJobError || !genJob?.id) {
+      console.error("[GENERATE-BOOK] Generation job create failed:", genJobError?.code ?? "no_row");
+      // Fail closed: do not leave an untracked AI-generated book behind
+      await supabase.from("books").delete().eq("id", book.id);
+      throw new Error("Failed to initialize book generation. Please try again.");
+    }
+
+    const jobId = genJob.id;
+    console.log(`[GENERATE-BOOK] Job ${jobId.slice(0, 8)}... created`);
 
     // Save chapters
     const chaptersToInsert = bookOutline.chapters.map((ch: any) => ({
@@ -333,18 +340,20 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     if (chaptersError) {
       console.error("[GENERATE-BOOK] Chapters error:", chaptersError);
       // Mark job as failed
-      if (jobId) await supabase.from("generation_jobs").update({ status: 'failed', error_code: 'GENERATION_FAILED', error_message: chaptersError.message }).eq("id", jobId);
+      await supabase.from("generation_jobs").update({ status: 'failed', error_code: 'GENERATION_FAILED', error_message: chaptersError.message }).eq("id", jobId);
       throw new Error(`Failed to save chapters: ${chaptersError.message}`);
     }
 
-    // Mark job as completed (outline phase done - chapters will be generated individually)
-    if (jobId) {
-      await supabase.from("generation_jobs").update({
-        status: 'completed',
-        current_chapter: effectiveChapters,
-        completed_at: new Date().toISOString(),
-      }).eq("id", jobId);
-    }
+    // Outline phase only — the book is NOT generated yet. Keep the job open so
+    // chapter generation can proceed/resume and the publication truth guard agrees.
+    await supabase.from("generation_jobs").update({
+      status: 'generating',
+      current_chapter: 0,
+      completed_at: null,
+      error_code: null,
+      error_message: null,
+    }).eq("id", jobId);
+
 
     // Add to library
     const { error: libraryError } = await supabase.from("user_library").insert({
