@@ -3,7 +3,9 @@ import {
   buildEan13Bits,
   buildKdpPrintCoverPdf,
   computeKdpCoverGeometry,
+  getKdpPaperbackPageLimits,
   getPdfPageCount,
+  requireKdpPaperbackPageCount,
 } from "./kdp-print-cover.ts";
 
 function assert(condition: unknown, message: string): asserts condition {
@@ -35,9 +37,43 @@ Deno.test("KDP cover rejects manuscripts below the 24-page minimum", () => {
   try {
     computeKdpCoverGeometry(23, "6x9", "white");
   } catch (error) {
-    rejected = error instanceof Error && error.message === "KDP_MIN_PAGE_COUNT_24";
+    rejected = error instanceof Error && error.message === "KDP_PAGE_COUNT_OUT_OF_RANGE:23:allowed_24_828";
   }
   assert(rejected, "sub-24-page KDP paperback must be rejected");
+});
+
+Deno.test("KDP page-limit matrix keeps format-specific minimums and maximums", () => {
+  const tradeWhite = getKdpPaperbackPageLimits("6x9", "white");
+  assert(tradeWhite.min === 24 && tradeWhite.max === 828, "wrong 6x9 white-paper limits");
+
+  const largeCream = getKdpPaperbackPageLimits("8.5x11", "cream");
+  assert(largeCream.min === 24 && largeCream.max === 550, "wrong 8.5x11 cream-paper limits");
+
+  const standardColor = getKdpPaperbackPageLimits("6x9", "standard_color");
+  assert(standardColor.min === 72 && standardColor.max === 600, "wrong standard-color limits");
+});
+
+Deno.test("KDP source minimum is enforced before odd-page geometry rounding", () => {
+  let rejected = false;
+  try {
+    requireKdpPaperbackPageCount(71, "6x9", "standard_color");
+  } catch (error) {
+    rejected = error instanceof Error && error.message === "KDP_PAGE_COUNT_OUT_OF_RANGE:71:allowed_72_600";
+  }
+  assert(rejected, "71 source pages must not become an eligible 72-page standard-color book by rounding");
+  assert(requireKdpPaperbackPageCount(72, "6x9", "standard_color") === 72, "72 pages should satisfy the minimum");
+});
+
+Deno.test("KDP maximum is enforced after odd-page geometry rounding", () => {
+  assert(requireKdpPaperbackPageCount(827, "6x9", "white") === 828, "827 pages should round to the 828-page maximum");
+
+  let rejected = false;
+  try {
+    requireKdpPaperbackPageCount(829, "6x9", "white");
+  } catch (error) {
+    rejected = error instanceof Error && error.message === "KDP_PAGE_COUNT_OUT_OF_RANGE:830:allowed_24_828";
+  }
+  assert(rejected, "an odd page count must not round beyond the KDP maximum");
 });
 
 Deno.test("short/thin books omit spine text when 7pt cannot fit safely", () => {
