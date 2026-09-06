@@ -4,14 +4,6 @@
  * Used as a genuine fallback when the premium TTS provider returns
  * `{ fallback: true }` (quota exhausted / provider down) so narration keeps
  * working instead of throwing an unrecovered error.
- *
- * Design notes:
- * - One utterance per narration chunk, awaited sequentially by the caller, so
- *   the existing chunk sequencing / progress model is preserved.
- * - Cancellation is cooperative: the caller passes `isCancelled()` which is
- *   polled, mirroring how the audio-element path checks `stopRef`.
- * - Never throws. Returns `false` when the chunk did not complete so callers
- *   can break out of their loop exactly like a failed audio element play.
  */
 
 export interface SpeakChunkOptions {
@@ -30,6 +22,7 @@ export interface SpeakChunkOptions {
 }
 
 const CANCEL_POLL_MS = 150;
+const START_EVENT_FALLBACK_MS = 300;
 
 export function isBrowserSpeechSupported(): boolean {
   return (
@@ -67,14 +60,17 @@ export function speakChunk(options: SpeakChunkOptions): Promise<boolean> {
 
   return new Promise<boolean>((resolve) => {
     let settled = false;
+    let started = false;
     let pollId: ReturnType<typeof setInterval> | null = null;
     let progressId: ReturnType<typeof setInterval> | null = null;
+    let startFallbackId: ReturnType<typeof setTimeout> | null = null;
 
     const finish = (value: boolean) => {
       if (settled) return;
       settled = true;
       if (pollId) clearInterval(pollId);
       if (progressId) clearInterval(progressId);
+      if (startFallbackId) clearTimeout(startFallbackId);
       resolve(value);
     };
 
@@ -89,9 +85,11 @@ export function speakChunk(options: SpeakChunkOptions): Promise<boolean> {
       utterance.pitch = 1;
 
       const estimatedMs = Math.max(500, estimateSpeechSeconds(text, rate) * 1000);
-      const startedAt = Date.now();
 
-      utterance.onstart = () => {
+      const markStarted = () => {
+        if (started || settled) return;
+        started = true;
+        const startedAt = Date.now();
         onStart?.();
         if (onProgress) {
           progressId = setInterval(() => {
@@ -101,14 +99,15 @@ export function speakChunk(options: SpeakChunkOptions): Promise<boolean> {
         }
       };
 
+      utterance.onstart = markStarted;
+
       utterance.onend = () => {
+        markStarted();
         onProgress?.(100);
         finish(true);
       };
 
       utterance.onerror = () => {
-        // A cancel() triggers onerror in several browsers — treat an explicit
-        // cancellation as a clean stop, anything else as a failure.
         finish(isCancelled?.() === true);
       };
 
@@ -127,8 +126,9 @@ export function speakChunk(options: SpeakChunkOptions): Promise<boolean> {
 
       synth.speak(utterance);
 
-      // Some browsers (older Chrome) never fire onstart; kick progress anyway.
-      if (!utterance.onstart) onStart?.();
+      // Some browsers never emit `start`. Invoke the same idempotent start path
+      // after a short grace period so UI state/progress cannot remain stuck.
+      startFallbackId = setTimeout(markStarted, START_EVENT_FALLBACK_MS);
     } catch {
       finish(false);
     }
