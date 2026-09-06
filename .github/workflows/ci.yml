@@ -89,6 +89,7 @@ jobs:
           deno check supabase/functions/generate-references/index.ts
           deno check supabase/functions/verify-references/index.ts
           deno check supabase/functions/qa-publishability-audit/index.ts
+          deno check supabase/functions/finalize-publication-certification/index.ts
 
   build:
     runs-on: ubuntu-latest
