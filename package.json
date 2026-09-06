@@ -3,6 +3,7 @@
   "private": true,
   "version": "0.0.0",
   "type": "module",
+  "packageManager": "bun@1.2.23",
   "scripts": {
     "dev": "vite",
     "build": "vite build",
@@ -12,7 +13,7 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run",
     "test:watch": "vitest",
-    "ci": "npm run typecheck && npm run lint && npm run test && npm run build"
+    "ci": "bun run typecheck && bun run lint && bun run test && bun run build"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
