@@ -9,7 +9,7 @@ import { newScrollIdentifier } from "../_shared/scroll-identity.ts";
 
 const Body = z.object({
   work_id: z.string().uuid(),
-  edition_kind: z.string().default("primary"),
+  edition_kind: z.enum(["original", "translation", "revision", "adaptation", "student_edition", "executive_edition", "audiobook_edition", "print_edition"]).default("original"),
   language: z.string().default("en"),
   notes: z.string().max(2000).optional(),
   override_typography_blockers: z.boolean().default(false),
