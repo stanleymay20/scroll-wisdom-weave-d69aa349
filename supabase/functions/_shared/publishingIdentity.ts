@@ -1,6 +1,22 @@
 type PublishingIdentityDb = { from: (table: string) => any };
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "./isbn.ts";
 
+interface AssignmentRow {
+  id: string;
+  isbn_id: string;
+  product_form: string;
+  language: string;
+  edition_label: string;
+  assigned_at: string;
+}
+
+interface InventoryRow {
+  id: string;
+  isbn13: string;
+  source: string;
+  imprint_id: string;
+}
+
 export interface ResolvedPublishingIdentity {
   configured: boolean;
   publisherMode: string | null;
@@ -94,25 +110,27 @@ export async function resolvePrepublicationIdentity(
     };
   }
 
-  const { data: assignmentRows, error: assignmentErr } = await sc
+  const { data: assignmentData, error: assignmentErr } = await sc
     .from("book_isbn_assignments")
     .select("id,isbn_id,product_form,language,edition_label,assigned_at")
     .eq("book_id", bookId)
     .order("product_form");
   if (assignmentErr) throw assignmentErr;
+  const assignmentRows = (assignmentData ?? []) as AssignmentRow[];
 
-  const inventoryIds = [...new Set((assignmentRows ?? []).map((row) => row.isbn_id).filter(Boolean))];
-  const inventoryById = new Map<string, { isbn13: string; source: string; imprint_id: string }>();
+  const inventoryIds = [...new Set(assignmentRows.map((row: AssignmentRow) => row.isbn_id).filter(Boolean))];
+  const inventoryById = new Map<string, InventoryRow>();
   if (inventoryIds.length > 0) {
-    const { data: inventory, error: inventoryErr } = await sc
+    const { data: inventoryData, error: inventoryErr } = await sc
       .from("isbn_inventory")
       .select("id,isbn13,source,imprint_id")
       .in("id", inventoryIds);
     if (inventoryErr) throw inventoryErr;
-    for (const row of inventory ?? []) inventoryById.set(row.id, row);
+    const inventoryRows = (inventoryData ?? []) as InventoryRow[];
+    for (const row of inventoryRows) inventoryById.set(row.id, row);
   }
 
-  const identifiers = (assignmentRows ?? []).map((assignment) => {
+  const identifiers = assignmentRows.map((assignment: AssignmentRow) => {
     const inventory = inventoryById.get(assignment.isbn_id);
     if (!inventory) throw new Error(`ISBN_INVENTORY_MISSING:${assignment.id}`);
     if (profile.imprint_id && inventory.imprint_id !== profile.imprint_id) {
