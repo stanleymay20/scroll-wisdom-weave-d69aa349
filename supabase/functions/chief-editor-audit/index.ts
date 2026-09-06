@@ -12,9 +12,23 @@ const log = (step: string, details?: any) => {
 };
 
 // ============================================================
-// AUDIT PROVENANCE — Locked model + prompt version
+// AUDIT PROVENANCE — Server-owned model routing + locked prompt version
 // ============================================================
-const AUDIT_MODEL = "google/gemini-2.5-flash";
+// The reviewer model is selected server-side from the authenticated user's
+// ACTIVE subscription tier. It is never read from the request body.
+//   premium / prophet_tier => google/gemini-2.5-pro
+//   student / free / default => google/gemini-2.5-flash
+const getAuditModelForPlan = (plan: string): string => {
+  switch (plan) {
+    case "prophet_tier":
+    case "premium":
+      return "google/gemini-2.5-pro";
+    case "student":
+    case "free":
+    default:
+      return "google/gemini-2.5-flash";
+  }
+};
 const AUDIT_PROMPT_VERSION = "v4.0"; // v4.0: Chief Editor Constitution — tier-neutral, anti-pattern, compression-aware, no regex farming
 
 // ============================================================
@@ -264,6 +278,17 @@ serve(async (req) => {
 
     log("Request", { bookId: bookId.slice(0, 8), action, userId: user.id.slice(0, 8) });
 
+    // Server-side audit model routing from the caller's ACTIVE subscription.
+    // Inactive/missing subscriptions fall back to free. Request body is never consulted.
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select("tier, status")
+      .eq("user_id", user.id)
+      .maybeSingle();
+    const userPlan = (subscription?.status === "active" && subscription?.tier) ? subscription.tier : "free";
+    const AUDIT_MODEL = getAuditModelForPlan(userPlan);
+    log("Audit model routed", { plan: userPlan, model: AUDIT_MODEL });
+
     // Fetch book and chapters
     const { data: book, error: bookError } = await supabase
       .from("books").select("*").eq("id", bookId).single();
@@ -422,6 +447,7 @@ Respond as JSON:
     const routed = await routeChat({
       task: "editorial_audit",
       model: AUDIT_MODEL,
+      prompt: auditPrompt,      // RouteInput requires prompt; messages below take precedence in the router
       messages: auditMessages,
       temperature: 0.1,
       workId: bookId,           // book id == work proxy for now; ledger accepts null
