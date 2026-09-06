@@ -151,9 +151,15 @@ export default function BookDetail() {
   const handleGenerateAllChapters = async () => {
     if (!book) return;
     const ungeneratedChapters = chapters.filter(ch => !ch.is_generated);
-    if (ungeneratedChapters.length === 0) { toast({ title: t('book.allChaptersAlreadyGenerated') }); return; }
+    if (ungeneratedChapters.length === 0) {
+      toast({ title: "Draft already generated", description: "Starting publication-quality verification." });
+      return;
+    }
+
     setIsGeneratingAll(true);
     setGenerationProgress({ current: 0, total: ungeneratedChapters.length });
+    let failedChapters = 0;
+
     for (let i = 0; i < ungeneratedChapters.length; i++) {
       const chapter = ungeneratedChapters[i];
       setGeneratingChapterId(chapter.id);
@@ -163,19 +169,49 @@ export default function BookDetail() {
         const keyTopics = keyTopicsMatch ? keyTopicsMatch[1].split('\n').filter(t => t.startsWith('-')).map(t => t.replace('- ', '')) : [];
         const shouldEnableAcademicMode = book.book_type === 'text' && isAcademicCategory(book.category);
         const response = await supabase.functions.invoke('generate-chapter', {
-          body: { chapterId: chapter.id, bookTitle: book.title, chapterTitle: chapter.title, chapterNumber: chapter.chapter_number, keyTopics, category: book.category, language: book.language || 'en', bookType: book.book_type || 'text', academicMode: shouldEnableAcademicMode, citationStyle: 'APA' }
+          body: {
+            chapterId: chapter.id,
+            bookTitle: book.title,
+            chapterTitle: chapter.title,
+            chapterNumber: chapter.chapter_number,
+            keyTopics,
+            category: book.category,
+            language: book.language || 'en',
+            bookType: book.book_type || 'text',
+            academicMode: shouldEnableAcademicMode,
+            citationStyle: 'APA',
+          }
         });
         if (response.error || response.data?.error) throw new Error(response.error?.message || response.data?.error);
         setChapters(prev => prev.map(ch => ch.id === chapter.id ? { ...ch, is_generated: true, word_count: response.data.wordCount } : ch));
       } catch (error) {
+        failedChapters++;
         console.error(`Error generating chapter ${chapter.chapter_number}:`, error);
-        toast({ title: `${t('book.failedToGenerateChapter')} ${chapter.chapter_number}`, description: error instanceof Error ? error.message : t('common.unknownError'), variant: "destructive" });
+        toast({
+          title: `${t('book.failedToGenerateChapter')} ${chapter.chapter_number}`,
+          description: error instanceof Error ? error.message : t('common.unknownError'),
+          variant: "destructive",
+        });
       }
     }
+
     setIsGeneratingAll(false);
     setGeneratingChapterId(null);
     setGenerationProgress({ current: 0, total: 0 });
-    toast({ title: t('book.generationComplete'), description: t('book.allChaptersGenerated') });
+
+    if (failedChapters > 0) {
+      toast({
+        title: "Draft generation incomplete",
+        description: `${failedChapters} chapter${failedChapters === 1 ? "" : "s"} failed. The book will remain blocked until every chapter and quality gate passes.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
+    toast({
+      title: "Draft generation complete",
+      description: "Starting independent editorial, evidence, and publishability verification.",
+    });
   };
 
   const handleGenerateCover = async () => {
