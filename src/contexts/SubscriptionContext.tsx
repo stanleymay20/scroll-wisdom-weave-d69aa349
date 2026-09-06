@@ -217,15 +217,6 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
           : (subData.tier as SubscriptionTier) || 'free';
         setTier(detectedTier);
         setSubscriptionEnd(subData.subscription_end);
-
-        const validPlans: SubscriptionTier[] = ['free', 'premium', 'prophet_tier', 'student'];
-        const planToSave = validPlans.includes(detectedTier) ? detectedTier : 'premium';
-
-        void supabase
-          .from('profiles')
-          .update({ plan: planToSave as 'free' | 'premium' | 'prophet_tier' | 'student' })
-          .or(`user_id.eq.${session.user.id},id.eq.${session.user.id}`)
-          .then(() => {});
       } else {
         setTier((profileData?.plan as SubscriptionTier) || 'free');
         setSubscriptionEnd(null);
@@ -244,48 +235,18 @@ export function SubscriptionProvider({ children }: { children: ReactNode }) {
   const incrementDailyBookCount = useCallback(async () => {
     if (!user) return;
 
-    const today = new Date().toISOString().split('T')[0];
-    const currentMonth = today.slice(0, 7);
-    const lastMonth = dailyLimitInfo.lastBookDate ? dailyLimitInfo.lastBookDate.slice(0, 7) : null;
-    const newCount = lastMonth === currentMonth ? dailyLimitInfo.dailyBookCount + 1 : 1;
+    // Generation counters are server-owned. The generate-book Edge Function has
+    // already persisted the authoritative increment; the browser only refreshes.
+    await checkDailyLimits(user.id);
+  }, [user, checkDailyLimits]);
 
-    await supabase
-      .from('profiles')
-      .update({
-        daily_book_count: newCount,
-        last_book_date: today,
-      })
-      .or(`user_id.eq.${user.id},id.eq.${user.id}`);
-
-    setDailyLimitInfo({
-      dailyBookCount: newCount,
-      lastBookDate: today,
-      canGenerateToday: newCount < LAUNCH_MODE_CONFIG.freeBookLimit,
-    });
-  }, [user, dailyLimitInfo]);
-
-  const updateTTSUsage = useCallback(async (minutes: number) => {
+  const updateTTSUsage = useCallback(async (_minutes: number) => {
     if (!user) return;
 
-    const currentMonth = new Date().toISOString().slice(0, 7);
-    const newTotal = ttsMinutesUsed + minutes;
-
-    await supabase
-      .from('tts_usage')
-      .upsert(
-        {
-          user_id: user.id,
-          month: currentMonth,
-          minutes_used: newTotal,
-          updated_at: new Date().toISOString(),
-        },
-        {
-          onConflict: 'user_id,month',
-        }
-      );
-
-    setTtsMinutesUsed(newTotal);
-  }, [user, ttsMinutesUsed]);
+    // TTS usage is reserved and persisted by the server before provider access.
+    // The browser only refreshes the canonical value after a successful chunk.
+    await checkTTSUsage(user.id);
+  }, [user, checkTTSUsage]);
 
   useEffect(() => {
     let mounted = true;
