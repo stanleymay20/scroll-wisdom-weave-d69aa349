@@ -34,15 +34,19 @@ Deno.serve(async (req) => {
 
     const sc = serviceClient();
 
-    // Ownership check
+    // Ownership check. Live historically used creator_id; newer schemas also
+    // expose user_id. Accept either owner column so QA remains safe during
+    // additive schema promotion.
     const { data: book, error: bookErr } = await sc
       .from("books")
-      .select("id, user_id, cover_url, book_type")
+      .select("id, user_id, creator_id, cover_image_url, book_type")
       .eq("id", bookId)
       .maybeSingle();
     if (bookErr) return serverError(bookErr);
     if (!book) return badRequest("Book not found");
-    if (book.user_id !== auth.userId) {
+
+    const isOwner = book.user_id === auth.userId || book.creator_id === auth.userId;
+    if (!isOwner) {
       // admin bypass
       const { data: adminRow } = await sc
         .from("user_roles").select("role").eq("user_id", auth.userId).eq("role", "admin").maybeSingle();
@@ -62,7 +66,7 @@ Deno.serve(async (req) => {
         title: c.title ?? "",
         content: c.content,
       })),
-      { hasCover: !!book.cover_url, bookType: book.book_type },
+      { hasCover: !!book.cover_image_url, bookType: book.book_type },
     );
 
     const { data: inserted, error: insErr } = await sc
