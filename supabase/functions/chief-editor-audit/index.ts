@@ -1,6 +1,8 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeChat } from "../_shared/ai-router.ts";
+import { captureBookScopeHash, recordBoundAttestation, scopeStabilityError } from "../_shared/publicationScope.ts";
+
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -289,6 +291,10 @@ serve(async (req) => {
     const AUDIT_MODEL = getAuditModelForPlan(userPlan);
     log("Audit model routed", { plan: userPlan, model: AUDIT_MODEL });
 
+    // Capture the exact manuscript state this audit will inspect. The same hash
+    // is bound to the final attestation, so any change during the audit fails closed.
+    const scopeBefore = await captureBookScopeHash(supabase, bookId);
+
     // Fetch book and chapters
     const { data: book, error: bookError } = await supabase
       .from("books").select("*").eq("id", bookId).single();
@@ -305,6 +311,15 @@ serve(async (req) => {
       .order("chapter_number", { ascending: true });
     if (chaptersError) throw new Error("Failed to fetch chapters");
 
+    const scopeAfter = await captureBookScopeHash(supabase, bookId);
+    const scopeLoadError = scopeStabilityError(scopeBefore, scopeAfter);
+    if (scopeLoadError) {
+      return new Response(JSON.stringify({ error: scopeLoadError }), {
+        status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+    const auditScopeHash = scopeAfter as string;
+
     const generatedChapters = (chapters || []).filter((ch: any) => ch.is_generated && ch.content);
 
     if (generatedChapters.length === 0) {
@@ -312,6 +327,7 @@ serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+
 
     // ============================================================
     // STEP 1: Proportional Deterministic Penalties
@@ -829,14 +845,16 @@ Respond as JSON array: [{"chapter": 1, "concepts": 15, "examples": ["loss aversi
 
     // ============================================================
     // STEP 4B: Server-side publication gate attestation (editorial)
-    // Fail closed — never report success without a recorded attestation.
+    // Bound to the manuscript hash captured before the audit began — if the
+    // manuscript or publication metadata changed meanwhile, this fails closed.
     // ============================================================
-    const { error: attestError } = await supabase.rpc("record_publication_gate_attestation", {
-      p_book_id: bookId,
-      p_user_id: user.id,
-      p_gate: "editorial",
-      p_status: certificationEligible ? "passed" : "blocked",
-      p_artifact: {
+    const attestFailure = await recordBoundAttestation(supabase, {
+      bookId,
+      userId: user.id,
+      gate: "editorial",
+      status: certificationEligible ? "passed" : "blocked",
+      expectedScopeHash: auditScopeHash,
+      artifact: {
         overallScore,
         structuralScore,
         academicScore,
@@ -845,14 +863,15 @@ Respond as JSON array: [{"chapter": 1, "concepts": 15, "examples": ["loss aversi
         model: AUDIT_MODEL,
         promptVersion: AUDIT_PROMPT_VERSION,
       },
-      p_source_record_id: auditRecord.id,
-      p_chapter_id: null,
+      sourceRecordId: auditRecord.id,
+      chapterId: null,
     });
 
-    if (attestError) {
-      log("Attestation error", { error: attestError.message });
-      throw new Error(`Failed to record editorial attestation: ${attestError.message}`);
+    if (attestFailure) {
+      log("Attestation error", { error: attestFailure });
+      throw new Error(`Failed to record editorial attestation: ${attestFailure}`);
     }
+
 
 
     // ============================================================

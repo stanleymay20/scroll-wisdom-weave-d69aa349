@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { captureChapterScopeHash, recordBoundAttestation, scopeStabilityError } from "../_shared/publicationScope.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version" };
 const log = (s: string, d?: any) => console.log(`[VERIFY-REF] ${s}${d ? ` - ${JSON.stringify(d)}` : ''}`);
@@ -284,8 +285,11 @@ serve(async (req) => {
     // (no ids) never produces an attestation.
     // ===========================================
     const trustedMode = !!(bookId && chapterId);
+    let evidenceScopeHash: string | null = null;
     if (trustedMode) {
+      const chapterScopeBefore = await captureChapterScopeHash(sb, chapterId);
       const { data: chapter, error: chErr } = await sb
+
         .from("chapters")
         .select("id, book_id, content, chapter_references")
         .eq("id", chapterId)
@@ -314,6 +318,13 @@ serve(async (req) => {
       references = Array.isArray(chapter.chapter_references) ? chapter.chapter_references : [];
       chapterContent = chapter.content || "";
       bookCategory = book.category || "general";
+
+      // Bind the evidence verdict to the exact chapter state being verified.
+      const chapterScopeAfter = await captureChapterScopeHash(sb, chapterId);
+      const scopeLoadError = scopeStabilityError(chapterScopeBefore, chapterScopeAfter);
+      if (scopeLoadError) return json({ error: scopeLoadError }, 409);
+      evidenceScopeHash = chapterScopeAfter as string;
+
       log("Trusted mode", { book: bookId.slice(0, 8), chapter: chapterId.slice(0, 8), refs: references.length });
     }
 
@@ -321,18 +332,20 @@ serve(async (req) => {
     // Returns a Response when the attestation fails (fail closed).
     const attestEvidence = async (passed: boolean, artifact: Record<string, unknown>): Promise<Response | null> => {
       if (!trustedMode) return null;
-      const { error: attErr } = await sb.rpc("record_publication_gate_attestation", {
-        p_book_id: bookId,
-        p_user_id: user.id,
-        p_gate: "evidence",
-        p_status: passed ? "passed" : "blocked",
-        p_artifact: artifact,
-        p_source_record_id: null,
-        p_chapter_id: chapterId,
+      const attErr = await recordBoundAttestation(sb, {
+        bookId,
+        userId: user.id,
+        gate: "evidence",
+        status: passed ? "passed" : "blocked",
+        expectedScopeHash: evidenceScopeHash ?? "",
+        artifact,
+        sourceRecordId: null,
+        chapterId,
       });
-      if (attErr) { log("Attestation error", { m: attErr.message }); return json({ error: `Failed to record evidence attestation: ${attErr.message}` }, 500); }
+      if (attErr) { log("Attestation error", { m: attErr }); return json({ error: `Failed to record evidence attestation: ${attErr}` }, 500); }
       return null;
     };
+
 
 
 

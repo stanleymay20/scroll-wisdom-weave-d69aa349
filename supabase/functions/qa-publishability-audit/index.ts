@@ -14,6 +14,8 @@ import {
   serverError, requireUser, validateBody, z, serviceClient, enforceRateLimit,
 } from "../_shared/http.ts";
 import { auditBookForPublishability } from "../_shared/qaPublishability.ts";
+import { captureBookScopeHash, recordBoundAttestation, scopeStabilityError } from "../_shared/publicationScope.ts";
+
 
 const BodySchema = z.object({ bookId: z.string().uuid() });
 
@@ -72,12 +74,20 @@ Deno.serve(async (req) => {
       if (!adminRow) return forbidden("Not the owner of this book");
     }
 
+    // Bind the deterministic audit to the exact manuscript state it inspects.
+    const scopeBefore = await captureBookScopeHash(sc, bookId);
+
     const { data: chapters, error: chErr } = await sc
       .from("chapters")
       .select("chapter_number, title, content")
       .eq("book_id", bookId)
       .order("chapter_number", { ascending: true });
     if (chErr) return serverError(chErr);
+
+    const scopeAfter = await captureBookScopeHash(sc, bookId);
+    const scopeLoadError = scopeStabilityError(scopeBefore, scopeAfter);
+    if (scopeLoadError) return json({ error: scopeLoadError }, 409);
+    const auditScopeHash = scopeAfter as string;
 
     const report = auditBookForPublishability(
       (chapters ?? []).map((c) => ({
@@ -105,23 +115,26 @@ Deno.serve(async (req) => {
       .single();
     if (insErr) return serverError(insErr);
 
-    // Server-side publication gate attestation (qa). Fail closed.
+    // Server-side publication gate attestation (qa), bound to the audited state.
+    // Fail closed if the manuscript changed while the audit ran.
     const qaPassed = report.status === "ready" && report.blockerCount === 0;
-    const { error: attestErr } = await sc.rpc("record_publication_gate_attestation", {
-      p_book_id: bookId,
-      p_user_id: auth.userId,
-      p_gate: "qa",
-      p_status: qaPassed ? "passed" : "blocked",
-      p_artifact: {
+    const attestFailure = await recordBoundAttestation(sc, {
+      bookId,
+      userId: auth.userId,
+      gate: "qa",
+      status: qaPassed ? "passed" : "blocked",
+      expectedScopeHash: auditScopeHash,
+      artifact: {
         status: report.status,
         score: report.score,
         blockerCount: report.blockerCount,
         warningCount: report.warningCount,
       },
-      p_source_record_id: inserted.id,
-      p_chapter_id: null,
+      sourceRecordId: inserted.id,
+      chapterId: null,
     });
-    if (attestErr) return serverError(attestErr);
+    if (attestFailure) return serverError(new Error(attestFailure));
+
 
     return json({ id: inserted.id, report });
   } catch (e) {
