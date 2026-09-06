@@ -23,6 +23,21 @@ const getModelForPlan = (plan: string): string => {
   }
 };
 
+// Publication-quality (Chief Editor) rewrite routing — server-owned, derived from the
+// authenticated user's active subscription tier. Deliberately has a higher floor than
+// normal generation so final polishing is never performed by Flash Lite.
+const getRewriteModelForPlan = (plan: string): string => {
+  switch (plan) {
+    case "prophet_tier":
+    case "premium":
+      return "google/gemini-2.5-pro";
+    case "student":
+    case "free":
+    default:
+      return "google/gemini-2.5-flash";
+  }
+};
+
 // ===========================================
 // SCROLLLIBRARY GENERATION ARCHITECTURE v3.0
 // Universal Core + Pipeline Micro-Contracts
@@ -1967,7 +1982,11 @@ serve(async (req) => {
     }
     const editIntent_raw = (requestBody?.editIntent as string | null) || null;
     const isChiefEditorRewrite = editIntent_raw?.startsWith('[CHIEF_EDITOR_REWRITE]') || false;
-    const forceModel = (requestBody?.forceModel as string | null) || null;
+    // SECURITY: model selection is server-owned. A legacy `forceModel` field from older
+    // clients is ignored (never used for routing) — logged only so we can retire it.
+    if (requestBody && Object.prototype.hasOwnProperty.call(requestBody, 'forceModel')) {
+      console.log(`[GENERATE-CHAPTER] Ignoring client-supplied forceModel (server-owned routing)`);
+    }
 
     console.log(`[GENERATE-CHAPTER] User: ${user.id.slice(0, 8)}...`);
 
@@ -1994,12 +2013,13 @@ serve(async (req) => {
 
     // Only use tier if subscription is active, otherwise fall back to free
     const userPlan = (subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free";
-    // Model routing respects subscription tier — admin bypass is for limits only, not model upgrade
-    // Chief Editor rewrites use forceModel to ensure quality regardless of tier
+    // Model routing respects subscription tier — admin bypass is for limits only, not model upgrade.
+    // Chief Editor (publication-quality) rewrites use a server-selected tier-based model with a
+    // higher floor so final polishing is never done by Flash Lite. Never client-selectable.
     const baseModel = getModelForPlan(userPlan);
-    const generationModel = (isChiefEditorRewrite && forceModel) ? forceModel : baseModel;
+    const generationModel = isChiefEditorRewrite ? getRewriteModelForPlan(userPlan) : baseModel;
     const maxWordCount = TIER_WORD_LIMITS[userPlan as keyof typeof TIER_WORD_LIMITS] || TIER_WORD_LIMITS.free;
-    console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel}${forceModel ? ` (forced from ${baseModel})` : ''} | Admin: ${isAdmin}`);
+    console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel}${isChiefEditorRewrite && generationModel !== baseModel ? ` (chief-editor rewrite floor, base ${baseModel})` : ''} | Admin: ${isAdmin}`);
 
     // ===========================================
     // INPUT NORMALIZATION — Defensive layer for multi-path orchestration
@@ -2285,23 +2305,23 @@ BEGIN REVISION:`;
     // ===========================================
     // ===========================================
     // ACADEMIC RESEARCH — domain-aware routing
-    // AUDIT FIX: Only trigger STEM deep-research for STEM categories.
-    // Non-STEM academic books (Business, Law, Psychology, etc.) should NOT pull
-    // STEM-biased citations from the same research pipeline. They get citations
-    // via Perplexity fallback with a humanistic search query, or the AI is
-    // instructed to use its training knowledge and mark claims for verification.
-    //
-    // "academicMode=true" alone is NOT sufficient to enter the STEM pipeline —
-    // the category must also be a recognised STEM domain.
+    // STEM categories keep their STEM-specific enhancements (arXiv/PubMed etc. are
+    // gated inside deep-research by category). Additionally, ANY chapter generated
+    // with academicMode=true, or for an academic/technical/reference/professional
+    // book type, is research-grounded through the same deep-research workflow —
+    // non-STEM domains still receive real OpenAlex/CrossRef/Semantic Scholar
+    // sources and are cited in their own discipline's voice downstream.
     // ===========================================
     const STEM_RESEARCH_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'engineering', 'data_science', 'computer_science', 'statistics'];
-    const needsAcademicResearch = (academicMode === true && STEM_RESEARCH_CATEGORIES.includes(category?.toLowerCase())) || (
-      (bookType === 'illustrated' || bookType === 'text') && 
-      STEM_RESEARCH_CATEGORIES.includes(category?.toLowerCase())
-    );
+    const RESEARCH_GROUNDED_BOOK_TYPES = ['academic', 'technical', 'reference', 'professional'];
+    const isStemResearchCategory = STEM_RESEARCH_CATEGORIES.includes(category?.toLowerCase());
+    const needsAcademicResearch =
+      academicMode === true ||
+      RESEARCH_GROUNDED_BOOK_TYPES.includes(String(effectiveBookType || '').toLowerCase()) ||
+      ((bookType === 'illustrated' || bookType === 'text') && isStemResearchCategory);
     
     if (needsAcademicResearch) {
-      console.log(`[GENERATE-CHAPTER] Academic research pipeline for bookType=${bookType}, category=${category}`);
+      console.log(`[GENERATE-CHAPTER] Academic research pipeline for bookType=${effectiveBookType} (request=${bookType}), category=${category}, academicMode=${academicMode}, stem=${isStemResearchCategory}`);
       
       researchResult = await conductDeepResearch(
         `${chapterTitle} - ${bookTitle}`,
@@ -5207,7 +5227,10 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
       citation_style: academicMode ? citationStyle : null,
     };
 
-    if (academicMode && researchResult) {
+    // Persist research sources whenever the research workflow produced them —
+    // academicMode books AND research-grounded book types (academic/technical/
+    // reference/professional) and STEM text/illustrated books.
+    if (researchResult) {
       updateData.chapter_references = researchResult.references;
       updateData.research_metadata = researchResult.metadata;
     }
@@ -5271,12 +5294,13 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
 
     // S6a auto-references: wire generate-references for non-academic chapters
     // that have real content and no existing references. Fire-and-forget so we
-    // don't block the response. Academic mode already populates references via
-    // researchResult above, so we skip that path here.
+    // don't block the response. Academic mode and the research-grounded paths
+    // already populate references via researchResult above, so we skip them here.
     try {
       const bookIdForRefs = chapter?.book_id;
       const trimmedForRefs = (finalContent || "").trim();
-      if (!academicMode && chapterId && bookIdForRefs && trimmedForRefs.length >= 400) {
+      const researchAlreadyGrounded = Boolean(researchResult && researchResult.references.length > 0);
+      if (!academicMode && !researchAlreadyGrounded && chapterId && bookIdForRefs && trimmedForRefs.length >= 400) {
         const { data: existingRefRow } = await supabase
           .from("chapters")
           .select("chapter_references")

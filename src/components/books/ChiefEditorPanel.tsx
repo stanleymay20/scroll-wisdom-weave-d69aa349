@@ -256,8 +256,9 @@ export function ChiefEditorPanel({ bookId, chapters, onChaptersUpdated, classNam
             regenerate: true,
             isRegeneration: true,
             originalContent: freshChapter.content,
+            // Server selects the rewrite model from the user's active tier; the
+            // [CHIEF_EDITOR_REWRITE] marker is the only signal the client sends.
             editIntent: `[CHIEF_EDITOR_REWRITE]\n${auditContext}${crossChapterContext}`,
-            forceModel: "google/gemini-2.5-flash",
           },
         });
 
