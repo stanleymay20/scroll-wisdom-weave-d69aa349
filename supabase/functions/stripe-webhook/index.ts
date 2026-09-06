@@ -112,7 +112,8 @@ serve(async (req) => {
     const getTierFromProductId = (productId: string): ValidPlan => {
       const productMap: Record<string, ValidPlan> = {
         prod_TaQU3ILEUpbXOT: "premium",
-        prod_TaQWA7MSUntiMy: "prophet_tier",
+        prod_U0fmlf14TPlMKj: "prophet_tier", // current Institutional product
+        prod_TaQWA7MSUntiMy: "prophet_tier", // legacy Institutional product
         prod_TaQSrotoUkTuPC: "student",
       };
       return productMap[productId] || "free";
@@ -356,7 +357,6 @@ serve(async (req) => {
           }
 
           const evidenceDue = dispute.evidence_details?.due_by ? new Date(dispute.evidence_details.due_by * 1000).toISOString() : null;
-
           await supabase.from("chargebacks").upsert({
             stripe_dispute_id: dispute.id,
             purchase_id: purchaseId,
