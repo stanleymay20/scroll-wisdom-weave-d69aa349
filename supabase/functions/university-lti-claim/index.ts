@@ -60,8 +60,34 @@ serve(async (req) => {
       .eq("user_id", auth.userId)
       .maybeSingle();
     if (personLookupError) throw personLookupError;
-    if (!universityPerson || ["suspended", "inactive"].includes(universityPerson.status)) {
+    if (!universityPerson || !["invited", "active"].includes(universityPerson.status)) {
       return forbidden("Your university identity is not active for LTI access.");
+    }
+
+    // External LMS subjects are durable identity bindings. Never let possession
+    // of a launch token reassign an existing subject to another ScrollLibrary
+    // account, and never let one local account silently replace a different
+    // subject for the same LTI connection.
+    const { data: subjectIdentity, error: subjectIdentityError } = await sc
+      .from("university_external_identities")
+      .select("id,user_id,external_subject")
+      .eq("connection_id", pendingLaunch.connection_id)
+      .eq("external_subject", pendingLaunch.subject)
+      .maybeSingle();
+    if (subjectIdentityError) throw subjectIdentityError;
+    if (subjectIdentity && subjectIdentity.user_id !== auth.userId) {
+      return forbidden("This LMS identity is already linked to another ScrollUniversity account.");
+    }
+
+    const { data: userIdentity, error: userIdentityError } = await sc
+      .from("university_external_identities")
+      .select("id,user_id,external_subject")
+      .eq("connection_id", pendingLaunch.connection_id)
+      .eq("user_id", auth.userId)
+      .maybeSingle();
+    if (userIdentityError) throw userIdentityError;
+    if (userIdentity && userIdentity.external_subject !== pendingLaunch.subject) {
+      return forbidden("Your ScrollUniversity account is already linked to a different LMS identity for this connection.");
     }
 
     const { data: claimedLaunch, error: claimError } = await sc
@@ -75,23 +101,33 @@ serve(async (req) => {
     if (claimError) throw claimError;
     if (!claimedLaunch) return badRequest("LTI launch was already claimed.");
 
-    const { error: identityError } = await sc
-      .from("university_external_identities")
-      .upsert({
-        organization_id: pendingLaunch.organization_id,
-        connection_id: pendingLaunch.connection_id,
-        external_subject: pendingLaunch.subject,
-        user_id: auth.userId,
-        roles: pendingLaunch.roles,
-        last_launch_at: now,
-      }, { onConflict: "connection_id,external_subject" });
-    if (identityError) throw identityError;
+    if (subjectIdentity) {
+      const { error: identityError } = await sc
+        .from("university_external_identities")
+        .update({ roles: pendingLaunch.roles, last_launch_at: now })
+        .eq("id", subjectIdentity.id)
+        .eq("user_id", auth.userId);
+      if (identityError) throw identityError;
+    } else {
+      const { error: identityError } = await sc
+        .from("university_external_identities")
+        .insert({
+          organization_id: pendingLaunch.organization_id,
+          connection_id: pendingLaunch.connection_id,
+          external_subject: pendingLaunch.subject,
+          user_id: auth.userId,
+          roles: pendingLaunch.roles,
+          last_launch_at: now,
+        });
+      if (identityError) throw identityError;
+    }
 
     if (universityPerson.status === "invited") {
       const { error: activationError } = await sc
         .from("university_people")
         .update({ status: "active" })
-        .eq("id", universityPerson.id);
+        .eq("id", universityPerson.id)
+        .eq("status", "invited");
       if (activationError) throw activationError;
     }
 
