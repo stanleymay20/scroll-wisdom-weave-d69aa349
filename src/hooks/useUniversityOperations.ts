@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import type { SupabaseClient } from '@supabase/supabase-js';
 import { supabase } from '@/integrations/supabase/client';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 
-const db = supabase as any;
+const db = supabase as unknown as SupabaseClient;
 
 export interface UniversityCohortMember {
   id: string;
