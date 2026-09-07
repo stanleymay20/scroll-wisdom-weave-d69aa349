@@ -1,20 +1,13 @@
 -- Post-forensic hardening for ISBN governance and verified Publication minting.
--- This migration closes four residual integrity gaps without weakening any gate:
---   1. attach the previously-defined imprint identity-drift trigger;
---   2. preserve immutable ISBN verification-batch membership history;
---   3. canonicalize order-insensitive snapshot arrays for retry idempotency;
---   4. re-validate frozen publisher/ISBN identity in the database transaction.
+-- The imprint identity-drift trigger already exists from the earlier publishing
+-- identity migrations; replacing its function body preserves that binding.
+-- This migration closes three additional residual integrity gaps:
+--   1. preserve immutable ISBN verification-batch membership history;
+--   2. canonicalize order-insensitive snapshot arrays for retry idempotency;
+--   3. re-validate frozen publisher/ISBN identity in the database transaction.
 
 -- ---------------------------------------------------------------------------
--- 1. Imprint identity drift guard must actually be attached.
--- ---------------------------------------------------------------------------
-DROP TRIGGER IF EXISTS trg_prevent_imprint_identity_drift ON public.publishing_imprints;
-CREATE TRIGGER trg_prevent_imprint_identity_drift
-BEFORE UPDATE ON public.publishing_imprints
-FOR EACH ROW EXECUTE FUNCTION public.prevent_imprint_identity_drift();
-
--- ---------------------------------------------------------------------------
--- 2. Immutable verification-batch membership history.
+-- 1. Immutable verification-batch membership history.
 -- Inventory rows may move to a later batch only after rejection; the historical
 -- membership record must remain attached to every reviewed batch forever.
 -- ---------------------------------------------------------------------------
@@ -84,7 +77,7 @@ BEFORE UPDATE ON public.platform_isbn_pool_verification_batches
 FOR EACH ROW EXECUTE FUNCTION public.tg_lock_reviewed_platform_isbn_batch();
 
 -- ---------------------------------------------------------------------------
--- 3. Retry identity canonicalization.
+-- 2. Retry identity canonicalization.
 -- Rights, rights-holder, citation and identifier arrays are sets for release
 -- identity purposes. Their database-return order is not semantically meaningful,
 -- so normalize only those arrays. Author and chapter order remains significant.
@@ -151,7 +144,7 @@ GRANT EXECUTE ON FUNCTION public.compute_publication_release_request_key(uuid,uu
   TO service_role;
 
 -- ---------------------------------------------------------------------------
--- 4. Frozen publisher/ISBN identity is re-validated inside the INSERT
+-- 3. Frozen publisher/ISBN identity is re-validated inside the INSERT
 -- transaction immediately before the existing atomic finalizer runs.
 -- ---------------------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.tg_finalize_verified_publication_insert()
