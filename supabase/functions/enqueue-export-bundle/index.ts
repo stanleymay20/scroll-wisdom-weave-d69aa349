@@ -737,7 +737,7 @@ serve(async (req) => {
     const { data: job, error } = await sc.from("export_jobs").insert({
       user_id: auth.userId, book_id: parsed.book_id, listing_id: parsed.listing_id ?? null,
       bundle_type: parsed.bundle_type, status: "pending",
-      metadata: parsed.options ?? {},
+      metadata: bundleOptions,
       correlation_id: corr,
       entitlement_snapshot_id: entitlementSnapshotId,
     }).select("id").single();
@@ -757,7 +757,7 @@ serve(async (req) => {
     });
 
     // @ts-ignore EdgeRuntime is provided by Supabase runtime
-    EdgeRuntime.waitUntil(runJob(job.id, auth.userId, parsed.book_id, parsed.bundle_type as BundlePlatform, auth.token, parsed.options ?? {}, corr));
+    EdgeRuntime.waitUntil(runJob(job.id, auth.userId, parsed.book_id, parsed.bundle_type as BundlePlatform, auth.token, bundleOptions, corr));
 
     return json({ ok: true, job_id: job.id, correlation_id: corr }, 200, { "x-correlation-id": corr });
   } catch (e) { return serverError(e); }
