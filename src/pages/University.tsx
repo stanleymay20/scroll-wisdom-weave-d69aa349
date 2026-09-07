@@ -1,8 +1,9 @@
 import { Link, useSearchParams } from 'react-router-dom';
-import { PlugZap, Settings2 } from 'lucide-react';
+import { BookOpen, PlugZap, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import UniversityHub from '@/components/university/UniversityHub';
 import UniversityAcademicAdministration from '@/components/university/UniversityAcademicAdministration';
+import UniversityCourseMaterials from '@/components/university/UniversityCourseMaterials';
 import UniversityInteroperability from '@/components/university/UniversityInteroperability';
 import UniversityLtiClaim from '@/pages/UniversityLtiClaim';
 
@@ -11,6 +12,10 @@ export default function University() {
 
   if (params.has('lti_launch')) {
     return <UniversityLtiClaim />;
+  }
+
+  if (params.get('view') === 'materials') {
+    return <UniversityCourseMaterials />;
   }
 
   if (params.get('view') === 'administration') {
@@ -25,6 +30,12 @@ export default function University() {
     <>
       <UniversityHub />
       <div className="fixed bottom-5 right-5 z-40 flex flex-col items-end gap-2">
+        <Button asChild className="shadow-lg">
+          <Link to="/university?view=materials">
+            <BookOpen className="mr-2 h-4 w-4" />
+            Course materials
+          </Link>
+        </Button>
         <Button asChild variant="secondary" className="shadow-lg">
           <Link to="/university?view=administration">
             <Settings2 className="mr-2 h-4 w-4" />
