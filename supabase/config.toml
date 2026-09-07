@@ -151,3 +151,19 @@ verify_jwt = false
 
 [functions.art-director-analyze]
 verify_jwt = false
+
+# ScrollUniversity LTI 1.3 protocol endpoints. OIDC login and form_post launch
+# originate from the external LMS and therefore cannot carry a ScrollLibrary JWT.
+# They perform state, nonce, issuer, audience, JWKS and deployment validation in
+# the function body. User-bound provisioning and claim APIs remain JWT-gated.
+[functions.university-lti-login]
+verify_jwt = false
+
+[functions.university-lti-launch]
+verify_jwt = false
+
+[functions.university-lti-claim]
+verify_jwt = true
+
+[functions.university-provision-users]
+verify_jwt = true
