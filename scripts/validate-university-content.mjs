@@ -12,11 +12,22 @@ const nonEmpty = (value) => typeof value === 'string' && value.trim().length > 0
 if (!programme?.programme?.code) fail('programme code is required');
 if (!Array.isArray(programme?.courses) || programme.courses.length === 0) fail('programme must contain courses');
 if (!workload?.courses || typeof workload.courses !== 'object') fail('workload-and-practice course map is required');
+if (programme?.programme?.credit_award_status !== 'workload_planning_only_not_awarded_or_transferable_academic_credit') {
+  fail('programme must explicitly state that workload units are not awarded or transferable academic credit');
+}
+if (!nonEmpty(programme?.programme?.credit_disclaimer) || !programme.programme.credit_disclaimer.includes('does not award ECTS')) {
+  fail('programme must carry an explicit no-ECTS-award disclaimer');
+}
+if (!nonEmpty(programme?.programme?.credit_system) || !programme.programme.credit_system.toLowerCase().includes('workload')) {
+  fail('programme credit_system must identify internal workload planning rather than awarded academic credit');
+}
 
-let programmeCredits = 0;
+let programmeWorkloadUnits = 0;
+let programmeHours = 0;
 
 for (const descriptor of programme.courses || []) {
-  programmeCredits += Number(descriptor.credits || 0);
+  programmeWorkloadUnits += Number(descriptor.credits || 0);
+  programmeHours += Number(descriptor.planned_hours || 0);
   if (!descriptor.pack) {
     fail(`${descriptor.code || 'unknown course'}: pack path is required`);
     continue;
@@ -32,13 +43,13 @@ for (const descriptor of programme.courses || []) {
 
   const course = pack.course || {};
   const prefix = course.code || descriptor.code || descriptor.pack;
-  const credits = Number(course.credits || 0);
+  const workloadUnits = Number(course.credits || 0);
   const hours = Number(course.planned_hours || 0);
 
   if (course.code !== descriptor.code) fail(`${prefix}: descriptor/course code mismatch`);
-  if (credits <= 0) fail(`${prefix}: credits must be > 0`);
-  if (hours < credits * 25 || hours > credits * 30) {
-    fail(`${prefix}: planned hours ${hours} must be between ${credits * 25} and ${credits * 30} for ${credits} ECTS`);
+  if (workloadUnits <= 0) fail(`${prefix}: internal workload units must be > 0`);
+  if (hours < workloadUnits * 25 || hours > workloadUnits * 30) {
+    fail(`${prefix}: planned hours ${hours} must be between ${workloadUnits * 25} and ${workloadUnits * 30} for ${workloadUnits} workload units`);
   }
 
   const workloadPlan = workload.courses?.[prefix];
@@ -138,8 +149,11 @@ for (const workloadCode of Object.keys(workload.courses || {})) {
   if (!descriptorCodes.has(workloadCode)) fail(`${workloadCode}: workload plan has no matching programme course`);
 }
 
-if (Number(programme.programme?.credits || 0) !== programmeCredits) {
-  fail(`programme credits ${programme.programme?.credits} do not equal course credits ${programmeCredits}`);
+if (Number(programme.programme?.credits || 0) !== programmeWorkloadUnits) {
+  fail(`programme workload units ${programme.programme?.credits} do not equal course workload units ${programmeWorkloadUnits}`);
+}
+if (Number(programme.programme?.planned_hours || 0) !== programmeHours) {
+  fail(`programme planned hours ${programme.programme?.planned_hours} do not equal course planned hours ${programmeHours}`);
 }
 
 if (failures.length) {
@@ -148,4 +162,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`ScrollUniversity content validation passed: ${programme.courses.length} course pack(s), ${programmeCredits} ECTS, explicit workload and practice evidence present.`);
+console.log(`ScrollUniversity content validation passed: ${programme.courses.length} course pack(s), ${programmeWorkloadUnits} internal workload units, ${programmeHours} planned learner hours, explicit workload and practice evidence present.`);
