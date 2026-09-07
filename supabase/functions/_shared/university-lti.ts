@@ -38,6 +38,55 @@ export async function sha256Hex(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), (byte) => byte.toString(16).padStart(2, "0")).join("");
 }
 
+function blockedIpv4(hostname: string): boolean {
+  const octets = hostname.split(".").map(Number);
+  if (octets.length !== 4 || octets.some((part) => !Number.isInteger(part) || part < 0 || part > 255)) return false;
+  const [a, b] = octets;
+  return a === 0
+    || a === 10
+    || a === 127
+    || (a === 100 && b >= 64 && b <= 127)
+    || (a === 169 && b === 254)
+    || (a === 172 && b >= 16 && b <= 31)
+    || (a === 192 && b === 168)
+    || (a === 198 && (b === 18 || b === 19))
+    || a >= 224;
+}
+
+function blockedIpv6(hostname: string): boolean {
+  const host = hostname.toLowerCase().replace(/^\[/, "").replace(/\]$/, "");
+  if (!host.includes(":")) return false;
+  return host === "::"
+    || host === "::1"
+    || host.startsWith("fc")
+    || host.startsWith("fd")
+    || /^fe[89ab]/.test(host)
+    || host.startsWith("ff");
+}
+
+export function remoteHttpsUrl(value: string, label = "URL"): URL {
+  let url: URL;
+  try {
+    url = new URL(value);
+  } catch {
+    throw new Error(`${label} is invalid.`);
+  }
+
+  if (url.protocol !== "https:") throw new Error(`${label} must use HTTPS.`);
+  if (url.username || url.password) throw new Error(`${label} must not contain embedded credentials.`);
+
+  const hostname = url.hostname.toLowerCase().replace(/\.$/, "");
+  if (!hostname
+      || hostname === "localhost"
+      || hostname.endsWith(".localhost")
+      || blockedIpv4(hostname)
+      || blockedIpv6(hostname)) {
+    throw new Error(`${label} must use a public HTTPS host.`);
+  }
+
+  return url;
+}
+
 export function buildLtiAuthorizationUrl(
   connection: LtiConnectionMetadata,
   params: {
@@ -48,7 +97,7 @@ export function buildLtiAuthorizationUrl(
     ltiMessageHint?: string | null;
   },
 ): string {
-  const url = new URL(connection.auth_login_url);
+  const url = remoteHttpsUrl(connection.auth_login_url, "LTI authorization URL");
   url.searchParams.set("scope", "openid");
   url.searchParams.set("response_type", "id_token");
   url.searchParams.set("response_mode", "form_post");
