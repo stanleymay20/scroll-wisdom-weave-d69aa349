@@ -57,7 +57,7 @@ export default function UniversityLtiClaim() {
 
       await refresh();
       setActiveOrgId(data.organization_id);
-      window.history.replaceState({}, '', '/university/lti');
+      window.history.replaceState({}, '', '/university');
       setClaim({
         status: 'success',
         message: 'Your LMS launch is verified and linked to your institutional identity.',
