@@ -2,6 +2,7 @@ import { ReactNode, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { SubscriptionTier, SUBSCRIPTION_TIERS } from '@/lib/subscription';
 import { useEntitlements } from '@/hooks/useEntitlements';
+import { hasPlanAccess } from '@/lib/entitlementAccess';
 import {
   Dialog,
   DialogContent,
@@ -26,13 +27,6 @@ const tierIcons: Record<SubscriptionTier, ReactNode> = {
   prophet_tier: <Crown className="h-6 w-6" />,
 };
 
-const tierPriority: Record<SubscriptionTier, number> = {
-  free: 0,
-  student: 1,
-  premium: 2,
-  prophet_tier: 3,
-};
-
 export function RequiresPlan({ 
   tier: requiredTier, 
   children, 
@@ -43,25 +37,10 @@ export function RequiresPlan({
   const [showModal, setShowModal] = useState(false);
   const navigate = useNavigate();
 
-  // ABSOLUTE PRIORITY: Admin → unrestricted access to everything
-  if (entitlements.isAdmin) {
-    return <>{children}</>;
-  }
-
-  // ABSOLUTE PRIORITY: Prophet tier → unrestricted access to all features
-  if (entitlements.isProphet) {
-    return <>{children}</>;
-  }
-
-  // For other paid tiers, check tier priority
-  const hasAccess = tierPriority[entitlements.tier] >= tierPriority[requiredTier];
-
-  if (hasAccess) {
-    return <>{children}</>;
-  }
-
-  // FAIL-SAFE: If user is paid, grant access rather than block
-  if (entitlements.isPaid) {
+  // Paid status alone never satisfies a higher-tier requirement. The pure
+  // policy allows only the actual tier hierarchy or an explicit full-access
+  // preview/admin mode.
+  if (hasPlanAccess(entitlements, requiredTier)) {
     return <>{children}</>;
   }
 
@@ -123,6 +102,7 @@ export function RequiresPlan({
 export function RequiresAdmin({ children, fallback }: { children: ReactNode; fallback?: ReactNode }) {
   const entitlements = useEntitlements();
 
+  // Deliberately does NOT honor review/trial/full-access preview modes.
   if (!entitlements.isAdmin) {
     return fallback ? <>{fallback}</> : null;
   }
