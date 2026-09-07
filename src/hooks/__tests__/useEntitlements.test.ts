@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { hasFeatureAccess, type Entitlements } from "../useEntitlements";
+import { hasFeatureAccess, type Entitlements } from "../../lib/entitlementAccess";
 
 const student: Entitlements = {
   canPublish: true,
