@@ -1,39 +1,13 @@
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useIsAdmin } from './useAdmin';
-import { SubscriptionTier } from '@/lib/subscription';
 import { isTrialActive } from '@/lib/config';
+import type { Entitlements } from '@/lib/entitlementAccess';
+
+export type { Entitlements } from '@/lib/entitlementAccess';
+export { hasFeatureAccess } from '@/lib/entitlementAccess';
 
 // Reviewer accounts get unrestricted access for Google Play review
 const REVIEWER_EMAILS = ['reviewer@scrolllibrary.org'];
-
-export interface Entitlements {
-  // Core access flags - use these, NOT tier names
-  canPublish: boolean;
-  canExport: boolean;
-  canDownload: boolean;
-  canGenerateBooks: boolean;
-  canUseAllFormats: boolean;
-  canExportAllFormats: boolean;
-  hasCommercialRights: boolean;
-  bypassAllLimits: boolean;
-  canUseAiCovers: boolean;
-  canUseTTS: boolean;
-  canUseOpenAITTS: boolean;
-  canUseElevenLabsTTS: boolean;
-  canBatchGenerate: boolean;
-  // Tier info (for display only, NOT for gating)
-  tier: SubscriptionTier;
-  // Role flags - use these for access checks
-  isAdmin: boolean;
-  isProphet: boolean;
-  isPremium: boolean;
-  isStudent: boolean;
-  /** @deprecated Legacy compatibility alias. Use isStudent. */
-  isScrollStudent: boolean;
-  isPaid: boolean;
-  // Trial mode flag
-  isTrialMode: boolean;
-}
 
 /**
  * SINGLE SOURCE OF TRUTH FOR ALL ENTITLEMENTS
@@ -241,42 +215,4 @@ export function useEntitlements(): Entitlements {
     isPaid: false,
     isTrialMode: false,
   };
-}
-
-/**
- * Check if user has access to a specific feature.
- * Paid status alone never overrides an explicit capability flag.
- */
-export function hasFeatureAccess(
-  entitlements: Entitlements,
-  feature: 'publish' | 'export' | 'download' | 'generate' | 'allFormats' | 'commercial' | 'aiCovers' | 'tts' | 'openaiTTS' | 'elevenLabsTTS' | 'batch'
-): boolean {
-  if (entitlements.isAdmin || entitlements.isProphet) {
-    return true;
-  }
-
-  switch (feature) {
-    case 'publish':
-      return entitlements.canPublish;
-    case 'export':
-    case 'download':
-      return entitlements.canExport || entitlements.canDownload;
-    case 'generate':
-      return entitlements.canGenerateBooks;
-    case 'allFormats':
-      return entitlements.canUseAllFormats || entitlements.canExportAllFormats;
-    case 'commercial':
-      return entitlements.hasCommercialRights;
-    case 'aiCovers':
-      return entitlements.canUseAiCovers;
-    case 'tts':
-    case 'openaiTTS':
-      return entitlements.canUseTTS || entitlements.canUseOpenAITTS;
-    case 'elevenLabsTTS':
-      return entitlements.canUseElevenLabsTTS;
-    case 'batch':
-      return entitlements.canBatchGenerate;
-    default:
-      return false;
-  }
 }
