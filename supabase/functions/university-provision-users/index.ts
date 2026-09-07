@@ -36,12 +36,22 @@ const Body = z.object({
   people: z.array(Person).min(1).max(500),
 });
 
+type PersonInput = z.infer<typeof Person>;
+
 type ProvisionResult = {
   email: string;
   ok: boolean;
   user_id?: string;
   invited?: boolean;
   error?: string;
+};
+
+type ResolvedPerson = {
+  index: number;
+  email: string;
+  user_id: string;
+  invited: boolean;
+  person: PersonInput;
 };
 
 async function loadUsersByEmail(sc: ReturnType<typeof serviceClient>) {
@@ -89,39 +99,14 @@ serve(async (req) => {
     }
 
     const usersByEmail = await loadUsersByEmail(sc);
-
-    // Academic titles must never implicitly change organization-wide authority.
-    // Preserve existing owner/admin/member roles and add new roster users only as
-    // ordinary organization members. ScrollUniversity privileges are governed by
-    // university_role and its dedicated RLS policies.
-    const { data: existingMemberships, error: existingMembershipsError } = await sc
-      .from("organization_members")
-      .select("user_id,role")
-      .eq("organization_id", parsed.organization_id);
-    if (existingMembershipsError) throw existingMembershipsError;
-    const membershipByUser = new Map(
-      (existingMemberships || []).map((row) => [row.user_id as string, row.role as string]),
-    );
-
-    // Roster provisioning may update academic identity fields, but it must not
-    // silently reactivate suspended/alumni/inactive records. Lifecycle state is
-    // controlled separately by registrar/admin workflows.
-    const { data: existingPeople, error: existingPeopleError } = await sc
-      .from("university_people")
-      .select("user_id,status")
-      .eq("organization_id", parsed.organization_id);
-    if (existingPeopleError) throw existingPeopleError;
-    const peopleStatusByUser = new Map(
-      (existingPeople || []).map((row) => [row.user_id as string, row.status as string]),
-    );
-
     const seen = new Set<string>();
-    const results: ProvisionResult[] = [];
+    const resultSlots: Array<ProvisionResult | null> = Array(parsed.people.length).fill(null);
+    const resolved: ResolvedPerson[] = [];
 
-    for (const person of parsed.people) {
+    for (const [index, person] of parsed.people.entries()) {
       const email = person.email.trim().toLowerCase();
       if (seen.has(email)) {
-        results.push({ email, ok: false, error: "Duplicate email in request" });
+        resultSlots[index] = { email, ok: false, error: "Duplicate email in request" };
         continue;
       }
       seen.add(email);
@@ -141,58 +126,63 @@ serve(async (req) => {
           invited = true;
         }
 
-        if (!membershipByUser.has(userId)) {
-          const { error: orgError } = await sc
-            .from("organization_members")
-            .insert({
-              organization_id: parsed.organization_id,
-              user_id: userId,
-              role: "member",
-              invited_by: auth.userId,
-            });
-          if (orgError) throw orgError;
-          membershipByUser.set(userId, "member");
-        }
-
-        if (peopleStatusByUser.has(userId)) {
-          const { error: personError } = await sc
-            .from("university_people")
-            .update({
-              university_role: person.role,
-              display_name: person.display_name,
-              student_number: person.student_number || null,
-              staff_number: person.staff_number || null,
-            })
-            .eq("organization_id", parsed.organization_id)
-            .eq("user_id", userId);
-          if (personError) throw personError;
-        } else {
-          const initialStatus = invited ? "invited" : "active";
-          const { error: personError } = await sc
-            .from("university_people")
-            .insert({
-              organization_id: parsed.organization_id,
-              user_id: userId,
-              university_role: person.role,
-              display_name: person.display_name,
-              student_number: person.student_number || null,
-              staff_number: person.staff_number || null,
-              status: initialStatus,
-            });
-          if (personError) throw personError;
-          peopleStatusByUser.set(userId, initialStatus);
-        }
-
-        results.push({ email, ok: true, user_id: userId, invited });
+        resolved.push({ index, email, user_id: userId, invited, person });
       } catch (error) {
-        results.push({
+        resultSlots[index] = {
           email,
           ok: false,
-          error: error instanceof Error ? error.message : "Provisioning failed",
-        });
+          error: error instanceof Error ? error.message : "Invitation failed",
+        };
       }
     }
 
+    if (resolved.length > 0) {
+      const rosterPayload = resolved.map((entry) => ({
+        user_id: entry.user_id,
+        university_role: entry.person.role,
+        display_name: entry.person.display_name,
+        student_number: entry.person.student_number ?? null,
+        staff_number: entry.person.staff_number ?? null,
+        initial_status: entry.invited ? "invited" : "active",
+      }));
+
+      const { data: provisionRows, error: provisionError } = await sc.rpc(
+        "provision_university_roster_batch",
+        {
+          _organization_id: parsed.organization_id,
+          _actor_id: auth.userId,
+          _people: rosterPayload,
+        },
+      );
+
+      if (provisionError) {
+        for (const entry of resolved) {
+          resultSlots[entry.index] = {
+            email: entry.email,
+            ok: false,
+            user_id: entry.user_id,
+            invited: entry.invited,
+            error: provisionError.message,
+          };
+        }
+      } else {
+        const provisionByUser = new Map(
+          (provisionRows || []).map((row) => [String(row.user_id), row]),
+        );
+        for (const entry of resolved) {
+          const row = provisionByUser.get(entry.user_id);
+          resultSlots[entry.index] = {
+            email: entry.email,
+            ok: Boolean(row?.ok),
+            user_id: entry.user_id,
+            invited: entry.invited,
+            error: row?.ok ? undefined : (row?.error_message || "Provisioning failed"),
+          };
+        }
+      }
+    }
+
+    const results = resultSlots.filter((result): result is ProvisionResult => result !== null);
     const succeeded = results.filter((result) => result.ok).length;
     const invited = results.filter((result) => result.ok && result.invited).length;
     const failed = results.length - succeeded;
