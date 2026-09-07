@@ -1,0 +1,84 @@
+name: Interactive Voice Security
+
+on:
+  pull_request:
+    paths:
+      - "src/components/reader/VoiceConversation.tsx"
+      - "supabase/config.toml"
+      - "supabase/functions/_shared/interactive-voice-gate.ts"
+      - "supabase/functions/_shared/interactive-voice-gate_test.ts"
+      - "supabase/functions/voice-stt/**"
+      - "supabase/functions/voice-tts/**"
+      - "supabase/functions/voice-conversation/**"
+      - "supabase/migrations/**"
+      - "scripts/test-interactive-voice-db-security.sql"
+      - ".github/workflows/interactive-voice-security.yml"
+  push:
+    branches: [main]
+    paths:
+      - "src/components/reader/VoiceConversation.tsx"
+      - "supabase/config.toml"
+      - "supabase/functions/_shared/interactive-voice-gate.ts"
+      - "supabase/functions/_shared/interactive-voice-gate_test.ts"
+      - "supabase/functions/voice-stt/**"
+      - "supabase/functions/voice-tts/**"
+      - "supabase/functions/voice-conversation/**"
+      - "supabase/migrations/**"
+      - "scripts/test-interactive-voice-db-security.sql"
+      - ".github/workflows/interactive-voice-security.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: interactive-voice-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DENO_VERSION: 2.9.6
+  SUPABASE_CLI_VERSION: 2.111.0
+
+jobs:
+  edge-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+      - name: Type-check interactive voice functions
+        run: |
+          deno check supabase/functions/voice-stt/index.ts
+          deno check supabase/functions/voice-tts/index.ts
+          deno check supabase/functions/voice-conversation/index.ts
+      - name: Test interactive voice quota calculations
+        run: deno test supabase/functions/_shared/interactive-voice-gate_test.ts
+      - name: Require gateway JWT verification for paid voice endpoints
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          text = Path('supabase/config.toml').read_text()
+          for fn in ('voice-stt', 'voice-tts', 'voice-conversation'):
+              block = f'[functions.{fn}]\nverify_jwt = true'
+              if block not in text:
+                  raise SystemExit(f'{fn} must set verify_jwt = true')
+          PY
+
+  database-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@v2.1.1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+          github-token: ${{ github.token }}
+      - name: Apply every migration to a fresh local Supabase database
+        run: supabase db start
+      - name: Assert interactive voice quota privileges and RLS
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-interactive-voice-db-security.sql
+      - name: Fail on PostgreSQL function and schema errors
+        run: supabase db lint --local --schema public --level error --fail-on error
