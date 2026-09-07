@@ -15,6 +15,17 @@ const userTwoPassword = required("E2E_USER_TWO_PASSWORD");
 const lifecycleTitle = "GA E2E Lifecycle Book";
 
 async function loginThroughUi(page: Page, email: string, password: string) {
+  // Keep first-run UX overlays from obscuring the lifecycle surface under test.
+  // These keys only suppress client onboarding/cookie chrome; auth, data and RLS
+  // remain fully real against the disposable Supabase stack.
+  await page.addInitScript(() => {
+    localStorage.setItem("sl_onboarding_completed", "true");
+    localStorage.setItem(
+      "cookie-consent",
+      JSON.stringify({ essential: true, analytics: false, marketing: false }),
+    );
+  });
+
   await page.goto("/auth");
   await page.locator("#email").fill(email);
   await page.locator("#password").fill(password);
@@ -67,6 +78,35 @@ async function highlightRows(request: APIRequestContext, token: string) {
   return (await response.json()) as Array<{ id: string; chapter_id: string; excerpt: string; note: string | null }>;
 }
 
+async function profileRows(request: APIRequestContext, token: string) {
+  const response = await request.get(`${supabaseUrl}/rest/v1/profiles?select=id,full_name&order=created_at.asc`, {
+    headers: { apikey: anonKey, Authorization: `Bearer ${token}` },
+  });
+  expect(response.status(), await response.text()).toBe(200);
+  return (await response.json()) as Array<{ id: string; full_name: string | null }>;
+}
+
+test("published lifecycle chapter remains anonymously readable without exposing library rows", async ({ request }) => {
+  const book = await lifecycleBook(request);
+
+  const chapterResponse = await request.get(
+    `${supabaseUrl}/rest/v1/chapters?select=title,content&book_id=eq.${book.id}&chapter_number=eq.1`,
+    { headers: { apikey: anonKey } },
+  );
+  expect(chapterResponse.status(), await chapterResponse.text()).toBe(200);
+  const chapters = (await chapterResponse.json()) as Array<{ title: string; content: string | null }>;
+  expect(chapters).toHaveLength(1);
+  expect(chapters[0].title).toBe("The Reader Contract");
+  expect(chapters[0].content).toContain("real authenticated reader can open this chapter");
+
+  const anonymousLibraryResponse = await request.get(
+    `${supabaseUrl}/rest/v1/user_library?select=id,book_id`,
+    { headers: { apikey: anonKey } },
+  );
+  expect(anonymousLibraryResponse.status(), await anonymousLibraryResponse.text()).toBe(200);
+  expect(await anonymousLibraryResponse.json()).toEqual([]);
+});
+
 test("real library renders the authenticated reader's saved book and routes to its detail page", async ({ page }) => {
   await loginThroughUi(page, userOneEmail, userOnePassword);
   await page.goto("/library");
@@ -95,10 +135,16 @@ test("real reader loads generated chapter content and remains readable after rel
   await expect(page.getByText(/real authenticated reader can open this chapter/i)).toBeVisible({ timeout: 15_000 });
 });
 
-test("real library and highlight ownership remain isolated between two authenticated users", async ({ request }) => {
+test("real profile, library and highlight ownership remain isolated between two authenticated users", async ({ request }) => {
   const book = await lifecycleBook(request);
   const tokenOne = await accessTokenFor(request, userOneEmail, userOnePassword);
   const tokenTwo = await accessTokenFor(request, userTwoEmail, userTwoPassword);
+
+  const oneProfiles = await profileRows(request, tokenOne);
+  const twoProfiles = await profileRows(request, tokenTwo);
+  expect(oneProfiles).toHaveLength(1);
+  expect(twoProfiles).toHaveLength(1);
+  expect(oneProfiles[0].id).not.toBe(twoProfiles[0].id);
 
   const oneLibrary = await libraryRows(request, tokenOne);
   const twoLibrary = await libraryRows(request, tokenTwo);
@@ -128,6 +174,9 @@ test("real library and highlight ownership remain isolated between two authentic
     },
   );
   expect([200, 204]).toContain(deniedCrossUserUpdate.status());
+  if (deniedCrossUserUpdate.status() === 200) {
+    expect(await deniedCrossUserUpdate.json()).toEqual([]);
+  }
 
   const oneLibraryAfter = await libraryRows(request, tokenOne);
   expect(oneLibraryAfter).toHaveLength(1);
