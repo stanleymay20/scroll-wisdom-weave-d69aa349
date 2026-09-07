@@ -5,12 +5,14 @@ import { extname, join, relative } from "node:path";
 const ROOTS = ["src", "supabase/functions"];
 const TEXT_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
-// Build forbidden cross-product markers from parts so this policy test does
-// not contain the very token it is responsible for detecting.
+// Build forbidden markers from parts so this policy test does not contain the
+// exact tokens it is responsible for detecting.
 const FORBIDDEN_MARKERS = [
   ["Scroll", "University"].join(""),
   ["scroll", "university"].join("-"),
   ["university", ""].join("_"),
+  ["REVIEWER", "EMAILS"].join("_"),
+  ["reviewer", "@scrolllibrary.org"].join(""),
 ];
 
 function walk(dir: string): string[] {
@@ -20,8 +22,8 @@ function walk(dir: string): string[] {
   });
 }
 
-describe("ScrollLibrary product boundary", () => {
-  it("contains no active cross-product application or Edge Function identifiers", () => {
+describe("ScrollLibrary product and entitlement boundary", () => {
+  it("contains no active cross-product or hard-coded reviewer entitlement identifiers", () => {
     const violations: string[] = [];
 
     for (const root of ROOTS) {
@@ -35,6 +37,6 @@ describe("ScrollLibrary product boundary", () => {
       }
     }
 
-    expect(violations, `Cross-product identifiers found:\n${violations.join("\n")}`).toEqual([]);
+    expect(violations, `Boundary violations found:\n${violations.join("\n")}`).toEqual([]);
   });
 });
