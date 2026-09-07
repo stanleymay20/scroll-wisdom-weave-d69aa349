@@ -1,21 +1,19 @@
 -- Restore the table-level privileges required by the existing RLS-protected
 -- ScrollLibrary reader and library flows.
 --
--- PostgreSQL table privileges are evaluated before row-level security. The
--- tracked schema has owner-scoped RLS policies for profiles, user_library and
--- highlights, but a fresh replay did not grant the browser roles the table
--- privileges needed to reach those policies. This caused legitimate requests
--- to fail with 42501 before RLS was evaluated and also broke the chapter policy
--- that checks user_library membership.
+-- PostgreSQL table privileges are evaluated before row-level security. A fresh
+-- repository replay exposed several tables whose owner-scoped RLS policies were
+-- correct, but whose browser roles could not reach those policies at all. The
+-- result was PostgREST 42501 failures inside otherwise legitimate reader flows.
 --
--- These grants do NOT bypass RLS. They only permit the role to execute the
--- operations already constrained by existing row policies.
+-- These grants do NOT bypass RLS. They only permit the browser roles to execute
+-- operations already constrained by the existing row policies.
 
 GRANT SELECT ON TABLE public.profiles TO authenticated;
 
 -- Authenticated users need normal library CRUD. Anonymous SELECT is required
--- only so the public chapter policy can safely evaluate its user_library branch;
--- auth.uid() is NULL for anon, so the existing RLS owner policy exposes no rows.
+-- only so chapter RLS expressions that reference user_library can be evaluated;
+-- auth.uid() is NULL for anon, so the existing owner policy exposes zero rows.
 GRANT SELECT ON TABLE public.user_library TO anon;
 GRANT SELECT, INSERT, UPDATE, DELETE
   ON TABLE public.user_library
@@ -25,8 +23,34 @@ GRANT SELECT, INSERT, DELETE
   ON TABLE public.highlights
   TO authenticated;
 
+-- A chapter SELECT policy checks accepted collaboration membership. Without
+-- SELECT on the referenced table, PostgreSQL rejects the chapter query before
+-- it can evaluate the other published/owner branches of the RLS policy.
+GRANT SELECT ON TABLE public.book_collaborators TO authenticated;
+
+-- Reader runtime persistence. Each grant mirrors an already-existing RLS policy
+-- and the operations issued by the reader hooks; no extra delete/admin authority
+-- is introduced.
+GRANT SELECT, INSERT, UPDATE ON TABLE public.reading_sessions TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.reading_goals TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.user_gamification TO authenticated;
+GRANT SELECT, INSERT ON TABLE public.quiz_attempts TO authenticated;
+GRANT SELECT, INSERT, UPDATE ON TABLE public.competency_progress TO authenticated;
+GRANT INSERT ON TABLE public.pmf_events TO authenticated;
+
 -- Service execution retains full access explicitly.
-GRANT ALL ON TABLE public.profiles, public.user_library, public.highlights TO service_role;
+GRANT ALL ON TABLE
+  public.profiles,
+  public.user_library,
+  public.highlights,
+  public.book_collaborators,
+  public.reading_sessions,
+  public.reading_goals,
+  public.user_gamification,
+  public.quiz_attempts,
+  public.competency_progress,
+  public.pmf_events
+TO service_role;
 
 DO $$
 BEGIN
@@ -49,6 +73,43 @@ BEGIN
      OR NOT has_table_privilege('authenticated', 'public.highlights', 'INSERT')
      OR NOT has_table_privilege('authenticated', 'public.highlights', 'DELETE') THEN
     RAISE EXCEPTION 'authenticated highlight privileges are incomplete';
+  END IF;
+
+  IF NOT has_table_privilege('authenticated', 'public.book_collaborators', 'SELECT') THEN
+    RAISE EXCEPTION 'authenticated chapter RLS cannot evaluate book_collaborators';
+  END IF;
+
+  IF NOT has_table_privilege('authenticated', 'public.reading_sessions', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.reading_sessions', 'INSERT')
+     OR NOT has_table_privilege('authenticated', 'public.reading_sessions', 'UPDATE') THEN
+    RAISE EXCEPTION 'authenticated reading_sessions privileges are incomplete';
+  END IF;
+
+  IF NOT has_table_privilege('authenticated', 'public.reading_goals', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.reading_goals', 'INSERT')
+     OR NOT has_table_privilege('authenticated', 'public.reading_goals', 'UPDATE') THEN
+    RAISE EXCEPTION 'authenticated reading_goals privileges are incomplete';
+  END IF;
+
+  IF NOT has_table_privilege('authenticated', 'public.user_gamification', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.user_gamification', 'INSERT')
+     OR NOT has_table_privilege('authenticated', 'public.user_gamification', 'UPDATE') THEN
+    RAISE EXCEPTION 'authenticated user_gamification privileges are incomplete';
+  END IF;
+
+  IF NOT has_table_privilege('authenticated', 'public.quiz_attempts', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.quiz_attempts', 'INSERT') THEN
+    RAISE EXCEPTION 'authenticated quiz_attempts privileges are incomplete';
+  END IF;
+
+  IF NOT has_table_privilege('authenticated', 'public.competency_progress', 'SELECT')
+     OR NOT has_table_privilege('authenticated', 'public.competency_progress', 'INSERT')
+     OR NOT has_table_privilege('authenticated', 'public.competency_progress', 'UPDATE') THEN
+    RAISE EXCEPTION 'authenticated competency_progress privileges are incomplete';
+  END IF;
+
+  IF NOT has_table_privilege('authenticated', 'public.pmf_events', 'INSERT') THEN
+    RAISE EXCEPTION 'authenticated must be able to INSERT own PMF events through RLS';
   END IF;
 END
 $$;
