@@ -36,6 +36,10 @@ export function productFormForExport(format: string): PublicationProductForm | n
   }
 }
 
+export function identifierStrategyRequiresIsbn(strategy: unknown): boolean {
+  return strategy === "own_isbn" || strategy === "platform_isbn";
+}
+
 export function isbnForPublicationSnapshot(
   snapshot: Record<string, unknown> | null | undefined,
   exportFormat: string,
@@ -43,7 +47,8 @@ export function isbnForPublicationSnapshot(
   if (!snapshot) return null;
   const form = productFormForExport(exportFormat);
   const byFormat = snapshot.isbn_by_format;
-  if (form && byFormat && typeof byFormat === "object" && !Array.isArray(byFormat)) {
+  const hasByFormat = !!byFormat && typeof byFormat === "object" && !Array.isArray(byFormat);
+  if (form && hasByFormat) {
     const candidate = (byFormat as Record<string, unknown>)[form];
     if (typeof candidate === "string" && isValidIsbn13(candidate)) return normalizeIsbn13(candidate);
   }
@@ -61,9 +66,19 @@ export function isbnForPublicationSnapshot(
     if (match?.value) return normalizeIsbn13(match.value);
   }
 
-  // Legacy compatibility is intentionally print-only. Never reuse a historical
-  // single ISBN for EPUB/PDF because separately sold product forms need their own.
-  if (exportFormat === "kdp-pdf") {
+  // A current format-aware snapshot must never fall back from paperback to a
+  // hardcover compatibility ISBN. KDP's current print bundle is a paperback
+  // product, so an own/platform ISBN strategy requires an explicit paperback
+  // assignment. KDP-free remains intentionally null because Amazon allocates it.
+  if (exportFormat === "kdp-pdf" && identifierStrategyRequiresIsbn(snapshot.print_identifier_strategy)) {
+    throw new Error("KDP_PAPERBACK_ISBN_REQUIRED");
+  }
+
+  // Legacy compatibility is print-only and is permitted only for historical
+  // snapshots that pre-date format-aware identifiers. This prevents a current
+  // hardcover ISBN stored in the legacy compatibility field from leaking into a
+  // paperback export.
+  if (exportFormat === "kdp-pdf" && !hasByFormat && identifiers.length === 0) {
     const legacy = typeof snapshot.isbn_13 === "string"
       ? snapshot.isbn_13
       : typeof snapshot.isbn === "string" ? snapshot.isbn : null;
