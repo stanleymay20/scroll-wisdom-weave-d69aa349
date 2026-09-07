@@ -1,6 +1,6 @@
 import { useSubscription } from '@/contexts/SubscriptionContext';
 import { useEntitlements } from './useEntitlements';
-import { SUBSCRIPTION_TIERS, SubscriptionTier, hasElevenLabsTTS } from '@/lib/subscription';
+import { SUBSCRIPTION_TIERS, SubscriptionTier, canExportFormat } from '@/lib/subscription';
 import { LAUNCH_MODE, LAUNCH_MODE_CONFIG } from '@/lib/config';
 
 export type Feature = 
@@ -26,30 +26,20 @@ export function useFeatureAccess() {
   const entitlements = useEntitlements();
 
   const hasFeature = (feature: Feature): FeatureAccessResult => {
-    // ABSOLUTE PRIORITY: Admin → unrestricted access to everything
-    if (entitlements.isAdmin) {
+    // Only an actual administrator or explicit trial/test bypass can ignore
+    // individual capability/tier limits. Paid status alone never does.
+    if (entitlements.isAdmin || entitlements.bypassAllLimits) {
       return { hasAccess: true };
     }
 
-    // ABSOLUTE PRIORITY: Prophet tier → unrestricted access to all features
-    if (entitlements.isProphet) {
-      return { hasAccess: true };
-    }
-
-    // FAIL-SAFE: If paid user, be generous with access
     const tierConfig = SUBSCRIPTION_TIERS[tier];
 
     switch (feature) {
       case 'generateBooks':
-        // In launch mode, free tier can generate with limits
         if (LAUNCH_MODE && tier === 'free') {
           return { hasAccess: true };
         }
-        // Paid users always can generate
-        if (entitlements.isPaid) {
-          return { hasAccess: true };
-        }
-        if (!tierConfig.features.canGenerateBooks) {
+        if (!entitlements.canGenerateBooks) {
           return { 
             hasAccess: false, 
             reason: 'Book generation requires a paid subscription',
@@ -59,11 +49,7 @@ export function useFeatureAccess() {
         return { hasAccess: true };
 
       case 'aiCovers':
-        // All paid users get AI covers
-        if (entitlements.isPaid) {
-          return { hasAccess: true };
-        }
-        if (!tierConfig.features.aiCovers) {
+        if (!entitlements.canUseAiCovers) {
           return { 
             hasAccess: false, 
             reason: 'AI cover generation requires Student tier or higher',
@@ -73,11 +59,7 @@ export function useFeatureAccess() {
         return { hasAccess: true };
 
       case 'tts':
-        // All paid users get TTS
-        if (entitlements.isPaid) {
-          return { hasAccess: true };
-        }
-        if (tierConfig.features.ttsMinutes <= 0) {
+        if (!entitlements.canUseTTS) {
           return { 
             hasAccess: false, 
             reason: 'Text-to-speech requires Student tier or higher',
@@ -92,7 +74,7 @@ export function useFeatureAccess() {
         }
         return { 
           hasAccess: false, 
-          reason: 'ElevenLabs TTS requires Prophet tier',
+          reason: 'ElevenLabs TTS requires Institutional tier',
           upgradeRequired: 'prophet_tier'
         };
 
@@ -102,60 +84,60 @@ export function useFeatureAccess() {
         }
         return { 
           hasAccess: false, 
-          reason: 'Batch generation requires Prophet tier',
+          reason: 'Batch generation requires Institutional tier',
           upgradeRequired: 'prophet_tier'
         };
 
       case 'commercialRights':
-        // All paid users get commercial rights
-        if (entitlements.isPaid) {
+        if (entitlements.hasCommercialRights) {
           return { hasAccess: true };
         }
         return { 
-          hasAccess: false, 
+          hasAccess: false,
           reason: 'Commercial publishing rights require Premium tier or higher',
           upgradeRequired: 'premium'
         };
 
       case 'exportPdf':
-        // PDF is available to ALL users (free tier included)
-        return { hasAccess: true };
+        return { hasAccess: entitlements.canExport || entitlements.canDownload };
 
       case 'exportEpub':
-      case 'exportDocx':
-        // EPUB/DOCX require Student tier or higher
-        if (entitlements.isPaid) {
+        if (entitlements.canExport && canExportFormat(tier, 'epub')) {
           return { hasAccess: true };
         }
         return { 
-          hasAccess: false, 
-          reason: `${feature === 'exportDocx' ? 'DOCX' : 'EPUB'} export requires Student plan or higher`,
+          hasAccess: false,
+          reason: 'EPUB export requires Student plan or higher',
+          upgradeRequired: 'student'
+        };
+
+      case 'exportDocx':
+        if (entitlements.canExport && canExportFormat(tier, 'docx')) {
+          return { hasAccess: true };
+        }
+        return { 
+          hasAccess: false,
+          reason: 'DOCX export requires Student plan or higher',
           upgradeRequired: 'student'
         };
 
       case 'exportKdpPdf':
-        // KDP-PDF requires Premium tier
-        if (entitlements.isPaid && (tier === 'premium' || tier === 'prophet_tier')) {
+        if (entitlements.canExport && canExportFormat(tier, 'kdp-pdf')) {
           return { hasAccess: true };
         }
         return { 
-          hasAccess: false, 
+          hasAccess: false,
           reason: 'KDP PDF export requires Premium plan or higher',
           upgradeRequired: 'premium'
         };
 
       default:
-        // FAIL-SAFE: If paid, grant access
-        if (entitlements.isPaid) {
-          return { hasAccess: true };
-        }
         return { hasAccess: false, reason: 'Unknown feature' };
     }
   };
 
   const getMaxWordCount = (): number => {
-    // Admin and Prophet get max
-    if (entitlements.isAdmin || entitlements.isProphet) {
+    if (entitlements.isAdmin || entitlements.bypassAllLimits) {
       return 6000;
     }
     
@@ -167,8 +149,7 @@ export function useFeatureAccess() {
   };
 
   const getTTSMinutes = (): number => {
-    // Admin and Prophet get unlimited
-    if (entitlements.isAdmin || entitlements.isProphet) {
+    if (entitlements.isAdmin || entitlements.bypassAllLimits) {
       return -1;
     }
     return SUBSCRIPTION_TIERS[tier].features.ttsMinutes;
