@@ -73,6 +73,7 @@ export interface UniversityOffering {
   term_id: string;
   cohort_id: string | null;
   section_code: string;
+  capacity: number | null;
   enrolment_status: string;
 }
 
@@ -81,6 +82,7 @@ export interface UniversityAssignment {
   organization_id: string;
   offering_id: string;
   title: string;
+  instructions: string;
   assignment_type: string;
   due_at: string | null;
   max_points: number;
