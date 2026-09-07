@@ -621,15 +621,22 @@ BEGIN
       RAISE EXCEPTION 'PUBLICATION_SNAPSHOT_INVALID_ISBN' USING ERRCODE='23514';
     END IF;
 
-    SELECT bia.*, ii.* INTO v_assignment, v_inventory
+    SELECT ii.* INTO v_inventory
+    FROM public.isbn_inventory AS ii
+    WHERE ii.isbn13 = v_isbn
+    FOR UPDATE;
+    IF NOT FOUND THEN
+      RAISE EXCEPTION 'PUBLICATION_SNAPSHOT_ISBN_ASSIGNMENT_MISSING:%', v_isbn USING ERRCODE='23514';
+    END IF;
+
+    SELECT bia.* INTO v_assignment
     FROM public.book_isbn_assignments AS bia
-    JOIN public.isbn_inventory AS ii ON ii.id = bia.isbn_id
     WHERE bia.book_id = p_book_id
+      AND bia.isbn_id = v_inventory.id
       AND bia.product_form = v_identifier->>'product_form'
       AND bia.language = v_identifier->>'language'
       AND bia.edition_label = v_identifier->>'edition_label'
-      AND ii.isbn13 = v_isbn
-    FOR UPDATE OF bia, ii;
+    FOR UPDATE;
     IF NOT FOUND THEN
       RAISE EXCEPTION 'PUBLICATION_SNAPSHOT_ISBN_ASSIGNMENT_MISSING:%', v_isbn USING ERRCODE='23514';
     END IF;
