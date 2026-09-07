@@ -702,6 +702,11 @@ serve(async (req) => {
     }
     kdpPrintProductForm = resolved.productForm;
   }
+  const bundleOptions: Record<string, unknown> = kdpPrintProductForm
+    ? { ...(parsed.options ?? {}), print_product_form: kdpPrintProductForm }
+    : { ...(parsed.options ?? {}) };
+
+
 
 
   try {
