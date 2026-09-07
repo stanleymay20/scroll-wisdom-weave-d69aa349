@@ -5,6 +5,7 @@ import {
   buildLtiToolRedirect,
   parseLtiClaims,
   randomUrlSafe,
+  remoteHttpsUrl,
   sha256Hex,
 } from "../_shared/university-lti.ts";
 
@@ -42,7 +43,7 @@ serve(async (req) => {
     if (connectionError) throw connectionError;
     if (!connection) return badRequest("LTI registration is unavailable.");
 
-    const jwks = createRemoteJWKSet(new URL(connection.jwks_url));
+    const jwks = createRemoteJWKSet(remoteHttpsUrl(connection.jwks_url, "LTI JWKS URL"));
     const { payload } = await jwtVerify(idToken, jwks, {
       issuer: connection.issuer,
       audience: connection.client_id,
