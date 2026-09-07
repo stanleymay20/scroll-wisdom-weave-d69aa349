@@ -42,6 +42,7 @@ import {
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
 import { buildKdpPrintCoverPdf, getPdfPageCount, type KdpPaperType, type KdpTrimSize } from "../_shared/kdp-print-cover.ts";
 import { requireKdpFrontCoverResolution, type KdpCoverResolutionAssessment } from "../_shared/kdp-cover-resolution.ts";
+import { resolveKdpPrintProductForm } from "../_shared/kdp-print-product-form.ts";
 
 const EXTERNAL_BUNDLES = new Set<BundlePlatform>(["gumroad", "shopify", "substack", "patreon", "etsy"]);
 
@@ -689,6 +690,19 @@ serve(async (req) => {
   if (parsed instanceof Response) return parsed;
 
   const corr = correlationId(req);
+
+  // KDP print bundles are paperback-only (paperback interior + paperback cover
+  // geometry). Resolve the contract before any job row is created so an
+  // unsupported product form never reaches the queue or gets coerced.
+  let kdpPrintProductForm: "paperback" | null = null;
+  if (parsed.bundle_type === "kdp") {
+    const resolved = resolveKdpPrintProductForm((parsed.options ?? {}).print_product_form);
+    if (!resolved.ok) {
+      return badRequest(resolved.message, { code: resolved.code, correlation_id: corr });
+    }
+    kdpPrintProductForm = resolved.productForm;
+  }
+
 
   try {
     const sc = serviceClient();
