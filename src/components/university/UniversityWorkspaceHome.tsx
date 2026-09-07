@@ -133,7 +133,7 @@ export default function UniversityWorkspaceHome() {
 
   const roleLabel = formatUniversityRole(universityRole || activeRole || 'member');
   const activePeople = people.filter((person) => person.status !== 'inactive').length;
-  const currentOfferings = offerings.filter((offering) => offering.status !== 'cancelled').length;
+  const currentOfferings = offerings.filter((offering) => offering.enrolment_status !== 'cancelled').length;
 
   if (!activeOrgId || !activeOrg) {
     return (
@@ -177,7 +177,7 @@ export default function UniversityWorkspaceHome() {
               </div>
             </div>
             <div className="flex flex-wrap gap-2">
-              <Button asChild variant="outline"><Link to="/university?view=about">About ScrollUniversity</Link></Button>
+              <Button asChild variant="outline"><Link to="/university/about">About ScrollUniversity</Link></Button>
               <Button asChild><Link to="/university?view=operations">Open academic operations<ArrowRight className="ml-2 h-4 w-4" /></Link></Button>
             </div>
           </div>
