@@ -7,6 +7,7 @@ import {
   LTI_ROLES_CLAIM,
   LTI_VERSION_CLAIM,
   parseLtiClaims,
+  remoteHttpsUrl,
   sha256Hex,
 } from "./university-lti.ts";
 
@@ -53,6 +54,15 @@ Deno.test("LTI claims require deployment, version, role and subject", () => {
     [LTI_VERSION_CLAIM]: "1.3.0",
     [LTI_ROLES_CLAIM]: ["Learner"],
   }, "deployment-1"));
+});
+
+Deno.test("LTI remote endpoints require public HTTPS hosts", () => {
+  assertEquals(remoteHttpsUrl("https://lms.example.edu/jwks", "JWKS").hostname, "lms.example.edu");
+  assertThrows(() => remoteHttpsUrl("http://lms.example.edu/jwks", "JWKS"));
+  assertThrows(() => remoteHttpsUrl("https://127.0.0.1/jwks", "JWKS"));
+  assertThrows(() => remoteHttpsUrl("https://169.254.169.254/latest/meta-data", "JWKS"));
+  assertThrows(() => remoteHttpsUrl("https://10.0.0.5/jwks", "JWKS"));
+  assertThrows(() => remoteHttpsUrl("https://user:pass@lms.example.edu/jwks", "JWKS"));
 });
 
 Deno.test("LTI tool redirect rejects insecure remote URLs", () => {
