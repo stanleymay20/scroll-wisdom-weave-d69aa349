@@ -318,74 +318,52 @@ Deno.serve(async (req) => {
       frozen_at: new Date().toISOString(),
     };
 
-    // Compute SHA-256 over canonical snapshot JSON.
+    // Compute SHA-256 over canonical snapshot JSON. This remains the immutable
+    // artifact hash; the database derives a separate retry key that excludes
+    // only the newly-generated scroll edition id and freeze timestamp.
     const enc = new TextEncoder().encode(JSON.stringify(snapshot));
     const hashBuf = await crypto.subtle.digest("SHA-256", enc);
     const contentHash = Array.from(new Uint8Array(hashBuf)).map((b) => b.toString(16).padStart(2, "0")).join("");
+    const publicationLanguage = publishingProfile.publication_language || body.language;
 
-    // Determine next semver. Phase 1: increment minor on each publish.
-    const { data: latest } = await sc
-      .from("publications")
-      .select("semver_major, semver_minor, semver_patch")
-      .eq("work_id", body.work_id)
-      .order("semver_major", { ascending: false })
-      .order("semver_minor", { ascending: false })
-      .order("semver_patch", { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    const major = latest?.semver_major ?? 1;
-    const minor = (latest?.semver_minor ?? -1) + 1;
-    const patch = 0;
-    const version = `${major}.${minor}.${patch}`;
-
-    // Two-phase publication: mint a non-public approved immutable candidate.
-    // The DB finalizer performs ISBN locking, product identity materialization,
-    // certificate creation, publish transition, and current-publication pointer
-    // updates in ONE transaction. Failure cannot leave a partially published row.
-    const { data: pub, error: pubErr } = await sc
-      .from("publications")
-      .insert({
-        work_id: body.work_id,
-        book_id: book.id,
-        scroll_edition_id: scrollEditionId,
-        edition_kind: body.edition_kind,
-        language: publishingProfile.publication_language || body.language,
-        version,
-        semver_major: major, semver_minor: minor, semver_patch: patch,
-        status: "approved",
-        integrity_level: PUBLISHED_INTEGRITY,
-        snapshot,
-        design_snapshot,
-        content_hash: contentHash,
-        published_at: null,
-        published_by: auth.userId,
-        notes: body.notes ?? null,
-      })
-      .select("id, version, content_hash, scroll_edition_id")
-      .single();
-    if (pubErr) throw pubErr;
-
-    const { data: finalizationData, error: finalizeErr } = await sc.rpc("finalize_publication_release", {
-      p_publication_id: pub.id,
+    // Database-owned minting serializes version allocation, re-checks current
+    // trust/publishing identity inside the transaction, finalizes ISBN locks and
+    // certification atomically, and returns the original Publication on a safe
+    // retry of the same frozen publishing state.
+    const { data: mintData, error: mintErr } = await sc.rpc("mint_verified_publication_release", {
       p_user_id: auth.userId,
+      p_work_id: body.work_id,
+      p_book_id: book.id,
+      p_scroll_edition_id: scrollEditionId,
+      p_edition_kind: body.edition_kind,
+      p_language: publicationLanguage,
+      p_snapshot: snapshot,
+      p_design_snapshot: design_snapshot,
+      p_content_hash: contentHash,
+      p_notes: body.notes ?? null,
     });
-    if (finalizeErr) return serverError(finalizeErr);
+    if (mintErr) return serverError(mintErr);
 
-    const finalization = (finalizationData ?? {}) as Record<string, unknown>;
-    const certificateId = typeof finalization.certificate_id === "string" ? finalization.certificate_id : null;
-    const publishedAt = typeof finalization.published_at === "string" ? finalization.published_at : null;
-    const scrollIdentity = finalization.scroll_identity ?? null;
-    if (!certificateId || !publishedAt) {
-      return serverError(new Error("PUBLICATION_FINALIZATION_INCOMPLETE"));
+    const mint = (mintData ?? {}) as Record<string, unknown>;
+    const publicationId = typeof mint.publication_id === "string" ? mint.publication_id : null;
+    const certificateId = typeof mint.certificate_id === "string" ? mint.certificate_id : null;
+    const version = typeof mint.version === "string" ? mint.version : null;
+    const publishedAt = typeof mint.published_at === "string" ? mint.published_at : null;
+    const publishedContentHash = typeof mint.content_hash === "string" ? mint.content_hash : null;
+    const publishedScrollEditionId = typeof mint.scroll_edition_id === "string" ? mint.scroll_edition_id : null;
+    const scrollIdentity = mint.scroll_identity ?? null;
+    const idempotentRetry = mint.idempotent === true;
+    if (!publicationId || !certificateId || !version || !publishedAt || !publishedContentHash || !publishedScrollEditionId) {
+      return serverError(new Error("PUBLICATION_MINT_INCOMPLETE"));
     }
 
     await logAuthorshipEvent(sc, {
-      workId: body.work_id, bookId: book.id, publicationId: pub.id,
+      workId: body.work_id, bookId: book.id, publicationId,
       userId: auth.userId, action: "publish", allowed: true,
       metadata: {
         version,
         integrity_level: PUBLISHED_INTEGRITY,
-        content_hash: contentHash,
+        content_hash: publishedContentHash,
         publisher_mode: publishingProfile.publisher_mode,
         identifier_product_forms: identifiers.map((i) => i.product_form),
         isbn_provenance: identifiers.map((i) => ({
@@ -394,20 +372,22 @@ Deno.serve(async (req) => {
           reference: i.provenance_reference,
         })),
         scroll_work_id: work.scroll_work_id,
-        scroll_edition_id: pub.scroll_edition_id,
+        scroll_edition_id: publishedScrollEditionId,
         scroll_products: scrollIdentity,
+        idempotent_retry: idempotentRetry,
       },
     });
 
     return json({
-      publication_id: pub.id,
+      publication_id: publicationId,
       certificate_id: certificateId,
       version,
-      content_hash: contentHash,
+      content_hash: publishedContentHash,
       published_at: publishedAt,
       publisher: publisherSnapshot,
       scroll_identity: scrollIdentity,
       identifiers,
+      idempotent: idempotentRetry,
     });
   } catch (e) {
     return serverError(e);
