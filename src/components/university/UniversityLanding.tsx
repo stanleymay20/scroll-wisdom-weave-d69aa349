@@ -39,7 +39,7 @@ export default function UniversityLanding() {
     <main className="min-h-screen bg-background text-foreground">
       <header className="sticky top-0 z-50 border-b bg-background/90 backdrop-blur-xl">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4">
-          <Link to="/university?view=about" className="flex items-center gap-2 font-semibold tracking-tight">
+          <Link to="/university/about" className="flex items-center gap-2 font-semibold tracking-tight">
             <span className="grid h-9 w-9 place-items-center rounded-xl bg-primary text-primary-foreground"><GraduationCap className="h-5 w-5" /></span>
             <span>ScrollUniversity</span>
           </Link>
@@ -76,9 +76,9 @@ export default function UniversityLanding() {
 
           <div className="relative">
             <div className="absolute -inset-8 -z-10 rounded-[2.5rem] bg-primary/5 blur-3xl" />
-            <Card className="overflow-hidden border-border/70 shadow-2xl shadow-black/5">
+            <Card className="overflow-hidden border-border/70 shadow-2xl shadow-black/5" aria-label="Illustrative ScrollUniversity student workspace preview">
               <CardHeader className="border-b bg-muted/30">
-                <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Student workspace</p><CardTitle className="mt-1">Your academic week</CardTitle></div><Badge variant="outline">Current term</Badge></div>
+                <div className="flex items-center justify-between gap-4"><div><p className="text-xs font-medium uppercase tracking-[0.18em] text-primary">Experience preview</p><CardTitle className="mt-1">A student academic week</CardTitle></div><Badge variant="outline">Illustrative</Badge></div>
               </CardHeader>
               <CardContent className="space-y-4 p-5">
                 <div className="grid grid-cols-3 gap-3">
