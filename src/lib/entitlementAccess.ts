@@ -28,7 +28,6 @@ export interface Entitlements {
 export interface EntitlementResolutionInput {
   tier: SubscriptionTier;
   isAdmin: boolean;
-  isReviewer: boolean;
   trialActive: boolean;
   stillLoading: boolean;
 }
@@ -57,11 +56,13 @@ const TIER_PRIORITY: Record<SubscriptionTier, number> = {
  * Resolve the client capability snapshot from authenticated subscription/admin
  * inputs. This object controls UI availability only; server-authoritative
  * operations must independently authenticate and authorize every request.
+ *
+ * There are deliberately no hard-coded account/email overrides here. Review
+ * accounts must receive their real server-side plan/entitlement assignment.
  */
 export function resolveEntitlements({
   tier,
   isAdmin,
-  isReviewer,
   trialActive,
   stillLoading,
 }: EntitlementResolutionInput): Entitlements {
@@ -87,11 +88,11 @@ export function resolveEntitlements({
       canBatchGenerate: true,
       tier,
       isAdmin,
-      isProphet: true,
-      isPremium: true,
-      isStudent: true,
-      isScrollStudent: true,
-      isPaid: true,
+      isProphet,
+      isPremium,
+      isStudent,
+      isScrollStudent: isStudent,
+      isPaid,
       isTrialMode: true,
     };
   }
@@ -113,40 +114,11 @@ export function resolveEntitlements({
       canBatchGenerate: true,
       tier,
       isAdmin: true,
-      isProphet: true,
-      isPremium: true,
-      isStudent: true,
-      isScrollStudent: true,
-      isPaid: true,
-      isTrialMode: false,
-    };
-  }
-
-  if (isReviewer) {
-    // App-store reviewers need broad client feature visibility, but a reviewer
-    // account must never impersonate an administrator. Server operations still
-    // enforce their own authenticated roles/entitlements.
-    return {
-      canPublish: true,
-      canExport: true,
-      canDownload: true,
-      canGenerateBooks: true,
-      canUseAllFormats: true,
-      canExportAllFormats: true,
-      hasCommercialRights: true,
-      bypassAllLimits: true,
-      canUseAiCovers: true,
-      canUseTTS: true,
-      canUseOpenAITTS: true,
-      canUseElevenLabsTTS: true,
-      canBatchGenerate: true,
-      tier,
-      isAdmin: false,
-      isProphet: true,
-      isPremium: true,
-      isStudent: true,
-      isScrollStudent: true,
-      isPaid: true,
+      isProphet,
+      isPremium,
+      isStudent,
+      isScrollStudent: isStudent,
+      isPaid,
       isTrialMode: false,
     };
   }
@@ -160,7 +132,9 @@ export function resolveEntitlements({
       canUseAllFormats: true,
       canExportAllFormats: true,
       hasCommercialRights: true,
-      bypassAllLimits: true,
+      // Institutional is the highest paid plan, but it is still economically
+      // capped (for example 300 TTS/interactive-voice minutes per month).
+      bypassAllLimits: false,
       canUseAiCovers: true,
       canUseTTS: true,
       canUseOpenAITTS: true,
@@ -229,6 +203,8 @@ export function resolveEntitlements({
     };
   }
 
+  // This branch is defensive for future subscription adapters that may expose a
+  // non-free tier before its full entitlement payload has finished resolving.
   if (stillLoading && tier !== "free") {
     return {
       canPublish: true,
@@ -282,14 +258,14 @@ export function resolveEntitlements({
 
 /**
  * Resolve access from explicit capabilities. Paid status and compatibility
- * aliases must never override a denied capability. Only deliberate
- * administrator/institutional overrides bypass individual flags.
+ * aliases must never override a denied capability. Only deliberate admin/trial
+ * bypass modes override individual capability flags.
  */
 export function hasFeatureAccess(
   entitlements: Entitlements,
   feature: EntitlementFeature,
 ): boolean {
-  if (entitlements.isAdmin || entitlements.isProphet) {
+  if (entitlements.isAdmin || entitlements.bypassAllLimits) {
     return true;
   }
 
@@ -297,8 +273,9 @@ export function hasFeatureAccess(
     case "publish":
       return entitlements.canPublish;
     case "export":
+      return entitlements.canExport;
     case "download":
-      return entitlements.canExport || entitlements.canDownload;
+      return entitlements.canDownload;
     case "generate":
       return entitlements.canGenerateBooks;
     case "allFormats":
@@ -308,8 +285,9 @@ export function hasFeatureAccess(
     case "aiCovers":
       return entitlements.canUseAiCovers;
     case "tts":
+      return entitlements.canUseTTS;
     case "openaiTTS":
-      return entitlements.canUseTTS || entitlements.canUseOpenAITTS;
+      return entitlements.canUseOpenAITTS;
     case "elevenLabsTTS":
       return entitlements.canUseElevenLabsTTS;
     case "batch":
@@ -321,14 +299,14 @@ export function hasFeatureAccess(
 
 /**
  * Plan wrappers must respect the subscription hierarchy. Being paid is not a
- * substitute for holding the required tier. Explicit full-access modes may
- * bypass the hierarchy for UI preview, but server checks remain authoritative.
+ * substitute for holding the required tier. Explicit admin/trial bypass modes
+ * may bypass the hierarchy for UI testing; server checks remain authoritative.
  */
 export function hasPlanAccess(
   entitlements: Entitlements,
   requiredTier: SubscriptionTier,
 ): boolean {
-  if (entitlements.isAdmin || entitlements.isProphet || entitlements.bypassAllLimits) {
+  if (entitlements.isAdmin || entitlements.bypassAllLimits) {
     return true;
   }
   return TIER_PRIORITY[entitlements.tier] >= TIER_PRIORITY[requiredTier];
