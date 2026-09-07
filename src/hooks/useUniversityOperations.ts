@@ -4,6 +4,32 @@ import { supabase } from '@/integrations/supabase/client';
 import { useSubscription } from '@/contexts/SubscriptionContext';
 
 const db = supabase as unknown as SupabaseClient;
+const OPERATIONS_PAGE_SIZE = 500;
+const OPERATIONS_MAX_ROWS = 20_000;
+
+async function fetchPagedInstitutionRows(
+  table: string,
+  organizationId: string,
+  options?: { statusColumn?: string; statusValues?: string[] },
+): Promise<Record<string, unknown>[]> {
+  const rows: Record<string, unknown>[] = [];
+  for (let from = 0; from < OPERATIONS_MAX_ROWS; from += OPERATIONS_PAGE_SIZE) {
+    let query = db.from(table)
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('id', { ascending: true })
+      .range(from, from + OPERATIONS_PAGE_SIZE - 1);
+    if (options?.statusColumn && options.statusValues?.length) {
+      query = query.in(options.statusColumn, options.statusValues);
+    }
+    const { data, error } = await query;
+    if (error) throw error;
+    const page = (data || []) as Record<string, unknown>[];
+    rows.push(...page);
+    if (page.length < OPERATIONS_PAGE_SIZE) return rows;
+  }
+  throw new Error(`${table} exceeded the guarded ${OPERATIONS_MAX_ROWS.toLocaleString()}-row operational load. Use a scoped report or offering workspace.`);
+}
 
 export interface UniversityCohortMember {
   id: string;
@@ -114,6 +140,22 @@ export function useUniversityOperations(activeOrgId: string | null, refreshUnive
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
+  const loadAttendanceSessionRecords = useCallback(async (sessionId: string) => {
+    if (!activeOrgId || !sessionId) {
+      setAttendanceRecords([]);
+      return [] as UniversityAttendanceRecord[];
+    }
+    const { data, error: recordsError } = await db.from('university_attendance_records')
+      .select('*')
+      .eq('organization_id', activeOrgId)
+      .eq('session_id', sessionId)
+      .order('user_id');
+    if (recordsError) throw recordsError;
+    const records = (data || []) as UniversityAttendanceRecord[];
+    setAttendanceRecords(records);
+    return records;
+  }, [activeOrgId]);
+
   const refresh = useCallback(async () => {
     if (!activeOrgId || !user) {
       setSettings(null);
@@ -130,26 +172,46 @@ export function useUniversityOperations(activeOrgId: string | null, refreshUnive
     setLoading(true);
     setError(null);
     try {
-      const results = await Promise.all([
+      const [settingsRes, personRes] = await Promise.all([
         db.from('university_settings').select('*').eq('organization_id', activeOrgId).maybeSingle(),
-        db.from('university_cohort_members').select('*').eq('organization_id', activeOrgId).order('joined_on', { ascending: false }),
-        db.from('university_submissions').select('*').eq('organization_id', activeOrgId).order('updated_at', { ascending: false }),
-        db.from('university_attendance_sessions').select('*').eq('organization_id', activeOrgId).order('starts_at', { ascending: false }),
-        db.from('university_attendance_records').select('*').eq('organization_id', activeOrgId),
-        db.from('university_attendance_summary_v').select('*').eq('organization_id', activeOrgId),
-        db.from('university_learner_progress_v').select('*').eq('organization_id', activeOrgId),
+        db.from('university_people').select('university_role').eq('organization_id', activeOrgId).eq('user_id', user.id).maybeSingle(),
       ]);
-      const firstError = results.find((result) => result.error)?.error;
-      if (firstError) throw firstError;
+      if (settingsRes.error) throw settingsRes.error;
+      if (personRes.error) throw personRes.error;
+      setSettings((settingsRes.data || null) as UniversitySettingsRecord | null);
+      setAttendanceRecords([]);
 
-      const [settingsRes, cohortRes, submissionsRes, sessionsRes, recordsRes, summaryRes, progressRes] = results;
-      setSettings(settingsRes.data || null);
-      setCohortMembers(cohortRes.data || []);
-      setSubmissions(submissionsRes.data || []);
-      setAttendanceSessions(sessionsRes.data || []);
-      setAttendanceRecords(recordsRes.data || []);
-      setAttendanceSummary(summaryRes.data || []);
-      setLearnerProgress(progressRes.data || []);
+      const role = typeof personRes.data?.university_role === 'string' ? personRes.data.university_role : null;
+      const learnerOnly = role === 'student';
+
+      if (learnerOnly) {
+        const [submissionsRes, summaryRes, progressRes] = await Promise.all([
+          db.from('university_submissions').select('*').eq('organization_id', activeOrgId).eq('user_id', user.id).order('updated_at', { ascending: false }),
+          db.from('university_attendance_summary_v').select('*').eq('organization_id', activeOrgId).eq('user_id', user.id),
+          db.from('university_learner_progress_v').select('*').eq('organization_id', activeOrgId).eq('user_id', user.id),
+        ]);
+        const learnerError = [submissionsRes, summaryRes, progressRes].find((result) => result.error)?.error;
+        if (learnerError) throw learnerError;
+        setCohortMembers([]);
+        setSubmissions((submissionsRes.data || []) as UniversitySubmission[]);
+        setAttendanceSessions([]);
+        setAttendanceSummary((summaryRes.data || []) as UniversityAttendanceSummary[]);
+        setLearnerProgress((progressRes.data || []) as UniversityLearnerProgress[]);
+        return;
+      }
+
+      const [cohortRows, submissionRows, sessionRows, summaryRows, progressRows] = await Promise.all([
+        fetchPagedInstitutionRows('university_cohort_members', activeOrgId),
+        fetchPagedInstitutionRows('university_submissions', activeOrgId, { statusColumn: 'status', statusValues: ['submitted', 'late'] }),
+        fetchPagedInstitutionRows('university_attendance_sessions', activeOrgId),
+        fetchPagedInstitutionRows('university_attendance_summary_v', activeOrgId),
+        fetchPagedInstitutionRows('university_learner_progress_v', activeOrgId),
+      ]);
+      setCohortMembers(cohortRows as unknown as UniversityCohortMember[]);
+      setSubmissions((submissionRows as unknown as UniversitySubmission[]).sort((a, b) => b.updated_at.localeCompare(a.updated_at)));
+      setAttendanceSessions((sessionRows as unknown as UniversityAttendanceSession[]).sort((a, b) => b.starts_at.localeCompare(a.starts_at)));
+      setAttendanceSummary(summaryRows as unknown as UniversityAttendanceSummary[]);
+      setLearnerProgress(progressRows as unknown as UniversityLearnerProgress[]);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load university operations.');
     } finally {
@@ -264,14 +326,12 @@ export function useUniversityOperations(activeOrgId: string | null, refreshUnive
       .select().single();
     if (upsertError) throw upsertError;
     await sync();
+    await loadAttendanceSessionRecords(sessionId);
     return data;
-  }, [activeOrgId, user, sync]);
+  }, [activeOrgId, user, sync, loadAttendanceSessionRecords]);
 
   const saveSubmission = useCallback(async (assignmentId: string, body: string, submit = false, dueAt?: string | null) => {
     if (!activeOrgId || !user) throw new Error('Authentication and an institution are required.');
-    const existing = submissions.find(
-      (submission) => submission.assignment_id === assignmentId && submission.user_id === user.id && submission.attempt_number === 1,
-    );
     const now = new Date();
     const status = submit ? (dueAt && now.getTime() > new Date(dueAt).getTime() ? 'late' : 'submitted') : 'draft';
     const payload = {
@@ -283,13 +343,14 @@ export function useUniversityOperations(activeOrgId: string | null, refreshUnive
       submitted_at: submit ? now.toISOString() : null,
       status,
     };
-    const result = existing
-      ? await db.from('university_submissions').update(payload).eq('id', existing.id).select().single()
-      : await db.from('university_submissions').insert(payload).select().single();
+    const result = await db.from('university_submissions')
+      .upsert(payload, { onConflict: 'assignment_id,user_id,attempt_number' })
+      .select()
+      .single();
     if (result.error) throw result.error;
     await sync();
     return result.data;
-  }, [activeOrgId, user, submissions, sync]);
+  }, [activeOrgId, user, sync]);
 
   const finalizeEnrolment = useCallback(async (enrolmentId: string, gradeLabel?: string | null) => {
     const { data, error: rpcError } = await db.rpc('finalize_university_enrolment', {
@@ -334,6 +395,7 @@ export function useUniversityOperations(activeOrgId: string | null, refreshUnive
     submissionsByAssignment,
     recordsBySession,
     refresh,
+    loadAttendanceSessionRecords,
     saveSettings,
     addTeachingAssignment,
     removeTeachingAssignment,
