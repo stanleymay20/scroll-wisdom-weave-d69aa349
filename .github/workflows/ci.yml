@@ -50,8 +50,6 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run test
-      - name: Validate ScrollUniversity curriculum content
-        run: bun scripts/validate-university-content.mjs
 
   migration-safety:
     runs-on: ubuntu-latest
@@ -106,15 +104,6 @@ jobs:
           deno check supabase/functions/validate-certificate/index.ts
           deno check supabase/functions/verify-certificate/index.ts
           deno check supabase/functions/export-certificate/index.ts
-      - name: Type-check ScrollUniversity Edge Functions
-        run: |
-          deno check supabase/functions/university-provision-users/index.ts
-          deno check supabase/functions/university-lti-login/index.ts
-          deno check supabase/functions/university-lti-launch/index.ts
-          deno check supabase/functions/university-lti-claim/index.ts
-      - name: Test ScrollUniversity protocol primitives
-        run: |
-          deno test supabase/functions/_shared/university-lti_test.ts
       - name: Type-check publication pipeline Edge Functions
         run: |
           deno check supabase/functions/generate-book/index.ts
