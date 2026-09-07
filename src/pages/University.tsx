@@ -3,9 +3,14 @@ import { Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import UniversityHub from '@/components/university/UniversityHub';
 import UniversityAcademicAdministration from '@/components/university/UniversityAcademicAdministration';
+import UniversityLtiClaim from '@/pages/UniversityLtiClaim';
 
 export default function University() {
   const [params] = useSearchParams();
+
+  if (params.has('lti_launch')) {
+    return <UniversityLtiClaim />;
+  }
 
   if (params.get('view') === 'administration') {
     return <UniversityAcademicAdministration />;
