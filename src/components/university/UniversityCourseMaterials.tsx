@@ -67,6 +67,10 @@ export default function UniversityCourseMaterials() {
     () => university.modules.filter((module) => module.course_id === selectedCourseId).sort((a, b) => a.sequence - b.sequence),
     [university.modules, selectedCourseId],
   );
+  const plannedLearningHours = useMemo(
+    () => modules.reduce((sum, module) => sum + Number(module.estimated_learning_hours || 0), 0),
+    [modules],
+  );
   const resources = content.resourcesByCourse.get(selectedCourseId) || [];
   const assessments = content.assessmentsByCourse.get(selectedCourseId) || [];
   const courseOutcomes = university.outcomes.filter((outcome) => outcome.course_id === selectedCourseId);
@@ -78,7 +82,7 @@ export default function UniversityCourseMaterials() {
 
   return <><Navbar /><main className="container mx-auto max-w-6xl px-4 pt-24 pb-16 space-y-6">
     <div className="flex flex-col gap-3 md:flex-row md:items-start md:justify-between">
-      <div><div className="flex items-center gap-2"><BookOpen className="h-8 w-8 text-primary"/><h1 className="text-3xl font-bold">Course materials</h1></div><p className="text-muted-foreground">{university.activeOrg.name} · reviewed lessons, readings, activities and assessment expectations.</p></div>
+      <div><div className="flex items-center gap-2"><BookOpen className="h-8 w-8 text-primary"/><h1 className="text-3xl font-bold">Course materials</h1></div><p className="text-muted-foreground">{university.activeOrg.name} · structured lessons, readings, activities and assessment expectations.</p></div>
       <div className="flex gap-2"><Button asChild variant="outline"><Link to="/university"><ArrowLeft className="h-4 w-4 mr-1"/>University hub</Link></Button><Button variant="outline" onClick={() => void Promise.all([university.refresh(), content.refresh()])}><RefreshCcw className="h-4 w-4 mr-1"/>Refresh</Button></div>
     </div>
 
@@ -89,8 +93,9 @@ export default function UniversityCourseMaterials() {
     </CardContent></Card>
 
     {selectedCourse && <>
-      <Card><CardHeader><div className="flex flex-wrap items-center gap-2"><CardTitle>{selectedCourse.code} — {selectedCourse.title}</CardTitle><Badge variant="outline">{selectedCourse.credits} credits</Badge><Badge variant="outline">Level {selectedCourse.level ?? '—'}</Badge></div><CardDescription>{selectedCourse.description || 'No course description has been published.'}</CardDescription></CardHeader><CardContent>
-        <h3 className="font-semibold mb-2">Learning outcomes</h3><div className="grid md:grid-cols-2 gap-2">{courseOutcomes.map((outcome) => <div key={outcome.id} className="rounded-lg border p-3"><p className="font-medium text-sm">{outcome.code}</p><p className="text-sm text-muted-foreground">{outcome.description}</p></div>)}</div>
+      <Card><CardHeader><div className="flex flex-wrap items-center gap-2"><CardTitle>{selectedCourse.code} — {selectedCourse.title}</CardTitle><Badge variant="outline">{plannedLearningHours || '—'} planned hours</Badge><Badge variant="outline">Level {selectedCourse.level ?? '—'}</Badge></div><CardDescription>{selectedCourse.description || 'No course description has been published.'}</CardDescription></CardHeader><CardContent className="space-y-4">
+        <Alert><AlertTitle>Workload planning, not awarded academic credit</AlertTitle><AlertDescription>ScrollUniversity workload units may be benchmarked to higher-education workload conventions, but ScrollUniversity does not itself award ECTS or transferable academic credit. Recognition, where applicable, must come from a duly authorized institution.</AlertDescription></Alert>
+        <div><h3 className="font-semibold mb-2">Learning outcomes</h3><div className="grid md:grid-cols-2 gap-2">{courseOutcomes.map((outcome) => <div key={outcome.id} className="rounded-lg border p-3"><p className="font-medium text-sm">{outcome.code}</p><p className="text-sm text-muted-foreground">{outcome.description}</p></div>)}</div></div>
       </CardContent></Card>
 
       <div className="space-y-4">
