@@ -66,7 +66,6 @@ Deno.serve(async (req) => {
     const scrollEditionId = newScrollIdentifier("SLE");
 
     // Subtitle is bibliographic identity, not mutable storefront decoration.
-    // Freeze exactly the subtitle that was covered by the publication hash.
     const { data: listingIdentity, error: listingIdentityErr } = await sc
       .from("public_listings")
       .select("subtitle")
@@ -139,7 +138,8 @@ Deno.serve(async (req) => {
     }
 
     // Canonical publisher/imprint identity is required BEFORE the immutable
-    // publication snapshot is minted. This separates publisher from rights holder.
+    // publication snapshot is minted. Publisher ownership and ISBN provenance
+    // must already have passed the server-owned verification workflow.
     const { data: publishingProfile, error: profileErr } = await sc
       .from("book_publishing_profiles")
       .select("imprint_id,publisher_mode,edition_label,publication_language,print_identifier_strategy,ebook_identifier_strategy,distribution_scope")
@@ -170,7 +170,7 @@ Deno.serve(async (req) => {
       }
       const { data: imprint, error: imprintErr } = await sc
         .from("publishing_imprints")
-        .select("id,scope,owner_user_id,publisher_name,imprint_name,country_code,isbn_agency_name,registrant_name,agency_record_attested,verified,verified_at")
+        .select("id,scope,owner_user_id,publisher_name,imprint_name,country_code,isbn_agency_name,registrant_name,agency_record_attested,verified,verified_at,verification_reference,verification_method")
         .eq("id", publishingProfile.imprint_id)
         .maybeSingle();
       if (imprintErr) return serverError(imprintErr);
@@ -180,8 +180,11 @@ Deno.serve(async (req) => {
         if (imprint.scope !== "user" || imprint.owner_user_id !== auth.userId || imprint.agency_record_attested !== true) {
           return json({ error: "publication_blocked", reason: "isbn_agency_match_attestation_required" }, 409);
         }
+        if (imprint.verified !== true || !imprint.verification_reference) {
+          return json({ error: "publication_blocked", reason: "isbn_imprint_verification_required" }, 409);
+        }
       } else if (publishingProfile.publisher_mode === "platform_imprint") {
-        if (imprint.scope !== "platform" || imprint.verified !== true) {
+        if (imprint.scope !== "platform" || imprint.verified !== true || !imprint.verification_reference) {
           return json({ error: "publication_blocked", reason: "verified_platform_imprint_required" }, 409);
         }
       } else {
@@ -196,8 +199,12 @@ Deno.serve(async (req) => {
         country_code: imprint.country_code,
         isbn_agency_name: imprint.isbn_agency_name,
         registrant_name: imprint.registrant_name,
-        verification: publishingProfile.publisher_mode === "platform_imprint" ? "platform_verified" : "user_attested_agency_match",
-        verified_at: publishingProfile.publisher_mode === "platform_imprint" ? imprint.verified_at : null,
+        verification: publishingProfile.publisher_mode === "platform_imprint"
+          ? "platform_agency_verified"
+          : "user_imprint_agency_verified",
+        verification_reference: imprint.verification_reference,
+        verification_method: imprint.verification_method,
+        verified_at: imprint.verified_at,
       };
     }
 
@@ -209,11 +216,17 @@ Deno.serve(async (req) => {
     if (assignmentsErr) return serverError(assignmentsErr);
 
     const isbnIds = [...new Set((isbnAssignments ?? []).map((a) => a.isbn_id).filter(Boolean))];
-    const inventoryMap = new Map<string, { isbn13: string; source: string; imprint_id: string }>();
+    const inventoryMap = new Map<string, {
+      isbn13: string;
+      source: string;
+      imprint_id: string;
+      provenance_status: string;
+      provenance_reference: string | null;
+    }>();
     if (isbnIds.length > 0) {
       const { data: inventory, error: inventoryErr } = await sc
         .from("isbn_inventory")
-        .select("id,isbn13,source,imprint_id")
+        .select("id,isbn13,source,imprint_id,provenance_status,provenance_reference")
         .in("id", isbnIds);
       if (inventoryErr) return serverError(inventoryErr);
       for (const row of inventory ?? []) inventoryMap.set(row.id, row);
@@ -225,6 +238,9 @@ Deno.serve(async (req) => {
       if (publishingProfile.imprint_id && inventory.imprint_id !== publishingProfile.imprint_id) {
         throw new Error(`ISBN imprint mismatch for assignment ${assignment.id}`);
       }
+      if (inventory.provenance_status !== "verified" || !inventory.provenance_reference) {
+        throw new Error(`ISBN provenance not verified for assignment ${assignment.id}`);
+      }
       return {
         scheme: "ISBN-13",
         value: inventory.isbn13,
@@ -232,6 +248,8 @@ Deno.serve(async (req) => {
         language: assignment.language,
         edition_label: assignment.edition_label,
         source: inventory.source,
+        provenance_status: inventory.provenance_status,
+        provenance_reference: inventory.provenance_reference,
         assigned_at: assignment.assigned_at,
       };
     });
@@ -294,6 +312,8 @@ Deno.serve(async (req) => {
         structural: "passed",
         rights: "passed",
         production: "passed",
+        publisher_identity: publishingProfile.publisher_mode === "kdp_independent" ? "kdp_managed" : "agency_verified",
+        isbn_provenance: identifiers.length > 0 ? "verified" : "not_applicable",
       },
       frozen_at: new Date().toISOString(),
     };
@@ -318,9 +338,10 @@ Deno.serve(async (req) => {
     const patch = 0;
     const version = `${major}.${minor}.${patch}`;
 
-    // Two-phase publication: mint an approved immutable candidate first. ISBNs
-    // are locked before the row becomes publicly published. If locking/certification
-    // fails, the candidate never masquerades as a completed publication.
+    // Two-phase publication: mint a non-public approved immutable candidate.
+    // The DB finalizer performs ISBN locking, product identity materialization,
+    // certificate creation, publish transition, and current-publication pointer
+    // updates in ONE transaction. Failure cannot leave a partially published row.
     const { data: pub, error: pubErr } = await sc
       .from("publications")
       .insert({
@@ -344,62 +365,19 @@ Deno.serve(async (req) => {
       .single();
     if (pubErr) throw pubErr;
 
-    const { error: lockErr } = await sc.rpc("lock_book_isbn_assignments", {
-      p_book_id: book.id,
+    const { data: finalizationData, error: finalizeErr } = await sc.rpc("finalize_publication_release", {
       p_publication_id: pub.id,
+      p_user_id: auth.userId,
     });
-    if (lockErr) return serverError(lockErr);
+    if (finalizeErr) return serverError(finalizeErr);
 
-    // Materialize the proprietary SLW → SLE → SLP graph only after ISBN
-    // assignments have been locked to this publication. This mapping never
-    // creates or substitutes an ISBN; it links external identifiers to SLP.
-    const { data: scrollIdentity, error: scrollIdentityErr } = await sc.rpc(
-      "materialize_scroll_publication_identity",
-      { p_publication_id: pub.id },
-    );
-    if (scrollIdentityErr) return serverError(scrollIdentityErr);
-
-    const { data: cert, error: certErr } = await sc
-      .from("publication_certificates")
-      .insert({
-        publication_id: pub.id,
-        work_id: body.work_id,
-        authors_snapshot: snapshot.authors,
-        rights_holders_snapshot: snapshot.rights_holders,
-        content_hash: contentHash,
-        signature_algorithm: "sha256",
-        signature_value: contentHash, // TODO(phase2): asymmetric ed25519 signing
-        public_key_id: "phase1-hash-only",
-        issuer: "scrolllibrary",
-      })
-      .select("id")
-      .single();
-    if (certErr) return serverError(certErr);
-
-    const publishedAt = new Date().toISOString();
-    const { error: publishErr } = await sc
-      .from("publications")
-      .update({
-        status: "published",
-        published_at: publishedAt,
-        certificate_id: cert.id,
-      })
-      .eq("id", pub.id)
-      .eq("status", "approved");
-    if (publishErr) return serverError(publishErr);
-
-    await sc.from("works").update({
-      current_publication_id: pub.id,
-      publish_locked_at: publishedAt,
-      publish_locked_by: auth.userId,
-      publish_lock_reason: "published",
-    }).eq("id", body.work_id);
-
-    await sc.from("books").update({
-      current_publication_id: pub.id,
-      publish_locked_at: publishedAt,
-      publish_locked_by: auth.userId,
-    }).eq("id", book.id);
+    const finalization = (finalizationData ?? {}) as Record<string, unknown>;
+    const certificateId = typeof finalization.certificate_id === "string" ? finalization.certificate_id : null;
+    const publishedAt = typeof finalization.published_at === "string" ? finalization.published_at : null;
+    const scrollIdentity = finalization.scroll_identity ?? null;
+    if (!certificateId || !publishedAt) {
+      return serverError(new Error("PUBLICATION_FINALIZATION_INCOMPLETE"));
+    }
 
     await logAuthorshipEvent(sc, {
       workId: body.work_id, bookId: book.id, publicationId: pub.id,
@@ -410,6 +388,11 @@ Deno.serve(async (req) => {
         content_hash: contentHash,
         publisher_mode: publishingProfile.publisher_mode,
         identifier_product_forms: identifiers.map((i) => i.product_form),
+        isbn_provenance: identifiers.map((i) => ({
+          product_form: i.product_form,
+          status: i.provenance_status,
+          reference: i.provenance_reference,
+        })),
         scroll_work_id: work.scroll_work_id,
         scroll_edition_id: pub.scroll_edition_id,
         scroll_products: scrollIdentity,
@@ -418,7 +401,7 @@ Deno.serve(async (req) => {
 
     return json({
       publication_id: pub.id,
-      certificate_id: cert.id,
+      certificate_id: certificateId,
       version,
       content_hash: contentHash,
       published_at: publishedAt,

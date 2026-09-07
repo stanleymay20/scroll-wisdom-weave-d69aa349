@@ -6,7 +6,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { AlertCircle, BookKey, CheckCircle2, Loader2, Lock, RefreshCw, ShieldCheck } from "lucide-react";
+import { AlertCircle, BookKey, CheckCircle2, Clock3, Loader2, Lock, RefreshCw, ShieldCheck } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "sonner";
 
@@ -21,8 +21,27 @@ type Assignment = {
   editionLabel: string;
   isbn13: string | null;
   source: string | null;
+  provenanceStatus?: string | null;
   lockedAt: string | null;
   publicationId: string | null;
+};
+
+type IsbnClaim = {
+  id: string;
+  isbn13: string;
+  agency_reference: string;
+  status: "pending" | "approved" | "rejected" | "cancelled";
+  reviewed_at: string | null;
+  review_notes: string | null;
+  created_at: string;
+};
+
+type OwnedIsbn = {
+  id: string;
+  isbn13: string;
+  status: "available" | "assigned" | "retired";
+  provenance_status: "unverified" | "verified" | "rejected";
+  provenance_reference: string | null;
 };
 
 type PlatformImprint = {
@@ -56,8 +75,12 @@ type IdentityPayload = {
     registrant_name: string | null;
     agency_record_attested: boolean;
     verified: boolean;
+    verification_reference?: string | null;
+    verification_method?: string | null;
   } | null;
   assignments: Assignment[];
+  isbnClaims?: IsbnClaim[];
+  ownedIsbns?: OwnedIsbn[];
   platformImprints: PlatformImprint[];
 };
 
@@ -70,6 +93,8 @@ const FORMS: Array<{ id: ProductForm; label: string; hint: string }> = [
   { id: "hardcover", label: "Hardcover", hint: "Requires a different ISBN from paperback." },
   { id: "epub", label: "EPUB / eBook", hint: "Use a separate ISBN when you choose to identify the EPUB edition." },
 ];
+
+const normalizeIsbn = (value: string) => value.replace(/[^0-9]/g, "");
 
 async function invokeIdentity(body: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke("publishing-identity", { body });
@@ -106,6 +131,7 @@ export function PublishingIdentityPanel({ bookId }: Props) {
   const [printStrategy, setPrintStrategy] = useState<IdentifierStrategy>("own_isbn");
   const [ebookStrategy, setEbookStrategy] = useState<IdentifierStrategy>("unassigned");
   const [isbnInputs, setIsbnInputs] = useState<Record<ProductForm, string>>({ paperback: "", hardcover: "", epub: "" });
+  const [agencyReferences, setAgencyReferences] = useState<Record<ProductForm, string>>({ paperback: "", hardcover: "", epub: "" });
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -155,6 +181,18 @@ export function PublishingIdentityPanel({ bookId }: Props) {
     [data, platformImprintId],
   );
 
+  function claimFor(form: ProductForm): IsbnClaim | undefined {
+    const isbn = normalizeIsbn(isbnInputs[form]);
+    if (!isbn) return undefined;
+    return data?.isbnClaims?.find((claim) => normalizeIsbn(claim.isbn13) === isbn);
+  }
+
+  function verifiedOwnedIsbnFor(form: ProductForm): OwnedIsbn | undefined {
+    const isbn = normalizeIsbn(isbnInputs[form]);
+    if (!isbn) return undefined;
+    return data?.ownedIsbns?.find((row) => normalizeIsbn(row.isbn13) === isbn && row.provenance_status === "verified");
+  }
+
   async function saveProfile() {
     setSaving(true);
     try {
@@ -190,6 +228,29 @@ export function PublishingIdentityPanel({ bookId }: Props) {
     }
   }
 
+  async function submitOwnedClaim(form: ProductForm) {
+    setBusyForm(form);
+    try {
+      if (!data?.profile) throw new Error("Save the publishing identity first");
+      const isbn13 = isbnInputs[form].trim();
+      const agencyReference = agencyReferences[form].trim();
+      if (!isbn13) throw new Error(`Enter the registered ISBN-13 for ${form}`);
+      if (!agencyReference) throw new Error("Enter the ISBN-agency ownership/reference evidence");
+      await invokeIdentity({
+        action: "submit_owned_isbn_claim",
+        bookId,
+        isbn13,
+        agencyReference,
+      });
+      toast.success("ISBN submitted for verification");
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "ISBN verification request failed");
+    } finally {
+      setBusyForm(null);
+    }
+  }
+
   async function assign(form: ProductForm) {
     setBusyForm(form);
     try {
@@ -197,6 +258,9 @@ export function PublishingIdentityPanel({ bookId }: Props) {
       if (mode === "own_imprint") {
         const isbn13 = isbnInputs[form].trim();
         if (!isbn13) throw new Error(`Enter the registered ISBN-13 for ${form}`);
+        if (!verifiedOwnedIsbnFor(form)) {
+          throw new Error("This ISBN must be verified against its ISBN-agency record before assignment");
+        }
         await invokeIdentity({
           action: "assign_owned_isbn",
           bookId,
@@ -218,6 +282,7 @@ export function PublishingIdentityPanel({ bookId }: Props) {
       }
       toast.success(`${form.charAt(0).toUpperCase() + form.slice(1)} identifier assigned`);
       setIsbnInputs((current) => ({ ...current, [form]: "" }));
+      setAgencyReferences((current) => ({ ...current, [form]: "" }));
       await load();
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "ISBN assignment failed");
@@ -233,6 +298,7 @@ export function PublishingIdentityPanel({ bookId }: Props) {
   const profileSaved = !!data?.profile;
   const ownIncomplete = mode === "own_imprint" && (!publisherName.trim() || !imprintName.trim() || !confirmAgencyMatch);
   const platformIncomplete = mode === "platform_imprint" && !platformImprintId;
+  const ownImprintVerified = mode === "own_imprint" && data?.imprint?.verified === true && !!data.imprint.verification_reference;
 
   return (
     <Card className="p-4 sm:p-6 space-y-5 border-primary/20">
@@ -275,8 +341,21 @@ export function PublishingIdentityPanel({ bookId }: Props) {
           </div>
           <label className="flex items-start gap-3 rounded-md bg-muted/40 p-3 text-sm">
             <Checkbox checked={confirmAgencyMatch} onCheckedChange={(checked) => setConfirmAgencyMatch(checked === true)} className="mt-0.5" />
-            <span>I confirm the publisher/imprint entered here matches the registration record for the ISBNs I will assign. I understand a mismatched imprint can cause distributor rejection.</span>
+            <span>I confirm the publisher/imprint entered here matches the registration record for the ISBNs I will assign. This declaration is not the final verification: ScrollLibrary verifies the publisher/ISBN provenance before allowing assignment.</span>
           </label>
+          {profileSaved && (
+            ownImprintVerified ? (
+              <div className="flex gap-2 rounded-md border border-emerald-500/30 bg-emerald-500/5 p-3 text-xs">
+                <ShieldCheck className="h-4 w-4 shrink-0" />
+                <span>Publisher/imprint registration verified. ISBNs still require their own provenance verification before assignment.</span>
+              </div>
+            ) : (
+              <div className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-xs">
+                <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />
+                <span>Publisher record saved but not yet independently verified. ISBN claims can be submitted, but cannot be approved or assigned until the imprint matches the agency record.</span>
+              </div>
+            )
+          )}
         </div>
       )}
 
@@ -287,7 +366,7 @@ export function PublishingIdentityPanel({ bookId }: Props) {
             <SelectTrigger><SelectValue placeholder="Select a verified imprint" /></SelectTrigger>
             <SelectContent>
               {(data?.platformImprints ?? []).map((row) => (
-                <SelectItem key={row.id} value={row.id} disabled={row.availableIsbns <= 0}>{row.imprint_name} — {row.publisher_name} ({row.availableIsbns} ISBNs available)</SelectItem>
+                <SelectItem key={row.id} value={row.id} disabled={row.availableIsbns <= 0}>{row.imprint_name} — {row.publisher_name} ({row.availableIsbns} provenance-verified ISBNs available)</SelectItem>
               ))}
             </SelectContent>
           </Select>
@@ -351,29 +430,77 @@ export function PublishingIdentityPanel({ bookId }: Props) {
         <div className="space-y-3 border-t pt-5">
           <div>
             <h3 className="font-medium">Format-specific ISBN assignments</h3>
-            <p className="text-xs text-muted-foreground">Paperback, hardcover and EPUB are separate products. The system will not reuse one ISBN across them.</p>
+            <p className="text-xs text-muted-foreground">Paperback, hardcover and EPUB are separate products. The system will not reuse one ISBN across them, and author-supplied ISBNs must be provenance-verified before assignment.</p>
           </div>
           {FORMS.map((form) => {
             const assignment = assignments.get(form.id);
             const locked = !!assignment?.lockedAt;
+            const claim = claimFor(form.id);
+            const verifiedOwned = verifiedOwnedIsbnFor(form.id);
+            const claimPending = claim?.status === "pending";
+            const claimRejected = claim?.status === "rejected";
             return (
               <div key={form.id} className="rounded-lg border p-3">
                 <div className="flex flex-wrap items-center gap-2">
                   <div className="font-medium text-sm">{form.label}</div>
                   {assignment?.isbn13 && <Badge variant="outline">ISBN {assignment.isbn13}</Badge>}
                   {assignment?.source && <Badge variant="secondary">{assignment.source === "platform_pool" ? "Platform pool" : "Publisher-owned"}</Badge>}
+                  {assignment?.provenanceStatus === "verified" && <Badge variant="secondary"><ShieldCheck className="mr-1 h-3 w-3" />Provenance verified</Badge>}
                   {locked && <Badge variant="secondary"><Lock className="mr-1 h-3 w-3" />Locked to publication</Badge>}
                 </div>
                 <p className="mt-1 text-xs text-muted-foreground">{form.hint}</p>
                 {!locked && !assignment?.isbn13 && (
-                  <div className="mt-3 flex flex-col gap-2 sm:flex-row">
+                  <div className="mt-3 space-y-2">
                     {mode === "own_imprint" && (
-                      <Input value={isbnInputs[form.id]} onChange={(e) => setIsbnInputs((current) => ({ ...current, [form.id]: e.target.value }))} placeholder="Registered ISBN-13" />
+                      <>
+                        <Input
+                          value={isbnInputs[form.id]}
+                          onChange={(e) => setIsbnInputs((current) => ({ ...current, [form.id]: e.target.value }))}
+                          placeholder="Registered ISBN-13"
+                        />
+                        {!verifiedOwned && !claimPending && (
+                          <Input
+                            value={agencyReferences[form.id]}
+                            onChange={(e) => setAgencyReferences((current) => ({ ...current, [form.id]: e.target.value }))}
+                            placeholder="ISBN-agency ownership / allocation reference"
+                          />
+                        )}
+                        {claimPending && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <Clock3 className="h-3.5 w-3.5" />Pending verification against the publisher/agency record.
+                          </div>
+                        )}
+                        {claimRejected && (
+                          <div className="text-xs text-destructive">Previous verification was rejected{claim.review_notes ? `: ${claim.review_notes}` : ". You may submit corrected evidence."}</div>
+                        )}
+                        {verifiedOwned && (
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <ShieldCheck className="h-3.5 w-3.5" />This ISBN is verified for your registered imprint and may be assigned to this format.
+                          </div>
+                        )}
+                      </>
                     )}
-                    <Button variant="outline" onClick={() => void assign(form.id)} disabled={busyForm !== null || (mode === "own_imprint" && !isbnInputs[form.id].trim())}>
-                      {busyForm === form.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BookKey className="mr-2 h-4 w-4" />}
-                      {mode === "platform_imprint" ? "Allocate ISBN" : "Assign ISBN"}
-                    </Button>
+                    <div className="flex flex-col gap-2 sm:flex-row">
+                      {mode === "own_imprint" && !verifiedOwned ? (
+                        <Button
+                          variant="outline"
+                          onClick={() => void submitOwnedClaim(form.id)}
+                          disabled={busyForm !== null || claimPending || !isbnInputs[form.id].trim() || !agencyReferences[form.id].trim()}
+                        >
+                          {busyForm === form.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}
+                          {claimPending ? "Verification pending" : "Submit for verification"}
+                        </Button>
+                      ) : (
+                        <Button
+                          variant="outline"
+                          onClick={() => void assign(form.id)}
+                          disabled={busyForm !== null || (mode === "own_imprint" && !verifiedOwned)}
+                        >
+                          {busyForm === form.id ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <BookKey className="mr-2 h-4 w-4" />}
+                          {mode === "platform_imprint" ? "Allocate verified ISBN" : "Assign verified ISBN"}
+                        </Button>
+                      )}
+                    </div>
                   </div>
                 )}
               </div>

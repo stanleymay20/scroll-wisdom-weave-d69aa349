@@ -15,6 +15,8 @@ interface InventoryRow {
   isbn13: string;
   source: string;
   imprint_id: string;
+  provenance_status: string;
+  provenance_reference: string | null;
 }
 
 export interface ResolvedPublishingIdentity {
@@ -82,16 +84,17 @@ export async function resolvePrepublicationIdentity(
     if (!profile.imprint_id) throw new Error("PUBLISHER_IMPRINT_REQUIRED");
     const { data: imprint, error: imprintErr } = await sc
       .from("publishing_imprints")
-      .select("id,scope,publisher_name,imprint_name,country_code,isbn_agency_name,registrant_name,agency_record_attested,verified,verified_at")
+      .select("id,scope,publisher_name,imprint_name,country_code,isbn_agency_name,registrant_name,agency_record_attested,verified,verified_at,verification_reference,verification_method")
       .eq("id", profile.imprint_id)
       .maybeSingle();
     if (imprintErr) throw imprintErr;
     if (!imprint) throw new Error("PUBLISHER_IMPRINT_MISSING");
 
-    if (profile.publisher_mode === "own_imprint" && imprint.agency_record_attested !== true) {
-      throw new Error("ISBN_AGENCY_MATCH_ATTESTATION_REQUIRED");
+    if (profile.publisher_mode === "own_imprint") {
+      if (imprint.agency_record_attested !== true) throw new Error("ISBN_AGENCY_MATCH_ATTESTATION_REQUIRED");
+      if (imprint.verified !== true || !imprint.verification_reference) throw new Error("ISBN_IMPRINT_VERIFICATION_REQUIRED");
     }
-    if (profile.publisher_mode === "platform_imprint" && imprint.verified !== true) {
+    if (profile.publisher_mode === "platform_imprint" && (imprint.verified !== true || !imprint.verification_reference)) {
       throw new Error("VERIFIED_PLATFORM_IMPRINT_REQUIRED");
     }
 
@@ -104,9 +107,11 @@ export async function resolvePrepublicationIdentity(
       isbn_agency_name: imprint.isbn_agency_name,
       registrant_name: imprint.registrant_name,
       verification: profile.publisher_mode === "platform_imprint"
-        ? "platform_verified"
-        : "user_attested_agency_match",
-      verified_at: profile.publisher_mode === "platform_imprint" ? imprint.verified_at : null,
+        ? "platform_agency_verified"
+        : "user_imprint_agency_verified",
+      verification_reference: imprint.verification_reference,
+      verification_method: imprint.verification_method,
+      verified_at: imprint.verified_at,
     };
   }
 
@@ -123,7 +128,7 @@ export async function resolvePrepublicationIdentity(
   if (inventoryIds.length > 0) {
     const { data: inventoryData, error: inventoryErr } = await sc
       .from("isbn_inventory")
-      .select("id,isbn13,source,imprint_id")
+      .select("id,isbn13,source,imprint_id,provenance_status,provenance_reference")
       .in("id", inventoryIds);
     if (inventoryErr) throw inventoryErr;
     const inventoryRows = (inventoryData ?? []) as InventoryRow[];
@@ -136,6 +141,9 @@ export async function resolvePrepublicationIdentity(
     if (profile.imprint_id && inventory.imprint_id !== profile.imprint_id) {
       throw new Error(`ISBN_IMPRINT_MISMATCH:${assignment.id}`);
     }
+    if (inventory.provenance_status !== "verified" || !inventory.provenance_reference) {
+      throw new Error(`ISBN_PROVENANCE_NOT_VERIFIED:${assignment.id}`);
+    }
     return {
       scheme: "ISBN-13",
       value: inventory.isbn13,
@@ -143,6 +151,8 @@ export async function resolvePrepublicationIdentity(
       language: assignment.language,
       edition_label: assignment.edition_label,
       source: inventory.source,
+      provenance_status: inventory.provenance_status,
+      provenance_reference: inventory.provenance_reference,
       assigned_at: assignment.assigned_at,
     };
   });
