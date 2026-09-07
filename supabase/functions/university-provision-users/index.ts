@@ -54,24 +54,6 @@ type ResolvedPerson = {
   person: PersonInput;
 };
 
-async function loadUsersByEmail(sc: ReturnType<typeof serviceClient>) {
-  const users = new Map<string, string>();
-  let page = 1;
-  const perPage = 1000;
-
-  while (page <= 100) {
-    const { data, error } = await sc.auth.admin.listUsers({ page, perPage });
-    if (error) throw error;
-    for (const user of data.users) {
-      if (user.email) users.set(user.email.toLowerCase(), user.id);
-    }
-    if (data.users.length < perPage) break;
-    page += 1;
-  }
-
-  return users;
-}
-
 serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
@@ -98,7 +80,18 @@ serve(async (req) => {
       return forbidden("Organization owner or admin required");
     }
 
-    const usersByEmail = await loadUsersByEmail(sc);
+    const requestedEmails = Array.from(
+      new Set(parsed.people.map((person) => person.email.trim().toLowerCase())),
+    );
+    const { data: existingUsers, error: existingUsersError } = await sc.rpc(
+      "resolve_university_auth_users",
+      { _emails: requestedEmails },
+    );
+    if (existingUsersError) throw existingUsersError;
+
+    const usersByEmail = new Map(
+      (existingUsers || []).map((row) => [String(row.email).toLowerCase(), String(row.user_id)]),
+    );
     const seen = new Set<string>();
     const resultSlots: Array<ProvisionResult | null> = Array(parsed.people.length).fill(null);
     const resolved: ResolvedPerson[] = [];
