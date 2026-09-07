@@ -3,6 +3,7 @@ import path from 'node:path';
 
 const root = path.resolve('content/university/foundation-core-v1');
 const programme = JSON.parse(await readFile(path.join(root, 'programme.json'), 'utf8'));
+const workload = JSON.parse(await readFile(path.join(root, 'workload-and-practice.json'), 'utf8'));
 const failures = [];
 
 const fail = (message) => failures.push(message);
@@ -10,6 +11,7 @@ const nonEmpty = (value) => typeof value === 'string' && value.trim().length > 0
 
 if (!programme?.programme?.code) fail('programme code is required');
 if (!Array.isArray(programme?.courses) || programme.courses.length === 0) fail('programme must contain courses');
+if (!workload?.courses || typeof workload.courses !== 'object') fail('workload-and-practice course map is required');
 
 let programmeCredits = 0;
 
@@ -37,6 +39,24 @@ for (const descriptor of programme.courses || []) {
   if (credits <= 0) fail(`${prefix}: credits must be > 0`);
   if (hours < credits * 25 || hours > credits * 30) {
     fail(`${prefix}: planned hours ${hours} must be between ${credits * 25} and ${credits * 30} for ${credits} ECTS`);
+  }
+
+  const workloadPlan = workload.courses?.[prefix];
+  if (!workloadPlan) {
+    fail(`${prefix}: explicit workload/practice plan is required`);
+  } else {
+    const totalHours = Number(workloadPlan.total_hours || 0);
+    const breakdown = workloadPlan.breakdown || {};
+    const breakdownHours = Object.values(breakdown).reduce((sum, value) => sum + Number(value || 0), 0);
+    if (totalHours !== hours) fail(`${prefix}: workload total ${totalHours} must equal planned hours ${hours}`);
+    if (breakdownHours !== hours) fail(`${prefix}: workload breakdown ${breakdownHours} must equal planned hours ${hours}`);
+    if (Object.keys(breakdown).length < 5) fail(`${prefix}: workload must show at least 5 distinct learning activity categories`);
+    if (Object.values(breakdown).some((value) => Number(value) <= 0)) fail(`${prefix}: every workload category must have positive hours`);
+    if (!Array.isArray(workloadPlan.practice_bank) || workloadPlan.practice_bank.length < 6) {
+      fail(`${prefix}: at least 6 substantial independent/guided practice tasks are required`);
+    } else if (workloadPlan.practice_bank.some((task) => !nonEmpty(task) || task.length < 45)) {
+      fail(`${prefix}: practice tasks must be substantive and actionable`);
+    }
   }
 
   const outcomes = course.outcomes || [];
@@ -75,10 +95,17 @@ for (const descriptor of programme.courses || []) {
   for (const assessment of assessments) {
     if (!nonEmpty(assessment.title) || !nonEmpty(assessment.instructions)) fail(`${prefix}: every assessment requires title and instructions`);
     if (!assessment.rubric || Object.keys(assessment.rubric).length < 2) fail(`${prefix}/${assessment.title}: rubric required`);
+    const rubricWeight = Object.values(assessment.rubric || {}).reduce((sum, value) => sum + Number(value || 0), 0);
+    if (Math.abs(rubricWeight - 100) > 0.001) fail(`${prefix}/${assessment.title}: rubric weights must total 100 (found ${rubricWeight})`);
     if (!Array.isArray(assessment.outcomes) || assessment.outcomes.length === 0) fail(`${prefix}/${assessment.title}: outcome mapping required`);
     for (const code of assessment.outcomes || []) {
       if (!outcomeCodes.has(code)) fail(`${prefix}/${assessment.title}: unknown mapped outcome ${code}`);
     }
+  }
+
+  const assessedOutcomes = new Set(assessments.flatMap((assessment) => assessment.outcomes || []));
+  for (const code of outcomeCodes) {
+    if (!assessedOutcomes.has(code)) fail(`${prefix}: learning outcome ${code} is not assessed`);
   }
 
   const resources = pack.resources || [];
@@ -86,6 +113,12 @@ for (const descriptor of programme.courses || []) {
   for (const resource of resources) {
     if (!nonEmpty(resource.title) || !nonEmpty(resource.publisher) || !nonEmpty(resource.url) || !nonEmpty(resource.provenance) || !nonEmpty(resource.license)) {
       fail(`${prefix}: every external resource requires title, publisher, URL, provenance and license/usage note`);
+    }
+    try {
+      const parsedUrl = new URL(resource.url);
+      if (!['https:', 'http:'].includes(parsedUrl.protocol)) fail(`${prefix}/${resource.title}: resource URL must use http(s)`);
+    } catch {
+      fail(`${prefix}/${resource.title}: resource URL is invalid`);
     }
   }
 
@@ -100,6 +133,11 @@ for (const descriptor of programme.courses || []) {
   }
 }
 
+const descriptorCodes = new Set((programme.courses || []).map((course) => course.code));
+for (const workloadCode of Object.keys(workload.courses || {})) {
+  if (!descriptorCodes.has(workloadCode)) fail(`${workloadCode}: workload plan has no matching programme course`);
+}
+
 if (Number(programme.programme?.credits || 0) !== programmeCredits) {
   fail(`programme credits ${programme.programme?.credits} do not equal course credits ${programmeCredits}`);
 }
@@ -110,4 +148,4 @@ if (failures.length) {
   process.exit(1);
 }
 
-console.log(`ScrollUniversity content validation passed: ${programme.courses.length} course pack(s), ${programmeCredits} ECTS.`);
+console.log(`ScrollUniversity content validation passed: ${programme.courses.length} course pack(s), ${programmeCredits} ECTS, explicit workload and practice evidence present.`);
