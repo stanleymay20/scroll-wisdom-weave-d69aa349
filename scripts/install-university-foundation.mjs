@@ -9,11 +9,16 @@ const organizationId = process.env.SCROLL_UNIVERSITY_ORG_ID || '';
 const supabaseUrl = process.env.SUPABASE_URL || '';
 const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY || '';
 const actorId = process.env.SCROLL_UNIVERSITY_INSTALLER_USER_ID || null;
+const packVersion = '1.0.0';
 
 const programmeManifest = JSON.parse(await readFile(path.join(root, 'programme.json'), 'utf8'));
 const packs = [];
 for (const descriptor of programmeManifest.courses) {
   packs.push(JSON.parse(await readFile(path.join(root, descriptor.pack), 'utf8')));
+}
+
+if (programmeManifest.programme.credit_award_status !== 'workload_planning_only_not_awarded_or_transferable_academic_credit') {
+  throw new Error('Foundation manifest must explicitly declare non-credit workload semantics before installation.');
 }
 
 const encoded = new TextEncoder().encode(JSON.stringify({ programmeManifest, packs }));
@@ -22,18 +27,22 @@ const contentHash = Array.from(new Uint8Array(digest)).map((byte) => byte.toStri
 
 const summary = {
   programme: programmeManifest.programme.code,
+  workload_units: packs.reduce((sum, pack) => sum + Number(pack.course.credits || 0), 0),
+  planned_hours: packs.reduce((sum, pack) => sum + Number(pack.course.planned_hours || 0), 0),
   courses: packs.length,
-  credits: packs.reduce((sum, pack) => sum + Number(pack.course.credits || 0), 0),
   modules: packs.reduce((sum, pack) => sum + pack.modules.length, 0),
   lessons: packs.reduce((sum, pack) => sum + pack.modules.reduce((inner, module) => inner + module.lessons.length, 0), 0),
   resources: packs.reduce((sum, pack) => sum + pack.resources.length, 0),
   assessments: packs.reduce((sum, pack) => sum + pack.assessments.length, 0),
+  credit_award_status: programmeManifest.programme.credit_award_status,
+  credit_disclaimer: programmeManifest.programme.credit_disclaimer,
   content_hash: contentHash,
 };
 
 if (!apply) {
   console.log('ScrollUniversity foundation installer dry run. No database writes performed.');
   console.table(summary);
+  console.log('Workload units are planning metadata only; this installer does not create or award ECTS or transferable academic credit.');
   console.log('Run the repository content validator first, then use --apply with SCROLL_UNIVERSITY_ORG_ID, SUPABASE_URL and SUPABASE_SERVICE_ROLE_KEY in a trusted operator environment.');
   process.exit(0);
 }
@@ -63,17 +72,17 @@ const existingRelease = await must(
     .select('id,content_hash')
     .eq('organization_id', organizationId)
     .eq('pack_code', programmeManifest.programme.code)
-    .eq('version', '1.0.0')
+    .eq('version', packVersion)
     .maybeSingle(),
   'check existing release',
 );
 
 if (existingRelease?.content_hash === contentHash) {
-  console.log(`Foundation pack ${programmeManifest.programme.code} v1.0.0 is already installed with hash ${contentHash}.`);
+  console.log(`Foundation pack ${programmeManifest.programme.code} v${packVersion} is already installed with hash ${contentHash}.`);
   process.exit(0);
 }
 if (existingRelease && existingRelease.content_hash !== contentHash) {
-  throw new Error('A different payload already uses pack version 1.0.0. Increment the pack version instead of mutating a released curriculum.');
+  throw new Error(`A different payload already uses pack version ${packVersion}. Increment the pack version instead of mutating a released curriculum.`);
 }
 
 const school = one(await must(
@@ -97,15 +106,12 @@ const programme = one(await must(
     qualification_level: programmeManifest.programme.qualification_level,
     duration_terms: 1,
     total_credits: programmeManifest.programme.credits,
-    description: programmeManifest.programme.purpose,
-    admissions_requirements: 'Institution-defined. Foundation Core itself does not confer admission eligibility.',
+    description: `${programmeManifest.programme.purpose} ${programmeManifest.programme.credit_disclaimer}`,
+    admissions_requirements: 'Institution-defined. Foundation Core itself does not confer admission eligibility or award academic credit.',
     status: 'active',
   }, { onConflict: 'organization_id,code' }).select('id'),
   'upsert foundation programme',
 ), 'foundation programme');
-
-const courseIds = new Map();
-const courseOutcomeIds = new Map();
 
 for (const [courseIndex, pack] of packs.entries()) {
   const c = pack.course;
@@ -115,7 +121,7 @@ for (const [courseIndex, pack] of packs.entries()) {
       school_id: school.id,
       code: c.code,
       title: c.title,
-      description: c.description,
+      description: `${c.description} Workload planning only; ScrollUniversity does not itself award transferable academic credit for this course.`,
       credits: c.credits,
       level: c.level,
       contact_hours: 35,
@@ -125,7 +131,6 @@ for (const [courseIndex, pack] of packs.entries()) {
     }, { onConflict: 'organization_id,code' }).select('id'),
     `upsert course ${c.code}`,
   ), `course ${c.code}`);
-  courseIds.set(c.code, course.id);
 
   await must(
     db.from('university_programme_courses').upsert({
@@ -181,9 +186,7 @@ for (const [courseIndex, pack] of packs.entries()) {
     }
     outcomeIds.set(outcome.code, outcomeId);
   }
-  courseOutcomeIds.set(c.code, outcomeIds);
 
-  const moduleIds = new Map();
   for (const [moduleIndex, module] of pack.modules.entries()) {
     const moduleRow = one(await must(
       db.from('university_modules').upsert({
@@ -198,7 +201,6 @@ for (const [courseIndex, pack] of packs.entries()) {
       }, { onConflict: 'course_id,sequence' }).select('id'),
       `upsert module ${c.code}/${module.code}`,
     ), `module ${c.code}/${module.code}`);
-    moduleIds.set(module.code, moduleRow.id);
 
     for (const [lessonIndex, lesson] of module.lessons.entries()) {
       await must(
@@ -213,7 +215,7 @@ for (const [courseIndex, pack] of packs.entries()) {
             teaching_material: lesson.teaching_material,
             activity: lesson.activity,
             self_check: lesson.self_check,
-            source_pack: `${programmeManifest.programme.code}@1.0.0`,
+            source_pack: `${programmeManifest.programme.code}@${packVersion}`,
           },
           required: true,
           estimated_minutes: lesson.minutes,
@@ -237,7 +239,11 @@ for (const [courseIndex, pack] of packs.entries()) {
         license_note: resource.license,
         required: resourceIndex < 2,
         sequence: resourceIndex + 1,
-        metadata: { publisher: resource.publisher, source_pack: `${programmeManifest.programme.code}@1.0.0` },
+        metadata: {
+          publisher: resource.publisher,
+          source_pack: `${programmeManifest.programme.code}@${packVersion}`,
+          credit_award_status: programmeManifest.programme.credit_award_status,
+        },
       }, { onConflict: 'course_id,title,sequence' }),
       `upsert resource ${c.code}/${resource.title}`,
     );
@@ -256,7 +262,10 @@ for (const [courseIndex, pack] of packs.entries()) {
         max_points: 100,
         weight_percent: assessment.weight,
         rubric: assessment.rubric,
-        release_policy: { source_pack: `${programmeManifest.programme.code}@1.0.0` },
+        release_policy: {
+          source_pack: `${programmeManifest.programme.code}@${packVersion}`,
+          credit_award_status: programmeManifest.programme.credit_award_status,
+        },
         active: true,
       }, { onConflict: 'course_id,code' }).select('id'),
       `upsert assessment template ${c.code}/${assessment.id}`,
@@ -282,7 +291,7 @@ await must(
   db.from('university_course_pack_releases').insert({
     organization_id: organizationId,
     pack_code: programmeManifest.programme.code,
-    version: '1.0.0',
+    version: packVersion,
     programme_code: programmeManifest.programme.code,
     content_hash: contentHash,
     source_ref: process.env.GITHUB_SHA || null,
@@ -294,4 +303,5 @@ await must(
 );
 
 console.log('ScrollUniversity foundation curriculum installed successfully.');
+console.log('This install records workload planning only; it does not award ECTS or transferable academic credit.');
 console.table(summary);
