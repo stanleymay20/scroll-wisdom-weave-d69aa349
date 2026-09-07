@@ -29,8 +29,21 @@ for (const [path, heading] of [
   });
 }
 
+test("ScrollUniversity landing is public and product-specific", async ({ page }) => {
+  await page.goto("/university/about");
+  await expect(page).toHaveURL(/\/university\/about$/);
+  await expect(page.getByRole("heading", { level: 1 })).toContainText("Learn deeply. Build mastery.");
+  await expect(page.getByText("Illustrative", { exact: true })).toBeVisible();
+  await expect(page.getByRole("link", { name: /open workspace/i })).toHaveAttribute("href", "/university");
+});
+
 test("protected routes fail closed to authentication", async ({ page }) => {
   await page.goto("/library");
+  await expect(page).toHaveURL(/\/auth$/);
+});
+
+test("ScrollUniversity workspace remains protected", async ({ page }) => {
+  await page.goto("/university");
   await expect(page).toHaveURL(/\/auth$/);
 });
 
