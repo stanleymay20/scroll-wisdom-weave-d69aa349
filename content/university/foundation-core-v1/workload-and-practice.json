@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "credit_system": "ECTS",
+  "credit_system": "ScrollUniversity workload units (ECTS workload benchmark only; not ECTS credit)",
   "courses": {
     "SU101": {
       "total_hours": 135,
