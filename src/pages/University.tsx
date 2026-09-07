@@ -6,7 +6,7 @@ import UniversityAcademicAdministration from '@/components/university/University
 import UniversityCourseGovernance from '@/components/university/UniversityCourseGovernance';
 import UniversityCourseMaterials from '@/components/university/UniversityCourseMaterials';
 import UniversityInteroperability from '@/components/university/UniversityInteroperability';
-import UniversityStudentLifecycle from '@/components/university/UniversityStudentLifecycle';
+import UniversityStudentLifecycleWorkspace from '@/components/university/UniversityStudentLifecycleWorkspace';
 import UniversityLtiClaim from '@/pages/UniversityLtiClaim';
 
 export default function University() {
@@ -25,7 +25,7 @@ export default function University() {
   }
 
   if (params.get('view') === 'lifecycle') {
-    return <UniversityStudentLifecycle />;
+    return <UniversityStudentLifecycleWorkspace />;
   }
 
   if (params.get('view') === 'administration') {
