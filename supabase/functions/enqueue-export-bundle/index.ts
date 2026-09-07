@@ -42,6 +42,7 @@ import {
 import { isbnForPublicationSnapshot, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
 import { buildKdpPrintCoverPdf, getPdfPageCount, type KdpPaperType, type KdpTrimSize } from "../_shared/kdp-print-cover.ts";
 import { requireKdpFrontCoverResolution, type KdpCoverResolutionAssessment } from "../_shared/kdp-cover-resolution.ts";
+import { resolveKdpPrintProductForm } from "../_shared/kdp-print-product-form.ts";
 
 const EXTERNAL_BUNDLES = new Set<BundlePlatform>(["gumroad", "shopify", "substack", "patreon", "etsy"]);
 
@@ -690,6 +691,24 @@ serve(async (req) => {
 
   const corr = correlationId(req);
 
+  // KDP print bundles are paperback-only (paperback interior + paperback cover
+  // geometry). Resolve the contract before any job row is created so an
+  // unsupported product form never reaches the queue or gets coerced.
+  let kdpPrintProductForm: "paperback" | null = null;
+  if (parsed.bundle_type === "kdp") {
+    const resolved = resolveKdpPrintProductForm((parsed.options ?? {}).print_product_form);
+    if (!resolved.ok) {
+      return badRequest(resolved.message, { code: resolved.code, correlation_id: corr });
+    }
+    kdpPrintProductForm = resolved.productForm;
+  }
+  const bundleOptions: Record<string, unknown> = kdpPrintProductForm
+    ? { ...(parsed.options ?? {}), print_product_form: kdpPrintProductForm }
+    : { ...(parsed.options ?? {}) };
+
+
+
+
   try {
     const sc = serviceClient();
 
@@ -723,7 +742,7 @@ serve(async (req) => {
     const { data: job, error } = await sc.from("export_jobs").insert({
       user_id: auth.userId, book_id: parsed.book_id, listing_id: parsed.listing_id ?? null,
       bundle_type: parsed.bundle_type, status: "pending",
-      metadata: parsed.options ?? {},
+      metadata: bundleOptions,
       correlation_id: corr,
       entitlement_snapshot_id: entitlementSnapshotId,
     }).select("id").single();
@@ -743,7 +762,7 @@ serve(async (req) => {
     });
 
     // @ts-ignore EdgeRuntime is provided by Supabase runtime
-    EdgeRuntime.waitUntil(runJob(job.id, auth.userId, parsed.book_id, parsed.bundle_type as BundlePlatform, auth.token, parsed.options ?? {}, corr));
+    EdgeRuntime.waitUntil(runJob(job.id, auth.userId, parsed.book_id, parsed.bundle_type as BundlePlatform, auth.token, bundleOptions, corr));
 
     return json({ ok: true, job_id: job.id, correlation_id: corr }, 200, { "x-correlation-id": corr });
   } catch (e) { return serverError(e); }
