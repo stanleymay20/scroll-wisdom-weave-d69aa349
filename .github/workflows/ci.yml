@@ -50,6 +50,8 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run test
+      - name: Validate ScrollUniversity curriculum content
+        run: bun scripts/validate-university-content.mjs
 
   migration-safety:
     runs-on: ubuntu-latest
