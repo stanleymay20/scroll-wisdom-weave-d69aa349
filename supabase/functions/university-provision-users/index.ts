@@ -54,6 +54,17 @@ type ResolvedPerson = {
   person: PersonInput;
 };
 
+type ResolvedAuthUserRow = {
+  email: string;
+  user_id: string;
+};
+
+type ProvisionBatchRow = {
+  user_id: string;
+  ok: boolean;
+  error_message: string | null;
+};
+
 serve(async (req) => {
   const pre = preflight(req);
   if (pre) return pre;
@@ -89,8 +100,9 @@ serve(async (req) => {
     );
     if (existingUsersError) throw existingUsersError;
 
-    const usersByEmail = new Map(
-      (existingUsers || []).map((row) => [String(row.email).toLowerCase(), String(row.user_id)]),
+    const existingUserRows = (Array.isArray(existingUsers) ? existingUsers : []) as ResolvedAuthUserRow[];
+    const usersByEmail = new Map<string, string>(
+      existingUserRows.map((row) => [String(row.email).toLowerCase(), String(row.user_id)]),
     );
     const seen = new Set<string>();
     const resultSlots: Array<ProvisionResult | null> = Array(parsed.people.length).fill(null);
@@ -159,8 +171,9 @@ serve(async (req) => {
           };
         }
       } else {
-        const provisionByUser = new Map(
-          (provisionRows || []).map((row) => [String(row.user_id), row]),
+        const batchRows = (Array.isArray(provisionRows) ? provisionRows : []) as ProvisionBatchRow[];
+        const provisionByUser = new Map<string, ProvisionBatchRow>(
+          batchRows.map((row) => [String(row.user_id), row]),
         );
         for (const entry of resolved) {
           const row = provisionByUser.get(entry.user_id);
