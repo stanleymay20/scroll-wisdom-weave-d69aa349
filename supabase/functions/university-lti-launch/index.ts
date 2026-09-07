@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.224.0/http/server.ts";
-import { createRemoteJWKSet, jwtVerify } from "npm:jose@6.1.0";
+import { createRemoteJWKSet, jwtVerify } from "https://esm.sh/jose@6.1.0?target=deno";
 import { badRequest, preflight, serverError, serviceClient } from "../_shared/http.ts";
 import {
   buildLtiToolRedirect,
