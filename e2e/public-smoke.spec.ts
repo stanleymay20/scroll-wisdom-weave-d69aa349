@@ -34,7 +34,7 @@ test("ScrollUniversity landing is public and product-specific", async ({ page })
   await expect(page).toHaveURL(/\/university\/about$/);
   await expect(page.getByRole("heading", { level: 1 })).toContainText("Learn deeply. Build mastery.");
   await expect(page.getByText("Illustrative", { exact: true })).toBeVisible();
-  await expect(page.getByRole("link", { name: /open workspace/i })).toHaveAttribute("href", "/university");
+  await expect(page.locator("header").getByRole("link", { name: "Open workspace", exact: true })).toHaveAttribute("href", "/university");
 });
 
 test("protected routes fail closed to authentication", async ({ page }) => {
