@@ -18,6 +18,24 @@ import {
 } from '@/lib/university';
 
 const db = supabase as unknown as SupabaseClient;
+const UNIVERSITY_PAGE_SIZE = 500;
+const UNIVERSITY_MAX_ROWS_PER_RESOURCE = 20_000;
+
+async function fetchInstitutionRows(table: string, organizationId: string): Promise<Record<string, unknown>[]> {
+  const rows: Record<string, unknown>[] = [];
+  for (let from = 0; from < UNIVERSITY_MAX_ROWS_PER_RESOURCE; from += UNIVERSITY_PAGE_SIZE) {
+    const { data, error } = await db.from(table)
+      .select('*')
+      .eq('organization_id', organizationId)
+      .order('id', { ascending: true })
+      .range(from, from + UNIVERSITY_PAGE_SIZE - 1);
+    if (error) throw error;
+    const page = (data || []) as Record<string, unknown>[];
+    rows.push(...page);
+    if (page.length < UNIVERSITY_PAGE_SIZE) return rows;
+  }
+  throw new Error(`${table} exceeded the guarded ${UNIVERSITY_MAX_ROWS_PER_RESOURCE.toLocaleString()}-row university load. Use a scoped workspace/report instead of loading the whole institution.`);
+}
 
 export interface UniversityOutcome {
   id: string;
@@ -149,56 +167,123 @@ export function useUniversity() {
     setLoading(true);
     setError(null);
     try {
-      const results = await Promise.all([
+      const [settingsRes, personRes] = await Promise.all([
         db.from('university_settings').select('organization_id').eq('organization_id', activeOrgId).maybeSingle(),
         db.from('university_people').select('*').eq('organization_id', activeOrgId).eq('user_id', user.id).maybeSingle(),
-        db.from('university_people').select('*').eq('organization_id', activeOrgId).order('display_name'),
-        db.from('university_programmes').select('*').eq('organization_id', activeOrgId).order('code'),
-        db.from('university_courses').select('*').eq('organization_id', activeOrgId).order('code'),
-        db.from('university_academic_terms').select('*').eq('organization_id', activeOrgId).order('starts_on', { ascending: false }),
-        db.from('university_cohorts').select('*').eq('organization_id', activeOrgId).order('created_at', { ascending: false }),
-        db.from('university_course_offerings').select('*').eq('organization_id', activeOrgId).order('created_at', { ascending: false }),
-        db.from('university_teaching_assignments').select('*').eq('organization_id', activeOrgId),
-        db.from('university_enrolments').select('*').eq('organization_id', activeOrgId).order('enrolled_at', { ascending: false }),
-        db.from('university_assignments').select('*').eq('organization_id', activeOrgId).order('due_at', { ascending: true }),
-        db.from('university_grade_items').select('*').eq('organization_id', activeOrgId).order('created_at'),
-        db.from('university_grades').select('*').eq('organization_id', activeOrgId),
-        db.from('university_gradebook_v').select('*').eq('organization_id', activeOrgId),
-        db.from('university_transcript_v').select('*').eq('organization_id', activeOrgId),
-        db.from('university_learning_outcomes').select('*').eq('organization_id', activeOrgId).order('code'),
-        db.from('university_modules').select('*').eq('organization_id', activeOrgId).order('sequence'),
+      ]);
+      if (settingsRes.error) throw settingsRes.error;
+      if (personRes.error) throw personRes.error;
+
+      const currentPerson = (personRes.data || null) as UniversityPerson | null;
+      const currentRole = currentPerson?.university_role ?? null;
+      const currentIsAcademicAdmin = isOrgAdmin || isUniversityAcademicAdmin(currentRole);
+      const currentIsStaff = isOrgAdmin || isUniversityStaff(currentRole);
+      setSettingsExists(!!settingsRes.data);
+      setPerson(currentPerson);
+
+      if (!currentIsStaff) {
+        const enrolmentRes = await db.from('university_enrolments')
+          .select('*')
+          .eq('organization_id', activeOrgId)
+          .eq('user_id', user.id)
+          .order('enrolled_at', { ascending: false });
+        if (enrolmentRes.error) throw enrolmentRes.error;
+        const learnerEnrolments = (enrolmentRes.data || []) as UniversityEnrolment[];
+        const offeringIds = [...new Set(learnerEnrolments.map((row) => row.offering_id))];
+
+        const offeringRes = offeringIds.length
+          ? await db.from('university_course_offerings').select('*').eq('organization_id', activeOrgId).in('id', offeringIds)
+          : { data: [], error: null };
+        if (offeringRes.error) throw offeringRes.error;
+        const learnerOfferings = (offeringRes.data || []) as UniversityOffering[];
+        const courseIds = [...new Set(learnerOfferings.map((row) => row.course_id))];
+        const termIds = [...new Set(learnerOfferings.map((row) => row.term_id))];
+
+        const [courseRes, termRes, assignmentRes, transcriptRes, announcementRes] = await Promise.all([
+          courseIds.length
+            ? db.from('university_courses').select('*').eq('organization_id', activeOrgId).in('id', courseIds)
+            : Promise.resolve({ data: [], error: null }),
+          termIds.length
+            ? db.from('university_academic_terms').select('*').eq('organization_id', activeOrgId).in('id', termIds)
+            : Promise.resolve({ data: [], error: null }),
+          offeringIds.length
+            ? db.from('university_assignments').select('*').eq('organization_id', activeOrgId).in('offering_id', offeringIds).eq('published', true).order('due_at')
+            : Promise.resolve({ data: [], error: null }),
+          db.from('university_transcript_v').select('*').eq('organization_id', activeOrgId).eq('user_id', user.id),
+          offeringIds.length
+            ? db.from('university_announcements').select('*').eq('organization_id', activeOrgId).or(`offering_id.is.null,offering_id.in.(${offeringIds.join(',')})`).order('created_at', { ascending: false }).limit(50)
+            : db.from('university_announcements').select('*').eq('organization_id', activeOrgId).is('offering_id', null).order('created_at', { ascending: false }).limit(50),
+        ]);
+        const learnerError = [courseRes, termRes, assignmentRes, transcriptRes, announcementRes].find((result) => result.error)?.error;
+        if (learnerError) throw learnerError;
+
+        setPeople(currentPerson ? [currentPerson] : []);
+        setProgrammes([]);
+        setCourses((courseRes.data || []) as UniversityCourse[]);
+        setTerms((termRes.data || []) as UniversityTerm[]);
+        setCohorts([]);
+        setOfferings(learnerOfferings);
+        setTeachingAssignments([]);
+        setEnrolments(learnerEnrolments);
+        setAssignments((assignmentRes.data || []) as UniversityAssignment[]);
+        setGradeItems([]);
+        setGrades([]);
+        setGradebook([]);
+        setTranscript((transcriptRes.data || []) as UniversityTranscriptRow[]);
+        setOutcomes([]);
+        setModules([]);
+        setAnnouncements((announcementRes.data || []) as UniversityAnnouncement[]);
+        return;
+      }
+
+      const [
+        peopleRows, programmeRows, courseRows, termRows, cohortRows, offeringRows, teachingRows,
+        enrolmentRows, assignmentRows, gradeItemRows, outcomeRows, moduleRows,
+        announcementRes,
+      ] = await Promise.all([
+        fetchInstitutionRows('university_people', activeOrgId),
+        fetchInstitutionRows('university_programmes', activeOrgId),
+        fetchInstitutionRows('university_courses', activeOrgId),
+        fetchInstitutionRows('university_academic_terms', activeOrgId),
+        fetchInstitutionRows('university_cohorts', activeOrgId),
+        fetchInstitutionRows('university_course_offerings', activeOrgId),
+        fetchInstitutionRows('university_teaching_assignments', activeOrgId),
+        fetchInstitutionRows('university_enrolments', activeOrgId),
+        fetchInstitutionRows('university_assignments', activeOrgId),
+        fetchInstitutionRows('university_grade_items', activeOrgId),
+        fetchInstitutionRows('university_learning_outcomes', activeOrgId),
+        fetchInstitutionRows('university_modules', activeOrgId),
         db.from('university_announcements').select('*').eq('organization_id', activeOrgId).order('created_at', { ascending: false }).limit(50),
       ]);
-      const firstError = results.find((result) => result.error)?.error;
-      if (firstError) throw firstError;
+      if (announcementRes.error) throw announcementRes.error;
 
-      const [settingsRes, personRes, peopleRes, programmeRes, courseRes, termRes, cohortRes, offeringRes,
-        teachingRes, enrolmentRes, assignmentRes, gradeItemRes, gradeRes, gradebookRes, transcriptRes,
-        outcomeRes, moduleRes, announcementRes] = results;
-      setSettingsExists(!!settingsRes.data);
-      setPerson(personRes.data || null);
-      setPeople(peopleRes.data || []);
-      setProgrammes(programmeRes.data || []);
-      setCourses(courseRes.data || []);
-      setTerms(termRes.data || []);
-      setCohorts(cohortRes.data || []);
-      setOfferings(offeringRes.data || []);
-      setTeachingAssignments(teachingRes.data || []);
-      setEnrolments(enrolmentRes.data || []);
-      setAssignments(assignmentRes.data || []);
-      setGradeItems(gradeItemRes.data || []);
-      setGrades(gradeRes.data || []);
-      setGradebook(gradebookRes.data || []);
-      setTranscript(transcriptRes.data || []);
-      setOutcomes(outcomeRes.data || []);
-      setModules(moduleRes.data || []);
-      setAnnouncements(announcementRes.data || []);
+      setPeople((peopleRows as unknown as UniversityPerson[]).sort((a, b) => (a.display_name || '').localeCompare(b.display_name || '')));
+      setProgrammes((programmeRows as unknown as UniversityProgramme[]).sort((a, b) => a.code.localeCompare(b.code)));
+      setCourses((courseRows as unknown as UniversityCourse[]).sort((a, b) => a.code.localeCompare(b.code)));
+      setTerms((termRows as unknown as UniversityTerm[]).sort((a, b) => b.starts_on.localeCompare(a.starts_on)));
+      setCohorts(cohortRows as unknown as UniversityCohort[]);
+      setOfferings(offeringRows as unknown as UniversityOffering[]);
+      setTeachingAssignments(teachingRows as unknown as UniversityTeachingAssignment[]);
+      setEnrolments(enrolmentRows as unknown as UniversityEnrolment[]);
+      setAssignments(assignmentRows as unknown as UniversityAssignment[]);
+      setGradeItems(gradeItemRows as unknown as UniversityGradeItem[]);
+      setGrades([]);
+      setGradebook([]);
+      setTranscript([]);
+      setOutcomes((outcomeRows as unknown as UniversityOutcome[]).sort((a, b) => a.code.localeCompare(b.code)));
+      setModules((moduleRows as unknown as UniversityModule[]).sort((a, b) => a.sequence - b.sequence));
+      setAnnouncements((announcementRes.data || []) as UniversityAnnouncement[]);
+
+      if (!currentIsAcademicAdmin) {
+        // RLS remains the authority. This branch simply documents that non-admin
+        // staff data above is limited by database policies, not client claims.
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to load ScrollUniversity.');
     } finally {
       setLoading(false);
     }
-  }, [activeOrgId, user, clear]);
+  }, [activeOrgId, user, isOrgAdmin, clear]);
 
   useEffect(() => { void refresh(); }, [refresh]);
 
@@ -255,7 +340,6 @@ export function useUniversity() {
     if (!activeOrgId || !user) throw new Error('Authentication and an active institution are required.');
     const bounded = Math.max(0, Math.min(100, percentage));
     const points = Math.round((bounded / 100) * Number(gradeItem.max_points) * 100) / 100;
-    const existing = grades.find((grade) => grade.grade_item_id === gradeItem.id && grade.user_id === learnerId);
     const payload = {
       organization_id: activeOrgId,
       grade_item_id: gradeItem.id,
@@ -267,13 +351,14 @@ export function useUniversity() {
       graded_by: user.id,
       graded_at: new Date().toISOString(),
     };
-    const result = existing
-      ? await db.from('university_grades').update(payload).eq('id', existing.id).select().single()
-      : await db.from('university_grades').insert(payload).select().single();
+    const result = await db.from('university_grades')
+      .upsert(payload, { onConflict: 'grade_item_id,user_id' })
+      .select()
+      .single();
     if (result.error) throw result.error;
     await refresh();
     return result.data;
-  }, [activeOrgId, user, grades, refresh]);
+  }, [activeOrgId, user, refresh]);
 
   const courseById = useMemo(() => new Map(courses.map((course) => [course.id, course])), [courses]);
   const termById = useMemo(() => new Map(terms.map((term) => [term.id, term])), [terms]);
