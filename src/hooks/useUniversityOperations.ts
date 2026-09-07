@@ -7,18 +7,28 @@ const db = supabase as unknown as SupabaseClient;
 const OPERATIONS_PAGE_SIZE = 500;
 const OPERATIONS_MAX_ROWS = 20_000;
 
+type PagedFetchOptions = {
+  statusColumn?: string;
+  statusValues?: string[];
+  orderColumn?: string;
+  secondaryOrderColumn?: string;
+};
+
 async function fetchPagedInstitutionRows(
   table: string,
   organizationId: string,
-  options?: { statusColumn?: string; statusValues?: string[] },
+  options?: PagedFetchOptions,
 ): Promise<Record<string, unknown>[]> {
   const rows: Record<string, unknown>[] = [];
   for (let from = 0; from < OPERATIONS_MAX_ROWS; from += OPERATIONS_PAGE_SIZE) {
     let query = db.from(table)
       .select('*')
       .eq('organization_id', organizationId)
-      .order('id', { ascending: true })
-      .range(from, from + OPERATIONS_PAGE_SIZE - 1);
+      .order(options?.orderColumn || 'id', { ascending: true });
+    if (options?.secondaryOrderColumn) {
+      query = query.order(options.secondaryOrderColumn, { ascending: true });
+    }
+    query = query.range(from, from + OPERATIONS_PAGE_SIZE - 1);
     if (options?.statusColumn && options.statusValues?.length) {
       query = query.in(options.statusColumn, options.statusValues);
     }
@@ -204,8 +214,8 @@ export function useUniversityOperations(activeOrgId: string | null, refreshUnive
         fetchPagedInstitutionRows('university_cohort_members', activeOrgId),
         fetchPagedInstitutionRows('university_submissions', activeOrgId, { statusColumn: 'status', statusValues: ['submitted', 'late'] }),
         fetchPagedInstitutionRows('university_attendance_sessions', activeOrgId),
-        fetchPagedInstitutionRows('university_attendance_summary_v', activeOrgId),
-        fetchPagedInstitutionRows('university_learner_progress_v', activeOrgId),
+        fetchPagedInstitutionRows('university_attendance_summary_v', activeOrgId, { orderColumn: 'offering_id', secondaryOrderColumn: 'user_id' }),
+        fetchPagedInstitutionRows('university_learner_progress_v', activeOrgId, { orderColumn: 'offering_id', secondaryOrderColumn: 'user_id' }),
       ]);
       setCohortMembers(cohortRows as unknown as UniversityCohortMember[]);
       setSubmissions((submissionRows as unknown as UniversitySubmission[]).sort((a, b) => b.updated_at.localeCompare(a.updated_at)));
