@@ -1,0 +1,78 @@
+{
+  "schema_version": 1,
+  "credit_system": "ECTS",
+  "courses": {
+    "SU101": {
+      "total_hours": 135,
+      "breakdown": {"guided_lessons": 19, "required_reading": 28, "guided_practice": 24, "independent_research": 24, "summative_assessment": 34, "reflection_and_review": 6},
+      "practice_bank": [
+        "Convert five broad topics into bounded research questions and justify feasibility.",
+        "Evaluate six mixed-quality sources using authority, evidence, method, currency and conflict-of-interest criteria.",
+        "Build and rerun a documented Boolean search strategy in two scholarly discovery environments.",
+        "Construct an evidence matrix from at least eight sources and identify agreement, disagreement and gaps.",
+        "Audit a draft for claim-to-source support, paraphrase integrity, quotation accuracy and bidirectional references.",
+        "Produce a reproducible mini-review package including search log, exclusions, synthesis and limitations."
+      ]
+    },
+    "SU102": {
+      "total_hours": 135,
+      "breakdown": {"guided_lessons": 17, "required_reading": 25, "guided_practice": 27, "independent_writing": 27, "summative_assessment": 33, "reflection_and_review": 6},
+      "practice_bank": [
+        "Rewrite one message for academic, executive and public audiences and explain the rhetorical choices.",
+        "Build claim-reason-evidence-counterargument maps for three contested questions.",
+        "Reverse-outline a weak essay and repair its document architecture.",
+        "Create a synthesis matrix and integrate six sources by theme rather than author.",
+        "Transform a long narrative into an evidence-led decision memo.",
+        "Perform argument, paragraph and sentence revision passes and submit a change rationale."
+      ]
+    },
+    "SU103": {
+      "total_hours": 135,
+      "breakdown": {"guided_lessons": 17, "required_reading": 22, "guided_problem_sets": 30, "dataset_labs": 28, "summative_assessment": 32, "reflection_and_review": 6},
+      "practice_bank": [
+        "Classify variables and document data-quality issues in a real open dataset.",
+        "Compare mean, median, spread and distribution shape under outlier scenarios.",
+        "Recalculate percentage-point, relative and absolute changes from public claims.",
+        "Use frequency tables to solve conditional-probability and base-rate problems.",
+        "Redesign misleading charts and explain each correction.",
+        "Build a reproducible spreadsheet analysis and two-page evidence brief from open data."
+      ]
+    },
+    "SU104": {
+      "total_hours": 135,
+      "breakdown": {"guided_lessons": 17, "required_reading": 24, "guided_practice": 26, "security_and_accessibility_labs": 28, "summative_assessment": 34, "reflection_and_review": 6},
+      "practice_bank": [
+        "Design a recoverable file, versioning and backup system and test restoration.",
+        "Audit account permissions and create a least-privilege remediation list without exposing credentials.",
+        "Verify three online claims by tracing them to original evidence.",
+        "Work through phishing and account-compromise simulations and document first-response actions.",
+        "Audit a digital artifact for privacy, copyright, accessibility and open-license compliance.",
+        "Create and test a personal digital-resilience checklist covering security, recovery and wellbeing."
+      ]
+    },
+    "SU105": {
+      "total_hours": 135,
+      "breakdown": {"guided_lessons": 18, "required_reading": 24, "prompt_and_evaluation_labs": 30, "independent_ai_projects": 24, "summative_assessment": 33, "reflection_and_review": 6},
+      "practice_bank": [
+        "Classify AI use cases by task, consequence of error, reversibility and required oversight.",
+        "Compare multiple prompt/workflow designs and measure unsupported claims and instruction adherence.",
+        "Create a ten-case evaluation set with normal, difficult and edge cases for one AI task.",
+        "Audit AI-generated factual claims and citations against authoritative sources.",
+        "Threat-model an AI workflow that can access files or tools, including prompt-injection risks.",
+        "Design a responsible AI workflow with data boundaries, evaluation, approvals, logging, fallback and incident response."
+      ]
+    },
+    "SU106": {
+      "total_hours": 135,
+      "breakdown": {"guided_lessons": 17, "required_reading": 22, "customer_and_market_research": 27, "experiments_and_financial_lab": 29, "summative_assessment": 34, "reflection_and_review": 6},
+      "practice_bank": [
+        "Conduct problem interviews without pitching and code evidence of frequency, consequence and current workaround.",
+        "Map direct competitors, substitutes, internal alternatives and the status quo from the user's decision perspective.",
+        "Rank business-model assumptions by importance and evidence strength.",
+        "Design and run a falsifiable low-cost validation experiment with a predefined decision threshold.",
+        "Build base, upside and downside unit-economics and cash scenarios.",
+        "Create a stakeholder-risk register and a ninety-day venture/career execution plan."
+      ]
+    }
+  }
+}
