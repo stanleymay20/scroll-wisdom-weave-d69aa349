@@ -5,6 +5,7 @@ const root = path.resolve('content/university/foundation-core-v1');
 const programme = JSON.parse(await readFile(path.join(root, 'programme.json'), 'utf8'));
 const workload = JSON.parse(await readFile(path.join(root, 'workload-and-practice.json'), 'utf8'));
 const failures = [];
+const INTERNAL_CREDIT_SYSTEM = 'ScrollUniversity workload units (ECTS workload benchmark only; not ECTS credit)';
 
 const fail = (message) => failures.push(message);
 const nonEmpty = (value) => typeof value === 'string' && value.trim().length > 0;
@@ -20,6 +21,9 @@ if (!nonEmpty(programme?.programme?.credit_disclaimer) || !programme.programme.c
 }
 if (!nonEmpty(programme?.programme?.credit_system) || !programme.programme.credit_system.toLowerCase().includes('workload')) {
   fail('programme credit_system must identify internal workload planning rather than awarded academic credit');
+}
+if (workload?.credit_system !== INTERNAL_CREDIT_SYSTEM) {
+  fail(`workload-and-practice credit_system must be exactly "${INTERNAL_CREDIT_SYSTEM}"`);
 }
 
 let programmeWorkloadUnits = 0;
@@ -47,6 +51,9 @@ for (const descriptor of programme.courses || []) {
   const hours = Number(course.planned_hours || 0);
 
   if (course.code !== descriptor.code) fail(`${prefix}: descriptor/course code mismatch`);
+  if (course.credit_system !== INTERNAL_CREDIT_SYSTEM) {
+    fail(`${prefix}: credit_system must be exactly "${INTERNAL_CREDIT_SYSTEM}"`);
+  }
   if (workloadUnits <= 0) fail(`${prefix}: internal workload units must be > 0`);
   if (hours < workloadUnits * 25 || hours > workloadUnits * 30) {
     fail(`${prefix}: planned hours ${hours} must be between ${workloadUnits * 25} and ${workloadUnits * 30} for ${workloadUnits} workload units`);
