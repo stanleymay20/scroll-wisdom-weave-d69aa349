@@ -25,7 +25,7 @@ import type { ExportQualityReport } from "@/lib/exportQuality";
 type BundleKind = "kdp" | "gumroad" | "substack" | "patreon" | "etsy";
 
 const BUNDLE_BUTTONS: Array<{ kind: BundleKind; label: string; icon: any; variant?: "default" | "outline" | "secondary" }> = [
-  { kind: "kdp",      label: "Amazon KDP",   icon: Package,  variant: "default"  },
+  { kind: "kdp",      label: "Amazon KDP Paperback", icon: Package,  variant: "default"  },
   { kind: "gumroad",  label: "Gumroad",      icon: Store,    variant: "outline"  },
   { kind: "substack", label: "Substack",     icon: BookOpen, variant: "outline"  },
   { kind: "patreon",  label: "Patreon",      icon: Heart,    variant: "outline"  },
@@ -208,8 +208,10 @@ export default function BookPublishSettings() {
   async function enqueue(kind: BundleKind) {
     setBundling(kind);
     try {
+      // The KDP bundle is paperback-only; state that explicitly at the boundary.
+      const options = kind === "kdp" ? { print_product_form: "paperback" } : {};
       const { data, error } = await supabase.functions.invoke("enqueue-export-bundle", {
-        body: { book_id: bookId, bundle_type: kind, listing_id: form.listing_id || undefined, options: {} },
+        body: { book_id: bookId, bundle_type: kind, listing_id: form.listing_id || undefined, options },
       });
       if (error) throw error;
       toast.success(`Bundle queued (job ${(data as any).job_id.slice(0, 8)}…)`);
