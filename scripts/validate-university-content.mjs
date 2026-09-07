@@ -1,0 +1,113 @@
+import { readFile } from 'node:fs/promises';
+import path from 'node:path';
+
+const root = path.resolve('content/university/foundation-core-v1');
+const programme = JSON.parse(await readFile(path.join(root, 'programme.json'), 'utf8'));
+const failures = [];
+
+const fail = (message) => failures.push(message);
+const nonEmpty = (value) => typeof value === 'string' && value.trim().length > 0;
+
+if (!programme?.programme?.code) fail('programme code is required');
+if (!Array.isArray(programme?.courses) || programme.courses.length === 0) fail('programme must contain courses');
+
+let programmeCredits = 0;
+
+for (const descriptor of programme.courses || []) {
+  programmeCredits += Number(descriptor.credits || 0);
+  if (!descriptor.pack) {
+    fail(`${descriptor.code || 'unknown course'}: pack path is required`);
+    continue;
+  }
+
+  let pack;
+  try {
+    pack = JSON.parse(await readFile(path.join(root, descriptor.pack), 'utf8'));
+  } catch (error) {
+    fail(`${descriptor.code}: course pack missing or invalid JSON (${error.message})`);
+    continue;
+  }
+
+  const course = pack.course || {};
+  const prefix = course.code || descriptor.code || descriptor.pack;
+  const credits = Number(course.credits || 0);
+  const hours = Number(course.planned_hours || 0);
+
+  if (course.code !== descriptor.code) fail(`${prefix}: descriptor/course code mismatch`);
+  if (credits <= 0) fail(`${prefix}: credits must be > 0`);
+  if (hours < credits * 25 || hours > credits * 30) {
+    fail(`${prefix}: planned hours ${hours} must be between ${credits * 25} and ${credits * 30} for ${credits} ECTS`);
+  }
+
+  const outcomes = course.outcomes || [];
+  if (outcomes.length < 4) fail(`${prefix}: at least 4 learning outcomes required`);
+  const outcomeCodes = new Set(outcomes.map((outcome) => outcome.code));
+  for (const outcome of outcomes) {
+    if (!nonEmpty(outcome.code) || !nonEmpty(outcome.text) || !nonEmpty(outcome.bloom)) {
+      fail(`${prefix}: every learning outcome requires code, Bloom level and text`);
+    }
+  }
+
+  const modules = pack.modules || [];
+  if (modules.length < 5) fail(`${prefix}: at least 5 modules required`);
+  let moduleHours = 0;
+  for (const module of modules) {
+    moduleHours += Number(module.estimated_hours || 0);
+    if (!nonEmpty(module.code) || !nonEmpty(module.title)) fail(`${prefix}: every module requires code and title`);
+    if (!Array.isArray(module.lessons) || module.lessons.length < 2) fail(`${prefix}/${module.code}: at least 2 lessons required`);
+    for (const lesson of module.lessons || []) {
+      if (!nonEmpty(lesson.title)) fail(`${prefix}/${module.code}: lesson title required`);
+      if (!Array.isArray(lesson.objectives) || lesson.objectives.length < 2) fail(`${prefix}/${module.code}/${lesson.title}: at least 2 lesson objectives required`);
+      if (!nonEmpty(lesson.teaching_material) || lesson.teaching_material.length < 220) fail(`${prefix}/${module.code}/${lesson.title}: substantive teaching material required (>=220 chars)`);
+      if (!nonEmpty(lesson.activity)) fail(`${prefix}/${module.code}/${lesson.title}: learner activity required`);
+      if (!Array.isArray(lesson.self_check) || lesson.self_check.length < 2) fail(`${prefix}/${module.code}/${lesson.title}: at least 2 self-check items required`);
+      for (const check of lesson.self_check || []) {
+        if (!nonEmpty(check.q) || !nonEmpty(check.a)) fail(`${prefix}/${module.code}/${lesson.title}: self-check question and answer required`);
+      }
+    }
+  }
+  if (moduleHours !== hours) fail(`${prefix}: module estimated hours (${moduleHours}) must equal planned hours (${hours})`);
+
+  const assessments = pack.assessments || [];
+  if (assessments.length < 2) fail(`${prefix}: at least 2 summative assessments required`);
+  const totalWeight = assessments.reduce((sum, assessment) => sum + Number(assessment.weight || 0), 0);
+  if (Math.abs(totalWeight - 100) > 0.001) fail(`${prefix}: assessment weights must total 100 (found ${totalWeight})`);
+  for (const assessment of assessments) {
+    if (!nonEmpty(assessment.title) || !nonEmpty(assessment.instructions)) fail(`${prefix}: every assessment requires title and instructions`);
+    if (!assessment.rubric || Object.keys(assessment.rubric).length < 2) fail(`${prefix}/${assessment.title}: rubric required`);
+    if (!Array.isArray(assessment.outcomes) || assessment.outcomes.length === 0) fail(`${prefix}/${assessment.title}: outcome mapping required`);
+    for (const code of assessment.outcomes || []) {
+      if (!outcomeCodes.has(code)) fail(`${prefix}/${assessment.title}: unknown mapped outcome ${code}`);
+    }
+  }
+
+  const resources = pack.resources || [];
+  if (resources.length < 5) fail(`${prefix}: at least 5 verified resources/references required`);
+  for (const resource of resources) {
+    if (!nonEmpty(resource.title) || !nonEmpty(resource.publisher) || !nonEmpty(resource.url) || !nonEmpty(resource.provenance) || !nonEmpty(resource.license)) {
+      fail(`${prefix}: every external resource requires title, publisher, URL, provenance and license/usage note`);
+    }
+  }
+
+  const accessibility = pack.accessibility || {};
+  for (const required of ['text_first', 'captions_required_for_video', 'transcripts_required_for_audio', 'visual_alt_text_required']) {
+    if (accessibility[required] !== true) fail(`${prefix}: accessibility flag ${required} must be true`);
+  }
+
+  const qa = pack.qa || {};
+  for (const required of ['structural', 'subject_review', 'citation_review', 'pedagogy_review', 'accessibility_review', 'copyright_review', 'version']) {
+    if (!nonEmpty(qa[required])) fail(`${prefix}: QA field ${required} is required`);
+  }
+}
+
+if (Number(programme.programme?.credits || 0) !== programmeCredits) {
+  fail(`programme credits ${programme.programme?.credits} do not equal course credits ${programmeCredits}`);
+}
+
+if (failures.length) {
+  console.error('ScrollUniversity content validation failed:');
+  for (const failure of failures) console.error(`  - ${failure}`);
+  process.exit(1);
+}
+
+console.log(`ScrollUniversity content validation passed: ${programme.courses.length} course pack(s), ${programmeCredits} ECTS.`);
