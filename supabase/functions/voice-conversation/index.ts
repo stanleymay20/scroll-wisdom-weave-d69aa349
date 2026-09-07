@@ -273,7 +273,15 @@ serve(async (req) => {
         // beyond that exists only to cover generated audio, so refund it if no
         // provider produced audio.
         if (!audioContent && additionalReserved > 0) {
-          await refundSeconds(additionalReserved);
+          const refundedSeconds = additionalReserved;
+          await refundSeconds(refundedSeconds);
+          latestReservation = {
+            ...latestReservation,
+            secondsUsed: Math.max(0, latestReservation.secondsUsed - refundedSeconds),
+            remainingSeconds: latestReservation.remainingSeconds < 0
+              ? -1
+              : latestReservation.remainingSeconds + refundedSeconds,
+          };
           additionalReserved = 0;
         }
       }
