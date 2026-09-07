@@ -97,6 +97,12 @@ const BodySchema = z.discriminatedUnion("action", [
     isbns: z.array(z.string().min(10).max(40)).min(1).max(200),
     provenanceReference: z.string().trim().min(1).max(500),
   }),
+  z.object({
+    action: z.literal("review_platform_pool"),
+    batchId: z.string().uuid(),
+    approved: z.boolean(),
+    notes: z.string().trim().max(2000).optional(),
+  }),
 ]);
 
 type Service = ReturnType<typeof serviceClient>;
@@ -150,7 +156,7 @@ async function getIdentity(sc: Service, bookId: string, userId: string) {
   if (profile?.imprint_id) {
     const { data, error } = await sc
       .from("publishing_imprints")
-      .select("id,scope,publisher_name,imprint_name,country_code,isbn_agency_name,registrant_name,agency_record_attested,verified,verified_at,verification_reference,verification_method")
+      .select("id,scope,publisher_name,imprint_name,country_code,isbn_agency_name,registrant_name,agency_record_attested,verified,verified_at,verification_reference,verification_method,verification_pending_reference,verification_pending_method,verification_submitted_at")
       .eq("id", profile.imprint_id)
       .maybeSingle();
     if (error) throw error;
@@ -319,6 +325,9 @@ Deno.serve(async (req) => {
         agency_record_attested_by: auth.userId,
         verified: false,
         verified_at: null,
+        verified_by: null,
+        verification_reference: null,
+        verification_method: null,
       };
       const query = body.imprintId
         ? sc.from("publishing_imprints").update(payload).eq("id", body.imprintId)
@@ -328,82 +337,43 @@ Deno.serve(async (req) => {
         .single();
       if (error) return serverError(error);
 
-      const { data: review, error: reviewErr } = await sc.rpc("review_publishing_imprint", {
+      const { data: submission, error: submitErr } = await sc.rpc("submit_publishing_imprint_verification", {
         p_admin_user_id: auth.userId,
         p_imprint_id: imprint.id,
-        p_approved: true,
         p_verification_reference: body.verificationReference,
-        p_notes: body.verificationNotes ?? null,
         p_verification_method: body.verificationMethod,
+        p_notes: body.verificationNotes ?? null,
       });
-      if (reviewErr) return json({ error: reviewErr.message, code: reviewErr.code }, 409);
-      return json({ success: true, imprint: { ...imprint, verified: true }, verification: review });
+      if (submitErr) return json({ error: submitErr.message, code: submitErr.code }, 409);
+      return json({ success: true, imprint: { ...imprint, verified: false }, verification: submission });
     }
 
     if (body.action === "add_platform_pool") {
       if (!(await requireAdmin(sc, auth.userId))) return forbidden("Administrator role required");
-      const { data: imprint, error: imprintErr } = await sc
-        .from("publishing_imprints")
-        .select("id,scope,verified,verification_reference")
-        .eq("id", body.imprintId)
-        .maybeSingle();
-      if (imprintErr) return serverError(imprintErr);
-      if (!imprint || imprint.scope !== "platform" || imprint.verified !== true || !imprint.verification_reference) {
-        return badRequest("A provenance-verified platform imprint is required");
-      }
-
       const normalized = [...new Set(body.isbns.map(normalizeIsbn13))];
       const invalid = normalized.filter((isbn) => !isValidIsbn13(isbn));
       if (invalid.length > 0) return badRequest(`Invalid ISBN-13: ${invalid.slice(0, 5).join(", ")}`);
 
-      const { data: existing, error: existingErr } = await sc
-        .from("isbn_inventory")
-        .select("isbn13,imprint_id,source")
-        .in("isbn13", normalized);
-      if (existingErr) return serverError(existingErr);
-      const conflict = (existing ?? []).find((row) => row.imprint_id !== body.imprintId || row.source !== "platform_pool");
-      if (conflict) {
-        return json({ error: `ISBN_ALREADY_REGISTERED:${conflict.isbn13}`, code: "isbn_conflict" }, 409);
-      }
+      const { data, error } = await sc.rpc("submit_platform_isbn_pool_batch", {
+        p_admin_user_id: auth.userId,
+        p_imprint_id: body.imprintId,
+        p_isbns: normalized,
+        p_provenance_reference: body.provenanceReference,
+      });
+      if (error) return json({ error: error.message, code: error.code }, 409);
+      return json({ success: true, batch: data, provenanceVerified: false });
+    }
 
-      const now = new Date().toISOString();
-      if ((existing?.length ?? 0) > 0) {
-        const existingNumbers = (existing ?? []).map((row) => row.isbn13);
-        const { error: verifyErr } = await sc
-          .from("isbn_inventory")
-          .update({
-            provenance_status: "verified",
-            provenance_reference: body.provenanceReference,
-            provenance_verified_at: now,
-            provenance_verified_by: auth.userId,
-          })
-          .eq("imprint_id", body.imprintId)
-          .eq("source", "platform_pool")
-          .in("isbn13", existingNumbers);
-        if (verifyErr) return serverError(verifyErr);
-      }
-
-      const existingSet = new Set((existing ?? []).map((row) => row.isbn13));
-      const rows = normalized
-        .filter((isbn13) => !existingSet.has(isbn13))
-        .map((isbn13) => ({
-          imprint_id: body.imprintId,
-          isbn13,
-          source: "platform_pool",
-          status: "available",
-          added_by: auth.userId,
-          provenance_status: "verified",
-          provenance_reference: body.provenanceReference,
-          provenance_verified_at: now,
-          provenance_verified_by: auth.userId,
-          claimed_by_user_id: null,
-        }));
-
-      if (rows.length > 0) {
-        const { error } = await sc.from("isbn_inventory").insert(rows);
-        if (error) return serverError(error);
-      }
-      return json({ success: true, accepted: normalized.length, supplied: normalized.length, provenanceVerified: true });
+    if (body.action === "review_platform_pool") {
+      if (!(await requireAdmin(sc, auth.userId))) return forbidden("Administrator role required");
+      const { data, error } = await sc.rpc("review_platform_isbn_pool_batch", {
+        p_admin_user_id: auth.userId,
+        p_batch_id: body.batchId,
+        p_approved: body.approved,
+        p_review_notes: body.notes ?? null,
+      });
+      if (error) return json({ error: error.message, code: error.code }, 409);
+      return json({ success: true, review: data });
     }
 
     const bookId = "bookId" in body ? body.bookId : null;
@@ -442,9 +412,7 @@ Deno.serve(async (req) => {
           .eq("status", "available")
           .eq("provenance_status", "verified");
         if (poolErr) return serverError(poolErr);
-        if (!availablePool) {
-          return badRequest("ScrollLibrary Press ISBN inventory is currently unavailable");
-        }
+        if (!availablePool) return badRequest("ScrollLibrary Press ISBN inventory is currently unavailable");
         imprintId = platform.id;
       } else {
         if (!body.publisherName || !body.imprintName || body.confirmAgencyMatch !== true) {
