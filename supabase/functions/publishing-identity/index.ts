@@ -273,7 +273,7 @@ Deno.serve(async (req) => {
         .select("id,user_id,imprint_id,isbn13,agency_reference,status,reviewed_by,reviewed_at,review_notes,created_at,updated_at")
         .eq("status", body.status)
         .order("created_at", { ascending: true })
-        .limit(body.limit);
+        .limit(body.limit ?? 100);
       if (error) return serverError(error);
       return json({ claims: data ?? [] });
     }
