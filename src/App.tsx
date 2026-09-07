@@ -73,8 +73,6 @@ const AdminOps = lazy(() => import("./pages/AdminOps"));
 const AdminEntitlements = lazy(() => import("./pages/AdminEntitlements"));
 const Organizations = lazy(() => import("./pages/Organizations"));
 const OrgAnalytics = lazy(() => import("./pages/OrgAnalytics"));
-const University = lazy(() => import("./pages/University"));
-const UniversityLanding = lazy(() => import("./components/university/UniversityLanding"));
 const VerifyLookup = lazy(() => import("./pages/VerifyLookup"));
 const VerifyExport = lazy(() => import("./pages/VerifyExport"));
 const CitationGraph = lazy(() => import("./pages/CitationGraph"));
@@ -102,6 +100,7 @@ const CreatorIntelligence = lazy(() => import("./pages/CreatorIntelligence"));
 const CreatorBusinessHub = lazy(() => import("./pages/CreatorBusinessHub"));
 const CreatorAssets = lazy(() => import("./pages/CreatorAssets"));
 
+// Global enhancements are useful but do not need to block first paint.
 const DiagnosticsPanel = lazy(() => import("./components/system/DiagnosticsPanel").then(m => ({ default: m.DiagnosticsPanel })));
 const ReEngagementBanner = lazy(() => import("./components/gamification/ReEngagementBanner").then(m => ({ default: m.ReEngagementBanner })));
 const GlobalAudioPlayer = lazy(() => import("./components/audio/GlobalAudioPlayer").then(m => ({ default: m.GlobalAudioPlayer })));
@@ -110,32 +109,51 @@ const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then
 const OnboardingDialog = lazy(() => import("./components/onboarding/OnboardingDialog").then(m => ({ default: m.OnboardingDialog })));
 
 const logger = createLogger('App');
+
+/**
+ * Wrap a route element in a recovery-enabled error boundary.
+ * Isolates per-page crashes (including dynamic-import failures) so the
+ * app shell, audio player, and navigation stay responsive.
+ */
 const withRecovery = (name: string, node: React.ReactNode): React.ReactElement => (
-  <ErrorBoundaryWithRecovery context={`Route:${name}`} maxRetries={2}>{node}</ErrorBoundaryWithRecovery>
+  <ErrorBoundaryWithRecovery context={`Route:${name}`} maxRetries={2}>
+    {node}
+  </ErrorBoundaryWithRecovery>
 );
 
+// Configure QueryClient with enterprise settings
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
-      staleTime: 5 * 60 * 1000,
-      gcTime: 10 * 60 * 1000,
+      staleTime: 5 * 60 * 1000, // 5 minutes
+      gcTime: 10 * 60 * 1000, // 10 minutes (formerly cacheTime)
       retry: 2,
       retryDelay: (attemptIndex) => Math.min(1000 * 2 ** attemptIndex, 30000),
-      refetchOnWindowFocus: false,
+      refetchOnWindowFocus: false, // Reduce unnecessary refetches
     },
     mutations: {
       retry: 1,
-      onError: (error) => { notifyError(error); },
+      onError: (error) => {
+        notifyError(error);
+      },
     },
   },
 });
 
 function AppInitializer() {
   useEffect(() => {
+    // Initialize trace ID for session correlation
     setTraceId();
+
+    // Auto-reload on stale lazy-chunk import failures (after deploys)
     installChunkReloadGuard();
+
+    // CONTRACT 5: Initialize performance monitoring
     initContract5();
+
+    // PHASE 7: Initialize observability (Web Vitals, analytics sink, long-task warnings)
     initObservability();
+
     logger.info('Application initialized');
   }, []);
   return null;
@@ -155,8 +173,11 @@ const App = () => (
                 <OfflineIndicator />
                 <PWAUpdateNotification />
                 <BrowserRouter>
+                  {/* PHASE 7: Per-navigation telemetry (logs route changes + dwell time) */}
                   <RouteTelemetry />
+                  {/* Phase 2.1d.1: first-touch attribution beacon for store/reader routes */}
                   <GlobalAttributionBeacon />
+                  {/* Inner ErrorBoundary keeps page crashes from killing the whole shell */}
                   <ErrorBoundary context="Routes">
                     <Suspense fallback={<InlineSplash />}>
                       <Routes>
@@ -209,8 +230,6 @@ const App = () => (
                         <Route path="/admin/entitlements" element={<AdminRoute><AdminEntitlements /></AdminRoute>} />
                         <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
                         <Route path="/organizations/analytics" element={<ProtectedRoute><OrgAnalytics /></ProtectedRoute>} />
-                        <Route path="/university/about" element={withRecovery('UniversityLanding', <UniversityLanding />)} />
-                        <Route path="/university" element={withRecovery('University', <ProtectedRoute><University /></ProtectedRoute>)} />
                         <Route path="/verify-certificate" element={<VerifyLookup />} />
                         <Route path="/verify/:exportId" element={<VerifyExport />} />
                         <Route path="/book/:bookId/citation-graph" element={withRecovery('CitationGraph', <ProtectedRoute><CitationGraph /></ProtectedRoute>)} />
@@ -218,6 +237,8 @@ const App = () => (
                         <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />
                         <Route path="/account/data-export" element={<ProtectedRoute><DataExport /></ProtectedRoute>} />
                         <Route path="/book/:bookId/publishing" element={withRecovery('PublishingCommandCenter', <ProtectedRoute><PublishingCommandCenter /></ProtectedRoute>)} />
+
+                        {/* Storefront (public) */}
                         <Route path="/store" element={withRecovery('Storefront', <Storefront />)} />
                         <Route path="/store/:slug" element={withRecovery('PublicBookPage', <PublicBookPage />)} />
                         <Route path="/store/:slug/read" element={withRecovery('PublicSampleReader', <PublicSampleReader />)} />
@@ -235,10 +256,12 @@ const App = () => (
                         <Route path="/account/intelligence" element={withRecovery('CreatorIntelligence', <ProtectedRoute><CreatorIntelligence /></ProtectedRoute>)} />
                         <Route path="/creator/business" element={withRecovery('CreatorBusinessHub', <ProtectedRoute><CreatorBusinessHub /></ProtectedRoute>)} />
                         <Route path="/creator/assets" element={withRecovery('CreatorAssets', <ProtectedRoute><CreatorAssets /></ProtectedRoute>)} />
+
                         <Route path="*" element={<NotFound />} />
                       </Routes>
                     </Suspense>
                   </ErrorBoundary>
+
                   <Suspense fallback={null}>
                     <ReEngagementBanner />
                     <PWAInstallPrompt />
