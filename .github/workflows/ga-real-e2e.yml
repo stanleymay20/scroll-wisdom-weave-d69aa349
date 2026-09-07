@@ -53,8 +53,8 @@ jobs:
 
           PUBLIC_KEY="${ANON_KEY:-${PUBLISHABLE_KEY:-}}"
           ADMIN_KEY="${SERVICE_ROLE_KEY:-${SECRET_KEY:-}}"
-          if [ -z "${API_URL:-}" ] || [ -z "$PUBLIC_KEY" ] || [ -z "$ADMIN_KEY" ]; then
-            echo "Local Supabase did not expose the required API/public/admin credentials." >&2
+          if [ -z "${API_URL:-}" ] || [ -z "$PUBLIC_KEY" ] || [ -z "$ADMIN_KEY" ] || [ -z "${DB_URL:-}" ]; then
+            echo "Local Supabase did not expose the required API/public/admin/database credentials." >&2
             exit 1
           fi
 
@@ -64,6 +64,7 @@ jobs:
             echo "E2E_SUPABASE_URL=$API_URL"
             echo "E2E_SUPABASE_ANON_KEY=$PUBLIC_KEY"
             echo "E2E_SUPABASE_SERVICE_ROLE_KEY=$ADMIN_KEY"
+            echo "E2E_DATABASE_URL=$DB_URL"
           } >> "$GITHUB_ENV"
 
       - name: Seed isolated confirmed users and RLS canaries
