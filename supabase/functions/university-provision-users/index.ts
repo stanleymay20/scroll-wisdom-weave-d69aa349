@@ -36,8 +36,6 @@ const Body = z.object({
   people: z.array(Person).min(1).max(500),
 });
 
-type PersonInput = z.infer<typeof Person>;
-
 type ProvisionResult = {
   email: string;
   ok: boolean;
@@ -62,10 +60,6 @@ async function loadUsersByEmail(sc: ReturnType<typeof serviceClient>) {
   }
 
   return users;
-}
-
-function organizationRoleForUniversityRole(role: PersonInput["role"]) {
-  return ["chancellor", "registrar", "dean"].includes(role) ? "admin" : "member";
 }
 
 serve(async (req) => {
@@ -95,6 +89,32 @@ serve(async (req) => {
     }
 
     const usersByEmail = await loadUsersByEmail(sc);
+
+    // Academic titles must never implicitly change organization-wide authority.
+    // Preserve existing owner/admin/member roles and add new roster users only as
+    // ordinary organization members. ScrollUniversity privileges are governed by
+    // university_role and its dedicated RLS policies.
+    const { data: existingMemberships, error: existingMembershipsError } = await sc
+      .from("organization_members")
+      .select("user_id,role")
+      .eq("organization_id", parsed.organization_id);
+    if (existingMembershipsError) throw existingMembershipsError;
+    const membershipByUser = new Map(
+      (existingMemberships || []).map((row) => [row.user_id as string, row.role as string]),
+    );
+
+    // Roster provisioning may update academic identity fields, but it must not
+    // silently reactivate suspended/alumni/inactive records. Lifecycle state is
+    // controlled separately by registrar/admin workflows.
+    const { data: existingPeople, error: existingPeopleError } = await sc
+      .from("university_people")
+      .select("user_id,status")
+      .eq("organization_id", parsed.organization_id);
+    if (existingPeopleError) throw existingPeopleError;
+    const peopleStatusByUser = new Map(
+      (existingPeople || []).map((row) => [row.user_id as string, row.status as string]),
+    );
+
     const seen = new Set<string>();
     const results: ProvisionResult[] = [];
 
@@ -121,34 +141,47 @@ serve(async (req) => {
           invited = true;
         }
 
-        const { error: orgError } = await sc
-          .from("organization_members")
-          .upsert(
-            {
+        if (!membershipByUser.has(userId)) {
+          const { error: orgError } = await sc
+            .from("organization_members")
+            .insert({
               organization_id: parsed.organization_id,
               user_id: userId,
-              role: organizationRoleForUniversityRole(person.role),
+              role: "member",
               invited_by: auth.userId,
-            },
-            { onConflict: "organization_id,user_id" },
-          );
-        if (orgError) throw orgError;
+            });
+          if (orgError) throw orgError;
+          membershipByUser.set(userId, "member");
+        }
 
-        const { error: personError } = await sc
-          .from("university_people")
-          .upsert(
-            {
+        if (peopleStatusByUser.has(userId)) {
+          const { error: personError } = await sc
+            .from("university_people")
+            .update({
+              university_role: person.role,
+              display_name: person.display_name,
+              student_number: person.student_number || null,
+              staff_number: person.staff_number || null,
+            })
+            .eq("organization_id", parsed.organization_id)
+            .eq("user_id", userId);
+          if (personError) throw personError;
+        } else {
+          const initialStatus = invited ? "invited" : "active";
+          const { error: personError } = await sc
+            .from("university_people")
+            .insert({
               organization_id: parsed.organization_id,
               user_id: userId,
               university_role: person.role,
               display_name: person.display_name,
               student_number: person.student_number || null,
               staff_number: person.staff_number || null,
-              status: invited ? "invited" : "active",
-            },
-            { onConflict: "organization_id,user_id" },
-          );
-        if (personError) throw personError;
+              status: initialStatus,
+            });
+          if (personError) throw personError;
+          peopleStatusByUser.set(userId, initialStatus);
+        }
 
         results.push({ email, ok: true, user_id: userId, invited });
       } catch (error) {
