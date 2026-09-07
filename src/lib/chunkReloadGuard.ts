@@ -31,7 +31,6 @@ function tryReload(reason: string) {
       return;
     }
     sessionStorage.setItem(RELOAD_FLAG, "1");
-    // eslint-disable-next-line no-console
     console.warn("[ChunkGuard] Reloading due to stale chunk:", reason);
     window.location.reload();
   } catch {
