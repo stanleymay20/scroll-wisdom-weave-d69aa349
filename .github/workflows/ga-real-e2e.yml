@@ -67,8 +67,11 @@ jobs:
             echo "E2E_DATABASE_URL=$DB_URL"
           } >> "$GITHUB_ENV"
 
-      - name: Seed isolated confirmed users and RLS canaries
+      - name: Seed isolated confirmed users and API-authorized canaries
         run: bun scripts/seed-ga-e2e.mjs
+
+      - name: Seed reader ownership fixtures in disposable database
+        run: psql "$E2E_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/seed-ga-reader-fixtures.sql
 
       - name: Install cross-browser Playwright runtimes
         run: bunx playwright install --with-deps chromium firefox webkit
