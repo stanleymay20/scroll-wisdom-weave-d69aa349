@@ -3,7 +3,7 @@
 -- The GA staging project was created from an older Lovable schema lineage. It has
 -- the Work/Publication spine, but it can legitimately lack the legacy author
 -- identity columns that the authoritative publication hash/convergence migration
--- expects. It can also lack the entire ISBN subsystem.
+-- expects. It can also lack the Scroll product identity layer and ISBN subsystem.
 --
 -- This migration is intentionally narrow:
 --   * it never invents, imports, allocates, verifies, assigns, or locks an ISBN;
@@ -12,10 +12,24 @@
 --     data exists, because that case requires a data-preserving migration plan;
 --   * on an already-converged production database it is additive/idempotent.
 --
--- After this prelude, the controlled legacy-staging recovery sequence is:
+-- After this prelude, the controlled legacy-staging recovery sequence follows
+-- the CURRENT canonical dependency chain (not the older handoff order):
 --   1. 20260906235000_live_publication_schema_convergence.sql
---   2. 20260907024300_isbn_provenance_and_publication_atomicity.sql
---   3. 20260907220000_isbn_independent_review_enforcement.sql
+--   2. 20260906235500_scroll_identity_layer.sql
+--   3. 20260907024300_isbn_provenance_and_publication_atomicity.sql
+--   4. 20260907024310_imprint_verification_drift.sql
+--   5. 20260907193000_isbn_governance_separation_and_atomic_mint.sql
+--   6. 20260907193600_user_imprint_evidence_submission.sql
+--   7. 20260907193800_bind_owned_isbn_claim_to_pending_imprint_evidence.sql
+--   8. 20260907194000_isbn_retry_and_identity_drift_hardening.sql
+--   9. 20260907194200_post_forensic_isbn_publication_invariants.sql
+--  10. 20260907194300_snapshot_consistency_and_batch_trigger_safety.sql
+--  11. 20260907194400_isbn_row_identity_immutability.sql
+--  12. 20260907220000_isbn_independent_review_enforcement.sql
+--
+-- Unrelated migrations (for example interactive-voice quota changes) are not
+-- replayed merely to imitate chronological history; only actual dependencies of
+-- the publication/identifier contract belong in this controlled recovery path.
 
 DO $$
 DECLARE
