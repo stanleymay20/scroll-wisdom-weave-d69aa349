@@ -6,6 +6,7 @@ DECLARE
   v_trigger_count integer;
   v_review_def text;
   v_submit_pool_def text;
+  v_submit_owned_def text;
 BEGIN
   -- Imprint verification must expose an explicit pending-evidence state.
   IF NOT EXISTS (
@@ -61,17 +62,28 @@ BEGIN
   SELECT pg_catalog.pg_get_functiondef(
     'public.review_publishing_imprint(uuid,uuid,boolean,text,text,text)'::regprocedure
   ) INTO v_review_def;
-  IF pg_catalog.position('IMPRINT_VERIFICATION_EVIDENCE_NOT_SUBMITTED' IN v_review_def) = 0
-     OR pg_catalog.position('IMPRINT_VERIFICATION_EVIDENCE_MISMATCH' IN v_review_def) = 0 THEN
+  IF pg_catalog.strpos(v_review_def, 'IMPRINT_VERIFICATION_EVIDENCE_NOT_SUBMITTED') = 0
+     OR pg_catalog.strpos(v_review_def, 'IMPRINT_VERIFICATION_EVIDENCE_MISMATCH') = 0 THEN
     RAISE EXCEPTION 'imprint review no longer enforces separate evidence submission';
   END IF;
 
   SELECT pg_catalog.pg_get_functiondef(
     'public.submit_platform_isbn_pool_batch(uuid,uuid,text[],text)'::regprocedure
   ) INTO v_submit_pool_def;
-  IF pg_catalog.position('provenance_status = ''unverified''' IN v_submit_pool_def) = 0
-     AND pg_catalog.position('''unverified''' IN v_submit_pool_def) = 0 THEN
+  IF pg_catalog.strpos(v_submit_pool_def, 'provenance_status = ''unverified''') = 0
+     AND pg_catalog.strpos(v_submit_pool_def, '''unverified''') = 0 THEN
     RAISE EXCEPTION 'platform pool submission no longer creates pending/unverified provenance';
+  END IF;
+
+  -- Author-owned ISBN submission must create pending imprint evidence when the
+  -- user imprint has not yet been independently verified. This preserves the
+  -- existing user workflow without conflating submission with approval.
+  SELECT pg_catalog.pg_get_functiondef(
+    'public.submit_owned_isbn_claim(uuid,uuid,text,text)'::regprocedure
+  ) INTO v_submit_owned_def;
+  IF pg_catalog.strpos(v_submit_owned_def, 'submit_publishing_imprint_verification') = 0
+     OR pg_catalog.strpos(v_submit_owned_def, 'v_imprint.verified IS NOT TRUE') = 0 THEN
+    RAISE EXCEPTION 'author-owned ISBN claim no longer submits pending imprint evidence';
   END IF;
 
   -- Verified publication minting must finalize in the INSERT transaction.
