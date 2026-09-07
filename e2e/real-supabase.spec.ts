@@ -66,7 +66,7 @@ test("invalid real credentials fail closed with the friendly auth error", async 
   await page.locator('button[type="submit"]').click();
 
   await expect(page).toHaveURL(/\/auth(?:\?|$)/);
-  await expect(page.getByText(/Invalid email or password/i)).toBeVisible({ timeout: 15_000 });
+  await expect(page.getByRole("alert")).toContainText(/Invalid email or password/i, { timeout: 15_000 });
 });
 
 test("RLS isolates two authenticated users and browser roles cannot write the quota ledger", async ({ request }) => {
