@@ -18,7 +18,6 @@ export function AttributionBeacon({ listingId = null, bookId = null }: Props) {
     // Defer slightly so it never competes with first render.
     const t = setTimeout(() => { void tagAttribution({ listing_id: listingId, book_id: bookId }); }, 50);
     return () => clearTimeout(t);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pathname, listingId, bookId]);
   return null;
 }
