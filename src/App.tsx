@@ -74,6 +74,7 @@ const AdminEntitlements = lazy(() => import("./pages/AdminEntitlements"));
 const Organizations = lazy(() => import("./pages/Organizations"));
 const OrgAnalytics = lazy(() => import("./pages/OrgAnalytics"));
 const University = lazy(() => import("./pages/University"));
+const UniversityLanding = lazy(() => import("./components/university/UniversityLanding"));
 const VerifyLookup = lazy(() => import("./pages/VerifyLookup"));
 const VerifyExport = lazy(() => import("./pages/VerifyExport"));
 const CitationGraph = lazy(() => import("./pages/CitationGraph"));
@@ -208,6 +209,7 @@ const App = () => (
                         <Route path="/admin/entitlements" element={<AdminRoute><AdminEntitlements /></AdminRoute>} />
                         <Route path="/organizations" element={<ProtectedRoute><Organizations /></ProtectedRoute>} />
                         <Route path="/organizations/analytics" element={<ProtectedRoute><OrgAnalytics /></ProtectedRoute>} />
+                        <Route path="/university/about" element={withRecovery('UniversityLanding', <UniversityLanding />)} />
                         <Route path="/university" element={withRecovery('University', <ProtectedRoute><University /></ProtectedRoute>)} />
                         <Route path="/verify-certificate" element={<VerifyLookup />} />
                         <Route path="/verify/:exportId" element={<VerifyExport />} />
