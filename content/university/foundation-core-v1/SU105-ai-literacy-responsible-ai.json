@@ -24,7 +24,7 @@
     ]}
   ],
   "assessments":[
-    {"id":"A1","title":"AI Output Verification Portfolio","weight":25,"outcomes":["SU105-LO2","SU105-LO3"],"instructions":"Document three AI-assisted tasks with prompts, source boundaries, output checks, errors found and corrected final work.","rubric":{"workflow_design":25,"verification":35,"error_analysis":25,"documentation":15}},
+    {"id":"A1","title":"AI Output Verification Portfolio","weight":25,"outcomes":["SU105-LO1","SU105-LO2","SU105-LO3"],"instructions":"Document three AI-assisted tasks with prompts, source boundaries, output checks, errors found and corrected final work. Include a short technical explanation of the AI task type, what the model can infer from patterns, and the limitations that require human verification.","rubric":{"workflow_design":25,"verification":35,"error_analysis":25,"documentation":15}},
     {"id":"A2","title":"AI Risk and Stakeholder Assessment","weight":30,"outcomes":["SU105-LO3","SU105-LO4"],"instructions":"Evaluate one proposed AI use case for stakeholders, benefits, harms, bias, privacy, security, evidence and governance controls.","rubric":{"stakeholder_analysis":20,"risk_analysis":30,"evidence":20,"controls":20,"communication":10}},
     {"id":"A3","title":"Responsible AI Workflow Capstone","weight":45,"outcomes":["SU105-LO2","SU105-LO3","SU105-LO4","SU105-LO5"],"instructions":"Design and demonstrate a bounded AI workflow with an evaluation set, human oversight, data controls, audit log, fallback and incident-response procedure.","rubric":{"task_design":20,"evaluation":25,"risk_controls":25,"human_oversight":20,"documentation":10}}
   ],
