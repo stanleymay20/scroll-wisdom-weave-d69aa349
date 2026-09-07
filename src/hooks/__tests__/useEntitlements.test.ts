@@ -1,5 +1,10 @@
 import { describe, expect, it } from "vitest";
-import { hasFeatureAccess, type Entitlements } from "../../lib/entitlementAccess";
+import {
+  hasFeatureAccess,
+  hasPlanAccess,
+  resolveEntitlements,
+  type Entitlements,
+} from "../../lib/entitlementAccess";
 
 const student: Entitlements = {
   canPublish: true,
@@ -26,7 +31,17 @@ const student: Entitlements = {
   isTrialMode: false,
 };
 
-describe("ScrollLibrary student entitlement boundaries", () => {
+function resolve(tier: Entitlements["tier"], overrides: Partial<Parameters<typeof resolveEntitlements>[0]> = {}) {
+  return resolveEntitlements({
+    tier,
+    isAdmin: false,
+    trialActive: false,
+    stillLoading: false,
+    ...overrides,
+  });
+}
+
+describe("ScrollLibrary entitlement boundaries", () => {
   it("keeps explicitly enabled student capabilities available", () => {
     expect(hasFeatureAccess(student, "publish")).toBe(true);
     expect(hasFeatureAccess(student, "export")).toBe(true);
@@ -41,7 +56,43 @@ describe("ScrollLibrary student entitlement boundaries", () => {
     expect(hasFeatureAccess(student, "batch")).toBe(false);
   });
 
+  it("does not let Student satisfy Premium or Institutional plan gates", () => {
+    expect(hasPlanAccess(student, "student")).toBe(true);
+    expect(hasPlanAccess(student, "premium")).toBe(false);
+    expect(hasPlanAccess(student, "prophet_tier")).toBe(false);
+  });
+
+  it("lets Premium satisfy Student and Premium but not Institutional", () => {
+    const premium = resolve("premium");
+    expect(hasPlanAccess(premium, "student")).toBe(true);
+    expect(hasPlanAccess(premium, "premium")).toBe(true);
+    expect(hasPlanAccess(premium, "prophet_tier")).toBe(false);
+  });
+
+  it("keeps Institutional high-tier capabilities without unlimited bypass", () => {
+    const institutional = resolve("prophet_tier");
+    expect(institutional.isProphet).toBe(true);
+    expect(institutional.canBatchGenerate).toBe(true);
+    expect(institutional.canUseElevenLabsTTS).toBe(true);
+    expect(institutional.bypassAllLimits).toBe(false);
+    expect(hasPlanAccess(institutional, "prophet_tier")).toBe(true);
+  });
+
+  it("does not invent privileged roles for a full-access trial", () => {
+    const trial = resolve("free", { trialActive: true });
+    expect(trial.bypassAllLimits).toBe(true);
+    expect(trial.isTrialMode).toBe(true);
+    expect(trial.isAdmin).toBe(false);
+    expect(trial.isProphet).toBe(false);
+    expect(hasFeatureAccess(trial, "batch")).toBe(true);
+    expect(hasPlanAccess(trial, "prophet_tier")).toBe(true);
+  });
+
   it("still allows deliberate administrator override", () => {
-    expect(hasFeatureAccess({ ...student, isAdmin: true }, "batch")).toBe(true);
+    const admin = resolve("free", { isAdmin: true });
+    expect(admin.isAdmin).toBe(true);
+    expect(admin.bypassAllLimits).toBe(true);
+    expect(hasFeatureAccess(admin, "batch")).toBe(true);
+    expect(hasPlanAccess(admin, "prophet_tier")).toBe(true);
   });
 });
