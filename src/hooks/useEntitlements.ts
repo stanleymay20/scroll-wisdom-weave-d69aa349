@@ -28,6 +28,7 @@ export interface Entitlements {
   isProphet: boolean;
   isPremium: boolean;
   isStudent: boolean;
+  /** @deprecated Legacy compatibility alias. Use isStudent. */
   isScrollStudent: boolean;
   isPaid: boolean;
   // Trial mode flag
@@ -36,37 +37,27 @@ export interface Entitlements {
 
 /**
  * SINGLE SOURCE OF TRUTH FOR ALL ENTITLEMENTS
- * 
+ *
  * Priority order:
  * 0. Trial Mode → ALL users get full access (temporary testing period)
  * 1. Admin → unrestricted access to everything
  * 2. Prophet tier → unrestricted access to all features
  * 3. Paid tiers → access according to plan
  * 4. Free users → restricted
- * 
- * FAIL-SAFE: If resolution fails, default to MORE access for paid users
  */
 export function useEntitlements(): Entitlements {
   const { tier, user, isLoading: subLoading } = useSubscription();
   const { isAdmin, isLoading: adminLoading } = useIsAdmin();
 
-  // Check if trial mode is active
   const trialActive = isTrialActive();
-
-  // Check if this is a reviewer account (full unrestricted access)
   const isReviewer = user?.email ? REVIEWER_EMAILS.includes(user.email.toLowerCase()) : false;
 
-  // Tier checks
   const isProphet = tier === 'prophet_tier';
   const isPremium = tier === 'premium';
   const isStudent = tier === 'student';
   const isPaid = isProphet || isPremium || isStudent;
-
-  // FAIL-OPEN during loading: If still loading AND we have hints of paid status, grant access
-  // This prevents false upgrade prompts while data loads
   const stillLoading = subLoading || adminLoading;
 
-  // TRIAL MODE: ALL USERS GET FULL ACCESS - 30 day testing period
   if (trialActive) {
     return {
       canPublish: true,
@@ -93,7 +84,6 @@ export function useEntitlements(): Entitlements {
     };
   }
 
-  // REVIEWER or ADMIN: GOD MODE - bypass everything, NO EXCEPTIONS
   if (isAdmin || isReviewer) {
     return {
       canPublish: true,
@@ -111,7 +101,7 @@ export function useEntitlements(): Entitlements {
       canBatchGenerate: true,
       tier,
       isAdmin: true,
-      isProphet: true, // Admin effectively has all privileges
+      isProphet: true,
       isPremium: true,
       isStudent: true,
       isScrollStudent: true,
@@ -120,7 +110,6 @@ export function useEntitlements(): Entitlements {
     };
   }
 
-  // PROPHET TIER: Full override - all features unlocked, NO EXCEPTIONS
   if (isProphet) {
     return {
       canPublish: true,
@@ -139,7 +128,7 @@ export function useEntitlements(): Entitlements {
       tier,
       isAdmin: false,
       isProphet: true,
-      isPremium: true, // Prophet includes all Premium features
+      isPremium: true,
       isStudent: true,
       isScrollStudent: true,
       isPaid: true,
@@ -147,7 +136,6 @@ export function useEntitlements(): Entitlements {
     };
   }
 
-  // PREMIUM TIER - Full export and TTS access
   if (isPremium) {
     return {
       canPublish: true,
@@ -174,16 +162,17 @@ export function useEntitlements(): Entitlements {
     };
   }
 
-  // STUDENT TIER - Premium-equivalent ScrollLibrary access
+  // Student is a paid ScrollLibrary plan, not a Premium alias. Keep its
+  // capability flags aligned to src/lib/subscription.ts.
   if (isStudent) {
     return {
       canPublish: true,
       canExport: true,
       canDownload: true,
       canGenerateBooks: true,
-      canUseAllFormats: true,
-      canExportAllFormats: true,
-      hasCommercialRights: true,
+      canUseAllFormats: false,
+      canExportAllFormats: false,
+      hasCommercialRights: false,
       bypassAllLimits: false,
       canUseAiCovers: true,
       canUseTTS: true,
@@ -193,7 +182,7 @@ export function useEntitlements(): Entitlements {
       tier,
       isAdmin: false,
       isProphet: false,
-      isPremium: true, // Student has Premium-equivalent access
+      isPremium: false,
       isStudent: true,
       isScrollStudent: true,
       isPaid: true,
@@ -201,16 +190,17 @@ export function useEntitlements(): Entitlements {
     };
   }
 
-  // FAIL-OPEN during loading: If tier isn't 'free' explicitly and we're loading, assume paid
+  // During transient loading, never invent Premium capabilities. Preserve only
+  // the tier information already known locally.
   if (stillLoading && tier !== 'free') {
     return {
       canPublish: true,
       canExport: true,
       canDownload: true,
       canGenerateBooks: true,
-      canUseAllFormats: true,
-      canExportAllFormats: true,
-      hasCommercialRights: true,
+      canUseAllFormats: isPremium || isProphet,
+      canExportAllFormats: isPremium || isProphet,
+      hasCommercialRights: isPremium || isProphet,
       bypassAllLimits: false,
       canUseAiCovers: true,
       canUseTTS: true,
@@ -219,27 +209,26 @@ export function useEntitlements(): Entitlements {
       canBatchGenerate: false,
       tier,
       isAdmin: false,
-      isProphet: isProphet,
-      isPremium: isPremium || isProphet,
-      isStudent: isStudent,
+      isProphet,
+      isPremium,
+      isStudent,
       isScrollStudent: isStudent,
-      isPaid: true, // Assume paid during loading if tier isn't explicitly 'free'
+      isPaid: true,
       isTrialMode: false,
     };
   }
 
-  // FREE TIER - limited access (1 book/month to validate PMF)
   return {
     canPublish: false,
-    canExport: true, // Free users can export PDF (server enforces format restrictions)
-    canDownload: true, // Free users can download PDF exports
-    canGenerateBooks: true, // Free users can generate 1 book/month
-    canUseAllFormats: false, // Only PDF for free tier
+    canExport: true,
+    canDownload: true,
+    canGenerateBooks: true,
+    canUseAllFormats: false,
     canExportAllFormats: false,
     hasCommercialRights: false,
     bypassAllLimits: false,
     canUseAiCovers: false,
-    canUseTTS: true, // Basic TTS for free users
+    canUseTTS: true,
     canUseOpenAITTS: true,
     canUseElevenLabsTTS: false,
     canBatchGenerate: false,
@@ -255,55 +244,17 @@ export function useEntitlements(): Entitlements {
 }
 
 /**
- * Check if user has access to a specific feature
- * Returns true if access granted, false otherwise
- * NEVER blocks paid users due to transient issues
+ * Check if user has access to a specific feature.
+ * Paid status alone never overrides an explicit capability flag.
  */
 export function hasFeatureAccess(
   entitlements: Entitlements,
   feature: 'publish' | 'export' | 'download' | 'generate' | 'allFormats' | 'commercial' | 'aiCovers' | 'tts' | 'openaiTTS' | 'elevenLabsTTS' | 'batch'
 ): boolean {
-  // Admin and Prophet always have access - NO EXCEPTIONS
   if (entitlements.isAdmin || entitlements.isProphet) {
     return true;
   }
 
-  // ScrollLibrary student tier has Premium-equivalent access
-  if (entitlements.isScrollStudent) {
-    return true;
-  }
-
-  // FAIL-SAFE: Paid users get access if resolution is uncertain
-  if (entitlements.isPaid) {
-    // For paid users, default to allowing access
-    switch (feature) {
-      case 'publish':
-        return entitlements.canPublish;
-      case 'export':
-      case 'download':
-        return entitlements.canExport || entitlements.canDownload;
-      case 'generate':
-        return entitlements.canGenerateBooks;
-      case 'allFormats':
-        return entitlements.canUseAllFormats || entitlements.canExportAllFormats;
-      case 'commercial':
-        return entitlements.hasCommercialRights;
-      case 'aiCovers':
-        return entitlements.canUseAiCovers;
-      case 'tts':
-      case 'openaiTTS':
-        return entitlements.canUseTTS || entitlements.canUseOpenAITTS;
-      case 'elevenLabsTTS':
-        return entitlements.canUseElevenLabsTTS;
-      case 'batch':
-        return entitlements.canBatchGenerate;
-      default:
-        // FAIL-SAFE: Grant access to paid users for unknown features
-        return true;
-    }
-  }
-
-  // Free tier - check specific entitlements
   switch (feature) {
     case 'publish':
       return entitlements.canPublish;
@@ -313,7 +264,7 @@ export function hasFeatureAccess(
     case 'generate':
       return entitlements.canGenerateBooks;
     case 'allFormats':
-      return entitlements.canUseAllFormats;
+      return entitlements.canUseAllFormats || entitlements.canExportAllFormats;
     case 'commercial':
       return entitlements.hasCommercialRights;
     case 'aiCovers':
