@@ -2,7 +2,7 @@ import { Link, useNavigate } from "react-router-dom";
 import { Button } from "@/components/ui/button";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
-import { Search, User, Menu, X, Settings, LogOut, HelpCircle, Shield } from "lucide-react";
+import { Search, User, Menu, X, Settings, LogOut, HelpCircle, Shield, GraduationCap } from "lucide-react";
 import { useState, useEffect, useRef } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,10 +14,7 @@ import { useSubscription } from "@/contexts/SubscriptionContext";
 import logo from "@/assets/logo.png";
 import { NotificationBell } from "@/components/notifications/NotificationBell";
 
-interface NavProfile {
-  full_name: string | null;
-  avatar_url: string | null;
-}
+interface NavProfile { full_name: string | null; avatar_url: string | null; }
 
 export function Navbar() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
@@ -30,45 +27,21 @@ export function Navbar() {
   const userId = user?.id ?? null;
   const lastUserIdRef = useRef<string | null>(null);
 
-  // Fetch profile only when the authenticated user ID actually changes.
-  // Cancel stale responses so a rapid account/session change cannot paint
-  // the previous user's profile into the navbar.
   useEffect(() => {
     let cancelled = false;
-
     if (!userId) {
       lastUserIdRef.current = null;
       setProfile(null);
-      return () => {
-        cancelled = true;
-      };
+      return () => { cancelled = true; };
     }
-
-    if (userId === lastUserIdRef.current) {
-      return () => {
-        cancelled = true;
-      };
-    }
-
+    if (userId === lastUserIdRef.current) return () => { cancelled = true; };
     lastUserIdRef.current = userId;
-
     const loadProfile = async () => {
-      const { data } = await supabase
-        .from("profiles")
-        .select("full_name, avatar_url")
-        .or(`user_id.eq.${userId},id.eq.${userId}`)
-        .maybeSingle();
-
-      if (!cancelled) {
-        setProfile(data ?? null);
-      }
+      const { data } = await supabase.from("profiles").select("full_name, avatar_url").or(`user_id.eq.${userId},id.eq.${userId}`).maybeSingle();
+      if (!cancelled) setProfile(data ?? null);
     };
-
     void loadProfile();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [userId]);
 
   const handleSignOut = async () => {
@@ -84,139 +57,58 @@ export function Navbar() {
 
   return (
     <nav className="fixed top-0 left-0 right-0 z-50 border-b border-border/30 bg-background/90 backdrop-blur-xl shadow-sm pt-[env(safe-area-inset-top)]">
-      <div className="container mx-auto px-4">
-        <div className="flex h-14 md:h-16 items-center justify-between">
-          <Link to="/" className="flex items-center gap-2 group">
-            <img src={logo} alt="ScrollLibrary" className="h-9 w-auto md:h-11 lg:h-12 transition-transform group-hover:scale-105" />
-          </Link>
-
-          <div className="hidden md:flex items-center gap-6 lg:gap-8">
-            <Link to="/explore" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Explore</Link>
-            <Link to="/library" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.library')}</Link>
-            <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
-            <Link to="/upload" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Upload</Link>
-            <Link to="/sell" className="text-sm text-primary hover:text-primary/80 transition-colors font-semibold">Sell</Link>
-            <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</Link>
-          </div>
-
-          <div className="hidden md:flex items-center gap-2">
-            <LanguageSwitcher />
-            <Button variant="ghost" size="icon" onClick={() => navigate('/explore')} aria-label="Search">
-              <Search className="h-5 w-5" />
-            </Button>
-            
-            {user && <NotificationBell />}
-            {user ? (
-              <DropdownMenu>
-                <DropdownMenuTrigger asChild>
-                  <Button variant="ghost" className="relative h-10 w-10 rounded-full ring-2 ring-transparent hover:ring-primary/20 transition-all">
-                    <Avatar className="h-9 w-9 border border-border">
-                      <AvatarImage src={profile?.avatar_url || ""} />
-                      <AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">{getInitials(profile?.full_name ?? null)}</AvatarFallback>
-                    </Avatar>
-                  </Button>
-                </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="w-56 bg-popover/95 backdrop-blur-xl">
-                  <div className="px-3 py-2">
-                    <p className="text-sm font-medium truncate">{profile?.full_name || "User"}</p>
-                    <p className="text-xs text-muted-foreground truncate">{user.email}</p>
-                  </div>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer">
-                    <User className="mr-2 h-4 w-4" />{t('nav.profile')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer">
-                    <Settings className="mr-2 h-4 w-4" />{t('nav.settings')}
-                  </DropdownMenuItem>
-                  <DropdownMenuItem onClick={() => navigate("/help")} className="cursor-pointer">
-                    <HelpCircle className="mr-2 h-4 w-4" />{t('footer.help')}
-                  </DropdownMenuItem>
-                  {isAdmin && (
-                    <DropdownMenuItem onClick={() => navigate("/admin")} className="cursor-pointer text-primary">
-                      <Shield className="mr-2 h-4 w-4" />Admin Panel
-                    </DropdownMenuItem>
-                  )}
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive focus:text-destructive">
-                    <LogOut className="mr-2 h-4 w-4" />{t('nav.signout')}
-                  </DropdownMenuItem>
-                </DropdownMenuContent>
-              </DropdownMenu>
-            ) : (
-              <Button size="sm" onClick={() => navigate('/auth')}>
-                <User className="h-4 w-4 mr-1.5" />{t('nav.signin')}
-              </Button>
-            )}
-          </div>
-
-          <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)} aria-label="Toggle menu">
-            {isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
-          </Button>
+      <div className="container mx-auto px-4"><div className="flex h-14 md:h-16 items-center justify-between">
+        <Link to="/" className="flex items-center gap-2 group"><img src={logo} alt="ScrollLibrary" className="h-9 w-auto md:h-11 lg:h-12 transition-transform group-hover:scale-105" /></Link>
+        <div className="hidden md:flex items-center gap-5 lg:gap-7">
+          <Link to="/explore" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Explore</Link>
+          <Link to="/library" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.library')}</Link>
+          {user && <Link to="/university" className="text-sm text-primary hover:text-primary/80 transition-colors font-semibold">University</Link>}
+          <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
+          <Link to="/upload" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Upload</Link>
+          <Link to="/sell" className="text-sm text-primary hover:text-primary/80 transition-colors font-semibold">Sell</Link>
+          <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</Link>
         </div>
-      </div>
-
-      <AnimatePresence>
-        {isMenuOpen && (
-          <motion.div 
-            initial={{ opacity: 0, height: 0 }} 
-            animate={{ opacity: 1, height: "auto" }} 
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.2 }}
-            className="md:hidden border-t border-border/50 bg-background/95 backdrop-blur-xl"
-          >
-            <div className="container mx-auto px-4 py-4 space-y-1">
-              <Link to="/explore" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                Explore
-              </Link>
-              <Link to="/library" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                {t('nav.library')}
-              </Link>
-              <Link to="/generate" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                {t('nav.generate')}
-              </Link>
-              <Link to="/upload" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                Upload
-              </Link>
-              <Link to="/sell" className="flex items-center gap-3 py-3 px-3 text-primary font-semibold rounded-lg hover:bg-primary/5 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                Start Selling
-              </Link>
-              <Link to="/pricing" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                Pricing
-              </Link>
-              
-              <div className="border-t border-border/50 pt-3 mt-3">
-                {user ? (
-                  <>
-                    <Link to="/profile" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                      <User className="h-4 w-4 text-muted-foreground" />
-                      {t('nav.profile')}
-                    </Link>
-                    <Link to="/settings" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                      <Settings className="h-4 w-4 text-muted-foreground" />
-                      {t('nav.settings')}
-                    </Link>
-                    {isAdmin && (
-                      <Link to="/admin" className="flex items-center gap-3 py-3 px-3 text-primary font-medium rounded-lg hover:bg-primary/5 transition-colors" onClick={() => setIsMenuOpen(false)}>
-                        <Shield className="h-4 w-4" />
-                        Admin Panel
-                      </Link>
-                    )}
-                    <Button variant="outline" className="w-full mt-3" onClick={() => { setIsMenuOpen(false); handleSignOut(); }}>
-                      <LogOut className="h-4 w-4 mr-2" />
-                      {t('nav.signout')}
-                    </Button>
-                  </>
-                ) : (
-                  <Button className="w-full" onClick={() => { setIsMenuOpen(false); navigate('/auth'); }}>
-                    <User className="h-4 w-4 mr-2" />
-                    {t('nav.signin')}
-                  </Button>
-                )}
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
+        <div className="hidden md:flex items-center gap-2">
+          <LanguageSwitcher />
+          <Button variant="ghost" size="icon" onClick={() => navigate('/explore')} aria-label="Search"><Search className="h-5 w-5" /></Button>
+          {user && <NotificationBell />}
+          {user ? (
+            <DropdownMenu><DropdownMenuTrigger asChild><Button variant="ghost" className="relative h-10 w-10 rounded-full ring-2 ring-transparent hover:ring-primary/20 transition-all"><Avatar className="h-9 w-9 border border-border"><AvatarImage src={profile?.avatar_url || ""} /><AvatarFallback className="bg-primary/10 text-primary text-sm font-medium">{getInitials(profile?.full_name ?? null)}</AvatarFallback></Avatar></Button></DropdownMenuTrigger>
+              <DropdownMenuContent align="end" className="w-56 bg-popover/95 backdrop-blur-xl">
+                <div className="px-3 py-2"><p className="text-sm font-medium truncate">{profile?.full_name || "User"}</p><p className="text-xs text-muted-foreground truncate">{user.email}</p></div>
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={() => navigate("/university")} className="cursor-pointer text-primary"><GraduationCap className="mr-2 h-4 w-4" />ScrollUniversity</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/profile")} className="cursor-pointer"><User className="mr-2 h-4 w-4" />{t('nav.profile')}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/settings")} className="cursor-pointer"><Settings className="mr-2 h-4 w-4" />{t('nav.settings')}</DropdownMenuItem>
+                <DropdownMenuItem onClick={() => navigate("/help")} className="cursor-pointer"><HelpCircle className="mr-2 h-4 w-4" />{t('footer.help')}</DropdownMenuItem>
+                {isAdmin && <DropdownMenuItem onClick={() => navigate("/admin")} className="cursor-pointer text-primary"><Shield className="mr-2 h-4 w-4" />Admin Panel</DropdownMenuItem>}
+                <DropdownMenuSeparator />
+                <DropdownMenuItem onClick={handleSignOut} className="cursor-pointer text-destructive focus:text-destructive"><LogOut className="mr-2 h-4 w-4" />{t('nav.signout')}</DropdownMenuItem>
+              </DropdownMenuContent>
+            </DropdownMenu>
+          ) : <Button size="sm" onClick={() => navigate('/auth')}><User className="h-4 w-4 mr-1.5" />{t('nav.signin')}</Button>}
+        </div>
+        <Button variant="ghost" size="icon" className="md:hidden" onClick={() => setIsMenuOpen(!isMenuOpen)} aria-label="Toggle menu">{isMenuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}</Button>
+      </div></div>
+      <AnimatePresence>{isMenuOpen && (
+        <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }} exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.2 }} className="md:hidden border-t border-border/50 bg-background/95 backdrop-blur-xl">
+          <div className="container mx-auto px-4 py-4 space-y-1">
+            <Link to="/explore" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>Explore</Link>
+            <Link to="/library" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>{t('nav.library')}</Link>
+            {user && <Link to="/university" className="flex items-center gap-3 py-3 px-3 text-primary font-semibold rounded-lg hover:bg-primary/5 transition-colors" onClick={() => setIsMenuOpen(false)}><GraduationCap className="h-4 w-4" />ScrollUniversity</Link>}
+            <Link to="/generate" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>{t('nav.generate')}</Link>
+            <Link to="/upload" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>Upload</Link>
+            <Link to="/sell" className="flex items-center gap-3 py-3 px-3 text-primary font-semibold rounded-lg hover:bg-primary/5 transition-colors" onClick={() => setIsMenuOpen(false)}>Start Selling</Link>
+            <Link to="/pricing" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}>Pricing</Link>
+            <div className="border-t border-border/50 pt-3 mt-3">{user ? (<>
+              <Link to="/profile" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}><User className="h-4 w-4 text-muted-foreground" />{t('nav.profile')}</Link>
+              <Link to="/settings" className="flex items-center gap-3 py-3 px-3 text-foreground font-medium rounded-lg hover:bg-muted/50 transition-colors" onClick={() => setIsMenuOpen(false)}><Settings className="h-4 w-4 text-muted-foreground" />{t('nav.settings')}</Link>
+              {isAdmin && <Link to="/admin" className="flex items-center gap-3 py-3 px-3 text-primary font-medium rounded-lg hover:bg-primary/5 transition-colors" onClick={() => setIsMenuOpen(false)}><Shield className="h-4 w-4" />Admin Panel</Link>}
+              <Button variant="outline" className="w-full mt-3" onClick={() => { setIsMenuOpen(false); void handleSignOut(); }}><LogOut className="h-4 w-4 mr-2" />{t('nav.signout')}</Button>
+            </>) : <Button className="w-full" onClick={() => { setIsMenuOpen(false); navigate('/auth'); }}><User className="h-4 w-4 mr-2" />{t('nav.signin')}</Button>}</div>
+          </div>
+        </motion.div>
+      )}</AnimatePresence>
     </nav>
   );
 }

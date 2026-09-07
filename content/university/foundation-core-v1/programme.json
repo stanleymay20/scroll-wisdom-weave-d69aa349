@@ -1,0 +1,82 @@
+{
+  "schema_version": 1,
+  "programme": {
+    "code": "SU-FND-30",
+    "name": "ScrollUniversity Foundation Core",
+    "qualification_level": "foundation",
+    "credits": 30,
+    "credit_system": "ScrollUniversity workload units benchmarked to ECTS workload conventions",
+    "credit_award_status": "workload_planning_only_not_awarded_or_transferable_academic_credit",
+    "credit_disclaimer": "These workload units use the ECTS workload convention only as a planning benchmark. ScrollUniversity does not award ECTS or transferable academic credit.",
+    "planned_hours": 810,
+    "delivery_mode": "online",
+    "status": "authoring",
+    "purpose": "A common foundation that develops the academic, digital, quantitative, AI, communication and innovation capabilities required for successful higher education study.",
+    "programme_outcomes": [
+      "Conduct ethical, evidence-based academic inquiry and distinguish reliable evidence from unsupported claims.",
+      "Communicate reasoned arguments clearly in academic, professional and digital formats.",
+      "Interpret quantitative information and data with appropriate uncertainty and statistical caution.",
+      "Use digital systems safely, responsibly and effectively for learning and collaboration.",
+      "Use and evaluate AI systems with human oversight, critical judgement and responsible risk management.",
+      "Identify opportunities, test assumptions and translate ideas into ethically and economically reasoned action."
+    ]
+  },
+  "courses": [
+    {
+      "code": "SU101",
+      "title": "Academic Research and Information Literacy",
+      "credits": 5,
+      "planned_hours": 135,
+      "pack": "SU101-academic-research-information-literacy.json",
+      "frameworks": ["ACRL Framework for Information Literacy for Higher Education"]
+    },
+    {
+      "code": "SU102",
+      "title": "Academic Communication and Professional Writing",
+      "credits": 5,
+      "planned_hours": 135,
+      "pack": "SU102-academic-communication-professional-writing.json",
+      "frameworks": ["higher-education academic writing and communication practice"]
+    },
+    {
+      "code": "SU103",
+      "title": "Quantitative Reasoning and Data Literacy",
+      "credits": 5,
+      "planned_hours": 135,
+      "pack": "SU103-quantitative-reasoning-data-literacy.json",
+      "frameworks": ["applied statistical literacy", "DigComp information and data literacy"]
+    },
+    {
+      "code": "SU104",
+      "title": "Digital Literacy, Cybersecurity and Responsible Technology",
+      "credits": 5,
+      "planned_hours": 135,
+      "pack": "SU104-digital-cyber-responsible-technology.json",
+      "frameworks": ["DigComp 3.0", "NIST Cybersecurity Framework 2.0"]
+    },
+    {
+      "code": "SU105",
+      "title": "Artificial Intelligence Literacy and Responsible AI",
+      "credits": 5,
+      "planned_hours": 135,
+      "pack": "SU105-ai-literacy-responsible-ai.json",
+      "frameworks": ["UNESCO AI Competency Framework for Students", "NIST AI RMF 1.0"]
+    },
+    {
+      "code": "SU106",
+      "title": "Innovation, Entrepreneurship and Career Development",
+      "credits": 5,
+      "planned_hours": 135,
+      "pack": "SU106-innovation-entrepreneurship-career.json",
+      "frameworks": ["EntreComp"]
+    }
+  ],
+  "quality": {
+    "structural_validation": "required",
+    "subject_review": "required",
+    "citation_review": "required",
+    "pedagogy_review": "required",
+    "accessibility_review": "required",
+    "copyright_review": "required"
+  }
+}

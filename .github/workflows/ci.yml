@@ -15,6 +15,7 @@ concurrency:
 env:
   BUN_VERSION: 1.2.23
   DENO_VERSION: 2.9.6
+  SUPABASE_CLI_VERSION: 2.111.0
 
 jobs:
   typecheck:
@@ -49,6 +50,8 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - run: bun install --frozen-lockfile
       - run: bun run test
+      - name: Validate ScrollUniversity curriculum content
+        run: bun scripts/validate-university-content.mjs
 
   migration-safety:
     runs-on: ubuntu-latest
@@ -60,6 +63,22 @@ jobs:
           bun-version: ${{ env.BUN_VERSION }}
       - name: Reject destructive migrations in hardened migration era
         run: bun scripts/check-migration-safety.mjs
+
+  database-schema:
+    name: Apply and lint Supabase schema
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@v2.1.1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+          github-token: ${{ github.token }}
+      - name: Apply every migration to a fresh local Supabase database
+        run: supabase db start
+      - name: Fail on PostgreSQL function and schema errors
+        run: supabase db lint --local --schema public --level error --fail-on error
 
   edge-functions:
     runs-on: ubuntu-latest
@@ -87,6 +106,15 @@ jobs:
           deno check supabase/functions/validate-certificate/index.ts
           deno check supabase/functions/verify-certificate/index.ts
           deno check supabase/functions/export-certificate/index.ts
+      - name: Type-check ScrollUniversity Edge Functions
+        run: |
+          deno check supabase/functions/university-provision-users/index.ts
+          deno check supabase/functions/university-lti-login/index.ts
+          deno check supabase/functions/university-lti-launch/index.ts
+          deno check supabase/functions/university-lti-claim/index.ts
+      - name: Test ScrollUniversity protocol primitives
+        run: |
+          deno test supabase/functions/_shared/university-lti_test.ts
       - name: Type-check publication pipeline Edge Functions
         run: |
           deno check supabase/functions/generate-book/index.ts

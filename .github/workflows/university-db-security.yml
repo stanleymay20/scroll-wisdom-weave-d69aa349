@@ -1,0 +1,41 @@
+name: University Database Security
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: university-db-security-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  SUPABASE_CLI_VERSION: 2.111.0
+
+jobs:
+  authorization-contract:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v6
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@v2.1.1
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+          github-token: ${{ github.token }}
+      - name: Apply every migration to a fresh local Supabase database
+        run: supabase db start
+      - name: Execute ScrollUniversity runtime database authorization contract
+        run: |
+          set -euo pipefail
+          db_container="$(docker ps --filter 'name=supabase_db_' --format '{{.Names}}' | head -n 1)"
+          if [ -z "$db_container" ]; then
+            echo '::error::Local Supabase PostgreSQL container was not found.'
+            exit 1
+          fi
+          docker exec -i "$db_container" \
+            psql -U postgres -d postgres -v ON_ERROR_STOP=1 \
+            < scripts/test-university-db-security.sql
