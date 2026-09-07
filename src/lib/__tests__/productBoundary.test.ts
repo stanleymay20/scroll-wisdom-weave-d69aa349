@@ -5,8 +5,8 @@ import { extname, join, relative } from "node:path";
 const ROOTS = ["src", "supabase/functions"];
 const TEXT_EXTENSIONS = new Set([".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs"]);
 
-// Build the forbidden markers without embedding them verbatim in this test,
-// otherwise the boundary checker would correctly report itself.
+// Build forbidden cross-product markers from parts so this policy test does
+// not contain the very token it is responsible for detecting.
 const FORBIDDEN_MARKERS = [
   ["Scroll", "University"].join(""),
   ["scroll", "university"].join("-"),
@@ -21,7 +21,7 @@ function walk(dir: string): string[] {
 }
 
 describe("ScrollLibrary product boundary", () => {
-  it("contains no active ScrollUniversity application or Edge Function identifiers", () => {
+  it("contains no active cross-product application or Edge Function identifiers", () => {
     const violations: string[] = [];
 
     for (const root of ROOTS) {
