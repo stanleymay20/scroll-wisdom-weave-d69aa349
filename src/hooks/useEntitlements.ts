@@ -174,7 +174,7 @@ export function useEntitlements(): Entitlements {
     };
   }
 
-  // STUDENT TIER (ScrollUniversity) - Premium-equivalent access
+  // STUDENT TIER - Premium-equivalent ScrollLibrary access
   if (isStudent) {
     return {
       canPublish: true,
@@ -268,7 +268,7 @@ export function hasFeatureAccess(
     return true;
   }
 
-  // Student tier (ScrollUniversity) has Premium-equivalent access
+  // ScrollLibrary student tier has Premium-equivalent access
   if (entitlements.isScrollStudent) {
     return true;
   }
