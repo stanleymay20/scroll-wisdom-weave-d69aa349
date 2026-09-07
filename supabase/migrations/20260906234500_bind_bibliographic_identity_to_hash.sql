@@ -49,7 +49,7 @@ AS $$
         E'\x1f',
         COALESCE(wa.user_id::text, ''),
         COALESCE(wa.display_name, ''),
-        COALESCE(wa.author_role, ''),
+        COALESCE(wa.author_role::text, ''),
         COALESCE(wa.sort_order, 0)::text,
         COALESCE(wa.contribution_percentage, 0)::text
       ),
@@ -64,15 +64,15 @@ AS $$
       pg_catalog.concat_ws(
         E'\x1f',
         wr.rights_holder_id::text,
-        COALESCE(wr.rights_class, ''),
-        COALESCE(wr.rights_scope, ''),
+        COALESCE(wr.rights_class::text, ''),
+        COALESCE(wr.rights_scope, '{}'::jsonb)::text,
         COALESCE(wr.territory, ''),
         COALESCE(wr.language, ''),
         COALESCE(rh.display_name, ''),
-        COALESCE(rh.holder_type, ''),
+        COALESCE(rh.holder_type::text, ''),
         COALESCE(rh.country_code, '')
       ),
-      E'\x1e' ORDER BY wr.rights_holder_id, COALESCE(wr.rights_class, ''), COALESCE(wr.rights_scope, ''), COALESCE(wr.territory, ''), COALESCE(wr.language, '')
+      E'\x1e' ORDER BY wr.rights_holder_id, COALESCE(wr.rights_class::text, ''), COALESCE(wr.rights_scope, '{}'::jsonb)::text, COALESCE(wr.territory, ''), COALESCE(wr.language, '')
     ) AS payload
     FROM public.books b
     JOIN public.work_rights wr ON wr.work_id = b.work_id
