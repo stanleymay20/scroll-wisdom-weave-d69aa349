@@ -1,4 +1,4 @@
-import { assertEquals, assertRejects, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
+import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   buildLtiAuthorizationUrl,
   buildLtiToolRedirect,
@@ -68,8 +68,5 @@ Deno.test("LTI state hashing is deterministic and non-plaintext", async () => {
   const second = await sha256Hex("secret-state");
   assertEquals(first, second);
   assertEquals(first.length, 64);
-  await assertRejects(async () => {
-    if (first === "secret-state") throw new Error("hash unexpectedly equals input");
-    throw new Error("expected rejection sentinel");
-  });
+  assert(first !== "secret-state", "state hash must not equal the plaintext state");
 });
