@@ -1,10 +1,11 @@
 import { Link, useSearchParams } from 'react-router-dom';
-import { BookOpen, PlugZap, Settings2 } from 'lucide-react';
+import { BookOpen, PlugZap, Route, Settings2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import UniversityHub from '@/components/university/UniversityHub';
 import UniversityAcademicAdministration from '@/components/university/UniversityAcademicAdministration';
 import UniversityCourseMaterials from '@/components/university/UniversityCourseMaterials';
 import UniversityInteroperability from '@/components/university/UniversityInteroperability';
+import UniversityStudentLifecycle from '@/components/university/UniversityStudentLifecycle';
 import UniversityLtiClaim from '@/pages/UniversityLtiClaim';
 
 export default function University() {
@@ -16,6 +17,10 @@ export default function University() {
 
   if (params.get('view') === 'materials') {
     return <UniversityCourseMaterials />;
+  }
+
+  if (params.get('view') === 'lifecycle') {
+    return <UniversityStudentLifecycle />;
   }
 
   if (params.get('view') === 'administration') {
@@ -34,6 +39,12 @@ export default function University() {
           <Link to="/university?view=materials">
             <BookOpen className="mr-2 h-4 w-4" />
             Course materials
+          </Link>
+        </Button>
+        <Button asChild variant="secondary" className="shadow-lg">
+          <Link to="/university?view=lifecycle">
+            <Route className="mr-2 h-4 w-4" />
+            Student lifecycle
           </Link>
         </Button>
         <Button asChild variant="secondary" className="shadow-lg">
