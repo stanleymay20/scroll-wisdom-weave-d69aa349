@@ -1,4 +1,4 @@
--- Correct programme progress aggregation.
+-- Correct ScrollUniversity progress aggregation.
 -- Count each curriculum course once per registration. SUM(DISTINCT credits)
 -- incorrectly collapses different courses that happen to carry the same credit
 -- value, while joining offerings directly can double-count repeated offerings.
@@ -105,3 +105,93 @@ LEFT JOIN curriculum cu
  AND cu.organization_id = r.organization_id
 LEFT JOIN completed co ON co.programme_registration_id = r.id
 LEFT JOIN recognized rc ON rc.programme_registration_id = r.id;
+
+-- Multiple submission attempts previously multiplied assignments_total because
+-- assignments were joined directly to every attempt. Count each published
+-- assignment once and only count submitted work for published assignments.
+CREATE OR REPLACE VIEW public.university_learner_progress_v
+WITH (security_invoker = true)
+AS
+WITH grade_stats AS (
+  SELECT
+    e.organization_id,
+    e.offering_id,
+    e.user_id,
+    count(gi.id) FILTER (WHERE gi.published) AS grade_items_total,
+    count(g.id) FILTER (WHERE g.status = 'published') AS grade_items_graded,
+    round(
+      SUM(CASE WHEN g.status = 'published' THEN g.percentage * gi.weight_percent ELSE 0 END)
+      / NULLIF(SUM(CASE WHEN g.status = 'published' THEN gi.weight_percent ELSE 0 END), 0),
+      2
+    ) AS weighted_percentage
+  FROM public.university_enrolments e
+  LEFT JOIN public.university_grade_items gi ON gi.offering_id = e.offering_id
+  LEFT JOIN public.university_grades g
+    ON g.grade_item_id = gi.id
+   AND g.user_id = e.user_id
+  GROUP BY e.organization_id, e.offering_id, e.user_id
+),
+submission_stats AS (
+  SELECT
+    e.organization_id,
+    e.offering_id,
+    e.user_id,
+    count(DISTINCT a.id) FILTER (WHERE a.published) AS assignments_total,
+    count(DISTINCT s.assignment_id) FILTER (
+      WHERE a.published AND s.status IN ('submitted','late','graded')
+    ) AS assignments_submitted
+  FROM public.university_enrolments e
+  LEFT JOIN public.university_assignments a ON a.offering_id = e.offering_id
+  LEFT JOIN public.university_submissions s
+    ON s.assignment_id = a.id
+   AND s.user_id = e.user_id
+  GROUP BY e.organization_id, e.offering_id, e.user_id
+)
+SELECT
+  e.organization_id,
+  e.offering_id,
+  e.user_id,
+  up.display_name,
+  up.student_number,
+  c.code AS course_code,
+  c.title AS course_title,
+  t.code AS term_code,
+  t.name AS term_name,
+  e.status AS enrolment_status,
+  COALESCE(e.final_percentage, gs.weighted_percentage) AS current_percentage,
+  gs.grade_items_total,
+  gs.grade_items_graded,
+  ss.assignments_total,
+  ss.assignments_submitted,
+  GREATEST(ss.assignments_total - ss.assignments_submitted, 0) AS assignments_outstanding,
+  ats.sessions_total,
+  ats.sessions_attended,
+  ats.sessions_absent,
+  ats.attendance_percentage,
+  e.final_grade,
+  e.credits_earned
+FROM public.university_enrolments e
+JOIN public.university_course_offerings o
+  ON o.id = e.offering_id
+ AND o.organization_id = e.organization_id
+JOIN public.university_courses c
+  ON c.id = o.course_id
+ AND c.organization_id = e.organization_id
+JOIN public.university_academic_terms t
+  ON t.id = o.term_id
+ AND t.organization_id = e.organization_id
+LEFT JOIN public.university_people up
+  ON up.organization_id = e.organization_id
+ AND up.user_id = e.user_id
+LEFT JOIN grade_stats gs
+  ON gs.organization_id = e.organization_id
+ AND gs.offering_id = e.offering_id
+ AND gs.user_id = e.user_id
+LEFT JOIN submission_stats ss
+  ON ss.organization_id = e.organization_id
+ AND ss.offering_id = e.offering_id
+ AND ss.user_id = e.user_id
+LEFT JOIN public.university_attendance_summary_v ats
+  ON ats.organization_id = e.organization_id
+ AND ats.offering_id = e.offering_id
+ AND ats.user_id = e.user_id;
