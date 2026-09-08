@@ -115,3 +115,7 @@ for (const [name, bytes] of [["canonical-export.epub", canonical], ["distributio
   }
   console.log(`${name}: ${bytes.byteLength} bytes`);
 }
+
+// export-book registers an Edge Function listener when imported. CI only needs
+// the renderer exports, so terminate after fixture bytes have been persisted.
+Deno.exit(0);
