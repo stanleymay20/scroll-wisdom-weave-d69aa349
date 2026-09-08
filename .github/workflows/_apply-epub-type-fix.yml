@@ -1,0 +1,43 @@
+name: Apply typed EPUB timestamp repair
+
+on:
+  push:
+    branches: [hardening/official-epubcheck-gate]
+
+permissions:
+  contents: write
+
+jobs:
+  patch:
+    if: github.actor != 'github-actions[bot]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: hardening/official-epubcheck-gate
+          fetch-depth: 0
+
+      - name: Remove unsupported zip.js option and delete this one-shot workflow
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('supabase/functions/export-book/index.ts')
+          text = path.read_text()
+          old = '{ level: 0, extendedTimestamp: false, ntfsTimestamp: false }'
+          new = '{ level: 0, extendedTimestamp: false }'
+          count = text.count(old)
+          if count != 2:
+              raise SystemExit(f'Expected exactly 2 EPUB mimetype option blocks, found {count}')
+          path.write_text(text.replace(old, new))
+          Path('.github/workflows/_apply-epub-type-fix.yml').unlink()
+          PY
+
+      - name: Commit targeted repair
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/functions/export-book/index.ts .github/workflows/_apply-epub-type-fix.yml
+          git commit -m "fix: use supported zip.js EPUB timestamp option"
+          git push origin HEAD:hardening/official-epubcheck-gate
