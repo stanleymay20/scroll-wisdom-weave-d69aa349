@@ -1,0 +1,84 @@
+name: EPUB Conformance
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: epubcheck-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DENO_VERSION: 2.9.6
+  EPUBCHECK_VERSION: 5.3.0
+  EPUBCHECK_SHA256: 6c07e68584b2e2ce2f89fe06e1246dfead3eb36b46b340e7d93524f29dcff6c5
+
+jobs:
+  official-epubcheck:
+    name: Official EPUBCheck 5.3.0
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Generate exact ScrollLibrary EPUB renderer fixtures
+        run: |
+          rm -rf .tmp/epubcheck
+          deno run --allow-env --allow-net --allow-read --allow-write \
+            scripts/generate-epubcheck-fixtures.ts .tmp/epubcheck
+
+      - name: Install checksum-pinned official EPUBCheck
+        run: |
+          set -euo pipefail
+          archive="/tmp/epubcheck-${EPUBCHECK_VERSION}.zip"
+          curl --fail --location --retry 3 --retry-all-errors \
+            --output "$archive" \
+            "https://github.com/w3c/epubcheck/releases/download/v${EPUBCHECK_VERSION}/epubcheck-${EPUBCHECK_VERSION}.zip"
+          echo "${EPUBCHECK_SHA256}  ${archive}" | sha256sum --check --strict
+          rm -rf "/tmp/epubcheck-${EPUBCHECK_VERSION}"
+          unzip -q "$archive" -d /tmp
+          test -f "/tmp/epubcheck-${EPUBCHECK_VERSION}/epubcheck.jar"
+          java -jar "/tmp/epubcheck-${EPUBCHECK_VERSION}/epubcheck.jar" --version
+
+      - name: Validate final EPUB bytes with official W3C EPUBCheck
+        run: |
+          set -uo pipefail
+          status=0
+          shopt -s nullglob
+          epubs=(.tmp/epubcheck/*.epub)
+          if [ ${#epubs[@]} -eq 0 ]; then
+            echo "No EPUB fixtures were generated" >&2
+            exit 1
+          fi
+          for epub in "${epubs[@]}"; do
+            base="$(basename "$epub" .epub)"
+            report=".tmp/epubcheck/${base}.epubcheck.json"
+            echo "Validating $epub"
+            java -jar "/tmp/epubcheck-${EPUBCHECK_VERSION}/epubcheck.jar" \
+              "$epub" --warn --json "$report" || status=1
+          done
+          exit "$status"
+
+      - name: Upload EPUBCheck evidence
+        if: always()
+        uses: actions/upload-artifact@v6
+        with:
+          name: epubcheck-${{ github.sha }}
+          path: |
+            .tmp/epubcheck/*.epub
+            .tmp/epubcheck/*.epubcheck.json
+          if-no-files-found: error
+          retention-days: 30
