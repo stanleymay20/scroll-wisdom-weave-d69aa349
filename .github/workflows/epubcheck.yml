@@ -1,6 +1,7 @@
 name: EPUB Conformance
 
 # Validates both ScrollLibrary EPUB renderer paths against the official validator.
+# The gate checks the final archive bytes produced by those renderers, not template source.
 on:
   push:
     branches: [main]
