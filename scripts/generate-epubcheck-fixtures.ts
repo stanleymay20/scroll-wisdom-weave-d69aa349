@@ -1,11 +1,17 @@
 import JSZip from "npm:jszip@3.10.1";
 import { generateCanonicalEPUB } from "../supabase/functions/export-book/index.ts";
 import { buildEpub } from "../supabase/functions/_shared/epub-builder.ts";
+import type {
+  BundleAuthor,
+  BundleBook,
+  BundleChapter,
+  BundleListing,
+} from "../supabase/functions/_shared/bundle-content.ts";
 
 const outputDir = Deno.args[0] ?? ".tmp/epubcheck";
 await Deno.mkdir(outputDir, { recursive: true });
 
-const chapters = [
+const chapters: BundleChapter[] = [
   {
     chapter_number: 1,
     title: "Introduction & Scope",
@@ -46,13 +52,23 @@ const chapters = [
   },
 ];
 
-const book = {
+const book: BundleBook = {
   id: "00000000-0000-4000-8000-000000000001",
   title: "ScrollLibrary EPUBCheck Fixture",
   description: "A deterministic non-production fixture used only for EPUB conformance validation.",
   category: "technology",
   book_type: "non_fiction",
   cover_image_url: null,
+};
+
+const listing: BundleListing = {
+  subtitle: "Official validator fixture",
+  blurb: "ScrollLibrary CI fixture.",
+  amazon_description: "ScrollLibrary CI fixture for official EPUBCheck validation.",
+};
+
+const author: BundleAuthor = {
+  display_name: "ScrollLibrary Test Author",
 };
 
 const exportContext = {
@@ -89,15 +105,11 @@ const canonical = new Uint8Array(await generateCanonicalEPUB(
 ));
 await Deno.writeFile(`${outputDir}/canonical-export.epub`, canonical);
 
-const bundle = await buildEpub(JSZip as any, {
-  book: { ...book, subtitle: "Official validator fixture" } as any,
-  listing: {
-    subtitle: "Official validator fixture",
-    blurb: "ScrollLibrary CI fixture.",
-    amazon_description: "ScrollLibrary CI fixture for official EPUBCheck validation.",
-  } as any,
-  author: { display_name: "ScrollLibrary Test Author" } as any,
-  chapters: chapters as any,
+const bundle = await buildEpub(JSZip, {
+  book: { ...book, subtitle: "Official validator fixture" },
+  listing,
+  author,
+  chapters,
   coverBytes: null,
   coverMime: null,
   language: "en",
