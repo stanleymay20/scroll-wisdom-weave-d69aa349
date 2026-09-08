@@ -4365,7 +4365,7 @@ async function generateEPUB(
   const blobWriter = new zip.BlobWriter("application/epub+zip");
   const zipWriter = new zip.ZipWriter(blobWriter);
 
-  await zipWriter.add("mimetype", new zip.TextReader("application/epub+zip"), { level: 0 });
+  await zipWriter.add("mimetype", new zip.TextReader("application/epub+zip"), { level: 0, extendedTimestamp: false });
 
   const containerXml = `<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
@@ -5965,7 +5965,7 @@ export async function generateCanonicalEPUB(
   const blobWriter = new zip.BlobWriter("application/epub+zip");
   const zipWriter = new zip.ZipWriter(blobWriter);
 
-  await zipWriter.add("mimetype", new zip.TextReader("application/epub+zip"), { level: 0 });
+  await zipWriter.add("mimetype", new zip.TextReader("application/epub+zip"), { level: 0, extendedTimestamp: false });
 
   const containerXml = `<?xml version="1.0" encoding="UTF-8"?>
 <container version="1.0" xmlns="urn:oasis:names:tc:opendocument:xmlns:container">
