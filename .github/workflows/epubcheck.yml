@@ -1,5 +1,6 @@
 name: EPUB Conformance
 
+# Validates both ScrollLibrary EPUB renderer paths against the official validator.
 on:
   push:
     branches: [main]
