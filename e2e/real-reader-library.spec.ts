@@ -125,11 +125,17 @@ test("real reader loads generated chapter content and remains readable after rel
   await page.goto(`/read/${book.id}/1`);
   await expect(page).toHaveURL(new RegExp(`/read/${book.id}/1$`));
   await expect(page.getByText("The Reader Contract", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/real authenticated reader can open this chapter/i)).toBeVisible({ timeout: 15_000 });
+
+  const renderedChapterText = page
+    .locator(".markdown-content [data-sentence-index]")
+    .filter({ hasText: /real authenticated reader can open this chapter/i });
+  await expect(renderedChapterText).toHaveCount(1);
+  await expect(renderedChapterText).toBeVisible({ timeout: 15_000 });
 
   await page.reload();
   await expect(page).toHaveURL(new RegExp(`/read/${book.id}/1$`));
-  await expect(page.getByText(/real authenticated reader can open this chapter/i)).toBeVisible({ timeout: 15_000 });
+  await expect(renderedChapterText).toHaveCount(1);
+  await expect(renderedChapterText).toBeVisible({ timeout: 15_000 });
 });
 
 test("real profile, library and highlight ownership remain isolated between two authenticated users", async ({ request }) => {
