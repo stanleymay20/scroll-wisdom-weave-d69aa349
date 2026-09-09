@@ -1,0 +1,42 @@
+name: Temporary xmldom lock refresh
+
+on:
+  push:
+    branches:
+      - repair/scrolllibrary-staging-publications-book-id-compat
+    paths:
+      - package.json
+
+permissions:
+  contents: write
+
+jobs:
+  refresh-lock:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: repair/scrolllibrary-staging-publications-book-id-compat
+          fetch-depth: 0
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+      - name: Refresh lockfile from package override
+        run: bun install --lockfile-only
+      - name: Prove frozen install and dependency audit
+        run: |
+          bun install --frozen-lockfile
+          bun run audit:dependencies
+      - name: Commit only the regenerated lockfile
+        run: |
+          git status --short
+          git diff -- bun.lock
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add bun.lock
+          if git diff --cached --quiet; then
+            echo "Lockfile already satisfies override"
+            exit 0
+          fi
+          git commit -m "fix: refresh xmldom transitive lock"
+          git push origin HEAD:repair/scrolllibrary-staging-publications-book-id-compat
