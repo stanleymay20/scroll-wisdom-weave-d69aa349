@@ -39,6 +39,7 @@ ALTER TABLE public.works
   DROP COLUMN IF EXISTS scroll_work_id CASCADE;
 
 ALTER TABLE public.publications
+  DROP COLUMN IF EXISTS book_id CASCADE,
   DROP COLUMN IF EXISTS scroll_edition_id CASCADE,
   DROP COLUMN IF EXISTS release_request_key CASCADE;
 
@@ -54,6 +55,7 @@ ALTER TABLE public.books
 
 -- Exact controlled recovery order for the CURRENT legacy GA-staging lineage.
 \ir ../supabase/migrations/20260907223000_legacy_staging_isbn_convergence_prelude.sql
+\ir ../supabase/migrations/20260909124500_legacy_staging_publications_book_id_compat.sql
 \ir ../supabase/migrations/20260906235000_live_publication_schema_convergence.sql
 \ir ../supabase/migrations/20260906235500_scroll_identity_layer.sql
 \ir ../supabase/migrations/20260907024300_isbn_provenance_and_publication_atomicity.sql
@@ -111,6 +113,13 @@ BEGIN
       RAISE EXCEPTION 'legacy convergence failed to recreate books column: %', v_name;
     END IF;
   END LOOP;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema='public' AND table_name='publications' AND column_name='book_id'
+  ) THEN
+    RAISE EXCEPTION 'legacy convergence failed to restore publications.book_id compatibility link';
+  END IF;
 
   IF NOT EXISTS (
     SELECT 1 FROM information_schema.columns
