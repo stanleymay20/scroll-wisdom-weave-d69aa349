@@ -21,6 +21,9 @@
     "audit:bundle": "bun scripts/check-bundle-budget.mjs",
     "ci": "bun run typecheck && bun run lint && bun run test && bun run build:release && bun run audit:secrets && bun run audit:dependencies"
   },
+  "overrides": {
+    "@xmldom/xmldom": "0.8.15"
+  },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
     "@lovable.dev/cloud-auth-js": "^1.2.0",
