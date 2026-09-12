@@ -84,7 +84,8 @@ jobs:
       - name: Confirm patched dependency
         shell: bash
         run: |
-          bun pm ls | grep -F '@xmldom/xmldom@0.8.15'
+          grep -F '"@xmldom/xmldom": ["@xmldom/xmldom@0.8.15"' bun.lock
+          ! grep -F '"@xmldom/xmldom": ["@xmldom/xmldom@0.8.11"' bun.lock
 
       - name: Commit lock repair and remove temporary writer
         shell: bash
