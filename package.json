@@ -4,6 +4,9 @@
   "version": "0.0.0",
   "type": "module",
   "packageManager": "bun@1.2.23",
+  "overrides": {
+    "@xmldom/xmldom": "0.8.15"
+  },
   "scripts": {
     "dev": "vite",
     "build": "vite build",
