@@ -13,6 +13,7 @@ const userOnePassword = required("E2E_USER_ONE_PASSWORD");
 const userTwoEmail = required("E2E_USER_TWO_EMAIL");
 const userTwoPassword = required("E2E_USER_TWO_PASSWORD");
 const lifecycleTitle = "GA E2E Lifecycle Book";
+const lifecycleChapterSentence = /real authenticated reader can open this chapter/i;
 
 async function loginThroughUi(page: Page, email: string, password: string) {
   await page.addInitScript(() => {
@@ -104,7 +105,8 @@ test("published lifecycle chapter remains anonymously readable without exposing 
   expect(await anonymousLibraryResponse.json()).toEqual([]);
 });
 
-test("real library renders the authenticated reader's saved book and routes to its detail page", async ({ page }) => {
+test("real library renders the authenticated reader's saved book and continues to its reading route", async ({ page, request }) => {
+  const book = await lifecycleBook(request);
   await loginThroughUi(page, userOneEmail, userOnePassword);
   await page.goto("/library");
 
@@ -112,10 +114,12 @@ test("real library renders the authenticated reader's saved book and routes to i
   await expect(bookHeading).toBeVisible({ timeout: 15_000 });
   await expect(page.getByText("25%", { exact: true })).toBeVisible();
 
-  await bookHeading.click();
-  await expect(page).toHaveURL(/\/book\/[0-9a-f-]+$/i, { timeout: 15_000 });
+  const continueLink = page.getByRole("link", { name: "Continue" });
+  await expect(continueLink).toHaveAttribute("href", `/read/${book.id}/1`);
+  await continueLink.click();
+  await expect(page).toHaveURL(new RegExp(`/read/${book.id}/1$`), { timeout: 15_000 });
   await expect(page.getByRole("heading", { level: 1, name: lifecycleTitle })).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/2\s+chapters/i)).toBeVisible();
+  await expect(page.getByText("The Reader Contract", { exact: true }).first()).toBeVisible();
 });
 
 test("real reader loads generated chapter content and remains readable after reload", async ({ page, request }) => {
@@ -125,11 +129,17 @@ test("real reader loads generated chapter content and remains readable after rel
   await page.goto(`/read/${book.id}/1`);
   await expect(page).toHaveURL(new RegExp(`/read/${book.id}/1$`));
   await expect(page.getByText("The Reader Contract", { exact: true }).first()).toBeVisible({ timeout: 15_000 });
-  await expect(page.getByText(/real authenticated reader can open this chapter/i)).toBeVisible({ timeout: 15_000 });
+
+  const chapterBodySentence = page
+    .locator('[data-sentence-index="0"]')
+    .filter({ hasText: lifecycleChapterSentence });
+  await expect(chapterBodySentence).toBeVisible({ timeout: 15_000 });
 
   await page.reload();
   await expect(page).toHaveURL(new RegExp(`/read/${book.id}/1$`));
-  await expect(page.getByText(/real authenticated reader can open this chapter/i)).toBeVisible({ timeout: 15_000 });
+  await expect(
+    page.locator('[data-sentence-index="0"]').filter({ hasText: lifecycleChapterSentence }),
+  ).toBeVisible({ timeout: 15_000 });
 });
 
 test("real profile, library and highlight ownership remain isolated between two authenticated users", async ({ request }) => {
