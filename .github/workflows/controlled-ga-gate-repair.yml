@@ -1,4 +1,5 @@
 name: Controlled GA Gate Repair
+# one-shot retrigger after corrected verification guard
 
 on:
   push:
