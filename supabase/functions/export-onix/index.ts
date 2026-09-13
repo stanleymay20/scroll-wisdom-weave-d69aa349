@@ -116,7 +116,7 @@ Deno.serve(async (req) => {
 
     const { data: metadata, error: metadataErr } = await sc
       .from("book_distribution_metadata")
-      .select("publication_date,warengruppe_code,product_availability,publishing_status,price_type,price_cents,currency,price_country,tax_rate_code,tax_rate_percent")
+      .select("publication_date,warengruppe_code,product_availability,publishing_status,price_type,price_cents,currency,price_country,tax_rate_code,tax_rate_percent,thema_codes,keywords")
       .eq("book_id", body.bookId)
       .eq("product_form", body.productForm)
       .eq("language", language)
@@ -153,6 +153,8 @@ Deno.serve(async (req) => {
       editionLabel,
       publicationDate: metadata.publication_date ?? "",
       warengruppeCode: metadata.warengruppe_code ?? "",
+      themaCodes: Array.isArray(metadata.thema_codes) ? metadata.thema_codes : [],
+      keywords: Array.isArray(metadata.keywords) ? metadata.keywords : [],
       productAvailability: metadata.product_availability ?? "",
       publishingStatus: metadata.publishing_status ?? null,
       priceType: metadata.price_type ?? "",
