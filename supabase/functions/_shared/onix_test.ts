@@ -1,6 +1,12 @@
-import { onixProductForm, renderOnix31Product, toOnixLanguageCode, validateOnixProduct } from "./onix.ts";
+import {
+  onixProductForm,
+  renderOnix31Product,
+  toOnixLanguageCode,
+  validateOnixProduct,
+  type OnixProductInput,
+} from "./onix.ts";
 
-function base(overrides: Record<string, unknown> = {}) {
+function base(overrides: Partial<OnixProductInput> = {}): OnixProductInput {
   return {
     recordReference: "SLP-0123456789ABCDEF0123456789ABCDEF",
     proprietaryProductId: "SLP-0123456789ABCDEF0123456789ABCDEF",
@@ -11,7 +17,7 @@ function base(overrides: Record<string, unknown> = {}) {
     publisherName: "ScrollLibrary Publishing",
     imprintName: "ScrollLibrary Press",
     language: "en",
-    productForm: "paperback" as const,
+    productForm: "paperback",
     editionLabel: "First edition",
     publicationDate: "2026-09-06",
     warengruppeCode: "1977",
@@ -67,7 +73,7 @@ Deno.test("renders VLB-shaped ONIX 3.1 metadata with Scroll Product ID plus ISBN
 });
 
 Deno.test("rejects malformed Scroll Product IDs without confusing them with ISBN", () => {
-  const issues = validateOnixProduct(base({ proprietaryProductId: "9780306406157" }) as any);
+  const issues = validateOnixProduct(base({ proprietaryProductId: "9780306406157" }));
   if (!issues.some((issue) => issue.code === "SCROLL_PRODUCT_ID_INVALID")) {
     throw new Error("ISBN-shaped proprietary ID was not rejected");
   }
@@ -84,21 +90,21 @@ Deno.test("maps EPUB to its own product form and requires e-book Warengruppe", (
     productForm: "epub",
     isbn13: "9781861972712",
     warengruppeCode: "9977",
-  }) as any);
+  }));
   if (valid.length !== 0) throw new Error(`valid EPUB metadata rejected: ${valid.map((i) => i.code).join(",")}`);
 
   const invalid = validateOnixProduct(base({
     productForm: "epub",
     isbn13: "9781861972712",
     warengruppeCode: "1977",
-  }) as any);
+  }));
   if (!invalid.some((i) => i.code === "WARENGRUPPE_PRODUCT_FORM_MISMATCH")) {
     throw new Error("EPUB Warengruppe mismatch was not blocked");
   }
 });
 
 Deno.test("rejects print records with e-book Warengruppe", () => {
-  const issues = validateOnixProduct(base({ warengruppeCode: "9977" }) as any);
+  const issues = validateOnixProduct(base({ warengruppeCode: "9977" }));
   if (!issues.some((i) => i.code === "WARENGRUPPE_PRODUCT_FORM_MISMATCH")) {
     throw new Error("print Warengruppe mismatch was not blocked");
   }
@@ -110,7 +116,7 @@ Deno.test("rejects invalid ISBN and never infers price binding or tax", () => {
     priceType: "",
     taxRateCode: "",
     taxRatePercent: Number.NaN,
-  }) as any);
+  }));
   const codes = new Set(issues.map((i) => i.code));
   for (const code of ["INVALID_ISBN13", "PRICE_TYPE_REQUIRED", "TAX_RATE_CODE_REQUIRED", "TAX_RATE_REQUIRED"]) {
     if (!codes.has(code)) throw new Error(`missing fail-closed validation: ${code}`);
@@ -121,7 +127,7 @@ Deno.test("rejects malformed Thema and keyword payloads", () => {
   const issues = validateOnixProduct(base({
     themaCodes: ["KFF", ""],
     keywords: ["valid", "x".repeat(121)],
-  }) as any);
+  }));
   const codes = new Set(issues.map((i) => i.code));
   if (!codes.has("THEMA_CODE_INVALID")) throw new Error("invalid Thema code was not rejected");
   if (!codes.has("KEYWORD_INVALID")) throw new Error("oversized keyword was not rejected");
@@ -132,7 +138,7 @@ Deno.test("escapes XML metadata including keyword subjects", () => {
     title: "Money & Power <2026>",
     publisherName: 'ScrollLibrary "Publishing"',
     keywords: ["money & power", "publishing <systems>"],
-  }) as any);
+  }));
   if (!output.includes("Money &amp; Power &lt;2026&gt;")) throw new Error("title XML escaping failed");
   if (!output.includes("ScrollLibrary &quot;Publishing&quot;")) throw new Error("publisher XML escaping failed");
   if (!output.includes("money &amp; power; publishing &lt;systems&gt;")) throw new Error("keyword XML escaping failed");
