@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { AlertCircle, CheckCircle2, Database, Download, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -97,6 +97,12 @@ function recordToForm(record: MetadataRecord | null): FormState {
   };
 }
 
+function errorMessage(error: unknown, fallback: string): string {
+  if (error instanceof Error && error.message) return error.message;
+  if (error && typeof error === "object" && "message" in error && typeof error.message === "string") return error.message;
+  return fallback;
+}
+
 export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
   const [productForm, setProductForm] = useState<DistributionProductForm>("paperback");
   const [form, setForm] = useState<FormState>(EMPTY_FORM);
@@ -107,30 +113,44 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const requestGenerationRef = useRef(0);
+  const selectedProductFormRef = useRef<DistributionProductForm>(productForm);
+  selectedProductFormRef.current = productForm;
 
-  async function load() {
+  async function load(requestedForm: DistributionProductForm) {
+    const requestGeneration = ++requestGenerationRef.current;
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("distribution-metadata", {
-        body: { action: "get", bookId, productForm },
+        body: { action: "get", bookId, productForm: requestedForm },
       });
       if (error) throw error;
+      if (requestGeneration !== requestGenerationRef.current || requestedForm !== selectedProductFormRef.current) return;
+
       const result = data as MetadataResponse;
+      if (result.productForm !== requestedForm) return;
       setCanonicalLanguage(result.canonicalLanguage ?? "");
       setCanonicalEditionLabel(result.canonicalEditionLabel ?? "");
       setIsbnAssigned(!!result.isbnAssigned);
       setPublished(!!result.published);
       setForm(recordToForm(result.metadata));
-    } catch (error: any) {
-      toast.error(error?.message ?? "Could not load distribution metadata");
+    } catch (error: unknown) {
+      if (requestGeneration !== requestGenerationRef.current || requestedForm !== selectedProductFormRef.current) return;
+      toast.error(errorMessage(error, "Could not load distribution metadata"));
       setForm({ ...EMPTY_FORM });
     } finally {
-      setLoading(false);
+      if (requestGeneration === requestGenerationRef.current && requestedForm === selectedProductFormRef.current) {
+        setLoading(false);
+      }
     }
   }
 
   useEffect(() => {
-    void load();
+    void load(productForm);
+    return () => {
+      requestGenerationRef.current += 1;
+    };
+    // load intentionally reads the current bookId and requested form supplied here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [bookId, productForm]);
 
@@ -149,6 +169,7 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
   const onixReady = readyCount === requiredChecks.length;
 
   async function save() {
+    const savedProductForm = productForm;
     setSaving(true);
     try {
       const parsedPrice = form.price.trim() === "" ? null : Number(form.price);
@@ -164,7 +185,7 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
         body: {
           action: "save",
           bookId,
-          productForm,
+          productForm: savedProductForm,
           publicationDate: form.publicationDate || null,
           warengruppeCode: form.warengruppeCode || null,
           productAvailability: form.productAvailability || null,
@@ -181,20 +202,21 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
         },
       });
       if (error) throw error;
-      toast.success(`${productForm} distribution metadata saved`);
-      await load();
-    } catch (error: any) {
-      toast.error(error?.message ?? "Could not save distribution metadata");
+      toast.success(`${savedProductForm} distribution metadata saved`);
+      if (selectedProductFormRef.current === savedProductForm) await load(savedProductForm);
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "Could not save distribution metadata"));
     } finally {
       setSaving(false);
     }
   }
 
   async function downloadOnix() {
+    const exportProductForm = productForm;
     setExporting(true);
     try {
       const { data, error } = await supabase.functions.invoke("export-onix", {
-        body: { bookId, productForm },
+        body: { bookId, productForm: exportProductForm },
       });
       if (error) throw error;
 
@@ -204,14 +226,14 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
       const url = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = url;
-      anchor.download = `scrolllibrary-${productForm}-onix-3.1.xml`;
+      anchor.download = `scrolllibrary-${exportProductForm}-onix-3.1.xml`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
       URL.revokeObjectURL(url);
       toast.success("ONIX 3.1 metadata exported");
-    } catch (error: any) {
-      toast.error(error?.message ?? "ONIX export failed");
+    } catch (error: unknown) {
+      toast.error(errorMessage(error, "ONIX export failed"));
     } finally {
       setExporting(false);
     }
@@ -271,56 +293,28 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
             </div>
             <div>
               <Label>VLB Warengruppe</Label>
-              <Input
-                inputMode="numeric"
-                maxLength={4}
-                placeholder={productForm === "epub" ? "9xxx" : "1xxx"}
-                value={form.warengruppeCode}
-                onChange={(event) => set("warengruppeCode", event.target.value.replace(/\D/g, "").slice(0, 4))}
-              />
+              <Input inputMode="numeric" maxLength={4} placeholder={productForm === "epub" ? "9xxx" : "1xxx"} value={form.warengruppeCode} onChange={(event) => set("warengruppeCode", event.target.value.replace(/\D/g, "").slice(0, 4))} />
               <p className="text-xs text-muted-foreground mt-1">Print codes begin with 1; EPUB codes begin with 9.</p>
             </div>
             <div>
               <Label>ONIX ProductAvailability code</Label>
-              <Input
-                inputMode="numeric"
-                maxLength={2}
-                placeholder="20"
-                value={form.productAvailability}
-                onChange={(event) => set("productAvailability", event.target.value.replace(/\D/g, "").slice(0, 2))}
-              />
+              <Input inputMode="numeric" maxLength={2} placeholder="20" value={form.productAvailability} onChange={(event) => set("productAvailability", event.target.value.replace(/\D/g, "").slice(0, 2))} />
             </div>
             <div>
               <Label>ONIX PublishingStatus code (optional)</Label>
-              <Input
-                inputMode="numeric"
-                maxLength={2}
-                placeholder="04"
-                value={form.publishingStatus}
-                onChange={(event) => set("publishingStatus", event.target.value.replace(/\D/g, "").slice(0, 2))}
-              />
+              <Input inputMode="numeric" maxLength={2} placeholder="04" value={form.publishingStatus} onChange={(event) => set("publishingStatus", event.target.value.replace(/\D/g, "").slice(0, 2))} />
             </div>
           </div>
 
           <div>
             <Label>Thema subject codes</Label>
-            <Input
-              placeholder="KFF, KJ"
-              value={form.themaCodes}
-              onChange={(event) => set("themaCodes", event.target.value)}
-            />
-            <p className="text-xs text-muted-foreground mt-1">
-              Comma-separated. Exported as ONIX SubjectSchemeIdentifier 93; ScrollLibrary never invents a classification at export time.
-            </p>
+            <Input placeholder="KFF, KJ" value={form.themaCodes} onChange={(event) => set("themaCodes", event.target.value)} />
+            <p className="text-xs text-muted-foreground mt-1">Comma-separated. Exported as ONIX SubjectSchemeIdentifier 93; ScrollLibrary never invents a classification at export time.</p>
           </div>
 
           <div>
             <Label>Trade keywords</Label>
-            <Input
-              placeholder="financial systems, money, economics"
-              value={form.keywords}
-              onChange={(event) => set("keywords", event.target.value)}
-            />
+            <Input placeholder="financial systems, money, economics" value={form.keywords} onChange={(event) => set("keywords", event.target.value)} />
             <p className="text-xs text-muted-foreground mt-1">Exported as ONIX keyword subject metadata (scheme 20).</p>
           </div>
 
@@ -369,11 +363,7 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
 
           <div>
             <Label>Unpriced item type (optional)</Label>
-            <Select
-              value={form.unpricedItemType || "none"}
-              onValueChange={(value) => set("unpricedItemType", value === "none" ? "" : value)}
-              disabled={form.price !== "" || form.priceType !== ""}
-            >
+            <Select value={form.unpricedItemType || "none"} onValueChange={(value) => set("unpricedItemType", value === "none" ? "" : value)} disabled={form.price !== "" || form.priceType !== ""}>
               <SelectTrigger><SelectValue placeholder="Not set" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">Not set</SelectItem>
@@ -388,9 +378,7 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
             <ul className="mt-2 grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-xs sm:text-sm">
               {requiredChecks.map((check) => (
                 <li key={check.label} className="flex items-center gap-2">
-                  {check.ok
-                    ? <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden />
-                    : <AlertCircle className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />}
+                  {check.ok ? <CheckCircle2 className="w-4 h-4 text-primary shrink-0" aria-hidden /> : <AlertCircle className="w-4 h-4 text-muted-foreground shrink-0" aria-hidden />}
                   <span className={check.ok ? "" : "text-muted-foreground"}>{check.label}</span>
                 </li>
               ))}
@@ -398,15 +386,9 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
           </div>
 
           <div className="flex flex-wrap gap-2">
-            <Button onClick={save} disabled={saving}>
-              <Save className="w-4 h-4 mr-2" /> {saving ? "Saving…" : "Save metadata"}
-            </Button>
-            <Button variant="outline" onClick={() => void load()} disabled={loading || saving}>
-              <RefreshCw className="w-4 h-4 mr-2" /> Refresh
-            </Button>
-            <Button variant="secondary" onClick={downloadOnix} disabled={!onixReady || exporting}>
-              <Download className="w-4 h-4 mr-2" /> {exporting ? "Exporting…" : "Download ONIX 3.1"}
-            </Button>
+            <Button onClick={save} disabled={saving}><Save className="w-4 h-4 mr-2" /> {saving ? "Saving…" : "Save metadata"}</Button>
+            <Button variant="outline" onClick={() => void load(productForm)} disabled={loading || saving}><RefreshCw className="w-4 h-4 mr-2" /> Refresh</Button>
+            <Button variant="secondary" onClick={downloadOnix} disabled={!onixReady || exporting}><Download className="w-4 h-4 mr-2" /> {exporting ? "Exporting…" : "Download ONIX 3.1"}</Button>
           </div>
         </div>
       )}
