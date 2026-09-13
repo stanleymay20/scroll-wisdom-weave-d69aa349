@@ -15,6 +15,8 @@ function base(overrides: Record<string, unknown> = {}) {
     editionLabel: "First edition",
     publicationDate: "2026-09-06",
     warengruppeCode: "1977",
+    themaCodes: ["KFF", "KJ"],
+    keywords: ["money", "publishing metadata", "financial systems"],
     productAvailability: "20",
     publishingStatus: "04",
     priceType: "04",
@@ -42,6 +44,11 @@ Deno.test("renders VLB-shaped ONIX 3.1 metadata with Scroll Product ID plus ISBN
     "<ProductFormDetail>B131</ProductFormDetail>",
     "<SubjectSchemeIdentifier>26</SubjectSchemeIdentifier>",
     "<SubjectCode>1977</SubjectCode>",
+    "<SubjectSchemeIdentifier>93</SubjectSchemeIdentifier>",
+    "<SubjectCode>KFF</SubjectCode>",
+    "<SubjectCode>KJ</SubjectCode>",
+    "<SubjectSchemeIdentifier>20</SubjectSchemeIdentifier>",
+    "<SubjectHeadingText>money; publishing metadata; financial systems</SubjectHeadingText>",
     "<PublishingRole>01</PublishingRole>",
     "<PublisherName>ScrollLibrary Publishing</PublisherName>",
     "<ImprintName>ScrollLibrary Press</ImprintName>",
@@ -110,13 +117,25 @@ Deno.test("rejects invalid ISBN and never infers price binding or tax", () => {
   }
 });
 
-Deno.test("escapes XML metadata", () => {
+Deno.test("rejects malformed Thema and keyword payloads", () => {
+  const issues = validateOnixProduct(base({
+    themaCodes: ["KFF", ""],
+    keywords: ["valid", "x".repeat(121)],
+  }) as any);
+  const codes = new Set(issues.map((i) => i.code));
+  if (!codes.has("THEMA_CODE_INVALID")) throw new Error("invalid Thema code was not rejected");
+  if (!codes.has("KEYWORD_INVALID")) throw new Error("oversized keyword was not rejected");
+});
+
+Deno.test("escapes XML metadata including keyword subjects", () => {
   const output = renderOnix31Product(base({
     title: "Money & Power <2026>",
     publisherName: 'ScrollLibrary "Publishing"',
+    keywords: ["money & power", "publishing <systems>"],
   }) as any);
   if (!output.includes("Money &amp; Power &lt;2026&gt;")) throw new Error("title XML escaping failed");
   if (!output.includes("ScrollLibrary &quot;Publishing&quot;")) throw new Error("publisher XML escaping failed");
+  if (!output.includes("money &amp; power; publishing &lt;systems&gt;")) throw new Error("keyword XML escaping failed");
 });
 
 Deno.test("maps supported two-letter language codes and accepts three-letter ONIX codes", () => {
