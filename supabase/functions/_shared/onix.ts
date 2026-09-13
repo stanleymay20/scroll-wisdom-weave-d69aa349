@@ -23,6 +23,8 @@ export interface OnixProductInput {
   editionLabel?: string | null;
   publicationDate: string;
   warengruppeCode: string;
+  themaCodes?: string[];
+  keywords?: string[];
   productAvailability: string;
   publishingStatus?: string | null;
   priceType: string;
@@ -61,6 +63,10 @@ function xml(value: unknown): string {
     .replace(/>/g, "&gt;")
     .replace(/"/g, "&quot;")
     .replace(/'/g, "&apos;");
+}
+
+function cleanList(values: string[] | null | undefined): string[] {
+  return (values ?? []).map((value) => value.trim()).filter(Boolean);
 }
 
 export function toOnixLanguageCode(value: string): string | null {
@@ -142,6 +148,13 @@ export function validateOnixProduct(input: OnixProductInput): OnixValidationIssu
     });
   }
 
+  if ((input.themaCodes ?? []).some((code) => typeof code !== "string" || code.trim().length === 0 || code.trim().length > 40)) {
+    issues.push({ field: "themaCodes", code: "THEMA_CODE_INVALID", message: "Thema codes must be non-empty strings of at most 40 characters" });
+  }
+  if ((input.keywords ?? []).some((keyword) => typeof keyword !== "string" || keyword.trim().length === 0 || keyword.trim().length > 120)) {
+    issues.push({ field: "keywords", code: "KEYWORD_INVALID", message: "Keywords must be non-empty strings of at most 120 characters" });
+  }
+
   if (!/^\d{2}$/.test(input.productAvailability || "")) {
     issues.push({ field: "productAvailability", code: "AVAILABILITY_INVALID", message: "ONIX ProductAvailability must be a two-digit code" });
   }
@@ -181,6 +194,26 @@ function contributorXml(contributor: OnixContributor, sequence: number): string 
   ].join("\n");
 }
 
+function subjectCodeXml(scheme: string, code: string, main = false): string[] {
+  return [
+    "      <Subject>",
+    ...(main ? ["        <MainSubject/>"] : []),
+    `        <SubjectSchemeIdentifier>${xml(scheme)}</SubjectSchemeIdentifier>`,
+    `        <SubjectCode>${xml(code)}</SubjectCode>`,
+    "      </Subject>",
+  ];
+}
+
+function keywordSubjectXml(keywords: string[]): string[] {
+  if (keywords.length === 0) return [];
+  return [
+    "      <Subject>",
+    "        <SubjectSchemeIdentifier>20</SubjectSchemeIdentifier>",
+    `        <SubjectHeadingText>${xml(keywords.join("; "))}</SubjectHeadingText>`,
+    "      </Subject>",
+  ];
+}
+
 export function renderOnix31Product(input: OnixProductInput): string {
   const issues = validateOnixProduct(input);
   if (issues.length > 0) {
@@ -194,6 +227,8 @@ export function renderOnix31Product(input: OnixProductInput): string {
   const form = onixProductForm(input.productForm);
   const pubDate = dateYYYYMMDD(input.publicationDate)!;
   const price = (input.priceCents / 100).toFixed(2);
+  const themaCodes = cleanList(input.themaCodes);
+  const keywords = cleanList(input.keywords);
 
   const lines = [
     '<?xml version="1.0" encoding="UTF-8"?>',
@@ -235,11 +270,9 @@ export function renderOnix31Product(input: OnixProductInput): string {
     "        <LanguageRole>01</LanguageRole>",
     `        <LanguageCode>${lang}</LanguageCode>`,
     "      </Language>",
-    "      <Subject>",
-    "        <MainSubject/>",
-    "        <SubjectSchemeIdentifier>26</SubjectSchemeIdentifier>",
-    `        <SubjectCode>${xml(input.warengruppeCode)}</SubjectCode>`,
-    "      </Subject>",
+    ...subjectCodeXml("26", input.warengruppeCode, true),
+    ...themaCodes.flatMap((code) => subjectCodeXml("93", code)),
+    ...keywordSubjectXml(keywords),
     ...(input.editionLabel?.trim() ? [`      <EditionStatement>${xml(input.editionLabel.trim())}</EditionStatement>`] : []),
     "    </DescriptiveDetail>",
     "    <PublishingDetail>",
