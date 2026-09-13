@@ -137,6 +137,18 @@ Deno.serve(async (req) => {
 
     const identity = await canonicalIdentity(sc, body.bookId);
     if (!identity) {
+      if (body.action === "get") {
+        return json({
+          bookId: body.bookId,
+          productForm: body.productForm,
+          identityConfigured: false,
+          canonicalLanguage: "",
+          canonicalEditionLabel: "",
+          isbnAssigned: false,
+          published: !!access.book?.current_publication_id,
+          metadata: null,
+        });
+      }
       return json({ error: "PUBLISHING_IDENTITY_REQUIRED", message: "Configure Publishing Identity before distribution metadata." }, 409);
     }
     const language = identity.publication_language;
@@ -148,6 +160,7 @@ Deno.serve(async (req) => {
       return json({
         bookId: body.bookId,
         productForm: body.productForm,
+        identityConfigured: true,
         canonicalLanguage: language,
         canonicalEditionLabel: editionLabel,
         isbnAssigned,
@@ -193,6 +206,7 @@ Deno.serve(async (req) => {
       saved: true,
       bookId: body.bookId,
       productForm: body.productForm,
+      identityConfigured: true,
       canonicalLanguage: language,
       canonicalEditionLabel: editionLabel,
       isbnAssigned,
