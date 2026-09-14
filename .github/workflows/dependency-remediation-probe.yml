@@ -1,0 +1,41 @@
+name: Dependency Remediation Probe
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dependency-remediation-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  compatible-update-probe:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+      - name: Verify committed lockfile installs
+        run: bun install --frozen-lockfile
+      - name: Record current high/critical backlog
+        run: bun audit --prod --audit-level=high || true
+      - name: Resolve latest versions allowed by existing package ranges
+        run: bun update
+      - name: Audit compatible-update candidate
+        run: bun audit --prod --audit-level=high || true
+      - name: Show candidate diff
+        run: git diff -- package.json bun.lock
+      - name: Upload candidate manifest and lockfile
+        uses: actions/upload-artifact@v6
+        with:
+          name: dependency-compatible-update-${{ github.sha }}
+          path: |
+            package.json
+            bun.lock
+          if-no-files-found: error
+          retention-days: 7
