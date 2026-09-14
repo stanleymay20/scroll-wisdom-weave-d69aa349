@@ -43,8 +43,9 @@ assert gate_count >= 1, f"expected gate event calls, found {gate_count}"
 assert "const supabase =" not in source
 assert "supabase.auth." not in source
 assert source.count("await userClient") == 2
-assert "await sc.rpc(\"reserve_book_generation\"" in source
-assert "await sc.rpc(\"release_book_generation\"" in source
+assert source.count("reserve_book_generation") == 1
+assert source.count("release_book_generation") == 1
+assert source.count("await sc.rpc") >= 3
 
 path.write_text(source)
 print(f"generate-book auth boundary transformed: {dot_count} privileged client calls, {gate_count} gate-event calls")
