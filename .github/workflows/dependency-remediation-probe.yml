@@ -12,7 +12,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  compatible-update-probe:
+  patched-transitive-probe:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -24,16 +24,39 @@ jobs:
         run: bun install --frozen-lockfile
       - name: Record current high/critical backlog
         run: bun audit --prod --audit-level=high || true
-      - name: Resolve latest versions allowed by existing package ranges
-        run: bun update
-      - name: Audit compatible-update candidate
+      - name: Add same-major patched transitive overrides
+        shell: bash
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs');
+          const p = JSON.parse(fs.readFileSync('package.json', 'utf8'));
+          p.overrides = {
+            ...(p.overrides || {}),
+            'lodash-es': '>4.17.23 <5',
+            'underscore': '>1.13.7 <2',
+            'fast-uri': '>=3.1.6 <4',
+            '@babel/plugin-transform-modules-systemjs': '>7.29.3 <8',
+            'nanoid': '>=3.3.16 <4',
+            'postcss': '>8.5.11 <9',
+            'browserslist': '>4.28.6 <5'
+          };
+          fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
+          NODE
+          bun install
+      - name: Audit patched-transitive candidate
         run: bun audit --prod --audit-level=high || true
+      - name: Run typecheck lint test and build against candidate
+        run: |
+          bun run typecheck
+          bun run lint
+          bun run test
+          bun run build:release
       - name: Show candidate diff
         run: git diff -- package.json bun.lock
       - name: Upload candidate manifest and lockfile
         uses: actions/upload-artifact@v6
         with:
-          name: dependency-compatible-update-${{ github.sha }}
+          name: dependency-patched-transitive-${{ github.sha }}
           path: |
             package.json
             bun.lock
