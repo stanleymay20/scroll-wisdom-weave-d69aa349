@@ -43,6 +43,28 @@ CI installs dependencies from `bun.lock` with `--frozen-lockfile` so dependency 
 - Functions with `verify_jwt = false` must authenticate the caller, verify a provider signature, or be intentionally public.
 - Local CLI state under `supabase/.temp/` and `supabase/.branches/` is ignored.
 
+## Alerting
+
+Financial events at `error` or `critical` severity, and any dead-lettered event,
+are dispatched to a webhook as they are written. Set the `ALERT_WEBHOOK_URL`
+secret on the Supabase project to turn this on:
+
+```bash
+supabase secrets set ALERT_WEBHOOK_URL="https://hooks.example.com/..."
+```
+
+It posts plain JSON, so a Slack or Discord incoming webhook, a PagerDuty Events
+API endpoint, or any HTTP receiver works. **Until it is set, nothing pages** —
+the events are still recorded in `financial_events`, and each one that would
+have alerted logs `[alert:unconfigured]`.
+
+Alerts carry the event type, severity, actor, correlation id and Stripe event
+id. They deliberately exclude the event `payload`, which can contain customer
+data; investigate by joining on the correlation id in `financial_events`.
+
+Dispatch is best-effort and never blocks the caller — an alerting failure must
+not become a payment failure.
+
 ## Security expectations
 
 - Local `.env` files are ignored. Commit only `.env.example`.
