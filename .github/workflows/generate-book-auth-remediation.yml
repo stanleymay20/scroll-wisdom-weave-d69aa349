@@ -1,0 +1,116 @@
+name: Generate Book Auth Remediation
+
+on:
+  pull_request:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: generate-book-auth-remediation-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DENO_VERSION: 2.9.6
+  WORK_BRANCH: claude/scroll-wisdom-weave-review-mtckux
+
+jobs:
+  harden-auth-boundary:
+    if: github.event.pull_request.head.ref == 'claude/scroll-wisdom-weave-review-mtckux'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.WORK_BRANCH }}
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+      - name: Replace service-role authentication with shared user boundary
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+          import re
+
+          path = Path('supabase/functions/generate-book/index.ts')
+          source = path.read_text()
+
+          old_import = 'import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";'
+          new_import = 'import { requireUser, serviceClient } from "../_shared/http.ts";'
+          assert source.count(old_import) == 1
+          source = source.replace(old_import, new_import, 1)
+
+          old_auth = '''    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error("Supabase configuration is missing");
+
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    // Auth
+    const authHeader = req.headers.get("Authorization");
+    if (!authHeader) {
+      return new Response(JSON.stringify({ error: "Authentication required" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const token = authHeader.replace("Bearer ", "");
+    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+    if (authError || !user) {
+      console.error("Auth error:", authError);
+      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
+        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+'''
+          new_auth = '''    // Authenticate with the caller-scoped client. The service-role client is
+    // created only after identity is established and is reserved for privileged
+    // server-side quota/job mutations below.
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
+    const user = { id: auth.userId };
+    const userClient = auth.client;
+    const sc = serviceClient();
+'''
+          assert source.count(old_auth) == 1
+          source = source.replace(old_auth, new_auth, 1)
+
+          old_admin = '''    const { data: adminRole } = await supabase
+      .from("user_roles").select("role")'''
+          new_admin = '''    const { data: adminRole } = await userClient
+      .from("user_roles").select("role")'''
+          assert source.count(old_admin) == 1
+          source = source.replace(old_admin, new_admin, 1)
+
+          old_subscription = '''    const { data: subscription } = await supabase
+      .from("subscriptions").select("tier, status")'''
+          new_subscription = '''    const { data: subscription } = await userClient
+      .from("subscriptions").select("tier, status")'''
+          assert source.count(old_subscription) == 1
+          source = source.replace(old_subscription, new_subscription, 1)
+
+          # Every remaining `supabase.` access is a privileged RPC or write path.
+          source, dot_count = re.subn(r'(?<![A-Za-z0-9_$])supabase\.', 'sc.', source)
+          source, gate_count = re.subn(r'recordGateEvent\(supabase,', 'recordGateEvent(sc,', source)
+          assert dot_count >= 8, dot_count
+          assert gate_count >= 1, gate_count
+          assert 'const supabase =' not in source
+          assert 'supabase.auth.' not in source
+
+          path.write_text(source)
+          PY
+
+          deno check supabase/functions/generate-book/index.ts
+      - name: Commit isolated auth-boundary change
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/functions/generate-book/index.ts
+          git diff --cached --check
+          git diff --cached --exit-code -- . ':(exclude)supabase/functions/generate-book/index.ts'
+          git commit -m "harden: separate generate-book user and service boundaries"
+          git push origin "HEAD:${WORK_BRANCH}"
