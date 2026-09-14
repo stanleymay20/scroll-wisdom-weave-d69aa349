@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { requireUser, serviceClient } from "../_shared/http.ts";
 import { ErrorCode, errorResponse } from "../_shared/error-codes.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
 
@@ -64,40 +64,26 @@ serve(async (req) => {
   let refundReservation: (() => Promise<void>) | null = null;
 
   try {
-    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) throw new Error("Supabase configuration is missing");
-
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
-
-    // Auth
-    const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
-      return new Response(JSON.stringify({ error: "Authentication required" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
-
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    if (authError || !user) {
-      console.error("Auth error:", authError);
-      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
-        status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
-    }
+    // Authenticate with the caller-scoped client. The service-role client is
+    // created only after identity is established and is reserved for privileged
+    // server-side quota/job mutations below.
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
+    const user = { id: auth.userId };
+    const userClient = auth.client;
+    const sc = serviceClient();
 
     console.log(`[GENERATE-BOOK] User: ${user.id.slice(0, 8)}...`);
 
     // Admin check
-    const { data: adminRole } = await supabase
+    const { data: adminRole } = await userClient
       .from("user_roles").select("role")
       .eq("user_id", user.id).eq("role", "admin").maybeSingle();
     const isAdmin = !!adminRole;
     if (isAdmin) console.log("[GENERATE-BOOK] ADMIN - bypassing limits");
 
     // Get subscription plan from subscriptions table (source of truth)
-    const { data: subscription } = await supabase
+    const { data: subscription } = await userClient
       .from("subscriptions").select("tier, status")
       .eq("user_id", user.id).maybeSingle();
 
@@ -122,7 +108,7 @@ serve(async (req) => {
     // burst budget. The paid quota (reserved further down) is the opposite and
     // is only consumed once the request is known to be well formed.
     if (!isAdmin) {
-      const { data: rlData, error: rlError } = await supabase.rpc("consume_rate_limit", {
+      const { data: rlData, error: rlError } = await sc.rpc("consume_rate_limit", {
         _identifier: user.id,
         _endpoint: "generate-book",
         _limit: 5,
@@ -256,7 +242,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     // Reserved AFTER validation and BEFORE the first paid model call, so a
     // rejected request never consumes a slot and a concurrent request can never
     // observe a stale count. Browser roles cannot execute this RPC directly.
-    const { data: reservationData, error: reservationError } = await supabase.rpc(
+    const { data: reservationData, error: reservationError } = await sc.rpc(
       "reserve_book_generation",
       {
         _user_id: user.id,
@@ -293,7 +279,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
         currentPlan: userPlan,
         usage: { booksGenerated: reservation.books_used, booksLimit: limits.booksPerDay },
       });
-      await recordGateEvent(supabase, {
+      await recordGateEvent(sc, {
         user_id: user.id, feature: "generate_book", reason: gate.reason, allowed: false,
         plan: userPlan,
         usage_snapshot: {
@@ -309,7 +295,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     refundReservation = async () => {
       if (!reservationActive) return;
       reservationActive = false;
-      const { error: releaseError } = await supabase.rpc("release_book_generation", {
+      const { error: releaseError } = await sc.rpc("release_book_generation", {
         _user_id: user.id,
         _day: today,
         _books: 1,
@@ -343,7 +329,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       }
       if (status === 402) {
         const gate = gateDenied("AI_QUOTA_EXHAUSTED", { currentPlan: userPlan });
-        await recordGateEvent(supabase, {
+        await recordGateEvent(sc, {
           user_id: user.id, feature: "generate_book", reason: gate.reason, allowed: false,
           plan: userPlan, usage_snapshot: { upstream_status: 402 },
         });
@@ -375,7 +361,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     console.log("[GENERATE-BOOK] Outline ready, saving...");
 
     // Save book
-    const { data: book, error: bookError } = await supabase.from("books").insert({
+    const { data: book, error: bookError } = await sc.from("books").insert({
       title: bookOutline.bookTitle || title,
       description: (bookOutline.bookDescription || description) + (transformationPrompt ? `\n\n---\nTRANSFORMATION DIRECTIVE: ${transformationPrompt}` : ''),
       category, total_chapters: effectiveChapters,
@@ -394,7 +380,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     console.log(`[GENERATE-BOOK] Book ${book.id.slice(0, 8)}... saved`);
 
     // Create generation job for progress tracking (required correctness primitive)
-    const { data: genJob, error: genJobError } = await supabase.from("generation_jobs").insert({
+    const { data: genJob, error: genJobError } = await sc.from("generation_jobs").insert({
       user_id: user.id,
       book_id: book.id,
       status: 'generating',
@@ -406,7 +392,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     if (genJobError || !genJob?.id) {
       console.error("[GENERATE-BOOK] Generation job create failed:", genJobError?.code ?? "no_row");
       // Fail closed: do not leave an untracked AI-generated book behind
-      await supabase.from("books").delete().eq("id", book.id);
+      await sc.from("books").delete().eq("id", book.id);
       throw new Error("Failed to initialize book generation. Please try again.");
     }
 
@@ -422,11 +408,11 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       word_count: 0, is_generated: false,
     }));
 
-    const { error: chaptersError } = await supabase.from("chapters").insert(chaptersToInsert);
+    const { error: chaptersError } = await sc.from("chapters").insert(chaptersToInsert);
     if (chaptersError) {
       console.error("[GENERATE-BOOK] Chapters error:", chaptersError);
       // Mark job as failed
-      await supabase.from("generation_jobs").update({ status: 'failed', error_code: 'GENERATION_FAILED', error_message: chaptersError.message }).eq("id", jobId);
+      await sc.from("generation_jobs").update({ status: 'failed', error_code: 'GENERATION_FAILED', error_message: chaptersError.message }).eq("id", jobId);
       throw new Error(`Failed to save chapters: ${chaptersError.message}`);
     }
 
@@ -437,7 +423,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
 
     // Outline phase only — the book is NOT generated yet. Keep the job open so
     // chapter generation can proceed/resume and the publication truth guard agrees.
-    await supabase.from("generation_jobs").update({
+    await sc.from("generation_jobs").update({
       status: 'generating',
       current_chapter: 0,
       completed_at: null,
@@ -447,7 +433,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
 
 
     // Add to library
-    const { error: libraryError } = await supabase.from("user_library").insert({
+    const { error: libraryError } = await sc.from("user_library").insert({
       user_id: user.id, book_id: book.id, progress_percent: 0, last_read_chapter: 1,
     });
     if (libraryError) console.error("[GENERATE-BOOK] Library error:", libraryError);
