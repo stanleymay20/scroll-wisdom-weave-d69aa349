@@ -26,11 +26,19 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: ${{ env.DENO_VERSION }}
+      - name: Preload frozen Edge dependency graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd supabase/functions
+          mapfile -d '' entries < <(find . -type f -name '*.ts' -print0 | sort -z)
+          test "${#entries[@]}" -gt 0
+          deno install --config deno.json --entrypoint --lockfile-only --frozen "${entries[@]}"
       - name: Replace service-role authentication with shared user boundary
         run: |
           set -euo pipefail
           python3 scripts/remediate-generate-book-auth.py
-          deno check supabase/functions/generate-book/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/generate-book/index.ts
       - name: Commit isolated auth-boundary change
         run: |
           set -euo pipefail
