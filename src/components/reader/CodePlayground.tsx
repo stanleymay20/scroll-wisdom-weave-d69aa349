@@ -185,7 +185,7 @@ try {
 
   // For SQL - explain the query
   if (language === 'sql') {
-    const operations = [];
+    const operations: string[] = [];
     if (/SELECT/i.test(code)) operations.push('📊 SELECT query');
     if (/INSERT/i.test(code)) operations.push('➕ INSERT operation');
     if (/UPDATE/i.test(code)) operations.push('✏️ UPDATE operation');

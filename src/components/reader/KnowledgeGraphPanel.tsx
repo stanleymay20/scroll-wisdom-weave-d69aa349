@@ -297,12 +297,12 @@ function ConceptDetailDrawer({
         )}
 
         {/* Misconceptions */}
-        {learnerState?.misconception_flags?.length > 0 && (
+        {(learnerState?.misconception_flags?.length ?? 0) > 0 && (
           <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
             <p className="text-[10px] uppercase tracking-wider text-destructive font-medium mb-1 flex items-center gap-1">
               <AlertTriangle className="h-3 w-3" /> Misconceptions to Address
             </p>
-            {learnerState.misconception_flags.map((flag, i) => (
+            {(learnerState?.misconception_flags ?? []).map((flag, i) => (
               <p key={i} className="text-xs text-destructive/80 mt-1">{flag}</p>
             ))}
           </div>
