@@ -1,261 +1,35 @@
-/**
- * PEDAGOGICAL SCHEMA CONTRACT
- * Enforces mandatory chapter structure for all generated books.
- * Every chapter MUST include these 7 sections in order.
- */
+import type { Tables } from "@/integrations/supabase/types";
 
-// ===========================================
-// MANDATORY CHAPTER SECTIONS
-// ===========================================
+export type PedagogicalBlockType =
+  | 'learning_objectives'
+  | 'key_terms'
+  | 'worked_example'
+  | 'misconception_alert'
+  | 'quick_check'
+  | 'checkpoint'
+  | 'scenario_practice'
+  | 'reflection'
+  | 'chapter_summary'
+  | 'further_reading'
+  | 'difficulty_marker'
+  | 'estimated_time'
+  | 'code_example'
+  | 'data_table'
+  | 'figure'
+  | 'equation';
 
-export const MANDATORY_CHAPTER_SECTIONS = [
-  'learning_objectives',
-  'core_concept',
-  'mental_model',
-  'worked_examples',
-  'common_mistakes',
-  'practice_section',
-  'quiz_gate'
-] as const;
-
-export type ChapterSection = typeof MANDATORY_CHAPTER_SECTIONS[number];
-
-export interface ChapterSectionConfig {
-  id: ChapterSection;
-  displayName: string;
-  description: string;
-  required: boolean;
-  minContent: string; // Regex pattern to detect section
-  maxWords?: number;
-  minWords?: number;
-  validationRules: string[];
+export interface PedagogicalBlock {
+  type: PedagogicalBlockType;
+  title?: string;
+  content: string;
+  metadata?: Record<string, unknown>;
 }
 
-export const CHAPTER_SECTION_CONFIGS: Record<ChapterSection, ChapterSectionConfig> = {
-  learning_objectives: {
-    id: 'learning_objectives',
-    displayName: 'Learning Objectives',
-    description: 'Clear, measurable outcomes the learner will achieve',
-    required: true,
-    minContent: '(learning objective|by the end of|you will be able to|after this chapter)',
-    minWords: 30,
-    maxWords: 150,
-    validationRules: [
-      'Must contain 3-5 bullet points',
-      'Must be specific and measurable',
-      'Must start with action verbs (understand, implement, apply, analyze)'
-    ]
-  },
-  core_concept: {
-    id: 'core_concept',
-    displayName: 'Core Concept Explanation',
-    description: 'The main idea or theory being taught',
-    required: true,
-    minContent: '(concept|definition|fundamental|principle|theory)',
-    minWords: 200,
-    maxWords: 800,
-    validationRules: [
-      'Must explain the core concept clearly',
-      'Must include technical definitions where needed',
-      'Must build on prior knowledge'
-    ]
-  },
-  mental_model: {
-    id: 'mental_model',
-    displayName: 'Mental Model / Analogy',
-    description: 'A relatable analogy to cement understanding',
-    required: true,
-    minContent: '(think of it as|imagine|like|similar to|analogy|mental model)',
-    minWords: 50,
-    maxWords: 300,
-    validationRules: [
-      'Must include a concrete, relatable analogy',
-      'Must connect abstract concept to familiar experience',
-      'Must be memorable and reusable'
-    ]
-  },
-  worked_examples: {
-    id: 'worked_examples',
-    displayName: 'Worked Examples',
-    description: 'Step-by-step examples with explanations',
-    required: true,
-    minContent: '(example|for instance|consider|let\'s look at|step \\d)',
-    minWords: 200,
-    maxWords: 1000,
-    validationRules: [
-      'Must include at least 2 worked examples',
-      'Must explain each step, not just show the solution',
-      'Must include code output for programming examples',
-      'Must progress from simple to complex'
-    ]
-  },
-  common_mistakes: {
-    id: 'common_mistakes',
-    displayName: 'Common Mistakes & Misconceptions',
-    description: 'Errors learners typically make and how to avoid them',
-    required: true,
-    minContent: '(mistake|misconception|common error|avoid|don\'t|pitfall|wrong)',
-    minWords: 100,
-    maxWords: 400,
-    validationRules: [
-      'Must list 2-4 common mistakes',
-      'Must explain WHY each is a mistake',
-      'Must provide the correct approach',
-      'Must include at least one failure example'
-    ]
-  },
-  practice_section: {
-    id: 'practice_section',
-    displayName: 'Practice Section',
-    description: 'Guided exercises for the learner',
-    required: true,
-    minContent: '(practice|exercise|try it|your turn|apply what you)',
-    minWords: 150,
-    maxWords: 500,
-    validationRules: [
-      'Must include 3-5 graded exercises',
-      'Must progress Easy → Medium → Hard',
-      'Must have clear success criteria',
-      'Must include one production task'
-    ]
-  },
-  quiz_gate: {
-    id: 'quiz_gate',
-    displayName: 'Chapter Quiz Gate',
-    description: 'Assessment questions that must be passed to proceed',
-    required: true,
-    minContent: '(quiz|assessment|test your|check your understanding|review question)',
-    minWords: 100,
-    maxWords: 400,
-    validationRules: [
-      'Must include 5 assessment questions',
-      'Must include Tier 2+ questions (not just MCQ)',
-      'Must reference chapter content directly',
-      'Quiz must be LOCKED until previous sections are read'
-    ]
-  }
-};
-
-// ===========================================
-// CHAPTER VALIDATION
-// ===========================================
-
-export interface SectionValidationResult {
-  section: ChapterSection;
-  found: boolean;
-  position: number; // -1 if not found
-  wordCount: number;
-  violations: string[];
-  passed: boolean;
-}
-
-export interface ChapterValidationResult {
-  valid: boolean;
-  sectionsFound: number;
-  sectionsRequired: number;
-  sections: SectionValidationResult[];
-  overallViolations: string[];
-  canPublish: boolean;
-  score: number; // 0-100
-}
-
-/**
- * Validate chapter content against mandatory schema
- */
-export function validateChapterSchema(content: string): ChapterValidationResult {
-  const sections: SectionValidationResult[] = [];
-  const overallViolations: string[] = [];
-  
-  const contentLower = content.toLowerCase();
-  const words = content.split(/\s+/).filter(w => w.length > 0);
-  const totalWords = words.length;
-
-  MANDATORY_CHAPTER_SECTIONS.forEach((sectionId, expectedPosition) => {
-    const config = CHAPTER_SECTION_CONFIGS[sectionId];
-    const pattern = new RegExp(config.minContent, 'i');
-    const found = pattern.test(content);
-    
-    // Find position in content
-    const match = content.match(pattern);
-    const position = match ? content.indexOf(match[0]) : -1;
-    
-    // Estimate section word count (rough approximation)
-    const sectionWordCount = found ? Math.floor(totalWords / MANDATORY_CHAPTER_SECTIONS.length) : 0;
-    
-    const violations: string[] = [];
-    
-    if (!found) {
-      violations.push(`Missing required section: ${config.displayName}`);
-    } else {
-      if (config.minWords && sectionWordCount < config.minWords) {
-        violations.push(`${config.displayName} too short (${sectionWordCount} words, min: ${config.minWords})`);
-      }
-      if (config.maxWords && sectionWordCount > config.maxWords) {
-        violations.push(`${config.displayName} too long (${sectionWordCount} words, max: ${config.maxWords})`);
-      }
-    }
-
-    sections.push({
-      section: sectionId,
-      found,
-      position,
-      wordCount: sectionWordCount,
-      violations,
-      passed: found && violations.length === 0
-    });
-  });
-
-  const sectionsFound = sections.filter(s => s.found).length;
-  const sectionsRequired = MANDATORY_CHAPTER_SECTIONS.length;
-  
-  // Overall violations
-  if (sectionsFound < sectionsRequired) {
-    overallViolations.push(`Missing ${sectionsRequired - sectionsFound} required sections`);
-  }
-  
-  // Check section order
-  const foundPositions = sections.filter(s => s.position >= 0).map(s => s.position);
-  const isOrderCorrect = foundPositions.every((pos, idx) => 
-    idx === 0 || pos > foundPositions[idx - 1]
-  );
-  if (!isOrderCorrect && sectionsFound >= 3) {
-    overallViolations.push('Sections are not in correct order');
-  }
-
-  // Check for minimum word count overall
-  if (totalWords < 1500) {
-    overallViolations.push(`Chapter too short: ${totalWords} words (minimum 1500)`);
-  }
-
-  const allSectionsPassed = sections.every(s => s.passed);
-  const score = Math.round((sectionsFound / sectionsRequired) * 100);
-
-  return {
-    valid: allSectionsPassed && overallViolations.length === 0,
-    sectionsFound,
-    sectionsRequired,
-    sections,
-    overallViolations,
-    canPublish: sectionsFound >= 5 && score >= 70, // Allow with 5/7 sections minimum
-    score
-  };
-}
-
-// ===========================================
-// BOOK AUDIT SYSTEM
-// ===========================================
-
-export interface BookAuditResult {
-  bookId: string;
-  passed: boolean;
+export interface PedagogicalValidationResult {
+  isValid: boolean;
   score: number;
-  chapterResults: ChapterValidationResult[];
-  codeQuality: CodeQualityResult;
-  tableQuality: TableQualityResult;
-  quizRigor: QuizRigorResult;
-  publishingBlocked: boolean;
-  blockerReasons: string[];
-  warnings: string[];
+  issues: string[];
+  suggestions: string[];
 }
 
 export interface CodeQualityResult {
@@ -278,65 +52,321 @@ export interface TableQualityResult {
   issues: string[];
 }
 
-export interface QuizRigorResult {
-  hasTier1: boolean;
-  hasTier2: boolean;
-  hasTier3: boolean;
-  hasTier4: boolean;
-  mcqOnlyChapters: number;
-  appliedReasoningCount: number;
-  scenarioCount: number;
-  score: number;
-  issues: string[];
+export const REQUIRED_CHAPTER_BLOCKS: PedagogicalBlockType[] = [
+  'learning_objectives',
+  'key_terms',
+  'chapter_summary',
+];
+
+export const RECOMMENDED_CHAPTER_BLOCKS: PedagogicalBlockType[] = [
+  'worked_example',
+  'quick_check',
+  'checkpoint',
+];
+
+export const BLOCK_PATTERNS: Record<PedagogicalBlockType, RegExp[]> = {
+  learning_objectives: [
+    /learning objectives?/i,
+    /what you(?:'ll| will) learn/i,
+    /by the end of this chapter/i,
+  ],
+  key_terms: [
+    /key terms?/i,
+    /key concepts?/i,
+    /vocabulary/i,
+    /terminology/i,
+  ],
+  worked_example: [
+    /worked example/i,
+    /example:/i,
+    /step[- ]by[- ]step/i,
+    /let(?:'s| us) (?:work|walk) through/i,
+  ],
+  misconception_alert: [
+    /misconception/i,
+    /common mistake/i,
+    /watch out/i,
+    /pitfall/i,
+  ],
+  quick_check: [
+    /quick check/i,
+    /check your understanding/i,
+    /knowledge check/i,
+  ],
+  checkpoint: [
+    /checkpoint/i,
+    /self[- ]assessment/i,
+    /review questions?/i,
+  ],
+  scenario_practice: [
+    /scenario/i,
+    /case study/i,
+    /practice (?:problem|exercise)/i,
+    /your turn/i,
+  ],
+  reflection: [
+    /reflection/i,
+    /reflect on/i,
+    /think about/i,
+  ],
+  chapter_summary: [
+    /chapter summary/i,
+    /summary/i,
+    /key takeaways?/i,
+    /what we(?:'ve| have) learned/i,
+  ],
+  further_reading: [
+    /further reading/i,
+    /additional resources?/i,
+    /recommended reading/i,
+  ],
+  difficulty_marker: [
+    /difficulty:/i,
+    /level:/i,
+    /beginner|intermediate|advanced/i,
+  ],
+  estimated_time: [
+    /estimated time/i,
+    /reading time/i,
+    /\d+\s*(?:min|minutes?|hours?)/i,
+  ],
+  code_example: [
+    /```\w*\n[\s\S]*?```/,
+    /<code>[\s\S]*?<\/code>/i,
+  ],
+  data_table: [
+    /\|[^|\n]+\|/,
+  ],
+  figure: [
+    /!\[[^\]]*\]\([^)]+\)/,
+    /figure\s+\d+/i,
+  ],
+  equation: [
+    /\$\$[\s\S]*?\$\$/,
+    /\\\[[\s\S]*?\\\]/,
+  ],
+};
+
+/**
+ * Extract pedagogical blocks from chapter content based on patterns
+ */
+export function extractPedagogicalBlocks(content: string): PedagogicalBlock[] {
+  const blocks: PedagogicalBlock[] = [];
+  
+  for (const [type, patterns] of Object.entries(BLOCK_PATTERNS)) {
+    for (const pattern of patterns) {
+      const matches = content.match(pattern);
+      if (matches) {
+        blocks.push({
+          type: type as PedagogicalBlockType,
+          content: matches[0],
+        });
+        break;
+      }
+    }
+  }
+  
+  return blocks;
 }
 
 /**
- * Audit code quality in chapter content
+ * Validate chapter content against pedagogical standards
+ */
+export function validateChapterPedagogy(content: string): PedagogicalValidationResult {
+  const issues: string[] = [];
+  const suggestions: string[] = [];
+  let score = 100;
+  
+  const blocks = extractPedagogicalBlocks(content);
+  const blockTypes = new Set(blocks.map(b => b.type));
+  
+  // Check required blocks
+  for (const required of REQUIRED_CHAPTER_BLOCKS) {
+    if (!blockTypes.has(required)) {
+      issues.push(`Missing required pedagogical block: ${required.replace(/_/g, ' ')}`);
+      score -= 15;
+    }
+  }
+  
+  // Check recommended blocks
+  for (const recommended of RECOMMENDED_CHAPTER_BLOCKS) {
+    if (!blockTypes.has(recommended)) {
+      suggestions.push(`Consider adding: ${recommended.replace(/_/g, ' ')}`);
+      score -= 5;
+    }
+  }
+  
+  // Check content length and structure
+  const wordCount = content.split(/\s+/).length;
+  if (wordCount < 500) {
+    issues.push('Chapter content is too short (minimum 500 words recommended)');
+    score -= 10;
+  }
+  
+  // Check heading hierarchy
+  const headings = content.match(/^#{1,6}\s+.+$/gm) || [];
+  if (headings.length < 3) {
+    suggestions.push('Add more section headings for better navigation');
+    score -= 5;
+  }
+  
+  // Check for learning objectives near start
+  const firstQuarter = content.slice(0, Math.floor(content.length / 4));
+  const hasEarlyObjectives = BLOCK_PATTERNS.learning_objectives.some(p => p.test(firstQuarter));
+  if (!hasEarlyObjectives) {
+    issues.push('Learning objectives should appear near the beginning of the chapter');
+    score -= 10;
+  }
+  
+  return {
+    isValid: issues.length === 0,
+    score: Math.max(0, score),
+    issues,
+    suggestions,
+  };
+}
+
+/**
+ * Generate a pedagogical enhancement prompt for AI content generation
+ */
+export function generatePedagogicalPrompt(topic: string, audience: string = 'general'): string {
+  return `
+Create comprehensive educational content about "${topic}" for a ${audience} audience.
+
+PEDAGOGICAL REQUIREMENTS:
+
+1. **Learning Objectives** (at the beginning)
+   - 3-5 specific, measurable objectives
+   - Use action verbs (understand, apply, analyze, create)
+
+2. **Key Terms**
+   - Define important terminology before using it
+   - Use clear, concise definitions
+
+3. **Progressive Structure**
+   - Start with foundational concepts
+   - Build complexity gradually
+   - Use clear section headings
+
+4. **Worked Examples**
+   - Include at least 2 step-by-step examples
+   - Explain the reasoning at each step
+   - Show both correct approaches and common mistakes
+
+5. **Misconception Alerts**
+   - Identify 2-3 common misconceptions
+   - Explain why they're wrong
+   - Provide the correct understanding
+
+6. **Quick Checks**
+   - Include 2-3 brief comprehension questions throughout
+   - Provide answers or explanations
+
+7. **Checkpoint** (mid-chapter)
+   - 3-5 review questions
+   - Mix of recall and application
+
+8. **Scenario Practice**
+   - Include at least one realistic scenario or case study
+   - Require application of learned concepts
+
+9. **Reflection**
+   - Include 1-2 reflection prompts
+   - Connect concepts to real-world experience
+
+10. **Chapter Summary**
+    - Concise recap of key points
+    - Revisit learning objectives
+    - Highlight main takeaways
+
+11. **Further Reading**
+    - Suggest 3-5 reliable resources for deeper learning
+
+FORMATTING:
+- Use markdown headings (##, ###) for clear hierarchy
+- Use bullet points for lists
+- Use numbered lists for sequential steps
+- Use blockquotes for important notes
+- Keep paragraphs concise (3-5 sentences)
+- Use tables only for comparative data (max 4 columns)
+
+CODE EXAMPLES (if applicable):
+- Use fenced code blocks with language labels
+- Include proper indentation
+- Show expected output
+- Explain what each section does
+- Include common error examples
+
+Avoid:
+- Dense walls of text
+- Unexplained jargon
+- Code without context
+- Tables with more than 4 columns
+- Code inside tables
+`;
+}
+
+/**
+ * Audit code example quality in chapter content
  */
 export function auditCodeQuality(content: string): CodeQualityResult {
   const issues: string[] = [];
   
-  // Check for structured code blocks (ChatGPT-level format)
-  const hasStructuredCodeBlocks = /\[CODE_BLOCK\][\s\S]*?\[\/CODE_BLOCK\]/.test(content);
+  // Find code blocks
+  const codeBlocks = content.match(/```[\s\S]*?```/g) || [];
+  const hasCodeBlocks = codeBlocks.length > 0;
   
-  // Check for proper code blocks (legacy or standard)
-  const hasProperFormatting = hasStructuredCodeBlocks || /```\w+[\s\S]*?```/.test(content);
-  if (!hasProperFormatting && /code|function|class|def |const |let |var /.test(content.toLowerCase())) {
-    issues.push('Code found but not in proper fenced code blocks');
+  if (!hasCodeBlocks) {
+    return {
+      hasProperFormatting: true,
+      hasLanguageLabels: true,
+      hasIndentation: true,
+      hasOutputExamples: true,
+      hasExplanations: true,
+      hasErrorExamples: true,
+      score: 100,
+      issues: [],
+    };
   }
+  
+  // Check structured code example format
+  const hasStructuredCodeBlocks = codeBlocks.some(block => 
+    /```(?:python|javascript|typescript|java|csharp|cpp|c|go|rust|ruby|php|swift|kotlin|sql|bash|shell|json|yaml|html|css)\n/i.test(block)
+  );
   
   // Check for language labels
-  const codeBlocks = content.match(/```\w+/g) || [];
-  const structuredLangs = content.match(/\[CODE_BLOCK\][\s\S]*?language:\s*(\w+)/gi) || [];
-  const hasLanguageLabels = codeBlocks.length > 0 || structuredLangs.length > 0;
-  if (!hasLanguageLabels && /```/.test(content)) {
-    issues.push('Code blocks missing language specification');
+  const hasLanguageLabels = codeBlocks.every(block => 
+    /```\w+\n/.test(block)
+  );
+  if (!hasLanguageLabels) {
+    issues.push('Code blocks should include language labels (e.g., ```python)');
   }
   
-  // Check indentation (look for 2+ space indentation patterns)
-  const hasIndentation = /\n {2,}|\n\t+/.test(content);
+  // Check indentation (at least some indented lines in multi-line code)
+  const hasIndentation = codeBlocks.some(block => 
+    /\n\s{2,}\S/.test(block)
+  );
   
-  // Check for output examples - structured blocks have explicit output section
-  const hasStructuredOutput = /\[CODE_BLOCK\][\s\S]*?output:[\s\S]*?\[\/CODE_BLOCK\]/i.test(content);
-  const hasOutputExamples = hasStructuredOutput || /(output|result|returns|prints|console\.log|print\()/i.test(content);
-  if (!hasOutputExamples && hasProperFormatting) {
-    issues.push('Missing output examples after code blocks');
+  // Check for output examples near code blocks
+  const hasOutputExamples = /(?:output|result|returns?):?\s*[\n`]/i.test(content);
+  if (!hasOutputExamples) {
+    issues.push('Code examples should include expected output');
   }
   
-  // Check for explanations - structured blocks have explicit explanation section
-  const hasStructuredExplanation = /\[CODE_BLOCK\][\s\S]*?explanation:[\s\S]*?\[\/CODE_BLOCK\]/i.test(content);
-  const hasExplanations = hasStructuredExplanation || /(explanation|this code|this function|here we|note that)/i.test(content);
-  
-  // Check for error/failure examples - structured blocks have common_mistake section
-  const hasStructuredMistakes = /\[CODE_BLOCK\][\s\S]*?common_mistake:[\s\S]*?\[\/CODE_BLOCK\]/i.test(content);
-  const hasErrorExamples = hasStructuredMistakes || /(error|exception|mistake|wrong|incorrect|fail|bug)/i.test(content);
-  if (!hasErrorExamples && hasProperFormatting) {
-    issues.push('Missing error/failure examples');
+  // Check for explanations
+  const hasExplanations = /(?:this code|the code|this example|here we|this function|this method)/i.test(content);
+  if (!hasExplanations) {
+    issues.push('Code examples should include explanations');
   }
-
-  // Bonus points for using structured code blocks
-  let score = 0;
-  if (hasProperFormatting) score += 20;
+  
+  // Check for error examples
+  const hasErrorExamples = /(?:common error|common mistake|error example|wrong|incorrect|pitfall)/i.test(content);
+  if (!hasErrorExamples) {
+    issues.push('Consider including common error examples');
+  }
+  
+  // Calculate score
+  let score = 30; // Base score for having code blocks
   if (hasStructuredCodeBlocks) score += 10; // Bonus for structured format
   if (hasLanguageLabels) score += 20;
   if (hasIndentation) score += 10;
@@ -372,7 +402,7 @@ export function auditTableQuality(content: string): TableQualityResult {
   }
   
   // Count max columns
-  const tableRows = content.match(/\|[^|\n]+\|/g) || [];
+  const tableRows: string[] = content.match(/\|[^|\n]+\|/g) ?? [];
   let maxColumns = 0;
   tableRows.forEach(row => {
     const colCount = (row.match(/\|/g) || []).length - 1;
@@ -402,138 +432,18 @@ export function auditTableQuality(content: string): TableQualityResult {
     mobileCompatible,
     noCodeInTables,
     score,
-    issues
+    issues,
   };
 }
 
 /**
- * Audit quiz rigor in chapter content
+ * Default pedagogical preferences derived from profile settings.
  */
-export function auditQuizRigor(content: string): QuizRigorResult {
-  const issues: string[] = [];
-  const contentLower = content.toLowerCase();
-  
-  // Tier 1: Basic MCQ
-  const hasTier1 = /(multiple choice|select the correct|which of the following)/i.test(content);
-  
-  // Tier 2: Applied Reasoning
-  const tier2Patterns = [
-    /what happens if/i,
-    /what would be the output/i,
-    /predict the result/i,
-    /why does this/i,
-    /explain how/i
-  ];
-  const hasTier2 = tier2Patterns.some(p => p.test(content));
-  const appliedReasoningCount = tier2Patterns.filter(p => p.test(content)).length;
-  
-  // Tier 3: Scenario & Debugging
-  const tier3Patterns = [
-    /fix the following/i,
-    /debug this/i,
-    /what is wrong with/i,
-    /which approach is best/i,
-    /given this scenario/i,
-    /case study/i
-  ];
-  const hasTier3 = tier3Patterns.some(p => p.test(content));
-  const scenarioCount = tier3Patterns.filter(p => p.test(content)).length;
-  
-  // Tier 4: Integrity-Weighted
-  const hasTier4 = /(time-based|progressive hint|pattern analysis|timed question)/i.test(content);
-
-  // MCQ-only chapters are not acceptable for certification
-  const mcqOnlyChapters = hasTier1 && !hasTier2 && !hasTier3 ? 1 : 0;
-  
-  if (!hasTier2) {
-    issues.push('Missing Tier 2 (Applied Reasoning) questions');
-  }
-  if (!hasTier3) {
-    issues.push('Missing Tier 3 (Scenario/Debugging) questions');
-  }
-  if (mcqOnlyChapters > 0) {
-    issues.push('Chapter has only Tier 1 MCQ questions - not acceptable for certification');
-  }
-
-  let score = 0;
-  if (hasTier1) score += 10;
-  if (hasTier2) score += 30;
-  if (hasTier3) score += 40;
-  if (hasTier4) score += 20;
-
+export function preferencesFromProfile(
+  profile: Pick<Tables<'profiles'>, 'preferred_content_level' | 'preferred_learning_style'>,
+): { audience: string; learningStyle: string } {
   return {
-    hasTier1,
-    hasTier2,
-    hasTier3,
-    hasTier4,
-    mcqOnlyChapters,
-    appliedReasoningCount,
-    scenarioCount,
-    score,
-    issues
-  };
-}
-
-/**
- * Full book audit combining all quality checks
- */
-export function auditBook(
-  bookId: string,
-  chapters: { id: string; content: string }[]
-): BookAuditResult {
-  const chapterResults = chapters.map(ch => validateChapterSchema(ch.content));
-  
-  const allContent = chapters.map(ch => ch.content).join('\n\n');
-  const codeQuality = auditCodeQuality(allContent);
-  const tableQuality = auditTableQuality(allContent);
-  const quizRigor = auditQuizRigor(allContent);
-  
-  const blockerReasons: string[] = [];
-  const warnings: string[] = [];
-  
-  // Check chapter validation — downgrade to warning (not blocker)
-  const failedChapters = chapterResults.filter(r => !r.valid);
-  if (failedChapters.length > 0) {
-    warnings.push(`${failedChapters.length} chapter(s) could improve pedagogical structure`);
-  }
-  
-  // Check code quality — warning only
-  if (codeQuality.score < 60) {
-    warnings.push(`Code quality score: ${codeQuality.score}/100 — consider improving`);
-  }
-  
-  // Check table quality — warning only
-  if (tableQuality.score < 60) {
-    warnings.push(`Table quality score: ${tableQuality.score}/100 — consider fixing`);
-  }
-  
-  // Check quiz rigor — warning only (was too aggressive blocking)
-  if (quizRigor.mcqOnlyChapters > 0) {
-    warnings.push('Some chapters have MCQ-only assessments — add applied reasoning questions for certification');
-  }
-  if (quizRigor.score < 50) {
-    warnings.push(`Quiz rigor: ${quizRigor.score}/100 — add Tier 2+ questions for stronger certification`);
-  }
-
-  // Calculate overall score
-  const chapterScore = chapterResults.reduce((sum, r) => sum + r.score, 0) / chapterResults.length;
-  const overallScore = Math.round(
-    (chapterScore * 0.4) + 
-    (codeQuality.score * 0.2) + 
-    (tableQuality.score * 0.1) + 
-    (quizRigor.score * 0.3)
-  );
-
-  return {
-    bookId,
-    passed: blockerReasons.length === 0,
-    score: overallScore,
-    chapterResults,
-    codeQuality,
-    tableQuality,
-    quizRigor,
-    publishingBlocked: blockerReasons.length > 0,
-    blockerReasons,
-    warnings
+    audience: profile.preferred_content_level || 'general',
+    learningStyle: profile.preferred_learning_style || 'mixed',
   };
 }
