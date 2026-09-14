@@ -4,7 +4,7 @@ import {
   json,
   serverError,
   requireUser,
-  enforceRateLimit,
+  enforceDurableRateLimit,
   serviceClient,
 } from "../_shared/http.ts";
 
@@ -20,8 +20,10 @@ serve(async (req) => {
     const auth = await requireUser(req);
     if (auth instanceof Response) return auth;
 
-    // Account deletion is irreversible — strict limit.
-    const limited = enforceRateLimit({
+    const adminClient = serviceClient();
+
+    // Account deletion is irreversible — strict, durable limit across edge instances.
+    const limited = await enforceDurableRateLimit(adminClient, {
       name: "delete-account",
       key: auth.userId,
       limit: 3,
@@ -31,8 +33,6 @@ serve(async (req) => {
 
     const userId = auth.userId;
     console.log(`[delete-account] processing deletion`, { userId });
-
-    const adminClient = serviceClient();
 
     // Step 1: revoke certificates (keep rows for verifiability).
     const { error: revokeError } = await adminClient
