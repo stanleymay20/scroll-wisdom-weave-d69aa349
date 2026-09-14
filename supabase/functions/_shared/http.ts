@@ -8,6 +8,9 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { z, ZodSchema } from "https://esm.sh/zod@3.23.8";
+import { captureEdgeException, initEdgeErrorTracking } from "./error-tracking.ts";
+
+await initEdgeErrorTracking();
 
 // ---------------------------------------------------------------------------
 // CORS
@@ -58,6 +61,7 @@ export function tooManyRequests(retryAfterSec: number, message = "Rate limit exc
 }
 
 export function serverError(err: unknown, code = "internal_error"): Response {
+  captureEdgeException(err, { surface: "shared-server-error", code });
   const message = err instanceof Error ? err.message : "Unknown error";
   // Avoid leaking stack traces to clients.
   return json({ error: message, code }, 500);

@@ -6,6 +6,8 @@
  * errorNotifier.ts; this module is only a diagnostic sink.
  */
 
+import type { Breadcrumb, ErrorEvent } from "@sentry/react";
+
 type SentryApi = typeof import("@sentry/react");
 
 let sentry: SentryApi | null = null;
@@ -30,11 +32,64 @@ export function sanitizeTelemetryUrl(value: string): string {
   }
 }
 
+/**
+ * Strips the query string and fragment while preserving whether the value was
+ * absolute or relative. Navigation breadcrumbs carry relative paths, and
+ * sanitizeTelemetryUrl would rewrite those into absolute URLs.
+ */
+export function stripQueryAndFragment(value: string): string {
+  return value.split(/[?#]/, 1)[0] ?? value;
+}
+
 function sanitizeHeaders(headers: Record<string, string | undefined> | undefined) {
   if (!headers) return headers;
   return Object.fromEntries(
     Object.entries(headers).filter(([key]) => !SENSITIVE_HEADERS.has(key.toLowerCase())),
   );
+}
+
+/**
+ * Keep diagnostics useful without shipping customer identity or request
+ * payloads. Query strings are excluded because application routes may carry
+ * user-supplied values.
+ *
+ * Exported so the privacy guarantee is asserted directly rather than trusted.
+ */
+export function scrubEvent(event: ErrorEvent): ErrorEvent {
+  event.user = undefined;
+  if (event.request) {
+    if (event.request.url) event.request.url = sanitizeTelemetryUrl(event.request.url);
+    event.request.cookies = undefined;
+    event.request.data = undefined;
+    event.request.headers = sanitizeHeaders(event.request.headers);
+  }
+  return event;
+}
+
+/**
+ * beforeSend never sees breadcrumb data, so breadcrumbs must be scrubbed on
+ * their own path. Two different shapes carry a location:
+ *
+ *   fetch / xhr  -> data.url, an absolute request URL
+ *   navigation   -> data.from and data.to, relative paths that Sentry builds
+ *                   as `path + search + hash`, so they arrive with the query
+ *                   string and fragment still attached
+ */
+export function scrubBreadcrumb(breadcrumb: Breadcrumb): Breadcrumb {
+  const data = breadcrumb.data;
+  if (!data) return breadcrumb;
+
+  const scrubbed = { ...data };
+  if (typeof scrubbed.url === "string") {
+    scrubbed.url = sanitizeTelemetryUrl(scrubbed.url);
+  }
+  for (const key of ["from", "to"] as const) {
+    if (typeof scrubbed[key] === "string") {
+      scrubbed[key] = stripQueryAndFragment(scrubbed[key] as string);
+    }
+  }
+  breadcrumb.data = scrubbed;
+  return breadcrumb;
 }
 
 export function isErrorTrackingConfigured(): boolean {
@@ -57,26 +112,8 @@ export function initErrorTracking(): Promise<boolean> {
         release: __BUILD_ID__,
         sendDefaultPii: false,
         tracesSampleRate: 0,
-        beforeSend(event) {
-          // Keep diagnostics useful without shipping customer identity or
-          // request payloads. Query strings are excluded because application
-          // routes may carry user-supplied values.
-          event.user = undefined;
-          if (event.request) {
-            if (event.request.url) event.request.url = sanitizeTelemetryUrl(event.request.url);
-            event.request.cookies = undefined;
-            event.request.data = undefined;
-            event.request.headers = sanitizeHeaders(event.request.headers);
-          }
-          return event;
-        },
-        beforeBreadcrumb(breadcrumb) {
-          const url = breadcrumb.data?.url;
-          if (typeof url === "string") {
-            breadcrumb.data = { ...breadcrumb.data, url: sanitizeTelemetryUrl(url) };
-          }
-          return breadcrumb;
-        },
+        beforeSend: scrubEvent,
+        beforeBreadcrumb: scrubBreadcrumb,
       });
       sentry = Sentry;
       return true;

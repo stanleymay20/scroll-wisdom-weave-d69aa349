@@ -101,6 +101,10 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: ${{ env.DENO_VERSION }}
+      - name: Type-check shared Edge boundary and error tracking
+        run: |
+          deno check supabase/functions/_shared/error-tracking.ts
+          deno check supabase/functions/_shared/http.ts
       - name: Type-check critical financial Edge Functions
         run: |
           deno check supabase/functions/create-checkout/index.ts
