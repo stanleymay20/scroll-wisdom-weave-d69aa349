@@ -1,0 +1,22 @@
+name: Strict Null Reader Probe
+
+on:
+  push:
+    branches:
+      - claude/scroll-wisdom-weave-review-mtckux
+
+permissions:
+  contents: read
+
+jobs:
+  reader:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+      - run: bun install --frozen-lockfile
+      - name: Probe strictNullChecks in reader
+        run: bun scripts/check-strict-null.mjs src/components/reader
