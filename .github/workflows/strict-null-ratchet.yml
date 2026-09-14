@@ -1,0 +1,24 @@
+name: Strict Null Ratchet
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: strict-null-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  src-lib:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+      - run: bun install --frozen-lockfile
+      - name: Enforce strictNullChecks in src/lib
+        run: bun scripts/check-strict-null.mjs src/lib
