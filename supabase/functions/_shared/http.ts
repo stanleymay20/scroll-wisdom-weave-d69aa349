@@ -206,11 +206,76 @@ export function rateLimit(opts: RateLimitOptions): RateLimitResult {
 /**
  * Convenience wrapper: enforces a per-user rate limit and returns a 429
  * Response if exceeded, or null when the request may proceed.
+ *
+ * NOTE: this is the in-memory limiter. It resets whenever the edge instance is
+ * recycled and is not shared between instances, so it is a fast local burst
+ * guard only. For anything that costs money per call, prefer
+ * enforceDurableRateLimit below.
  */
 export function enforceRateLimit(opts: RateLimitOptions): Response | null {
   const r = rateLimit(opts);
   if (!r.ok) return tooManyRequests(r.retryAfter);
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Durable rate limiting (database-backed, survives instance recycling).
+// ---------------------------------------------------------------------------
+
+interface RateLimitConsumption {
+  allowed: boolean;
+  request_count: number;
+  retry_after_seconds: number;
+}
+
+/**
+ * Enforces a per-identifier rate limit through public.consume_rate_limit,
+ * which counts and writes under a per-identifier/endpoint advisory lock. Unlike
+ * enforceRateLimit this holds across edge instances and cold starts.
+ *
+ * Returns a 429 Response when the limit is exhausted, or null to proceed.
+ *
+ * Requires a service-role client: the RPC is revoked from anon and
+ * authenticated, so a browser cannot spend or inspect anyone's budget.
+ *
+ * Fails OPEN on an RPC error, deliberately. This is a burst guard, not the
+ * money gate — the quota reservations (reserve_book_generation,
+ * reserve_tts_minutes) fail closed and run against the same database, so a
+ * database outage still stops paid work rather than letting it through here.
+ * Failing closed here would only add a second way for a transient blip to break
+ * the product.
+ */
+export async function enforceDurableRateLimit(
+  admin: SupabaseClient,
+  opts: RateLimitOptions,
+): Promise<Response | null> {
+  try {
+    const { data, error } = await admin.rpc("consume_rate_limit", {
+      _identifier: opts.key,
+      _endpoint: opts.name,
+      _limit: opts.limit,
+      _window_seconds: opts.windowSec,
+    });
+
+    if (error) {
+      console.error(`[rate-limit] consume_rate_limit failed for ${opts.name}`, error);
+      return null;
+    }
+
+    const row = (Array.isArray(data) ? data[0] : data) as RateLimitConsumption | null;
+    if (!row) {
+      console.error(`[rate-limit] consume_rate_limit returned no row for ${opts.name}`);
+      return null;
+    }
+
+    if (!row.allowed) {
+      return tooManyRequests(Math.max(1, row.retry_after_seconds));
+    }
+    return null;
+  } catch (e) {
+    console.error(`[rate-limit] consume_rate_limit threw for ${opts.name}`, e);
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

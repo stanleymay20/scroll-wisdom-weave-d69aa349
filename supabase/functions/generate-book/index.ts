@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
-import { ErrorCode, errorResponse, checkRateLimit } from "../_shared/error-codes.ts";
+import { ErrorCode, errorResponse } from "../_shared/error-codes.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
 
 const corsHeaders = {
@@ -113,15 +113,36 @@ serve(async (req) => {
     const dailyLimit = isAdmin ? -1 : limits.booksPerDay;
     const today = new Date().toISOString().split("T")[0];
 
-    // Rate limiting: max 5 book generations per hour per user
+    // Burst limiting: max 5 book generations per hour per user.
+    //
+    // Durable rather than in-memory — the previous limiter lived in a
+    // process-local Map, so it reset on every cold start and was never shared
+    // between edge instances. Applied before body validation on purpose: this
+    // guards against hammering, so an invalid payload should still consume
+    // burst budget. The paid quota (reserved further down) is the opposite and
+    // is only consumed once the request is known to be well formed.
     if (!isAdmin) {
-      const rl = checkRateLimit(`gen-book:${user.id}`, 5, 60 * 60 * 1000);
-      if (!rl.allowed) {
-        const gate = gateDenied("RATE_LIMITED", {
-          message: 'Too many book generations. Please wait before creating another.',
-          currentPlan: userPlan,
-        });
-        return gateResponse(gate, corsHeaders);
+      const { data: rlData, error: rlError } = await supabase.rpc("consume_rate_limit", {
+        _identifier: user.id,
+        _endpoint: "generate-book",
+        _limit: 5,
+        _window_seconds: 60 * 60,
+      });
+
+      if (rlError) {
+        // Fail open: the atomic quota reservation below fails closed against
+        // the same database, so an outage still stops paid work.
+        console.error("[GENERATE-BOOK] Rate limit check failed:", rlError);
+      } else {
+        const rl = (Array.isArray(rlData) ? rlData[0] : rlData) as
+          { allowed: boolean; retry_after_seconds: number } | null;
+        if (rl && !rl.allowed) {
+          const gate = gateDenied("RATE_LIMITED", {
+            message: 'Too many book generations. Please wait before creating another.',
+            currentPlan: userPlan,
+          });
+          return gateResponse(gate, corsHeaders);
+        }
       }
     }
 
