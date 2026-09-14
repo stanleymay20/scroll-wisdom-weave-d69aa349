@@ -28,13 +28,13 @@ jobs:
           p = Path('supabase/functions/_shared/http.ts')
           s = p.read_text()
           needle = 'import { z, ZodSchema } from "https://esm.sh/zod@3.23.8";\n'
-          replacement = needle + 'import { captureEdgeException, initEdgeErrorTracking } from "./error-tracking.ts";\n\nawait initEdgeErrorTracking();\n'
-          if 'initEdgeErrorTracking' not in s:
+          replacement = needle + 'import { captureException, initErrorTracking } from "./error-tracking.ts";\n\ninitErrorTracking();\n'
+          if 'initErrorTracking' not in s:
               if needle not in s:
                   raise SystemExit('http import anchor not found')
               s = s.replace(needle, replacement, 1)
           old = '''export function serverError(err: unknown, code = "internal_error"): Response {\n  const message = err instanceof Error ? err.message : "Unknown error";\n  // Avoid leaking stack traces to clients.\n  return json({ error: message, code }, 500);\n}\n'''
-          new = '''export function serverError(err: unknown, code = "internal_error"): Response {\n  captureEdgeException(err, { surface: "shared-server-error", code });\n  const message = err instanceof Error ? err.message : "Unknown error";\n  // Avoid leaking stack traces to clients.\n  return json({ error: message, code }, 500);\n}\n'''
+          new = '''export function serverError(err: unknown, code = "internal_error"): Response {\n  captureException(err, { surface: "shared-server-error", code });\n  const message = err instanceof Error ? err.message : "Unknown error";\n  // Avoid leaking stack traces to clients.\n  return json({ error: message, code }, 500);\n}\n'''
           if 'surface: "shared-server-error"' not in s:
               if old not in s:
                   raise SystemExit('serverError anchor not found')
