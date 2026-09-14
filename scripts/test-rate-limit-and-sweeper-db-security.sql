@@ -38,6 +38,7 @@ DECLARE
   v_status text;
   v_code text;
   v_message text;
+  v_category text;
 BEGIN
   -- ── 1. Server-only execution posture ────────────────────
   FOREACH v_message IN ARRAY ARRAY['consume_rate_limit', 'sweep_stale_jobs'] LOOP
@@ -190,7 +191,24 @@ BEGIN
   END;
 
   -- ── 9. Sweeper: stale jobs fail, fresh jobs are untouched ──
-  INSERT INTO public.books DEFAULT VALUES RETURNING id INTO v_book;
+  -- public.books requires title and category (an enum). Resolve the category
+  -- from pg_enum rather than hard-coding a label, so this fixture survives the
+  -- enum gaining or reordering values.
+  SELECT e.enumlabel::text
+    INTO v_category
+  FROM pg_enum e
+  JOIN pg_type t ON t.oid = e.enumtypid
+  WHERE t.typname = 'book_category'
+  ORDER BY e.enumsortorder
+  LIMIT 1;
+
+  IF v_category IS NULL THEN
+    RAISE EXCEPTION 'book_category enum not found; books fixture cannot be built';
+  END IF;
+
+  INSERT INTO public.books (title, category)
+  VALUES ('stale-job sweeper fixture', v_category::public.book_category)
+  RETURNING id INTO v_book;
 
   INSERT INTO public.generation_jobs (user_id, book_id, status)
   VALUES (v_user, v_book, 'generating') RETURNING id INTO v_fresh;
