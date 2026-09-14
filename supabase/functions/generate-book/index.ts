@@ -8,6 +8,12 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
+type BookReservation = {
+  allowed: boolean;
+  books_used: number;
+  remaining_books: number;
+};
+
 const TIER_LIMITS = {
   free: { booksPerDay: 1, maxChapters: 5, booksPerMonth: 1 },
   student: { booksPerDay: 3, maxChapters: 30, booksPerMonth: 10 },   // Aligned with subscription.ts
@@ -53,6 +59,10 @@ serve(async (req) => {
     } catch { /* ignore */ }
   }
 
+  // Releases the generation slot reserved before the paid model call. Assigned
+  // once the reservation succeeds; invoked on every post-reservation failure.
+  let refundReservation: (() => Promise<void>) | null = null;
+
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -94,30 +104,14 @@ serve(async (req) => {
     // Only use tier if subscription is active
     const userPlan = ((subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free") as keyof typeof TIER_LIMITS;
 
-    // Profile for daily limits tracking only
-    const { data: profile } = await supabase
-      .from("profiles").select("daily_book_count, last_book_date")
-      .eq("user_id", user.id).maybeSingle();
-
     // Model routing respects subscription tier — admin bypass is for limits only
     const effectivePlan: keyof typeof TIER_LIMITS = isAdmin ? "prophet_tier" : userPlan;
     const limits = TIER_LIMITS[effectivePlan] || TIER_LIMITS.free;
 
+    // Admins are never blocked, but their usage is still tracked (-1 = unlimited),
+    // matching the TTS reservation contract.
+    const dailyLimit = isAdmin ? -1 : limits.booksPerDay;
     const today = new Date().toISOString().split("T")[0];
-    const currentCount = profile?.last_book_date === today ? (profile?.daily_book_count || 0) : 0;
-
-    if (!isAdmin && currentCount >= limits.booksPerDay) {
-      const gate = gateDenied("BOOK_LIMIT_REACHED", {
-        message: `You've reached your ${userPlan === 'free' ? 'monthly' : 'daily'} book generation limit (${limits.booksPerDay} for ${userPlan}). Upgrade to keep creating.`,
-        currentPlan: userPlan,
-        usage: { booksGenerated: currentCount, booksLimit: limits.booksPerDay },
-      });
-      await recordGateEvent(supabase, {
-        user_id: user.id, feature: "generate_book", reason: gate.reason, allowed: false,
-        plan: userPlan, usage_snapshot: { used: currentCount, limit: limits.booksPerDay },
-      });
-      return gateResponse(gate, corsHeaders);
-    }
 
     // Rate limiting: max 5 book generations per hour per user
     if (!isAdmin) {
@@ -237,6 +231,75 @@ For each chapter provide: chapterNumber, title, description (2-3 sentences), key
 
 Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumber":1,"title":"","description":"","keyTopics":[]}]}`;
 
+    // ── Atomic quota reservation ──────────────────────────
+    // Reserved AFTER validation and BEFORE the first paid model call, so a
+    // rejected request never consumes a slot and a concurrent request can never
+    // observe a stale count. Browser roles cannot execute this RPC directly.
+    const { data: reservationData, error: reservationError } = await supabase.rpc(
+      "reserve_book_generation",
+      {
+        _user_id: user.id,
+        _day: today,
+        _books: 1,
+        _limit: dailyLimit,
+      },
+    );
+
+    if (reservationError) {
+      console.error("[GENERATE-BOOK] Quota reservation failed:", reservationError);
+      return errorResponse(
+        ErrorCode.GENERATION_FAILED,
+        "Unable to verify your generation allowance right now. Please try again.",
+        corsHeaders,
+      );
+    }
+
+    const reservation = (Array.isArray(reservationData) ? reservationData[0] : reservationData) as BookReservation | null;
+
+    if (!reservation) {
+      console.error("[GENERATE-BOOK] Quota reservation returned no result");
+      return errorResponse(
+        ErrorCode.GENERATION_FAILED,
+        "Unable to verify your generation allowance right now. Please try again.",
+        corsHeaders,
+      );
+    }
+
+    if (!reservation.allowed) {
+      console.log(`[GENERATE-BOOK] Daily limit reached: ${reservation.books_used}/${dailyLimit} (${userPlan})`);
+      const gate = gateDenied("BOOK_LIMIT_REACHED", {
+        message: `You've reached your ${userPlan === 'free' ? 'monthly' : 'daily'} book generation limit (${limits.booksPerDay} for ${userPlan}). Upgrade to keep creating.`,
+        currentPlan: userPlan,
+        usage: { booksGenerated: reservation.books_used, booksLimit: limits.booksPerDay },
+      });
+      await recordGateEvent(supabase, {
+        user_id: user.id, feature: "generate_book", reason: gate.reason, allowed: false,
+        plan: userPlan,
+        usage_snapshot: {
+          used: reservation.books_used,
+          limit: limits.booksPerDay,
+          remaining: reservation.remaining_books,
+        },
+      });
+      return gateResponse(gate, corsHeaders);
+    }
+
+    let reservationActive = true;
+    refundReservation = async () => {
+      if (!reservationActive) return;
+      reservationActive = false;
+      const { error: releaseError } = await supabase.rpc("release_book_generation", {
+        _user_id: user.id,
+        _day: today,
+        _books: 1,
+      });
+      if (releaseError) {
+        console.error("[GENERATE-BOOK] Failed to refund quota reservation:", releaseError);
+      }
+    };
+
+    console.log(`[GENERATE-BOOK] Reserved 1 slot — ${reservation.books_used}/${dailyLimit === -1 ? "unlimited" : dailyLimit}`);
+
     const outlineResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
       headers: { Authorization: `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
@@ -252,6 +315,8 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     if (!outlineResponse.ok) {
       const status = outlineResponse.status;
       console.error("[GENERATE-BOOK] AI error:", status);
+      // The paid call never produced a book — give the slot back.
+      await refundReservation();
       if (status === 429) {
         return gateResponse(gateDenied("RATE_LIMITED", { currentPlan: userPlan }), corsHeaders);
       }
@@ -344,6 +409,11 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       throw new Error(`Failed to save chapters: ${chaptersError.message}`);
     }
 
+    // The book and its chapters are durably persisted, so the reserved slot is
+    // legitimately consumed. Everything below is non-fatal bookkeeping and must
+    // not trigger a refund.
+    reservationActive = false;
+
     // Outline phase only — the book is NOT generated yet. Keep the job open so
     // chapter generation can proceed/resume and the publication truth guard agrees.
     await supabase.from("generation_jobs").update({
@@ -361,12 +431,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     });
     if (libraryError) console.error("[GENERATE-BOOK] Library error:", libraryError);
 
-    // Update daily count
-    await supabase.from("profiles").update({
-      daily_book_count: currentCount + 1, last_book_date: today,
-    }).eq("user_id", user.id);
-
-    console.log(`[GENERATE-BOOK] Done. Daily: ${currentCount + 1}/${limits.booksPerDay}`);
+    console.log(`[GENERATE-BOOK] Done. Daily: ${reservation.books_used}/${dailyLimit === -1 ? "unlimited" : dailyLimit}`);
 
     return new Response(JSON.stringify({
       success: true, message: "Book created successfully",
@@ -374,6 +439,15 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {
+    // Every post-reservation failure path throws, so this is the single refund
+    // point for book save, job creation, chapter save and unexpected errors.
+    if (refundReservation) {
+      try {
+        await refundReservation();
+      } catch (refundError) {
+        console.error("[GENERATE-BOOK] Reservation refund failed during exception handling:", refundError);
+      }
+    }
     console.error("[GENERATE-BOOK] Error:", error);
     const msg = error instanceof Error ? error.message : "Unknown error";
     return errorResponse(ErrorCode.GENERATION_FAILED, msg, corsHeaders);

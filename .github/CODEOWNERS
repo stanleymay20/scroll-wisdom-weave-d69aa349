@@ -1,0 +1,57 @@
+# Code owners for ScrollLibrary.
+#
+# Review ownership on trust-critical paths should be enforced, not conventional.
+# Later rules win, so the most specific paths sit at the bottom.
+#
+# Requires "Require review from Code Owners" on the branch protection rule for
+# `main` to have any effect.
+
+# Default owner for anything not matched below.
+*                                   @stanleymay20
+
+# --- Money -------------------------------------------------------------------
+# Checkout, webhooks, entitlements, refunds, payouts, and the ledger.
+/supabase/functions/create-checkout/            @stanleymay20
+/supabase/functions/create-book-checkout/       @stanleymay20
+/supabase/functions/customer-portal/            @stanleymay20
+/supabase/functions/check-subscription/         @stanleymay20
+/supabase/functions/stripe-webhook/             @stanleymay20
+/supabase/functions/get-entitlements/           @stanleymay20
+/supabase/functions/admin-refund-purchase/      @stanleymay20
+/supabase/functions/admin-ledger-reconcile/     @stanleymay20
+/supabase/functions/admin-force-stripe-resync/  @stanleymay20
+/supabase/functions/backfill-earnings-ledger/   @stanleymay20
+/supabase/functions/creator-earnings-summary/   @stanleymay20
+/supabase/functions/creator-payout-profile/     @stanleymay20
+/supabase/functions/_shared/entitlements.ts     @stanleymay20
+/supabase/functions/_shared/usage-gate.ts       @stanleymay20
+
+# --- Authority and authorization --------------------------------------------
+/supabase/functions/_shared/http.ts             @stanleymay20
+/supabase/functions/_shared/permissions.ts      @stanleymay20
+/supabase/functions/claim-admin/                @stanleymay20
+/supabase/functions/delete-account/             @stanleymay20
+/supabase/functions/export-user-data/           @stanleymay20
+
+# --- Publication trust state -------------------------------------------------
+# Server-attested readiness. A client must never be able to manufacture a PASS.
+/supabase/functions/finalize-publication-certification/  @stanleymay20
+/supabase/functions/_shared/publicationScope.ts          @stanleymay20
+/supabase/functions/_shared/publicationSnapshot.ts       @stanleymay20
+/supabase/functions/_shared/isbn.ts                      @stanleymay20
+/supabase/functions/_shared/scroll-identity.ts           @stanleymay20
+
+# --- Schema and release controls ---------------------------------------------
+# Migrations are forward-only; these gates are what make that safe.
+/supabase/migrations/               @stanleymay20
+/supabase/config.toml               @stanleymay20
+/.github/workflows/                 @stanleymay20
+/scripts/                           @stanleymay20
+/security/                          @stanleymay20
+
+# --- Published commitments ---------------------------------------------------
+# Changing these changes what we have promised users and partners.
+/src/pages/TermsOfService.tsx       @stanleymay20
+/src/pages/PrivacyPolicy.tsx        @stanleymay20
+/docs/PRODUCTION_READINESS.md       @stanleymay20
+/SECURITY.md                        @stanleymay20

@@ -81,6 +81,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-governance-db-security.sql
       - name: Assert independent ISBN provenance review separation
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
+      - name: Assert atomic book-generation quota reservation contract
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-book-generation-quota-db-security.sql
       - name: Fail on PostgreSQL function and schema errors
         run: supabase db lint --local --schema public --level error --fail-on error
 
