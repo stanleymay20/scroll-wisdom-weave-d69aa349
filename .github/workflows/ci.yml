@@ -139,6 +139,17 @@ jobs:
           deno check supabase/functions/export-onix/index.ts
           deno check supabase/functions/resolve-scroll-id/index.ts
           deno check supabase/functions/scrollvision-retrieve/index.ts
+      - name: Type-check storefront, telemetry and moderation Edge Functions
+        run: |
+          deno check supabase/functions/storefront-user-api/index.ts
+          deno check supabase/functions/record-purchase-intent/index.ts
+          deno check supabase/functions/suggest-publishing-metadata/index.ts
+          deno check supabase/functions/content-filter/index.ts
+          deno check supabase/functions/grade-think-answer/index.ts
+          deno check supabase/functions/attribution-tag/index.ts
+          deno check supabase/functions/log-search-query/index.ts
+          deno check supabase/functions/log-storefront-event/index.ts
+          deno check supabase/functions/log-recommendation-feedback/index.ts
       - name: Test financial alerting contract
         run: |
           deno test supabase/functions/_shared/observability_test.ts
@@ -210,5 +221,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Reject committed high-confidence secrets
         run: bun run audit:secrets
+      - name: Reject per-instance rate limiting on metered endpoints
+        run: bun run audit:rate-limits
       - name: Reject high or critical production dependency vulnerabilities
         run: bun run audit:dependencies

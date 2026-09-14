@@ -290,6 +290,7 @@ Deno.serve(async (req) => {
       windowSec: 60,
     });
     if (rate) return rate;
+
     const ownership = await authorizeBook(sc, body.bookId, auth.userId);
     if (!ownership.found) return badRequest("Book not found");
     if (!ownership.authorized) return forbidden("Not the owner of this book");

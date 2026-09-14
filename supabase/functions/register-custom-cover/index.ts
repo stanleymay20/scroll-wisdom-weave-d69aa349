@@ -9,7 +9,7 @@ import {
   validateBody,
   z,
   serviceClient,
-  enforceRateLimit,
+  enforceDurableRateLimit,
 } from "../_shared/http.ts";
 
 const MAX_CUSTOM_COVER_BYTES = 5 * 1024 * 1024;
@@ -84,7 +84,9 @@ Deno.serve(async (req) => {
     const body = await validateBody(req, BodySchema);
     if (body instanceof Response) return body;
 
-    const rate = enforceRateLimit({
+    const sc = serviceClient();
+
+    const rate = await enforceDurableRateLimit(sc, {
       name: "register-custom-cover",
       key: auth.userId,
       limit: 10,
@@ -92,7 +94,6 @@ Deno.serve(async (req) => {
     });
     if (rate) return rate;
 
-    const sc = serviceClient();
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     if (!supabaseUrl) return serverError(new Error("Supabase configuration is missing"));
 

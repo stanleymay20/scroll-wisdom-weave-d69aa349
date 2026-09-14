@@ -5,7 +5,7 @@ import {
   serverError,
   requireUser,
   validateBody,
-  enforceRateLimit,
+  enforceDurableRateLimit,
   serviceClient,
   z,
 } from "../_shared/http.ts";
@@ -107,7 +107,8 @@ serve(async (req) => {
     const auth = await requireUser(req);
     if (auth instanceof Response) return auth;
 
-    const limited = enforceRateLimit({
+    const admin = serviceClient();
+    const limited = await enforceDurableRateLimit(admin, {
       name: "content-filter",
       key: auth.userId,
       limit: 60,
@@ -128,7 +129,6 @@ serve(async (req) => {
 
     if (result.flagged && body.contentId) {
       try {
-        const admin = serviceClient();
         await admin.from("moderation_queue").insert({
           content_type: body.contentType,
           content_id: body.contentId,

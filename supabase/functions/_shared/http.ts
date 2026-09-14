@@ -209,8 +209,17 @@ export function rateLimit(opts: RateLimitOptions): RateLimitResult {
  *
  * NOTE: this is the in-memory limiter. It resets whenever the edge instance is
  * recycled and is not shared between instances, so it is a fast local burst
- * guard only. For anything that costs money per call, prefer
- * enforceDurableRateLimit below.
+ * guard only, never a spend or abuse control on its own.
+ *
+ * Every endpoint whose limit is the actual control now uses
+ * enforceDurableRateLimit. The only remaining callers are the three anonymous
+ * ingestion endpoints (log-search-query, log-storefront-event,
+ * log-recommendation-feedback), where this runs as a free first pass in front
+ * of an enforcePersistentVelocity gate at the same cap — that gate is the
+ * durable one. Do not "upgrade" those to enforceDurableRateLimit: it would buy
+ * a second database round trip per request for a limit already enforced.
+ *
+ * For a new endpoint, reach for enforceDurableRateLimit.
  */
 export function enforceRateLimit(opts: RateLimitOptions): Response | null {
   const r = rateLimit(opts);

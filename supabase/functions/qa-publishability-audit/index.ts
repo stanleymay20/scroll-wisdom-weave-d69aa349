@@ -11,7 +11,7 @@
 import "https://deno.land/std@0.224.0/dotenv/load.ts";
 import {
   corsHeaders, preflight, json, badRequest, unauthorized, forbidden,
-  serverError, requireUser, validateBody, z, serviceClient, enforceRateLimit,
+  serverError, requireUser, validateBody, z, serviceClient, enforceDurableRateLimit,
 } from "../_shared/http.ts";
 import { auditBookForPublishability } from "../_shared/qaPublishability.ts";
 import { captureBookScopeHash, recordBoundAttestation, scopeStabilityError } from "../_shared/publicationScope.ts";
@@ -31,10 +31,15 @@ Deno.serve(async (req) => {
     if (parsed instanceof Response) return parsed;
     const { bookId } = parsed;
 
-    const rate = enforceRateLimit({ name: "qa-audit", key: auth.userId, limit: 30, windowSec: 60 });
-    if (rate) return rate;
-
     const sc = serviceClient();
+
+    const rate = await enforceDurableRateLimit(sc, {
+      name: "qa-audit",
+      key: auth.userId,
+      limit: 30,
+      windowSec: 60,
+    });
+    if (rate) return rate;
 
     // Capture before loading any publication-relevant inputs used by the audit.
     // The post-load hash below must match this value, preventing stale/mixed

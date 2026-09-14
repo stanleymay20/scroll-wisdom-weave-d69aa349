@@ -27,6 +27,7 @@
     "test:e2e": "playwright test",
     "test:e2e:install": "playwright install --with-deps chromium",
     "audit:secrets": "bun scripts/check-secrets.mjs",
+    "audit:rate-limits": "bun scripts/check-rate-limit-durability.mjs",
     "audit:dependencies": "bun scripts/check-dependency-audit.mjs",
     "audit:bundle": "bun scripts/check-bundle-budget.mjs",
     "ci": "bun run typecheck && bun run lint && bun run test && bun run build:release && bun run audit:secrets && bun run audit:dependencies"

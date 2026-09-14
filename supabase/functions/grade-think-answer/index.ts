@@ -5,7 +5,8 @@ import {
   serverError,
   requireUser,
   validateBody,
-  enforceRateLimit,
+  enforceDurableRateLimit,
+  serviceClient,
   z,
 } from "../_shared/http.ts";
 
@@ -26,8 +27,10 @@ serve(async (req) => {
     const auth = await requireUser(req);
     if (auth instanceof Response) return auth;
 
-    // Each grading call is an AI request — cap to prevent runaway billing.
-    const limited = enforceRateLimit({
+    // Each grading call is an AI request — cap to prevent runaway billing. The
+    // cap has to outlive the instance handling the request, or a caller simply
+    // waits for a cold start to get another 30.
+    const limited = await enforceDurableRateLimit(serviceClient(), {
       name: "grade-think-answer",
       key: auth.userId,
       limit: 30,

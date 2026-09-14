@@ -9,7 +9,7 @@ import {
   validateBody,
   z,
   serviceClient,
-  enforceRateLimit,
+  enforceDurableRateLimit,
   corsHeaders,
 } from "../_shared/http.ts";
 import { isValidIsbn13, publisherFromPublicationSnapshot } from "../_shared/isbn.ts";
@@ -61,10 +61,11 @@ Deno.serve(async (req) => {
     const body = await validateBody(req, BodySchema);
     if (body instanceof Response) return body;
 
-    const rate = enforceRateLimit({ name: "export-onix", key: auth.userId, limit: 20, windowSec: 60 });
+    const sc = serviceClient();
+
+    const rate = await enforceDurableRateLimit(sc, { name: "export-onix", key: auth.userId, limit: 20, windowSec: 60 });
     if (rate) return rate;
 
-    const sc = serviceClient();
     const access = await authorizeBook(sc, body.bookId, auth.userId);
     if (!access.found) return badRequest("Book not found");
     if (!access.authorized) return forbidden("Not the owner of this book");
