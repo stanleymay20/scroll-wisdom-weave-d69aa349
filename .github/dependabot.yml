@@ -1,0 +1,61 @@
+version: 2
+
+updates:
+  # GitHub Actions are pinned by major tag in .github/workflows/. Unreviewed
+  # action drift is a supply-chain path into a workflow that holds repository
+  # credentials, so these are grouped and raised weekly.
+  - package-ecosystem: "github-actions"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 5
+    commit-message:
+      prefix: "ci"
+    groups:
+      github-actions:
+        patterns:
+          - "*"
+
+  # Application dependencies resolved from bun.lock.
+  #
+  # CI installs with `bun install --frozen-lockfile`, so any update must land as
+  # a lockfile change or the install fails. `bun run audit:dependencies` gates
+  # high and critical production advisories against the time-boxed baseline in
+  # security/audit-exceptions.json; Dependabot is what keeps that baseline from
+  # growing between reviews.
+  - package-ecosystem: "npm"
+    directory: "/"
+    schedule:
+      interval: "weekly"
+      day: "monday"
+      time: "06:00"
+    open-pull-requests-limit: 10
+    commit-message:
+      prefix: "deps"
+      prefix-development: "deps-dev"
+    groups:
+      # Radix ships many small packages in lockstep; one PR per package is noise.
+      radix-ui:
+        patterns:
+          - "@radix-ui/*"
+      supabase:
+        patterns:
+          - "@supabase/*"
+      dev-tooling:
+        dependency-type: "development"
+        patterns:
+          - "*"
+    ignore:
+      # React 19 is a deliberate migration, not a dependency bump.
+      - dependency-name: "react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "react-dom"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "@types/react-dom"
+        update-types: ["version-update:semver-major"]
+      # Pinned deliberately: see the "overrides" block in package.json.
+      - dependency-name: "@xmldom/xmldom"
