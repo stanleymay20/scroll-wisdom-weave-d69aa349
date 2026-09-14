@@ -17,7 +17,7 @@ if (!configPath) {
 
 const configFile = ts.readConfigFile(configPath, ts.sys.readFile);
 if (configFile.error) {
-  console.error(ts.formatDiagnostic(configFile.error, formatHost));
+  console.error(ts.formatDiagnostic(configFile.error, formatHost()));
   process.exit(2);
 }
 
@@ -33,7 +33,7 @@ const parsed = ts.parseJsonConfigFileContent(
 );
 
 if (parsed.errors.length > 0) {
-  console.error(ts.formatDiagnosticsWithColorAndContext(parsed.errors, formatHost));
+  console.error(ts.formatDiagnosticsWithColorAndContext(parsed.errors, formatHost()));
   process.exit(2);
 }
 
@@ -58,7 +58,7 @@ if (diagnostics.length > 0) {
   console.error(
     `strictNullChecks found ${diagnostics.length} diagnostic(s) in ${targets.join(", ")}:`,
   );
-  console.error(ts.formatDiagnosticsWithColorAndContext(diagnostics, formatHost));
+  console.error(ts.formatDiagnosticsWithColorAndContext(diagnostics, formatHost()));
   process.exit(1);
 }
 
