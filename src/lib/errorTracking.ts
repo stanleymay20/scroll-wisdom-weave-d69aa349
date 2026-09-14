@@ -41,11 +41,18 @@ export function stripQueryAndFragment(value: string): string {
   return value.split(/[?#]/, 1)[0] ?? value;
 }
 
-function sanitizeHeaders(headers: Record<string, string | undefined> | undefined) {
-  if (!headers) return headers;
-  return Object.fromEntries(
-    Object.entries(headers).filter(([key]) => !SENSITIVE_HEADERS.has(key.toLowerCase())),
-  );
+function sanitizeHeaders(
+  headers: Record<string, string | undefined> | undefined,
+): Record<string, string> | undefined {
+  if (!headers) return undefined;
+
+  const sanitized: Record<string, string> = {};
+  for (const [key, value] of Object.entries(headers)) {
+    if (!SENSITIVE_HEADERS.has(key.toLowerCase()) && typeof value === "string") {
+      sanitized[key] = value;
+    }
+  }
+  return sanitized;
 }
 
 /**
