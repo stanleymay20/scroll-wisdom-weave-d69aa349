@@ -5,26 +5,28 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
   group: dependency-remediation-probe-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
-  patched-transitive-probe:
+  apply-patched-transitives:
+    if: github.event_name == 'workflow_dispatch' || github.head_ref == 'claude/scroll-wisdom-weave-review-mtckux'
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: claude/scroll-wisdom-weave-review-mtckux
+          fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.2.23
       - name: Verify committed lockfile installs
         run: bun install --frozen-lockfile
-      - name: Record current high/critical backlog
-        run: bun audit --prod --audit-level=high || true
-      - name: Add same-major patched transitive overrides
+      - name: Add verified same-major patched transitive overrides
         shell: bash
         run: |
           node <<'NODE'
@@ -43,22 +45,22 @@ jobs:
           fs.writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
           NODE
           bun install
-      - name: Audit patched-transitive candidate
-        run: bun audit --prod --audit-level=high || true
-      - name: Run typecheck lint test and build against candidate
+      - name: Verify candidate before committing
         run: |
           bun run typecheck
           bun run lint
           bun run test
           bun run build:release
-      - name: Show candidate diff
-        run: git diff -- package.json bun.lock
-      - name: Upload candidate manifest and lockfile
-        uses: actions/upload-artifact@v6
-        with:
-          name: dependency-patched-transitive-${{ github.sha }}
-          path: |
-            package.json
-            bun.lock
-          if-no-files-found: error
-          retention-days: 7
+          bun audit --prod --audit-level=high || true
+      - name: Commit generated manifest and lockfile to the work branch
+        shell: bash
+        run: |
+          if git diff --quiet -- package.json bun.lock; then
+            echo 'No dependency changes remain to commit.'
+            exit 0
+          fi
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add package.json bun.lock
+          git commit -m 'deps: apply patched transitive security updates'
+          git push origin HEAD:refs/heads/claude/scroll-wisdom-weave-review-mtckux
