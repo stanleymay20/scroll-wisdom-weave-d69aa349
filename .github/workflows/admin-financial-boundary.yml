@@ -1,0 +1,41 @@
+name: Admin Financial Boundary
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: admin-financial-boundary-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DENO_VERSION: 2.9.6
+
+jobs:
+  cors-boundary:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v6
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+      - name: Verify frozen Edge dependency graph
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd supabase/functions
+          mapfile -d '' entries < <(find . -type f -name '*.ts' -print0 | sort -z)
+          test "${#entries[@]}" -gt 0
+          deno install --config deno.json --entrypoint --lockfile-only --frozen "${entries[@]}"
+      - name: Type-check admin financial origin boundary
+        run: |
+          deno check --config supabase/functions/deno.json supabase/functions/_shared/admin-cors.ts
+          deno check --config supabase/functions/deno.json supabase/functions/admin-refund-purchase/index.ts
+          deno check --config supabase/functions/deno.json supabase/functions/admin-force-stripe-resync/index.ts
+      - name: Test exact-origin admin CORS contract
+        run: deno test --config supabase/functions/deno.json supabase/functions/_shared/admin-cors_test.ts
