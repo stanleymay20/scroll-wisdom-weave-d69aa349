@@ -1,0 +1,60 @@
+name: Deno Lock Probe
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deno-lock-probe-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  DENO_VERSION: 2.9.6
+
+jobs:
+  generate-lock:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v6
+      - uses: denoland/setup-deno@v2
+        with:
+          deno-version: ${{ env.DENO_VERSION }}
+      - name: Generate scoped Edge Function lockfile
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd supabase/functions
+          cat > deno.json <<'JSON'
+          {
+            "lock": {
+              "path": "./deno.lock",
+              "frozen": false
+            },
+            "nodeModulesDir": "none"
+          }
+          JSON
+          mapfile -d '' entries < <(find . -type f -name '*.ts' -print0 | sort -z)
+          test "${#entries[@]}" -gt 0
+          deno install --config deno.json --entrypoint --lockfile-only --frozen=false "${entries[@]}"
+          test -s deno.lock
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          data = json.loads(Path('deno.lock').read_text())
+          print('lockfile version:', data.get('version'))
+          print('remote entries:', len(data.get('remote', {})))
+          print('npm entries:', len(data.get('npm', {})))
+          print('jsr entries:', len(data.get('jsr', {})))
+          PY
+      - name: Upload generated lock candidate
+        uses: actions/upload-artifact@v6
+        with:
+          name: deno-lock-candidate-${{ github.sha }}
+          path: |
+            supabase/functions/deno.json
+            supabase/functions/deno.lock
+          if-no-files-found: error
+          retention-days: 3
