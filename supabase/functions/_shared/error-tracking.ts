@@ -6,7 +6,55 @@
  * the request path beyond this small guard.
  */
 
-type SentryApi = typeof import("npm:@sentry/deno@10.73.0");
+/**
+ * The SDK surface this module uses, declared locally rather than derived from
+ * `typeof import("npm:@sentry/deno@...")`.
+ *
+ * A static type-level import forces `deno check` to resolve the npm specifier,
+ * which needs a node_modules directory that CI does not have — it fails with
+ * "Could not find a matching package". The runtime import below is unaffected:
+ * the Supabase Edge Runtime resolves npm: specifiers natively.
+ */
+interface SentryApi {
+  init(options: SentryInitOptions): void;
+  withScope(callback: (scope: SentryScope) => void): void;
+  captureException(error: unknown): string;
+}
+
+interface SentryScope {
+  setTag(key: string, value: string): void;
+}
+
+interface SentryRequest {
+  url?: string;
+  cookies?: unknown;
+  data?: unknown;
+  headers?: Record<string, string | undefined>;
+}
+
+interface SentryEvent {
+  user?: unknown;
+  request?: SentryRequest;
+}
+
+interface SentryInitOptions {
+  dsn: string;
+  environment?: string;
+  release?: string;
+  sendDefaultPii?: boolean;
+  tracesSampleRate?: number;
+  beforeSend?: (event: SentryEvent) => SentryEvent | null;
+}
+
+/**
+ * Held in a constant so the dynamic import below is not a statically analyzable
+ * specifier either — `deno check` resolves literal dynamic imports too, and
+ * would fail on the same missing node_modules directory.
+ *
+ * The cost is that dependency scanners no longer see this edge on a static
+ * read, so the version is pinned here and must be bumped by hand.
+ */
+const SENTRY_MODULE = "npm:@sentry/deno@10.73.0";
 
 let sentry: SentryApi | null = null;
 let initPromise: Promise<boolean> | null = null;
@@ -49,7 +97,7 @@ export function initEdgeErrorTracking(): Promise<boolean> {
 
   initPromise = (async () => {
     try {
-      const Sentry = await import("npm:@sentry/deno@10.73.0");
+      const Sentry = (await import(SENTRY_MODULE)) as unknown as SentryApi;
       Sentry.init({
         dsn,
         environment: Deno.env.get("SENTRY_ENVIRONMENT")?.trim() || "unknown",
