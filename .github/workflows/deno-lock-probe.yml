@@ -1,28 +1,32 @@
-name: Deno Lock Probe
+name: Deno Lock Materialization
 
 on:
   pull_request:
 
 permissions:
-  contents: read
+  contents: write
 
 concurrency:
-  group: deno-lock-probe-${{ github.ref }}
+  group: deno-lock-materialization-${{ github.ref }}
   cancel-in-progress: true
 
 env:
   DENO_VERSION: 2.9.6
+  WORK_BRANCH: claude/scroll-wisdom-weave-review-mtckux
 
 jobs:
-  generate-lock:
+  materialize-lock:
+    if: github.event.pull_request.head.ref == 'claude/scroll-wisdom-weave-review-mtckux'
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v6
+        with:
+          ref: ${{ env.WORK_BRANCH }}
       - uses: denoland/setup-deno@v2
         with:
           deno-version: ${{ env.DENO_VERSION }}
-      - name: Generate scoped Edge Function lockfile
+      - name: Generate reviewed scoped Edge Function lockfile
         shell: bash
         run: |
           set -euo pipefail
@@ -43,18 +47,26 @@ jobs:
           python3 - <<'PY'
           import json
           from pathlib import Path
-          data = json.loads(Path('deno.lock').read_text())
+          lock = Path('deno.lock')
+          data = json.loads(lock.read_text())
+          assert data.get('version') == '5', data.get('version')
+          assert len(data.get('remote', {})) > 0
+          assert len(data.get('npm', {})) > 0
+          Path('deno.json').write_text('''{\n  "lock": {\n    "path": "./deno.lock",\n    "frozen": true\n  },\n  "nodeModulesDir": "none"\n}\n''')
           print('lockfile version:', data.get('version'))
           print('remote entries:', len(data.get('remote', {})))
           print('npm entries:', len(data.get('npm', {})))
-          print('jsr entries:', len(data.get('jsr', {})))
           PY
-      - name: Upload generated lock candidate
-        uses: actions/upload-artifact@v6
-        with:
-          name: deno-lock-candidate-${{ github.sha }}
-          path: |
-            supabase/functions/deno.json
-            supabase/functions/deno.lock
-          if-no-files-found: error
-          retention-days: 3
+      - name: Commit lock to the approved work branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add supabase/functions/deno.json supabase/functions/deno.lock
+          if git diff --cached --quiet; then
+            echo "Reviewed Deno lock already materialized."
+            exit 0
+          fi
+          git commit -m "deps: pin Supabase Edge dependency graph"
+          git push origin "HEAD:${WORK_BRANCH}"
