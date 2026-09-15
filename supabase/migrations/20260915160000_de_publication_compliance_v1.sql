@@ -30,6 +30,13 @@ CREATE TABLE IF NOT EXISTS public.publication_compliance_declarations (
   dnb_deposit_plan_confirmed boolean NOT NULL DEFAULT false,
   state_deposit_plan_confirmed boolean NOT NULL DEFAULT false,
 
+  -- Post-release completion is tracked separately from the pre-release plan.
+  dnb_deposit_completed_at timestamptz,
+  state_deposit_completed_at timestamptz,
+  deposit_evidence_reference text CHECK (
+    deposit_evidence_reference IS NULL OR pg_catalog.length(deposit_evidence_reference) <= 1000
+  ),
+
   -- Direct-sale and packaging responsibility are conditional.
   direct_sales_enabled boolean NOT NULL DEFAULT false,
   direct_sales_legal_notice_confirmed boolean NOT NULL DEFAULT false,
