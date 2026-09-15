@@ -30,6 +30,11 @@ CREATE TABLE IF NOT EXISTS public.publication_compliance_declarations (
   dnb_deposit_plan_confirmed boolean NOT NULL DEFAULT false,
   state_deposit_plan_confirmed boolean NOT NULL DEFAULT false,
 
+  -- Legal-deposit timing is tied to actual distribution/public-access start, not
+  -- ScrollLibrary's internal publication timestamp. The latter may differ from the
+  -- statutory trigger and must never be used as a silent substitute.
+  distribution_started_at timestamptz,
+
   -- Post-release completion is tracked separately from the pre-release plan.
   dnb_deposit_completed_at timestamptz,
   state_deposit_completed_at timestamptz,
