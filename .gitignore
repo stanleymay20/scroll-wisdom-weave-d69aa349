@@ -36,3 +36,8 @@ supabase/.branches/
 *.njsproj
 *.sln
 *.sw?
+
+# Playwright run output (outputDir and the HTML reporter target,
+# which CI uploads as a diagnostics artifact on failure).
+test-results/
+playwright-report/
