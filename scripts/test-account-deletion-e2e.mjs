@@ -165,7 +165,11 @@ for (const certificateNumber of [publishingNumber, competencyNumber]) {
       `verify-certificate failed for retained credential (${verificationResponse.status}): ${JSON.stringify(verification)}`,
     );
   }
-  if (verification.valid !== false || verification.revoked !== true) {
+  // verify-certificate reports revocation through `status`, which distinguishes
+  // revoked from unverifiable and invalid. `valid` alone would pass for any of
+  // the three, so both are asserted: a retained credential must read as revoked
+  // specifically, not merely as not-valid.
+  if (verification.valid !== false || verification.status !== "revoked") {
     throw new Error(`Retained credential did not verify as revoked: ${JSON.stringify(verification)}`);
   }
   if (verification.revokedReason !== "Account Deleted") {
