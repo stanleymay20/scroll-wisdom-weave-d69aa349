@@ -148,6 +148,19 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path === "/functions/v1/publishing-identity") {
+      await fulfillJson(route, {
+        book: { id: BOOK_ID, title: BOOK_TITLE },
+        profile: null,
+        imprint: null,
+        assignments: [],
+        isbnClaims: [],
+        ownedIsbns: [],
+        platformImprints: [],
+      });
+      return;
+    }
+
     if (path.startsWith("/functions/v1/")) {
       await fulfillJson(route, { ok: true });
       return;
@@ -208,6 +221,11 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path === "/rest/v1/rpc/get_book_elite_readiness") {
+      await fulfillJson(route, null);
+      return;
+    }
+
     if (path === "/rest/v1/profiles") {
       await fulfillJson(route, [{
         id: USER_ID,
@@ -243,11 +261,8 @@ async function loginThroughMockedAuth(page: Page) {
   await expect(page).not.toHaveURL(/\/auth(?:\?|$)/, { timeout: 10_000 });
 }
 
-test.beforeEach(async ({ page }) => {
-  await installDeterministicBackend(page);
-});
-
 test("public sample reader renders canonical sample content and returns to the listing", async ({ page }) => {
+  await installDeterministicBackend(page);
   await page.goto(`/store/${SLUG}/read`);
 
   await expect(page.getByRole("heading", { level: 1, name: BOOK_TITLE })).toBeVisible();
