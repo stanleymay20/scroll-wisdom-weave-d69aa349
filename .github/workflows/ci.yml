@@ -151,6 +151,7 @@ jobs:
           deno check supabase/functions/certify-production-render/index.ts
           deno check supabase/functions/finalize-publication-certification/index.ts
           deno check supabase/functions/publishing-identity/index.ts
+          deno check supabase/functions/isbn-admin-state/index.ts
           deno check supabase/functions/publish-work/index.ts
           deno check supabase/functions/enqueue-export-bundle/index.ts
           deno check supabase/functions/export-book/index.ts
