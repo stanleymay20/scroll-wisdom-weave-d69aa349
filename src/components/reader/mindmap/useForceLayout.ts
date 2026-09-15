@@ -99,9 +99,9 @@ export function useForceLayout(
     // Repulsion (n-body)
     for (let i = 0; i < ns.length; i++) {
       for (let j = i + 1; j < ns.length; j++) {
-        let dx = ns[j].x - ns[i].x;
-        let dy = ns[j].y - ns[i].y;
-        let dist = Math.sqrt(dx * dx + dy * dy) || 1;
+        const dx = ns[j].x - ns[i].x;
+        const dy = ns[j].y - ns[i].y;
+        const dist = Math.sqrt(dx * dx + dy * dy) || 1;
         const force = REPULSION / (dist * dist);
         const fx = (dx / dist) * force;
         const fy = (dy / dist) * force;
