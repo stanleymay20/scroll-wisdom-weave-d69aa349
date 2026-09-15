@@ -144,6 +144,27 @@ jobs:
       - name: Run real authentication and RLS browser E2E
         run: bunx playwright test --config=playwright.ga.config.ts
 
+      - name: Capture disposable stack logs on failure
+        if: failure()
+        shell: bash
+        run: |
+          set -uo pipefail
+          mkdir -p ga-diagnostics
+
+          # Edge Functions run inside `supabase start`'s own containers, so their
+          # console output never reaches this job log. Every function here answers
+          # a caller with a deliberately generic message — delete-account says
+          # "contact support" rather than naming the tables it could not clear —
+          # so when a step fails the actionable detail exists only in these logs
+          # and is discarded when the stack stops. Capture it before that.
+          for container in $(docker ps -aq --filter name=supabase_edge_runtime --filter name=supabase_db); do
+            name=$(docker inspect -f '{{.Name}}' "$container" | tr -d '/')
+            docker logs "$container" > "ga-diagnostics/$name.log" 2>&1 || true
+            echo "::group::$name (last 200 lines)"
+            tail -n 200 "ga-diagnostics/$name.log" || true
+            echo "::endgroup::"
+          done
+
       - name: Upload GA E2E diagnostics on failure
         if: failure()
         uses: actions/upload-artifact@v6
@@ -152,6 +173,7 @@ jobs:
           path: |
             playwright-report/
             test-results/
+            ga-diagnostics/
           if-no-files-found: ignore
           retention-days: 14
 
