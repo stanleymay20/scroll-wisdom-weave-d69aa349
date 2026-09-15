@@ -75,6 +75,8 @@ jobs:
           github-token: ${{ github.token }}
       - name: Apply every migration to a fresh local Supabase database
         run: supabase db start
+      - name: Assert account-deletion certificate retention contract
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-account-deletion-certificate-retention.sql
       - name: Rebuild hardened ISBN schema from verified legacy staging shape
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-legacy-staging-isbn-convergence.sql
       - name: Assert ISBN governance, RLS and transactional mint contract
@@ -122,6 +124,7 @@ jobs:
       - name: Type-check authority and metered usage Edge Functions
         run: |
           deno check supabase/functions/claim-admin/index.ts
+          deno check supabase/functions/delete-account/index.ts
           deno check supabase/functions/text-to-speech/index.ts
           deno check supabase/functions/validate-certificate/index.ts
           deno check supabase/functions/verify-certificate/index.ts
