@@ -60,17 +60,33 @@ For another German state, V1 fails closed with **manual review** rather than ass
 
 ## Post-release tracking
 
-When a current Publication has `published_at`, the engine changes from pre-release only to post-release tracking.
+A ScrollLibrary `published_at` timestamp only activates the post-release workflow; it is **not** silently treated as the statutory distribution trigger.
 
-For a Germany-based publisher it calculates the DNB one-week window from publication time and reports:
+The publisher records the actual timestamp at which the exact product entered distribution or became publicly accessible. For a Germany-based publisher the engine calculates the DNB one-week window from that recorded distribution/public-access start and reports:
 
 - pending;
 - completed; or
 - overdue.
 
+If the actual distribution/public-access start has not been recorded, the DNB deadline remains uncalculated and the post-release state stays blocking.
+
 Brandenburg completion is tracked separately because the Brandenburg rule is tied to the beginning of distribution and has its own state-law basis.
 
-Completion timestamps are publisher declarations unless ScrollLibrary later integrates a regulator/library receipt or submission API.
+Distribution-start and completed-deposit timestamps are treated as audit facts. Normal declaration saves cannot silently erase an existing timestamp. Completion timestamps remain publisher declarations unless ScrollLibrary later integrates a regulator/library receipt or submission API.
+
+## Trade-export enforcement
+
+Germany-facing ONIX export is a controlled-release boundary in V1. If the distribution record targets Germany (`price_country = DE`), `export-onix` fails closed until the relevant product has:
+
+- current publication trust gates;
+- a verified Germany-based publishing identity;
+- the matching format-specific ISBN assignment;
+- an explicit Germany fixed-price record;
+- the required publisher declarations for operating basis, imprint and deposit planning;
+- Brandenburg state-deposit acknowledgement under the V1 state model; and
+- applicable direct-sales and packaging/LUCID declarations.
+
+The failure response identifies machine-readable blocker codes. This prevents ScrollLibrary from generating a Germany-facing trade feed while the modeled controlled-release prerequisites are incomplete.
 
 ## Authoritative sources
 
@@ -117,5 +133,5 @@ These states are operational controls. They are not legal opinions.
 - attach cryptographically bound evidence artifacts for imprint and deposit receipts;
 - integrate official DNB submission receipts where technically available;
 - add independent administrator/counsel review without allowing self-review;
-- connect Germany controlled-release readiness to trade-distribution release gates only after staging validation and legal review;
+- extend controlled-release enforcement from ONIX to additional distributor-specific release adapters after staging validation and legal review;
 - preserve the distinction between legal obligations, trade requirements, and ScrollLibrary quality policy.
