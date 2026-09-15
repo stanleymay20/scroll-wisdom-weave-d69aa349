@@ -202,6 +202,36 @@ export function buildIllustrationPrompt(
   return prompt;
 }
 
+// Reader interaction capability is part of the existing Contract 9 public API.
+// Keep it separate from publishability auditing: these flags describe UI affordances,
+// not evidence that can satisfy or bypass any certification rule.
+export interface IllustrationInteraction {
+  type: 'expand' | 'explain' | 'zoom' | 'step-through';
+  available: boolean;
+  label: string;
+}
+
+export function getAvailableInteractions(
+  illustType: IllustrationType,
+  bookType: BookType,
+): IllustrationInteraction[] {
+  const interactions: IllustrationInteraction[] = [
+    { type: 'expand', available: true, label: 'View Full Size' },
+  ];
+
+  if (illustType === 'chart' || illustType === 'diagram') {
+    interactions.push({ type: 'explain', available: true, label: 'Explain This' });
+  }
+  if (illustType === 'technical') {
+    interactions.push({ type: 'step-through', available: true, label: 'Step-by-Step' });
+  }
+  if (bookType === 'children') {
+    interactions.push({ type: 'explain', available: true, label: "What's This?" });
+  }
+
+  return interactions;
+}
+
 export const ICG_CONTRACT_VERSION = '1.0';
 export const ICG_CONTRACT_FROZEN = true;
 export const ICG_CONTRACT_SUMMARY = `CONTRACT 9 — ILLUSTRATED CONTENT GENERATION (ICG-1.0)\nRequired visuals and metadata are publication-blocking when absent.\nVERSION: ${ICG_CONTRACT_VERSION}\nSTATUS: FROZEN`;
