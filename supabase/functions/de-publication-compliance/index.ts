@@ -33,6 +33,7 @@ const SaveSchema = z.object({
   imprintNoticeConfirmed: z.boolean(),
   dnbDepositPlanConfirmed: z.boolean(),
   stateDepositPlanConfirmed: z.boolean(),
+  distributionStartedAt: z.string().datetime().nullable().optional(),
   dnbDepositCompleted: z.boolean().default(false),
   stateDepositCompleted: z.boolean().default(false),
   depositEvidenceReference: z.string().trim().max(1000).nullable().optional(),
@@ -146,49 +147,56 @@ async function readContext(sc: Service, bookId: string, productForm: ProductForm
   const language = profile.publication_language;
   const editionLabel = profile.edition_label;
 
-  const [imprintResult, assignmentResult, distributionResult, declarationResult, gatesResult] = await Promise.all([
-    profile.imprint_id
-      ? sc.from("publishing_imprints")
-        .select("id,scope,publisher_name,imprint_name,country_code,verified")
-        .eq("id", profile.imprint_id)
-        .maybeSingle()
-      : Promise.resolve({ data: null, error: null }),
-    sc.from("book_isbn_assignments")
-      .select("id,isbn_id,product_form,language,edition_label,locked_at")
-      .eq("book_id", bookId)
-      .eq("product_form", productForm)
-      .eq("language", language)
-      .eq("edition_label", editionLabel)
-      .maybeSingle(),
-    sc.from("book_distribution_metadata")
-      .select("publication_date,price_type,price_cents,currency,price_country,product_availability,publishing_status,warengruppe_code")
-      .eq("book_id", bookId)
-      .eq("product_form", productForm)
-      .eq("language", language)
-      .eq("edition_label", editionLabel)
-      .maybeSingle(),
-    sc.from("publication_compliance_declarations")
-      .select("*")
-      .eq("book_id", bookId)
-      .eq("jurisdiction", "DE")
-      .eq("product_form", productForm)
-      .eq("language", language)
-      .eq("edition_label", editionLabel)
-      .maybeSingle(),
-    sc.rpc("has_current_publication_attestations", { p_book_id: bookId }),
-  ]);
+  const imprintResult = profile.imprint_id
+    ? await sc.from("publishing_imprints")
+      .select("id,scope,publisher_name,imprint_name,country_code,verified")
+      .eq("id", profile.imprint_id)
+      .maybeSingle()
+    : { data: null, error: null };
+  if (imprintResult.error) throw imprintResult.error;
 
-  for (const result of [imprintResult, assignmentResult, distributionResult, declarationResult, gatesResult]) {
-    if (result.error) throw result.error;
-  }
+  const { data: assignment, error: assignmentErr } = await sc
+    .from("book_isbn_assignments")
+    .select("id,isbn_id,product_form,language,edition_label,locked_at")
+    .eq("book_id", bookId)
+    .eq("product_form", productForm)
+    .eq("language", language)
+    .eq("edition_label", editionLabel)
+    .maybeSingle();
+  if (assignmentErr) throw assignmentErr;
+
+  const { data: distribution, error: distributionErr } = await sc
+    .from("book_distribution_metadata")
+    .select("publication_date,price_type,price_cents,currency,price_country,product_availability,publishing_status,warengruppe_code")
+    .eq("book_id", bookId)
+    .eq("product_form", productForm)
+    .eq("language", language)
+    .eq("edition_label", editionLabel)
+    .maybeSingle();
+  if (distributionErr) throw distributionErr;
+
+  const { data: declaration, error: declarationErr } = await sc
+    .from("publication_compliance_declarations")
+    .select("*")
+    .eq("book_id", bookId)
+    .eq("jurisdiction", "DE")
+    .eq("product_form", productForm)
+    .eq("language", language)
+    .eq("edition_label", editionLabel)
+    .maybeSingle();
+  if (declarationErr) throw declarationErr;
+
+  const { data: publicationGatesCurrent, error: gatesErr } = await sc
+    .rpc("has_current_publication_attestations", { p_book_id: bookId });
+  if (gatesErr) throw gatesErr;
 
   return {
     profile,
     imprint: imprintResult.data,
-    assignment: assignmentResult.data,
-    distribution: distributionResult.data,
-    declaration: declarationResult.data,
-    publicationGatesCurrent: gatesResult.data === true,
+    assignment,
+    distribution,
+    declaration,
+    publicationGatesCurrent: publicationGatesCurrent === true,
   };
 }
 
@@ -228,7 +236,6 @@ function evaluatePreRelease(context: Awaited<ReturnType<typeof readContext>>, pr
   const commercial = d?.commercial_release ?? true;
   const isPhysical = productForm === "paperback" || productForm === "hardcover";
   const dePublisher = imprint?.country_code === "DE";
-
   const checks: ReadinessCheck[] = [];
 
   checks.push(check(
@@ -322,7 +329,7 @@ function evaluatePreRelease(context: Awaited<ReturnType<typeof readContext>>, pr
       "publisher_declaration",
       d?.dnb_deposit_plan_confirmed === true,
       "A DNB legal-deposit plan has been acknowledged for this product.",
-      "Acknowledge the DNB deposit plan before release. Completion is tracked separately after publication.",
+      "Acknowledge the DNB deposit plan before release. Completion is tracked separately after distribution begins.",
     ));
   }
 
@@ -423,9 +430,6 @@ function evaluatePostRelease(
   const imprint = context.imprint;
   const dePublisher = imprint?.country_code === "DE";
   const checks: ReadinessCheck[] = [];
-  const published = new Date(publishedAt);
-  const due = new Date(published.getTime() + 7 * 24 * 60 * 60 * 1000);
-  const dueIso = due.toISOString();
 
   if (!dePublisher) {
     checks.push(manualReview(
@@ -433,7 +437,36 @@ function evaluatePostRelease(
       "DNB deposit completion",
       "Publisher is not recorded as Germany-based; post-release DNBG applicability requires manual review.",
     ));
-  } else if (d?.dnb_deposit_completed_at) {
+    return { checks, dnbDueAt: null };
+  }
+
+  const distributionStartedAt = d?.distribution_started_at ?? null;
+  if (!distributionStartedAt) {
+    checks.push({
+      id: "distribution_start",
+      label: "Actual distribution/public-access start",
+      source: "publisher_declaration",
+      status: "pending",
+      blocking: true,
+      detail: "Record when distribution or public access actually began. ScrollLibrary does not substitute its internal publication timestamp for the legal trigger.",
+    });
+  } else {
+    checks.push({
+      id: "distribution_start",
+      label: "Actual distribution/public-access start",
+      source: "publisher_declaration",
+      status: "passed",
+      blocking: false,
+      detail: `Publisher recorded distribution/public access starting at ${distributionStartedAt}.`,
+    });
+  }
+
+  const due = distributionStartedAt
+    ? new Date(new Date(distributionStartedAt).getTime() + 7 * 24 * 60 * 60 * 1000)
+    : null;
+  const dueIso = due?.toISOString() ?? null;
+
+  if (d?.dnb_deposit_completed_at) {
     checks.push({
       id: "dnb_deposit_completion",
       label: "DNB deposit completion",
@@ -441,6 +474,15 @@ function evaluatePostRelease(
       status: "passed",
       blocking: false,
       detail: `Publisher recorded DNB deposit completion at ${d.dnb_deposit_completed_at}.`,
+    });
+  } else if (!due) {
+    checks.push({
+      id: "dnb_deposit_completion",
+      label: "DNB deposit completion",
+      source: "publisher_declaration",
+      status: "pending",
+      blocking: true,
+      detail: "DNB completion is not recorded. The statutory deadline cannot be calculated until the actual distribution/public-access start is recorded.",
     });
   } else {
     const overdue = Date.now() > due.getTime();
@@ -451,14 +493,12 @@ function evaluatePostRelease(
       status: overdue ? "overdue" : "pending",
       blocking: true,
       detail: overdue
-        ? `No DNB completion is recorded and the one-week statutory window calculated from publication has passed (${dueIso}).`
-        : `DNB completion is not yet recorded. The one-week statutory window calculated from publication ends ${dueIso}.`,
+        ? `No DNB completion is recorded and the one-week window calculated from distribution start has passed (${dueIso}).`
+        : `DNB completion is not yet recorded. The one-week window calculated from distribution start ends ${dueIso}.`,
     });
   }
 
-  if (!dePublisher) {
-    // Covered by the manual review above; avoid claiming a state rule.
-  } else if (d?.publisher_state_code === "BB") {
+  if (d?.publisher_state_code === "BB") {
     if (d?.state_deposit_completed_at) {
       checks.push({
         id: "state_deposit_completion",
@@ -475,7 +515,9 @@ function evaluatePostRelease(
         source: "publisher_declaration",
         status: "pending",
         blocking: true,
-        detail: "Brandenburg deposit completion is not yet recorded. The state rule applies from the beginning of distribution.",
+        detail: distributionStartedAt
+          ? "Brandenburg deposit completion is not yet recorded. The state rule is tied to the beginning of distribution."
+          : "Brandenburg deposit completion is not recorded, and the actual distribution start is still missing.",
       });
     }
   } else if (d?.publisher_state_code) {
@@ -486,7 +528,7 @@ function evaluatePostRelease(
     ));
   }
 
-  return { checks, dnbDueAt: dePublisher ? dueIso : null };
+  return { checks, dnbDueAt: dueIso };
 }
 
 async function buildResponse(sc: Service, book: Record<string, unknown>, productForm: ProductForm) {
@@ -562,6 +604,18 @@ Deno.serve(async (req) => {
       if (profileErr) throw profileErr;
       if (!profile) return json({ error: "PUBLISHING_IDENTITY_REQUIRED", message: "Configure Publishing Identity first." }, 409);
 
+      const { data: existing, error: existingErr } = await sc
+        .from("publication_compliance_declarations")
+        .select("dnb_deposit_completed_at,state_deposit_completed_at")
+        .eq("book_id", body.bookId)
+        .eq("jurisdiction", "DE")
+        .eq("product_form", body.productForm)
+        .eq("language", profile.publication_language)
+        .eq("edition_label", profile.edition_label)
+        .maybeSingle();
+      if (existingErr) throw existingErr;
+
+      const now = new Date().toISOString();
       const payload = {
         book_id: body.bookId,
         owner_user_id: access.book.user_id ?? access.book.creator_id ?? auth.userId,
@@ -576,15 +630,20 @@ Deno.serve(async (req) => {
         imprint_notice_confirmed: body.imprintNoticeConfirmed,
         dnb_deposit_plan_confirmed: body.dnbDepositPlanConfirmed,
         state_deposit_plan_confirmed: body.stateDepositPlanConfirmed,
-        dnb_deposit_completed_at: body.dnbDepositCompleted ? new Date().toISOString() : null,
-        state_deposit_completed_at: body.stateDepositCompleted ? new Date().toISOString() : null,
+        distribution_started_at: body.distributionStartedAt ?? null,
+        dnb_deposit_completed_at: body.dnbDepositCompleted
+          ? (existing?.dnb_deposit_completed_at ?? now)
+          : null,
+        state_deposit_completed_at: body.stateDepositCompleted
+          ? (existing?.state_deposit_completed_at ?? now)
+          : null,
         deposit_evidence_reference: body.depositEvidenceReference || null,
         direct_sales_enabled: body.directSalesEnabled,
         direct_sales_legal_notice_confirmed: body.directSalesLegalNoticeConfirmed,
         packaging_responsibility: body.packagingResponsibility,
         lucid_status: body.lucidStatus,
         notes: body.notes || null,
-        acknowledged_at: new Date().toISOString(),
+        acknowledged_at: now,
       };
 
       const { error: saveErr } = await sc
