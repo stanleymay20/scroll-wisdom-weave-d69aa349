@@ -122,6 +122,7 @@ verify_jwt = false
 
 [functions.storefront-user-api]
 verify_jwt = false
+
 [functions.materialize-release-schedules]
 verify_jwt = false
 
@@ -156,4 +157,9 @@ verify_jwt = false
 verify_jwt = false
 
 [functions.art-director-analyze]
+verify_jwt = false
+
+# Admin-only state endpoint. It validates the bearer token and admin role
+# internally, then reads governance tables with service_role.
+[functions.isbn-admin-state]
 verify_jwt = false
