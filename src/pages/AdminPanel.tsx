@@ -9,11 +9,12 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Shield, Crown, Users, Lock, Loader2, Check, X, UserPlus, Trash2, Key } from "lucide-react";
+import { Shield, Crown, Users, Lock, Loader2, Check, Trash2, Key, BookKey } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { useIsAdmin } from "@/hooks/useAdmin";
 import { useToast } from "@/hooks/use-toast";
+import { IsbnGovernancePanel } from "@/components/admin/IsbnGovernancePanel";
 
 interface UserRole {
   id: string;
@@ -33,10 +34,7 @@ export default function AdminPanel() {
   const [isClaiming, setIsClaiming] = useState(false);
   const [userRoles, setUserRoles] = useState<UserRole[]>([]);
   const [loadingRoles, setLoadingRoles] = useState(true);
-  const [newAdminEmail, setNewAdminEmail] = useState("");
-  const [isAddingAdmin, setIsAddingAdmin] = useState(false);
 
-  // Fetch all user roles if admin
   useEffect(() => {
     if (isAdmin) {
       fetchUserRoles();
@@ -99,28 +97,6 @@ export default function AdminPanel() {
     }
   };
 
-  const handleAddAdmin = async () => {
-    if (!newAdminEmail.trim()) return;
-    
-    setIsAddingAdmin(true);
-    try {
-      // Find user by email (admin must have access to profiles)
-      // For security, we'd need a server function for this
-      toast({
-        title: "Feature Coming Soon",
-        description: "Adding admins by email requires additional backend setup.",
-      });
-    } catch (error: any) {
-      toast({
-        title: "Error",
-        description: error.message,
-        variant: "destructive",
-      });
-    } finally {
-      setIsAddingAdmin(false);
-    }
-  };
-
   const handleRemoveRole = async (roleId: string) => {
     try {
       const { error } = await supabase
@@ -144,7 +120,6 @@ export default function AdminPanel() {
     }
   };
 
-  // Loading state
   if (adminLoading) {
     return (
       <div className="min-h-screen flex flex-col">
@@ -157,7 +132,6 @@ export default function AdminPanel() {
     );
   }
 
-  // Not logged in
   if (!user) {
     return (
       <div className="min-h-screen flex flex-col">
@@ -183,7 +157,6 @@ export default function AdminPanel() {
     );
   }
 
-  // Not admin - show claim form
   if (!isAdmin) {
     return (
       <div className="min-h-screen flex flex-col">
@@ -247,24 +220,22 @@ export default function AdminPanel() {
     );
   }
 
-  // Admin panel
   return (
     <div className="min-h-screen flex flex-col">
       <Navbar />
       <main className="flex-1 pt-24 pb-16">
-        <div className="container mx-auto px-4 max-w-4xl">
+        <div className="container mx-auto px-4 max-w-5xl">
           <motion.div
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
           >
-            {/* Header */}
             <div className="flex items-center gap-4 mb-8">
               <div className="p-3 rounded-xl bg-primary/20">
                 <Shield className="h-8 w-8 text-primary" />
               </div>
               <div>
                 <h1 className="text-3xl font-display font-bold">Admin Panel</h1>
-                <p className="text-muted-foreground">Manage users, roles, and system settings</p>
+                <p className="text-muted-foreground">Manage users, publishing identity, and system settings</p>
               </div>
               <Badge className="ml-auto bg-primary/20 text-primary border-primary/30">
                 <Crown className="h-3 w-3 mr-1" />
@@ -273,10 +244,14 @@ export default function AdminPanel() {
             </div>
 
             <Tabs defaultValue="roles" className="space-y-6">
-              <TabsList className="bg-muted/50">
+              <TabsList className="bg-muted/50 flex-wrap h-auto">
                 <TabsTrigger value="roles" className="data-[state=active]:bg-primary/20">
                   <Users className="h-4 w-4 mr-2" />
                   User Roles
+                </TabsTrigger>
+                <TabsTrigger value="isbn" className="data-[state=active]:bg-primary/20">
+                  <BookKey className="h-4 w-4 mr-2" />
+                  ISBN Governance
                 </TabsTrigger>
                 <TabsTrigger value="settings" className="data-[state=active]:bg-primary/20">
                   <Shield className="h-4 w-4 mr-2" />
@@ -285,7 +260,6 @@ export default function AdminPanel() {
               </TabsList>
 
               <TabsContent value="roles" className="space-y-6">
-                {/* Current Admins */}
                 <Card className="bg-gradient-card border-border/50">
                   <CardHeader>
                     <CardTitle className="flex items-center gap-2">
@@ -313,9 +287,7 @@ export default function AdminPanel() {
                             className="flex items-center justify-between p-4 rounded-lg bg-muted/30 border border-border/50"
                           >
                             <div className="flex items-center gap-3">
-                              <div className={`p-2 rounded-lg ${
-                                role.role === 'admin' ? 'bg-primary/20' : 'bg-primary/20'
-                              }`}>
+                              <div className="p-2 rounded-lg bg-primary/20">
                                 {role.role === 'admin' ? (
                                   <Crown className="h-4 w-4 text-primary" />
                                 ) : (
@@ -352,6 +324,10 @@ export default function AdminPanel() {
                     )}
                   </CardContent>
                 </Card>
+              </TabsContent>
+
+              <TabsContent value="isbn" className="space-y-6">
+                <IsbnGovernancePanel />
               </TabsContent>
 
               <TabsContent value="settings" className="space-y-6">

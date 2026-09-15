@@ -2,6 +2,7 @@ import React, { Component, ErrorInfo, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { createLogger } from '@/lib/logger';
+import { captureException } from '@/lib/errorTracking';
 
 const logger = createLogger('ErrorBoundary');
 
@@ -45,6 +46,14 @@ export class ErrorBoundary extends Component<Props, State> {
       message: error.message,
       stack: error.stack?.substring(0, 500),
       componentStack: errorInfo.componentStack?.substring(0, 500),
+    });
+
+    // Remote reporting is a no-op unless Sentry is configured. Only stable
+    // diagnostic tags are sent; component stacks remain in the local logger.
+    captureException(error, {
+      surface: 'react-error-boundary',
+      context: context ?? 'unknown',
+      error_id: errorId ?? undefined,
     });
 
     // Call custom error handler if provided
@@ -164,7 +173,7 @@ export function SectionErrorBoundary({
           <p className="text-sm text-muted-foreground">{fallbackMessage}</p>
           <Button 
             variant="ghost" 
-            size="sm" 
+            size="sm"
             className="mt-2"
             onClick={() => window.location.reload()}
           >

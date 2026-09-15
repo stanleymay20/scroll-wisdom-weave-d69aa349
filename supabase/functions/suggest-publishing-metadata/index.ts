@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
-import { preflight, json, badRequest, serverError, unauthorized, requireUser, validateBody, z, enforceRateLimit, serviceClient } from "../_shared/http.ts";
+import { preflight, json, badRequest, serverError, unauthorized, requireUser, validateBody, z, enforceDurableRateLimit, serviceClient } from "../_shared/http.ts";
 
 const Body = z.object({ book_id: z.string().uuid() });
 
@@ -12,14 +12,22 @@ serve(async (req) => {
   const auth = await requireUser(req);
   if (auth instanceof Response) return auth;
 
-  const limited = enforceRateLimit({ name: "suggest-metadata", key: auth.userId, limit: 10, windowSec: 60 });
-  if (limited) return limited;
-
   const parsed = await validateBody(req, Body);
   if (parsed instanceof Response) return parsed;
 
   try {
     const sc = serviceClient();
+
+    // Inside the try: serviceClient() throws when the service role is missing,
+    // and that belongs in the 500 below, not in an unhandled rejection.
+    const limited = await enforceDurableRateLimit(sc, {
+      name: "suggest-metadata",
+      key: auth.userId,
+      limit: 10,
+      windowSec: 60,
+    });
+    if (limited) return limited;
+
     const { data: book, error: bErr } = await sc.from("books")
       .select("id, title, description, category, target_audience, user_id")
       .eq("id", parsed.book_id).maybeSingle();

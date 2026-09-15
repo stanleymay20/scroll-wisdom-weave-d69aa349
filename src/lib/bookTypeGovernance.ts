@@ -1,423 +1,131 @@
 /**
- * CONTRACT 3 — CONTENT-TYPE FIDELITY & GENERATION GOVERNANCE
- * 
- * Book Type is a GOVERNING CONSTITUTION, not a hint.
- * Once selected, it locks structure, tone, formatting, and generation behavior.
+ * CANONICAL BOOK-TYPE CONSTITUTION — BTG-1.0
+ *
+ * This is the single browser/runtime source of truth for ScrollLibrary book
+ * types. Contract 3 and Contract 6 consume this table rather than maintaining
+ * independent definitions.
  */
 
-// ===========================================
-// BOOK TYPE DEFINITIONS (LOCKED)
-// ===========================================
-
-export type BookType = 
-  | 'academic'      // Academic Textbook
-  | 'professional'  // Professional / Business Guide  
-  | 'workbook'      // Workbook / Fill-In Guide
-  | 'bestseller'    // Mass-Market Bestseller
-  | 'comic'         // Comic / Graphic Novel
-  | 'children'      // Children's Book
-  | 'technical'     // Technical / Hands-On Guide
-  | 'reference'     // Reference / Handbook
-  | 'fiction'       // Fiction / Novel
-  | 'text';         // Standard Text (legacy)
-
-// ===========================================
-// BOOK TYPE CONTRACTS (HARD RULES)
-// ===========================================
+export type BookType =
+  | 'academic'
+  | 'professional'
+  | 'workbook'
+  | 'bestseller'
+  | 'comic'
+  | 'children'
+  | 'technical'
+  | 'reference'
+  | 'fiction'
+  | 'illustrated'
+  | 'text';
 
 export interface BookTypeContract {
   type: BookType;
   displayName: string;
   description: string;
-  
-  // Content Rules
   mandatory: string[];
   forbidden: string[];
-  
-  // Structure Rules
   chapterStructure: string[];
   wordLimits?: { min: number; max: number };
-  
-  // Formatting Rules
   requiresCitations: boolean;
   requiresImages: boolean;
   requiresCode: boolean;
   requiresInteractivity: boolean;
-  
-  // Validation Rules
   validationChecks: string[];
 }
 
 export const BOOK_TYPE_CONTRACTS: Record<BookType, BookTypeContract> = {
   academic: {
-    type: 'academic',
-    displayName: 'Academic Textbook',
-    description: 'Scholarly content with citations, formal tone, learning objectives',
-    mandatory: [
-      'Formal academic tone',
-      'Clear learning objectives per chapter',
-      'Definitions, frameworks, models',
-      'Citations + references section (APA / Harvard)',
-      'Neutral, evidence-driven language',
-      'Structured headings (1.1, 1.2, etc.)',
-    ],
-    forbidden: [
-      'Motivational tone',
-      'Narrative storytelling',
-      'First-person persuasion',
-      'Bestseller hooks',
-      'Metaphorical titles',
-    ],
-    chapterStructure: [
-      'Learning Objectives',
-      'Concept Explanation',
-      'Examples / Case Studies',
-      'Exercises',
-      'References',
-    ],
-    requiresCitations: true,
-    requiresImages: false,
-    requiresCode: false,
-    requiresInteractivity: false,
-    validationChecks: [
-      'has_learning_objectives',
-      'has_citations',
-      'has_references_section',
-      'no_motivational_language',
-      'formal_tone',
-    ],
+    type: 'academic', displayName: 'Academic Textbook', description: 'Scholarly, evidence-driven textbook content.',
+    mandatory: ['Formal academic tone', 'Learning objectives', 'Definitions/frameworks/models', 'In-text citations', 'References section', 'Structured headings'],
+    forbidden: ['Fictional storytelling presented as fact', 'Motivational filler', 'Unsupported factual claims', 'Metaphorical titles that obscure subject matter'],
+    chapterStructure: ['Learning Objectives', 'Concept Explanation', 'Examples / Case Studies', 'Exercises', 'References'],
+    requiresCitations: true, requiresImages: false, requiresCode: false, requiresInteractivity: false,
+    validationChecks: ['has_learning_objectives', 'has_citations', 'has_references_section', 'formal_tone'],
   },
-  
   professional: {
-    type: 'professional',
-    displayName: 'Professional Guide',
-    description: 'Business & industry guides with frameworks and actionable strategies',
-    mandatory: [
-      'Strategic frameworks and models',
-      'Actionable recommendations',
-      'Decision tools and checklists',
-      'Industry context',
-      'Professional tone',
-    ],
-    forbidden: [
-      'Academic citations (excessive)',
-      'Personal anecdotes',
-      'Informal language',
-    ],
-    chapterStructure: [
-      'Executive Summary',
-      'Context / Background',
-      'Framework / Model',
-      'Implementation Steps',
-      'Key Takeaways',
-    ],
-    requiresCitations: false,
-    requiresImages: false,
-    requiresCode: false,
-    requiresInteractivity: false,
-    validationChecks: [
-      'has_actionable_steps',
-      'has_frameworks',
-      'professional_tone',
-    ],
+    type: 'professional', displayName: 'Professional Guide', description: 'Industry-oriented guidance with frameworks and decisions.',
+    mandatory: ['Strategic frameworks', 'Actionable recommendations', 'Decision tools', 'Industry context', 'Professional tone'],
+    forbidden: ['Fabricated case studies presented as real', 'Unsupported performance claims', 'Casual filler'],
+    chapterStructure: ['Executive Summary', 'Context / Background', 'Framework / Model', 'Implementation Steps', 'Key Takeaways'],
+    requiresCitations: false, requiresImages: false, requiresCode: false, requiresInteractivity: false,
+    validationChecks: ['has_actionable_steps', 'has_frameworks', 'professional_tone'],
   },
-  
   workbook: {
-    type: 'workbook',
-    displayName: 'Workbook / Fill-In',
-    description: 'Interactive templates with prompts, tables, and checklists',
-    mandatory: [
-      'Short explanations ONLY',
-      'Fill-in prompts with blank lines',
-      'Tables and worksheets',
-      'Reflection questions',
-      'Action step checkboxes',
-    ],
-    forbidden: [
-      'Long essays',
-      'Case studies over 150 words',
-      'Narrative dominance',
-      'Dense prose paragraphs',
-    ],
-    chapterStructure: [
-      'Purpose (≤150 words)',
-      'Key Concepts (≤300 words)',
-      'Fill-In Prompts',
-      'Tables / Worksheets',
-      'Reflection Questions',
-      'Action Steps',
-    ],
+    type: 'workbook', displayName: 'Workbook / Fill-In', description: 'Interactive exercises, prompts, tables, and checklists.',
+    mandatory: ['Short explanations', 'Fill-in prompts', 'Tables/worksheets', 'Reflection questions', 'Action-step checkboxes'],
+    forbidden: ['Long essay dominance', 'Narrative dominance', 'Dense uninterrupted prose'],
+    chapterStructure: ['Purpose (≤150 words)', 'Key Concepts (≤300 words)', 'Fill-In Prompts', 'Tables / Worksheets', 'Reflection Questions', 'Action Steps'],
     wordLimits: { min: 800, max: 1800 },
-    requiresCitations: false,
-    requiresImages: false,
-    requiresCode: false,
-    requiresInteractivity: true,
-    validationChecks: [
-      'has_fill_in_prompts',
-      'has_checkboxes',
-      'word_count_under_limit',
-      'minimal_prose',
-    ],
+    requiresCitations: false, requiresImages: false, requiresCode: false, requiresInteractivity: true,
+    validationChecks: ['has_fill_in_prompts', 'has_checkboxes', 'word_count_in_range', 'minimal_prose'],
   },
-  
   bestseller: {
-    type: 'bestseller',
-    displayName: 'Bestseller / Trade Book',
-    description: 'Narrative-driven with emotional engagement and transformation promise',
-    mandatory: [
-      'Clear narrative arc',
-      'Storytelling, metaphors, case studies',
-      'Emotional engagement',
-      'Conversational but intelligent tone',
-      'Chapter hooks and strong endings',
-      'Named principles (memorable concepts)',
-    ],
-    forbidden: [
-      'Academic citations',
-      'Section numbering',
-      'Lecture-style exposition',
-      'Hedging language',
-    ],
-    chapterStructure: [
-      'Opening Hook',
-      'Central Idea',
-      'Human Illustration',
-      'Named Principle',
-      'Reader Engagement',
-      'Actionable Takeaways',
-    ],
-    requiresCitations: false,
-    requiresImages: false,
-    requiresCode: false,
-    requiresInteractivity: false,
-    validationChecks: [
-      'has_hook',
-      'has_named_principle',
-      'has_takeaways',
-      'conversational_tone',
-      'no_hedging',
-    ],
+    type: 'bestseller', displayName: 'Bestseller / Trade Book', description: 'Narrative trade nonfiction with memorable principles and takeaways.',
+    mandatory: ['Strong hook', 'Narrative or human illustration', 'Named principles', 'Conversational clarity', 'Actionable takeaways'],
+    forbidden: ['Dense academic formatting', 'Lecture-style exposition', 'Unnecessary hedging', 'Fabricated factual anecdotes presented as real'],
+    chapterStructure: ['Opening Hook', 'Central Idea', 'Human Illustration', 'Named Principle', 'Reader Engagement', 'Actionable Takeaways'],
+    requiresCitations: false, requiresImages: false, requiresCode: false, requiresInteractivity: false,
+    validationChecks: ['has_hook', 'has_named_principle', 'has_takeaways'],
   },
-  
   comic: {
-    type: 'comic',
-    displayName: 'Comic / Graphic Novel',
-    description: 'Visual storytelling with multi-panel structure and dialogue',
-    mandatory: [
-      'Multi-panel structure (4-6 per chapter)',
-      'Visual continuity across panels',
-      'Consistent character appearance',
-      'EVERY panel MUST include dialogue',
-      'Visual descriptions for image generation',
-    ],
-    forbidden: [
-      'Prose paragraphs',
-      'Image-only panels',
-      'Single image per chapter',
-      'Caption-only panels',
-    ],
-    chapterStructure: [
-      'Panel 1: Visual + Dialogue',
-      'Panel 2: Visual + Dialogue',
-      'Panel 3: Visual + Dialogue',
-      'Panel 4: Visual + Dialogue',
-      '(Optional) Panels 5-6',
-    ],
-    requiresCitations: false,
-    requiresImages: true,
-    requiresCode: false,
-    requiresInteractivity: false,
-    validationChecks: [
-      'has_panels',
-      'every_panel_has_dialogue',
-      'has_visual_descriptions',
-      'panel_count_valid',
-    ],
+    type: 'comic', displayName: 'Comic / Graphic Novel', description: 'Panel-based sequential storytelling.',
+    mandatory: ['4–6+ panels per chapter', 'Visual description per panel', 'Dialogue per panel', 'Character/style continuity'],
+    forbidden: ['Prose-only chapter', 'Image-only panel without narrative purpose', 'Single-panel chapter'],
+    chapterStructure: ['Panel 1: Visual + Dialogue', 'Panel 2: Visual + Dialogue', 'Panel 3: Visual + Dialogue', 'Panel 4: Visual + Dialogue', '(Optional) Panels 5+'],
+    requiresCitations: false, requiresImages: true, requiresCode: false, requiresInteractivity: false,
+    validationChecks: ['has_panels', 'every_panel_has_dialogue', 'has_visual_descriptions', 'panel_count_valid'],
   },
-  
   children: {
-    type: 'children',
-    displayName: "Children's Book",
-    description: 'Simple language, visual-first storytelling, age-appropriate content',
-    mandatory: [
-      'Simple language',
-      'Visual-first storytelling',
-      'Short sentences',
-      'Clear moral or lesson',
-      'High image-to-text ratio',
-    ],
-    forbidden: [
-      'Complex abstractions',
-      'Academic language',
-      'Long paragraphs',
-      'Adult themes',
-    ],
-    chapterStructure: [
-      'Scene Setup (1-2 sentences)',
-      'Story Beat (with illustration)',
-      'Character Action',
-      'Lesson / Message',
-    ],
+    type: 'children', displayName: "Children's Book", description: 'Age-appropriate visual-first storytelling.',
+    mandatory: ['Simple language', 'Short sentences', 'Visual-first storytelling', 'Clear lesson/message'],
+    forbidden: ['Uncontextualized graphic violence', 'Adult sexual themes', 'Dense academic language', 'Long complex paragraphs'],
+    chapterStructure: ['Scene Setup', 'Story Beat with Illustration', 'Character Action', 'Lesson / Message'],
     wordLimits: { min: 100, max: 500 },
-    requiresCitations: false,
-    requiresImages: true,
-    requiresCode: false,
-    requiresInteractivity: false,
-    validationChecks: [
-      'simple_language',
-      'short_sentences',
-      'has_images',
-      'age_appropriate',
-    ],
+    requiresCitations: false, requiresImages: true, requiresCode: false, requiresInteractivity: false,
+    validationChecks: ['simple_language', 'short_sentences', 'has_images', 'age_appropriate'],
   },
-  
   technical: {
-    type: 'technical',
-    displayName: 'Technical / Hands-On Guide',
-    description: 'Step-by-step explanations with code blocks and practical exercises',
-    mandatory: [
-      'Step-by-step explanations',
-      'Properly formatted code blocks',
-      'Line-by-line indentation',
-      'Clear outputs and explanations',
-      'Exercises and mini-projects',
-    ],
-    forbidden: [
-      'Storytelling',
-      'Motivational language',
-      'Vague explanations',
-      'Metaphorical titles',
-    ],
-    chapterStructure: [
-      'Learning Objectives',
-      'Concept Explanation',
-      'Code Examples (40%+ of content)',
-      'Exercises',
-      'Mini-Project',
-    ],
-    requiresCitations: false,
-    requiresImages: false,
-    requiresCode: true,
-    requiresInteractivity: false,
-    validationChecks: [
-      'has_code_blocks',
-      'code_properly_indented',
-      'has_exercises',
-      'no_metaphors',
-      'literal_titles',
-    ],
+    type: 'technical', displayName: 'Technical / Hands-On Guide', description: 'Practical technical instruction with executable examples.',
+    mandatory: ['Step-by-step explanations', 'Properly formatted code/examples', 'Expected outputs', 'Exercises', 'Mini-projects'],
+    forbidden: ['Storytelling that substitutes for technical explanation', 'Vague instructions', 'Metaphorical titles that obscure the topic'],
+    chapterStructure: ['Learning Objectives', 'Concept Explanation', 'Code / Technical Examples', 'Exercises', 'Mini-Project'],
+    requiresCitations: false, requiresImages: false, requiresCode: true, requiresInteractivity: false,
+    validationChecks: ['has_code_blocks', 'has_exercises', 'literal_titles'],
   },
-  
   reference: {
-    type: 'reference',
-    displayName: 'Reference / Handbook',
-    description: 'Quick reference materials with structured lookup',
-    mandatory: [
-      'Structured information architecture',
-      'Clear categorization',
-      'Quick lookup format',
-      'Comprehensive coverage',
-      'Alphabetical or logical ordering',
-    ],
-    forbidden: [
-      'Narrative flow',
-      'Storytelling',
-      'Personal opinions',
-    ],
-    chapterStructure: [
-      'Topic Header',
-      'Definition / Overview',
-      'Key Points',
-      'Examples',
-      'Cross-references',
-    ],
-    requiresCitations: false,
-    requiresImages: false,
-    requiresCode: false,
-    requiresInteractivity: false,
-    validationChecks: [
-      'structured_format',
-      'clear_headings',
-      'comprehensive',
-    ],
+    type: 'reference', displayName: 'Reference / Handbook', description: 'Structured quick-lookup reference material.',
+    mandatory: ['Clear categorization', 'Quick lookup format', 'Comprehensive coverage', 'Cross-references'],
+    forbidden: ['Narrative dominance', 'Unsupported personal opinions presented as reference fact'],
+    chapterStructure: ['Topic Header', 'Definition / Overview', 'Key Points', 'Examples', 'Cross-references'],
+    requiresCitations: false, requiresImages: false, requiresCode: false, requiresInteractivity: false,
+    validationChecks: ['structured_format', 'clear_headings', 'comprehensive'],
   },
-  
   fiction: {
-    type: 'fiction',
-    displayName: 'Fiction / Novel',
-    description: 'Narrative fiction with characters, plot arcs, and world-building',
-    mandatory: [
-      'Clear narrative arc',
-      'Developed characters with motivations',
-      'Consistent point of view',
-      'Scene-based chapter structure',
-      'Show-don\'t-tell prose',
-      'Dialogue that reveals character',
-    ],
-    forbidden: [
-      'Academic citations',
-      'Section numbering',
-      'Bullet-point lists',
-      'Instructional language',
-      'Hedging / qualifiers',
-    ],
-    chapterStructure: [
-      'Scene Opening (setting + tension)',
-      'Character Action / Dialogue',
-      'Conflict Escalation',
-      'Scene Turning Point',
-      'Chapter Hook / Cliffhanger',
-    ],
+    type: 'fiction', displayName: 'Fiction / Novel', description: 'Narrative fiction with scenes, characters, and plot progression.',
+    mandatory: ['Narrative arc', 'Developed characters', 'Consistent point of view', 'Scene-based chapters', 'Dialogue'],
+    forbidden: ['Academic formatting unless narratively intentional', 'Instructional bullet-list dominance'],
+    chapterStructure: ['Scene Opening', 'Character Action / Dialogue', 'Conflict Escalation', 'Turning Point', 'Chapter Hook'],
     wordLimits: { min: 2000, max: 6000 },
-    requiresCitations: false,
-    requiresImages: false,
-    requiresCode: false,
-    requiresInteractivity: false,
-    validationChecks: [
-      'has_dialogue',
-      'has_scene_breaks',
-      'consistent_pov',
-      'show_dont_tell',
-      'no_instructional_language',
-    ],
+    requiresCitations: false, requiresImages: false, requiresCode: false, requiresInteractivity: false,
+    validationChecks: ['has_dialogue', 'has_scene_structure', 'consistent_pov'],
   },
-
+  illustrated: {
+    type: 'illustrated', displayName: 'Illustrated Learning Book', description: 'Text-and-visual learning material governed by Contracts 9–11.',
+    mandatory: ['Learning objectives', 'Concept explanation', 'Purposeful visuals', 'Captions/alt text', 'In-text visual references'],
+    forbidden: ['Decorative filler visuals', 'Orphan visuals', 'Fabricated chart data presented as empirical evidence'],
+    chapterStructure: ['Learning Objectives', 'Concept Explanation', 'Visual Explanation', 'Application / Example', 'Key Takeaways'],
+    requiresCitations: false, requiresImages: true, requiresCode: false, requiresInteractivity: false,
+    validationChecks: ['has_visuals', 'visuals_referenced', 'visual_metadata_complete'],
+  },
   text: {
-    type: 'text',
-    displayName: 'Standard Text',
-    description: 'Traditional book format with flexible structure',
-    mandatory: [
-      'Clear writing',
-      'Logical flow',
-      'Proper formatting',
-    ],
-    forbidden: [],
-    chapterStructure: [
-      'Introduction',
-      'Main Content',
-      'Conclusion',
-    ],
-    requiresCitations: false,
-    requiresImages: false,
-    requiresCode: false,
-    requiresInteractivity: false,
-    validationChecks: [
-      'readable',
-      'structured',
-    ],
+    type: 'text', displayName: 'Standard Text', description: 'Flexible traditional prose format.',
+    mandatory: ['Clear writing', 'Logical flow', 'Proper formatting'], forbidden: [],
+    chapterStructure: ['Introduction', 'Main Content', 'Conclusion'],
+    requiresCitations: false, requiresImages: false, requiresCode: false, requiresInteractivity: false,
+    validationChecks: ['readable', 'structured'],
   },
 };
-
-// ===========================================
-// VALIDATION FUNCTIONS
-// ===========================================
-
-export interface ContentValidationResult {
-  valid: boolean;
-  violations: ContentViolation[];
-  warnings: string[];
-  bookType: BookType;
-}
 
 export interface ContentViolation {
   code: string;
@@ -426,380 +134,122 @@ export interface ContentViolation {
   suggestedFix?: string;
 }
 
-/**
- * Validate content against book type contract
- */
+export interface ContentValidationResult {
+  valid: boolean;
+  violations: ContentViolation[];
+  warnings: string[];
+  bookType: BookType;
+}
+
+function countWords(content: string): number {
+  return content.trim() ? content.trim().split(/\s+/).length : 0;
+}
+
 export function validateContentAgainstBookType(
   content: string,
   bookType: BookType,
-  options?: {
-    checkTitle?: boolean;
-    title?: string;
-    checkWordCount?: boolean;
-  }
+  options?: { checkTitle?: boolean; title?: string; checkWordCount?: boolean },
 ): ContentValidationResult {
   const contract = BOOK_TYPE_CONTRACTS[bookType];
   const violations: ContentViolation[] = [];
   const warnings: string[] = [];
-  
   if (!contract) {
-    return {
-      valid: false,
-      violations: [{
-        code: 'INVALID_BOOK_TYPE',
-        message: `Unknown book type: ${bookType}`,
-        severity: 'critical',
-      }],
-      warnings: [],
-      bookType,
-    };
+    return { valid: false, violations: [{ code: 'INVALID_BOOK_TYPE', message: `Unknown book type: ${bookType}`, severity: 'critical' }], warnings, bookType };
   }
-  
-  // Word count validation (for workbook/children)
+
   if (options?.checkWordCount && contract.wordLimits) {
-    const wordCount = content.split(/\s+/).filter(w => w.length > 0).length;
-    if (wordCount > contract.wordLimits.max) {
-      violations.push({
-        code: 'WORD_COUNT_EXCEEDED',
-        message: `Content exceeds ${contract.wordLimits.max} word limit (${wordCount} words)`,
-        severity: 'high',
-        suggestedFix: `Reduce content to under ${contract.wordLimits.max} words`,
-      });
-    }
-    if (wordCount < contract.wordLimits.min) {
-      violations.push({
-        code: 'WORD_COUNT_INSUFFICIENT',
-        message: `Content below ${contract.wordLimits.min} word minimum (${wordCount} words)`,
-        severity: 'medium',
-      });
-    }
+    const words = countWords(content);
+    if (words > contract.wordLimits.max) violations.push({ code: 'WORD_COUNT_EXCEEDED', message: `${contract.displayName} exceeds ${contract.wordLimits.max} words (${words})`, severity: 'high', suggestedFix: `Reduce to ${contract.wordLimits.max} words or fewer` });
+    if (words < contract.wordLimits.min) violations.push({ code: 'WORD_COUNT_INSUFFICIENT', message: `${contract.displayName} is below ${contract.wordLimits.min} words (${words})`, severity: 'medium' });
   }
-  
-  // Title validation for academic/technical
+
   if (options?.checkTitle && options.title && (bookType === 'academic' || bookType === 'technical')) {
-    const metaphorPatterns = [
-      /alchemist/i, /wizard/i, /journey/i, /dark\s*arts/i, /secrets/i,
-      /hidden/i, /forging/i, /zero\s*to\s*hero/i, /ultimate/i, /revolutionary/i,
-      /mystical/i, /magic/i, /kingdom/i,
-    ];
-    
-    for (const pattern of metaphorPatterns) {
-      if (pattern.test(options.title)) {
-        violations.push({
-          code: 'METAPHORICAL_TITLE',
-          message: `Academic/Technical titles must be literal, not metaphorical`,
-          severity: 'high',
-          suggestedFix: 'Use descriptive, technical titles like "Introduction to [Topic]" or "Practical Guide to [Topic]"',
-        });
-        break;
-      }
+    if (/alchemist|wizard|journey|dark\s*arts|secrets|hidden|forging|zero\s*to\s*hero|mystical|magic|kingdom/i.test(options.title)) {
+      violations.push({ code: 'METAPHORICAL_TITLE', message: 'Academic/technical titles must clearly describe the subject.', severity: 'high', suggestedFix: 'Use a literal subject-focused title.' });
     }
   }
-  
-  // Book type specific validations
-  switch (bookType) {
-    case 'comic':
-      validateComicContent(content, violations, warnings);
-      break;
-    case 'workbook':
-      validateWorkbookContent(content, violations, warnings);
-      break;
-    case 'academic':
-      validateAcademicContent(content, violations, warnings);
-      break;
-    case 'technical':
-      validateTechnicalContent(content, violations, warnings);
-      break;
-    case 'bestseller':
-      validateBestsellerContent(content, violations, warnings);
-      break;
-    case 'children':
-      validateChildrensContent(content, violations, warnings);
-      break;
+
+  if (bookType === 'academic') {
+    if (!/\([A-Z][A-Za-z'’-]+(?:\s+et\s+al\.)?,?\s*\d{4}[a-z]?\)/.test(content)) violations.push({ code: 'NO_CITATIONS', message: 'Academic content must include in-text citations.', severity: 'critical' });
+    if (!/\b(references|bibliography)\b/i.test(content)) violations.push({ code: 'NO_REFERENCES_SECTION', message: 'Academic content must include a references section.', severity: 'critical' });
   }
-  
-  const hasCritical = violations.some(v => v.severity === 'critical');
-  
+
+  if (bookType === 'technical') {
+    if (!/```[\s\S]*?```/.test(content)) violations.push({ code: 'NO_CODE_BLOCKS', message: 'Technical content must include properly formatted technical/code examples.', severity: 'high' });
+    if (!/\b(exercise|practice|mini-project|try it)\b/i.test(content)) warnings.push('Technical content should include exercises or a mini-project.');
+  }
+
+  if (bookType === 'workbook') {
+    if (!/_{3,}|\.{3,}/.test(content)) violations.push({ code: 'NO_FILL_IN_PROMPTS', message: 'Workbook must include fill-in prompts.', severity: 'high' });
+    if (!/\[\s*\]|□/.test(content)) violations.push({ code: 'NO_CHECKBOXES', message: 'Workbook must include action-step checkboxes.', severity: 'high' });
+  }
+
+  if (bookType === 'comic') {
+    const panels = content.match(/\[PANEL\s*\d+\]/gi) || [];
+    if (panels.length < 4) violations.push({ code: 'INSUFFICIENT_PANELS', message: `Comic requires at least 4 panels; found ${panels.length}.`, severity: 'critical' });
+    const dialogue = content.match(/[A-Z][A-Z0-9_\s-]{1,30}:\s*["“][^"”\n]+["”]/g) || [];
+    if (panels.length && dialogue.length < panels.length) violations.push({ code: 'MISSING_DIALOGUE', message: 'Every comic panel must include dialogue.', severity: 'critical' });
+  }
+
+  if (bookType === 'children') {
+    const sentences = content.split(/[.!?]+/).map(sentence => sentence.trim()).filter(Boolean);
+    const long = sentences.filter(sentence => countWords(sentence) > 15).length;
+    if (sentences.length && long / sentences.length > 0.3) violations.push({ code: 'COMPLEX_SENTENCES', message: "Children's content contains too many long sentences.", severity: 'high' });
+  }
+
+  if (bookType === 'bestseller' && /it could be argued|might potentially|some experts say/i.test(content)) {
+    warnings.push('Trade-book prose contains avoidable hedging.');
+  }
+
+  if (bookType === 'fiction' && !/["“][^"”\n]+["”]/.test(content)) warnings.push('Fiction chapter contains no dialogue.');
+
+  // Contracts 9–11 perform the authoritative visual audit. Here we only block a
+  // plainly text-only payload for visual-mandatory book types.
+  if ((bookType === 'illustrated' || bookType === 'children' || bookType === 'comic') && !/!\[[^\]]*\]\([^\)]+\)|\[PANEL\s*\d+\]|\b(Figure|Diagram|Chart)\s+\d+/i.test(content)) {
+    warnings.push(`${contract.displayName} requires visual evidence; Contract 9 must pass before publication.`);
+  }
+
+  const crossType = detectCrossTypeViolation(content, bookType);
+  if (crossType.hasCrossType) {
+    violations.push({ code: 'CROSS_TYPE_CONTAMINATION', message: crossType.message || 'Cross-type contamination detected.', severity: 'critical' });
+  }
+
   return {
-    valid: !hasCritical,
+    valid: !violations.some(violation => violation.severity === 'critical' || violation.severity === 'high'),
     violations,
     warnings,
     bookType,
   };
 }
 
-function validateComicContent(content: string, violations: ContentViolation[], warnings: string[]): void {
-  // Check for panel structure
-  const panelMatches = content.match(/\[PANEL\s*\d+\]/gi) || [];
-  if (panelMatches.length < 4) {
-    violations.push({
-      code: 'INSUFFICIENT_PANELS',
-      message: `Comic requires minimum 4 panels, found ${panelMatches.length}`,
-      severity: 'critical',
-      suggestedFix: 'Add more panels with [PANEL X] markers',
-    });
-  }
-  
-  // Check for dialogue
-  const dialoguePattern = /-\s*[A-Z][a-z]+(?:_[A-Z][a-z]+)*:\s*["']?[^"'\n]+["']?/g;
-  const dialogueMatches = content.match(dialoguePattern) || [];
-  if (dialogueMatches.length < panelMatches.length) {
-    violations.push({
-      code: 'MISSING_DIALOGUE',
-      message: 'Every panel MUST include character dialogue',
-      severity: 'critical',
-    });
-  }
-  
-  // Check for visual descriptions
-  const visualPattern = /Visual:/gi;
-  const visualMatches = content.match(visualPattern) || [];
-  if (visualMatches.length < panelMatches.length * 0.8) {
-    warnings.push('Some panels may lack visual descriptions');
-  }
+export interface RegenerationRequest { bookType: BookType; originalContent: string; editIntent?: string; }
+export function validateRegenerationRequest(request: RegenerationRequest): { allowed: boolean; reason?: string } {
+  return BOOK_TYPE_CONTRACTS[request.bookType] ? { allowed: true } : { allowed: false, reason: 'Invalid book type' };
 }
 
-function validateWorkbookContent(content: string, violations: ContentViolation[], warnings: string[]): void {
-  // Check for fill-in prompts
-  if (!content.includes('___') && !content.includes('_____')) {
-    violations.push({
-      code: 'NO_FILL_IN_PROMPTS',
-      message: 'Workbook must include fill-in prompts (blank lines)',
-      severity: 'high',
-    });
-  }
-  
-  // Check for checkboxes
-  if (!content.includes('[ ]') && !content.includes('□')) {
-    violations.push({
-      code: 'NO_CHECKBOXES',
-      message: 'Workbook must include action step checkboxes',
-      severity: 'high',
-    });
-  }
-  
-  // Check for reflection questions
-  if (!content.includes('?')) {
-    warnings.push('Workbook should include reflection questions');
-  }
-}
-
-function validateAcademicContent(content: string, violations: ContentViolation[], warnings: string[]): void {
-  // Check for citations
-  const citationPattern = /\([A-Z][a-z]+(?:\s+(?:et\s+al\.?|&\s+[A-Z][a-z]+))?,?\s*\d{4}[a-z]?\)/g;
-  const citations = content.match(citationPattern) || [];
-  if (citations.length === 0) {
-    violations.push({
-      code: 'NO_CITATIONS',
-      message: 'Academic content must include in-text citations',
-      severity: 'critical',
-    });
-  }
-  
-  // Check for references section
-  if (!/references?|bibliography/i.test(content)) {
-    violations.push({
-      code: 'NO_REFERENCES_SECTION',
-      message: 'Academic content must include a References section',
-      severity: 'critical',
-    });
-  }
-  
-  // Check for motivational language (forbidden)
-  const motivationalPatterns = [
-    /you can do it/i, /believe in yourself/i, /let's dive in/i,
-    /journey begins/i, /exciting adventure/i,
-  ];
-  for (const pattern of motivationalPatterns) {
-    if (pattern.test(content)) {
-      violations.push({
-        code: 'MOTIVATIONAL_LANGUAGE',
-        message: 'Academic content must not include motivational language',
-        severity: 'medium',
-      });
-      break;
-    }
-  }
-}
-
-function validateTechnicalContent(content: string, violations: ContentViolation[], warnings: string[]): void {
-  // Check for code blocks
-  const codeBlockPattern = /CODE EXAMPLE|```\w+|    \w+/g;
-  const codeBlocks = content.match(codeBlockPattern) || [];
-  if (codeBlocks.length === 0) {
-    violations.push({
-      code: 'NO_CODE_BLOCKS',
-      message: 'Technical content must include code examples',
-      severity: 'high',
-    });
-  }
-  
-  // Check for learning objectives
-  if (!/learning\s+objectives?|by the end of this/i.test(content)) {
-    warnings.push('Technical content should include learning objectives');
-  }
-  
-  // Check for exercises
-  if (!/exercises?|practice|try it yourself/i.test(content)) {
-    warnings.push('Technical content should include exercises');
-  }
-}
-
-function validateBestsellerContent(content: string, violations: ContentViolation[], warnings: string[]): void {
-  // Check for hedging language (forbidden)
-  const hedgingPatterns = [
-    /it could be argued/i, /in some cases/i, /this suggests/i,
-    /on the one hand/i, /might potentially/i, /some experts say/i,
-  ];
-  for (const pattern of hedgingPatterns) {
-    if (pattern.test(content)) {
-      violations.push({
-        code: 'HEDGING_LANGUAGE',
-        message: 'Bestseller content must not include hedging language',
-        severity: 'medium',
-        suggestedFix: 'Use declarative, confident statements',
-      });
-      break;
-    }
-  }
-  
-  // Check for takeaways
-  if (!/takeaways?|action\s+steps?|what\s+you.+learned/i.test(content)) {
-    warnings.push('Bestseller content should include actionable takeaways');
-  }
-}
-
-function validateChildrensContent(content: string, violations: ContentViolation[], warnings: string[]): void {
-  // Check sentence complexity
-  const sentences = content.split(/[.!?]+/);
-  const longSentences = sentences.filter(s => s.split(/\s+/).length > 15);
-  if (longSentences.length > sentences.length * 0.3) {
-    violations.push({
-      code: 'COMPLEX_SENTENCES',
-      message: "Children's content must use short, simple sentences",
-      severity: 'high',
-    });
-  }
-}
-
-// ===========================================
-// REGENERATION GOVERNANCE
-// ===========================================
-
-export interface RegenerationRequest {
-  bookType: BookType;
-  originalContent: string;
-  editIntent?: string;
-}
-
-/**
- * Check if regeneration respects book type contract
- */
-export function validateRegenerationRequest(request: RegenerationRequest): {
-  allowed: boolean;
-  reason?: string;
-} {
-  const contract = BOOK_TYPE_CONTRACTS[request.bookType];
-  
-  if (!contract) {
-    return { allowed: false, reason: 'Invalid book type' };
-  }
-  
-  // Book type is immutable - regeneration must respect original type
-  // This is enforced at the API level
-  
-  return { allowed: true };
-}
-
-/**
- * Get the generation prompt contract for a book type
- */
 export function getBookTypePromptContract(bookType: BookType): string {
   const contract = BOOK_TYPE_CONTRACTS[bookType];
-  
-  if (!contract) {
-    return '';
-  }
-  
-  let prompt = `\n=== BOOK TYPE CONTRACT: ${contract.displayName.toUpperCase()} ===\n\n`;
-  
-  prompt += `MANDATORY REQUIREMENTS:\n`;
-  contract.mandatory.forEach(req => {
-    prompt += `- ${req}\n`;
-  });
-  
-  prompt += `\nSTRICTLY FORBIDDEN:\n`;
-  contract.forbidden.forEach(req => {
-    prompt += `- ${req}\n`;
-  });
-  
-  prompt += `\nREQUIRED CHAPTER STRUCTURE:\n`;
-  contract.chapterStructure.forEach((section, i) => {
-    prompt += `${i + 1}. ${section}\n`;
-  });
-  
-  if (contract.wordLimits) {
-    prompt += `\nWORD LIMITS: ${contract.wordLimits.min}-${contract.wordLimits.max} words per chapter\n`;
-  }
-  
-  prompt += `\n=== END BOOK TYPE CONTRACT ===\n`;
-  
-  return prompt;
+  if (!contract) return '';
+  return `\n=== BOOK TYPE CONTRACT ${bookType.toUpperCase()} / BTG-1.0 ===\nMANDATORY:\n${contract.mandatory.map(item => `- ${item}`).join('\n')}\n\nFORBIDDEN:\n${contract.forbidden.map(item => `- ${item}`).join('\n')}\n\nSTRUCTURE:\n${contract.chapterStructure.map((item, index) => `${index + 1}. ${item}`).join('\n')}${contract.wordLimits ? `\n\nWORD RANGE: ${contract.wordLimits.min}-${contract.wordLimits.max}` : ''}\n=== END BOOK TYPE CONTRACT ===\n`;
 }
-
-// ===========================================
-// CROSS-TYPE DETECTION (FORBIDDEN)
-// ===========================================
 
 export function detectCrossTypeViolation(
   content: string,
-  declaredType: BookType
+  declaredType: BookType,
 ): { hasCrossType: boolean; detectedTypes: BookType[]; message?: string } {
   const detectedTypes: BookType[] = [];
-  
-  // Academic indicators
-  if (/\([A-Z][a-z]+,?\s*\d{4}\)/g.test(content) && declaredType !== 'academic') {
-    detectedTypes.push('academic');
-  }
-  
-  // Comic indicators
-  if (/\[PANEL\s*\d+\]/gi.test(content) && declaredType !== 'comic') {
-    detectedTypes.push('comic');
-  }
-  
-  // Workbook indicators
-  if (/_{5,}/.test(content) && /\[\s*\]/.test(content) && declaredType !== 'workbook') {
-    detectedTypes.push('workbook');
-  }
-  
-  // Technical indicators (code blocks)
-  if (/```\w+[\s\S]+```/.test(content) && declaredType !== 'technical' && declaredType !== 'academic') {
-    detectedTypes.push('technical');
-  }
-  
-  const hasCrossType = detectedTypes.length > 0;
-  
+  if (/\([A-Z][A-Za-z'’-]+,?\s*\d{4}\)/.test(content) && !['academic', 'technical', 'reference'].includes(declaredType)) detectedTypes.push('academic');
+  if (/\[PANEL\s*\d+\]/i.test(content) && !['comic', 'children'].includes(declaredType)) detectedTypes.push('comic');
+  if (/_{5,}/.test(content) && /\[\s*\]/.test(content) && declaredType !== 'workbook') detectedTypes.push('workbook');
+  if (/```\w*[\s\S]*?```/.test(content) && !['technical', 'academic', 'reference'].includes(declaredType)) detectedTypes.push('technical');
+  const unique = [...new Set(detectedTypes)];
   return {
-    hasCrossType,
-    detectedTypes,
-    message: hasCrossType 
-      ? `Content appears to mix ${declaredType} with ${detectedTypes.join(', ')} elements. Cross-type content is FORBIDDEN.`
-      : undefined,
+    hasCrossType: unique.length > 0,
+    detectedTypes: unique,
+    message: unique.length ? `${BOOK_TYPE_CONTRACTS[declaredType].displayName} contains governed elements associated with: ${unique.join(', ')}.` : undefined,
   };
 }
 
-// ===========================================
-// EXPORT
-// ===========================================
-
-export function getBookTypeContract(type: BookType): BookTypeContract | undefined {
-  return BOOK_TYPE_CONTRACTS[type];
-}
-
-export function getAllBookTypes(): BookType[] {
-  return Object.keys(BOOK_TYPE_CONTRACTS) as BookType[];
-}
-
-export function isValidBookType(type: string): type is BookType {
-  return type in BOOK_TYPE_CONTRACTS;
-}
+export function getBookTypeContract(type: BookType): BookTypeContract | undefined { return BOOK_TYPE_CONTRACTS[type]; }
+export function getAllBookTypes(): BookType[] { return Object.keys(BOOK_TYPE_CONTRACTS) as BookType[]; }
+export function isValidBookType(type: string): type is BookType { return Object.prototype.hasOwnProperty.call(BOOK_TYPE_CONTRACTS, type); }

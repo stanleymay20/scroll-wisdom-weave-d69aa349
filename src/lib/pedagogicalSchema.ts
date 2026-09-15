@@ -372,7 +372,7 @@ export function auditTableQuality(content: string): TableQualityResult {
   }
   
   // Count max columns
-  const tableRows = content.match(/\|[^|\n]+\|/g) || [];
+  const tableRows: string[] = content.match(/\|[^|\n]+\|/g) ?? [];
   let maxColumns = 0;
   tableRows.forEach(row => {
     const colCount = (row.match(/\|/g) || []).length - 1;

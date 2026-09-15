@@ -1,676 +1,399 @@
-/**
- * CONTRACT 6C — Server-Side Certificate Validation
- * 
- * Re-runs eligibility checks server-side before issuance.
- * Rejects issuance if client state differs from server state.
- * 
- * This endpoint is the ONLY authority for certificate generation.
- */
-
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import {
+  CERTIFICATE_ISSUER,
+  COMPLETION_THRESHOLDS,
+  CONTRACT_VERSIONS,
+  MASTERY_THRESHOLDS,
+} from '../_shared/contract-canonical.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-// ============================================================
-// 7A Schema Version (for forward compatibility)
-// ============================================================
+const CERTIFICATE_SCHEMA_VERSION = '8.0';
 
-const CERTIFICATE_SCHEMA_VERSION = '7.0';
-
-// ============================================================
-// 6C Eligibility Constants (mirrored from client)
-// ============================================================
-
-const COMPLETION_THRESHOLDS = {
-  MIN_INTEGRITY: 0.6,
-  CHAPTERS_REQUIRED: 1.0,
-  QUIZZES_REQUIRED: 1.0,
-};
-
-const MASTERY_THRESHOLDS = {
-  MIN_SCORE: 0.9,
-  MIN_INTEGRITY: 0.9,
-  COOLDOWN_MS: 24 * 60 * 60 * 1000, // 24 hours
-};
-
-// ============================================================
-// 6A Certificate Authority Constants (immutable)
-// ============================================================
-
-const CERTIFICATE_ISSUER = {
-  name: 'ScrollLibrary Certification Authority',
-  title: 'Founder & Publishing Director',
-  organization: 'ScrollLibrary™',
-} as const;
-
-// ============================================================
-// Types
-// ============================================================
-
-interface BookProgress {
-  totalChapters: number;
-  completedChapters: number;
-  quizzesRequired: number;
-  quizzesSubmitted: number;
-  averageScore: number;
-  integrityScore: number;
-  hasRejectFlags: boolean;
-  hasReviewFlags: boolean;
-  masteryRequirementsMet: boolean;
-  lastMasteryAttempt: Date | null;
-}
-
-interface EligibilityResult {
-  eligible: boolean;
-  certificateType: 'completion' | 'mastery' | null;
-  reasons: string[];
-  integrityScore: number;
-  blockedByCooldown: boolean;
-  canRetryAt: Date | null;
-}
-
-interface CertificateRequest {
-  bookId: string;
-  requestedType?: 'completion' | 'mastery';
-}
-
-// ============================================================
-// Pure Eligibility Functions (6C.1)
-// ============================================================
-
-function checkCompletionEligibility(progress: BookProgress): { eligible: boolean; reasons: string[] } {
-  const reasons: string[] = [];
-  let eligible = true;
-
-  const chapterProgress = progress.totalChapters > 0 
-    ? progress.completedChapters / progress.totalChapters 
-    : 0;
-  
-  if (chapterProgress < COMPLETION_THRESHOLDS.CHAPTERS_REQUIRED) {
-    eligible = false;
-    reasons.push(`Complete all chapters (${progress.completedChapters}/${progress.totalChapters})`);
-  }
-
-  const quizProgress = progress.quizzesRequired > 0
-    ? progress.quizzesSubmitted / progress.quizzesRequired
-    : 1;
-  
-  if (quizProgress < COMPLETION_THRESHOLDS.QUIZZES_REQUIRED) {
-    eligible = false;
-    reasons.push(`Submit all quizzes (${progress.quizzesSubmitted}/${progress.quizzesRequired})`);
-  }
-
-  if (progress.hasRejectFlags) {
-    eligible = false;
-    reasons.push('Resolve integrity violations before certificate issuance');
-  }
-
-  if (progress.integrityScore < COMPLETION_THRESHOLDS.MIN_INTEGRITY) {
-    eligible = false;
-    reasons.push(`Integrity score too low (${Math.round(progress.integrityScore * 100)}% < 60%)`);
-  }
-
-  return { eligible, reasons };
-}
-
-function checkMasteryEligibility(progress: BookProgress): {
-  eligible: boolean;
-  reasons: string[];
-  blockedByCooldown: boolean;
-  canRetryAt: Date | null;
-} {
-  const reasons: string[] = [];
-  let eligible = true;
-  let blockedByCooldown = false;
-  let canRetryAt: Date | null = null;
-
-  // Cooldown enforcement
-  if (progress.lastMasteryAttempt) {
-    const cooldownEnd = new Date(new Date(progress.lastMasteryAttempt).getTime() + MASTERY_THRESHOLDS.COOLDOWN_MS);
-    if (new Date() < cooldownEnd) {
-      eligible = false;
-      blockedByCooldown = true;
-      canRetryAt = cooldownEnd;
-      reasons.push(`Mastery attempt locked until ${cooldownEnd.toLocaleString()}`);
-    }
-  }
-
-  if (progress.averageScore < MASTERY_THRESHOLDS.MIN_SCORE) {
-    eligible = false;
-    reasons.push(`Average score below 90% (current: ${Math.round(progress.averageScore * 100)}%)`);
-  }
-
-  if (progress.integrityScore < MASTERY_THRESHOLDS.MIN_INTEGRITY) {
-    eligible = false;
-    reasons.push(`Integrity score below 90% (current: ${Math.round(progress.integrityScore * 100)}%)`);
-  }
-
-  if (progress.hasRejectFlags) {
-    eligible = false;
-    reasons.push('Unresolved integrity violations block mastery certification');
-  }
-
-  if (progress.hasReviewFlags) {
-    eligible = false;
-    reasons.push('Pending review flags must be resolved');
-  }
-
-  if (!progress.masteryRequirementsMet) {
-    eligible = false;
-    reasons.push('Complete all mastery requirements');
-  }
-
-  return { eligible, reasons, blockedByCooldown, canRetryAt };
-}
-
-function evaluateEligibility(progress: BookProgress): EligibilityResult {
-  const masteryResult = checkMasteryEligibility(progress);
-  
-  if (masteryResult.eligible) {
-    return {
-      eligible: true,
-      certificateType: 'mastery',
-      reasons: [],
-      integrityScore: progress.integrityScore,
-      blockedByCooldown: false,
-      canRetryAt: null,
-    };
-  }
-
-  const completionResult = checkCompletionEligibility(progress);
-  
-  if (completionResult.eligible) {
-    return {
-      eligible: true,
-      certificateType: 'completion',
-      reasons: masteryResult.reasons,
-      integrityScore: progress.integrityScore,
-      blockedByCooldown: masteryResult.blockedByCooldown,
-      canRetryAt: masteryResult.canRetryAt,
-    };
-  }
-
-  return {
-    eligible: false,
-    certificateType: null,
-    reasons: completionResult.reasons,
-    integrityScore: progress.integrityScore,
-    blockedByCooldown: masteryResult.blockedByCooldown,
-    canRetryAt: masteryResult.canRetryAt,
-  };
-}
-
-// ============================================================
-// Certificate Generation (6A Authority)
-// ============================================================
+const respond = (body: unknown, status = 200) => new Response(JSON.stringify(body), {
+  status,
+  headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+});
 
 function randomHex(bytes: number): string {
-  const buffer = crypto.getRandomValues(new Uint8Array(bytes));
-  return Array.from(buffer, (value) => value.toString(16).padStart(2, '0')).join('').toUpperCase();
+  return Array.from(crypto.getRandomValues(new Uint8Array(bytes)), value => value.toString(16).padStart(2, '0')).join('').toUpperCase();
 }
 
-function generateCertificateNumber(): string {
-  const timestamp = Date.now().toString(36).toUpperCase();
-  return `SL-CERT-${timestamp}-${randomHex(8)}`;
+function certificateNumber(): string {
+  return `SL-CERT-${Date.now().toString(36).toUpperCase()}-${randomHex(8)}`;
 }
 
-function generateVerificationHash(): string {
-  // High-entropy verification token. Legacy 8-character hashes remain readable,
-  // but every newly issued certificate receives a 256-bit token.
-  return randomHex(32);
+function wordCount(content: string): number {
+  return content.trim() ? content.trim().split(/\s+/).length : 0;
 }
 
-// ============================================================
-// Main Handler
-// ============================================================
+function canonicalizeBook(book: any, chapters: any[]): string {
+  const canonicalChapters = [...chapters]
+    .map((chapter, index) => ({
+      id: String(chapter.id),
+      position: Number(chapter.chapter_number ?? index + 1),
+      content: String(chapter.content ?? ''),
+      wordCount: wordCount(String(chapter.content ?? '')),
+    }))
+    .sort((a, b) => a.position - b.position || a.id.localeCompare(b.id));
+
+  return JSON.stringify({
+    schema: 'scrolllibrary-book-provenance-v1',
+    bookId: String(book.id),
+    title: String(book.title ?? ''),
+    version: String(book.updated_at ?? book.created_at ?? 'v1'),
+    chapters: canonicalChapters,
+  });
+}
+
+async function sha256Hex(value: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(value));
+  return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
+}
+
+function latestPerChapter<T extends { chapter_id: string; submitted_at?: string | null; created_at?: string | null }>(rows: T[]): Map<string, T> {
+  const latest = new Map<string, T>();
+  for (const row of rows) {
+    if (!row.chapter_id) continue;
+    const existing = latest.get(row.chapter_id);
+    const rowTime = new Date(row.submitted_at ?? row.created_at ?? 0).getTime();
+    const existingTime = existing ? new Date(existing.submitted_at ?? existing.created_at ?? 0).getTime() : -1;
+    if (!existing || rowTime >= existingTime) latest.set(row.chapter_id, row);
+  }
+  return latest;
+}
 
 Deno.serve(async (req) => {
-  // Handle CORS preflight
-  if (req.method === 'OPTIONS') {
-    return new Response(null, { headers: corsHeaders });
-  }
+  if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
+  if (req.method !== 'POST') return respond({ error: 'Method not allowed' }, 405);
 
   try {
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+    const supabaseUrl = Deno.env.get('SUPABASE_URL');
+    const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+    if (!supabaseUrl || !serviceKey) return respond({ error: 'Certificate authority unavailable', code: 'SERVER_CONFIG' }, 503);
 
-    // Get user from auth header
     const authHeader = req.headers.get('Authorization');
-    if (!authHeader) {
-      console.error('[validate-certificate] No auth header');
-      return new Response(
-        JSON.stringify({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    if (!authHeader) return respond({ error: 'Unauthorized', code: 'AUTH_REQUIRED' }, 401);
+
+    const service = createClient(supabaseUrl, serviceKey);
+    const token = authHeader.replace(/^Bearer\s+/i, '');
+    const { data: { user }, error: authError } = await service.auth.getUser(token);
+    if (authError || !user) return respond({ error: 'Invalid token', code: 'INVALID_TOKEN' }, 401);
+
+    const body = await req.json();
+    const bookId = String(body?.bookId || '');
+    const requestedType = body?.requestedType === 'mastery' ? 'mastery' : body?.requestedType === 'completion' ? 'completion' : undefined;
+    if (!bookId) return respond({ error: 'bookId is required', code: 'INVALID_REQUEST' }, 400);
+
+    const [{ data: book, error: bookError }, { data: chapters, error: chapterError }] = await Promise.all([
+      service.from('books')
+        .select('id,title,book_type,category,language,total_chapters,created_at,updated_at')
+        .eq('id', bookId)
+        .single(),
+      service.from('chapters')
+        .select('id,chapter_number,content')
+        .eq('book_id', bookId)
+        .order('chapter_number', { ascending: true }),
+    ]);
+
+    if (bookError || !book || chapterError || !chapters?.length) {
+      return respond({ error: 'Book or chapters not found', code: 'BOOK_NOT_FOUND' }, 404);
     }
 
-    const token = authHeader.replace('Bearer ', '');
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      console.error('[validate-certificate] Auth error:', authError);
-      return new Response(
-        JSON.stringify({ error: 'Invalid token', code: 'INVALID_TOKEN' }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    const totalChapters = chapters.length;
+    const chapterIds = new Set(chapters.map((chapter: any) => String(chapter.id)));
+
+    // Contract 6C: learner coverage comes from reading evidence, never from chapter generation state.
+    const { data: readingRows, error: readingError } = await service.from('reading_progress')
+      .select('chapter_id,percent,updated_at')
+      .eq('user_id', user.id)
+      .eq('book_id', bookId);
+    if (readingError) throw readingError;
+
+    const maxReadByChapter = new Map<string, number>();
+    for (const row of readingRows ?? []) {
+      const chapterId = String(row.chapter_id || '');
+      if (!chapterIds.has(chapterId)) continue;
+      maxReadByChapter.set(chapterId, Math.max(maxReadByChapter.get(chapterId) ?? 0, Number(row.percent ?? 0)));
+    }
+    const completedChapterIds = [...maxReadByChapter.entries()]
+      .filter(([, percent]) => percent >= 80)
+      .map(([chapterId]) => chapterId);
+    const chapterCoverage = completedChapterIds.length / totalChapters;
+    const coveragePercentage = Math.round(chapterCoverage * 10000) / 100;
+
+    // Contract 8/6C: only server-scored, ARC-passing session attempts count.
+    const { data: rawAttempts, error: attemptsError } = await service.from('quiz_attempts')
+      .select('id,chapter_id,score,total_questions,correct_answers,submitted_at,assessment_session_id,assessment_contract_version,assessment_contract_passed,assessment_manifest_hash,tier_breakdown,coding_question_count')
+      .eq('user_id', user.id)
+      .eq('book_id', bookId)
+      .eq('assessment_contract_passed', true)
+      .eq('assessment_contract_version', CONTRACT_VERSIONS.assessmentRigor)
+      .not('assessment_session_id', 'is', null)
+      .order('submitted_at', { ascending: true });
+    if (attemptsError) throw attemptsError;
+
+    const attempts = latestPerChapter((rawAttempts ?? []).filter((row: any) => chapterIds.has(String(row.chapter_id || ''))));
+    const assessedChapterIds = [...attempts.keys()];
+    const allQuizzesSubmitted = attempts.size >= totalChapters && chapters.every((chapter: any) => attempts.has(String(chapter.id)));
+
+    if (attempts.size === 0) {
+      return respond({
+        success: false,
+        error: 'No server-authoritative assessment evidence exists for this book',
+        code: 'NO_AUTHORITATIVE_ASSESSMENT',
+      }, 403);
     }
 
-    const body: CertificateRequest = await req.json();
-    const { bookId, requestedType } = body;
+    const authoritativeAttempts = [...attempts.values()];
+    const averageScore = authoritativeAttempts.reduce((sum, attempt: any) => sum + Number(attempt.score ?? 0), 0) / authoritativeAttempts.length / 100;
+    const sessionIds = new Set(authoritativeAttempts.map((attempt: any) => String(attempt.assessment_session_id)));
+    const attemptIds = new Set(authoritativeAttempts.map((attempt: any) => String(attempt.id)));
 
-    if (!bookId) {
-      return new Response(
-        JSON.stringify({ error: 'Missing required fields', code: 'INVALID_REQUEST' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+    // Contract 6B: accept only integrity logs emitted by the server-scored assessment path.
+    const { data: rawIntegrity, error: integrityError } = await service.from('assessment_integrity_logs')
+      .select('quiz_attempt_id,chapter_id,integrity_score,severity,details,created_at')
+      .eq('user_id', user.id)
+      .eq('book_id', bookId)
+      .order('created_at', { ascending: true });
+    if (integrityError) throw integrityError;
+
+    const trustedIntegrity = (rawIntegrity ?? []).filter((row: any) => {
+      const details = row.details && typeof row.details === 'object' ? row.details : {};
+      return details.server_scored === true
+        && attemptIds.has(String(row.quiz_attempt_id || ''))
+        && sessionIds.has(String(details.assessment_session_id || ''));
+    });
+
+    if (trustedIntegrity.length < attempts.size) {
+      return respond({
+        success: false,
+        error: 'Authoritative integrity evidence is incomplete',
+        code: 'NO_AUTHORITATIVE_INTEGRITY',
+      }, 403);
     }
 
-    const { data: recipientProfile } = await supabase
-      .from('profiles')
+    const integrityScore = trustedIntegrity.reduce((sum: number, row: any) => sum + Number(row.integrity_score ?? 0), 0) / trustedIntegrity.length;
+    const hasRejectFlags = trustedIntegrity.some((row: any) => row.severity === 'reject' || row.details?.classification === 'reject');
+    const hasReviewFlags = trustedIntegrity.some((row: any) => row.severity === 'review' || row.details?.classification === 'review');
+    const integrityClassification = hasRejectFlags ? 'reject' : hasReviewFlags ? 'review' : integrityScore >= 0.9 ? 'trusted' : integrityScore >= 0.6 ? 'review' : 'reject';
+
+    const completionReasons: string[] = [];
+    if (chapterCoverage < COMPLETION_THRESHOLDS.MIN_CHAPTER_COVERAGE) {
+      completionReasons.push(`Read at least 80% of chapters (${completedChapterIds.length}/${totalChapters})`);
+    }
+    if (!allQuizzesSubmitted) completionReasons.push(`Complete all chapter assessments (${attempts.size}/${totalChapters})`);
+    if (integrityScore < COMPLETION_THRESHOLDS.MIN_INTEGRITY) completionReasons.push('Integrity score is below 60%');
+    if (hasRejectFlags) completionReasons.push('Resolve rejected integrity evidence');
+    const completionEligible = completionReasons.length === 0;
+
+    const { data: failedMasteryRows, error: masteryError } = await service.from('mastery_attempts')
+      .select('attempted_at,passed')
+      .eq('user_id', user.id)
+      .eq('book_id', bookId)
+      .eq('passed', false)
+      .order('attempted_at', { ascending: false })
+      .limit(1);
+    if (masteryError) throw masteryError;
+
+    let blockedByCooldown = false;
+    let canRetryAt: string | null = null;
+    const lastFailedAt = failedMasteryRows?.[0]?.attempted_at ? new Date(failedMasteryRows[0].attempted_at) : null;
+    if (lastFailedAt) {
+      const retryAt = new Date(lastFailedAt.getTime() + MASTERY_THRESHOLDS.COOLDOWN_MS);
+      if (Date.now() < retryAt.getTime()) {
+        blockedByCooldown = true;
+        canRetryAt = retryAt.toISOString();
+      }
+    }
+
+    const masteryReasons: string[] = [];
+    if (!completionEligible) masteryReasons.push(...completionReasons);
+    if (averageScore < MASTERY_THRESHOLDS.MIN_SCORE) masteryReasons.push('Average assessment score is below 90%');
+    if (integrityScore < MASTERY_THRESHOLDS.MIN_INTEGRITY) masteryReasons.push('Integrity score is below 90%');
+    if (hasRejectFlags || hasReviewFlags) masteryReasons.push('Mastery requires no unresolved review or reject flags');
+    if (blockedByCooldown) masteryReasons.push(`Mastery retry is locked until ${canRetryAt}`);
+    const masteryEligible = masteryReasons.length === 0;
+
+    const eligibleType: 'mastery' | 'completion' | null = masteryEligible ? 'mastery' : completionEligible ? 'completion' : null;
+    if (!eligibleType) {
+      return respond({
+        success: false,
+        error: 'Not eligible for a learning record',
+        code: 'NOT_ELIGIBLE',
+        eligibility: {
+          eligible: false,
+          certificateType: null,
+          completionReasons,
+          masteryReasons,
+          coveragePercentage,
+          integrityScore,
+          blockedByCooldown,
+          canRetryAt,
+        },
+      }, 403);
+    }
+
+    if (requestedType === 'mastery' && eligibleType !== 'mastery') {
+      return respond({
+        success: false,
+        error: 'Mastery thresholds are not satisfied',
+        code: 'MASTERY_NOT_ELIGIBLE',
+        eligibility: { eligible: true, certificateType: eligibleType, masteryReasons, blockedByCooldown, canRetryAt },
+      }, 403);
+    }
+
+    const certificateType = requestedType === 'completion' ? 'completion' : eligibleType;
+
+    const canonical = canonicalizeBook(book, chapters);
+    const bookContentHash = await sha256Hex(canonical);
+    const bookVersion = String(book.updated_at ?? book.created_at ?? 'v1');
+
+    const { data: profile } = await service.from('profiles')
       .select('full_name')
       .or(`user_id.eq.${user.id},id.eq.${user.id}`)
       .maybeSingle();
-    const recipientName = recipientProfile?.full_name?.trim()
-      || user.email?.split('@')[0]
-      || 'ScrollLibrary learner';
-    const recipientEmail = user.email ?? null;
+    const recipientName = profile?.full_name?.trim() || user.email?.split('@')[0] || 'ScrollLibrary learner';
 
-    console.log(`[validate-certificate] Processing for user ${user.id}, book ${bookId}`);
-
-    // ============================================================
-    // SERVER-SIDE PROGRESS RECALCULATION
-    // ============================================================
-
-    // 1. Get book info
-    const { data: book, error: bookError } = await supabase
-      .from('books')
-      .select('id, title, total_chapters')
-      .eq('id', bookId)
-      .single();
-
-    if (bookError || !book) {
-      console.error('[validate-certificate] Book not found:', bookError);
-      return new Response(
-        JSON.stringify({ error: 'Book not found', code: 'BOOK_NOT_FOUND' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // 2. Get chapters to calculate completion
-    const { data: chapters, error: chaptersError } = await supabase
-      .from('chapters')
-      .select('id, is_generated')
-      .eq('book_id', bookId);
-
-    if (chaptersError) {
-      console.error('[validate-certificate] Error fetching chapters:', chaptersError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch chapters', code: 'DB_ERROR' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    const totalChapters = chapters?.length || 0;
-    const completedChapters = chapters?.filter(c => c.is_generated).length || 0;
-
-    // 3. Get user library entry for progress
-    const { data: libraryEntry } = await supabase
-      .from('user_library')
-      .select('progress_percent, last_read_chapter')
-      .eq('book_id', bookId)
-      .eq('user_id', user.id)
-      .single();
-
-    // ============================================================
-    // 4. REAL QUIZ SCORE AGGREGATION (NO PLACEHOLDERS)
-    // ============================================================
-    
-    const { data: quizAttempts, error: quizError } = await supabase
-      .from('quiz_attempts')
-      .select('score, total_questions, correct_answers')
-      .eq('user_id', user.id)
-      .eq('book_id', bookId);
-
-    if (quizError) {
-      console.error('[validate-certificate] Error fetching quiz attempts:', quizError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch quiz data', code: 'DB_ERROR' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // CRITICAL: If no quiz attempts exist, certificate is BLOCKED
-    if (!quizAttempts || quizAttempts.length === 0) {
-      console.log('[validate-certificate] No quiz attempts found - certificate blocked');
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'No quiz attempts found',
-          code: 'NO_QUIZ_DATA',
-          eligibility: {
-            eligible: false,
-            certificateType: null,
-            reasons: ['Complete at least one quiz assessment before requesting certificate'],
-            integrityScore: 0,
-            blockedByCooldown: false,
-            canRetryAt: null,
-          },
-        }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Calculate real average score (normalize to 0-1 range)
-    const averageScore = quizAttempts.reduce((sum, q) => sum + q.score, 0) / quizAttempts.length / 100;
-    const quizzesSubmitted = quizAttempts.length;
-    const quizzesRequired = totalChapters; // One quiz per chapter required
-
-    console.log(`[validate-certificate] Quiz data: ${quizzesSubmitted} attempts, avg score: ${(averageScore * 100).toFixed(1)}%`);
-
-    // ============================================================
-    // 5. REAL INTEGRITY SCORE AGGREGATION (NO PLACEHOLDERS)
-    // ============================================================
-
-    const { data: integrityLogs, error: integrityError } = await supabase
-      .from('assessment_integrity_logs')
-      .select('integrity_score, severity')
-      .eq('user_id', user.id)
-      .eq('book_id', bookId);
-
-    if (integrityError) {
-      console.error('[validate-certificate] Error fetching integrity logs:', integrityError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to fetch integrity data', code: 'DB_ERROR' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // CRITICAL: If no integrity logs exist, certificate is BLOCKED
-    if (!integrityLogs || integrityLogs.length === 0) {
-      console.log('[validate-certificate] No integrity logs found - certificate blocked');
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'No integrity data available',
-          code: 'NO_INTEGRITY_DATA',
-          eligibility: {
-            eligible: false,
-            certificateType: null,
-            reasons: ['Integrity assessment data required before certificate issuance'],
-            integrityScore: 0,
-            blockedByCooldown: false,
-            canRetryAt: null,
-          },
-        }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // Calculate real integrity score
-    const integrityScore = integrityLogs.reduce((sum, l) => sum + l.integrity_score, 0) / integrityLogs.length;
-    const hasRejectFlags = integrityLogs.some(l => l.severity === 'reject');
-    const hasReviewFlags = integrityLogs.some(l => l.severity === 'review');
-
-    console.log(`[validate-certificate] Integrity data: score=${(integrityScore * 100).toFixed(1)}%, reject=${hasRejectFlags}, review=${hasReviewFlags}`);
-
-    // ============================================================
-    // 6. REAL COOLDOWN ENFORCEMENT (NO PLACEHOLDERS)
-    // ============================================================
-
-    const { data: masteryAttempts, error: masteryError } = await supabase
-      .from('mastery_attempts')
-      .select('attempted_at, passed')
+    const { data: existing, error: existingError } = await service.from('publishing_certificates')
+      .select('id,certificate_number,certificate_type,issued_at,book_content_hash,metadata')
       .eq('user_id', user.id)
       .eq('book_id', bookId)
-      .order('attempted_at', { ascending: false })
-      .limit(1);
-
-    if (masteryError) {
-      console.error('[validate-certificate] Error fetching mastery attempts:', masteryError);
-      // Non-blocking - cooldown is optional
-    }
-
-    const lastMasteryAttempt = masteryAttempts?.[0]?.attempted_at 
-      ? new Date(masteryAttempts[0].attempted_at) 
-      : null;
-
-    // Check if mastery requirements are truly met (strict)
-    const masteryRequirementsMet = 
-      averageScore >= MASTERY_THRESHOLDS.MIN_SCORE &&
-      integrityScore >= MASTERY_THRESHOLDS.MIN_INTEGRITY &&
-      !hasRejectFlags &&
-      !hasReviewFlags &&
-      quizzesSubmitted >= quizzesRequired;
-
-    console.log(`[validate-certificate] Mastery requirements met: ${masteryRequirementsMet}`);
-
-    // ============================================================
-    // 7. BUILD PROGRESS OBJECT (NO DEFAULTS, NO FALLBACKS)
-    // ============================================================
-
-    const progress: BookProgress = {
-      totalChapters,
-      completedChapters,
-      quizzesRequired,
-      quizzesSubmitted,
-      averageScore,         // REAL: from quiz_attempts
-      integrityScore,       // REAL: from assessment_integrity_logs
-      hasRejectFlags,       // REAL: from assessment_integrity_logs
-      hasReviewFlags,       // REAL: from assessment_integrity_logs
-      masteryRequirementsMet, // REAL: computed from actual data
-      lastMasteryAttempt,   // REAL: from mastery_attempts
-    };
-
-    // ============================================================
-    // RE-RUN ELIGIBILITY CHECK (Server-side authority)
-    // ============================================================
-
-    const eligibility = evaluateEligibility(progress);
-
-    console.log('[validate-certificate] Eligibility result:', {
-      eligible: eligibility.eligible,
-      type: eligibility.certificateType,
-      reasons: eligibility.reasons,
-    });
-
-    // ============================================================
-    // REJECT IF NOT ELIGIBLE
-    // ============================================================
-
-    if (!eligibility.eligible) {
-      return new Response(
-        JSON.stringify({
-          success: false,
-          error: 'Not eligible for certificate',
-          code: 'NOT_ELIGIBLE',
-          eligibility,
-        }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // ============================================================
-    // VALIDATE REQUESTED TYPE MATCHES ELIGIBILITY
-    // ============================================================
-
-    if (requestedType && requestedType !== eligibility.certificateType) {
-      // Client requested a type they're not eligible for
-      console.warn(`[validate-certificate] Type mismatch: requested ${requestedType}, eligible for ${eligibility.certificateType}`);
-      
-      if (requestedType === 'mastery' && eligibility.certificateType === 'completion') {
-        return new Response(
-          JSON.stringify({
-            success: false,
-            error: 'Not eligible for Mastery certificate',
-            code: 'MASTERY_NOT_ELIGIBLE',
-            eligibility,
-          }),
-          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    }
-
-    // ============================================================
-    // 6C.6 — IDEMPOTENCY CHECK (CRITICAL)
-    // Only one active certificate per user per book per type
-    // ============================================================
-
-    const { data: existingCert, error: existingError } = await supabase
-      .from('publishing_certificates')
-      .select('id, certificate_number, issued_at, certificate_type')
-      .eq('user_id', user.id)
-      .eq('book_id', bookId)
-      .eq('certificate_type', eligibility.certificateType)
+      .eq('certificate_type', certificateType)
       .is('revoked_at', null)
       .maybeSingle();
+    if (existingError) throw existingError;
 
-    if (existingError) {
-      console.error('[validate-certificate] Error checking existing certificate:', existingError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to verify certificate status', code: 'DB_ERROR' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // If certificate already exists, return it instead of creating a duplicate
-    if (existingCert) {
-      console.log(`[validate-certificate] Certificate already exists: ${existingCert.certificate_number}`);
-      return new Response(
-        JSON.stringify({
+    if (existing) {
+      // Idempotency is valid only while the certified book state is unchanged.
+      if (existing.book_content_hash === bookContentHash) {
+        return respond({
           success: true,
           alreadyIssued: true,
           certificate: {
-            id: existingCert.id,
-            certificateNumber: existingCert.certificate_number,
-            certificateType: existingCert.certificate_type,
-            issuedAt: existingCert.issued_at,
+            id: existing.id,
+            certificateNumber: existing.certificate_number,
+            certificateType: existing.certificate_type,
+            issuedAt: existing.issued_at,
             issuer: CERTIFICATE_ISSUER,
-            recipient: {
-              name: recipientName,
-              email: recipientEmail,
-            },
-            book: {
-              id: bookId,
-              title: book.title,
-            },
-            integrityScore: eligibility.integrityScore,
+            recipient: { name: recipientName },
+            book: { id: bookId, title: book.title },
+            coveragePercentage,
+            integrityScore,
           },
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    // ============================================================
-    // ISSUE CERTIFICATE (6A Authority)
-    // ============================================================
-
-    const certificateNumber = generateCertificateNumber();
-    const issuedAt = new Date().toISOString();
-
-    const verificationHash = generateVerificationHash();
-
-    // Store certificate in database
-    const { data: certificate, error: certError } = await supabase
-      .from('publishing_certificates')
-      .insert({
-        book_id: bookId,
-        user_id: user.id,
-        certificate_number: certificateNumber,
-        certificate_type: eligibility.certificateType,
-        issued_at: issuedAt,
-        verification_hash: verificationHash,
-        metadata: {
-          schemaVersion: CERTIFICATE_SCHEMA_VERSION,
-          recipientName,
-          recipientEmail,
-          bookTitle: book.title,
-          issuer: CERTIFICATE_ISSUER,
-          integrityScore: eligibility.integrityScore,
-          chaptersCompleted: completedChapters,
-          totalChapters,
-          issuedWithVersion: CERTIFICATE_SCHEMA_VERSION,
-        },
-      })
-      .select()
-      .single();
-
-    if (certError) {
-      // Handle unique constraint violation gracefully
-      if (certError.code === '23505') {
-        console.log('[validate-certificate] Duplicate certificate attempt - race condition handled');
-        // Re-fetch the existing certificate
-        const { data: raceCert } = await supabase
-          .from('publishing_certificates')
-          .select('id, certificate_number, issued_at, certificate_type')
-          .eq('user_id', user.id)
-          .eq('book_id', bookId)
-          .eq('certificate_type', eligibility.certificateType)
-          .is('revoked_at', null)
-          .single();
-
-        if (raceCert) {
-          return new Response(
-            JSON.stringify({
-              success: true,
-              alreadyIssued: true,
-              certificate: {
-                id: raceCert.id,
-                certificateNumber: raceCert.certificate_number,
-                certificateType: raceCert.certificate_type,
-                issuedAt: raceCert.issued_at,
-                issuer: CERTIFICATE_ISSUER,
-                recipient: { name: recipientName, email: recipientEmail },
-                book: { id: bookId, title: book.title },
-                integrityScore: eligibility.integrityScore,
-              },
-            }),
-            { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
-        }
+        });
       }
 
-      console.error('[validate-certificate] Error creating certificate:', certError);
-      return new Response(
-        JSON.stringify({ error: 'Failed to create certificate', code: 'CERT_CREATE_ERROR' }),
-        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      // A changed book state invalidates the old active record. Revoke it before
+      // issuing a new state-bound record rather than silently reusing the old one.
+      const { error: revokeError } = await service.from('publishing_certificates').update({
+        revoked_at: new Date().toISOString(),
+        revoked_reason: 'Book content changed after issuance; superseded by a new state-bound learning record.',
+      }).eq('id', existing.id).is('revoked_at', null);
+      if (revokeError) throw revokeError;
     }
 
-    console.log(`[validate-certificate] Certificate issued: ${certificateNumber}`);
+    const issuedAt = new Date().toISOString();
+    const number = certificateNumber();
+    const verificationHash = randomHex(32);
+    const metadata = {
+      schemaVersion: CERTIFICATE_SCHEMA_VERSION,
+      recipientName,
+      bookId,
+      bookTitle: book.title,
+      bookType: book.book_type,
+      bookVersion,
+      bookContentHash,
+      coveragePercentage,
+      chaptersCompleted: completedChapterIds.length,
+      totalChapters,
+      assessedChapters: assessedChapterIds,
+      integrityScore,
+      integrityClassification,
+      assessmentSchema: CONTRACT_VERSIONS.assessmentRigor,
+      provenanceContract: CONTRACT_VERSIONS.provenance,
+      issuer: CERTIFICATE_ISSUER,
+      issuedWithVersion: CERTIFICATE_SCHEMA_VERSION,
+    };
 
-    return new Response(
-      JSON.stringify({
-        success: true,
-        certificate: {
-          id: certificate.id,
-          certificateNumber,
-          certificateType: eligibility.certificateType,
-          issuedAt,
-          verificationHash,
-          issuer: CERTIFICATE_ISSUER,
-          recipient: {
-            name: recipientName,
-            email: recipientEmail,
-          },
-          book: {
-            id: bookId,
-            title: book.title,
-          },
-          integrityScore: eligibility.integrityScore,
-        },
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    const evidenceSnapshot = {
+      reading: {
+        completedChapterIds,
+        thresholdPerChapterPercent: 80,
+        coveragePercentage,
+      },
+      assessment: {
+        attemptIds: authoritativeAttempts.map((attempt: any) => attempt.id),
+        sessionIds: authoritativeAttempts.map((attempt: any) => attempt.assessment_session_id),
+        manifestHashes: authoritativeAttempts.map((attempt: any) => attempt.assessment_manifest_hash),
+        averageScore,
+        contractVersion: CONTRACT_VERSIONS.assessmentRigor,
+        contractPassed: true,
+      },
+      integrity: {
+        score: integrityScore,
+        classification: integrityClassification,
+        serverScored: true,
+      },
+    };
 
+    const { data: certificate, error: insertError } = await service.from('publishing_certificates').insert({
+      book_id: bookId,
+      user_id: user.id,
+      certificate_number: number,
+      certificate_type: certificateType,
+      issued_at: issuedAt,
+      verification_hash: verificationHash,
+      book_content_hash: bookContentHash,
+      book_version: bookVersion,
+      coverage_percentage: coveragePercentage,
+      assessment_contract_version: CONTRACT_VERSIONS.assessmentRigor,
+      assessment_contract_passed: true,
+      evidence_snapshot: evidenceSnapshot,
+      metadata,
+    }).select('id,certificate_number,certificate_type,issued_at').single();
+
+    if (insertError || !certificate) {
+      if (insertError?.code === '23505') {
+        const { data: raced } = await service.from('publishing_certificates')
+          .select('id,certificate_number,certificate_type,issued_at')
+          .eq('user_id', user.id)
+          .eq('book_id', bookId)
+          .eq('certificate_type', certificateType)
+          .is('revoked_at', null)
+          .maybeSingle();
+        if (raced) return respond({ success: true, alreadyIssued: true, certificate: raced });
+      }
+      throw insertError || new Error('Certificate issuance failed');
+    }
+
+    return respond({
+      success: true,
+      alreadyIssued: false,
+      certificate: {
+        id: certificate.id,
+        certificateNumber: certificate.certificate_number,
+        certificateType: certificate.certificate_type,
+        issuedAt: certificate.issued_at,
+        issuer: CERTIFICATE_ISSUER,
+        recipient: { name: recipientName },
+        book: { id: bookId, title: book.title },
+        bookVersion,
+        bookContentHash,
+        coveragePercentage,
+        integrityScore,
+        integrityClassification,
+        assessmentContract: CONTRACT_VERSIONS.assessmentRigor,
+      },
+    }, 201);
   } catch (error) {
-    console.error('[validate-certificate] Unexpected error:', error);
-    return new Response(
-      JSON.stringify({ error: 'Internal server error', code: 'INTERNAL_ERROR' }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-    );
+    console.error('[validate-certificate]', error);
+    return respond({
+      error: 'Certificate authority failed closed',
+      code: 'CERTIFICATE_AUTHORITY_ERROR',
+    }, 500);
   }
 });

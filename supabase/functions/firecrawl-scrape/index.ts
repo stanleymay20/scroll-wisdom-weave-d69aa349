@@ -4,7 +4,8 @@ import {
   serverError,
   requireUser,
   validateBody,
-  enforceRateLimit,
+  enforceDurableRateLimit,
+  serviceClient,
   z,
 } from "../_shared/http.ts";
 
@@ -58,8 +59,10 @@ Deno.serve(async (req) => {
     const auth = await requireUser(req);
     if (auth instanceof Response) return auth;
 
-    // Limit external scrapes to prevent abuse / runaway costs.
-    const limited = enforceRateLimit({
+    const admin = serviceClient();
+
+    // Limit external scrapes durably across instances to prevent abuse / runaway costs.
+    const limited = await enforceDurableRateLimit(admin, {
       name: "firecrawl-scrape",
       key: auth.userId,
       limit: 30,

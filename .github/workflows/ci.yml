@@ -75,6 +75,10 @@ jobs:
           github-token: ${{ github.token }}
       - name: Apply every migration to a fresh local Supabase database
         run: supabase db start
+      - name: Assert the server identity can reach every table
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-service-role-table-authority.sql
+      - name: Assert account-deletion certificate retention contract
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-account-deletion-certificate-retention.sql
       - name: Rebuild hardened ISBN schema from verified legacy staging shape
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-legacy-staging-isbn-convergence.sql
       - name: Assert ISBN governance, RLS and transactional mint contract
@@ -83,6 +87,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
       - name: Assert atomic book-generation quota reservation contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-book-generation-quota-db-security.sql
+      - name: Assert durable rate limit and stale-job sweeper contract
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-rate-limit-and-sweeper-db-security.sql
       - name: Assert Germany publication-compliance security contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-de-publication-compliance.sql
       - name: Fail on PostgreSQL function and schema errors
@@ -101,6 +107,18 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: ${{ env.DENO_VERSION }}
+      - name: Verify frozen Edge dependency lock
+        shell: bash
+        run: |
+          set -euo pipefail
+          cd supabase/functions
+          mapfile -d '' entries < <(find . -type f -name '*.ts' -print0 | sort -z)
+          test "${#entries[@]}" -gt 0
+          deno install --config deno.json --entrypoint --lockfile-only --frozen "${entries[@]}"
+      - name: Type-check shared Edge boundary and error tracking
+        run: |
+          deno check supabase/functions/_shared/error-tracking.ts
+          deno check supabase/functions/_shared/http.ts
       - name: Type-check critical financial Edge Functions
         run: |
           deno check supabase/functions/create-checkout/index.ts
@@ -110,6 +128,7 @@ jobs:
       - name: Type-check authority and metered usage Edge Functions
         run: |
           deno check supabase/functions/claim-admin/index.ts
+          deno check supabase/functions/delete-account/index.ts
           deno check supabase/functions/text-to-speech/index.ts
           deno check supabase/functions/validate-certificate/index.ts
           deno check supabase/functions/verify-certificate/index.ts
@@ -120,6 +139,7 @@ jobs:
           deno check supabase/functions/generate-chapter/index.ts
           deno check supabase/functions/generate-cover/index.ts
           deno check supabase/functions/generate-cover-raw/index.ts
+          deno check supabase/functions/process-document/index.ts
           deno check supabase/functions/register-custom-cover/index.ts
           deno check supabase/functions/chief-editor-audit/index.ts
           deno check supabase/functions/deep-research/index.ts
@@ -131,6 +151,7 @@ jobs:
           deno check supabase/functions/certify-production-render/index.ts
           deno check supabase/functions/finalize-publication-certification/index.ts
           deno check supabase/functions/publishing-identity/index.ts
+          deno check supabase/functions/isbn-admin-state/index.ts
           deno check supabase/functions/publish-work/index.ts
           deno check supabase/functions/enqueue-export-bundle/index.ts
           deno check supabase/functions/export-book/index.ts
@@ -139,6 +160,20 @@ jobs:
           deno check supabase/functions/de-publication-compliance/index.ts
           deno check supabase/functions/resolve-scroll-id/index.ts
           deno check supabase/functions/scrollvision-retrieve/index.ts
+      - name: Type-check storefront, telemetry and moderation Edge Functions
+        run: |
+          deno check supabase/functions/storefront-user-api/index.ts
+          deno check supabase/functions/record-purchase-intent/index.ts
+          deno check supabase/functions/suggest-publishing-metadata/index.ts
+          deno check supabase/functions/content-filter/index.ts
+          deno check supabase/functions/grade-think-answer/index.ts
+          deno check supabase/functions/attribution-tag/index.ts
+          deno check supabase/functions/log-search-query/index.ts
+          deno check supabase/functions/log-storefront-event/index.ts
+          deno check supabase/functions/log-recommendation-feedback/index.ts
+      - name: Test financial alerting contract
+        run: |
+          deno test supabase/functions/_shared/observability_test.ts
       - name: Test publication trust engines
         run: |
           deno test supabase/functions/_shared/isbn_test.ts
@@ -207,5 +242,7 @@ jobs:
       - run: bun install --frozen-lockfile
       - name: Reject committed high-confidence secrets
         run: bun run audit:secrets
+      - name: Reject per-instance rate limiting on metered endpoints
+        run: bun run audit:rate-limits
       - name: Reject high or critical production dependency vulnerabilities
         run: bun run audit:dependencies

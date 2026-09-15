@@ -20,10 +20,10 @@ export async function logAudit(p: AuditPayload): Promise<void> {
   try {
     const { error } = await supabase.rpc("log_audit_event", {
       _event_type: p.eventType,
-      _actor_id: p.actorId ?? null,
-      _organization_id: p.organizationId ?? null,
-      _resource_type: p.resourceType ?? null,
-      _resource_id: p.resourceId ?? null,
+      _actor_id: p.actorId ?? undefined,
+      _organization_id: p.organizationId ?? undefined,
+      _resource_type: p.resourceType ?? undefined,
+      _resource_id: p.resourceId ?? undefined,
       _severity: p.severity ?? "info",
       _metadata: (p.metadata ?? {}) as never,
     });

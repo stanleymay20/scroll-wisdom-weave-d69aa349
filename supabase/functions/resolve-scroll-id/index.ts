@@ -1,5 +1,5 @@
 import "https://deno.land/std@0.224.0/dotenv/load.ts";
-import { preflight, json, badRequest, serviceClient, enforceRateLimit } from "../_shared/http.ts";
+import { preflight, json, badRequest, serviceClient, enforceDurableRateLimit } from "../_shared/http.ts";
 import { parseScrollIdentifier } from "../_shared/scroll-identity.ts";
 
 function clientKey(req: Request): string {
@@ -103,15 +103,23 @@ Deno.serve(async (req) => {
   if (pf) return pf;
   if (req.method !== "GET") return json({ error: "METHOD_NOT_ALLOWED" }, 405, { Allow: "GET, OPTIONS" });
 
-  const rate = enforceRateLimit({ name: "resolve-scroll-id", key: clientKey(req), limit: 120, windowSec: 60 });
-  if (rate) return rate;
-
+  // Parsing first: a malformed identifier is rejected without touching the
+  // database, and the durable limiter below is itself a database call.
   const raw = new URL(req.url).searchParams.get("id") ?? "";
   const parsed = parseScrollIdentifier(raw);
   if (!parsed) return badRequest("A valid SLW, SLE or SLP ScrollLibrary identifier is required");
 
   try {
     const sc = serviceClient();
+
+    const rate = await enforceDurableRateLimit(sc, {
+      name: "resolve-scroll-id",
+      key: clientKey(req),
+      limit: 120,
+      windowSec: 60,
+    });
+    if (rate) return rate;
+
     let publicationId: string | null = null;
 
     if (parsed.kind === "SLW") {

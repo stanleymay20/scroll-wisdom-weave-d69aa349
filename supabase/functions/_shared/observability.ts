@@ -27,8 +27,100 @@ export interface FinancialEventInput {
   dead_letter_reason?: string;
 }
 
+// ---------------------------------------------------------------------------
+// Alerting
+// ---------------------------------------------------------------------------
+// financial_events has always recorded invalid webhook signatures, failed event
+// claims and dead-lettered payments at critical severity — into a table nothing
+// watched. Logging is not alerting: without this, mean time to detection for a
+// payment outage is "a customer complains".
+//
+// Dispatch is deliberately at write time rather than from a polling worker.
+// There is no pg_net in this project and the scheduler for the existing pg_cron
+// workers lives outside the repository, so a poller would add infrastructure
+// that cannot be verified here. Alerting inline keeps detection immediate and
+// the moving parts to one.
+//
+// The sink is a plain JSON webhook so it works with Slack, Discord, PagerDuty
+// Events API or anything else that accepts a POST; pointing it somewhere is a
+// configuration change, not a code change. With ALERT_WEBHOOK_URL unset the
+// path is inert apart from one log line.
+
+/** Severities that should reach a human immediately. */
+const ALERTABLE_SEVERITIES: ReadonlySet<string> = new Set(["error", "critical"]);
+
+/**
+ * Whether an event warrants paging someone. Dead-lettered events always do,
+ * whatever severity they carry: a dead letter means money work was abandoned.
+ *
+ * Pure and exported so the decision is unit-testable without a network or a
+ * database.
+ */
+export function shouldAlert(e: FinancialEventInput): boolean {
+  if (e.dead_letter_reason) return true;
+  return ALERTABLE_SEVERITIES.has(e.severity ?? "info");
+}
+
+/** Compact, human-first alert payload. Never includes the raw event payload,
+ *  which can carry customer data — the correlation id is the join key. */
+export function buildAlertBody(e: FinancialEventInput): Record<string, unknown> {
+  const severity = e.severity ?? "info";
+  const reason = e.dead_letter_reason ? ` (dead-lettered: ${e.dead_letter_reason})` : "";
+  return {
+    text: `[ScrollLibrary] ${severity.toUpperCase()} financial event: ${e.event_type}${reason}`,
+    severity,
+    event_type: e.event_type,
+    actor: e.actor ?? "system",
+    correlation_id: e.correlation_id ?? null,
+    stripe_event_id: e.stripe_event_id ?? null,
+    purchase_id: e.purchase_id ?? null,
+    dead_letter_reason: e.dead_letter_reason ?? null,
+    occurred_at: new Date().toISOString(),
+  };
+}
+
+/**
+ * Best-effort alert dispatch. Never throws and never blocks the caller: an
+ * alerting problem must not become a payment problem.
+ */
+export function dispatchFinancialAlert(e: FinancialEventInput): void {
+  if (!shouldAlert(e)) return;
+
+  const url = Deno.env.get("ALERT_WEBHOOK_URL");
+  if (!url) {
+    console.error(
+      `[alert:unconfigured] ${e.severity ?? "info"} ${e.event_type} — set ALERT_WEBHOOK_URL to page on this`,
+    );
+    return;
+  }
+
+  try {
+    const send = fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildAlertBody(e)),
+      signal: AbortSignal.timeout(5_000),
+    })
+      .then((res) => {
+        if (!res.ok) console.error(`[alert:failed] webhook returned ${res.status} for ${e.event_type}`);
+      })
+      .catch((err) => console.error(`[alert:failed] ${e.event_type}`, err));
+
+    // Keep the request alive past the response where the runtime supports it,
+    // without making the caller wait for the webhook.
+    const runtime = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+    runtime?.waitUntil?.(send);
+  } catch (err) {
+    console.error(`[alert:failed] dispatch threw for ${e.event_type}`, err);
+  }
+}
+
 /** Best-effort: never throw from logging. */
 export async function logFinancialEvent(sc: SupabaseClient, e: FinancialEventInput): Promise<void> {
+  // Alert first. If the insert itself is what is broken, the page still goes
+  // out rather than being lost with the row.
+  dispatchFinancialAlert(e);
+
   try {
     const row = {
       event_type: e.event_type,

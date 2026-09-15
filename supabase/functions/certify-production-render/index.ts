@@ -9,7 +9,7 @@ import {
   validateBody,
   z,
   serviceClient,
-  enforceRateLimit,
+  enforceDurableRateLimit,
 } from "../_shared/http.ts";
 import {
   captureBookScopeHash,
@@ -105,7 +105,9 @@ Deno.serve(async (req) => {
     const body = await validateBody(req, BodySchema);
     if (body instanceof Response) return body;
 
-    const rate = enforceRateLimit({
+    const sc = serviceClient();
+
+    const rate = await enforceDurableRateLimit(sc, {
       name: "certify-production-render",
       key: auth.userId,
       limit: 10,
@@ -113,7 +115,6 @@ Deno.serve(async (req) => {
     });
     if (rate) return rate;
 
-    const sc = serviceClient();
     const ownership = await authorizeBook(sc, body.bookId, auth.userId);
     if (!ownership.found) return badRequest("Book not found");
     if (!ownership.authorized) return forbidden("Not the owner of this book");

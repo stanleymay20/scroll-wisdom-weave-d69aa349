@@ -6,7 +6,7 @@ import {
   serverError,
   requireUser,
   validateBody,
-  enforceRateLimit,
+  enforceDurableRateLimit,
   serviceClient,
   z,
 } from "../_shared/http.ts";
@@ -71,7 +71,9 @@ serve(async (req) => {
     }
 
     // Aggressive per-user limit — first-admin bootstrap attempts should be rare.
-    const limited = enforceRateLimit({
+    // Durable: an in-memory limit would reset on every cold start, which is the
+    // wrong property for the endpoint that grants the first admin role.
+    const limited = await enforceDurableRateLimit(admin, {
       name: "claim-admin",
       key: auth.userId,
       limit: 5,

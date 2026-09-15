@@ -8,6 +8,9 @@
 
 import { createClient, SupabaseClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { z, ZodSchema } from "https://esm.sh/zod@3.23.8";
+import { captureEdgeException, initEdgeErrorTracking } from "./error-tracking.ts";
+
+await initEdgeErrorTracking();
 
 // ---------------------------------------------------------------------------
 // CORS
@@ -58,6 +61,7 @@ export function tooManyRequests(retryAfterSec: number, message = "Rate limit exc
 }
 
 export function serverError(err: unknown, code = "internal_error"): Response {
+  captureEdgeException(err, { surface: "shared-server-error", code });
   const message = err instanceof Error ? err.message : "Unknown error";
   // Avoid leaking stack traces to clients.
   return json({ error: message, code }, 500);
@@ -206,11 +210,85 @@ export function rateLimit(opts: RateLimitOptions): RateLimitResult {
 /**
  * Convenience wrapper: enforces a per-user rate limit and returns a 429
  * Response if exceeded, or null when the request may proceed.
+ *
+ * NOTE: this is the in-memory limiter. It resets whenever the edge instance is
+ * recycled and is not shared between instances, so it is a fast local burst
+ * guard only, never a spend or abuse control on its own.
+ *
+ * Every endpoint whose limit is the actual control now uses
+ * enforceDurableRateLimit. The only remaining callers are the three anonymous
+ * ingestion endpoints (log-search-query, log-storefront-event,
+ * log-recommendation-feedback), where this runs as a free first pass in front
+ * of an enforcePersistentVelocity gate at the same cap — that gate is the
+ * durable one. Do not "upgrade" those to enforceDurableRateLimit: it would buy
+ * a second database round trip per request for a limit already enforced.
+ *
+ * For a new endpoint, reach for enforceDurableRateLimit.
  */
 export function enforceRateLimit(opts: RateLimitOptions): Response | null {
   const r = rateLimit(opts);
   if (!r.ok) return tooManyRequests(r.retryAfter);
   return null;
+}
+
+// ---------------------------------------------------------------------------
+// Durable rate limiting (database-backed, survives instance recycling).
+// ---------------------------------------------------------------------------
+
+interface RateLimitConsumption {
+  allowed: boolean;
+  request_count: number;
+  retry_after_seconds: number;
+}
+
+/**
+ * Enforces a per-identifier rate limit through public.consume_rate_limit,
+ * which counts and writes under a per-identifier/endpoint advisory lock. Unlike
+ * enforceRateLimit this holds across edge instances and cold starts.
+ *
+ * Returns a 429 Response when the limit is exhausted, or null to proceed.
+ *
+ * Requires a service-role client: the RPC is revoked from anon and
+ * authenticated, so a browser cannot spend or inspect anyone's budget.
+ *
+ * Fails OPEN on an RPC error, deliberately. This is a burst guard, not the
+ * money gate — the quota reservations (reserve_book_generation,
+ * reserve_tts_minutes) fail closed and run against the same database, so a
+ * database outage still stops paid work rather than letting it through here.
+ * Failing closed here would only add a second way for a transient blip to break
+ * the product.
+ */
+export async function enforceDurableRateLimit(
+  admin: SupabaseClient,
+  opts: RateLimitOptions,
+): Promise<Response | null> {
+  try {
+    const { data, error } = await admin.rpc("consume_rate_limit", {
+      _identifier: opts.key,
+      _endpoint: opts.name,
+      _limit: opts.limit,
+      _window_seconds: opts.windowSec,
+    });
+
+    if (error) {
+      console.error(`[rate-limit] consume_rate_limit failed for ${opts.name}`, error);
+      return null;
+    }
+
+    const row = (Array.isArray(data) ? data[0] : data) as RateLimitConsumption | null;
+    if (!row) {
+      console.error(`[rate-limit] consume_rate_limit returned no row for ${opts.name}`);
+      return null;
+    }
+
+    if (!row.allowed) {
+      return tooManyRequests(Math.max(1, row.retry_after_seconds));
+    }
+    return null;
+  } catch (e) {
+    console.error(`[rate-limit] consume_rate_limit threw for ${opts.name}`, e);
+    return null;
+  }
 }
 
 // ---------------------------------------------------------------------------

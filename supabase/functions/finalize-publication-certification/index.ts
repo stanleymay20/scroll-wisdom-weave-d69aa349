@@ -17,7 +17,7 @@ import {
   validateBody,
   z,
   serviceClient,
-  enforceRateLimit,
+  enforceDurableRateLimit,
 } from "../_shared/http.ts";
 
 const BodySchema = z.object({
@@ -148,15 +148,15 @@ Deno.serve(async (req) => {
     if (parsed instanceof Response) return parsed;
     const { bookId, mode } = parsed;
 
-    const rate = enforceRateLimit({
+    const sc = serviceClient();
+
+    const rate = await enforceDurableRateLimit(sc, {
       name: "finalize-publication-certification",
       key: auth.userId,
       limit: 30,
       windowSec: 60,
     });
     if (rate) return rate;
-
-    const sc = serviceClient();
 
     // Legacy-compatible ownership check. Live historically used creator_id;
     // user_id is queried separately so a schema still converging cannot turn a

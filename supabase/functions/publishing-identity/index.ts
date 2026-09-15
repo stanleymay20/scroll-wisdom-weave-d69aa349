@@ -9,7 +9,7 @@ import {
   validateBody,
   z,
   serviceClient,
-  enforceRateLimit,
+  enforceDurableRateLimit,
 } from "../_shared/http.ts";
 import { isValidIsbn13, normalizeIsbn13 } from "../_shared/isbn.ts";
 
@@ -262,9 +262,10 @@ Deno.serve(async (req) => {
     const body = await validateBody(req, BodySchema);
     if (body instanceof Response) return body;
 
-    const rate = enforceRateLimit({ name: "publishing-identity", key: auth.userId, limit: 40, windowSec: 60 });
-    if (rate) return rate;
     const sc = serviceClient();
+
+    const rate = await enforceDurableRateLimit(sc, { name: "publishing-identity", key: auth.userId, limit: 40, windowSec: 60 });
+    if (rate) return rate;
 
     if (body.action === "get") {
       const result = await getIdentity(sc, body.bookId, auth.userId);

@@ -9,7 +9,7 @@ import {
   validateBody,
   z,
   serviceClient,
-  enforceRateLimit,
+  enforceDurableRateLimit,
 } from "../_shared/http.ts";
 
 const ProductForm = z.enum(["paperback", "hardcover", "epub"]);
@@ -587,10 +587,16 @@ Deno.serve(async (req) => {
     const body = await validateBody(req, BodySchema);
     if (body instanceof Response) return body;
 
-    const rate = enforceRateLimit({ name: "de-publication-compliance", key: auth.userId, limit: 30, windowSec: 60 });
+    const sc = serviceClient();
+
+    const rate = await enforceDurableRateLimit(sc, {
+      name: "de-publication-compliance",
+      key: auth.userId,
+      limit: 30,
+      windowSec: 60,
+    });
     if (rate) return rate;
 
-    const sc = serviceClient();
     const access = await authorizeBook(sc, body.bookId, auth.userId);
     if (!access.found) return badRequest("Book not found");
     if (!access.authorized || !access.book) return forbidden("Not the owner of this book");
