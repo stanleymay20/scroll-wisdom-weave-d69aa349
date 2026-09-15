@@ -104,6 +104,20 @@ BEGIN
   ) THEN
     RAISE EXCEPTION 'owner-read RLS policy missing';
   END IF;
+
+  IF to_regprocedure('public.preserve_publication_compliance_audit_facts()') IS NULL THEN
+    RAISE EXCEPTION 'audit-fact preservation function missing';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_trigger
+    WHERE tgrelid = 'public.publication_compliance_declarations'::regclass
+      AND tgname = 'trg_preserve_publication_compliance_audit_facts'
+      AND NOT tgisinternal
+  ) THEN
+    RAISE EXCEPTION 'audit-fact preservation trigger missing';
+  END IF;
 END $$;
 
 SELECT 'DE_PUBLICATION_COMPLIANCE_SCHEMA_OK' AS result;
