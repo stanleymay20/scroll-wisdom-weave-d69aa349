@@ -22,6 +22,7 @@ const BodySchema = z.object({
 });
 
 type Service = ReturnType<typeof serviceClient>;
+type ProductForm = z.infer<typeof ProductForm>;
 
 async function authorizeBook(sc: Service, bookId: string, userId: string) {
   const { data: book, error } = await sc
@@ -49,6 +50,92 @@ async function authorizeBook(sc: Service, bookId: string, userId: string) {
 function snapshotString(snapshot: Record<string, unknown>, key: string): string | null {
   const value = snapshot[key];
   return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+async function germanyTradeReleaseBlockers(
+  sc: Service,
+  bookId: string,
+  productForm: ProductForm,
+  language: string,
+  editionLabel: string,
+): Promise<string[]> {
+  const blockers: string[] = [];
+
+  const { data: profile, error: profileErr } = await sc
+    .from("book_publishing_profiles")
+    .select("imprint_id,publisher_mode")
+    .eq("book_id", bookId)
+    .maybeSingle();
+  if (profileErr) throw profileErr;
+  if (!profile || profile.publisher_mode === "kdp_independent" || !profile.imprint_id) {
+    blockers.push("verified_publishing_identity");
+  }
+
+  if (profile?.imprint_id) {
+    const { data: imprint, error: imprintErr } = await sc
+      .from("publishing_imprints")
+      .select("verified,country_code")
+      .eq("id", profile.imprint_id)
+      .maybeSingle();
+    if (imprintErr) throw imprintErr;
+    if (!imprint?.verified) blockers.push("verified_publishing_identity");
+    if (imprint?.country_code !== "DE") blockers.push("manual_review_non_de_publisher");
+  }
+
+  const { data: assignment, error: assignmentErr } = await sc
+    .from("book_isbn_assignments")
+    .select("id")
+    .eq("book_id", bookId)
+    .eq("product_form", productForm)
+    .eq("language", language)
+    .eq("edition_label", editionLabel)
+    .maybeSingle();
+  if (assignmentErr) throw assignmentErr;
+  if (!assignment) blockers.push("format_specific_isbn_assignment");
+
+  const { data: gatesCurrent, error: gatesErr } = await sc
+    .rpc("has_current_publication_attestations", { p_book_id: bookId });
+  if (gatesErr) throw gatesErr;
+  if (gatesCurrent !== true) blockers.push("current_publication_trust_gates");
+
+  const { data: declaration, error: declarationErr } = await sc
+    .from("publication_compliance_declarations")
+    .select("german_market_intended,commercial_release,publisher_state_code,publisher_operating_basis_confirmed,imprint_notice_confirmed,dnb_deposit_plan_confirmed,state_deposit_plan_confirmed,direct_sales_enabled,direct_sales_legal_notice_confirmed,packaging_responsibility,lucid_status")
+    .eq("book_id", bookId)
+    .eq("jurisdiction", "DE")
+    .eq("product_form", productForm)
+    .eq("language", language)
+    .eq("edition_label", editionLabel)
+    .maybeSingle();
+  if (declarationErr) throw declarationErr;
+
+  if (!declaration) {
+    blockers.push("germany_release_declarations");
+    return [...new Set(blockers)];
+  }
+
+  if (!declaration.german_market_intended || !declaration.commercial_release) blockers.push("germany_commercial_release_scope");
+  if (!declaration.publisher_operating_basis_confirmed) blockers.push("publisher_operating_basis");
+  if (!declaration.imprint_notice_confirmed) blockers.push("book_imprint_notice");
+  if (!declaration.dnb_deposit_plan_confirmed) blockers.push("dnb_deposit_plan");
+
+  if (declaration.publisher_state_code !== "BB") {
+    blockers.push("state_deposit_manual_review");
+  } else if (!declaration.state_deposit_plan_confirmed) {
+    blockers.push("brandenburg_deposit_plan");
+  }
+
+  if (declaration.direct_sales_enabled && !declaration.direct_sales_legal_notice_confirmed) {
+    blockers.push("direct_sales_legal_notice");
+  }
+
+  if (productForm === "paperback" || productForm === "hardcover") {
+    const packagingReady = declaration.packaging_responsibility === "third_party_confirmed"
+      || (declaration.packaging_responsibility === "publisher_responsible" && declaration.lucid_status === "registered");
+    if (!packagingReady) blockers.push("packaging_lucid_responsibility");
+  }
+
+  return [...new Set(blockers)];
 }
 
 Deno.serve(async (req) => {
@@ -125,6 +212,19 @@ Deno.serve(async (req) => {
     if (metadataErr) throw metadataErr;
     if (!metadata) {
       return json({ error: "DISTRIBUTION_METADATA_REQUIRED", message: `Complete ${body.productForm} distribution metadata before ONIX export.` }, 409);
+    }
+
+    if (metadata.price_country === "DE") {
+      const germanyBlockers = await germanyTradeReleaseBlockers(sc, body.bookId, body.productForm, language, editionLabel);
+      const fixedPriceReady = metadata.price_type === "04" && metadata.price_cents != null && metadata.currency === "EUR";
+      if (!fixedPriceReady) germanyBlockers.push("german_fixed_retail_price");
+      if (germanyBlockers.length > 0) {
+        return json({
+          error: "DE_CONTROLLED_RELEASE_REQUIRED",
+          message: "Germany-facing ONIX export is blocked until the controlled-release prerequisites are complete.",
+          blockers: [...new Set(germanyBlockers)],
+        }, 409);
+      }
     }
 
     const authorsRaw = Array.isArray(snapshot.authors) ? snapshot.authors as Array<Record<string, unknown>> : [];
