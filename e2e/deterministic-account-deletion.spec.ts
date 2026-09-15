@@ -129,8 +129,12 @@ test("account deletion requires both confirmations and reports retained-certific
   await deleteButton.click();
 
   await expect.poll(backend.deleteCalls).toBe(1);
-  await expect(page.getByRole("heading", { name: "Account Deleted" })).toBeVisible();
-  await expect(page.getByText(/personal data have been permanently deleted/i)).toBeVisible();
-  await expect(page.getByText(/revoked but remain publicly verifiable/i)).toBeVisible();
-  await expect(page.getByRole("button", { name: "Return to Home" })).toBeVisible();
+  // Scope to <main>: the same sentence is also rendered by the success toast
+  // and echoed in its aria-live status region, so an unscoped getByText matches
+  // three elements and trips strict mode.
+  const confirmation = page.getByRole("main");
+  await expect(confirmation.getByRole("heading", { name: "Account Deleted" })).toBeVisible();
+  await expect(confirmation.getByText(/personal data have been permanently deleted/i)).toBeVisible();
+  await expect(confirmation.getByText(/revoked but remain publicly verifiable/i)).toBeVisible();
+  await expect(confirmation.getByRole("button", { name: "Return to Home" })).toBeVisible();
 });
