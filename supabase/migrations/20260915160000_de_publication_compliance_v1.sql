@@ -94,6 +94,35 @@ DO $$ BEGIN
   FOR EACH ROW EXECUTE FUNCTION public.touch_publishing_identity_updated_at();
 EXCEPTION WHEN duplicate_object THEN NULL; END $$;
 
+-- Distribution start and completed-deposit timestamps are audit facts. Normal
+-- declaration saves must not erase a fact simply because an older UI omits it or
+-- a checkbox is toggled off later. Corrections require an explicit future audit
+-- workflow rather than silent deletion.
+CREATE OR REPLACE FUNCTION public.preserve_publication_compliance_audit_facts()
+RETURNS trigger
+LANGUAGE plpgsql
+SET search_path = ''
+AS $$
+BEGIN
+  IF OLD.distribution_started_at IS NOT NULL AND NEW.distribution_started_at IS NULL THEN
+    NEW.distribution_started_at := OLD.distribution_started_at;
+  END IF;
+  IF OLD.dnb_deposit_completed_at IS NOT NULL AND NEW.dnb_deposit_completed_at IS NULL THEN
+    NEW.dnb_deposit_completed_at := OLD.dnb_deposit_completed_at;
+  END IF;
+  IF OLD.state_deposit_completed_at IS NOT NULL AND NEW.state_deposit_completed_at IS NULL THEN
+    NEW.state_deposit_completed_at := OLD.state_deposit_completed_at;
+  END IF;
+  RETURN NEW;
+END;
+$$;
+
+DO $$ BEGIN
+  CREATE TRIGGER trg_preserve_publication_compliance_audit_facts
+  BEFORE UPDATE ON public.publication_compliance_declarations
+  FOR EACH ROW EXECUTE FUNCTION public.preserve_publication_compliance_audit_facts();
+EXCEPTION WHEN duplicate_object THEN NULL; END $$;
+
 -- Browser roles cannot manufacture compliance declarations. Writes go through the
 -- authenticated Edge Function, which verifies ownership and uses the service role.
 REVOKE INSERT, UPDATE, DELETE ON TABLE public.publication_compliance_declarations
