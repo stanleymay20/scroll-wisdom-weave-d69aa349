@@ -26,6 +26,7 @@ BEGIN
       'imprint_notice_confirmed',
       'dnb_deposit_plan_confirmed',
       'state_deposit_plan_confirmed',
+      'distribution_started_at',
       'dnb_deposit_completed_at',
       'state_deposit_completed_at',
       'deposit_evidence_reference',
@@ -36,8 +37,8 @@ BEGIN
       'acknowledged_at'
     )
     AND NOT attisdropped;
-  IF v_count <> 21 THEN
-    RAISE EXCEPTION 'publication compliance column contract incomplete: %/21', v_count;
+  IF v_count <> 22 THEN
+    RAISE EXCEPTION 'publication compliance column contract incomplete: %/22', v_count;
   END IF;
 
   IF NOT (SELECT relrowsecurity FROM pg_class WHERE oid = 'public.publication_compliance_declarations'::regclass) THEN
