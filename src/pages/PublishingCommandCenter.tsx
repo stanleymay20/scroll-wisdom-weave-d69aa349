@@ -19,6 +19,7 @@ import DesignSystemPanel from "@/components/publish/DesignSystemPanel";
 import TypographyReport from "@/components/publish/TypographyReport";
 import PublishabilityQAPanel from "@/components/publish/PublishabilityQAPanel";
 import { DePublicationCompliancePanel } from "@/components/publish/DePublicationCompliancePanel";
+import { DeDistributionStartPanel } from "@/components/publish/DeDistributionStartPanel";
 
 interface Audit {
   id: string;
@@ -137,6 +138,7 @@ export default function PublishingCommandCenter() {
         <>
           <PublishabilityQAPanel bookId={bookId} />
           <DePublicationCompliancePanel bookId={bookId} />
+          <DeDistributionStartPanel bookId={bookId} />
           <TypographyReport bookId={bookId} />
           <div className="grid gap-6 lg:grid-cols-2">
             <DesignSystemPanel bookId={bookId} />
