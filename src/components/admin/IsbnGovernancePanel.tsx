@@ -76,21 +76,29 @@ type AdminState = {
   ownedClaims: OwnedClaim[];
 };
 
-async function invokeFunction(name: string, body: Record<string, unknown>) {
+type InvokeError = Error & { context?: Response };
+type ErrorPayload = { error?: string; message?: string };
+
+function isErrorPayload(value: unknown): value is ErrorPayload {
+  if (!value || typeof value !== "object") return false;
+  const record = value as Record<string, unknown>;
+  return (record.error === undefined || typeof record.error === "string")
+    && (record.message === undefined || typeof record.message === "string");
+}
+
+async function invokeFunction<T = unknown>(name: string, body: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabase.functions.invoke(name, { body });
   if (error) {
     let detail = error.message;
-    const context = (error as any)?.context;
+    const context = (error as InvokeError).context;
     try {
-      const payload = context && typeof context.clone === "function"
-        ? await context.clone().json()
-        : context && typeof context.json === "function" ? await context.json() : null;
-      detail = payload?.error || payload?.message || detail;
+      const payload: unknown = context ? await context.clone().json() : null;
+      if (isErrorPayload(payload)) detail = payload.error || payload.message || detail;
     } catch { /* preserve safe connector message */ }
     throw new Error(detail || `${name} request failed`);
   }
-  if ((data as any)?.error) throw new Error((data as any).error);
-  return data as any;
+  if (isErrorPayload(data) && data.error) throw new Error(data.error);
+  return data as T;
 }
 
 const splitIsbns = (value: string) => value
@@ -102,7 +110,6 @@ export function IsbnGovernancePanel() {
   const [state, setState] = useState<AdminState | null>(null);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
-
   const [selectedImprintId, setSelectedImprintId] = useState("new");
   const [publisherName, setPublisherName] = useState("ScrollLibrary Press");
   const [imprintName, setImprintName] = useState("ScrollLibrary Press");
@@ -112,7 +119,6 @@ export function IsbnGovernancePanel() {
   const [verificationReference, setVerificationReference] = useState("");
   const [verificationMethod, setVerificationMethod] = useState("agency_allocation_record");
   const [verificationNotes, setVerificationNotes] = useState("");
-
   const [poolImprintId, setPoolImprintId] = useState("");
   const [isbnBlock, setIsbnBlock] = useState("");
   const [poolReference, setPoolReference] = useState("");
@@ -120,9 +126,9 @@ export function IsbnGovernancePanel() {
   const load = useCallback(async () => {
     setLoading(true);
     try {
-      const payload = await invokeFunction("isbn-admin-state", {});
-      setState(payload as AdminState);
-      const firstVerified = (payload as AdminState).platformImprints.find((row) => row.verified);
+      const payload = await invokeFunction<AdminState>("isbn-admin-state", {});
+      setState(payload);
+      const firstVerified = payload.platformImprints.find((row) => row.verified);
       setPoolImprintId((current) => current || firstVerified?.id || "");
     } catch (error) {
       toast.error(error instanceof Error ? error.message : "Could not load ISBN governance state");
@@ -259,7 +265,6 @@ export function IsbnGovernancePanel() {
   if (loading) {
     return <Card><CardContent className="py-8"><div className="flex items-center justify-center gap-2 text-sm text-muted-foreground"><Loader2 className="h-4 w-4 animate-spin" />Loading ISBN governance…</div></CardContent></Card>;
   }
-
   if (!state) return null;
 
   return (
@@ -276,21 +281,11 @@ export function IsbnGovernancePanel() {
         </CardHeader>
         <CardContent className="space-y-3">
           {state.platformImprints.length === 0 ? (
-            <div className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm">
-              <AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />No platform publisher identity is active yet. Submit the real ScrollLibrary Press agency/registrant evidence below.
-            </div>
+            <div className="flex gap-2 rounded-md border border-amber-500/30 bg-amber-500/5 p-3 text-sm"><AlertCircle className="h-4 w-4 shrink-0 text-amber-600" />No platform publisher identity is active yet. Submit the real ScrollLibrary Press agency/registrant evidence below.</div>
           ) : state.platformImprints.map((row) => (
             <div key={row.id} className="rounded-lg border p-3 text-sm">
-              <div className="flex flex-wrap items-center gap-2">
-                <span className="font-medium">{row.imprint_name}</span>
-                <Badge variant={row.verified ? "secondary" : "outline"}>{row.verified ? "Publisher verified" : "Not verified"}</Badge>
-                {row.verification_submitted_at && <Badge variant="outline">Review pending</Badge>}
-              </div>
-              <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-3">
-                <span>Total pool: {row.inventory.total}</span>
-                <span>Available + verified: {row.inventory.availableVerified}</span>
-                <span>Assigned: {row.inventory.assigned}</span>
-              </div>
+              <div className="flex flex-wrap items-center gap-2"><span className="font-medium">{row.imprint_name}</span><Badge variant={row.verified ? "secondary" : "outline"}>{row.verified ? "Publisher verified" : "Not verified"}</Badge>{row.verification_submitted_at && <Badge variant="outline">Review pending</Badge>}</div>
+              <div className="mt-2 grid gap-1 text-xs text-muted-foreground sm:grid-cols-3"><span>Total pool: {row.inventory.total}</span><span>Available + verified: {row.inventory.availableVerified}</span><span>Assigned: {row.inventory.assigned}</span></div>
             </div>
           ))}
         </CardContent>
@@ -310,9 +305,7 @@ export function IsbnGovernancePanel() {
             <div><Label>Verification method</Label><Input className="mt-1" value={verificationMethod} onChange={(e) => setVerificationMethod(e.target.value)} /></div>
           </div>
           <div><Label>Evidence notes</Label><Textarea className="mt-1" value={verificationNotes} onChange={(e) => setVerificationNotes(e.target.value)} placeholder="Describe where the independent reviewer can verify the registration." /></div>
-          <Button onClick={() => void submitImprintEvidence()} disabled={busy !== null || !publisherName.trim() || !imprintName.trim() || countryCode.length !== 2 || !agencyName.trim() || !registrantName.trim() || !verificationReference.trim()}>
-            {busy === "imprint-submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}Submit publisher evidence
-          </Button>
+          <Button onClick={() => void submitImprintEvidence()} disabled={busy !== null || !publisherName.trim() || !imprintName.trim() || countryCode.length !== 2 || !agencyName.trim() || !registrantName.trim() || !verificationReference.trim()}>{busy === "imprint-submit" ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <ShieldCheck className="mr-2 h-4 w-4" />}Submit publisher evidence</Button>
         </CardContent>
       </Card>
 
@@ -321,14 +314,7 @@ export function IsbnGovernancePanel() {
         <CardContent className="space-y-3">
           {state.pendingImprints.length === 0 ? <p className="text-sm text-muted-foreground">No publisher verification reviews are pending.</p> : state.pendingImprints.map((row) => {
             const sameReviewer = row.verification_submitted_by === state.currentAdminUserId;
-            return <div key={row.id} className="rounded-lg border p-3">
-              <div className="flex flex-wrap items-center gap-2"><span className="font-medium text-sm">{row.imprint_name}</span><Badge variant="outline">{row.scope}</Badge>{sameReviewer && <Badge variant="outline">Needs another admin</Badge>}</div>
-              <p className="mt-1 text-xs text-muted-foreground">{row.publisher_name} · {row.registrant_name || "No registrant"} · Ref: {row.verification_pending_reference || "missing"}</p>
-              <div className="mt-3 flex gap-2">
-                <Button size="sm" onClick={() => void reviewImprint(row, true)} disabled={busy !== null || sameReviewer || !row.verification_pending_reference}><CheckCircle2 className="mr-1 h-4 w-4" />Approve</Button>
-                <Button size="sm" variant="destructive" onClick={() => void reviewImprint(row, false)} disabled={busy !== null || sameReviewer || !row.verification_pending_reference}><XCircle className="mr-1 h-4 w-4" />Reject</Button>
-              </div>
-            </div>;
+            return <div key={row.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-center gap-2"><span className="font-medium text-sm">{row.imprint_name}</span><Badge variant="outline">{row.scope}</Badge>{sameReviewer && <Badge variant="outline">Needs another admin</Badge>}</div><p className="mt-1 text-xs text-muted-foreground">{row.publisher_name} · {row.registrant_name || "No registrant"} · Ref: {row.verification_pending_reference || "missing"}</p><div className="mt-3 flex gap-2"><Button size="sm" onClick={() => void reviewImprint(row, true)} disabled={busy !== null || sameReviewer || !row.verification_pending_reference}><CheckCircle2 className="mr-1 h-4 w-4" />Approve</Button><Button size="sm" variant="destructive" onClick={() => void reviewImprint(row, false)} disabled={busy !== null || sameReviewer || !row.verification_pending_reference}><XCircle className="mr-1 h-4 w-4" />Reject</Button></div></div>;
           })}
         </CardContent>
       </Card>
@@ -348,14 +334,7 @@ export function IsbnGovernancePanel() {
         <CardContent className="space-y-3">
           {state.poolBatches.filter((row) => row.status === "pending").length === 0 ? <p className="text-sm text-muted-foreground">No ISBN pool batches are pending.</p> : state.poolBatches.filter((row) => row.status === "pending").map((batch) => {
             const sameReviewer = batch.submitted_by === state.currentAdminUserId;
-            return <div key={batch.id} className="rounded-lg border p-3">
-              <div className="flex flex-wrap items-center gap-2"><span className="font-medium text-sm">{batch.isbn_count} ISBN{batch.isbn_count === 1 ? "" : "s"}</span><Badge variant="outline">pending</Badge>{sameReviewer && <Badge variant="outline">Needs another admin</Badge>}</div>
-              <p className="mt-1 text-xs text-muted-foreground">Reference: {batch.provenance_reference}</p>
-              <div className="mt-3 flex gap-2">
-                <Button size="sm" onClick={() => void reviewPool(batch, true)} disabled={busy !== null || sameReviewer}><CheckCircle2 className="mr-1 h-4 w-4" />Approve</Button>
-                <Button size="sm" variant="destructive" onClick={() => void reviewPool(batch, false)} disabled={busy !== null || sameReviewer}><XCircle className="mr-1 h-4 w-4" />Reject</Button>
-              </div>
-            </div>;
+            return <div key={batch.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-center gap-2"><span className="font-medium text-sm">{batch.isbn_count} ISBN{batch.isbn_count === 1 ? "" : "s"}</span><Badge variant="outline">pending</Badge>{sameReviewer && <Badge variant="outline">Needs another admin</Badge>}</div><p className="mt-1 text-xs text-muted-foreground">Reference: {batch.provenance_reference}</p><div className="mt-3 flex gap-2"><Button size="sm" onClick={() => void reviewPool(batch, true)} disabled={busy !== null || sameReviewer}><CheckCircle2 className="mr-1 h-4 w-4" />Approve</Button><Button size="sm" variant="destructive" onClick={() => void reviewPool(batch, false)} disabled={busy !== null || sameReviewer}><XCircle className="mr-1 h-4 w-4" />Reject</Button></div></div>;
           })}
         </CardContent>
       </Card>
@@ -364,14 +343,7 @@ export function IsbnGovernancePanel() {
         <CardHeader><CardTitle>5. Author-Owned ISBN Claims</CardTitle><CardDescription>Independent admin review for ISBNs authors say are registered to their own verified imprint.</CardDescription></CardHeader>
         <CardContent className="space-y-3">
           {state.ownedClaims.length === 0 ? <p className="text-sm text-muted-foreground">No author-owned ISBN claims are pending.</p> : state.ownedClaims.map((claim) => (
-            <div key={claim.id} className="rounded-lg border p-3">
-              <div className="flex flex-wrap items-center gap-2"><span className="font-mono text-sm">{claim.isbn13}</span><Badge variant="outline">pending</Badge></div>
-              <p className="mt-1 text-xs text-muted-foreground">Agency reference: {claim.agency_reference}</p>
-              <div className="mt-3 flex gap-2">
-                <Button size="sm" onClick={() => void reviewOwnedClaim(claim, true)} disabled={busy !== null}><CheckCircle2 className="mr-1 h-4 w-4" />Approve</Button>
-                <Button size="sm" variant="destructive" onClick={() => void reviewOwnedClaim(claim, false)} disabled={busy !== null}><XCircle className="mr-1 h-4 w-4" />Reject</Button>
-              </div>
-            </div>
+            <div key={claim.id} className="rounded-lg border p-3"><div className="flex flex-wrap items-center gap-2"><span className="font-mono text-sm">{claim.isbn13}</span><Badge variant="outline">pending</Badge></div><p className="mt-1 text-xs text-muted-foreground">Agency reference: {claim.agency_reference}</p><div className="mt-3 flex gap-2"><Button size="sm" onClick={() => void reviewOwnedClaim(claim, true)} disabled={busy !== null}><CheckCircle2 className="mr-1 h-4 w-4" />Approve</Button><Button size="sm" variant="destructive" onClick={() => void reviewOwnedClaim(claim, false)} disabled={busy !== null}><XCircle className="mr-1 h-4 w-4" />Reject</Button></div></div>
           ))}
         </CardContent>
       </Card>
