@@ -66,14 +66,17 @@ async function verifyCompetencyCertificate(supabase: any, certNumber: string) {
 
   if (error || !cert) return null;
 
+  const metadata = cert.metadata as Record<string, unknown> | null;
   const book = Array.isArray(cert.books) ? cert.books[0] : cert.books;
+  const bookTitle = book?.title || (metadata?.bookTitle as string | undefined) || 'Record unavailable';
+  const bookCategory = book?.category || (metadata?.bookCategory as string | undefined);
 
   return {
     valid: !cert.revoked_at,
     certificateNumber: cert.certificate_number,
     certificateType: 'competency',
     competency_level: cert.competency_level,
-    holder: cert.metadata?.recipientName || 'Record unavailable',
+    holder: (metadata?.recipientName as string) || 'Record unavailable',
     skills_validated: cert.skills_validated || [],
     competency_summary: cert.competency_summary,
     ai_evaluation_summary: cert.ai_evaluation_summary,
@@ -85,11 +88,11 @@ async function verifyCompetencyCertificate(supabase: any, certNumber: string) {
     },
     issuedAt: cert.issued_at,
     issuer: CERTIFICATE_ISSUER,
-    book: book ? { title: book.title, category: book.category } : undefined,
+    book: { title: bookTitle, category: bookCategory },
     verification_status: cert.revoked_at ? 'revoked' : 'verified',
     revoked: !!cert.revoked_at,
     revokedAt: cert.revoked_at,
-    revokedReason: cert.revoked_reason,
+    revokedReason: cert.revoked_reason || (cert.revoked_at ? 'Certificate has been revoked' : null),
   };
 }
 
@@ -126,12 +129,15 @@ async function verifyLegacyCertificate(supabase: any, certNumber: string) {
     issuedAt: cert.issued_at,
     issuer: CERTIFICATE_ISSUER,
     recipient: { name: (metadata?.recipientName as string) || 'Record unavailable' },
-    book: { title: (metadata?.bookTitle as string) || book?.title || 'Record unavailable', category: book?.category },
+    book: {
+      title: (metadata?.bookTitle as string) || book?.title || 'Record unavailable',
+      category: (metadata?.bookCategory as string) || book?.category,
+    },
     integrityClassification,
     verificationHash: cert.verification_hash || undefined,
     revoked: !!cert.revoked_at,
     revokedAt: cert.revoked_at,
-    revokedReason: cert.revoked_reason || 'Certificate has been revoked',
+    revokedReason: cert.revoked_reason || (cert.revoked_at ? 'Certificate has been revoked' : null),
     verification_status: cert.revoked_at ? 'revoked' : 'verified',
   };
 }
