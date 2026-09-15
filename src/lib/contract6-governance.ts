@@ -28,6 +28,7 @@ export const GENERATOR_IDENTITIES: Record<GovernedBookType, string> = {
   technical: 'Engineer · Instructor',
   reference: 'Subject Matter Expert · Editor',
   fiction: 'Novelist · Storyteller',
+  illustrated: 'Author · Visual Learning Designer',
   text: 'Author',
 };
 
