@@ -1,18 +1,5 @@
--- Assert that the trusted server identity can actually reach every table.
---
--- This is the invariant 20260915190000 restored. It is asserted here, in the
--- fast database-schema job, because the only thing that previously noticed its
--- absence was a real Edge Function failing at runtime inside the slow GA E2E
--- job — and even then the reason was invisible, because a function that logs
--- the failure and answers the caller with a generic message leaves no trace in
--- CI. A missing GRANT must fail here, naming the table, not there.
---
--- No migration in this repository has ever revoked anything from service_role.
--- If a future table genuinely must withhold authority from the server identity,
--- that is a deliberate security decision: revoke it explicitly in a migration
--- that says why, and add the table to the exemption list below so this contract
--- keeps describing the real policy.
-
+-- Assert that the trusted server identity can actually reach every table and
+-- that browser roles cannot mint authoritative credential evidence.
 \set ON_ERROR_STOP on
 
 BEGIN;
@@ -54,26 +41,19 @@ BEGIN
 END;
 $$;
 
--- The account-deletion path is asserted by name as well as by the schema-wide
--- rule above. It is the GDPR/CCPA erasure route, it is fail-closed, and it is
--- the path whose breakage motivated both this contract and 20260915190000, so
--- it is worth a failure message that says so rather than one that only says a
--- table is missing a grant.
 DO $$
 DECLARE
   _deletion_surface CONSTANT text[] := ARRAY[
-    -- book-scoped, cleared via book_id
     'book_citations', 'book_knowledge_graphs', 'concept_edges', 'concept_nodes',
     'book_audits', 'book_collaborators', 'chapters', 'content_reports', 'books',
-    -- user-scoped, cleared via user_id
     'learner_concept_states', 'quiz_question_history', 'spaced_repetition_cards',
     'learning_progress', 'competency_progress', 'competency_profile',
     'reading_sessions', 'reading_streaks', 'reading_goals',
     'saved_learning_decks', 'saved_decks', 'highlights', 'study_notes',
-    'quiz_attempts', 'assessment_integrity_logs', 'bookmarks',
-    'chapter_edit_sessions', 'audit_telemetry', 'pmf_events',
+    'assessment_session_answers', 'assessment_sessions',
+    'quiz_attempts', 'assessment_integrity_logs', 'mastery_attempts',
+    'bookmarks', 'chapter_edit_sessions', 'audit_telemetry', 'pmf_events',
     'ai_usage_tracking', 'user_roles', 'profiles',
-    -- retained and revoked rather than deleted
     'publishing_certificates', 'competency_certificates'
   ];
   _table text;
@@ -83,9 +63,66 @@ BEGIN
       RAISE EXCEPTION 'delete-account targets public.%, which does not exist', _table;
     END IF;
     IF NOT pg_catalog.has_table_privilege('service_role', ('public.' || _table)::regclass, 'DELETE') THEN
-      RAISE EXCEPTION 'delete-account cannot clear public.%: service_role has no DELETE. Account deletion would fail closed and no user could erase their data.', _table;
+      RAISE EXCEPTION 'delete-account cannot clear public.%: service_role has no DELETE. Account deletion would fail closed.', _table;
     END IF;
   END LOOP;
+END;
+$$;
+
+-- Contract 6B/6C evidence authority: authenticated browser sessions may read
+-- their permitted evidence through RLS, but may not mint or rewrite the rows
+-- used by the certificate authority.
+DO $$
+BEGIN
+  IF pg_catalog.has_table_privilege('authenticated', 'public.quiz_attempts', 'INSERT')
+     OR pg_catalog.has_table_privilege('authenticated', 'public.quiz_attempts', 'UPDATE')
+     OR pg_catalog.has_table_privilege('authenticated', 'public.quiz_attempts', 'DELETE') THEN
+    RAISE EXCEPTION 'Contract 6C broken: authenticated can mutate authoritative quiz_attempts';
+  END IF;
+
+  IF pg_catalog.has_table_privilege('authenticated', 'public.assessment_integrity_logs', 'INSERT')
+     OR pg_catalog.has_table_privilege('authenticated', 'public.assessment_integrity_logs', 'UPDATE')
+     OR pg_catalog.has_table_privilege('authenticated', 'public.assessment_integrity_logs', 'DELETE') THEN
+    RAISE EXCEPTION 'Contract 6B broken: authenticated can mutate authoritative integrity evidence';
+  END IF;
+
+  IF pg_catalog.has_table_privilege('authenticated', 'public.mastery_attempts', 'INSERT')
+     OR pg_catalog.has_table_privilege('authenticated', 'public.mastery_attempts', 'UPDATE')
+     OR pg_catalog.has_table_privilege('authenticated', 'public.mastery_attempts', 'DELETE') THEN
+    RAISE EXCEPTION 'Contract 6C broken: authenticated can mutate mastery evidence';
+  END IF;
+
+  IF pg_catalog.has_function_privilege(
+    'authenticated',
+    'public.insert_integrity_log(uuid, uuid, uuid, text, numeric, jsonb)',
+    'EXECUTE'
+  ) THEN
+    RAISE EXCEPTION 'Contract 6B broken: authenticated can invoke insert_integrity_log';
+  END IF;
+
+  IF pg_catalog.has_table_privilege('authenticated', 'public.assessment_sessions', 'SELECT')
+     OR pg_catalog.has_table_privilege('authenticated', 'public.assessment_sessions', 'INSERT')
+     OR pg_catalog.has_table_privilege('authenticated', 'public.assessment_session_answers', 'SELECT') THEN
+    RAISE EXCEPTION 'Contract 8 broken: browser role can bypass assessment-session authority or read answer keys';
+  END IF;
+END;
+$$;
+
+-- Contract 12/8 snapshot columns must exist on the retained record.
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'publishing_certificates' AND column_name = 'book_content_hash'
+  ) THEN
+    RAISE EXCEPTION 'Contract 12 broken: publishing_certificates.book_content_hash missing';
+  END IF;
+  IF NOT EXISTS (
+    SELECT 1 FROM information_schema.columns
+    WHERE table_schema = 'public' AND table_name = 'publishing_certificates' AND column_name = 'assessment_contract_passed'
+  ) THEN
+    RAISE EXCEPTION 'Contract 8 broken: publishing_certificates.assessment_contract_passed missing';
+  END IF;
 END;
 $$;
 
