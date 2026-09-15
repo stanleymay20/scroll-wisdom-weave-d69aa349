@@ -126,6 +126,12 @@ jobs:
             echo "E2E_DATABASE_URL=$DB_URL"
           } >> "$GITHUB_ENV"
 
+      - name: Assert certificate retention database contract
+        run: psql "$E2E_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/test-account-deletion-certificate-retention.sql
+
+      - name: Exercise real account deletion and retained-certificate verification
+        run: bun scripts/test-account-deletion-e2e.mjs
+
       - name: Seed isolated confirmed users and API-authorized canaries
         run: bun scripts/seed-ga-e2e.mjs
 
