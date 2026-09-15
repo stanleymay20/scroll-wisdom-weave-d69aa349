@@ -16,6 +16,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Award, CheckCircle2, AlertTriangle, RefreshCw, BookOpen, Search, FileDown, Library, Sparkles } from "lucide-react";
+import { DistributionMetadataPanel } from "@/components/publish/DistributionMetadataPanel";
 
 interface Dim {
   score: number;
@@ -123,83 +124,87 @@ export function EliteReadinessPanel({ bookId }: Props) {
   const uniqueBlockers = Array.from(new Set(blockers));
 
   return (
-    <Card className="p-6 mb-6 border-border">
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <div className="flex items-center gap-2">
-            <Award className="h-5 w-5 text-foreground/80" />
-            <h2 className="text-lg font-semibold">Elite Readiness</h2>
-            <Badge variant="outline" className={tier.tone}>{tier.label}</Badge>
-          </div>
-          <p className="mt-1 text-sm text-muted-foreground">{tier.desc}</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <div className="text-right">
-            <div className="text-3xl font-semibold tabular-nums">{composite}<span className="text-base text-muted-foreground">/100</span></div>
-            <div className="text-[11px] text-muted-foreground">composite score</div>
-          </div>
-          <Button size="sm" variant="ghost" onClick={() => void load()} disabled={loading}>
-            <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
-          </Button>
-        </div>
-      </div>
-
-      <div className="mt-5">
-        <Progress value={composite} className="h-2" />
-        <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
-          <span>Needs work · 0</span>
-          <span>Ready · 65</span>
-          <span>Elite · 85</span>
-        </div>
-      </div>
-
-      <div className="mt-6 grid grid-cols-1 sm:grid-cols-5 gap-3">
-        {(Object.keys(DIM_LABELS) as Array<keyof typeof DIM_LABELS>).map((k) => {
-          const dim = data.dimensions[k];
-          const Icon = DIM_ICONS[k];
-          const pct = Math.round((dim?.score ?? 0) * 100);
-          return (
-            <div key={k} className="rounded-lg border border-border p-3 bg-muted/20">
-              <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <Icon className="h-3.5 w-3.5" />
-                <span>{DIM_LABELS[k]}</span>
-                <span className="ml-auto text-[10px] opacity-70">{DIM_WEIGHT[k]}%</span>
-              </div>
-              <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">{pct}</div>
-              <div className="text-[11px] text-muted-foreground">{dim?.passed ?? 0}/{dim?.total ?? 0} checks</div>
+    <>
+      <Card className="p-6 mb-6 border-border">
+        <div className="flex items-start justify-between gap-4 flex-wrap">
+          <div>
+            <div className="flex items-center gap-2">
+              <Award className="h-5 w-5 text-foreground/80" />
+              <h2 className="text-lg font-semibold">Elite Readiness</h2>
+              <Badge variant="outline" className={tier.tone}>{tier.label}</Badge>
             </div>
-          );
-        })}
-      </div>
-
-      {uniqueBlockers.length > 0 ? (
-        <div className="mt-6">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
-            What's blocking Elite ({uniqueBlockers.length})
+            <p className="mt-1 text-sm text-muted-foreground">{tier.desc}</p>
           </div>
-          <ul className="mt-2 space-y-1.5">
-            {uniqueBlockers.map((code) => (
-              <li key={code} className="flex items-start gap-2 text-sm text-muted-foreground">
-                <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" aria-hidden />
-                <span className="text-foreground/90">{BLOCKER_LABELS[code] ?? code}</span>
-              </li>
-            ))}
-          </ul>
+          <div className="flex items-center gap-3">
+            <div className="text-right">
+              <div className="text-3xl font-semibold tabular-nums">{composite}<span className="text-base text-muted-foreground">/100</span></div>
+              <div className="text-[11px] text-muted-foreground">composite score</div>
+            </div>
+            <Button size="sm" variant="ghost" onClick={() => void load()} disabled={loading}>
+              <RefreshCw className={`h-4 w-4 ${loading ? "animate-spin" : ""}`} />
+            </Button>
+          </div>
         </div>
-      ) : (
-        <div className="mt-6 flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
-          <CheckCircle2 className="h-4 w-4" />
-          All Elite checks cleared. Excellent work.
-        </div>
-      )}
 
-      {data.dimensions.export.bundles_missing && data.dimensions.export.bundles_missing.length > 0 && data.tier !== "draft" && (
-        <p className="mt-4 text-xs text-muted-foreground">
-          Export bundles still to generate for full reach:{" "}
-          <span className="text-foreground">{data.dimensions.export.bundles_missing.join(", ")}</span>
-        </p>
-      )}
-    </Card>
+        <div className="mt-5">
+          <Progress value={composite} className="h-2" />
+          <div className="mt-1 flex justify-between text-[11px] text-muted-foreground">
+            <span>Needs work · 0</span>
+            <span>Ready · 65</span>
+            <span>Elite · 85</span>
+          </div>
+        </div>
+
+        <div className="mt-6 grid grid-cols-1 sm:grid-cols-5 gap-3">
+          {(Object.keys(DIM_LABELS) as Array<keyof typeof DIM_LABELS>).map((k) => {
+            const dim = data.dimensions[k];
+            const Icon = DIM_ICONS[k];
+            const pct = Math.round((dim?.score ?? 0) * 100);
+            return (
+              <div key={k} className="rounded-lg border border-border p-3 bg-muted/20">
+                <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <Icon className="h-3.5 w-3.5" />
+                  <span>{DIM_LABELS[k]}</span>
+                  <span className="ml-auto text-[10px] opacity-70">{DIM_WEIGHT[k]}%</span>
+                </div>
+                <div className="mt-1 text-xl font-semibold tabular-nums text-foreground">{pct}</div>
+                <div className="text-[11px] text-muted-foreground">{dim?.passed ?? 0}/{dim?.total ?? 0} checks</div>
+              </div>
+            );
+          })}
+        </div>
+
+        {uniqueBlockers.length > 0 ? (
+          <div className="mt-6">
+            <div className="flex items-center gap-2 text-sm font-medium">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              What's blocking Elite ({uniqueBlockers.length})
+            </div>
+            <ul className="mt-2 space-y-1.5">
+              {uniqueBlockers.map((code) => (
+                <li key={code} className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <span className="mt-1.5 h-1.5 w-1.5 rounded-full bg-amber-500 shrink-0" aria-hidden />
+                  <span className="text-foreground/90">{BLOCKER_LABELS[code] ?? code}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        ) : (
+          <div className="mt-6 flex items-center gap-2 text-sm text-emerald-600 dark:text-emerald-400">
+            <CheckCircle2 className="h-4 w-4" />
+            All Elite checks cleared. Excellent work.
+          </div>
+        )}
+
+        {data.dimensions.export.bundles_missing && data.dimensions.export.bundles_missing.length > 0 && data.tier !== "draft" && (
+          <p className="mt-4 text-xs text-muted-foreground">
+            Export bundles still to generate for full reach:{" "}
+            <span className="text-foreground">{data.dimensions.export.bundles_missing.join(", ")}</span>
+          </p>
+        )}
+      </Card>
+
+      <DistributionMetadataPanel bookId={bookId} />
+    </>
   );
 }
