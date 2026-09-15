@@ -18,6 +18,8 @@ import CitationManager from "@/components/citations/CitationManager";
 import DesignSystemPanel from "@/components/publish/DesignSystemPanel";
 import TypographyReport from "@/components/publish/TypographyReport";
 import PublishabilityQAPanel from "@/components/publish/PublishabilityQAPanel";
+import { DePublicationCompliancePanel } from "@/components/publish/DePublicationCompliancePanel";
+import { DeDistributionStartPanel } from "@/components/publish/DeDistributionStartPanel";
 
 interface Audit {
   id: string;
@@ -99,7 +101,7 @@ export default function PublishingCommandCenter() {
           </div>
           <h1 className="text-3xl font-semibold mt-1 text-foreground">Publishing Command Center</h1>
           <p className="text-muted-foreground mt-1 max-w-2xl">
-            Audit, humanize, validate, and certify your manuscript across 10 publishing intelligence layers.
+            Audit, humanize, validate, certify, and prepare your manuscript for controlled release.
           </p>
         </div>
         <Button onClick={runAudit} disabled={running} size="lg">
@@ -135,6 +137,8 @@ export default function PublishingCommandCenter() {
       {bookId && (
         <>
           <PublishabilityQAPanel bookId={bookId} />
+          <DePublicationCompliancePanel bookId={bookId} />
+          <DeDistributionStartPanel bookId={bookId} />
           <TypographyReport bookId={bookId} />
           <div className="grid gap-6 lg:grid-cols-2">
             <DesignSystemPanel bookId={bookId} />
@@ -142,7 +146,6 @@ export default function PublishingCommandCenter() {
           </div>
         </>
       )}
-
 
       <div>
         <h2 className="text-lg font-semibold mb-3 text-foreground">Intelligence Layers</h2>

@@ -87,6 +87,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-book-generation-quota-db-security.sql
       - name: Assert durable rate limit and stale-job sweeper contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-rate-limit-and-sweeper-db-security.sql
+      - name: Assert Germany publication-compliance security contract
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-de-publication-compliance.sql
       - name: Fail on PostgreSQL function and schema errors
         run: supabase db lint --local --schema public --level error --fail-on error
 
@@ -152,6 +154,7 @@ jobs:
           deno check supabase/functions/export-book/index.ts
           deno check supabase/functions/distribution-metadata/index.ts
           deno check supabase/functions/export-onix/index.ts
+          deno check supabase/functions/de-publication-compliance/index.ts
           deno check supabase/functions/resolve-scroll-id/index.ts
           deno check supabase/functions/scrollvision-retrieve/index.ts
       - name: Type-check storefront, telemetry and moderation Edge Functions
