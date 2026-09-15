@@ -21,8 +21,6 @@ serve(async (req) => {
     if (auth instanceof Response) return auth;
 
     const adminClient = serviceClient();
-
-    // Account deletion is irreversible — strict, durable limit across edge instances.
     const limited = await enforceDurableRateLimit(adminClient, {
       name: "delete-account",
       key: auth.userId,
@@ -36,38 +34,24 @@ serve(async (req) => {
     const revokedReason = "Account Deleted";
     console.log(`[delete-account] processing deletion`, { userId });
 
-    // Step 1: revoke certificates before removing books/account data. These
-    // records are intentionally retained for public verification integrity.
+    // Retained public learning records are revoked before their subject/account
+    // links are removed. They remain audit records, not active credentials.
     const { error: publishingRevokeError } = await adminClient
       .from("publishing_certificates")
       .update({ revoked_at: revokedAt, revoked_reason: revokedReason })
       .eq("user_id", userId);
-
     if (publishingRevokeError) {
       console.error("[delete-account] publishing certificate revocation error", publishingRevokeError);
-      return json(
-        {
-          error: "Account deletion could not safely revoke existing certificates. Please contact support.",
-          code: "certificate_revoke_failed",
-        },
-        500,
-      );
+      return json({ error: "Account deletion could not safely revoke existing certificates. Please contact support.", code: "certificate_revoke_failed" }, 500);
     }
 
     const { error: competencyRevokeError } = await adminClient
       .from("competency_certificates")
       .update({ revoked_at: revokedAt, revoked_reason: revokedReason, user_id: null })
       .eq("user_id", userId);
-
     if (competencyRevokeError) {
       console.error("[delete-account] competency certificate revocation error", competencyRevokeError);
-      return json(
-        {
-          error: "Account deletion could not safely revoke existing certificates. Please contact support.",
-          code: "certificate_revoke_failed",
-        },
-        500,
-      );
+      return json({ error: "Account deletion could not safely revoke existing certificates. Please contact support.", code: "certificate_revoke_failed" }, 500);
     }
 
     const cleanupFailures: string[] = [];
@@ -85,8 +69,14 @@ serve(async (req) => {
       "saved_decks",
       "highlights",
       "study_notes",
+      // Contract 8/6B server-owned assessment evidence. Answers are listed
+      // explicitly even though deleting the session also cascades them, so the
+      // erasure surface is visible and testable.
+      "assessment_session_answers",
+      "assessment_sessions",
       "quiz_attempts",
       "assessment_integrity_logs",
+      "mastery_attempts",
       "bookmarks",
       "chapter_edit_sessions",
       "audit_telemetry",
@@ -96,22 +86,13 @@ serve(async (req) => {
       "profiles",
     ];
 
-    // Step 2: delete book-scoped data first. Ownership must cover both the
-    // historical creator_id authority and the newer user_id compatibility key.
     const { data: userBooks, error: userBooksError } = await adminClient
       .from("books")
       .select("id")
       .or(`creator_id.eq.${userId},user_id.eq.${userId}`);
-
     if (userBooksError) {
       console.error("[delete-account] error loading owned books", userBooksError);
-      return json(
-        {
-          error: "Account deletion could not safely enumerate owned data. Please contact support.",
-          code: "data_cleanup_failed",
-        },
-        500,
-      );
+      return json({ error: "Account deletion could not safely enumerate owned data. Please contact support.", code: "data_cleanup_failed" }, 500);
     }
 
     if (userBooks && userBooks.length > 0) {
@@ -140,9 +121,6 @@ serve(async (req) => {
       }
     }
 
-    // Step 3: delete user-scoped personal data. Certificate tables are
-    // deliberately excluded because Step 1 converted them to retained revoked
-    // audit records.
     for (const table of userIdTables) {
       const { error } = await adminClient.from(table).delete().eq("user_id", userId);
       if (error) {
@@ -152,39 +130,20 @@ serve(async (req) => {
     }
 
     if (cleanupFailures.length > 0) {
-      console.error("[delete-account] refusing success after cleanup failures", {
-        userId,
-        tables: cleanupFailures,
-      });
-      return json(
-        {
-          error: "Account deletion could not safely remove all personal data. Please contact support.",
-          code: "data_cleanup_failed",
-        },
-        500,
-      );
+      console.error("[delete-account] refusing success after cleanup failures", { userId, tables: cleanupFailures });
+      return json({ error: "Account deletion could not safely remove all personal data. Please contact support.", code: "data_cleanup_failed" }, 500);
     }
 
-    console.log("[delete-account] personal data wiped and certificates revoked", { userId });
-
-    // Step 4: delete the auth user itself. Publishing certificate user_id is
-    // detached via ON DELETE SET NULL; competency certificate user_id was
-    // already cleared above. Supabase also invalidates refresh sessions here.
     const { error: deleteUserError } = await adminClient.auth.admin.deleteUser(userId);
     if (deleteUserError) {
       console.error("[delete-account] auth deletion error", deleteUserError);
-      return json(
-        { error: "Failed to delete account. Please contact support.", code: "auth_delete_failed" },
-        500,
-      );
+      return json({ error: "Failed to delete account. Please contact support.", code: "auth_delete_failed" }, 500);
     }
 
-    console.log("[delete-account] account fully deleted", { userId });
-
+    console.log("[delete-account] account fully deleted; retained learning records revoked", { userId });
     return json({
       success: true,
-      message:
-        "Your account has been permanently deleted. Certificates have been revoked but remain verifiable for audit purposes.",
+      message: "Your account has been permanently deleted. Retained learning records have been revoked for audit integrity.",
     });
   } catch (err) {
     console.error("[delete-account] unexpected error", err);
