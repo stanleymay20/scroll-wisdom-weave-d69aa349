@@ -25,7 +25,7 @@ let _lastRoute: string | null = null;
 let _lastRouteAt = 0;
 let _lcpReported = false;
 let _clsValue = 0;
-let _clsEntries: PerformanceEntry[] = [];
+const _clsEntries: PerformanceEntry[] = [];
 
 // Throttle long-task warnings: at most one per minute per category
 const _throttle = new Map<string, number>();
