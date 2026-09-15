@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { createClient } from "@supabase/supabase-js";
 
 const required = (name) => {
@@ -17,7 +18,11 @@ const authClient = createClient(supabaseUrl, anonKey, {
   auth: { persistSession: false, autoRefreshToken: false, detectSessionInUrl: false },
 });
 
-const suffix = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+// randomUUID rather than Math.random: this suffix keys the throwaway account
+// email and both certificate numbers, so CodeQL reads it as randomness in a
+// security context. A 6-character base36 slice is also genuinely collision-
+// prone for concurrent GA runs.
+const suffix = `${Date.now()}-${randomUUID().slice(0, 8)}`;
 const email = `ga-account-delete-${suffix}@example.test`;
 const password = "GaDeleteContract123!";
 const bookTitle = "GA Account Deletion Certificate Book";
