@@ -11,13 +11,13 @@
   },
   "control": {
     "purpose": "Canonical repository ledger for owner-issued ISBN reservations and assignments. Every ScrollLibrary Press ISBN must be recorded here before cover/barcode/publication production so the same identifier cannot be assigned twice.",
-    "database_sync_status": "pending_authorized_scrolllibrary_supabase_connection",
+    "database_sync_status": "blocked_expected_project_not_visible_to_authorized_connection_2026-09-17",
     "database_project_ref": "lrricdforqfkaaciammv",
     "database_tables": [
       "public.isbn_inventory",
       "public.book_isbn_assignments"
     ],
-    "last_updated": "2026-09-16",
+    "last_updated": "2026-09-17",
     "rules": [
       "ISBN-13 values must pass checksum validation.",
       "An ISBN may occur only once in assignments.",
