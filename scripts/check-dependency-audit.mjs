@@ -8,6 +8,19 @@ if (!Number.isFinite(expiry.valueOf()) || Date.now() > expiry.valueOf()) {
   process.exit(1);
 }
 
+// Keep the reviewed backlog visible in CI instead of letting --ignore hide the
+// package/advisory paths that must be remediated before the exception expiry.
+// This report is informational; the second audit below remains the fail-closed
+// gate for any new high/critical advisory outside the reviewed baseline.
+const backlog = spawnSync("bun", ["audit", "--prod", "--audit-level=high"], {
+  encoding: "utf8",
+  stdio: ["inherit", "pipe", "pipe"],
+});
+console.log("--- reviewed high/critical dependency backlog (informational) ---");
+if (backlog.stdout) process.stdout.write(backlog.stdout);
+if (backlog.stderr) process.stderr.write(backlog.stderr);
+console.log("--- end reviewed dependency backlog ---");
+
 const args = ["audit", "--prod", "--audit-level=high", ...policy.advisories.flatMap((id) => ["--ignore", id])];
 const result = spawnSync("bun", args, { encoding: "utf8", stdio: ["inherit", "pipe", "pipe"] });
 if (result.stdout) process.stdout.write(result.stdout);

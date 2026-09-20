@@ -2,10 +2,14 @@ import { readdir, stat } from "node:fs/promises";
 import path from "node:path";
 
 const assetDir = path.resolve("dist/assets");
+// Ratcheted from the verified 2026-09-14 release build:
+//   largest JS ~= 1,067,020 B; CSS ~= 168,310 B; total JS = 9,311,398 B.
+// Keep only a small deterministic-growth allowance so this gate catches real
+// regressions instead of permitting another multi-megabyte jump.
 const limits = {
-  javascriptFile: 1_100_000,
-  stylesheetFile: 200_000,
-  totalJavascript: 11_000_000,
+  javascriptFile: 1_085_000,
+  stylesheetFile: 180_000,
+  totalJavascript: 9_500_000,
 };
 
 const files = await readdir(assetDir);

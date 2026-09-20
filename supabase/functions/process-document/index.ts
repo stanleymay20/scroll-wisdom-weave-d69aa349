@@ -12,7 +12,7 @@
  */
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { corsHeaders, preflight, requireUser, enforceRateLimit, json as httpJson } from '../_shared/http.ts';
+import { corsHeaders, preflight, requireUser, enforceDurableRateLimit, serviceClient, json as httpJson } from '../_shared/http.ts';
 
 Deno.serve(async (req) => {
   const pre = preflight(req);
@@ -27,17 +27,18 @@ Deno.serve(async (req) => {
     if (auth instanceof Response) return auth;
     const userId = auth.userId;
 
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+
     // Per-user rate limit: 10 uploads / 10 min — protects AI gateway and DB.
-    const limited = enforceRateLimit({
+    // Durable, so it survives edge instance recycling.
+    const limited = await enforceDurableRateLimit(serviceClient(), {
       name: 'process-document',
       key: userId,
       limit: 10,
       windowSec: 600,
     });
     if (limited) return limited;
-
-    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
-    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 
     let body: any;
     try {

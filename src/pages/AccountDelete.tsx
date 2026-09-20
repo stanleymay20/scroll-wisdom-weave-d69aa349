@@ -61,10 +61,13 @@ export default function AccountDelete() {
       if (data?.error) throw new Error(data.error);
 
       setDeleted(true);
-      
-      // Sign out locally
-      await supabase.auth.signOut();
-      
+
+      // Deliberately NOT signing out here. /account/delete is wrapped in
+      // ProtectedRoute, which renders <Navigate to="/auth"> the moment `user`
+      // becomes null — that unmounts the confirmation below before the user can
+      // read that their certificates stay publicly verifiable. The session is
+      // cleared on the way out instead, in handleReturnHome.
+
       toast({
         title: "Account Deleted",
         description: "Your account and personal data have been permanently deleted.",
@@ -80,6 +83,16 @@ export default function AccountDelete() {
     } finally {
       setIsDeleting(false);
     }
+  };
+
+  /**
+   * Leave the protected route first, then drop the session. Doing it in the
+   * other order lets ProtectedRoute redirect to /auth mid-navigation. The
+   * account is already gone server-side, so the token is inert either way.
+   */
+  const handleReturnHome = () => {
+    navigate("/");
+    void supabase.auth.signOut();
   };
 
   // Deleted successfully state
@@ -102,7 +115,7 @@ export default function AccountDelete() {
               Any certificates you had have been revoked but remain publicly verifiable 
               with a "Revoked (Account Deleted)" status.
             </p>
-            <Button onClick={() => navigate("/")} variant="outline">
+            <Button onClick={handleReturnHome} variant="outline">
               Return to Home
             </Button>
           </motion.div>

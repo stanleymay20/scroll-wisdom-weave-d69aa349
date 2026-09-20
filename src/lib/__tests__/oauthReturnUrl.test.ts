@@ -9,17 +9,29 @@ const ORIGINAL_ENV: Record<string, string | undefined> = {
   ALLOWED_RETURN_ORIGINS: undefined,
 };
 
+type TestDeno = {
+  env: {
+    _inner: Record<string, string>;
+    get: (key: string) => string | undefined;
+  };
+};
+
+type TestGlobal = typeof globalThis & { Deno?: TestDeno };
+const testGlobal = globalThis as TestGlobal;
+
 function setEnv(values: Partial<Record<string, string | undefined>>) {
+  const deno = testGlobal.Deno;
+  if (!deno) throw new Error("Deno test shim is not initialized");
   for (const [k, v] of Object.entries(values)) {
-    if (v == null) delete (globalThis as any).Deno.env._inner[k];
-    else (globalThis as any).Deno.env._inner[k] = v;
+    if (v == null) delete deno.env._inner[k];
+    else deno.env._inner[k] = v;
   }
 }
 
 // Shim Deno.env so the helper can read APP_PUBLIC_URL under vitest.
 beforeEach(() => {
   const store: Record<string, string> = {};
-  (globalThis as any).Deno = {
+  testGlobal.Deno = {
     env: {
       _inner: store,
       get(k: string) { return store[k]; },
@@ -30,7 +42,7 @@ beforeEach(() => {
 });
 
 afterEach(() => {
-  delete (globalThis as any).Deno;
+  delete testGlobal.Deno;
 });
 
 describe("safeReturnUrl — accepts same-origin", () => {
@@ -86,7 +98,7 @@ describe("safeReturnUrl — rejects open-redirect primitives", () => {
   });
 
   it("rejects when no allow-list is configured at all", () => {
-    setEnv({ APP_PUBLIC_URL: undefined, ALLOWED_RETURN_ORIGINS: undefined });
+    setEnv({ ...ORIGINAL_ENV });
     expect(safeReturnUrl("https://scrolllibrary.org/x")).toBeNull();
     // Relative paths still work because they're definitionally same-origin.
     expect(safeReturnUrl("/account")).toBe("/account");

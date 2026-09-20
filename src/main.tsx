@@ -2,6 +2,7 @@ import { createRoot } from "react-dom/client";
 import App from "./App.tsx";
 import "./index.css";
 import { initGlobalErrorHandlers } from "@/lib/errorNotifier";
+import { initErrorTracking } from "@/lib/errorTracking";
 
 interface ScrollLibraryWindow extends Window {
   __removeSplash?: () => void;
@@ -22,29 +23,36 @@ function getSupabaseProjectRef(): string | null {
   }
 }
 
-initGlobalErrorHandlers();
+async function bootstrap() {
+  // When no DSN is configured this resolves immediately without loading the
+  // Sentry SDK. A telemetry failure must never stop the application mounting.
+  await initErrorTracking();
+  initGlobalErrorHandlers();
 
-// Purge only an unparseable auth payload for the active environment.
-try {
-  const projectRef = getSupabaseProjectRef();
-  if (projectRef) {
-    const storageKey = `sb-${projectRef}-auth-token`;
-    const raw = localStorage.getItem(storageKey);
-    if (raw) {
-      try {
-        JSON.parse(raw);
-      } catch {
-        console.warn('[pre-mount] Removing unparseable auth token payload');
-        localStorage.removeItem(storageKey);
+  // Purge only an unparseable auth payload for the active environment.
+  try {
+    const projectRef = getSupabaseProjectRef();
+    if (projectRef) {
+      const storageKey = `sb-${projectRef}-auth-token`;
+      const raw = localStorage.getItem(storageKey);
+      if (raw) {
+        try {
+          JSON.parse(raw);
+        } catch {
+          console.warn('[pre-mount] Removing unparseable auth token payload');
+          localStorage.removeItem(storageKey);
+        }
       }
     }
+  } catch {
+    // localStorage unavailable — let supabase-js handle it.
   }
-} catch {
-  // localStorage unavailable — let supabase-js handle it.
+
+  createRoot(document.getElementById("root")!).render(<App />);
+
+  requestAnimationFrame(() => {
+    (window as ScrollLibraryWindow).__removeSplash?.();
+  });
 }
 
-createRoot(document.getElementById("root")!).render(<App />);
-
-requestAnimationFrame(() => {
-  (window as ScrollLibraryWindow).__removeSplash?.();
-});
+void bootstrap();

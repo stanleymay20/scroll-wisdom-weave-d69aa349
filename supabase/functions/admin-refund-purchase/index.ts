@@ -5,9 +5,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import {
-  preflight, json, badRequest, forbidden, serverError,
+  json, badRequest, forbidden, serverError,
   requireUser, validateBody, z, serviceClient,
 } from "../_shared/http.ts";
+import { adminOriginGuard, withAdminOriginAllowList } from "../_shared/admin-cors.ts";
 import { correlationId, logFinancialEvent } from "../_shared/observability.ts";
 
 const Body = z.object({
@@ -18,7 +19,10 @@ const Body = z.object({
 });
 
 serve(async (req) => {
-  const pre = preflight(req); if (pre) return pre;
+  const originGate = adminOriginGuard(req);
+  if (originGate) return withAdminOriginAllowList(req, originGate);
+
+  const response = await (async () => {
   if (req.method !== "POST") return badRequest("POST only");
 
   const auth = await requireUser(req);
@@ -123,4 +127,6 @@ serve(async (req) => {
       return json({ ok: false, error: msg, refund_request_id: reqRow.id }, 502);
     }
   } catch (e) { return serverError(e); }
+  })();
+  return withAdminOriginAllowList(req, response);
 });

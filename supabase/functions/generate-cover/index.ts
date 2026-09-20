@@ -9,7 +9,7 @@ import {
   validateBody,
   z,
   serviceClient,
-  enforceRateLimit,
+  enforceDurableRateLimit,
 } from "../_shared/http.ts";
 
 const MODEL = "google/gemini-3-pro-image-preview";
@@ -279,7 +279,11 @@ Deno.serve(async (req) => {
     const body = await validateBody(req, BodySchema);
     if (body instanceof Response) return body;
 
-    const rate = enforceRateLimit({
+    const sc = serviceClient();
+
+    // Durable: an in-memory limit resets on every cold start, which is the wrong
+    // property for an endpoint that spends money at the image provider.
+    const rate = await enforceDurableRateLimit(sc, {
       name: "generate-cover-provenance",
       key: auth.userId,
       limit: 5,
@@ -287,7 +291,6 @@ Deno.serve(async (req) => {
     });
     if (rate) return rate;
 
-    const sc = serviceClient();
     const ownership = await authorizeBook(sc, body.bookId, auth.userId);
     if (!ownership.found) return badRequest("Book not found");
     if (!ownership.authorized) return forbidden("Not the owner of this book");

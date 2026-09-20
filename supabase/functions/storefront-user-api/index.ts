@@ -9,7 +9,7 @@
 // plus a `reasons` array on each item explaining why it was recommended.
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { corsHeaders, preflight, json, serviceClient, requireUser, enforceRateLimit } from "../_shared/http.ts";
+import { corsHeaders, preflight, json, serviceClient, requireUser, enforceDurableRateLimit } from "../_shared/http.ts";
 
 const NO_CACHE = {
   "Cache-Control": "private, no-store, max-age=0",
@@ -249,9 +249,6 @@ serve(async (req) => {
   const authed = await requireUser(req);
   if (authed instanceof Response) return authed;
 
-  const rl = enforceRateLimit({ name: "storefront-user-api", key: authed.userId, limit: 120, windowSec: 60 });
-  if (rl) return rl;
-
   const url = new URL(req.url);
   const route = url.pathname.split("/").filter(Boolean).pop() ?? "";
 
@@ -259,6 +256,14 @@ serve(async (req) => {
   try { sc = serviceClient(); } catch (e) {
     return reply({ error: (e as Error).message, code: "service_unavailable" }, 500);
   }
+
+  const rl = await enforceDurableRateLimit(sc, {
+    name: "storefront-user-api",
+    key: authed.userId,
+    limit: 120,
+    windowSec: 60,
+  });
+  if (rl) return rl;
 
   try {
     switch (route) {
