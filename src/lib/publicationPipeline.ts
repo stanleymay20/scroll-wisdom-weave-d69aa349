@@ -14,6 +14,7 @@ export type PublicationStage =
   | "editorial-audit"
   | "repairing"
   | "evidence-verification"
+  | "proofreading"
   | "publishability-qa"
   | "production-render"
   | "certified"
@@ -109,6 +110,12 @@ export interface PublicationPipelineResult {
     checkedChapters: number;
     passedChapters: number;
     repairedChapters: number;
+  };
+  proofreading: {
+    chaptersProofread: number;
+    chaptersChanged: number;
+    correctionsApplied: number;
+    failed: number;
   };
   publishability: {
     status: string | null;
@@ -359,6 +366,7 @@ function emptyResult(book: EvidenceBook, blockers: string[]): PublicationPipelin
       passedChapters: 0,
       repairedChapters: 0,
     },
+    proofreading: { chaptersProofread: 0, chaptersChanged: 0, correctionsApplied: 0, failed: 0 },
     publishability: { status: null, score: null },
     production: { status: null, score: null, fileHash: null, pageCount: null },
   };
@@ -401,6 +409,88 @@ function productionBlockers(production: ProductionResponse): string[] {
   if (issueMessages.length > 0) return issueMessages;
   if (production.error) return [production.error];
   return [`Production render certification is ${production.status || "incomplete"}.`];
+}
+
+interface ProofreadResponse {
+  success?: boolean;
+  changed?: boolean;
+  applied?: number;
+  error?: string;
+  code?: string;
+}
+
+export interface ProofreadingSummary {
+  chaptersProofread: number;
+  chaptersChanged: number;
+  correctionsApplied: number;
+  failed: number;
+}
+
+/**
+ * Run the copy editor over every chapter of a book.
+ *
+ * Sequential rather than parallel: proofread-chapter fans out to one AI
+ * request per window internally, so a whole book at once is a burst large
+ * enough to trip its own durable rate limit and the upstream provider's.
+ *
+ * Nothing here throws. The editorial audit decides whether a book may be
+ * certified; this pass only improves the prose it has already approved, and a
+ * chapter that cannot be copyedited is worth reporting, not worth blocking a
+ * publication over.
+ */
+async function runProofreadingPass(
+  bookId: string,
+  onStage: PublicationPipelineOptions["onStage"],
+): Promise<ProofreadingSummary> {
+  const summary: ProofreadingSummary = {
+    chaptersProofread: 0,
+    chaptersChanged: 0,
+    correctionsApplied: 0,
+    failed: 0,
+  };
+
+  const { data: chapters, error } = await supabase
+    .from("chapters")
+    .select("id, chapter_number")
+    .eq("book_id", bookId)
+    .order("chapter_number", { ascending: true });
+
+  if (error || !chapters?.length) {
+    if (error) summary.failed = 1;
+    return summary;
+  }
+
+  for (const chapter of chapters) {
+    report(
+      onStage,
+      "proofreading",
+      `Copy editing chapter ${chapter.chapter_number} of ${chapters.length}…`,
+    );
+
+    const { data, error: invokeError } = await supabase.functions.invoke(
+      "proofread-chapter",
+      { body: { chapterId: chapter.id } },
+    );
+
+    if (invokeError) {
+      summary.failed++;
+      continue;
+    }
+
+    const result = (data || {}) as ProofreadResponse;
+    if (result.error) {
+      // An empty chapter is not a proofreading failure; the editorial audit
+      // already has an opinion about chapters with no content.
+      if (result.code !== "empty_chapter") summary.failed++;
+      continue;
+    }
+
+    summary.chaptersProofread++;
+    if (result.changed) summary.chaptersChanged++;
+    summary.correctionsApplied += result.applied ?? 0;
+  }
+
+  return summary;
 }
 
 export async function runPublicationQualityPipeline({
@@ -489,6 +579,19 @@ export async function runPublicationQualityPipeline({
     };
   }
 
+  // Copyedit last.
+  //
+  // The editorial repair path REGENERATES a chapter, so a copyedit applied
+  // before it would simply be rewritten away. This is the final pass over the
+  // prose, after the manuscript has stopped changing and before anything is
+  // rendered from it.
+  //
+  // It is deliberately non-blocking. chief-editor-audit grades structure and
+  // reasoning and can refuse to certify; a missing comma should not. A chapter
+  // that fails to proofread is reported and the book carries on.
+  report(onStage, "proofreading", "Copy editor is correcting spelling, grammar and punctuation…");
+  const proofreading = await runProofreadingPass(bookId, onStage);
+
   report(onStage, "publishability-qa", "Running deterministic publishability and rendering-risk checks…");
   const { data: qaData, error: qaError } = await supabase.functions.invoke(
     "qa-publishability-audit",
@@ -553,6 +656,7 @@ export async function runPublicationQualityPipeline({
       passedChapters: evidence.passed,
       repairedChapters: evidence.repaired,
     },
+    proofreading,
     publishability: {
       status: qa.report?.status ?? null,
       score: qa.report?.score ?? null,
