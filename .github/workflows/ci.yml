@@ -119,6 +119,9 @@ jobs:
         run: |
           deno check supabase/functions/_shared/error-tracking.ts
           deno check supabase/functions/_shared/http.ts
+          deno check supabase/functions/_shared/figure-data.ts
+          deno check supabase/functions/_shared/figure-layout.ts
+          deno check supabase/functions/_shared/figure-export.ts
       - name: Type-check critical financial Edge Functions
         run: |
           deno check supabase/functions/create-checkout/index.ts
@@ -190,6 +193,9 @@ jobs:
           deno test supabase/functions/_shared/audit-excerpt_test.ts
           deno test supabase/functions/_shared/proofread_test.ts
           deno test supabase/functions/_shared/visual-intelligence_test.ts
+          deno test supabase/functions/_shared/figure-data_test.ts
+          deno test supabase/functions/_shared/figure-layout_test.ts
+          deno test supabase/functions/_shared/figure-export_test.ts
 
   build:
     runs-on: ubuntu-latest

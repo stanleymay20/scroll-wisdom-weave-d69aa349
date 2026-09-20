@@ -1,3 +1,5 @@
+import { parseFigureData, serializeFigureData, type FigureData } from './figure-data.ts';
+
 // ===========================================
 // SCROLLLIBRARY VISUAL INTELLIGENCE ENGINE v2.0
 // Three-Stage Pipeline: Detect → Classify → Render
@@ -256,7 +258,7 @@ export function buildVisualIntelligencePrompt(
   const style = VISUAL_STYLE_MAP[bookType] || 'explanatory concept visual';
 
   return `
-=== VISUAL INTELLIGENCE ENGINE v2.0 (MANDATORY) ===
+=== VISUAL INTELLIGENCE ENGINE v2.2 (MANDATORY) ===
 
 You are the ScrollLibrary Visual Intelligence Engine for this chapter.
 Decide WHETHER a section needs a visual, WHAT kind, and WHERE to place it.
@@ -304,6 +306,7 @@ Use this EXACT format for each figure:
 TYPE: <visual_type>
 CAPTION: <publication-ready caption>
 DESCRIPTION: <30-50 word detailed description for the renderer>
+DATA: <single-line JSON, REQUIRED for diagram types — see STAGE D>
 ]
 
 Supported TYPE values:
@@ -326,6 +329,40 @@ CAPTION: Three-Stage Model of Memory Processing
 DESCRIPTION: A labeled conceptual framework showing encoding, storage, and retrieval stages with directional arrows indicating information flow, feedback loops, and decay pathways
 ]
 
+STAGE D — FIGURE DATA (REQUIRED for every type except the four artwork types
+labeled_illustration, comic_panel, children_illustration and cinematic_scene):
+
+A diagram is its structure. A description alone cannot be drawn — it can only
+be guessed at — so supply the structure itself as one line of JSON in DATA.
+Use exactly one of these three shapes.
+
+1. flow — processes, lifecycles, taxonomies, architectures, concept maps.
+   Use for TYPE flowchart, taxonomy_tree, lifecycle_model,
+   architecture_diagram, concept_map, framework_diagram.
+   {"kind":"flow","direction":"down","nodes":[{"id":"a","label":"Encoding"},{"id":"b","label":"Storage"},{"id":"c","label":"Retrieval"}],"edges":[{"from":"a","to":"b"},{"from":"b","to":"c","label":"on recall"}]}
+   - direction "down" for hierarchies and processes, "right" for cycles.
+   - Every edge's "from" and "to" MUST name a node "id" you declared.
+   - 2-12 nodes. A node label is 1-6 words, NOT a sentence.
+   - Two or more nodes with no edges is a list, not a diagram — use prose.
+
+2. table — comparisons, step sequences, matrices.
+   Use for TYPE comparison_visual, step_by_step, matrix, workbook_template.
+   {"kind":"table","columns":["Approach","Strength","Cost"],"rows":[["Manual","Precise","High"],["Automated","Fast","Low"]]}
+   - 2-6 columns, 1-14 rows. For a matrix, the first column is the row axis.
+   - Cells are short phrases, not paragraphs.
+
+3. series — a single measure across categories.
+   Use for TYPE chart.
+   {"kind":"series","unit":"% of respondents","points":[{"label":"Agree","value":62},{"label":"Neutral","value":23},{"label":"Disagree","value":15}]}
+   - 2-12 points. Values are numbers, never strings or ranges.
+   - Only use real figures the chapter states. NEVER invent data to fill a chart.
+     If you do not have actual numbers, choose a different TYPE.
+
+DATA RULES:
+- DATA must be ONE line of valid JSON. No line breaks, no code fences, no prose.
+- The labels in DATA must match the concepts the DESCRIPTION names.
+- Omit DATA for the four artwork types; those are drawn by an image model.
+
 LEGACY FALLBACK: Simple [FIGURE X: description] format is also accepted but the structured format is preferred.
 
 PLACEMENT RULES:
@@ -340,9 +377,11 @@ FINAL CHECK:
 - Each figure scored ≥ 2 on cognitive value?
 - Figures spaced throughout (not clustered)?
 - Descriptions 30-50 words with specific elements?
+- Every non-artwork figure carries a valid one-line DATA payload?
+- Every edge in a flow names nodes that exist?
 - Figure count ≤ ${density.maxFigures}?
 
-=== END VISUAL INTELLIGENCE ENGINE v2.0 ===
+=== END VISUAL INTELLIGENCE ENGINE v2.2 ===
 `;
 }
 
@@ -358,6 +397,14 @@ interface RawFigureMarker {
   type?: string;
   caption?: string;
   description: string;
+  /**
+   * Raw DATA payload (v2.2), holding the figure's structure as JSON.
+   *
+   * Validated by _shared/figure-data.ts rather than here: this parser's job is
+   * to find the field, not to vouch for it, and a figure whose data is
+   * malformed must still parse so the pipeline can fall back to its prose.
+   */
+  data?: string;
 }
 
 export function parseRawFigureMarkers(content: string): RawFigureMarker[] {
@@ -372,8 +419,11 @@ export function parseRawFigureMarkers(content: string): RawFigureMarker[] {
     const fullMatch = text.slice(start, end);
 
     // v2.0 structured format: [FIGURE X\nTYPE: ...\nCAPTION: ...\nDESCRIPTION: ...]
+    // DESCRIPTION stops at a DATA line rather than running to the closing
+    // bracket, or the JSON payload would be appended to the prose description
+    // and shown to a reader under the figure.
     const structured = fullMatch.match(
-      /^\[FIGURE\s*(\d+(?:\.\d+)*)\s*\n\s*TYPE:\s*([^\n]+)\n\s*CAPTION:\s*([^\n]+)\n\s*DESCRIPTION:\s*([\s\S]*?)\s*\]$/i,
+      /^\[FIGURE\s*(\d+(?:\.\d+)*)\s*\n\s*TYPE:\s*([^\n]+)\n\s*CAPTION:\s*([^\n]+)\n\s*DESCRIPTION:\s*([\s\S]*?)\s*(?:\n\s*DATA:\s*([\s\S]*?)\s*)?\]$/i,
     );
     if (structured) {
       markers.push({
@@ -382,6 +432,7 @@ export function parseRawFigureMarkers(content: string): RawFigureMarker[] {
         type: structured[2].trim().toLowerCase(),
         caption: structured[3].trim(),
         description: structured[4].trim(),
+        data: structured[5]?.trim() || undefined,
       });
       continue;
     }
@@ -745,18 +796,106 @@ export function findFigureMarkerSpans(content: string): Array<[number, number]> 
  * `^\[FIGURE` strippers in canonicalContent and export-book do not match it,
  * and it was reaching finished PDFs as an italic apology for a missing picture.
  */
-export function stripFigureMarkers(content: string): string {
+export function stripFigureMarkers(
+  content: string,
+  options: { keepRenderable?: boolean } = {},
+): string {
   const text = content || '';
   const spans = findFigureMarkerSpans(text);
   if (spans.length === 0) return text;
 
+  // A marker carrying valid DATA is not an orphan: it is a diagram the reader
+  // and the exporters render from its structure, so the sweep steps over it.
+  // The text-only pipeline passes nothing here and removes every marker,
+  // because a text book has no figures by contract.
+  const keep = new Set<string>();
+  if (options.keepRenderable) {
+    for (const marker of parseRawFigureMarkers(text)) {
+      if (figureDataFor(marker)) keep.add(marker.fullMatch);
+    }
+  }
+
   let out = '';
   let cursor = 0;
   for (const [start, end] of spans) {
+    if (keep.has(text.slice(start, end))) continue;
     out += text.slice(cursor, start);
     cursor = end;
   }
   out += text.slice(cursor);
   // Collapse the blank runs the removals leave behind.
   return out.replace(/\n{3,}/g, '\n\n');
+}
+
+
+// ===========================================
+// FIGURE DATA BRIDGE
+// ===========================================
+
+/** Visual types drawn by an image model rather than from structure. */
+const ARTWORK_VISUAL_TYPES: ReadonlySet<VisualType> = new Set<VisualType>([
+  'labeled_illustration',
+  'comic_panel',
+  'children_illustration',
+  'cinematic_scene',
+]);
+
+/**
+ * The validated structure a figure marker carries, or null.
+ *
+ * Null covers every way a figure can fail to be a drawable diagram — no DATA
+ * field, malformed JSON, a flow whose edges name nodes that do not exist — and
+ * in each case the caller falls back to generating an image. That fallback is
+ * why validation can afford to be strict: refusing a questionable structure
+ * costs a picture, while accepting one prints a wrong diagram in a book.
+ */
+export function figureDataFor(marker: { data?: string }): FigureData | null {
+  return parseFigureData(marker.data);
+}
+
+/**
+ * How a figure should be produced.
+ *
+ * 'data' means it is drawn from structure by the reader and the exporters;
+ * 'image' means it goes to the image model. Artwork always takes the image
+ * path even if a stray DATA field appears, because a watercolour of a fox is
+ * not a flowchart no matter what JSON accompanies it.
+ */
+export function resolveFigureRendering(
+  marker: { data?: string },
+  visualType: VisualType,
+  bookType: string,
+): { mode: 'data'; data: FigureData } | { mode: 'image' } {
+  if (ARTWORK_VISUAL_TYPES.has(visualType)) return { mode: 'image' };
+  if (TEXTLESS_BOOK_TYPES.has(bookType)) return { mode: 'image' };
+  const data = figureDataFor(marker);
+  return data ? { mode: 'data', data } : { mode: 'image' };
+}
+
+/**
+ * Write a figure marker in canonical form.
+ *
+ * generate-chapter rewrites every data-bearing marker through this rather than
+ * leaving the model's own text in place, so the exporters and the reader parse
+ * one shape: fields in a fixed order, a description free of stray newlines and
+ * a DATA payload re-serialized with its brackets escaped. Whatever the model
+ * emitted, what reaches the manuscript is what this function produces.
+ */
+export function buildFigureMarker(fields: {
+  figureNumber: number;
+  visualType: VisualType | string;
+  caption: string;
+  description: string;
+  data?: FigureData | null;
+}): string {
+  const caption = fields.caption.replace(/\s+/g, ' ').trim() || `Figure ${fields.figureNumber}`;
+  const description = fields.description.replace(/\s+/g, ' ').trim();
+  const lines = [
+    `[FIGURE ${fields.figureNumber}`,
+    `TYPE: ${String(fields.visualType)}`,
+    `CAPTION: ${caption}`,
+    `DESCRIPTION: ${description}`,
+  ];
+  if (fields.data) lines.push(`DATA: ${serializeFigureData(fields.data)}`);
+  return `${lines.join('\n')}]`;
 }

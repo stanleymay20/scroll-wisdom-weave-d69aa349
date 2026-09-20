@@ -8,6 +8,9 @@
  * should migrate to consuming `parseChapterToCanonical()` next.
  */
 
+import { figureDataFor, parseRawFigureMarkers } from "./visual-intelligence.ts";
+import type { FigureData } from "./figure-data.ts";
+
 export type CanonicalBlockKind =
   | "heading"
   | "paragraph"
@@ -18,6 +21,7 @@ export type CanonicalBlockKind =
   | "image"
   | "callout"
   | "reference"
+  | "diagram"
   | "hr";
 
 export interface CanonicalBlock {
@@ -35,6 +39,26 @@ export interface CanonicalBlock {
   code?: { language: string | null; source: string };
   /** Image source + alt text. */
   image?: { src: string; alt: string };
+  /**
+   * A figure drawn from structure rather than fetched as a picture.
+   *
+   * Until now every `[FIGURE ...]` marker was stripped before parsing, on the
+   * grounds that it was a prompt for an image pipeline rather than prose. That
+   * is true of artwork and false of a diagram: a flowchart's nodes and edges
+   * ARE the content, and dropping them deleted the figure from the PDF, the
+   * EPUB and the DOCX alike. A marker carrying a validated DATA payload now
+   * survives as one of these.
+   */
+  diagram?: CanonicalDiagram;
+}
+
+export interface CanonicalDiagram {
+  figureNumber: number;
+  caption: string;
+  /** Prose description, used as the accessible alternative to the graphic. */
+  description: string;
+  visualType: string;
+  data: FigureData;
 }
 
 export interface CanonicalChapter {
@@ -52,6 +76,8 @@ export interface CanonicalChapter {
     lists: number;
   };
 }
+
+const DIAGRAM_TOKEN_RE = /^<<<SCROLL_DIAGRAM_(\d+)>>>$/;
 
 const HEADING_RE = /^(#{1,6})\s+(.*)$/;
 const FENCE_RE = /^```([\w+-]*)\s*$/;
@@ -119,7 +145,31 @@ export function parseChapterToCanonical(
 ): CanonicalChapter {
   const blocks: CanonicalBlock[] = [];
   const stats = { words: 0, headings: 0, paragraphs: 0, images: 0, tables: 0, codeBlocks: 0, lists: 0 };
-  const text = stripExportOnlyArtifacts(content ?? "");
+
+  // Lift drawable figures out before stripExportOnlyArtifacts runs, because
+  // that function's job is to delete every `[FIGURE ...]` block and it cannot
+  // tell a diagram from an image prompt. Each is replaced by a single-line
+  // token that survives the strip and is recognised by the parse loop below.
+  const raw = content ?? "";
+  const diagrams = new Map<string, CanonicalDiagram>();
+  let prepared = raw;
+  for (const marker of parseRawFigureMarkers(raw)) {
+    const data = figureDataFor(marker);
+    if (!data) continue;
+    const token = `<<<SCROLL_DIAGRAM_${diagrams.size}>>>`;
+    diagrams.set(token, {
+      figureNumber: marker.num,
+      caption: marker.caption?.trim() || `Figure ${marker.num}`,
+      description: marker.description.trim(),
+      visualType: marker.type || "flowchart",
+      data,
+    });
+    // Replaced with a function so a '$' anywhere in the marker is not read as
+    // a replacement pattern.
+    prepared = prepared.replace(marker.fullMatch, () => `\n\n${token}\n\n`);
+  }
+
+  const text = stripExportOnlyArtifacts(prepared);
   const lines = text.split("\n");
 
   let i = 0;
@@ -157,6 +207,19 @@ export function parseChapterToCanonical(
     // Horizontal rule
     if (HR_RE.test(line)) {
       blocks.push({ kind: "hr" });
+      i++;
+      continue;
+    }
+
+    // A drawable figure, lifted out above.
+    const diagramToken = line.trim();
+    if (DIAGRAM_TOKEN_RE.test(diagramToken) && diagrams.has(diagramToken)) {
+      const diagram = diagrams.get(diagramToken)!;
+      blocks.push({ kind: "diagram", diagram });
+      // Counted as a figure: export-quality asks whether a book has visuals,
+      // and a diagram is one.
+      stats.images++;
+      stats.words += diagram.caption.split(/\s+/).filter(Boolean).length;
       i++;
       continue;
     }

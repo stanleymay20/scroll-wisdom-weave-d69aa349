@@ -1,4 +1,6 @@
 import { memo, useMemo, Component, type ReactNode } from "react";
+import { StructuredFigure } from "./visuals/StructuredFigure";
+import type { FigureData } from "../../../supabase/functions/_shared/figure-data";
 import { MermaidDiagram, descriptionToMermaid } from "./visuals/MermaidDiagram";
 import { DataChart } from "./visuals/DataChart";
 import { ComparisonTable } from "./visuals/ComparisonTable";
@@ -25,6 +27,14 @@ export interface FigureRendererProps {
   cognitiveScore?: number;
   figureNumber: string | number;
   className?: string;
+  /**
+   * The figure's real structure, when the generation call supplied it.
+   *
+   * When present it takes precedence over every renderMode below, because
+   * those paths reconstruct a diagram by splitting this figure's prose on full
+   * stops — a guess that was the only option before figures carried data.
+   */
+  data?: FigureData | null;
 }
 
 /**
@@ -92,8 +102,23 @@ export const FigureRenderer = memo(function FigureRenderer({
   cognitiveScore,
   figureNumber,
   className = "",
+  data,
 }: FigureRendererProps) {
   const renderedContent = useMemo(() => {
+    // Structure beats prose. Drawn from the same layout module the PDF and the
+    // EPUB use, so the figure on screen is the figure in the download.
+    if (data && !imageUrl) {
+      return (
+        <ErrorFallback
+          fallbackCaption={caption}
+          fallbackDescription={description}
+          visualType={visualType}
+        >
+          <StructuredFigure data={data} caption={caption} description={description} />
+        </ErrorFallback>
+      );
+    }
+
     // If we have an actual image URL, always render it
     if (imageUrl) {
       return (
@@ -181,7 +206,7 @@ export const FigureRenderer = memo(function FigureRenderer({
           </div>
         );
     }
-  }, [imageUrl, renderMode, visualType, description, caption]);
+  }, [imageUrl, renderMode, visualType, description, caption, data]);
 
   return (
     <figure className={`my-6 ${className}`}>

@@ -4,6 +4,7 @@ import DOMPurify from "dompurify";
 import { StructuredCodeBlock, extractAllStructuredCodeBlocks, StructuredCodeBlockData } from "./StructuredCodeBlock";
 import { ComputationalEvidencePanel } from "./ComputationalEvidencePanel";
 import { FigureRenderer, type RenderMode } from "./FigureRenderer";
+import { parseFigureData, type FigureData } from "../../../supabase/functions/_shared/figure-data";
 import { parseEvidenceBlocks, type ParsedEvidenceBlock } from "@/lib/computationalEvidence";
 
 // DOMPurify config that keeps embedded SVG diagrams and sandboxed iframes intact
@@ -253,6 +254,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     renderMode: RenderMode;
     cognitiveScore?: number;
     imageUrl?: string;
+    data?: FigureData | null;
   }
 
   const { figureMarkers, cleanedAfterFigures } = useMemo(() => {
@@ -262,7 +264,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
     let text = cleanedAfterEvidence;
 
     const extractFigureField = (block: string, label: string) => {
-      const fieldRegex = new RegExp(`(?:^|\\n)\\s*${label}:\\s*([\\s\\S]*?)(?=\\n\\s*(?:TYPE|CAPTION|DESCRIPTION|COGNITIVE_SCORE|IMAGE_URL|IMAGE):|$)`, 'i');
+      const fieldRegex = new RegExp(`(?:^|\\n)\\s*${label}:\\s*([\\s\\S]*?)(?=\\n\\s*(?:TYPE|CAPTION|DESCRIPTION|DATA|COGNITIVE_SCORE|IMAGE_URL|IMAGE):|$)`, 'i');
       return block.match(fieldRegex)?.[1]?.trim();
     };
 
@@ -280,6 +282,9 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
       const description = extractFigureField(block, 'DESCRIPTION');
       const score = extractFigureField(block, 'COGNITIVE_SCORE');
       const imageUrl = extractFigureField(block, 'IMAGE_URL') || extractFigureField(block, 'IMAGE');
+      // Validated rather than trusted: a malformed payload falls back to the
+      // prose-derived rendering instead of drawing a wrong diagram.
+      const data = parseFigureData(extractFigureField(block, 'DATA'));
 
       if (!visualType || !caption || !description) {
         return match;
@@ -293,6 +298,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
         renderMode: resolveRenderModeClient(visualType),
         cognitiveScore: score ? parseFloat(score) : undefined,
         imageUrl,
+        data,
       });
       return `<!--FIGURE_MARKER_${markers.length - 1}-->`;
     });
@@ -814,6 +820,7 @@ export function MarkdownRenderer({ content, className = "" }: MarkdownRendererPr
               renderMode={fig.renderMode}
               visualType={fig.type}
               cognitiveScore={fig.cognitiveScore}
+              data={fig.data}
               className="my-6"
             />
           );

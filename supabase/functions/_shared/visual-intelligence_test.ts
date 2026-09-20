@@ -9,7 +9,11 @@ import {
   stripFigureMarkers,
   validateFigureSpecs,
   VISUAL_DENSITY,
+  buildFigureMarker,
+  figureDataFor,
+  resolveFigureRendering,
 } from "./visual-intelligence.ts";
+import { parseFigureData } from "./figure-data.ts";
 
 function marker(num: number, type: string, caption: string, description: string): string {
   return `[FIGURE ${num}\nTYPE: ${type}\nCAPTION: ${caption}\nDESCRIPTION: ${description}]`;
@@ -285,4 +289,149 @@ Deno.test("a bare bracket that is not a figure marker is untouched", () => {
   const content = "See [1] and [FIGURES] and [Figure] below.";
   assertEquals(stripFigureMarkers(content), content);
   assertEquals(parseRawFigureMarkers(content).length, 0);
+});
+
+// ---------------------------------------------------------------------------
+// DATA payloads — the structure a diagram is drawn from.
+// ---------------------------------------------------------------------------
+
+const FLOW_JSON =
+  '{"kind":"flow","direction":"down","nodes":[{"id":"a","label":"Encoding"},{"id":"b","label":"Storage"}],"edges":[{"from":"a","to":"b"}]}';
+
+function dataMarker(num: number, type: string, caption: string, description: string, data: string): string {
+  return `[FIGURE ${num}\nTYPE: ${type}\nCAPTION: ${caption}\nDESCRIPTION: ${description}\nDATA: ${data}]`;
+}
+
+Deno.test("a DATA payload is parsed off the marker", () => {
+  const content = `Prose.\n\n${dataMarker(1, "flowchart", "Memory", "Three stages of memory.", FLOW_JSON)}\n\nMore.`;
+  const [m] = parseRawFigureMarkers(content);
+  assertEquals(m.num, 1);
+  assertEquals(m.data, FLOW_JSON);
+  // The JSON must not leak into the prose description shown under the figure.
+  assertEquals(m.description, "Three stages of memory.");
+  assert(!m.description.includes("kind"), m.description);
+});
+
+Deno.test("a marker without DATA still parses", () => {
+  const [m] = parseRawFigureMarkers(marker(1, "flowchart", "C", "A description."));
+  assertEquals(m.data, undefined);
+  assertEquals(m.description, "A description.");
+});
+
+Deno.test("JSON brackets do not end the marker early", () => {
+  // The payload's own brackets are balanced, which is exactly what lets the
+  // bracket-matching scanner carry JSON inside a bracketed marker at all.
+  const content = dataMarker(1, "flowchart", "C", "D", FLOW_JSON);
+  const [m] = parseRawFigureMarkers(content);
+  assertEquals(m.fullMatch, content);
+  assert(m.fullMatch.endsWith("]"));
+  assertEquals(figureDataFor(m)?.kind, "flow");
+});
+
+Deno.test("figureDataFor rejects a malformed payload", () => {
+  const [m] = parseRawFigureMarkers(dataMarker(1, "flowchart", "C", "D", '{"kind":"flow","nodes":"bad"}'));
+  assertEquals(figureDataFor(m), null);
+});
+
+// ---------------------------------------------------------------------------
+// resolveFigureRendering
+// ---------------------------------------------------------------------------
+
+Deno.test("a diagram with valid data is drawn from structure", () => {
+  const [m] = parseRawFigureMarkers(dataMarker(1, "flowchart", "C", "D", FLOW_JSON));
+  const resolved = resolveFigureRendering(m, "flowchart", "academic");
+  assertEquals(resolved.mode, "data");
+});
+
+Deno.test("a diagram without usable data falls back to an image", () => {
+  const [m] = parseRawFigureMarkers(marker(1, "flowchart", "C", "A flowchart of the process."));
+  assertEquals(resolveFigureRendering(m, "flowchart", "academic").mode, "image");
+});
+
+Deno.test("artwork always takes the image path", () => {
+  // A watercolour of a fox is not a flowchart, whatever JSON accompanies it.
+  const [m] = parseRawFigureMarkers(dataMarker(1, "children_illustration", "C", "D", FLOW_JSON));
+  assertEquals(resolveFigureRendering(m, "children_illustration", "illustrated").mode, "image");
+});
+
+Deno.test("artwork-first book types take the image path", () => {
+  const [m] = parseRawFigureMarkers(dataMarker(1, "flowchart", "C", "D", FLOW_JSON));
+  for (const bookType of ["children", "comic", "fiction"]) {
+    assertEquals(resolveFigureRendering(m, "flowchart", bookType).mode, "image", bookType);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// buildFigureMarker — one canonical shape reaches the manuscript.
+// ---------------------------------------------------------------------------
+
+Deno.test("a built marker round-trips through the parser", () => {
+  const data = parseFigureData(FLOW_JSON)!;
+  const built = buildFigureMarker({
+    figureNumber: 4,
+    visualType: "flowchart",
+    caption: "  Memory   stages  ",
+    description: "Three\nstages\tof memory.",
+    data,
+  });
+  const [m] = parseRawFigureMarkers(built);
+  assertEquals(m.num, 4);
+  assertEquals(m.type, "flowchart");
+  assertEquals(m.caption, "Memory stages");
+  assertEquals(m.description, "Three stages of memory.");
+  assertEquals(figureDataFor(m), data);
+  assertEquals(m.fullMatch, built);
+});
+
+Deno.test("a built marker without data omits the field", () => {
+  const built = buildFigureMarker({
+    figureNumber: 1,
+    visualType: "children_illustration",
+    caption: "A fox at dawn",
+    description: "A fox waking beneath an oak.",
+    data: null,
+  });
+  assert(!built.includes("DATA:"), built);
+  const [m] = parseRawFigureMarkers(built);
+  assertEquals(m.data, undefined);
+});
+
+Deno.test("a caption containing brackets survives being built and reparsed", () => {
+  const data = parseFigureData('{"kind":"table","columns":["A","B"],"rows":[["x [1]","y ]"]]}')!;
+  const built = buildFigureMarker({
+    figureNumber: 2,
+    visualType: "comparison_visual",
+    caption: "Comparison",
+    description: "A comparison.",
+    data,
+  });
+  const [m] = parseRawFigureMarkers(built);
+  assertEquals(m.fullMatch, built, "the marker must not be cut short");
+  assertEquals(figureDataFor(m), data);
+});
+
+// ---------------------------------------------------------------------------
+// The sweep must spare renderable diagrams.
+// ---------------------------------------------------------------------------
+
+Deno.test("keepRenderable spares a data-bearing marker", () => {
+  const good = dataMarker(1, "flowchart", "Kept", "D", FLOW_JSON);
+  const bare = marker(2, "flowchart", "Dropped", "A flowchart of the thing.");
+  const content = `A\n\n${good}\n\nB\n\n${bare}\n\nC`;
+
+  const swept = stripFigureMarkers(content, { keepRenderable: true });
+  assertStringIncludes(swept, "CAPTION: Kept");
+  assert(!swept.includes("CAPTION: Dropped"), swept);
+});
+
+Deno.test("a data marker whose payload is broken is still swept", () => {
+  const broken = dataMarker(1, "flowchart", "Broken", "D", "{not json");
+  const swept = stripFigureMarkers(`A\n\n${broken}\n\nB`, { keepRenderable: true });
+  assert(!/\[FIGURE/i.test(swept), swept);
+});
+
+Deno.test("the default sweep removes everything, including diagrams", () => {
+  // The text-only pipeline relies on this: a text book has no figures at all.
+  const content = `A\n\n${dataMarker(1, "flowchart", "C", "D", FLOW_JSON)}\n\nB`;
+  assert(!/\[FIGURE/i.test(stripFigureMarkers(content)), "default must strip data markers too");
 });

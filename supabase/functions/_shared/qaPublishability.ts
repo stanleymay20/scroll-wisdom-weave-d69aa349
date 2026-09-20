@@ -11,6 +11,8 @@
 // This module is the deterministic backbone that all downstream QA slices
 // (LLM validators, code executors) build on top of. Same input ⇒ same output.
 
+import { figureDataFor, parseRawFigureMarkers } from "./visual-intelligence.ts";
+
 import { auditChapterArtifacts, type ContentIssue } from "./content-quality.ts";
 import { parseBookToCanonical, type CanonicalChapter } from "./canonicalContent.ts";
 import { auditBookForExport, type ExportIssue } from "./exportQuality.ts";
@@ -58,6 +60,21 @@ export interface QAChapterInput {
 }
 
 // --- Rendering risk detectors ------------------------------------------------
+
+/**
+ * True when the chapter holds a figure marker that nothing can render.
+ *
+ * Markers with a validated DATA payload are drawn as diagrams and are
+ * legitimate manuscript content; everything else bracketed is a leftover
+ * directive that would print raw.
+ */
+function hasUnrenderableFigureMarker(content: string): boolean {
+  const markers = parseRawFigureMarkers(content);
+  // A bracketed thing this parser does not recognise is still an orphan.
+  if (markers.length === 0) return true;
+  return markers.some((marker) => !figureDataFor(marker));
+}
+
 
 // $...$ / $$...$$ / \\alpha / \\frac{}{} / \\begin{...}
 const LATEX_INLINE_RE = /(?<!\\)\$[^$\n]{1,200}\$/;
@@ -123,14 +140,19 @@ function detectRenderingIssues(
     });
   }
 
-  if (ORPHAN_FIGURE_RE.test(content)) {
+  // A marker carrying a validated DATA payload is not an orphan. It is a
+  // diagram the reader and every exporter draw from its structure, so the
+  // check asks whether any marker LACKS usable data rather than whether a
+  // marker exists at all — otherwise shipping a real diagram would block the
+  // book it is part of.
+  if (ORPHAN_FIGURE_RE.test(content) && hasUnrenderableFigureMarker(content)) {
     issues.push({
       severity: "blocker",
       code: "orphan_figure_marker",
       category: "rendering",
       chapter,
       message: `Chapter ${chapter}: unrendered [FIGURE ...] marker`,
-      hint: "Replace the placeholder with a real image or delete the marker before export.",
+      hint: "Replace the placeholder with a real image, supply a DATA payload, or delete the marker before export.",
     });
   }
 

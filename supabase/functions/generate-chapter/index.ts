@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs, parseRawFigureMarkers, summarizeFigureSpecs, VISUAL_DENSITY, buildFigureImagePrompt, figureImageMarkdown, replaceFigureMarker, stripFigureMarkers, type VisualType } from "../_shared/visual-intelligence.ts";
+import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs, parseRawFigureMarkers, summarizeFigureSpecs, VISUAL_DENSITY, buildFigureImagePrompt, buildFigureMarker, figureImageMarkdown, replaceFigureMarker, resolveFigureRendering, stripFigureMarkers, type VisualType } from "../_shared/visual-intelligence.ts";
 import { checkRateLimit, errorResponse, ErrorCode } from "../_shared/error-codes.ts";
 import { COMIC_STYLE_PRESETS, COMIC_SUB_TYPE_DEFINITIONS, buildStoryArchitectPrompt, buildScriptwriterPrompt, buildVisualDirectorPrompt, buildLearningAgentPrompt, buildContinuityGuardianPrompt, buildEnhancedComicSystemPrompt, buildEnhancedComicChapterPrompt, buildComicSystemPrompt, buildComicChapterPrompt } from "../_shared/generation/comic-prompts.ts";
 
@@ -4957,11 +4957,12 @@ ${(researchResult?.references ?? []).map((ref, idx) => {
         // Stage 3: Build approved figure set using explicit figureNumber identity
         const approvedNums = new Set(validSpecs.map(s => s.figureNumber));
         const rawMarkers = parseRawFigureMarkers(finalContent);
-        const figures = rawMarkers
+        const approvedMarkers = rawMarkers
           .filter(m => approvedNums.has(m.num))
           .map(m => {
             const spec = validSpecs.find(s => s.figureNumber === m.num);
             return {
+              marker: m,
               num: m.num,
               description: m.description,
               // The structured CAPTION the author's marker carries, written for
@@ -4974,6 +4975,44 @@ ${(researchResult?.references ?? []).map((ref, idx) => {
               renderMode: spec?.renderMode || 'ai_image',
             };
           });
+
+        // Split by how each figure is produced. A flowchart, matrix, comparison
+        // or chart is DRAWN from the structure the generation call supplied in
+        // the marker's DATA field; only artwork goes to the image model.
+        //
+        // Every one of these used to be flattened into an AI image, which is
+        // why a book's diagrams were unlabelled approximations: an image model
+        // asked for "a risk matrix" invents a picture of one, where the reader,
+        // the PDF, the EPUB and the DOCX can each draw the actual quadrants
+        // from the actual data.
+        const figures: typeof approvedMarkers = [];
+        let drawnFigures = 0;
+
+        for (const item of approvedMarkers) {
+          const resolved = resolveFigureRendering(item.marker, item.visualType, effectiveBookType);
+          if (resolved.mode === 'image') {
+            figures.push(item);
+            continue;
+          }
+          // Rewritten into canonical form so the exporters and the reader parse
+          // one shape regardless of how the model formatted its own marker.
+          finalContent = replaceFigureMarker(
+            finalContent,
+            item.fullMatch,
+            buildFigureMarker({
+              figureNumber: item.num,
+              visualType: item.visualType,
+              caption: item.caption,
+              description: item.description,
+              data: resolved.data,
+            }),
+          );
+          drawnFigures++;
+        }
+
+        if (drawnFigures > 0) {
+          console.log(`[VISUAL-INTELLIGENCE] ${drawnFigures} figure(s) drawn from structured data (no image call)`);
+        }
 
         // Rejected markers are not removed one by one here. Every marker that
         // does not end up rendered — rejected, over the density cap, or failed
@@ -5230,7 +5269,12 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
     // ILLUSTRATION_ENABLED_TYPES were covered by nothing at all.
     if (/\[FIGURE\s*\d/i.test(finalContent)) {
       const beforeSweep = finalContent;
-      finalContent = stripFigureMarkers(finalContent);
+      // A text book keeps no figures at all, so it sweeps everything. Every
+      // other pipeline spares markers carrying valid DATA: those are diagrams
+      // the reader and the exporters render from their structure, not orphans.
+      finalContent = stripFigureMarkers(finalContent, {
+        keepRenderable: effectiveBookType !== 'text',
+      });
       if (beforeSweep !== finalContent) {
         console.log("[GENERATE-CHAPTER] Swept unrendered [FIGURE] markers from chapter content");
       }
