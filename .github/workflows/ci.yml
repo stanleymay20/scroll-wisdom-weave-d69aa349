@@ -79,6 +79,12 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-service-role-table-authority.sql
       - name: Assert account-deletion certificate retention contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-account-deletion-certificate-retention.sql
+      - name: Assert scheduled releases actually materialize
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-release-materialization.sql
+      - name: Assert the payout write surface stays server-owned
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-payout-surface.sql
+      - name: Assert browser roles hold no privilege RLS cannot restrain
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-browser-role-truncate.sql
       - name: Rebuild hardened ISBN schema from verified legacy staging shape
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-legacy-staging-isbn-convergence.sql
       - name: Assert ISBN governance, RLS and transactional mint contract
@@ -119,12 +125,18 @@ jobs:
         run: |
           deno check supabase/functions/_shared/error-tracking.ts
           deno check supabase/functions/_shared/http.ts
+          deno check supabase/functions/_shared/figure-data.ts
+          deno check supabase/functions/_shared/figure-layout.ts
+          deno check supabase/functions/_shared/figure-export.ts
+          deno check supabase/functions/_shared/cron-auth.ts
+          deno check supabase/functions/_shared/stripe-connect.ts
       - name: Type-check critical financial Edge Functions
         run: |
           deno check supabase/functions/create-checkout/index.ts
           deno check supabase/functions/customer-portal/index.ts
           deno check supabase/functions/check-subscription/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
+          deno check supabase/functions/stripe-connect-onboarding/index.ts
       - name: Type-check authority and metered usage Edge Functions
         run: |
           deno check supabase/functions/claim-admin/index.ts
@@ -154,6 +166,7 @@ jobs:
           deno check supabase/functions/publishing-identity/index.ts
           deno check supabase/functions/isbn-admin-state/index.ts
           deno check supabase/functions/publish-work/index.ts
+          deno check supabase/functions/materialize-release-schedules/index.ts
           deno check supabase/functions/enqueue-export-bundle/index.ts
           deno check supabase/functions/export-book/index.ts
           deno check supabase/functions/distribution-metadata/index.ts
@@ -185,10 +198,16 @@ jobs:
           deno test supabase/functions/_shared/productionArtifactAudit_test.ts
           deno test supabase/functions/_shared/kdp-print-cover_test.ts
           deno test supabase/functions/_shared/kdp-cover-resolution_test.ts
-      - name: Test editorial coverage and copyediting safety
+      - name: Test editorial coverage, copyediting and illustration safety
         run: |
           deno test supabase/functions/_shared/audit-excerpt_test.ts
           deno test supabase/functions/_shared/proofread_test.ts
+          deno test supabase/functions/_shared/visual-intelligence_test.ts
+          deno test supabase/functions/_shared/figure-data_test.ts
+          deno test supabase/functions/_shared/figure-layout_test.ts
+          deno test supabase/functions/_shared/figure-export_test.ts
+          deno test supabase/functions/_shared/cron-auth_test.ts
+          deno test supabase/functions/_shared/stripe-connect_test.ts
 
   build:
     runs-on: ubuntu-latest

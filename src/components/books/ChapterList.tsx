@@ -116,9 +116,15 @@ export function ChapterList({
         if (latestJob) {
           setLatestJob({ ...latestJob, status: "completed" });
         }
+        // The copyedit pass is worth reporting: it is the one stage that
+        // changes the prose a reader actually sees, and silence about it makes
+        // a corrected manuscript indistinguishable from an unchecked one.
+        const copyedits = result.proofreading.correctionsApplied > 0
+          ? ` · ${result.proofreading.correctionsApplied} copyedit${result.proofreading.correctionsApplied === 1 ? "" : "s"} applied across ${result.proofreading.chaptersChanged} chapter${result.proofreading.chaptersChanged === 1 ? "" : "s"}`
+          : "";
         toast({
           title: "Publication candidate verified",
-          description: `Editorial ${result.editorial.score ?? "—"}/100 · evidence and publishability gates passed.`,
+          description: `Editorial ${result.editorial.score ?? "—"}/100 · evidence and publishability gates passed${copyedits}.`,
         });
       } else {
         // Pipeline already persisted the partial verdict; surface the manual

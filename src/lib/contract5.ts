@@ -177,7 +177,14 @@ export const READER_CONSTRAINTS = {
 } as const;
 export const AUDIO_CONSTRAINTS = { maxChunkSize: 800, firstChunkSize: 260, resumeDebounceMs: 500 } as const;
 
-type CheckState = 'pass' | 'fail' | 'unknown';
+/**
+ * A check is `unknown` when the browser never produced the observation it
+ * grades — no page metrics recorded, no viewport lock, no connection probe.
+ * That is deliberately not `pass`: reporting a check green because it never
+ * ran is the failure mode this three-state type exists to prevent, so
+ * consumers must render it as its own state rather than coercing it.
+ */
+export type CheckState = 'pass' | 'fail' | 'unknown';
 export interface Contract5Report {
   passed: boolean;
   complete: boolean;

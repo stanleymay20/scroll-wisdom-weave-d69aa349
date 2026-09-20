@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
+import { payoutMethodForStatus, payoutStatusFromAccount } from "../_shared/stripe-connect.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { correlationId, logFinancialEvent, logFraudSignal, evaluateSeverity } from "../_shared/observability.ts";
 
@@ -580,6 +581,70 @@ serve(async (req) => {
               threshold_key: "subscription.payment_failed_count_5m",
             },
           });
+          break;
+        }
+
+        case "account.updated": {
+          // A creator's Connect account changed: onboarding finished, Stripe
+          // finished a review, or a requirement fell due. This is the only
+          // path that can mark a creator payable, and it is deliberately the
+          // only one — stripe_connect_status is not settable by a client and
+          // the onboarding endpoint only ever reports what Stripe already
+          // says.
+          const account = event.data.object as Stripe.Account;
+          const status = payoutStatusFromAccount(account);
+
+          // Matched on the stored account id, never on metadata: metadata is
+          // writable through the Stripe dashboard, and this decides where
+          // money goes.
+          const { data: profile } = await supabase
+            .from("creator_payout_profiles")
+            .select("user_id, payout_method, stripe_connect_status")
+            .eq("stripe_connect_account_id", account.id)
+            .maybeSingle();
+
+          if (!profile) {
+            // An account we did not create, or one whose profile row was
+            // removed. Recorded rather than silently dropped.
+            await logFinancialEvent(supabase, {
+              event_type: "connect_account_unknown", severity: "warn", actor: "webhook",
+              correlation_id: corr, stripe_event_id: event.id,
+              payload: { account_id: account.id, status },
+            });
+            break;
+          }
+
+          const previous = profile.stripe_connect_status as string;
+          const { error: updateError } = await supabase
+            .from("creator_payout_profiles")
+            .update({
+              stripe_connect_status: status,
+              payout_method: payoutMethodForStatus(status, profile.payout_method ?? "unset"),
+              updated_at: new Date().toISOString(),
+            })
+            .eq("user_id", profile.user_id);
+
+          if (updateError) {
+            await logFinancialEvent(supabase, {
+              event_type: "connect_status_write_failed", severity: "error", actor: "webhook",
+              correlation_id: corr, stripe_event_id: event.id, user_id: profile.user_id,
+              payload: { account_id: account.id, status, error: updateError.message },
+            });
+            break;
+          }
+
+          if (previous !== status) {
+            // Losing the ability to pay someone is more serious than gaining
+            // it, and both are worth an audit entry on the money path.
+            const severity = status === "verified"
+              ? "info"
+              : (previous === "verified" ? "warn" : "info");
+            await logFinancialEvent(supabase, {
+              event_type: "connect_status_changed", severity, actor: "webhook",
+              correlation_id: corr, stripe_event_id: event.id, user_id: profile.user_id,
+              payload: { account_id: account.id, from: previous, to: status },
+            });
+          }
           break;
         }
 

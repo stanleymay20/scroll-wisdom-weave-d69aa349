@@ -3,15 +3,42 @@
 // and broadcasts a followed_author_release notification to the author's followers
 // (deduped at the DB level by uniq_creator_notifications_follow_release).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { authorizeCronRequest, CRON_SECRET_HEADER } from "../_shared/cron-auth.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Headers": "authorization, apikey, content-type",
+  "Access-Control-Allow-Headers": "authorization, apikey, content-type, x-cron-secret",
   "Access-Control-Allow-Methods": "POST, OPTIONS",
 };
 
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") return new Response(null, { headers: cors });
+
+  // This worker runs with verify_jwt = false so pg_cron can reach it, which
+  // means the shared secret below is its only access control. It holds the
+  // service-role key and flips release_schedule_items to "released", so an
+  // unauthenticated caller can drive privileged work and read back the ids of
+  // every schedule it touched.
+  //
+  // Enforcement is conditional on purpose. The job is scheduled outside this
+  // repository, so demanding the header unconditionally would stop whatever
+  // currently calls it — and for a release scheduler that means an author's
+  // chapters quietly never going live. Setting CRON_SECRET, and adding the
+  // header wherever the job is scheduled, closes the hole with no code change.
+  const auth = authorizeCronRequest(req.headers, Deno.env.get("CRON_SECRET"));
+  if (auth.status === "rejected") {
+    console.warn("materialize-release-schedules: rejected", { reason: auth.reason });
+    return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
+      status: 401,
+      headers: { ...cors, "Content-Type": "application/json" },
+    });
+  }
+  if (auth.status === "unconfigured") {
+    console.warn(
+      `materialize-release-schedules: CRON_SECRET is not set; running unauthenticated. ` +
+      `Set CRON_SECRET and send it as ${CRON_SECRET_HEADER} from the scheduler to close this.`,
+    );
+  }
 
   const url = Deno.env.get("SUPABASE_URL")!;
   const svc = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -50,7 +77,11 @@ Deno.serve(async (req) => {
               .eq("id", item.id)
               .eq("status", "scheduled");
             await admin.from("publishing_audit_log").insert({
-              user_id: ownerId, platform: null,
+              // platform is NOT NULL. Passing null made this insert throw, so
+              // the catch below recorded a constraint error as the item's
+              // error_message instead of "entitlement_revoked" — the author
+              // saw a Postgres message where a reason belonged.
+              user_id: ownerId, platform: "platform",
               event_type: "publish_blocked_by_tier", severity: "warning",
               message: "Scheduled release skipped: owner lost can_schedule_releases",
               metadata: { release_schedule_item_id: item.id, current_tier: ent?.tier ?? "free" },
@@ -96,7 +127,10 @@ Deno.serve(async (req) => {
       ok: true,
       processed, released, failed, notified,
       elapsed_ms: Date.now() - started,
-      results,
+      // Per-item ids and error text go only to a caller that proved it is the
+      // scheduler. Counts are harmless and keep the response useful while
+      // CRON_SECRET is still unset.
+      ...(auth.verified ? { results } : {}),
     }), { headers: { ...cors, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({

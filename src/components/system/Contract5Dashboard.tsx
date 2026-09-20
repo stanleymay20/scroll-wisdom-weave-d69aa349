@@ -30,7 +30,8 @@ import {
   getLockedViewport,
   SLA,
   type Contract5Report,
-  type ConnectionState
+  type ConnectionState,
+  type CheckState
 } from '@/lib/contract5';
 import { getMetrics, getViolations as getPerformanceViolations } from '@/lib/performance';
 
@@ -71,12 +72,61 @@ export function Contract5Dashboard() {
     }
   };
 
-  const getStatusBadge = (passed: boolean) => (
-    <Badge variant={passed ? 'default' : 'destructive'} className="gap-1">
-      {passed ? <CheckCircle className="h-3 w-3" /> : <XCircle className="h-3 w-3" />}
-      {passed ? 'PASS' : 'FAIL'}
-    </Badge>
-  );
+  // `passed` is "nothing failed", which is true of a report in which nothing
+  // was measured either. `complete` distinguishes the two, so a report resting
+  // on unobserved checks is labelled PARTIAL rather than presented as a pass.
+  const getStatusBadge = (passed: boolean, complete: boolean) => {
+    if (!passed) {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <XCircle className="h-3 w-3" />
+          FAIL
+        </Badge>
+      );
+    }
+    if (!complete) {
+      return (
+        <Badge variant="secondary" className="gap-1">
+          <AlertTriangle className="h-3 w-3" />
+          PARTIAL
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="default" className="gap-1">
+        <CheckCircle className="h-3 w-3" />
+        PASS
+      </Badge>
+    );
+  };
+
+  // Each check reports pass, fail or unknown, and unknown is shown as itself.
+  // Rendering "not observed" as PASS would tell an operator that a check ran
+  // and cleared when in fact nothing was ever measured.
+  const getCheckBadge = (state: CheckState) => {
+    if (state === 'pass') {
+      return (
+        <Badge variant="default" className="gap-1">
+          <CheckCircle className="h-3 w-3" />
+          PASS
+        </Badge>
+      );
+    }
+    if (state === 'fail') {
+      return (
+        <Badge variant="destructive" className="gap-1">
+          <XCircle className="h-3 w-3" />
+          FAIL
+        </Badge>
+      );
+    }
+    return (
+      <Badge variant="secondary" className="gap-1">
+        <AlertTriangle className="h-3 w-3" />
+        NOT OBSERVED
+      </Badge>
+    );
+  };
 
   if (!report) {
     return (
@@ -104,7 +154,7 @@ export function Contract5Dashboard() {
             </CardDescription>
           </div>
           <div className="flex items-center gap-3">
-            {getStatusBadge(report.passed)}
+            {getStatusBadge(report.passed, report.complete)}
             <Button variant="outline" size="sm" onClick={refreshReport} disabled={isRefreshing}>
               <RefreshCw className={`h-4 w-4 mr-1 ${isRefreshing ? 'animate-spin' : ''}`} />
               Refresh
@@ -120,7 +170,7 @@ export function Contract5Dashboard() {
               <Gauge className="h-4 w-4 text-muted-foreground" />
               <h4 className="font-semibold">SLA Compliance (Rule 5.1)</h4>
             </div>
-            {getStatusBadge(report.results.slaCompliance.passed)}
+            {getCheckBadge(report.results.slaCompliance.state)}
           </div>
           <div className="text-sm text-muted-foreground mb-2">
             First content: ≤{SLA.FIRST_MEANINGFUL_CONTENT_MS}ms • Interactive: ≤{SLA.FULLY_INTERACTIVE_MS}ms
@@ -173,7 +223,7 @@ export function Contract5Dashboard() {
               )}
               <h4 className="font-semibold">Mobile Stability (Rule 5.2)</h4>
             </div>
-            {getStatusBadge(report.results.mobileStability.passed)}
+            {getCheckBadge(report.results.mobileStability.state)}
           </div>
           
           <div className="grid grid-cols-2 gap-4 text-sm">
@@ -202,7 +252,7 @@ export function Contract5Dashboard() {
               {getConnectionIcon(connectionDiagnostics.state)}
               <h4 className="font-semibold">Connection Truth (Rule 5.3)</h4>
             </div>
-            {getStatusBadge(report.results.connectionTruth.passed)}
+            {getCheckBadge(report.results.connectionTruth.state)}
           </div>
           
           <div className="grid grid-cols-2 gap-4 text-sm mb-3">
@@ -258,7 +308,7 @@ export function Contract5Dashboard() {
               <Activity className="h-4 w-4 text-muted-foreground" />
               <h4 className="font-semibold">Trust Signals (Rule 5.7)</h4>
             </div>
-            {getStatusBadge(report.results.trustSignals.passed)}
+            {getCheckBadge(report.results.trustSignals.state)}
           </div>
           
           <div className="text-sm text-muted-foreground">
@@ -268,20 +318,27 @@ export function Contract5Dashboard() {
 
         {/* Overall Status */}
         <div className={`rounded-lg p-4 text-center ${
-          report.passed 
-            ? 'bg-green-500/10 border border-green-500/30' 
-            : 'bg-destructive/10 border border-destructive/30'
+          !report.passed
+            ? 'bg-destructive/10 border border-destructive/30'
+            : report.complete
+              ? 'bg-green-500/10 border border-green-500/30'
+              : 'bg-amber-500/10 border border-amber-500/30'
         }`}>
           <div className="flex items-center justify-center gap-2 font-semibold">
-            {report.passed ? (
+            {!report.passed ? (
+              <>
+                <XCircle className="h-5 w-5 text-destructive" />
+                <span className="text-destructive">Contract 5 Compliance: FAILED</span>
+              </>
+            ) : report.complete ? (
               <>
                 <CheckCircle className="h-5 w-5 text-green-600 dark:text-green-400" />
                 <span className="text-green-600 dark:text-green-400">Contract 5 Compliance: PASSED</span>
               </>
             ) : (
               <>
-                <XCircle className="h-5 w-5 text-destructive" />
-                <span className="text-destructive">Contract 5 Compliance: FAILED</span>
+                <AlertTriangle className="h-5 w-5 text-amber-500" />
+                <span className="text-amber-600 dark:text-amber-400">Contract 5 Compliance: PARTIAL &mdash; some checks were never observed</span>
               </>
             )}
           </div>

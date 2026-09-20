@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs, parseRawFigureMarkers, summarizeFigureSpecs, VISUAL_DENSITY } from "../_shared/visual-intelligence.ts";
+import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs, parseRawFigureMarkers, summarizeFigureSpecs, VISUAL_DENSITY, buildFigureImagePrompt, buildFigureMarker, figureImageMarkdown, replaceFigureMarker, resolveFigureRendering, stripFigureMarkers, type VisualType } from "../_shared/visual-intelligence.ts";
 import { checkRateLimit, errorResponse, ErrorCode } from "../_shared/error-codes.ts";
 import { COMIC_STYLE_PRESETS, COMIC_SUB_TYPE_DEFINITIONS, buildStoryArchitectPrompt, buildScriptwriterPrompt, buildVisualDirectorPrompt, buildLearningAgentPrompt, buildContinuityGuardianPrompt, buildEnhancedComicSystemPrompt, buildEnhancedComicChapterPrompt, buildComicSystemPrompt, buildComicChapterPrompt } from "../_shared/generation/comic-prompts.ts";
 
@@ -10,6 +10,33 @@ const corsHeaders = {
 };
 
 // Tier-based model routing: better models for paid users, cost-efficient for free
+/**
+ * Time budgets for figure generation.
+ *
+ * The figure batch runs late in the request, after text generation, any
+ * retries and validation. A budget measured from where the batch starts is
+ * therefore not a bound on the request at all: if text generation took 100s,
+ * a fresh 90s for images would run the invocation to 190s and the platform
+ * would kill it — losing the finished chapter, not just its pictures.
+ *
+ * So the deadline is whichever comes first: this slice, or the point at which
+ * the reserve must begin. The reserve covers what still has to happen after
+ * the last image arrives — base64 decoding, sequential storage uploads, the
+ * Contract 6 gate and the database write that actually saves the chapter.
+ * Images are the optional part of a chapter; saving it is not.
+ */
+const FIGURE_IMAGE_BUDGET_MS = 90_000;
+const FUNCTION_TIME_CEILING_MS = 150_000;
+const POST_IMAGE_RESERVE_MS = 30_000;
+
+/** Carries the figure number through Promise.allSettled's rejection path. */
+class FigureImageError extends Error {
+  constructor(readonly figureNumber: number, message: string) {
+    super(`Figure ${figureNumber}: ${message}`);
+    this.name = "FigureImageError";
+  }
+}
+
 const getModelForPlan = (plan: string): string => {
   switch (plan) {
     case "prophet_tier":
@@ -1886,6 +1913,11 @@ BEGIN CREATING THE WORKBOOK CHAPTER:`;
 // ===========================================
 
 serve(async (req) => {
+  // Anchors every downstream time budget. Figure generation happens late in
+  // the request, so a budget measured from where it starts says nothing about
+  // how much of the function's own ceiling is left.
+  const invocationStart = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -4939,23 +4971,67 @@ ${(researchResult?.references ?? []).map((ref, idx) => {
         // Stage 3: Build approved figure set using explicit figureNumber identity
         const approvedNums = new Set(validSpecs.map(s => s.figureNumber));
         const rawMarkers = parseRawFigureMarkers(finalContent);
-        const figures = rawMarkers
+        const approvedMarkers = rawMarkers
           .filter(m => approvedNums.has(m.num))
-          .map(m => ({
-            num: m.num,
-            description: m.description,
-            fullMatch: m.fullMatch,
-            renderMode: validSpecs.find(s => s.figureNumber === m.num)?.renderMode || 'ai_image',
-          }));
-        
-        // Remove rejected figure markers from content by exact fullMatch
-        for (const r of rejected) {
-          // Use the exact raw marker text stored during parsing for safe removal
-          const rawMarker = rawMarkers.find(m => m.num === r.spec.figureNumber);
-          if (rawMarker) {
-            finalContent = finalContent.replace(rawMarker.fullMatch, '');
+          .map(m => {
+            const spec = validSpecs.find(s => s.figureNumber === m.num);
+            return {
+              marker: m,
+              num: m.num,
+              description: m.description,
+              // The structured CAPTION the author's marker carries, written for
+              // a reader. The previous code took the first sentence of the
+              // DESCRIPTION instead, which is written for an image model, and
+              // printed it under the figure.
+              caption: (m.caption || spec?.caption || '').trim() || `Figure ${m.num}`,
+              visualType: (spec?.visualType || 'labeled_illustration') as VisualType,
+              fullMatch: m.fullMatch,
+              renderMode: spec?.renderMode || 'ai_image',
+            };
+          });
+
+        // Split by how each figure is produced. A flowchart, matrix, comparison
+        // or chart is DRAWN from the structure the generation call supplied in
+        // the marker's DATA field; only artwork goes to the image model.
+        //
+        // Every one of these used to be flattened into an AI image, which is
+        // why a book's diagrams were unlabelled approximations: an image model
+        // asked for "a risk matrix" invents a picture of one, where the reader,
+        // the PDF, the EPUB and the DOCX can each draw the actual quadrants
+        // from the actual data.
+        const figures: typeof approvedMarkers = [];
+        let drawnFigures = 0;
+
+        for (const item of approvedMarkers) {
+          const resolved = resolveFigureRendering(item.marker, item.visualType, effectiveBookType);
+          if (resolved.mode === 'image') {
+            figures.push(item);
+            continue;
           }
+          // Rewritten into canonical form so the exporters and the reader parse
+          // one shape regardless of how the model formatted its own marker.
+          finalContent = replaceFigureMarker(
+            finalContent,
+            item.fullMatch,
+            buildFigureMarker({
+              figureNumber: item.num,
+              visualType: item.visualType,
+              caption: item.caption,
+              description: item.description,
+              data: resolved.data,
+            }),
+          );
+          drawnFigures++;
         }
+
+        if (drawnFigures > 0) {
+          console.log(`[VISUAL-INTELLIGENCE] ${drawnFigures} figure(s) drawn from structured data (no image call)`);
+        }
+
+        // Rejected markers are not removed one by one here. Every marker that
+        // does not end up rendered — rejected, over the density cap, or failed
+        // at the image model — is swept at the end of the pipeline, so there is
+        // one place responsible for the invariant that no marker survives.
         
         console.log(`[VISUAL-INTELLIGENCE] ${figures.length} figure markers ready for rendering`);
 
@@ -5051,32 +5127,81 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
           const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
           const storageClient = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-          // Cap at 2 figures to stay within edge function timeout (150s)
-          const figuresToGenerate = figures.slice(0, 2);
-          
+          // How many figures are generated is decided by the book type's visual
+          // density, not by a constant. The previous hard cap of 2 was applied
+          // AFTER the density rules had already approved up to five figures for
+          // a children's book and six for a comic — the two types that exist to
+          // be looked at — so those shipped with two pictures and the rest
+          // degraded to italic text.
+          //
+          // The timeout the cap was protecting against is handled by the thing
+          // that actually causes it: elapsed time. Every request is raced
+          // against a shared deadline, so a slow provider costs the figures it
+          // could not deliver in time rather than the whole invocation.
+          const figuresToGenerate = figures;
+          const imageDeadline = Math.min(
+            Date.now() + FIGURE_IMAGE_BUDGET_MS,
+            invocationStart + FUNCTION_TIME_CEILING_MS - POST_IMAGE_RESERVE_MS,
+          );
+
+          // If the request has already spent its budget, do not start the batch
+          // at all: every request would abort immediately anyway, and the
+          // markers are swept so the chapter still saves cleanly without them.
+          if (imageDeadline <= Date.now()) {
+            console.warn("[GENERATE-CHAPTER] no time left for figures", {
+              elapsedMs: Date.now() - invocationStart,
+              skipped: figuresToGenerate.length,
+            });
+          }
+
           // Generate ALL images in parallel to save time
-          const imageResults = await Promise.allSettled(
+          const imageResults = imageDeadline <= Date.now() ? [] : await Promise.allSettled(
             figuresToGenerate.map(async (fig) => {
-              const imagePrompt = `${fig.description}.\n\n${styleHint}\n\nSubject: ${category.replace(/_/g, ' ')}. IMPORTANT: Do NOT render any text, words, or letters in the image.`;
-              console.log(`[GENERATE-CHAPTER] Generating Figure ${fig.num}: ${fig.description.slice(0, 80)}...`);
-              
-              const imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${LOVABLE_API_KEY}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({
-                  model: "google/gemini-3-pro-image-preview",
-                  messages: [{ role: "user", content: imagePrompt }],
-                  modalities: ["image", "text"],
-                }),
+              const imagePrompt = buildFigureImagePrompt({
+                description: fig.description,
+                visualType: fig.visualType,
+                bookType: effectiveBookType,
+                styleHint,
+                subject: category.replace(/_/g, ' '),
               });
+              console.log(`[GENERATE-CHAPTER] Generating Figure ${fig.num} (${fig.visualType}): ${fig.description.slice(0, 80)}...`);
+
+              const remaining = imageDeadline - Date.now();
+              if (remaining <= 0) {
+                throw new FigureImageError(fig.num, 'image budget exhausted before request');
+              }
+
+              // Abort rather than let one slow generation hold the whole
+              // invocation past the edge function's own limit.
+              const abort = new AbortController();
+              const timer = setTimeout(() => abort.abort(), remaining);
+              let imageResponse: Response;
+              try {
+                imageResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${LOVABLE_API_KEY}`,
+                    "Content-Type": "application/json",
+                  },
+                  body: JSON.stringify({
+                    model: "google/gemini-3-pro-image-preview",
+                    messages: [{ role: "user", content: imagePrompt }],
+                    modalities: ["image", "text"],
+                  }),
+                  signal: abort.signal,
+                });
+              } catch (fetchErr) {
+                throw new FigureImageError(fig.num, fetchErr instanceof Error ? fetchErr.message : String(fetchErr));
+              } finally {
+                clearTimeout(timer);
+              }
 
               if (!imageResponse.ok) {
                 const errStatus = imageResponse.status;
                 await imageResponse.text();
-                throw new Error(`Image generation failed: status ${errStatus}`);
+                // Carries the figure number, so the failure path can report
+                // which figure was lost instead of logging an anonymous error.
+                throw new FigureImageError(fig.num, `image generation failed: status ${errStatus}`);
               }
 
               const imageData = await imageResponse.json();
@@ -5086,59 +5211,68 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
           );
 
           // Process results and upload to storage
+          let rendered = 0;
           for (const result of imageResults) {
-            if (result.status === 'fulfilled') {
-              const { fig, base64Url } = result.value;
-              if (base64Url && base64Url.startsWith('data:image/')) {
-                try {
-                  const base64Data = base64Url.split(',')[1];
-                  const mimeMatch = base64Url.match(/data:(image\/\w+);/);
-                  const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
-                  const ext = mimeType.split('/')[1] || 'png';
-                  
-                  const binaryStr = atob(base64Data);
-                  const bytes = new Uint8Array(binaryStr.length);
-                  for (let b = 0; b < binaryStr.length; b++) {
-                    bytes[b] = binaryStr.charCodeAt(b);
-                  }
-                  
-                  const storagePath = `${user.id}/${chapter?.book_id || "unknown"}/ch${chapterNumber}-fig${fig.num}.${ext}`;
-                  
-                  const { error: uploadError } = await storageClient.storage
-                    .from('book-images')
-                    .upload(storagePath, bytes, { contentType: mimeType, upsert: true });
-                  
-                  if (!uploadError) {
-                    const { data: publicUrl } = storageClient.storage
-                      .from('book-images')
-                      .getPublicUrl(storagePath);
-                    
-                    const captionText = fig.description.split('.')[0] || `Figure ${fig.num}`;
-                    const imageMarkdown = `\n\n![${captionText}](${publicUrl.publicUrl})\n*Figure ${fig.num}: ${captionText}*\n\n`;
-                    finalContent = finalContent.replace(fig.fullMatch, imageMarkdown);
-                    console.log(`[GENERATE-CHAPTER] Figure ${fig.num} uploaded to storage and inserted inline`);
-                  } else {
-                    console.error(`[GENERATE-CHAPTER] Storage upload failed for Figure ${fig.num}:`, uploadError);
-                    finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
-                  }
-                } catch (uploadErr) {
-                  console.error(`[GENERATE-CHAPTER] Upload error for Figure ${fig.num}:`, uploadErr);
-                  finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
-                }
-              } else {
-                console.log(`[GENERATE-CHAPTER] Figure ${fig.num}: No image returned, using placeholder`);
-                finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
+            if (result.status === 'rejected') {
+              const reason = result.reason;
+              const figNum = reason instanceof FigureImageError ? reason.figureNumber : null;
+              console.error(`[GENERATE-CHAPTER] Figure ${figNum ?? '?'} generation failed:`, reason);
+              // No content edit here. The marker is removed by the sweep below,
+              // which is what makes an image failure cost one illustration
+              // instead of blocking the export of the entire book.
+              continue;
+            }
+
+            const { fig, base64Url } = result.value;
+            if (!base64Url || !base64Url.startsWith('data:image/')) {
+              console.log(`[GENERATE-CHAPTER] Figure ${fig.num}: no image returned`);
+              continue;
+            }
+
+            try {
+              const base64Data = base64Url.split(',')[1];
+              const mimeMatch = base64Url.match(/data:(image\/\w+);/);
+              const mimeType = mimeMatch ? mimeMatch[1] : 'image/png';
+              const ext = mimeType.split('/')[1] || 'png';
+
+              const binaryStr = atob(base64Data);
+              const bytes = new Uint8Array(binaryStr.length);
+              for (let b = 0; b < binaryStr.length; b++) {
+                bytes[b] = binaryStr.charCodeAt(b);
               }
-            } else {
-              // Find which figure failed from the error
-              console.error(`[GENERATE-CHAPTER] Figure generation failed:`, result.reason);
+
+              const storagePath = `${user.id}/${chapter?.book_id || "unknown"}/ch${chapterNumber}-fig${fig.num}.${ext}`;
+
+              const { error: uploadError } = await storageClient.storage
+                .from('book-images')
+                .upload(storagePath, bytes, { contentType: mimeType, upsert: true });
+
+              if (uploadError) {
+                console.error(`[GENERATE-CHAPTER] Storage upload failed for Figure ${fig.num}:`, uploadError);
+                continue;
+              }
+
+              const { data: publicUrl } = storageClient.storage
+                .from('book-images')
+                .getPublicUrl(storagePath);
+
+              finalContent = replaceFigureMarker(
+                finalContent,
+                fig.fullMatch,
+                figureImageMarkdown({
+                  figureNumber: fig.num,
+                  caption: fig.caption,
+                  description: fig.description,
+                  url: publicUrl.publicUrl,
+                }),
+              );
+              rendered++;
+              console.log(`[GENERATE-CHAPTER] Figure ${fig.num} uploaded to storage and inserted inline`);
+            } catch (uploadErr) {
+              console.error(`[GENERATE-CHAPTER] Upload error for Figure ${fig.num}:`, uploadErr);
             }
           }
-
-          // Replace any remaining unfulfilled figure markers (figures 3+ that were capped)
-          for (const fig of figures.slice(2)) {
-            finalContent = finalContent.replace(fig.fullMatch, `\n\n*[Figure ${fig.num}: ${fig.description.split('.')[0]}]*\n\n`);
-          }
+          console.log(`[VISUAL-INTELLIGENCE] ${rendered}/${figures.length} figures rendered`);
         } else {
           console.log("[GENERATE-CHAPTER] No [FIGURE] markers found in illustrated content — skipping illustration generation");
         }
@@ -5147,12 +5281,30 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
       }
     }
 
-    // TEXT-ONLY PIPELINE SAFETY: Strip any [FIGURE] markers that the AI may have
-    // emitted despite the micro-contract forbidding them. This prevents text books
-    // from containing raw placeholder markers.
-    if (effectiveBookType === 'text') {
-      finalContent = finalContent.replace(/\[FIGURE\s*\d+\s*:[^\]]*\]/gi, '');
-      console.log("[GENERATE-CHAPTER] Text pipeline: stripped any residual [FIGURE] markers");
+    // ONE RESPONSIBLE SWEEP, for every book type.
+    //
+    // A figure marker is a directive to the image pipeline, never manuscript
+    // prose. Any marker still present here was never rendered — rejected on
+    // cognitive value, beyond the density cap, failed at the image model, lost
+    // to the pipeline throwing, or emitted by a text book whose micro-contract
+    // forbids figures entirely — and qaPublishability rates a survivor a
+    // BLOCKER, so one failed image used to make the whole book unexportable.
+    //
+    // This runs unconditionally rather than per book type. The previous
+    // text-only stripper matched `[FIGURE n: ...]` alone, so the structured
+    // multi-line form survived it, and book types outside
+    // ILLUSTRATION_ENABLED_TYPES were covered by nothing at all.
+    if (/\[FIGURE\s*\d/i.test(finalContent)) {
+      const beforeSweep = finalContent;
+      // A text book keeps no figures at all, so it sweeps everything. Every
+      // other pipeline spares markers carrying valid DATA: those are diagrams
+      // the reader and the exporters render from their structure, not orphans.
+      finalContent = stripFigureMarkers(finalContent, {
+        keepRenderable: effectiveBookType !== 'text',
+      });
+      if (beforeSweep !== finalContent) {
+        console.log("[GENERATE-CHAPTER] Swept unrendered [FIGURE] markers from chapter content");
+      }
     }
 
     // Preserve markdown formatting — MarkdownRenderer handles rendering

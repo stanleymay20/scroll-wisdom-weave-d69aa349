@@ -3,6 +3,10 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { PDFDocument, rgb, StandardFonts, PDFRawStream, pushGraphicsState, popGraphicsState, concatTransformationMatrix, drawObject } from "https://esm.sh/pdf-lib@1.17.1";
 import * as zip from "https://deno.land/x/zipjs@v2.7.32/index.js";
 import { parseBookToCanonical } from "../_shared/canonicalContent.ts";
+import type { CanonicalDiagram } from "../_shared/canonicalContent.ts";
+import { DIAGRAM_LAYOUT_WIDTH, diagramCaption, diagramIsDrawn, diagramToDocxXml, diagramToPlainText, diagramToXhtml } from "../_shared/figure-export.ts";
+import { figureDataToTable } from "../_shared/figure-data.ts";
+import { layoutFigure } from "../_shared/figure-layout.ts";
 import { auditBookForExport } from "../_shared/exportQuality.ts";
 import { computeSha256Hex } from "../_shared/export/hash.ts";
 import { recordExportEvent } from "../_shared/export/audit.ts";
@@ -717,6 +721,66 @@ function getWrappedTableRows(
     heights.push(Math.max(1, ...wrappedRow.map((cell) => cell.length)) * (fontSize + 3) + 8);
   }
   return { cells, heights };
+}
+
+/**
+ * The slice of pdf-lib's API the diagram renderer uses.
+ *
+ * Structural types rather than `any`: these two helpers are new, and the
+ * drawing calls are the one place a typo becomes an invisible blank space on a
+ * printed page instead of a compile error.
+ */
+interface PdfPageLike {
+  drawLine(options: unknown): void;
+  drawText(text: string, options: unknown): void;
+}
+
+interface PdfFontLike {
+  widthOfTextAtSize(text: string, size: number): number;
+}
+
+/**
+ * Draw the arrow head for a diagram edge.
+ *
+ * pdf-lib has no marker concept, so the head is two short strokes rotated to
+ * the segment's bearing. Kept beside the table renderer because both are the
+ * same kind of thing: primitives standing in for a layout engine the PDF
+ * pipeline does not have.
+ */
+function drawArrowHead(page: PdfPageLike, fromX: number, fromY: number, toX: number, toY: number): void {
+  const dx = toX - fromX;
+  const dy = toY - fromY;
+  const length = Math.hypot(dx, dy);
+  if (length < 0.01) return;
+  const angle = Math.atan2(dy, dx);
+  const size = 4;
+  const spread = Math.PI / 7;
+  for (const sign of [1, -1]) {
+    const theta = angle + Math.PI + sign * spread;
+    page.drawLine({
+      start: { x: toX, y: toY },
+      end: { x: toX + Math.cos(theta) * size, y: toY + Math.sin(theta) * size },
+      thickness: 0.9,
+      color: rgb(0.28, 0.33, 0.41),
+    });
+  }
+}
+
+/** Print "Figure N: caption" beneath a diagram and return the new cursor. */
+function drawDiagramCaption(
+  page: PdfPageLike,
+  diagram: CanonicalDiagram,
+  margin: number,
+  y: number,
+  textWidth: number,
+  font: PdfFontLike,
+): number {
+  let cursor = y;
+  for (const line of wrapText(sanitizeForPDF(diagramCaption(diagram)), font, 9, textWidth).slice(0, 3)) {
+    page.drawText(line, { x: margin, y: cursor, size: 9, font, color: rgb(0.4, 0.4, 0.4) });
+    cursor -= 12;
+  }
+  return cursor - 6;
 }
 
 function drawPdfTable(
@@ -2181,6 +2245,143 @@ export async function generateCanonicalPDF(
             });
             page = rendered.page;
             y = rendered.y;
+            break;
+          }
+          case "diagram": {
+            const diagram = block.diagram as CanonicalDiagram;
+
+            // A table-shaped figure goes through drawPdfTable, which already
+            // paginates, repeats headers and shades rows. Redrawing one by hand
+            // would be a worse table for no reason.
+            if (!diagramIsDrawn(diagram)) {
+              const { header, rows } = figureDataToTable(diagram.data);
+              const rendered = drawPdfTable({
+                page, pdfDoc, y, pageWidth, pageHeight, margin, textWidth,
+                headers: header, rows,
+                fonts: { regular: timesRoman, bold: timesRomanBold, helvetica },
+                addPageNumber, pageNumberRef,
+              });
+              page = rendered.page;
+              y = rendered.y;
+              y = drawDiagramCaption(page, diagram, margin, y, textWidth, helvetica);
+              break;
+            }
+
+            const layout = layoutFigure(diagram.data, DIAGRAM_LAYOUT_WIDTH);
+            if (!layout || layout.height <= 0) {
+              // Never silently absent: fall back to the plain-text rendering.
+              for (const line of diagramToPlainText(diagram).split("\n")) {
+                for (const wrapped of wrapText(sanitizeForPDF(line), helvetica, 9, textWidth)) {
+                  ensureRoom(12);
+                  page.drawText(wrapped, { x: margin, y, size: 9, font: helvetica, color: rgb(0.3, 0.3, 0.35) });
+                  y -= 12;
+                }
+              }
+              y -= 6;
+              break;
+            }
+
+            // The layout is computed at a nominal width; scale it to the text
+            // column so the aspect ratio holds at any page size.
+            const laneWidth = Math.max(
+              layout.width,
+              ...layout.arrows.flatMap((a) => a.points.map((pt) => pt.x)),
+            );
+            const scale = Math.min(1, textWidth / Math.max(1, laneWidth));
+            const drawnHeight = layout.height * scale;
+            const captionLines = wrapText(sanitizeForPDF(diagramCaption(diagram)), helvetica, 9, textWidth).slice(0, 3);
+            ensureRoom(drawnHeight + captionLines.length * 12 + 16);
+
+            // Layout coordinates run top-left with y increasing downward; PDF
+            // user space runs bottom-left with y increasing upward. `top` is
+            // the flip point, applied once here rather than at every call.
+            const top = y;
+            const px = (value: number) => margin + value * scale;
+            const py = (value: number) => top - value * scale;
+
+            for (const arrow of layout.arrows) {
+              for (let i = 1; i < arrow.points.length; i++) {
+                const a = arrow.points[i - 1];
+                const b = arrow.points[i];
+                page.drawLine({
+                  start: { x: px(a.x), y: py(a.y) },
+                  end: { x: px(b.x), y: py(b.y) },
+                  thickness: 0.9,
+                  color: rgb(0.28, 0.33, 0.41),
+                });
+              }
+              const last = arrow.points[arrow.points.length - 1];
+              const prev = arrow.points[arrow.points.length - 2];
+              if (prev) drawArrowHead(page, px(prev.x), py(prev.y), px(last.x), py(last.y));
+              if (arrow.label) {
+                const mid = arrow.points[Math.floor(arrow.points.length / 2)];
+                page.drawText(sanitizeForPDF(arrow.label).slice(0, 24), {
+                  x: px(mid.x) + 3, y: py(mid.y) + 3, size: 7, font: helvetica, color: rgb(0.28, 0.33, 0.41),
+                });
+              }
+            }
+
+            for (const box of layout.boxes) {
+              page.drawRectangle({
+                x: px(box.x),
+                y: py(box.y + box.height),
+                width: box.width * scale,
+                height: box.height * scale,
+                color: rgb(0.945, 0.961, 0.976),
+                borderColor: rgb(0.58, 0.64, 0.72),
+                borderWidth: 0.8,
+              });
+              const size = box.text.size * scale;
+              const lineHeight = 11 * scale;
+              const blockHeight = box.text.lines.length * lineHeight;
+              let baseline = box.y + (box.height - blockHeight) / 2 + box.text.size;
+              for (const line of box.text.lines) {
+                const text = sanitizeForPDF(line);
+                const lineWidth = helvetica.widthOfTextAtSize(text, size);
+                page.drawText(text, {
+                  x: px(box.x + box.width / 2) - lineWidth / 2,
+                  y: py(baseline) + size * 0.25,
+                  size,
+                  font: helvetica,
+                  color: rgb(0.06, 0.09, 0.16),
+                });
+                baseline += 11;
+              }
+            }
+
+            if (layout.bars.length > 0 && layout.axisX !== undefined) {
+              page.drawLine({
+                start: { x: px(layout.axisX), y: py(0) },
+                end: { x: px(layout.axisX), y: py(layout.height) },
+                thickness: 0.8,
+                color: rgb(0.58, 0.64, 0.72),
+              });
+              for (const bar of layout.bars) {
+                page.drawRectangle({
+                  x: px(bar.x),
+                  y: py(bar.y + bar.height),
+                  width: Math.max(0.5, bar.width * scale),
+                  height: bar.height * scale,
+                  color: rgb(0.118, 0.227, 0.373),
+                });
+                const size = 8 * scale;
+                const label = sanitizeForPDF(bar.label);
+                const labelWidth = helvetica.widthOfTextAtSize(label, size);
+                page.drawText(label, {
+                  x: Math.max(margin, px(layout.axisX) - 4 - labelWidth),
+                  y: py(bar.labelY) - size * 0.35,
+                  size, font: helvetica, color: rgb(0.06, 0.09, 0.16),
+                });
+                page.drawText(sanitizeForPDF(String(bar.value)), {
+                  x: px(bar.x + bar.width) + 3,
+                  y: py(bar.labelY) - size * 0.35,
+                  size, font: helvetica, color: rgb(0.28, 0.33, 0.41),
+                });
+              }
+            }
+
+            y = top - drawnHeight - 8;
+            y = drawDiagramCaption(page, diagram, margin, y, textWidth, helvetica);
             break;
           }
           case "image": {
@@ -5731,6 +5932,9 @@ function renderCanonicalBlockDocx(
   nextPicId: () => number,
 ): string {
   switch (blk.kind) {
+    case "diagram": {
+      return `\n${diagramToDocxXml(blk.diagram as CanonicalDiagram)}`;
+    }
     case "heading": {
       const level = Math.min(Math.max(blk.level || 2, 1), 6);
       // Map markdown H1→Heading2 etc. (chapter title already uses Heading1).
@@ -5873,8 +6077,16 @@ function renderCanonicalBlockXhtml(
   blk: any,
   imageRefs: { href: string; alt: string }[],
   imgPtrRef: { i: number },
+  diagramCounter?: { i: number },
 ): string {
   switch (blk.kind) {
+    case "diagram": {
+      // The suffix must be unique within the chapter document: two diagrams
+      // would otherwise both define an arrowhead marker with the same id, and
+      // EPUBCheck fails the whole book over a duplicate id.
+      const suffix = `${blk.diagram?.figureNumber ?? 0}-${diagramCounter ? diagramCounter.i++ : 0}`;
+      return diagramToXhtml(blk.diagram as CanonicalDiagram, suffix);
+    }
     case "heading": {
       const level = Math.min(Math.max(blk.level || 2, 1), 6);
       // Chapter title is rendered as <h1>, so demote markdown H1 to H2 etc.
@@ -6016,15 +6228,21 @@ export async function generateCanonicalEPUB(
     id: `chapter${i + 1}`,
     href: `chapter${i + 1}.xhtml`,
     chapter: ch,
+    // EPUB 3 requires a content document that embeds SVG to declare the `svg`
+    // property in the manifest. EPUBCheck reports a missing declaration as an
+    // error, so the flag is computed from the blocks themselves rather than
+    // set optimistically for every chapter.
+    hasSvg: (ch.blocks || []).some((b) => b.kind === "diagram" && b.diagram && diagramIsDrawn(b.diagram)),
   }));
   const processedChapters: { id: string; href: string; xhtml: string }[] = [];
   for (const item of chapterItems) {
     let body = "";
     const refs = imageRefsByChapter.get(item.chapter.chapter_number) || [];
     const imgPtr = { i: 0 };
+    const diagramCounter = { i: 0 };
     for (const blk of item.chapter.blocks) {
       try {
-        body += renderCanonicalBlockXhtml(blk, refs, imgPtr) + "\n";
+        body += renderCanonicalBlockXhtml(blk, refs, imgPtr, diagramCounter) + "\n";
       } catch (e) {
         // Malformed-block guard — skip the block, keep chapter intact.
         console.warn(`[EXPORT] canonical EPUB: skipping malformed ${blk?.kind} block`, e);
@@ -6066,7 +6284,7 @@ ${body}
     ${hasCover ? `<item id="cover-image" href="images/cover.${coverExt}" media-type="${coverMediaType}" properties="cover-image"/>` : ""}
     <item id="title" href="title.xhtml" media-type="application/xhtml+xml"/>
     <item id="dedication" href="dedication.xhtml" media-type="application/xhtml+xml"/>
-    ${chapterItems.map((c) => `<item id="${c.id}" href="${c.href}" media-type="application/xhtml+xml"/>`).join("\n    ")}
+    ${chapterItems.map((c) => `<item id="${c.id}" href="${c.href}" media-type="application/xhtml+xml"${c.hasSvg ? ' properties="svg"' : ""}/>`).join("\n    ")}
     <item id="about-author" href="about-author.xhtml" media-type="application/xhtml+xml"/>
     ${hasRefs ? '<item id="references" href="references.xhtml" media-type="application/xhtml+xml"/>' : ""}
     ${imageManifestItems}
