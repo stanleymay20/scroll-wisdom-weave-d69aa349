@@ -1,0 +1,86 @@
+{
+  "schema": "scrolllibrary-press-isbn-ledger-v1",
+  "publisher": {
+    "publisher_model": "Stanley Osei-Wusu as self-publisher",
+    "imprint": "ScrollLibrary Press",
+    "isbn_agency": "German ISBN Agency / MVB",
+    "publisher_prefix": "978-3-67620",
+    "allocation_size": 1000,
+    "first_isbn": "978-3-67620-000-4",
+    "last_isbn": "978-3-67620-999-1"
+  },
+  "control": {
+    "purpose": "Canonical repository ledger for owner-issued ISBN reservations and assignments. Every ScrollLibrary Press ISBN must be recorded here before cover/barcode/publication production so the same identifier cannot be assigned twice.",
+    "database_sync_status": "blocked_expected_project_not_visible_to_authorized_connection_2026-09-17",
+    "database_project_ref": "lrricdforqfkaaciammv",
+    "database_tables": [
+      "public.isbn_inventory",
+      "public.book_isbn_assignments"
+    ],
+    "last_updated": "2026-09-17",
+    "rules": [
+      "ISBN-13 values must pass checksum validation.",
+      "An ISBN may occur only once in assignments.",
+      "A title/product-form/language/edition combination may occur only once.",
+      "All owner-controlled ISBNs must fall within the recorded ScrollLibrary Press MVB allocation.",
+      "Reserved or assigned ISBNs must never be returned to the available pool for a different publication product.",
+      "Public registry/platform submission is a separate state from internal reservation."
+    ]
+  },
+  "assignments": [
+    {
+      "isbn13": "978-3-67620-000-4",
+      "control_id": "KW-PB-01",
+      "title": "KINGDOM WEALTH",
+      "subtitle": "The Biblical Code Behind Money",
+      "author": "Stanley Osei-Wusu",
+      "product_form": "paperback",
+      "language": "en",
+      "edition": "First edition",
+      "publication_year": 2026,
+      "trim": "7 x 10 in",
+      "interior": "black-and-white / white paper",
+      "finish": "matte",
+      "status": "reserved",
+      "reserved_at": "2026-09-16",
+      "source_project": "stanleymay20/Kingdom-Wealth-",
+      "source_control_file": "00_CONTROL/KINGDOM_WEALTH_ISBN_ASSIGNMENT_2026-09-16.md",
+      "public_registry_submission": "not_yet_recorded"
+    },
+    {
+      "isbn13": "978-3-67620-001-1",
+      "control_id": "KW-HC-01",
+      "title": "KINGDOM WEALTH",
+      "subtitle": "The Biblical Code Behind Money",
+      "author": "Stanley Osei-Wusu",
+      "product_form": "hardcover",
+      "language": "en",
+      "edition": "First edition",
+      "publication_year": 2026,
+      "trim": "7 x 10 in",
+      "interior": "black-and-white / white paper",
+      "finish": "matte case laminate",
+      "status": "reserved",
+      "reserved_at": "2026-09-16",
+      "source_project": "stanleymay20/Kingdom-Wealth-",
+      "source_control_file": "00_CONTROL/KINGDOM_WEALTH_ISBN_ASSIGNMENT_2026-09-16.md",
+      "public_registry_submission": "not_yet_recorded"
+    },
+    {
+      "isbn13": "978-3-67620-002-8",
+      "control_id": "KW-EPUB-01",
+      "title": "KINGDOM WEALTH",
+      "subtitle": "The Biblical Code Behind Money",
+      "author": "Stanley Osei-Wusu",
+      "product_form": "epub",
+      "language": "en",
+      "edition": "First edition",
+      "publication_year": 2026,
+      "status": "reserved",
+      "reserved_at": "2026-09-16",
+      "source_project": "stanleymay20/Kingdom-Wealth-",
+      "source_control_file": "00_CONTROL/KINGDOM_WEALTH_ISBN_ASSIGNMENT_2026-09-16.md",
+      "public_registry_submission": "not_yet_recorded"
+    }
+  ]
+}

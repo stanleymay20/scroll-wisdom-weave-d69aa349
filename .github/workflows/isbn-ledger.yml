@@ -1,0 +1,52 @@
+name: ScrollLibrary ISBN Ledger
+
+on:
+  pull_request:
+    paths:
+      - 'docs/publishing/SCROLLLIBRARY_PRESS_ISBN_LEDGER.json'
+      - 'scripts/check-isbn-ledger.mjs'
+      - '.github/workflows/isbn-ledger.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'docs/publishing/SCROLLLIBRARY_PRESS_ISBN_LEDGER.json'
+      - 'scripts/check-isbn-ledger.mjs'
+      - '.github/workflows/isbn-ledger.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-isbn-ledger:
+    name: Validate ScrollLibrary Press ISBN uniqueness
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout exact commit
+        uses: actions/checkout@v4
+
+      - name: Validate ISBN checksums, allocation range and uniqueness
+        run: node scripts/check-isbn-ledger.mjs
+
+      - name: Assert current KINGDOM WEALTH reservations
+        shell: bash
+        run: |
+          set -euo pipefail
+          node - <<'NODE'
+          const fs = require('fs');
+          const ledger = JSON.parse(fs.readFileSync('docs/publishing/SCROLLLIBRARY_PRESS_ISBN_LEDGER.json', 'utf8'));
+          const expected = new Map([
+            ['978-3-67620-000-4', 'paperback'],
+            ['978-3-67620-001-1', 'hardcover'],
+            ['978-3-67620-002-8', 'epub'],
+          ]);
+          for (const [isbn, form] of expected) {
+            const row = ledger.assignments.find((entry) => entry.isbn13 === isbn);
+            if (!row) throw new Error(`Missing controlled KINGDOM WEALTH reservation: ${isbn}`);
+            if (row.title !== 'KINGDOM WEALTH' || row.product_form !== form) {
+              throw new Error(`Controlled reservation drift for ${isbn}`);
+            }
+          }
+          console.log('PASS: KINGDOM WEALTH ISBN reservations are present and exact.');
+          NODE
