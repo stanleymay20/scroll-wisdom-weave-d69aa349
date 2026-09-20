@@ -122,6 +122,7 @@ jobs:
           deno check supabase/functions/_shared/figure-data.ts
           deno check supabase/functions/_shared/figure-layout.ts
           deno check supabase/functions/_shared/figure-export.ts
+          deno check supabase/functions/_shared/cron-auth.ts
       - name: Type-check critical financial Edge Functions
         run: |
           deno check supabase/functions/create-checkout/index.ts
@@ -157,6 +158,7 @@ jobs:
           deno check supabase/functions/publishing-identity/index.ts
           deno check supabase/functions/isbn-admin-state/index.ts
           deno check supabase/functions/publish-work/index.ts
+          deno check supabase/functions/materialize-release-schedules/index.ts
           deno check supabase/functions/enqueue-export-bundle/index.ts
           deno check supabase/functions/export-book/index.ts
           deno check supabase/functions/distribution-metadata/index.ts
@@ -196,6 +198,7 @@ jobs:
           deno test supabase/functions/_shared/figure-data_test.ts
           deno test supabase/functions/_shared/figure-layout_test.ts
           deno test supabase/functions/_shared/figure-export_test.ts
+          deno test supabase/functions/_shared/cron-auth_test.ts
 
   build:
     runs-on: ubuntu-latest
