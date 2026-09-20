@@ -1,4 +1,4 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { createClient, SupabaseClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { COMPLETION_THRESHOLDS, CONTRACT_VERSIONS } from '../_shared/contract-canonical.ts';
 
 const corsHeaders = {
@@ -60,7 +60,12 @@ async function sha256Hex(value: string): Promise<string> {
  * it short-circuits before any recomputation there too.
  */
 async function verifyCompetencyCertificate(
-  service: ReturnType<typeof createClient>,
+  // Annotated with the exported SupabaseClient type, not
+  // ReturnType<typeof createClient>. The latter works as a variable annotation
+  // (voice-stt uses it that way) but not as a parameter: in argument position
+  // it resolves the schema generic to `never`, so every selected row types as
+  // `never` and each field access fails.
+  service: SupabaseClient,
   number: string,
 ): Promise<Response | null> {
   const { data: cert, error } = await service.from('competency_certificates')
