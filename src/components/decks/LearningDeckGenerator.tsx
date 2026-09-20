@@ -582,7 +582,7 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
-                    Generate {eligibility?.tier === 'premium' ? 'Premium' : 'Basic'} Deck
+                    Generate {effectiveTier === 'premium' ? 'Premium' : 'Basic'} Deck
                   </>
                 )}
               </Button>
