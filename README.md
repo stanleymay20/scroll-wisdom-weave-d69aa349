@@ -19,7 +19,7 @@ The engineering focus is broader than text generation: the system combines **str
 - database migration-safety checks;
 - end-to-end browser validation with Playwright;
 - dependency/security scanning and CodeQL;
-- deterministic EPUB generation validated against the official EPUB checker;
+- EPUB archive conformance validation against the official EPUB checker;
 - release/build provenance and production-readiness documentation.
 
 ## AI workflow examples
