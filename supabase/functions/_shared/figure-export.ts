@@ -17,11 +17,15 @@
 import type { CanonicalDiagram } from './canonicalContent.ts';
 import { figureDataToTable } from './figure-data.ts';
 import { escapeXml, figureLayoutToSvg, layoutFigure } from './figure-layout.ts';
+import { stripFigureCaptionPrefix } from './visual-intelligence.ts';
 
 /** "Figure 3: The review lifecycle" — the printed label beneath a figure. */
 export function diagramCaption(diagram: CanonicalDiagram): string {
-  const caption = diagram.caption.replace(/\s+/g, ' ').trim();
-  return `Figure ${diagram.figureNumber}: ${caption}`;
+  const flat = diagram.caption.replace(/\s+/g, ' ').trim();
+  // Stripped first: a caption that already reads "Figure 3: ..." would
+  // otherwise be printed as "Figure 3: Figure 3: ...".
+  const caption = stripFigureCaptionPrefix(flat, diagram.figureNumber);
+  return caption ? `Figure ${diagram.figureNumber}: ${caption}` : `Figure ${diagram.figureNumber}`;
 }
 
 /** Whether this diagram is drawn as a graphic rather than laid out as a table. */

@@ -712,6 +712,26 @@ export function replaceFigureMarker(content: string, fullMatch: string, replacem
   return content.replace(fullMatch, () => replacement);
 }
 
+/**
+ * Remove a "Figure N:" prefix a caption already carries.
+ *
+ * Captions reach the renderers from two places. A structured marker's CAPTION
+ * field is bare prose, but extractFigureSpecs synthesises one for the legacy
+ * `[FIGURE 1: description]` form as `Figure 1: <first sentence>` — already
+ * prefixed. Every renderer then prints its own "Figure N:" label, so a legacy
+ * figure came out as "Figure 1: Figure 1: ...".
+ *
+ * Stripping happens at the point of formatting rather than at the source, so
+ * it holds for any caption however it was produced, including one an author
+ * wrote with the prefix by hand.
+ */
+export function stripFigureCaptionPrefix(caption: string, figureNumber: number | string): string {
+  const num = String(figureNumber).replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  // Matches "Figure 3", "Figure 3:", "Figure 3 —", "Fig. 3 -" and similar.
+  const prefix = new RegExp(`^\\s*(?:fig\\.?|figure)\\s*${num}\\s*[:.\u2013\u2014-]?\\s*`, 'i');
+  return caption.replace(prefix, '').trim();
+}
+
 /** Markdown for a successfully rendered figure. */
 export function figureImageMarkdown(args: {
   figureNumber: number;
@@ -723,7 +743,12 @@ export function figureImageMarkdown(args: {
   // The caption is the figure's label and is printed beneath it. Using the
   // caption for both leaves a screen-reader user with a title and no picture.
   const alt = args.description.replace(/\s+/g, ' ').trim().slice(0, 300);
-  const caption = args.caption.replace(/\s+/g, ' ').trim();
+  const flat = args.caption.replace(/\s+/g, ' ').trim();
+  // A caption that is nothing but its own prefix leaves no label at all, so
+  // the description's opening clause stands in.
+  const caption = stripFigureCaptionPrefix(flat, args.figureNumber)
+    || alt.split('.')[0]
+    || flat;
   return `\n\n![${alt}](${args.url})\n*Figure ${args.figureNumber}: ${caption}*\n\n`;
 }
 
@@ -888,7 +913,9 @@ export function buildFigureMarker(fields: {
   description: string;
   data?: FigureData | null;
 }): string {
-  const caption = fields.caption.replace(/\s+/g, ' ').trim() || `Figure ${fields.figureNumber}`;
+  const flatCaption = fields.caption.replace(/\s+/g, ' ').trim();
+  const caption = stripFigureCaptionPrefix(flatCaption, fields.figureNumber)
+    || `Figure ${fields.figureNumber}`;
   const description = fields.description.replace(/\s+/g, ' ').trim();
   const lines = [
     `[FIGURE ${fields.figureNumber}`,

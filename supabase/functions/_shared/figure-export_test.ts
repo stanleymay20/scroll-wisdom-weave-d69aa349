@@ -273,3 +273,17 @@ Deno.test("one broken marker beside a good one still blocks", () => {
   ] as never, { hasCover: true });
   assertEquals(report.issues.filter((i) => i.code === "orphan_figure_marker").length, 1);
 });
+
+Deno.test("a diagram caption already carrying a prefix is not doubled", () => {
+  const d = diagram(FLOW_JSON);
+  d.caption = "Figure 3: The review lifecycle";
+  assertEquals(diagramCaption(d), "Figure 3: The review lifecycle");
+  assertStringIncludes(diagramToXhtml(d, "1-0"), "<figcaption>Figure 3: The review lifecycle</figcaption>");
+  assert(!diagramToDocxXml(d).includes("Figure 3: Figure 3:"));
+});
+
+Deno.test("a diagram caption that is only a prefix still labels the figure", () => {
+  const d = diagram(FLOW_JSON);
+  d.caption = "Figure 3";
+  assertEquals(diagramCaption(d), "Figure 3");
+});

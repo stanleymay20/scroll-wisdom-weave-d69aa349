@@ -11,14 +11,23 @@ const corsHeaders = {
 
 // Tier-based model routing: better models for paid users, cost-efficient for free
 /**
- * Wall-clock budget for the whole per-chapter figure batch.
+ * Time budgets for figure generation.
  *
- * The edge function's own ceiling is 150s and text generation has already
- * consumed part of it by the time figures start, so the batch gets a bounded
- * slice rather than the remainder. Requests run in parallel and share the
- * deadline: one stalled provider costs its own figure, not the chapter.
+ * The figure batch runs late in the request, after text generation, any
+ * retries and validation. A budget measured from where the batch starts is
+ * therefore not a bound on the request at all: if text generation took 100s,
+ * a fresh 90s for images would run the invocation to 190s and the platform
+ * would kill it — losing the finished chapter, not just its pictures.
+ *
+ * So the deadline is whichever comes first: this slice, or the point at which
+ * the reserve must begin. The reserve covers what still has to happen after
+ * the last image arrives — base64 decoding, sequential storage uploads, the
+ * Contract 6 gate and the database write that actually saves the chapter.
+ * Images are the optional part of a chapter; saving it is not.
  */
 const FIGURE_IMAGE_BUDGET_MS = 90_000;
+const FUNCTION_TIME_CEILING_MS = 150_000;
+const POST_IMAGE_RESERVE_MS = 30_000;
 
 /** Carries the figure number through Promise.allSettled's rejection path. */
 class FigureImageError extends Error {
@@ -1904,6 +1913,11 @@ BEGIN CREATING THE WORKBOOK CHAPTER:`;
 // ===========================================
 
 serve(async (req) => {
+  // Anchors every downstream time budget. Figure generation happens late in
+  // the request, so a budget measured from where it starts says nothing about
+  // how much of the function's own ceiling is left.
+  const invocationStart = Date.now();
+
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -5125,10 +5139,23 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
           // against a shared deadline, so a slow provider costs the figures it
           // could not deliver in time rather than the whole invocation.
           const figuresToGenerate = figures;
-          const imageDeadline = Date.now() + FIGURE_IMAGE_BUDGET_MS;
+          const imageDeadline = Math.min(
+            Date.now() + FIGURE_IMAGE_BUDGET_MS,
+            invocationStart + FUNCTION_TIME_CEILING_MS - POST_IMAGE_RESERVE_MS,
+          );
+
+          // If the request has already spent its budget, do not start the batch
+          // at all: every request would abort immediately anyway, and the
+          // markers are swept so the chapter still saves cleanly without them.
+          if (imageDeadline <= Date.now()) {
+            console.warn("[GENERATE-CHAPTER] no time left for figures", {
+              elapsedMs: Date.now() - invocationStart,
+              skipped: figuresToGenerate.length,
+            });
+          }
 
           // Generate ALL images in parallel to save time
-          const imageResults = await Promise.allSettled(
+          const imageResults = imageDeadline <= Date.now() ? [] : await Promise.allSettled(
             figuresToGenerate.map(async (fig) => {
               const imagePrompt = buildFigureImagePrompt({
                 description: fig.description,

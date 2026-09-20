@@ -12,6 +12,7 @@ import {
   buildFigureMarker,
   figureDataFor,
   resolveFigureRendering,
+  stripFigureCaptionPrefix,
 } from "./visual-intelligence.ts";
 import { parseFigureData } from "./figure-data.ts";
 
@@ -434,4 +435,75 @@ Deno.test("the default sweep removes everything, including diagrams", () => {
   // The text-only pipeline relies on this: a text book has no figures at all.
   const content = `A\n\n${dataMarker(1, "flowchart", "C", "D", FLOW_JSON)}\n\nB`;
   assert(!/\[FIGURE/i.test(stripFigureMarkers(content)), "default must strip data markers too");
+});
+
+// ---------------------------------------------------------------------------
+// Caption prefixes — every renderer prints its own "Figure N:" label, so a
+// caption that already carries one must not be printed with two.
+// ---------------------------------------------------------------------------
+
+Deno.test("a legacy figure's caption is not prefixed twice", () => {
+  // extractFigureSpecs synthesises "Figure 1: <first sentence>" for the legacy
+  // [FIGURE 1: description] form, which used to render as
+  // "Figure 1: Figure 1: ...".
+  const content =
+    "[FIGURE 1: A flowchart that breaks down the structure of the review process and organizes each stage. It shows the hierarchy.]";
+  const [m] = parseRawFigureMarkers(content);
+  const spec = extractFigureSpecs(content, "academic", 1)[0];
+  const caption = (m.caption || spec?.caption || "").trim() || `Figure ${m.num}`;
+  assertStringIncludes(caption, "Figure 1:");
+
+  const md = figureImageMarkdown({
+    figureNumber: 1,
+    caption,
+    description: m.description,
+    url: "https://example.test/f.png",
+  });
+  assert(!md.includes("Figure 1: Figure 1:"), md);
+  assertStringIncludes(md, "*Figure 1: A flowchart that breaks down");
+});
+
+Deno.test("stripFigureCaptionPrefix removes the forms captions actually carry", () => {
+  assertEquals(stripFigureCaptionPrefix("Figure 3: The lifecycle", 3), "The lifecycle");
+  assertEquals(stripFigureCaptionPrefix("Figure 3 - The lifecycle", 3), "The lifecycle");
+  assertEquals(stripFigureCaptionPrefix("Figure 3 — The lifecycle", 3), "The lifecycle");
+  assertEquals(stripFigureCaptionPrefix("figure 3. The lifecycle", 3), "The lifecycle");
+  assertEquals(stripFigureCaptionPrefix("Fig. 3: The lifecycle", 3), "The lifecycle");
+  assertEquals(stripFigureCaptionPrefix("Figure 3", 3), "");
+});
+
+Deno.test("a caption for a different figure number is left alone", () => {
+  // "Figure 2" inside figure 3's caption is a cross-reference, not a prefix.
+  assertEquals(
+    stripFigureCaptionPrefix("Figure 2 compared with the present model", 3),
+    "Figure 2 compared with the present model",
+  );
+});
+
+Deno.test("an unprefixed caption is unchanged", () => {
+  assertEquals(stripFigureCaptionPrefix("The review lifecycle", 1), "The review lifecycle");
+  assertEquals(stripFigureCaptionPrefix("Figured out at last", 1), "Figured out at last");
+});
+
+Deno.test("a caption that is only a prefix falls back to the description", () => {
+  const md = figureImageMarkdown({
+    figureNumber: 4,
+    caption: "Figure 4",
+    description: "A taxonomy of methods. With further detail.",
+    url: "https://example.test/f.png",
+  });
+  assert(!md.includes("Figure 4: Figure 4"), md);
+  assertStringIncludes(md, "*Figure 4: A taxonomy of methods*");
+});
+
+Deno.test("a built marker stores a bare caption", () => {
+  const built = buildFigureMarker({
+    figureNumber: 2,
+    visualType: "flowchart",
+    caption: "Figure 2: The lifecycle",
+    description: "A lifecycle.",
+    data: parseFigureData(FLOW_JSON),
+  });
+  const [m] = parseRawFigureMarkers(built);
+  assertEquals(m.caption, "The lifecycle");
 });
