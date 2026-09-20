@@ -185,10 +185,11 @@ jobs:
           deno test supabase/functions/_shared/productionArtifactAudit_test.ts
           deno test supabase/functions/_shared/kdp-print-cover_test.ts
           deno test supabase/functions/_shared/kdp-cover-resolution_test.ts
-      - name: Test editorial coverage and copyediting safety
+      - name: Test editorial coverage, copyediting and illustration safety
         run: |
           deno test supabase/functions/_shared/audit-excerpt_test.ts
           deno test supabase/functions/_shared/proofread_test.ts
+          deno test supabase/functions/_shared/visual-intelligence_test.ts
 
   build:
     runs-on: ubuntu-latest

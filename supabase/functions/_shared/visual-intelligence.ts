@@ -361,41 +361,43 @@ interface RawFigureMarker {
 }
 
 export function parseRawFigureMarkers(content: string): RawFigureMarker[] {
+  const text = content || '';
   const markers: RawFigureMarker[] = [];
 
-  // v2.0 Structured format: [FIGURE X\nTYPE: ...\nCAPTION: ...\nDESCRIPTION: ...\n]
-  const structuredRegex = /\[FIGURE\s*(\d+)\s*\n\s*TYPE:\s*([^\n]+)\n\s*CAPTION:\s*([^\n]+)\n\s*DESCRIPTION:\s*([\s\S]*?)\]/gi;
-  let match;
-  const processedIndices = new Set<number>();
+  // Spans are found by bracket matching rather than by a non-greedy regex, so
+  // a description containing "[see appendix]" yields the whole marker instead
+  // of the half of it that precedes the inner bracket. The field patterns then
+  // run against that complete span.
+  for (const [start, end] of findFigureMarkerSpans(text)) {
+    const fullMatch = text.slice(start, end);
 
-  while ((match = structuredRegex.exec(content)) !== null) {
-    processedIndices.add(match.index);
-    markers.push({
-      num: parseInt(match[1]),
-      fullMatch: match[0],
-      type: match[2].trim().toLowerCase(),
-      caption: match[3].trim(),
-      description: match[4].trim(),
-    });
-  }
-
-  // Legacy format: [FIGURE X: description]
-  const legacyRegex = /\[FIGURE\s*(\d+)\s*:\s*([\s\S]*?)\]/gi;
-  while ((match = legacyRegex.exec(content)) !== null) {
-    // Skip if already parsed as structured
-    if (processedIndices.has(match.index)) continue;
-    // Also skip if this overlaps with a structured match
-    let overlaps = false;
-    for (const idx of processedIndices) {
-      if (match.index >= idx && match.index < idx + 100) { overlaps = true; break; }
+    // v2.0 structured format: [FIGURE X\nTYPE: ...\nCAPTION: ...\nDESCRIPTION: ...]
+    const structured = fullMatch.match(
+      /^\[FIGURE\s*(\d+(?:\.\d+)*)\s*\n\s*TYPE:\s*([^\n]+)\n\s*CAPTION:\s*([^\n]+)\n\s*DESCRIPTION:\s*([\s\S]*?)\s*\]$/i,
+    );
+    if (structured) {
+      markers.push({
+        num: parseInt(structured[1]),
+        fullMatch,
+        type: structured[2].trim().toLowerCase(),
+        caption: structured[3].trim(),
+        description: structured[4].trim(),
+      });
+      continue;
     }
-    if (overlaps) continue;
 
-    markers.push({
-      num: parseInt(match[1]),
-      fullMatch: match[0],
-      description: match[2].trim(),
-    });
+    // Legacy format: [FIGURE X: description]
+    const legacy = fullMatch.match(/^\[FIGURE\s*(\d+(?:\.\d+)*)\s*:\s*([\s\S]*?)\s*\]$/i);
+    if (legacy) {
+      markers.push({
+        num: parseInt(legacy[1]),
+        fullMatch,
+        description: legacy[2].trim(),
+      });
+    }
+    // A span matching neither shape is left in place for the final sweep; it is
+    // not a marker this parser can describe, and guessing at its fields would
+    // put invented text under a figure.
   }
 
   // Sort by figure number
@@ -576,4 +578,185 @@ export function summarizeFigureSpecs(specs: FigureSpec[]): string {
   return specs.map(s =>
     `Fig${s.chapter}.${s.figureNumber}: ${s.visualType} (score:${s.cognitiveScore}, render:${s.renderMode}, placement:${s.placement})`
   ).join(' | ');
+}
+
+// ===========================================
+// FIGURE IMAGE PROMPTING
+// ===========================================
+
+/**
+ * Whether a figure's image is allowed to contain text.
+ *
+ * This is not a stylistic preference, it decides whether the figure works at
+ * all. A flowchart, matrix, taxonomy or chart IS its labels: the nodes, axes,
+ * quadrants and legend entries are the information, and an unlabelled version
+ * is a diagram-shaped blob that tells a reader nothing. A children's
+ * illustration or a cinematic scene is the opposite case — image models garble
+ * lettering, and a picture book should carry its words in the typeset caption
+ * rather than baked into the artwork.
+ *
+ * The distinction was previously absent: every figure was generated under a
+ * blanket "do NOT render any text, words, or letters" instruction, which sat
+ * in the same prompt as art direction demanding "every element labeled" and
+ * "proper axes, annotated callouts". The model was told to label the diagram
+ * and forbidden from writing on it, in consecutive sentences.
+ */
+export type FigureTextPolicy = 'labelled' | 'textless';
+
+/** Visual types that are narrative artwork rather than information graphics. */
+const TEXTLESS_VISUAL_TYPES: ReadonlySet<VisualType> = new Set<VisualType>([
+  'children_illustration',
+  'comic_panel',
+  'cinematic_scene',
+]);
+
+/** Book types whose figures are artwork regardless of how a type was classified. */
+const TEXTLESS_BOOK_TYPES: ReadonlySet<string> = new Set(['children', 'comic', 'fiction']);
+
+export function figureTextPolicy(visualType: VisualType, bookType: string): FigureTextPolicy {
+  if (TEXTLESS_BOOK_TYPES.has(bookType)) return 'textless';
+  if (TEXTLESS_VISUAL_TYPES.has(visualType)) return 'textless';
+  return 'labelled';
+}
+
+const LABELLED_TEXT_CLAUSE =
+  `TEXT IN IMAGE: This is a labelled figure, so render the labels the description calls for — node names, axis titles, step numbers, quadrant headings, legend entries — as short, correctly spelled words in a clean sans-serif. Labels must be legible at half size and no longer than four words each. Do not add a title bar, caption, watermark, signature, or any wording the description does not ask for.`;
+
+const TEXTLESS_TEXT_CLAUSE =
+  `TEXT IN IMAGE: None. Do not render any text, words, letters or numbers anywhere in the image. The caption printed beneath the figure carries the wording.`;
+
+/**
+ * Build the image-model prompt for one figure.
+ *
+ * Kept here, beside the policy it depends on, so the contradiction described
+ * above cannot be reintroduced by editing the art direction alone.
+ */
+export function buildFigureImagePrompt(args: {
+  description: string;
+  visualType: VisualType;
+  bookType: string;
+  styleHint: string;
+  subject?: string;
+}): string {
+  const policy = figureTextPolicy(args.visualType, args.bookType);
+  const parts = [
+    args.description.trim().replace(/\.?$/, '.'),
+    args.styleHint.trim(),
+  ];
+  if (args.subject && args.subject.trim()) {
+    parts.push(`Subject: ${args.subject.trim()}.`);
+  }
+  parts.push(policy === 'labelled' ? LABELLED_TEXT_CLAUSE : TEXTLESS_TEXT_CLAUSE);
+  return parts.join('\n\n');
+}
+
+/**
+ * Replace one figure marker with rendered output, literally.
+ *
+ * `String.replace` with a string replacement interprets `$&`, `$1` and friends,
+ * and figure captions are author- and model-supplied text that can contain a
+ * dollar sign. A function replacement is substituted verbatim.
+ */
+export function replaceFigureMarker(content: string, fullMatch: string, replacement: string): string {
+  return content.replace(fullMatch, () => replacement);
+}
+
+/** Markdown for a successfully rendered figure. */
+export function figureImageMarkdown(args: {
+  figureNumber: number;
+  caption: string;
+  description: string;
+  url: string;
+}): string {
+  // Alt text describes what is in the image, for a reader who cannot see it.
+  // The caption is the figure's label and is printed beneath it. Using the
+  // caption for both leaves a screen-reader user with a title and no picture.
+  const alt = args.description.replace(/\s+/g, ' ').trim().slice(0, 300);
+  const caption = args.caption.replace(/\s+/g, ' ').trim();
+  return `\n\n![${alt}](${args.url})\n*Figure ${args.figureNumber}: ${caption}*\n\n`;
+}
+
+/**
+ * Longest a single figure marker may be before the scanner gives up on finding
+ * a balanced close. Without this, one unmatched `[` inside a description would
+ * swallow the rest of the chapter.
+ */
+const MAX_FIGURE_MARKER_LENGTH = 4000;
+
+/**
+ * Locate every figure marker as a [start, end) span, matching brackets.
+ *
+ * A description legitimately contains brackets — "a chart of results [see
+ * appendix] by cohort" — and a non-greedy `[\s\S]*?\]` stops at the first one,
+ * cutting the marker in half. Whatever consumed that half-marker then left the
+ * tail behind as loose prose in the manuscript: a stray "by cohort]" mid-page.
+ *
+ * Scanning with a depth counter ends the marker at the bracket that actually
+ * closes it. If no balanced close appears within MAX_FIGURE_MARKER_LENGTH the
+ * scanner falls back to the first `]`, which is the old behaviour and is still
+ * better than consuming the chapter.
+ */
+export function findFigureMarkerSpans(content: string): Array<[number, number]> {
+  const text = content || '';
+  const opener = /\[FIGURE\s*\d+(?:\.\d+)*\s*(?::|\n)/gi;
+  const spans: Array<[number, number]> = [];
+  let match: RegExpExecArray | null;
+
+  while ((match = opener.exec(text)) !== null) {
+    const start = match.index;
+    let depth = 0;
+    let end = -1;
+    let firstClose = -1;
+    const limit = Math.min(text.length, start + MAX_FIGURE_MARKER_LENGTH);
+
+    for (let i = start; i < limit; i++) {
+      const ch = text[i];
+      if (ch === '[') {
+        depth++;
+      } else if (ch === ']') {
+        if (firstClose === -1) firstClose = i;
+        depth--;
+        if (depth === 0) { end = i + 1; break; }
+      }
+    }
+
+    if (end === -1) end = firstClose === -1 ? -1 : firstClose + 1;
+    if (end === -1) continue; // No close at all: not a marker, leave it alone.
+
+    spans.push([start, end]);
+    opener.lastIndex = end;
+  }
+
+  return spans;
+}
+
+/**
+ * Remove every remaining figure marker from a chapter.
+ *
+ * A marker is a directive to the image pipeline, not manuscript prose. Any
+ * marker still present when the pipeline finishes is one that was never
+ * rendered — rejected on cognitive value, dropped by the density cap, or
+ * failed at the image model — and leaving it is not a neutral act:
+ * qaPublishability classifies a surviving `[FIGURE ...]` as a BLOCKER, so a
+ * single failed image made the whole book unexportable.
+ *
+ * They are deleted rather than degraded to `*[Figure 3: ...]*`, which is what
+ * the pipeline used to emit. That placeholder starts with `*`, so the
+ * `^\[FIGURE` strippers in canonicalContent and export-book do not match it,
+ * and it was reaching finished PDFs as an italic apology for a missing picture.
+ */
+export function stripFigureMarkers(content: string): string {
+  const text = content || '';
+  const spans = findFigureMarkerSpans(text);
+  if (spans.length === 0) return text;
+
+  let out = '';
+  let cursor = 0;
+  for (const [start, end] of spans) {
+    out += text.slice(cursor, start);
+    cursor = end;
+  }
+  out += text.slice(cursor);
+  // Collapse the blank runs the removals leave behind.
+  return out.replace(/\n{3,}/g, '\n\n');
 }
