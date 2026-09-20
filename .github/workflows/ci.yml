@@ -79,6 +79,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-service-role-table-authority.sql
       - name: Assert account-deletion certificate retention contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-account-deletion-certificate-retention.sql
+      - name: Assert scheduled releases actually materialize
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-release-materialization.sql
       - name: Rebuild hardened ISBN schema from verified legacy staging shape
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-legacy-staging-isbn-convergence.sql
       - name: Assert ISBN governance, RLS and transactional mint contract

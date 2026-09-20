@@ -77,7 +77,11 @@ Deno.serve(async (req) => {
               .eq("id", item.id)
               .eq("status", "scheduled");
             await admin.from("publishing_audit_log").insert({
-              user_id: ownerId, platform: null,
+              // platform is NOT NULL. Passing null made this insert throw, so
+              // the catch below recorded a constraint error as the item's
+              // error_message instead of "entitlement_revoked" — the author
+              // saw a Postgres message where a reason belonged.
+              user_id: ownerId, platform: "platform",
               event_type: "publish_blocked_by_tier", severity: "warning",
               message: "Scheduled release skipped: owner lost can_schedule_releases",
               metadata: { release_schedule_item_id: item.id, current_tier: ent?.tier ?? "free" },
