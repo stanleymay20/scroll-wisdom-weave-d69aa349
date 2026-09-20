@@ -1,6 +1,10 @@
 /**
- * PayoutProfileEditor — creator's payout readiness profile.
- * Stripe Connect onboarding is reserved (disabled with "Coming soon").
+ * PayoutProfileEditor — creator's payout settings.
+ *
+ * Stripe Connect onboarding is live here. The page never sees or sends a
+ * Connect account id: it asks the stripe-connect-onboarding function to start
+ * or refresh onboarding, and renders the status word and sentence that come
+ * back. Only Stripe, through the webhook, can mark a creator payable.
  */
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
@@ -23,6 +27,67 @@ interface Profile {
   tax_form_status: string;
 }
 
+type ConnectStatus = "not_started" | "pending" | "verified" | "restricted" | "disabled";
+
+interface ConnectResponse {
+  status?: ConnectStatus;
+  message?: string;
+  can_receive_payouts?: boolean;
+  onboarding_url?: string;
+}
+
+const CONNECT_STATUSES: ConnectStatus[] = [
+  "not_started",
+  "pending",
+  "verified",
+  "restricted",
+  "disabled",
+];
+
+/** The column is a free-text CHECK; anything unrecognised reads as unstarted. */
+function toConnectStatus(value: string | null | undefined): ConnectStatus {
+  return CONNECT_STATUSES.includes(value as ConnectStatus)
+    ? (value as ConnectStatus)
+    : "not_started";
+}
+
+/**
+ * Wording shown before the server has spoken.
+ *
+ * Kept in step with _shared/stripe-connect.ts by hand rather than imported:
+ * this file is bundled for the browser and that one is a Deno edge module. The
+ * server's message wins the moment a response arrives.
+ */
+function connectMessageFor(status: ConnectStatus): string {
+  switch (status) {
+    case "verified":
+      return "Your payout account is active. Earnings will be sent to it.";
+    case "pending":
+      return "Stripe is reviewing your details. This usually takes a few minutes, occasionally a day or two.";
+    case "restricted":
+      return "Stripe needs more information before it can pay you. Continue onboarding to provide it.";
+    case "disabled":
+      return "Stripe cannot pay out to this account. Contact support so we can help you sort it out.";
+    default:
+      return "Connect a payout account to receive your earnings.";
+  }
+}
+
+function connectBadgeFor(status: ConnectStatus): { label: string; variant: "default" | "secondary" | "destructive" } {
+  switch (status) {
+    case "verified":
+      return { label: "Active", variant: "default" };
+    case "pending":
+      return { label: "In review", variant: "secondary" };
+    case "restricted":
+      return { label: "Action needed", variant: "destructive" };
+    case "disabled":
+      return { label: "Unavailable", variant: "destructive" };
+    default:
+      return { label: "Not connected", variant: "secondary" };
+  }
+}
+
 export default function PayoutProfileEditor() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [email, setEmail] = useState("");
@@ -30,6 +95,55 @@ export default function PayoutProfileEditor() {
   const [method, setMethod] = useState<"unset" | "manual">("unset");
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [connectBusy, setConnectBusy] = useState(false);
+  const [connectStatus, setConnectStatus] = useState<ConnectStatus>("not_started");
+  const [connectMessage, setConnectMessage] = useState(
+    "Connect a payout account to receive your earnings.",
+  );
+
+  /**
+   * Ask the server to start or refresh Connect onboarding.
+   *
+   * The browser holds no Stripe identifiers. It receives a status, a sentence
+   * written for the creator, and — when there is onboarding left to do — a
+   * one-time Stripe-hosted URL.
+   */
+  const callConnect = async (action: "start" | "refresh") => {
+    setConnectBusy(true);
+    const { data, error } = await supabase.functions.invoke("stripe-connect-onboarding", {
+      body: { action, return_path: "/payout-profile" },
+    });
+    setConnectBusy(false);
+
+    if (error) {
+      toast.error("Could not reach Stripe. Please try again.");
+      return null;
+    }
+    const result = data as ConnectResponse;
+    if (result?.status) setConnectStatus(result.status);
+    if (result?.message) setConnectMessage(result.message);
+    return result;
+  };
+
+  const startConnect = async () => {
+    const result = await callConnect("start");
+    if (result?.onboarding_url) {
+      // Stripe-hosted onboarding. Same tab: the creator comes back to this
+      // page through the return_url, and a popup would be blocked as often as
+      // not.
+      window.location.href = result.onboarding_url;
+      return;
+    }
+    if (result?.status === "verified") toast.success("Your payout account is active.");
+  };
+
+  const refreshConnect = async () => {
+    const result = await callConnect("refresh");
+    if (result) {
+      void load();
+      toast.success("Status updated");
+    }
+  };
 
   const load = async () => {
     const { data, error } = await supabase.functions.invoke("creator-payout-profile", { method: "GET" });
@@ -41,6 +155,8 @@ export default function PayoutProfileEditor() {
         setEmail(p.payout_email ?? "");
         setCountry(p.country_code ?? "");
         setMethod(p.payout_method === "stripe_connect" ? "unset" : p.payout_method);
+        setConnectStatus(toConnectStatus(p.stripe_connect_status));
+        setConnectMessage(connectMessageFor(toConnectStatus(p.stripe_connect_status)));
       }
     }
     setLoading(false);
@@ -71,6 +187,8 @@ export default function PayoutProfileEditor() {
     }
   };
 
+  const connectBadge = connectBadgeFor(connectStatus);
+
   if (loading) return <div className="container mx-auto py-8 px-4 max-w-2xl"><Skeleton className="h-64" /></div>;
 
   return (
@@ -78,7 +196,7 @@ export default function PayoutProfileEditor() {
       <div>
         <h1 className="text-3xl font-bold tracking-tight">Payout settings</h1>
         <p className="text-sm text-muted-foreground mt-1">
-          Set how we'll send your earnings when payouts go live.
+          Set how we'll send your earnings.
           <Link to="/account/earnings" className="ml-2 underline">View earnings →</Link>
         </p>
       </div>
@@ -86,17 +204,32 @@ export default function PayoutProfileEditor() {
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
-            Stripe Connect <Badge variant="secondary">Coming soon</Badge>
+            Stripe Connect
+            <Badge variant={connectBadge.variant}>{connectBadge.label}</Badge>
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-3">
-          <p className="text-sm text-muted-foreground">
-            Direct bank payouts via Stripe Connect are launching soon. Set your payout email below in the
-            meantime — we'll use it to notify you when onboarding opens.
-          </p>
-          <Button disabled variant="outline">Start Stripe Connect onboarding</Button>
+          <p className="text-sm text-muted-foreground">{connectMessage}</p>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              onClick={() => void startConnect()}
+              disabled={connectBusy || connectStatus === "verified"}
+              variant={connectStatus === "not_started" ? "default" : "outline"}
+            >
+              {connectBusy
+                ? "Opening Stripe…"
+                : connectStatus === "not_started"
+                  ? "Start Stripe Connect onboarding"
+                  : "Continue onboarding"}
+            </Button>
+            {connectStatus !== "not_started" && (
+              <Button variant="ghost" onClick={() => void refreshConnect()} disabled={connectBusy}>
+                Refresh status
+              </Button>
+            )}
+          </div>
           <div className="text-xs text-muted-foreground">
-            Current status: <span className="font-mono">{profile?.stripe_connect_status ?? "not_started"}</span>
+            Current status: <span className="font-mono">{connectStatus}</span>
           </div>
         </CardContent>
       </Card>
@@ -123,7 +256,9 @@ export default function PayoutProfileEditor() {
               <Button type="button" variant={method === "unset" ? "default" : "outline"} size="sm" onClick={() => setMethod("unset")}>Not yet</Button>
             </div>
             <p className="text-xs text-muted-foreground mt-2">
-              Manual payouts are processed offline until Stripe Connect goes live.
+              {connectStatus === "verified"
+                ? "Stripe Connect is active, so earnings are sent to your connected account. This preference applies only if you disconnect it."
+                : "Manual payouts are processed offline. Connect Stripe above for direct bank payouts."}
             </p>
           </div>
           <div className="text-xs text-muted-foreground">

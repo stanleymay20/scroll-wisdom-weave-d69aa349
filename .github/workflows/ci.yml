@@ -81,6 +81,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-account-deletion-certificate-retention.sql
       - name: Assert scheduled releases actually materialize
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-release-materialization.sql
+      - name: Assert the payout write surface stays server-owned
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-payout-surface.sql
       - name: Rebuild hardened ISBN schema from verified legacy staging shape
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-legacy-staging-isbn-convergence.sql
       - name: Assert ISBN governance, RLS and transactional mint contract
@@ -125,12 +127,14 @@ jobs:
           deno check supabase/functions/_shared/figure-layout.ts
           deno check supabase/functions/_shared/figure-export.ts
           deno check supabase/functions/_shared/cron-auth.ts
+          deno check supabase/functions/_shared/stripe-connect.ts
       - name: Type-check critical financial Edge Functions
         run: |
           deno check supabase/functions/create-checkout/index.ts
           deno check supabase/functions/customer-portal/index.ts
           deno check supabase/functions/check-subscription/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
+          deno check supabase/functions/stripe-connect-onboarding/index.ts
       - name: Type-check authority and metered usage Edge Functions
         run: |
           deno check supabase/functions/claim-admin/index.ts
@@ -201,6 +205,7 @@ jobs:
           deno test supabase/functions/_shared/figure-layout_test.ts
           deno test supabase/functions/_shared/figure-export_test.ts
           deno test supabase/functions/_shared/cron-auth_test.ts
+          deno test supabase/functions/_shared/stripe-connect_test.ts
 
   build:
     runs-on: ubuntu-latest
