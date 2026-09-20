@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { routeChat } from "../_shared/ai-router.ts";
 import { captureBookScopeHash, recordBoundAttestation, scopeStabilityError } from "../_shared/publicationScope.ts";
+import { chapterExcerptBudget, excerptForAudit } from "../_shared/audit-excerpt.ts";
 
 
 const corsHeaders = {
@@ -353,13 +354,30 @@ serve(async (req) => {
 
     log("Audit started", { auditId: auditRecord.id.slice(0, 8), chapters: generatedChapters.length, model: AUDIT_MODEL, promptVersion: AUDIT_PROMPT_VERSION });
 
-    // Build chapter summaries
-    const chapterSummaries = generatedChapters.map((ch: any) => ({
-      number: ch.chapter_number,
-      title: ch.title,
-      wordCount: ch.word_count || 0,
-      content: (ch.content || "").slice(0, 8000),
-    }));
+    // Build chapter summaries.
+    //
+    // This used to be a flat slice(0, 8000), which meant the auditor never saw
+    // the last third of a normal chapter — the exact region where generated
+    // prose degrades. The budget is now derived from the chapter count, and an
+    // over-budget chapter is excerpted from both ends so its closing is always
+    // audited. See _shared/audit-excerpt.ts.
+    const excerptBudget = chapterExcerptBudget(generatedChapters.length);
+    let chaptersFullyAudited = 0;
+    const chapterSummaries = generatedChapters.map((ch: any) => {
+      const excerpt = excerptForAudit(ch.content || "", excerptBudget);
+      if (excerpt.complete) chaptersFullyAudited++;
+      return {
+        number: ch.chapter_number,
+        title: ch.title,
+        wordCount: ch.word_count || 0,
+        content: excerpt.text,
+      };
+    });
+    log("Chapter excerpting", {
+      chapters: generatedChapters.length,
+      budgetPerChapter: excerptBudget,
+      fullyAudited: chaptersFullyAudited,
+    });
 
     // ============================================================
     // STEP 2: AI Evaluation with Contrastive Evidence
@@ -653,12 +671,25 @@ Respond as JSON:
     ): Promise<{ perChapter: { chapterNumber: number; cdi: number; concepts: number; words: number }[]; average: number }> {
       const perChapter: { chapterNumber: number; cdi: number; concepts: number; words: number }[] = [];
       
-      // Build a combined request for all chapters to minimize API calls
-      const chapterTexts = chapters.map((ch: any) => ({
-        num: ch.chapter_number,
-        words: (ch.content || "").split(/\s+/).filter(Boolean).length,
-        text: (ch.content || "").slice(0, 6000),
-      })).filter(c => c.words >= 50);
+      // Build a combined request for all chapters to minimize API calls.
+      //
+      // The excerpt and the denominator must describe the same text. This
+      // previously counted concepts in the first 6000 characters but divided
+      // by the word count of the WHOLE chapter, so density was understated in
+      // proportion to how much of the chapter went unread — a 2200-word
+      // chapter scored roughly half its real CDI. Since CDI feeds the
+      // cognitive-depth score, longer chapters were penalised for their length.
+      const cdiBudget = chapterExcerptBudget(chapters.length);
+      const chapterTexts = chapters.map((ch: any) => {
+        const full = ch.content || "";
+        const excerpt = excerptForAudit(full, cdiBudget);
+        return {
+          num: ch.chapter_number,
+          words: full.split(/\s+/).filter(Boolean).length,
+          analyzedWords: excerpt.text.split(/\s+/).filter(Boolean).length,
+          text: excerpt.text,
+        };
+      }).filter(c => c.words >= 50);
 
       if (chapterTexts.length === 0) return { perChapter, average: 0 };
 
@@ -667,7 +698,7 @@ Respond as JSON:
 
 A "concept" is a named idea that could be a glossary entry: a theory, framework, principle, mechanism, named effect, technical term, or domain-specific construct. Do NOT count generic words (e.g., "strategy", "important") — only count SPECIFIC named concepts (e.g., "loss aversion", "Porter's Five Forces", "cognitive dissonance").
 
-${chapterTexts.map(c => `--- Chapter ${c.num} (${c.words} words) ---\n${c.text}`).join('\n\n')}
+${chapterTexts.map(c => `--- Chapter ${c.num} (${c.analyzedWords} words shown) ---\n${c.text}`).join('\n\n')}
 
 Respond as JSON array: [{"chapter": 1, "concepts": 15, "examples": ["loss aversion", "disposition effect", "prospect theory"]}, ...]`;
 
@@ -694,7 +725,10 @@ Respond as JSON array: [{"chapter": 1, "concepts": 15, "examples": ["loss aversi
             for (const item of parsed) {
               const chText = chapterTexts.find(c => c.num === item.chapter);
               if (chText) {
-                const cdi = Math.round((item.concepts / chText.words) * 1000 * 10) / 10;
+                // Divide by the words actually analysed, not the chapter's
+                // total, so density is a true ratio even when excerpted.
+                const denominator = Math.max(1, chText.analyzedWords);
+                const cdi = Math.round((item.concepts / denominator) * 1000 * 10) / 10;
                 perChapter.push({ chapterNumber: item.chapter, cdi, concepts: item.concepts, words: chText.words });
               }
             }

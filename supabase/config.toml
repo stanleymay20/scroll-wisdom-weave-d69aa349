@@ -163,3 +163,6 @@ verify_jwt = false
 # internally, then reads governance tables with service_role.
 [functions.isbn-admin-state]
 verify_jwt = false
+
+[functions.proofread-chapter]
+verify_jwt = false

@@ -142,6 +142,7 @@ jobs:
           deno check supabase/functions/process-document/index.ts
           deno check supabase/functions/register-custom-cover/index.ts
           deno check supabase/functions/chief-editor-audit/index.ts
+          deno check supabase/functions/proofread-chapter/index.ts
           deno check supabase/functions/deep-research/index.ts
           deno check supabase/functions/generate-references/index.ts
           deno check supabase/functions/verify-references/index.ts
@@ -184,6 +185,10 @@ jobs:
           deno test supabase/functions/_shared/productionArtifactAudit_test.ts
           deno test supabase/functions/_shared/kdp-print-cover_test.ts
           deno test supabase/functions/_shared/kdp-cover-resolution_test.ts
+      - name: Test editorial coverage and copyediting safety
+        run: |
+          deno test supabase/functions/_shared/audit-excerpt_test.ts
+          deno test supabase/functions/_shared/proofread_test.ts
 
   build:
     runs-on: ubuntu-latest
