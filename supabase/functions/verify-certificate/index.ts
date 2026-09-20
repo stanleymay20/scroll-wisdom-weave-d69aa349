@@ -40,6 +40,92 @@ async function sha256Hex(value: string): Promise<string> {
   return Array.from(new Uint8Array(digest), byte => byte.toString(16).padStart(2, '0')).join('');
 }
 
+/**
+ * Public verification for competency certificates.
+ *
+ * Returns null when the number is not a competency certificate, so the caller
+ * can fall through to its own not_found response.
+ *
+ * A live competency certificate deliberately reports `unverifiable` rather than
+ * `valid`. These records were minted by the browser — src/lib/competencyCertification.ts
+ * wrote them directly — which is precisely the authority gap Contract 6C exists
+ * to close, and which 20260915115000 closed at the table level by revoking
+ * INSERT/UPDATE/DELETE from anon and authenticated. A credential whose evidence
+ * a browser could fabricate must not be presented to an employer as verified.
+ * That is the same fail-closed rule the publishing path applies to its own
+ * incompletely-migrated records, applied to a different table.
+ *
+ * Revocation is reported exactly as it is for publishing certificates, because
+ * revocation is a server-side fact that does not depend on provenance evidence:
+ * it short-circuits before any recomputation there too.
+ */
+async function verifyCompetencyCertificate(
+  service: ReturnType<typeof createClient>,
+  number: string,
+): Promise<Response | null> {
+  const { data: cert, error } = await service.from('competency_certificates')
+    .select('id,certificate_number,issued_at,revoked_at,revoked_reason,verification_hash,book_id,competency_level,mastery_classification,overall_competency_score,chapters_completed,total_chapters,metadata')
+    .eq('certificate_number', number)
+    .maybeSingle();
+
+  if (error) throw error;
+  if (!cert) return null;
+
+  // Metadata is author-supplied JSON, so every field is validated rather than
+  // trusted. `str` also collapses empty strings to null, so a blank bookTitle
+  // does not present as a real one.
+  const metadata = (cert.metadata && typeof cert.metadata === 'object' ? cert.metadata : {}) as Record<string, unknown>;
+  const str = (value: unknown): string | null => (typeof value === 'string' && value.length > 0 ? value : null);
+
+  const totalChapters = Number(cert.total_chapters ?? 0);
+  const chaptersCompleted = Number(cert.chapters_completed ?? 0);
+  const coveragePercentage = totalChapters > 0
+    ? Math.round((chaptersCompleted / totalChapters) * 100)
+    : 0;
+
+  const base = {
+    found: true,
+    certificateNumber: cert.certificate_number,
+    certificateType: 'competency',
+    issuedAt: cert.issued_at,
+    holder: str(metadata.recipientName),
+    book: {
+      id: cert.book_id,
+      title: str(metadata.bookTitle),
+      type: str(metadata.bookType),
+      version: null,
+    },
+    coveragePercentage,
+    competency: {
+      level: cert.competency_level ?? null,
+      masteryClassification: cert.mastery_classification ?? null,
+      overallScore: cert.overall_competency_score ?? null,
+      chaptersCompleted,
+      totalChapters,
+    },
+    verificationHash: cert.verification_hash,
+  };
+
+  if (cert.revoked_at) {
+    return respond({
+      ...base,
+      status: 'revoked',
+      valid: false,
+      revokedAt: cert.revoked_at,
+      revokedReason: cert.revoked_reason || 'This learning record has been revoked.',
+    });
+  }
+
+  return respond({
+    ...base,
+    status: 'unverifiable',
+    valid: false,
+    reasons: [
+      'Competency certificates do not carry server-authoritative provenance under the current contract',
+    ],
+  });
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: corsHeaders });
   if (req.method !== 'GET' && req.method !== 'POST') return respond({ error: 'Method not allowed' }, 405);
@@ -65,7 +151,26 @@ Deno.serve(async (req) => {
       .maybeSingle();
 
     if (certError) throw certError;
-    if (!cert) return respond({ found: false, status: 'not_found', certificateNumber: number }, 404);
+
+    // Competency certificates live in their own table and are NOT interchangeable
+    // with publishing certificates: they carry no book_content_hash, no coverage
+    // percentage and no assessment contract, so the provenance recomputation
+    // below cannot run against them.
+    //
+    // They are still looked up here, because the alternative — the 404 this
+    // function returned between 921d6ba and now — tells a holder or an employer
+    // that a credential which demonstrably exists was never issued. Account
+    // deletion deliberately RETAINS these rows (delete-account nulls user_id and
+    // sets revoked_reason rather than deleting), and 20260915113500 states the
+    // contract they are retained under: "certificates are revoked, not erased, so
+    // employers and institutions can continue to verify that a previously issued
+    // credential is no longer valid". Retaining a row while removing the only way
+    // to read it honours the letter of that and none of its purpose.
+    if (!cert) {
+      const competency = await verifyCompetencyCertificate(service, number);
+      if (competency) return competency;
+      return respond({ found: false, status: 'not_found', certificateNumber: number }, 404);
+    }
 
     const metadata = cert.metadata && typeof cert.metadata === 'object' ? cert.metadata as Record<string, any> : {};
     const evidence = cert.evidence_snapshot && typeof cert.evidence_snapshot === 'object' ? cert.evidence_snapshot as Record<string, any> : {};
