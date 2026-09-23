@@ -615,7 +615,8 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
 
     if (path === "/rest/v1/release_schedules") {
       if (method === "POST") {
-        const body = requestBody(route);
+        const rawBody = requestBody(route);
+        const body = Array.isArray(rawBody) ? rawBody[0] ?? {} : rawBody;
         state.scheduleWrites.push(body);
         const row = {
           id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
