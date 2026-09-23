@@ -40,6 +40,18 @@ const externalModes = {
     mode: "public_readonly",
     evidence: [/storefront|public/i],
   },
+  "export-certificate": {
+    mode: "public_certificate_projection",
+    evidence: [/verify-certificate/i, /Cache-Control.*no-store|no-store/i],
+  },
+  "batch-verify-certificates": {
+    mode: "public_certificate_verification",
+    evidence: [/enforceDurableRateLimit/, /verify-certificate/i],
+  },
+  "log-recommendation-feedback": {
+    mode: "public_rate_limited_telemetry",
+    evidence: [/enforcePersistentVelocity/, /serviceClient/, /auth\.getUser/],
+  },
 };
 
 const userAuthEvidence = [
