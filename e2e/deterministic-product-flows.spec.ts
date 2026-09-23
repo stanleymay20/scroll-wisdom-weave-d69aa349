@@ -121,6 +121,8 @@ type MockState = {
   qualityFunctionCalls: string[];
   connectRequests: Array<Record<string, unknown>>;
   subscriptionCheckoutRequests: Array<Record<string, unknown>>;
+  coverRegistrationRequests: Array<Record<string, unknown>>;
+  coverStorageWrites: string[];
   portalCalls: number;
   subscriptionTier: "free" | "student" | "premium" | "prophet_tier";
 };
@@ -159,6 +161,8 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     qualityFunctionCalls: [],
     connectRequests: [],
     subscriptionCheckoutRequests: [],
+    coverRegistrationRequests: [],
+    coverStorageWrites: [],
     portalCalls: 0,
     subscriptionTier: "free",
   };
@@ -187,6 +191,14 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path.startsWith("/storage/v1/object/book-images/")) {
+      state.coverStorageWrites.push(path);
+      await fulfillJson(route, {
+        Key: path.replace("/storage/v1/object/", ""),
+      });
+      return;
+    }
+
     if (path.startsWith("/functions/v1/storefront-api/")) {
       const endpoint = path.split("/").pop();
       if (endpoint === "book") {
@@ -196,6 +208,18 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       } else {
         await fulfillJson(route, { items: [] });
       }
+      return;
+    }
+
+    if (path === "/functions/v1/register-custom-cover") {
+      const body = requestBody(route);
+      state.coverRegistrationRequests.push(body);
+      await fulfillJson(route, {
+        success: true,
+        coverUrl: body.assetUrl,
+        provenance: "user_attested_publication_rights",
+        authority: "server_cover_provenance",
+      });
       return;
     }
 
@@ -828,6 +852,57 @@ test("citation manager previews duplicates before committing a bulk import", asy
 });
 
 
+
+
+
+test("custom cover upload requires explicit publication-rights confirmation before storage and registration", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  await loginThroughMockedAuth(page);
+  await page.goto(`/book/${BOOK_ID}`);
+  await expect(page.getByRole("heading", { name: BOOK_TITLE }).first()).toBeVisible({ timeout: 10_000 });
+
+  const fileInput = page.locator('input[type="file"][accept="image/jpeg,image/png,image/webp"]').first();
+  const fixture = {
+    name: "rights-fixture.png",
+    mimeType: "image/png",
+    buffer: Buffer.from([
+      0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a,
+      0x00, 0x00, 0x00, 0x0d, 0x49, 0x48, 0x44, 0x52,
+    ]),
+  };
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("Publication rights confirmation");
+    await dialog.dismiss();
+  });
+  await fileInput.setInputFiles(fixture);
+
+  await expect.poll(() => state.coverStorageWrites.length).toBe(0);
+  await expect.poll(() => state.coverRegistrationRequests.length).toBe(0);
+  await expect(page.getByText("Cover not uploaded", { exact: true })).toBeVisible();
+
+  page.once("dialog", async (dialog) => {
+    expect(dialog.message()).toContain("commercially distribute");
+    await dialog.accept();
+  });
+  await fileInput.setInputFiles(fixture);
+
+  await expect.poll(() => state.coverStorageWrites.length).toBe(1);
+  expect(state.coverStorageWrites[0]).toContain(
+    `/storage/v1/object/book-images/${USER_ID}/covers/${BOOK_ID}-`,
+  );
+
+  await expect.poll(() => state.coverRegistrationRequests.length).toBe(1);
+  expect(state.coverRegistrationRequests[0]).toMatchObject({
+    bookId: BOOK_ID,
+    confirmPublicationRights: true,
+  });
+  expect(String(state.coverRegistrationRequests[0].assetUrl)).toContain(
+    `/storage/v1/object/public/book-images/${USER_ID}/covers/${BOOK_ID}-`,
+  );
+
+  await expect(page.getByText("Cover updated", { exact: true })).toBeVisible();
+});
 
 test("generated chapter regeneration requires explicit edit intent and sends the revision contract", async ({ page }) => {
   const state = await installDeterministicBackend(page);
