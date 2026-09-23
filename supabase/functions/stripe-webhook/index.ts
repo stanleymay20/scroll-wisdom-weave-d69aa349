@@ -245,7 +245,7 @@ serve(async (req) => {
     };
 
     const findUserIdByCustomer = async (customerId: string): Promise<string | null> =>
-      await resolveUserIdForBillingCustomer(supabase, stripe, customerId);
+      await resolveUserIdForBillingCustomer(supabase, customerId);
 
 
     const writePurchaseLedger = async (
