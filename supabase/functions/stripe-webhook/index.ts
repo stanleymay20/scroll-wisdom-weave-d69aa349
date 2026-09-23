@@ -3,6 +3,7 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { payoutMethodForStatus, payoutStatusFromAccount } from "../_shared/stripe-connect.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { correlationId, logFinancialEvent, logFraudSignal, evaluateSeverity } from "../_shared/observability.ts";
+import { resolveUserIdForBillingCustomer } from "../_shared/billing-customer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -243,25 +244,8 @@ serve(async (req) => {
       }
     };
 
-    const findUserByEmail = async (email: string) => {
-      const { data: users, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (error) throw new Error(`User lookup failed: ${error.message}`);
-      if (!users?.users) return null;
-      return users.users.find((u) => u.email === email) || null;
-    };
-
-    const findUserIdByCustomer = async (customerId: string): Promise<string | null> => {
-      const { data: linked, error: linkedError } = await supabase.from("subscriptions")
-        .select("user_id")
-        .eq("stripe_customer_id", customerId)
-        .maybeSingle();
-      if (linkedError) throw new Error(`Customer subscription lookup failed: ${linkedError.message}`);
-      if (linked?.user_id) return linked.user_id;
-
-      const customer = await stripe.customers.retrieve(customerId);
-      if (!customer || customer.deleted || !("email" in customer) || !customer.email) return null;
-      return (await findUserByEmail(customer.email))?.id ?? null;
-    };
+    const findUserIdByCustomer = async (customerId: string): Promise<string | null> =>
+      await resolveUserIdForBillingCustomer(supabase, stripe, customerId);
 
 
     const writePurchaseLedger = async (
@@ -308,15 +292,21 @@ serve(async (req) => {
         throw new Error("Book purchase checkout is missing listing/book metadata");
       }
 
-      const metaBuyerUserId = session.metadata?.buyer_user_id || null;
+      const buyerUserId = session.metadata?.buyer_user_id || null;
       const email = session.customer_details?.email ?? session.customer_email ?? null;
-      let buyerUserId: string | null = metaBuyerUserId;
-      if (!buyerUserId && email) {
-        const u = await findUserByEmail(email);
-        buyerUserId = u?.id ?? null;
-      }
       if (!buyerUserId) {
-        throw new Error("Paid book purchase could not be mapped to an authenticated buyer");
+        throw new Error("Paid book purchase is missing authenticated buyer metadata");
+      }
+
+      const sessionCustomerId = typeof session.customer === "string"
+        ? session.customer
+        : session.customer?.id ?? null;
+      if (!sessionCustomerId) {
+        throw new Error("Paid book purchase is missing Stripe customer identity");
+      }
+      const linkedBuyerUserId = await findUserIdByCustomer(sessionCustomerId);
+      if (linkedBuyerUserId !== buyerUserId) {
+        throw new Error("Paid book purchase customer/user identity mismatch");
       }
 
       const { data: existing, error: existingError } = await supabase
@@ -676,13 +666,25 @@ serve(async (req) => {
             const productId = subscription.items.data[0]?.price?.product as string;
             const planTier = getPlanTierFromProductId(productId);
             const metadataUserId = session.metadata?.userId || null;
-            const customerEmail = session.customer_details?.email ?? session.customer_email ?? null;
             const creatorTier = getCreatorTierFromProductId(productId);
-            const userId = metadataUserId || (customerEmail ? (await findUserByEmail(customerEmail))?.id ?? null : null);
             const recognizedProduct = planTier !== null || creatorTier !== "free";
-            if (recognizedProduct && !userId) {
-              throw new Error(`Recognized subscription product ${productId} could not be mapped to a user`);
+            const sessionCustomerId = typeof session.customer === "string"
+              ? session.customer
+              : session.customer?.id ?? null;
+
+            if (recognizedProduct && (!metadataUserId || !sessionCustomerId)) {
+              throw new Error(`Recognized subscription product ${productId} is missing canonical user/customer identity`);
             }
+
+            let userId: string | null = null;
+            if (metadataUserId && sessionCustomerId) {
+              const linkedUserId = await findUserIdByCustomer(sessionCustomerId);
+              if (linkedUserId !== metadataUserId) {
+                throw new Error("Subscription checkout customer/user identity mismatch");
+              }
+              userId = metadataUserId;
+            }
+
             if (userId) {
               if (planTier) {
                 await updateProfilePlan(userId, planTier);
@@ -890,13 +892,17 @@ serve(async (req) => {
           let userId: string | null = null;
           let email: string | null = null;
           try {
-            const customer = await stripe.customers.retrieve(invoice.customer as string);
-            if (customer && !customer.deleted && "email" in customer && customer.email) {
-              email = customer.email;
-              const user = await findUserByEmail(customer.email);
-              userId = user?.id ?? null;
+            const customerId = typeof invoice.customer === "string"
+              ? invoice.customer
+              : invoice.customer?.id ?? null;
+            if (customerId) {
+              userId = await findUserIdByCustomer(customerId);
+              const customer = await stripe.customers.retrieve(customerId);
+              if (customer && !customer.deleted && "email" in customer) {
+                email = customer.email ?? null;
+              }
             }
-          } catch (_) { /* best-effort */ }
+          } catch (_) { /* best-effort identity/log enrichment */ }
 
           // Phase 4.1 — move creator entitlement into 7-day grace period on payment failure.
           if (userId && invoice.subscription) {
