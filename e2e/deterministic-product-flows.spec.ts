@@ -12,6 +12,8 @@ const PUBLICATION_ID = "88888888-8888-4888-8888-888888888888";
 const SLUG = "deterministic-reader-book";
 const BOOK_TITLE = "Deterministic Reader Book";
 const CHECKOUT_URL = "https://checkout.stripe.com/c/pay/cs_test_scrolllibrary";
+const SUBSCRIPTION_CHECKOUT_URL = "https://checkout.stripe.test/subscription/cs_test_premium";
+const BILLING_PORTAL_URL = "https://billing.stripe.test/session/bps_e2e";
 /**
  * Assembled at runtime rather than embedded as a literal.
  *
@@ -117,6 +119,9 @@ type MockState = {
   citationImportRequests: Array<Record<string, unknown>>;
   qualityFunctionCalls: string[];
   connectRequests: Array<Record<string, unknown>>;
+  subscriptionCheckoutRequests: Array<Record<string, unknown>>;
+  portalCalls: number;
+  subscriptionTier: "free" | "student" | "premium" | "prophet_tier";
 };
 
 async function fulfillJson(route: Route, body: unknown, status = 200, headers: Record<string, string> = {}) {
@@ -151,6 +156,9 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     citationImportRequests: [],
     qualityFunctionCalls: [],
     connectRequests: [],
+    subscriptionCheckoutRequests: [],
+    portalCalls: 0,
+    subscriptionTier: "free",
   };
 
   await page.addInitScript(() => {
@@ -272,8 +280,25 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path === "/functions/v1/create-checkout") {
+      state.subscriptionCheckoutRequests.push(requestBody(route));
+      await fulfillJson(route, { url: SUBSCRIPTION_CHECKOUT_URL });
+      return;
+    }
+
+    if (path === "/functions/v1/customer-portal") {
+      state.portalCalls += 1;
+      await fulfillJson(route, { url: BILLING_PORTAL_URL });
+      return;
+    }
+
     if (path === "/functions/v1/check-subscription") {
-      await fulfillJson(route, { subscribed: false, tier: "free", subscription_end: null });
+      const subscribed = state.subscriptionTier !== "free";
+      await fulfillJson(route, {
+        subscribed,
+        tier: state.subscriptionTier,
+        subscription_end: subscribed ? "2026-10-23T00:00:00.000Z" : null,
+      });
       return;
     }
 
@@ -880,4 +905,63 @@ test("creator payout page starts Stripe Connect with the real registered return 
   });
 
   await expect(page).toHaveURL("https://connect.stripe.test/onboarding/session_e2e", { timeout: 10_000 });
+});
+
+
+test("pricing upgrade sends the canonical Premium tier and price to subscription checkout", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  await loginThroughMockedAuth(page);
+
+  await page.evaluate(() => {
+    const testWindow = window as typeof window & { __lastBillingUrl?: string };
+    testWindow.__lastBillingUrl = undefined;
+    testWindow.open = ((url?: string | URL) => {
+      testWindow.__lastBillingUrl = String(url ?? "");
+      return testWindow;
+    }) as typeof window.open;
+  });
+
+  await page.goto("/pricing");
+  await expect(page.getByRole("heading", { name: "Plans & Pricing" })).toBeVisible({ timeout: 10_000 });
+
+  const premiumCard = page.getByText("Premium", { exact: true }).first().locator("xpath=ancestor::*[contains(@class,'border')][1]");
+  const premiumUpgrade = page.getByRole("button", { name: "Upgrade to Premium" }).first();
+  await expect(premiumUpgrade).toBeEnabled();
+  await premiumUpgrade.click();
+
+  await expect.poll(() => state.subscriptionCheckoutRequests.length).toBe(1);
+  expect(state.subscriptionCheckoutRequests[0]).toEqual({
+    priceId: "price_1SdFddJYFIBeCvefJr1ZY92E",
+    tier: "premium",
+  });
+
+  await expect.poll(() =>
+    page.evaluate(() => (window as typeof window & { __lastBillingUrl?: string }).__lastBillingUrl)
+  ).toBe(SUBSCRIPTION_CHECKOUT_URL);
+  await expect(premiumCard).toBeVisible();
+});
+
+test("subscribed pricing page opens the server-created Stripe billing portal", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  state.subscriptionTier = "premium";
+  await loginThroughMockedAuth(page);
+
+  await page.evaluate(() => {
+    const testWindow = window as typeof window & { __lastBillingUrl?: string };
+    testWindow.__lastBillingUrl = undefined;
+    testWindow.open = ((url?: string | URL) => {
+      testWindow.__lastBillingUrl = String(url ?? "");
+      return testWindow;
+    }) as typeof window.open;
+  });
+
+  await page.goto("/pricing");
+  const manage = page.getByRole("button", { name: "Manage Subscription" }).first();
+  await expect(manage).toBeVisible({ timeout: 10_000 });
+  await manage.click();
+
+  await expect.poll(() => state.portalCalls).toBe(1);
+  await expect.poll(() =>
+    page.evaluate(() => (window as typeof window & { __lastBillingUrl?: string }).__lastBillingUrl)
+  ).toBe(BILLING_PORTAL_URL);
 });
