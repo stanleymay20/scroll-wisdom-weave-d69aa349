@@ -268,5 +268,9 @@ jobs:
         run: bun run audit:secrets
       - name: Reject per-instance rate limiting on metered endpoints
         run: bun run audit:rate-limits
+      - name: Require compensating auth on verify_jwt=false Edge Functions
+        run: bun run audit:edge-auth
+      - name: Reject orphaned Edge Functions
+        run: bun run audit:function-reachability
       - name: Reject high or critical production dependency vulnerabilities
         run: bun run audit:dependencies
