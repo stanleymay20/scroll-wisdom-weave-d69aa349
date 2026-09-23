@@ -965,3 +965,30 @@ test("subscribed pricing page opens the server-created Stripe billing portal", a
     page.evaluate(() => (window as typeof window & { __lastBillingUrl?: string }).__lastBillingUrl)
   ).toBe(BILLING_PORTAL_URL);
 });
+
+
+test("post-checkout success only claims activation after server confirmation", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  state.subscriptionTier = "premium";
+  await loginThroughMockedAuth(page);
+
+  await page.goto("/pricing?success=true");
+
+  await expect(page.getByText("Subscription activated!", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/features are now unlocked/i)).toBeVisible();
+  await expect(page).toHaveURL(/\/pricing$/, { timeout: 10_000 });
+});
+
+test("post-checkout return stays truthful while entitlement confirmation is delayed", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  state.subscriptionTier = "free";
+  await loginThroughMockedAuth(page);
+
+  await page.goto("/pricing?success=true");
+
+  await expect(
+    page.getByText("Payment received — confirming subscription", { exact: true }),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Subscription activated!", { exact: true })).toHaveCount(0);
+  await expect(page).toHaveURL(/\/pricing$/, { timeout: 10_000 });
+});
