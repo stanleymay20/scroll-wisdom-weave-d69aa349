@@ -81,6 +81,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-account-deletion-certificate-retention.sql
       - name: Assert scheduled releases actually materialize
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-release-materialization.sql
+      - name: Assert release scheduling entitlement cannot be bypassed through RLS
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-release-schedule-entitlement-rls.sql
       - name: Assert the payout write surface stays server-owned
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-payout-surface.sql
       - name: Assert purchase, ledger, entitlement and refund lifecycle
