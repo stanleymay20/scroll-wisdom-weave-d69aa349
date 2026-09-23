@@ -204,7 +204,7 @@ const App = () => (
                         <Route path="/pwa-test" element={<PWATest />} />
                         <Route path="/diagnostics" element={<AdminRoute><Diagnostics /></AdminRoute>} />
                         <Route path="/book/:id" element={withRecovery('BookDetail', <BookDetail />)} />
-                        <Route path="/book/:bookId/certificate" element={withRecovery('CertificateStatus', <CertificateStatus />)} />
+                        <Route path="/book/:bookId/certificate" element={withRecovery('CertificateStatus', <ProtectedRoute><CertificateStatus /></ProtectedRoute>)} />
                         <Route path="/read/:bookId/:chapterId" element={withRecovery('Reader', <Reader />)} />
                         <Route path="/certificate/:certificateNumber" element={<CertificateVerify />} />
                         <Route path="/verify" element={<OrganizationVerify />} />
