@@ -1,6 +1,17 @@
 -- Support multiple idempotent partial refunds without weakening the append-only
 -- creator earnings ledger. Refund identity comes from Stripe refund IDs.
 
+-- Admin refund requests are independently idempotent at the API boundary.
+-- The same key may be safely retried, but cannot create a second Stripe refund
+-- for the same purchase.
+ALTER TABLE public.refund_requests
+  ADD COLUMN IF NOT EXISTS idempotency_key text;
+
+CREATE UNIQUE INDEX IF NOT EXISTS refund_requests_purchase_idempotency_unique
+  ON public.refund_requests(purchase_id, idempotency_key)
+  WHERE idempotency_key IS NOT NULL;
+
+
 ALTER TABLE public.creator_earnings_ledger
   ADD COLUMN IF NOT EXISTS source_event_id text;
 
