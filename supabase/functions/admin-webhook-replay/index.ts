@@ -32,9 +32,10 @@ serve(async (req) => {
   const corr = correlationId(req);
 
   try {
-    const { data: existing } = await sc.from("stripe_webhook_events")
+    const { data: existing, error: existingError } = await sc.from("stripe_webhook_events")
       .select("stripe_event_id, status, payload, event_type, attempts")
       .eq("stripe_event_id", parsed.stripe_event_id).maybeSingle();
+    if (existingError) return serverError(existingError);
     if (!existing) return badRequest("Webhook event not found");
 
     const priorStatus = String(existing.status ?? "unknown");
@@ -57,12 +58,16 @@ serve(async (req) => {
       }, 409);
     }
 
-    // Mark replaying
-    await sc.from("stripe_webhook_events").update({
-      status: "processing",
-      attempts: (existing.attempts ?? 0) + 1,
+    // Stage the event as retryable, then let the normal webhook claim RPC
+    // atomically transition failed -> processing and increment attempts.
+    // Pre-setting "processing" would make the webhook reject this replay as
+    // an in-flight duplicate and no side effects would actually run.
+    const { error: stageError } = await sc.from("stripe_webhook_events").update({
+      status: "failed",
+      last_error: "admin_replay_staged",
       updated_at: new Date().toISOString(),
     }).eq("stripe_event_id", parsed.stripe_event_id);
+    if (stageError) return serverError(stageError);
 
     await logFinancialEvent(sc, {
       event_type: "webhook_replay_started", severity: force ? "critical" : "warn", actor: "admin",
@@ -70,7 +75,11 @@ serve(async (req) => {
       payload: { event_type: existing.event_type, prior_status: priorStatus, force, reason: parsed.reason ?? null },
     });
 
-    const whSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET")!;
+    const whSecret = Deno.env.get("STRIPE_WEBHOOK_SECRET");
+    const supabaseUrl = Deno.env.get("SUPABASE_URL");
+    if (!whSecret || !supabaseUrl) {
+      return serverError(new Error("Webhook replay configuration is incomplete"));
+    }
     const payloadStr = JSON.stringify(existing.payload);
     const timestamp = Math.floor(Date.now() / 1000);
     const signedPayload = `${timestamp}.${payloadStr}`;
@@ -86,7 +95,7 @@ serve(async (req) => {
     const sigHex = Array.from(new Uint8Array(sigBuf)).map(b => b.toString(16).padStart(2, "0")).join("");
     const sig = `t=${timestamp},v1=${sigHex}`;
 
-    const url = `${Deno.env.get("SUPABASE_URL")}/functions/v1/stripe-webhook`;
+    const url = `${supabaseUrl}/functions/v1/stripe-webhook`;
     const res = await fetch(url, {
       method: "POST",
       headers: {
@@ -97,14 +106,29 @@ serve(async (req) => {
       body: payloadStr,
     });
 
-    const finalStatus = res.ok ? "replayed" : "failed";
-    await sc.from("stripe_webhook_events").update({
-      status: finalStatus,
-      last_error: res.ok ? null : `replay http ${res.status}`,
-      processed_at: new Date().toISOString(),
-      updated_at: new Date().toISOString(),
-      ...(res.ok ? { dead_letter_reason: null, dead_lettered_at: null } : {}),
-    }).eq("stripe_event_id", parsed.stripe_event_id);
+    let finalStatus: string;
+    if (res.ok) {
+      const { error: replayFinalizeError } = await sc.from("stripe_webhook_events").update({
+        status: "replayed",
+        last_error: null,
+        processed_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+        dead_letter_reason: null,
+        dead_lettered_at: null,
+      }).eq("stripe_event_id", parsed.stripe_event_id);
+      if (replayFinalizeError) return serverError(replayFinalizeError);
+      finalStatus = "replayed";
+    } else {
+      // The webhook owns failed/dead_lettered state. Never overwrite a
+      // dead-letter with generic "failed" merely because the HTTP call failed.
+      const { data: afterReplay, error: replayReadError } = await sc
+        .from("stripe_webhook_events")
+        .select("status")
+        .eq("stripe_event_id", parsed.stripe_event_id)
+        .maybeSingle();
+      if (replayReadError) return serverError(replayReadError);
+      finalStatus = String(afterReplay?.status ?? "failed");
+    }
 
     await logFinancialEvent(sc, {
       event_type: "webhook_replay_finished", severity: res.ok ? (force ? "warn" : "info") : "error", actor: "admin",
