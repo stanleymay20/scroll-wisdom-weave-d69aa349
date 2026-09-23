@@ -576,10 +576,12 @@ export default function UploadPage() {
           <p className="text-muted-foreground mb-6" aria-live="polite">{progressMessage}</p>
           <Progress value={progress} className="max-w-md mx-auto mb-4" />
           <p className="text-xs text-muted-foreground mb-6">
-            This may take 15–30 seconds depending on document length.
+            {serverProcessing
+              ? "Server analysis has started. You can stop waiting, but work already accepted by the server may still finish and appear in your Library."
+              : "This may take 15–30 seconds depending on document length."}
           </p>
           <Button variant="outline" onClick={cancelProcessing} className="gap-2">
-            <X className="h-4 w-4" /> Cancel
+            <X className="h-4 w-4" /> {serverProcessing ? "Stop waiting" : "Cancel"}
           </Button>
         </motion.div>
       )}
