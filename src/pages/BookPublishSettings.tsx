@@ -54,8 +54,9 @@ export default function BookPublishSettings() {
   const [suggesting, setSuggesting] = useState(false);
   const [bundling, setBundling] = useState<"" | BundleKind>("");
   const [publishingGumroad, setPublishingGumroad] = useState(false);
-  const { entitlements } = useCreatorEntitlements();
+  const { entitlements, loading: entitlementsLoading } = useCreatorEntitlements();
   const canPublishExternal = entitlements.can_publish_external;
+  const canScheduleReleases = entitlements.can_schedule_releases;
   const [publishingShopify, setPublishingShopify] = useState(false);
   // Tracked per-platform so the user sees "Auditing → Building bundle → Creating product".
   const [oneClickStage, setOneClickStage] = useState<{ platform: "gumroad" | "shopify"; label: string } | null>(null);
@@ -918,7 +919,28 @@ export default function BookPublishSettings() {
         {/* Serialized publishing */}
         {bookId && book?.user_id && (
           <div className="mt-6">
-            <ReleaseScheduleSection bookId={bookId} ownerUserId={book.user_id} />
+            {entitlementsLoading ? (
+              <Card className="p-5 text-sm text-muted-foreground">
+                Checking serialized-release access…
+              </Card>
+            ) : canScheduleReleases ? (
+              <ReleaseScheduleSection bookId={bookId} ownerUserId={book.user_id} />
+            ) : (
+              <Card className="p-5">
+                <div className="flex items-start gap-3">
+                  <Lock className="h-5 w-5 text-muted-foreground mt-0.5" aria-hidden="true" />
+                  <div className="space-y-2">
+                    <div className="font-medium">Serialized release schedules are locked</div>
+                    <p className="text-sm text-muted-foreground">
+                      Upgrade to a creator plan with release scheduling before creating or changing a drip-release queue.
+                    </p>
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/pricing">View creator plans</Link>
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
           </div>
         )}
 
