@@ -1,4 +1,5 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 
 const USER_ID = "55555555-5555-4555-8555-555555555555";
 
@@ -48,6 +49,7 @@ async function fulfillJson(route: Route, body: unknown, status = 200) {
 
 async function installDeletionBackend(page: Page) {
   let deleteCalls = 0;
+  let exportCalls = 0;
 
   await page.addInitScript(() => {
     localStorage.setItem("sl_onboarding_completed", "true");
@@ -76,6 +78,19 @@ async function installDeletionBackend(page: Page) {
       return;
     }
 
+    if (path === "/functions/v1/export-user-data") {
+      exportCalls += 1;
+      await fulfillJson(route, {
+        exported_at: "2026-09-23T03:00:00.000Z",
+        user: { id: USER_ID, email: user.email },
+        profile: { full_name: "Deletion E2E" },
+        library: [{ book_id: "book-fixture", progress_percent: 42 }],
+        highlights: [{ id: "highlight-fixture", text: "portable data" }],
+        certificates: [{ certificate_number: "SLC-E2E-001", status: "active" }],
+      });
+      return;
+    }
+
     if (path === "/functions/v1/delete-account") {
       deleteCalls += 1;
       expect(request.headers()["authorization"]).toContain(ACCESS_TOKEN);
@@ -99,7 +114,10 @@ async function installDeletionBackend(page: Page) {
     await fulfillJson(route, {});
   });
 
-  return { deleteCalls: () => deleteCalls };
+  return {
+    deleteCalls: () => deleteCalls,
+    exportCalls: () => exportCalls,
+  };
 }
 
 async function login(page: Page) {
@@ -137,4 +155,32 @@ test("account deletion requires both confirmations and reports retained-certific
   await expect(confirmation.getByText(/personal data have been permanently deleted/i)).toBeVisible();
   await expect(confirmation.getByText(/revoked but remain publicly verifiable/i)).toBeVisible();
   await expect(confirmation.getByRole("button", { name: "Return to Home" })).toBeVisible();
+});
+
+
+test("data export downloads a machine-readable copy of the authenticated user's data", async ({ page }) => {
+  const backend = await installDeletionBackend(page);
+  await login(page);
+
+  await page.goto("/account/data-export");
+  await expect(page.getByRole("heading", { name: "Export your data" })).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Download my data" }).click();
+  const download = await downloadPromise;
+
+  await expect.poll(backend.exportCalls).toBe(1);
+  expect(download.suggestedFilename()).toMatch(/^scrolllibrary-data-export-\d{4}-\d{2}-\d{2}\.json$/);
+
+  const path = await download.path();
+  expect(path).toBeTruthy();
+  const exported = JSON.parse(await readFile(path!, "utf8")) as Record<string, unknown>;
+  expect(exported).toMatchObject({
+    user: { id: USER_ID, email: "delete-e2e@example.com" },
+    library: [{ book_id: "book-fixture", progress_percent: 42 }],
+    highlights: [{ id: "highlight-fixture", text: "portable data" }],
+    certificates: [{ certificate_number: "SLC-E2E-001", status: "active" }],
+  });
+
+  await expect(page.getByRole("button", { name: "Downloaded" })).toBeVisible();
 });
