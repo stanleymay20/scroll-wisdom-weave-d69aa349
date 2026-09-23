@@ -6,7 +6,7 @@
 -- transaction-scoped so CI/local verification leaves no synthetic user/book.
 BEGIN;
 
-DO $
+DO $$
 DECLARE
   v_user uuid := '92000000-0000-4000-8000-000000000001';
   v_book uuid;
