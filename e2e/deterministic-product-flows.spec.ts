@@ -1329,6 +1329,13 @@ test("Reader assessment keeps answer keys server-side and finalizes server-score
   state.assessmentJourneyReady = true;
   await loginThroughMockedAuth(page);
 
+  // This test exercises Reader Tools and server-authoritative assessment, not
+  // the chapter-intro animation. Pre-dismiss the normal ChapterHookScreen so it
+  // cannot transiently intercept the Reader Tools click under CI timing.
+  await page.addInitScript(() => {
+    window.sessionStorage.setItem("scroll_hook_1", "dismissed");
+  });
+
   await page.goto(`/read/${BOOK_ID}/1`);
   await expect(page.getByText(chapter.title, { exact: true }).first()).toBeVisible({ timeout: 10_000 });
 
