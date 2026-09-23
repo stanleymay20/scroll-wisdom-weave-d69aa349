@@ -112,6 +112,7 @@ type MockState = {
   checkoutIdempotencyKeys: string[];
   listingWrites: Array<Record<string, unknown>>;
   generationRequests: Array<Record<string, unknown>>;
+  chapterGenerationRequests: Array<Record<string, unknown>>;
   exportRequests: Array<Record<string, unknown>>;
   canonicalPublishRequests: Array<Record<string, unknown>>;
   distributionRequests: Array<Record<string, unknown>>;
@@ -149,6 +150,7 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     checkoutIdempotencyKeys: [],
     listingWrites: [],
     generationRequests: [],
+    chapterGenerationRequests: [],
     exportRequests: [],
     canonicalPublishRequests: [],
     distributionRequests: [],
@@ -283,6 +285,16 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     if (path === "/functions/v1/create-checkout") {
       state.subscriptionCheckoutRequests.push(requestBody(route));
       await fulfillJson(route, { url: SUBSCRIPTION_CHECKOUT_URL });
+      return;
+    }
+
+    if (path === "/functions/v1/generate-chapter") {
+      state.chapterGenerationRequests.push(requestBody(route));
+      await fulfillJson(route, {
+        success: true,
+        wordCount: 37,
+        provider: "deterministic-e2e",
+      });
       return;
     }
 
@@ -813,6 +825,49 @@ test("citation manager previews duplicates before committing a bulk import", asy
     book_id: BOOK_ID,
     commit: true,
   });
+});
+
+
+
+test("generated chapter regeneration requires explicit edit intent and sends the revision contract", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  await loginThroughMockedAuth(page);
+
+  await page.goto(`/book/${BOOK_ID}`);
+  await expect(page.getByRole("heading", { name: BOOK_TITLE }).first()).toBeVisible({ timeout: 10_000 });
+
+  await page.locator('[title="Regenerate chapter"]').click();
+
+  const dialog = page.getByRole("alertdialog");
+  await expect(dialog.getByRole("heading", { name: "Regenerate chapter (revision)" })).toBeVisible();
+
+  // Blank intent is fail-closed in the UI and must not hit the generation API.
+  await dialog.getByRole("button", { name: "Regenerate", exact: true }).click();
+  await expect.poll(() => state.chapterGenerationRequests.length).toBe(0);
+  await expect(page.getByText("Edit intent required", { exact: true })).toBeVisible();
+
+  const intent = "Shorten the chapter and make the examples more concrete.";
+  await dialog.getByPlaceholder(/Shorten by 30%/i).fill(intent);
+  await dialog.getByRole("button", { name: "Regenerate", exact: true }).click();
+
+  await expect.poll(() => state.chapterGenerationRequests.length).toBe(1);
+  expect(state.chapterGenerationRequests[0]).toMatchObject({
+    chapterId: chapter.id,
+    bookTitle: BOOK_TITLE,
+    chapterTitle: chapter.title,
+    chapterNumber: chapter.chapter_number,
+    category: "fiction",
+    language: "en",
+    bookType: "text",
+    academicMode: false,
+    citationStyle: "APA",
+    regenerate: true,
+    isRegeneration: true,
+    originalContent: chapter.content,
+    editIntent: intent,
+  });
+
+  await expect(page.getByText("Chapter updated", { exact: true })).toBeVisible();
 });
 
 test("authenticated generated book exports a non-placeholder PDF through the real Download UI", async ({ page }) => {
