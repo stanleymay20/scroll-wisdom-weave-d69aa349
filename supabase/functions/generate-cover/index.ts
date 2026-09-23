@@ -128,14 +128,14 @@ async function authorizeBook(
   sc: ReturnType<typeof serviceClient>,
   bookId: string,
   userId: string,
-): Promise<{ found: boolean; authorized: boolean; coverUrl: string | null }> {
+): Promise<{ found: boolean; authorized: boolean; coverUrl: string | null; certified: boolean }> {
   const { data: book, error: bookErr } = await sc
     .from("books")
-    .select("id,creator_id,cover_image_url")
+    .select("id,creator_id,cover_image_url,current_publication_id")
     .eq("id", bookId)
     .maybeSingle();
   if (bookErr) throw bookErr;
-  if (!book) return { found: false, authorized: false, coverUrl: null };
+  if (!book) return { found: false, authorized: false, coverUrl: null, certified: false };
 
   let authorized = book.creator_id === userId;
   if (!authorized && book.creator_id == null) {
@@ -169,6 +169,7 @@ async function authorizeBook(
     found: true,
     authorized,
     coverUrl: typeof book.cover_image_url === "string" ? book.cover_image_url : null,
+    certified: book.current_publication_id != null,
   };
 }
 
@@ -294,6 +295,13 @@ Deno.serve(async (req) => {
     const ownership = await authorizeBook(sc, body.bookId, auth.userId);
     if (!ownership.found) return badRequest("Book not found");
     if (!ownership.authorized) return forbidden("Not the owner of this book");
+    if (ownership.certified) {
+      return json({
+        success: false,
+        error: "CERTIFIED_PUBLICATION_IMMUTABLE",
+        message: "Create a revision before changing the cover of a certified publication.",
+      }, 409);
+    }
 
     const previousCoverUrl = ownership.coverUrl;
     const generated = await invokeRawGenerator(req, body);
