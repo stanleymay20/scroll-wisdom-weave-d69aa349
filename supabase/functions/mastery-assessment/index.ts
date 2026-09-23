@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { requireUser, serviceClient, enforceDurableRateLimit } from "../_shared/http.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -528,6 +529,16 @@ serve(async (req) => {
   }
 
   try {
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
+    const limited = await enforceDurableRateLimit(serviceClient(), {
+      name: "mastery-assessment",
+      key: auth.userId,
+      limit: 30,
+      windowSec: 600,
+    });
+    if (limited) return limited;
+
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) throw new Error("LOVABLE_API_KEY is not configured");
 
