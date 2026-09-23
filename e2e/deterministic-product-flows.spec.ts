@@ -129,6 +129,8 @@ type MockState = {
   certificateEvidenceReady: boolean;
   certificateAuthorityReject: boolean;
   certificateIssuanceRequests: Array<Record<string, unknown>>;
+  assessmentJourneyReady: boolean;
+  assessmentRequests: Array<Record<string, unknown>>;
   portalCalls: number;
   subscriptionTier: "free" | "student" | "premium" | "prophet_tier";
 };
@@ -175,6 +177,8 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     certificateEvidenceReady: false,
     certificateAuthorityReject: false,
     certificateIssuanceRequests: [],
+    assessmentJourneyReady: false,
+    assessmentRequests: [],
     portalCalls: 0,
     subscriptionTier: "free",
   };
@@ -564,6 +568,60 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path === "/functions/v1/assessment-session") {
+      const body = requestBody(route);
+      state.assessmentRequests.push(body);
+
+      if (body.action === "start") {
+        await fulfillJson(route, {
+          sessionId: "d1000000-0000-4000-8000-000000000001",
+          masteryDepthScore: 82,
+          questions: [{
+            id: "d2000000-0000-4000-8000-000000000001",
+            tier: 1,
+            bloomLevel: "understand",
+            question: "Which statement best summarizes the reader contract?",
+            options: [
+              "The server owns the scored assessment evidence.",
+              "The browser owns the answer key.",
+            ],
+            questionType: "multiple_choice",
+            difficulty: 3,
+            pointValue: 1,
+            stressTestPass: true,
+          }],
+        });
+        return;
+      }
+
+      if (body.action === "answer") {
+        await fulfillJson(route, {
+          success: true,
+          correct: true,
+          correctIndex: 0,
+          reasoningExplanation: "Credential evidence is scored and persisted by the server.",
+        });
+        return;
+      }
+
+      if (body.action === "complete") {
+        await fulfillJson(route, {
+          success: true,
+          score: 100,
+          correctAnswers: 1,
+          totalQuestions: 1,
+          integrityScore: 0.96,
+          integrityClassification: "trusted",
+          assessmentContractPassed: true,
+          assessmentContractVersion: "ARC-1.0",
+        });
+        return;
+      }
+
+      await fulfillJson(route, { ok: true });
+      return;
+    }
+
     if (path === "/functions/v1/publishing-identity") {
       await fulfillJson(route, {
         book: { id: BOOK_ID, title: BOOK_TITLE },
@@ -617,6 +675,29 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
         sample_chapters: 1,
         book: { id: BOOK_ID, title: BOOK_TITLE },
       }], 200, { "content-range": "0-0/1" });
+      return;
+    }
+
+    if (path === "/rest/v1/user_library") {
+      if (method === "GET") {
+        const wantsSingle = (request.headers()["accept"] ?? "").includes("application/vnd.pgrst.object+json");
+        const row = state.assessmentJourneyReady
+          ? {
+              user_id: USER_ID,
+              book_id: BOOK_ID,
+              progress_percent: 100,
+              last_read_chapter: 1,
+            }
+          : null;
+        await fulfillJson(
+          route,
+          wantsSingle ? row : (row ? [row] : []),
+          200,
+          { "content-range": row ? "0-0/1" : "*/0" },
+        );
+      } else {
+        await fulfillJson(route, [], 200, { "content-range": "*/0" });
+      }
       return;
     }
 
@@ -1211,6 +1292,72 @@ test("Retry publication review drives the shipped quality pipeline through final
 });
 
 
+
+
+test("Reader assessment keeps answer keys server-side and finalizes server-scored ARC evidence", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  state.assessmentJourneyReady = true;
+  await loginThroughMockedAuth(page);
+
+  await page.goto(`/read/${BOOK_ID}/1`);
+  await expect(page.getByText(chapter.title, { exact: true }).first()).toBeVisible({ timeout: 10_000 });
+
+  await page.locator('[title="Reader Tools"]').click();
+  await expect(page.getByText("Reader Tools", { exact: true })).toBeVisible();
+  const quiz = page.getByRole("button", { name: "Quiz", exact: true });
+  await expect(quiz).toBeEnabled();
+  await quiz.click();
+
+  await expect(page.getByText("Server-Authoritative Assessment", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await page.getByRole("button", { name: "Start Assessment" }).click();
+
+  await expect.poll(() => state.assessmentRequests.length).toBe(1);
+  expect(state.assessmentRequests[0]).toEqual({
+    action: "start",
+    bookId: BOOK_ID,
+    chapterId: chapter.id,
+    mode: "completion",
+    difficulty: 3,
+  });
+
+  await expect(page.getByText("Which statement best summarizes the reader contract?", { exact: true })).toBeVisible();
+  await expect(page.getByText("Server session", { exact: true })).toBeVisible();
+
+  // The start payload/response must not expose the answer key. The UI only
+  // learns correctness after it submits a selected index to the server.
+  expect(JSON.stringify(state.assessmentRequests[0])).not.toMatch(/correctIndex|answerKey|correctAnswer/i);
+  await expect(page.getByText("Correct", { exact: true })).toHaveCount(0);
+
+  await page.getByRole("button", { name: /The server owns the scored assessment evidence/ }).click();
+  await page.getByRole("button", { name: "Submit Answer" }).click();
+
+  await expect.poll(() => state.assessmentRequests.length).toBe(2);
+  expect(state.assessmentRequests[1]).toEqual({
+    action: "answer",
+    sessionId: "d1000000-0000-4000-8000-000000000001",
+    questionIndex: 0,
+    selectedIndex: 0,
+  });
+  await expect(page.getByText("Correct", { exact: true })).toBeVisible();
+  await expect(
+    page.getByText("Credential evidence is scored and persisted by the server.", { exact: true }),
+  ).toBeVisible();
+
+  await page.getByRole("button", { name: "Finalize Results" }).click();
+
+  await expect.poll(() => state.assessmentRequests.length).toBe(3);
+  expect(state.assessmentRequests[2]).toEqual({
+    action: "complete",
+    sessionId: "d1000000-0000-4000-8000-000000000001",
+  });
+
+  await expect(page.getByText("Assessment Complete", { exact: true })).toBeVisible();
+  await expect(page.getByText("100%", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText("1 of 1 correct", { exact: true })).toBeVisible();
+  await expect(page.getByText("ARC-1.0", { exact: true })).toBeVisible();
+  await expect(page.getByText("Passed", { exact: true })).toBeVisible();
+  await expect(page.getByText("96%", { exact: true })).toBeVisible();
+});
 
 test("eligible learner requests certificate issuance from the server authority without sending client proof", async ({ page }) => {
   const state = await installDeterministicBackend(page);
