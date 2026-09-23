@@ -104,7 +104,6 @@ serve(async (req) => {
           : subscription.customer.id;
         const linkedUserId = await resolveUserIdForBillingCustomer(
           sc,
-          stripe,
           subscriptionCustomerId,
         );
         if (linkedUserId !== parsed.user_id) {
