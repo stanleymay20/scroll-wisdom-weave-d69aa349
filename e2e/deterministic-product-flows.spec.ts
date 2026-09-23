@@ -105,6 +105,7 @@ const chapter = {
 
 type MockState = {
   checkoutRequests: Array<Record<string, unknown>>;
+  checkoutIdempotencyKeys: string[];
   listingWrites: Array<Record<string, unknown>>;
   generationRequests: Array<Record<string, unknown>>;
   exportRequests: Array<Record<string, unknown>>;
@@ -133,6 +134,7 @@ function requestBody(route: Route): Record<string, unknown> {
 async function installDeterministicBackend(page: Page): Promise<MockState> {
   const state: MockState = {
     checkoutRequests: [],
+    checkoutIdempotencyKeys: [],
     listingWrites: [],
     generationRequests: [],
     exportRequests: [],
@@ -177,6 +179,9 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
 
     if (path === "/functions/v1/create-book-checkout") {
       state.checkoutRequests.push(requestBody(route));
+      state.checkoutIdempotencyKeys.push(
+        request.headers()["x-idempotency-key"] ?? "",
+      );
       await fulfillJson(route, { url: CHECKOUT_URL });
       return;
     }
@@ -441,6 +446,10 @@ test("paid checkout CTA sends the listing id and consumes the returned Stripe ch
 
   await expect.poll(() => state.checkoutRequests.length).toBe(1);
   expect(state.checkoutRequests[0]).toMatchObject({ listing_id: LISTING_ID });
+  expect(state.checkoutIdempotencyKeys).toHaveLength(1);
+  expect(state.checkoutIdempotencyKeys[0]).toMatch(
+    /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i,
+  );
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __lastCheckoutUrl?: string }).__lastCheckoutUrl)).toBe(CHECKOUT_URL);
   await expect(page).toHaveURL(new RegExp(`/store/${SLUG}$`));
 });
