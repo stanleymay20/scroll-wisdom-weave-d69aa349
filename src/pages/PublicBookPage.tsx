@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { supabase } from "@/integrations/supabase/client";
 import { SEO } from "@/components/SEO";
@@ -73,6 +73,8 @@ export default function PublicBookPage() {
   const [loading, setLoading] = useState(true);
   const [related, setRelated] = useState<StoreListing[] | null>(null);
   const [moreFromAuthor, setMoreFromAuthor] = useState<StoreListing[] | null>(null);
+  const checkoutInFlight = useRef(false);
+  const [checkoutBusy, setCheckoutBusy] = useState(false);
 
   useEffect(() => {
     if (!slug) return;
@@ -119,11 +121,17 @@ export default function PublicBookPage() {
   };
 
   async function handleBuy() {
+    if (checkoutInFlight.current) return;
+    checkoutInFlight.current = true;
+    setCheckoutBusy(true);
+    const idempotencyKey = crypto.randomUUID();
+
     trackStorefrontEvent(data!.id, "cta_click", { cta: "buy" });
     try {
       const attribution = getAttributionContext();
       const { data: res, error } = await supabase.functions.invoke("create-book-checkout", {
         body: { listing_id: data!.id, attribution },
+        headers: { "x-idempotency-key": idempotencyKey },
       });
       // supabase-js wraps non-2xx as FunctionsHttpError; read the real body
       if (error) {
@@ -176,6 +184,9 @@ export default function PublicBookPage() {
         return;
       }
       toast.error(msg);
+    } finally {
+      checkoutInFlight.current = false;
+      setCheckoutBusy(false);
     }
   }
 
@@ -213,8 +224,12 @@ export default function PublicBookPage() {
               <Button onClick={() => { trackStorefrontEvent(data.id, "cta_click", { cta: "read_sample" }); navigate(`/store/${data.slug}/read`); }}>
                 Read sample
               </Button>
-              <Button variant="default" onClick={handleBuy}>
-                {data.price_cents > 0 ? `Buy for $${(data.price_cents / 100).toFixed(2)}` : "Get free copy"}
+              <Button variant="default" onClick={handleBuy} disabled={checkoutBusy}>
+                {checkoutBusy
+                  ? "Starting checkout…"
+                  : data.price_cents > 0
+                    ? `Buy for ${(data.price_cents / 100).toFixed(2)}`
+                    : "Get free copy"}
               </Button>
               <ShareDialog title={data.book.title} bookId={data.book.id} description={description} />
             </div>
