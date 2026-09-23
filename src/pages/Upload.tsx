@@ -20,6 +20,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { cn } from "@/lib/utils";
 import { SEO } from "@/components/SEO";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 type UploadStep = 'input' | 'processing' | 'done';
 
@@ -68,6 +69,7 @@ export default function UploadPage() {
   const [resultTitle, setResultTitle] = useState('');
   const [resultChapters, setResultChapters] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [serverProcessing, setServerProcessing] = useState(false);
 
   // Input states
   const [file, setFile] = useState<File | null>(null);
@@ -156,8 +158,9 @@ export default function UploadPage() {
     if (f.type === 'application/pdf' || f.name.endsWith('.pdf')) {
       setProgressMessage('Extracting text from PDF...');
       const pdfjsLib = await import('pdfjs-dist');
-      // Pin to a stable mjs worker matching the loaded version
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+      // Bundle the exact matching worker with ScrollLibrary. Manuscript ingestion
+      // must not depend on a third-party CDN being reachable at runtime.
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
       const arrayBuffer = await f.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -212,9 +215,15 @@ export default function UploadPage() {
       setStep('input');
       setProgress(0);
       setProgressMessage('');
-      toast({ title: "Cancelled", description: "Upload was cancelled." });
+      setServerProcessing(false);
+      toast({
+        title: serverProcessing ? "Stopped waiting" : "Cancelled",
+        description: serverProcessing
+          ? "ScrollLibrary stopped waiting for the server response. If processing had already started, the imported book may still finish and appear in your Library."
+          : "Document processing was cancelled before server analysis started.",
+      });
     }
-  }, [stopProgressTimers, toast]);
+  }, [serverProcessing, stopProgressTimers, toast]);
 
   // ---------------------------------------------------------------------
   // Process
@@ -261,6 +270,7 @@ export default function UploadPage() {
 
         const { data: scrapeData, error: scrapeError } = await supabase.functions.invoke('firecrawl-scrape', {
           body: { url: url.trim() },
+          signal: abort.signal,
         });
 
         if (abort.signal.aborted) return;
@@ -301,10 +311,16 @@ export default function UploadPage() {
         setTimeout(() => isMountedRef.current && setProgressMessage(msg), ms),
       );
 
-      // Single-attempt invoke with structured-error handling.
+      // Single-attempt invoke with structured-error handling. The AbortSignal
+      // cancels the client request when possible. Once an Edge Function has
+      // already begun side effects, HTTP cancellation cannot guarantee server
+      // rollback, so the UI deliberately says "Stop waiting" during this phase.
+      setServerProcessing(true);
       const { data, error } = await supabase.functions.invoke('process-document', {
         body: { documentText, documentName, sourceType, language },
+        signal: abort.signal,
       });
+      setServerProcessing(false);
 
       stopProgressTimers();
       if (abort.signal.aborted) return;
@@ -336,6 +352,7 @@ export default function UploadPage() {
       });
     } catch (err) {
       stopProgressTimers();
+      setServerProcessing(false);
       if ((err as { name?: string })?.name === 'AbortError' || abort.signal.aborted) return;
       console.error('Upload error:', err);
       if (isMountedRef.current) {
