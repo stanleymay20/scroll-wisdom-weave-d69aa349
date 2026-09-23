@@ -84,15 +84,14 @@ for (const fn of functionNames) {
   );
   const directHttpPatterns = ["/functions/v1/" + fn, "functions/v1/" + fn];
 
-  // Wrapper helpers are common in this repository:
-  //   invokeFunction("isbn-admin-state", ...)
-  //   invokePublishFunction("publish-to-gumroad", ...)
-  //   call("storefront-user-api/...")
-  // A quoted slug in executable runtime code outside the function's own
-  // directory is therefore caller evidence. Config files and migrations are
-  // intentionally excluded so "declared" cannot masquerade as "reachable".
-  const quotedSlugPattern = new RegExp(
-    "[\\\"'\x60]" + escaped + "(?:/[^\\\"'\x60]*)?[\\\"'\x60]",
+  // Recognized application wrappers. A bare quoted slug does NOT count as
+  // reachability: registries, labels and dead feature flags must not make an
+  // orphaned function look wired.
+  const wrapperPattern = new RegExp(
+    "(?:invokeFunction|invokePublishFunction|invokeEdgeFunction)" +
+      "\\s*\\(\\s*[\\\"'\\x60]" +
+      escaped +
+      "[\\\"'\\x60]",
   );
 
   let found = null;
@@ -101,8 +100,8 @@ for (const fn of functionNames) {
     const body = readFileSync(file, "utf8");
     if (
       invokePattern.test(body) ||
-      directHttpPatterns.some((pattern) => body.includes(pattern)) ||
-      quotedSlugPattern.test(body)
+      wrapperPattern.test(body) ||
+      directHttpPatterns.some((pattern) => body.includes(pattern))
     ) {
       found = relative(root, file);
       break;
