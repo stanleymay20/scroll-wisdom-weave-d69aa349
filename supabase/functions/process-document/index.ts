@@ -235,11 +235,12 @@ Return ONLY valid JSON:
       is_published: false,
     };
 
-    const { data: book, error: bookError } = await adminSupabase
+    const { data: insertedBook, error: bookError } = await adminSupabase
       .from('books')
       .insert(bookInsert)
       .select('id')
       .single();
+    let bookId = insertedBook?.id ?? null;
 
     if (bookError) {
       console.error('[process-document] Book creation error:', bookError);
@@ -250,10 +251,14 @@ Return ONLY valid JSON:
         if (retry.error) {
           return jsonRes({ error: 'Failed to create book record', code: 'CONFLICT' }, 500);
         }
-        (book as any) = retry.data;
+        bookId = retry.data?.id ?? null;
       } else {
         return jsonRes({ error: 'Failed to create book record', code: 'CONFLICT' }, 500);
       }
+    }
+
+    if (!bookId) {
+      return jsonRes({ error: 'Failed to resolve created book', code: 'GENERATION_PARTIAL' }, 500);
     }
 
     console.log(`[process-document] Source type: ${safeSourceType}, isPdfUpload: ${isPdfUpload}`);
@@ -286,7 +291,7 @@ Return ONLY valid JSON:
       const safeTitle = stripNul(candidateTitle).replace(/\s+/g, ' ').slice(0, 200) || `Chapter ${i + 1}`;
 
       chapterInserts.push({
-        book_id: (book as any).id,
+        book_id: bookId,
         chapter_number: i + 1,
         title: safeTitle,
         content: safeContent,
@@ -303,13 +308,13 @@ Return ONLY valid JSON:
 
     if (chaptersError) {
       console.error('[process-document] Chapters insert error:', chaptersError);
-      await adminSupabase.from('books').delete().eq('id', (book as any).id);
+      await adminSupabase.from('books').delete().eq('id', bookId);
       return jsonRes({ error: 'Failed to create chapters', code: 'GENERATION_PARTIAL' }, 500);
     }
 
     const { error: libraryError } = await adminSupabase.from('user_library').insert({
       user_id: userId,
-      book_id: (book as any).id,
+      book_id: bookId,
       progress_percent: 0,
       last_read_chapter: 0,
     });
@@ -322,16 +327,16 @@ Return ONLY valid JSON:
       const { error: chapterCleanupError } = await adminSupabase
         .from('chapters')
         .delete()
-        .eq('book_id', (book as any).id);
+        .eq('book_id', bookId);
       const { error: bookCleanupError } = await adminSupabase
         .from('books')
         .delete()
-        .eq('id', (book as any).id);
+        .eq('id', bookId);
       if (chapterCleanupError || bookCleanupError) {
         console.error('[process-document] Rollback after library linkage failure was incomplete', {
           chapterCleanupError,
           bookCleanupError,
-          bookId: (book as any).id,
+          bookId: bookId,
         });
       }
       return jsonRes({ error: 'Failed to add imported document to library', code: 'GENERATION_PARTIAL' }, 500);
@@ -347,7 +352,7 @@ Return ONLY valid JSON:
           ? `Pasted text (${documentText.length.toLocaleString()} chars)`
           : `Uploaded document: ${documentName ?? 'document'}`;
       await adminSupabase.from('book_citations').insert({
-        book_id: (book as any).id,
+        book_id: bookId,
         citation_text: citationText.slice(0, 1000),
         source_url: sourceUrl,
         citation_type: 'source',
@@ -356,11 +361,11 @@ Return ONLY valid JSON:
       console.warn('[process-document] Source citation insert failed (non-fatal):', citErr);
     }
 
-    console.log(`[process-document] Success: Book ${(book as any).id} with ${detectedChapters.length} chapters`);
+    console.log(`[process-document] Success: Book ${bookId} with ${detectedChapters.length} chapters`);
 
     return jsonRes({
       success: true,
-      bookId: (book as any).id,
+      bookId: bookId,
       title: analysis.title,
       chaptersCreated: detectedChapters.length,
     }, 200);
