@@ -184,7 +184,11 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
   };
 
   await page.addInitScript(() => {
+    // This suite tests product contracts, not first-run/gamification overlays.
+    // Keep deterministic controls reachable without force-clicking through UI
+    // that has its own dedicated behavior and storage contract.
     localStorage.setItem("sl_onboarding_completed", "true");
+    sessionStorage.setItem("scroll_hook_1", "dismissed");
     localStorage.setItem(
       "cookie-consent",
       JSON.stringify({ essential: true, analytics: false, marketing: false }),
