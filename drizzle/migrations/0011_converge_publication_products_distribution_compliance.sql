@@ -38,21 +38,24 @@ RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
-AS $$
+AS $
 BEGIN
-  IF TG_TABLE_NAME = 'works'
-     AND NEW.scroll_work_id IS DISTINCT FROM OLD.scroll_work_id THEN
-    RAISE EXCEPTION 'SCROLL_WORK_ID_IMMUTABLE' USING ERRCODE = '22023';
-  END IF;
-
-  IF TG_TABLE_NAME = 'publications'
-     AND NEW.scroll_edition_id IS DISTINCT FROM OLD.scroll_edition_id THEN
-    RAISE EXCEPTION 'SCROLL_EDITION_ID_IMMUTABLE' USING ERRCODE = '22023';
+  IF TG_TABLE_NAME = 'works' THEN
+    IF NEW.scroll_work_id IS DISTINCT FROM OLD.scroll_work_id THEN
+      RAISE EXCEPTION 'SCROLL_WORK_ID_IMMUTABLE' USING ERRCODE = '22023';
+    END IF;
+  ELSIF TG_TABLE_NAME = 'publications' THEN
+    IF NEW.scroll_edition_id IS DISTINCT FROM OLD.scroll_edition_id THEN
+      RAISE EXCEPTION 'SCROLL_EDITION_ID_IMMUTABLE' USING ERRCODE = '22023';
+    END IF;
+  ELSE
+    RAISE EXCEPTION 'SCROLL_IDENTITY_TRIGGER_UNEXPECTED_TABLE:%', TG_TABLE_NAME
+      USING ERRCODE = '22023';
   END IF;
 
   RETURN NEW;
 END;
-$$;
+$;
 
 REVOKE ALL ON FUNCTION public.tg_protect_scroll_identity()
   FROM PUBLIC, anon, authenticated;
