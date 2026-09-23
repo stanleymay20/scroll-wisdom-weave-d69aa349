@@ -77,7 +77,10 @@ Deno.serve(async (req) => {
 
     // Dedup: hash the input text + user; reject identical re-uploads within 24h.
     const adminSupabase = createClient(supabaseUrl, supabaseServiceKey);
-    const contentHash = await sha256(`${userId}|${documentText.length}|${documentText.slice(0, 4000)}|${documentText.slice(-2000)}`);
+    // Hash the complete source, not sampled prefixes/suffixes. Two different
+    // manuscripts of equal length can share the same beginning and ending; a
+    // sampled hash could incorrectly deduplicate them.
+    const contentHash = await sha256(`${userId}|${safeLanguage}|${documentText}`);
     const { data: dupBook } = await adminSupabase
       .from('books')
       .select('id, title, created_at')
@@ -304,12 +307,35 @@ Return ONLY valid JSON:
       return jsonRes({ error: 'Failed to create chapters', code: 'GENERATION_PARTIAL' }, 500);
     }
 
-    await adminSupabase.from('user_library').insert({
+    const { error: libraryError } = await adminSupabase.from('user_library').insert({
       user_id: userId,
       book_id: (book as any).id,
       progress_percent: 0,
       last_read_chapter: 0,
     });
+
+    if (libraryError) {
+      console.error('[process-document] Library linkage error:', libraryError);
+      // Do not report a successful import when the user cannot discover the
+      // resulting book. Roll back the newly-created content as one logical
+      // ingestion operation.
+      const { error: chapterCleanupError } = await adminSupabase
+        .from('chapters')
+        .delete()
+        .eq('book_id', (book as any).id);
+      const { error: bookCleanupError } = await adminSupabase
+        .from('books')
+        .delete()
+        .eq('id', (book as any).id);
+      if (chapterCleanupError || bookCleanupError) {
+        console.error('[process-document] Rollback after library linkage failure was incomplete', {
+          chapterCleanupError,
+          bookCleanupError,
+          bookId: (book as any).id,
+        });
+      }
+      return jsonRes({ error: 'Failed to add imported document to library', code: 'GENERATION_PARTIAL' }, 500);
+    }
 
     // Auto-save the original source as a citation on the new book so users can
     // cite the URL/document/text from any chapter. Best-effort — don't fail the
