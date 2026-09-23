@@ -83,6 +83,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-release-materialization.sql
       - name: Assert the payout write surface stays server-owned
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-payout-surface.sql
+      - name: Assert purchase, ledger, entitlement and refund lifecycle
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-commerce-ledger-lifecycle.sql
       - name: Assert browser roles hold no privilege RLS cannot restrain
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-browser-role-truncate.sql
       - name: Rebuild hardened ISBN schema from verified legacy staging shape
