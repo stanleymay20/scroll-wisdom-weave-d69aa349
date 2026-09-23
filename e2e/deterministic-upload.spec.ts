@@ -1,7 +1,36 @@
 import { expect, test, type Page, type Route } from "@playwright/test";
+import JSZip from "jszip";
 
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const BOOK_ID = "99999999-9999-4999-8999-999999999999";
+async function buildMinimalDocx(paragraphs: string[]): Promise<Buffer> {
+  const zip = new JSZip();
+  zip.file("[Content_Types].xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types">
+<Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/>
+<Default Extension="xml" ContentType="application/xml"/>
+<Override PartName="/word/document.xml" ContentType="application/vnd.openxmlformats-officedocument.wordprocessingml.document.main+xml"/>
+</Types>`);
+  zip.folder("_rels")?.file(".rels",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">
+<Relationship Id="rId1" Type="http://schemas.openxmlformats.org/officeDocument/2006/relationships/officeDocument" Target="word/document.xml"/>
+</Relationships>`);
+  const escapeXml = (value: string) => value
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+  const body = paragraphs.map((paragraph) =>
+    `<w:p><w:r><w:t xml:space="preserve">${escapeXml(paragraph)}</w:t></w:r></w:p>`
+  ).join("");
+  zip.folder("word")?.file("document.xml",
+    `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>
+<w:document xmlns:w="http://schemas.openxmlformats.org/wordprocessingml/2006/main">
+<w:body>${body}<w:sectPr/></w:body></w:document>`);
+  return zip.generateAsync({ type: "nodebuffer", compression: "DEFLATE" });
+}
+
 
 function fixtureJwt(payload: Record<string, unknown>): string {
   const segment = (value: unknown) =>
@@ -160,6 +189,41 @@ test("TXT upload reaches process-document with extracted source text and produce
   });
 });
 
+
+test("DOCX upload extracts the manuscript in-browser before invoking process-document", async ({ page }) => {
+  const state = await installBackend(page);
+  await login(page);
+  await page.goto("/upload");
+
+  const paragraphs = [
+    "Chapter 1: DOCX Extraction",
+    "This DOCX extraction fixture proves that ScrollLibrary reads Microsoft Word content through Mammoth before the manuscript reaches the server.",
+    "The body deliberately contains enough material to exceed the minimum ingestion threshold and preserve several distinct paragraphs for validation.",
+    "Chapter 2: Durable Import",
+    "A second chapter confirms that the resulting text is substantial enough to represent a realistic author manuscript rather than a filename-only upload.",
+  ];
+  const buffer = await buildMinimalDocx(paragraphs);
+
+  await page.locator("#file-input").setInputFiles({
+    name: "upload-pipeline-fixture.docx",
+    mimeType: "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+    buffer,
+  });
+  await page.getByRole("button", { name: "Process & Create Learning Path" }).click();
+
+  await expect(page.getByRole("heading", { name: "Learning Path Created!" })).toBeVisible({ timeout: 10_000 });
+  expect(state.requests).toHaveLength(1);
+  expect(state.requests[0]).toMatchObject({
+    documentName: "upload-pipeline-fixture.docx",
+    sourceType: "uploaded",
+    language: "en",
+  });
+  const extracted = String(state.requests[0].documentText ?? "");
+  expect(extracted.length).toBeGreaterThan(200);
+  expect(extracted).toContain("DOCX Extraction");
+  expect(extracted).toContain("Durable Import");
+  expect(extracted).toContain("Microsoft Word content");
+});
 test("oversized upload is rejected in the browser and never reaches process-document", async ({ page }) => {
   const state = await installBackend(page);
   await login(page);
