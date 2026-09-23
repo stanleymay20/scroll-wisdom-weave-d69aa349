@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { Download, Loader2, RefreshCw, Save } from "lucide-react";
 import { toast } from "sonner";
 import { Badge } from "@/components/ui/badge";
@@ -116,32 +116,69 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const requestGenerationRef = useRef(0);
+  const selectedProductFormRef = useRef<ProductForm>(productForm);
 
-  const load = useCallback(async (format: ProductForm = productForm) => {
+  const load = useCallback(async (format: ProductForm) => {
+    const requestGeneration = ++requestGenerationRef.current;
     setLoading(true);
     try {
       const { data, error } = await supabase.functions.invoke("distribution-metadata", {
         body: { action: "get", bookId, productForm: format },
       });
       if (error) throw error;
+      if (
+        requestGeneration !== requestGenerationRef.current
+        || format !== selectedProductFormRef.current
+      ) return;
+
       const next = data as DistributionPayload;
+      if (next.productForm !== format) {
+        throw new Error("Distribution metadata response did not match the requested product format");
+      }
+
       setPayload(next);
       setForm(fromRecord(next.metadata));
     } catch (error) {
+      if (
+        requestGeneration !== requestGenerationRef.current
+        || format !== selectedProductFormRef.current
+      ) return;
+
       setPayload(null);
       setForm({ ...EMPTY });
       toast.error(await edgeErrorMessage(error, "Could not load distribution metadata"));
     } finally {
-      setLoading(false);
+      if (
+        requestGeneration === requestGenerationRef.current
+        && format === selectedProductFormRef.current
+      ) {
+        setLoading(false);
+      }
     }
-  }, [bookId, productForm]);
+  }, [bookId]);
 
-  useEffect(() => { void load(productForm); }, [load, productForm]);
+  useEffect(() => {
+    selectedProductFormRef.current = productForm;
+    void load(productForm);
+    return () => {
+      requestGenerationRef.current += 1;
+    };
+  }, [load, productForm]);
+
+  const selectProductForm = (format: ProductForm) => {
+    if (format === selectedProductFormRef.current) return;
+    requestGenerationRef.current += 1;
+    selectedProductFormRef.current = format;
+    setLoading(true);
+    setProductForm(format);
+  };
 
   const set = <K extends keyof FormState>(key: K, value: FormState[K]) =>
     setForm((current) => ({ ...current, [key]: value }));
 
   async function save() {
+    const savedProductForm = productForm;
     const priceCents = form.price.trim()
       ? Math.round(Number(form.price) * 100)
       : null;
@@ -168,7 +205,7 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
         body: {
           action: "save",
           bookId,
-          productForm,
+          productForm: savedProductForm,
           publicationDate: form.publicationDate || null,
           warengruppeCode: form.warengruppeCode || null,
           productAvailability: form.productAvailability || null,
@@ -186,9 +223,14 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
       });
       if (error) throw error;
       const next = data as DistributionPayload;
-      setPayload(next);
-      setForm(fromRecord(next.metadata));
-      toast.success("Trade distribution metadata saved");
+      if (next.productForm !== savedProductForm) {
+        throw new Error("Distribution metadata response did not match the requested product format");
+      }
+      if (selectedProductFormRef.current === savedProductForm) {
+        setPayload(next);
+        setForm(fromRecord(next.metadata));
+      }
+      toast.success(`${savedProductForm} distribution metadata saved`);
     } catch (error) {
       toast.error(await edgeErrorMessage(error, "Could not save distribution metadata"));
     } finally {
@@ -197,10 +239,11 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
   }
 
   async function exportOnix() {
+    const exportProductForm = productForm;
     setExporting(true);
     try {
       const { data, error } = await supabase.functions.invoke("export-onix", {
-        body: { bookId, productForm },
+        body: { bookId, productForm: exportProductForm },
       });
       if (error) throw error;
 
@@ -218,7 +261,7 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
       const href = URL.createObjectURL(blob);
       const anchor = document.createElement("a");
       anchor.href = href;
-      anchor.download = `scrolllibrary-${productForm}-onix-3.1.xml`;
+      anchor.download = `scrolllibrary-${exportProductForm}-onix-3.1.xml`;
       document.body.appendChild(anchor);
       anchor.click();
       anchor.remove();
@@ -256,7 +299,7 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
             key={format}
             type="button"
             variant={productForm === format ? "default" : "outline"}
-            onClick={() => setProductForm(format)}
+            onClick={() => selectProductForm(format)}
             className="capitalize"
           >
             {format}
