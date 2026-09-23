@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { requireUser, serviceClient, enforceDurableRateLimit } from "../_shared/http.ts";
 import { encode as base64Encode } from "https://deno.land/std@0.168.0/encoding/base64.ts";
 
 const corsHeaders = {
@@ -177,6 +178,16 @@ serve(async (req) => {
   }
 
   try {
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
+    const limited = await enforceDurableRateLimit(serviceClient(), {
+      name: "generate-chapter-video",
+      key: auth.userId,
+      limit: 10,
+      windowSec: 600,
+    });
+    if (limited) return limited;
+
     const { chapterContent, chapterTitle, bookTitle, bookType, tier, language, chapterNumber } = await req.json();
 
     if (!chapterContent || !chapterTitle) {
