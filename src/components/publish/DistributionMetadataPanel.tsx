@@ -133,7 +133,9 @@ export function DistributionMetadataPanel({ bookId }: { bookId: string }) {
       ) return;
 
       const next = data as DistributionPayload;
-      if (next.productForm !== format) return;
+      if (next.productForm !== format) {
+        throw new Error("Distribution metadata response did not match the requested product format");
+      }
 
       setPayload(next);
       setForm(fromRecord(next.metadata));
