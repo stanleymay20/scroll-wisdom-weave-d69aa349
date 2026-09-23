@@ -112,6 +112,9 @@ type MockState = {
   generationRequests: Array<Record<string, unknown>>;
   exportRequests: Array<Record<string, unknown>>;
   canonicalPublishRequests: Array<Record<string, unknown>>;
+  distributionRequests: Array<Record<string, unknown>>;
+  onixRequests: Array<Record<string, unknown>>;
+  citationImportRequests: Array<Record<string, unknown>>;
   qualityFunctionCalls: string[];
 };
 
@@ -142,6 +145,9 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     generationRequests: [],
     exportRequests: [],
     canonicalPublishRequests: [],
+    distributionRequests: [],
+    onixRequests: [],
+    citationImportRequests: [],
     qualityFunctionCalls: [],
   };
 
@@ -295,6 +301,70 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
         identifiers: [],
         idempotent: false,
       });
+      return;
+    }
+
+    if (path === "/functions/v1/distribution-metadata") {
+      const body = requestBody(route);
+      state.distributionRequests.push(body);
+      const action = body.action;
+      await fulfillJson(route, {
+        saved: action === "save",
+        bookId: BOOK_ID,
+        productForm: body.productForm ?? "paperback",
+        canonicalLanguage: "en",
+        canonicalEditionLabel: "First edition",
+        isbnAssigned: true,
+        published: true,
+        metadata: {
+          publication_date: "2026-10-01",
+          warengruppe_code: "1110",
+          product_availability: "20",
+          publishing_status: "04",
+          price_type: "04",
+          price_cents: 1999,
+          currency: "EUR",
+          price_country: "DE",
+          tax_rate_code: "R",
+          tax_rate_percent: 7,
+          unpriced_item_type: null,
+          thema_codes: ["KJ"],
+          keywords: ["decision intelligence"],
+        },
+      });
+      return;
+    }
+
+    if (path === "/functions/v1/export-onix") {
+      state.onixRequests.push(requestBody(route));
+      await route.fulfill({
+        status: 200,
+        headers: {
+          "Content-Type": "application/xml; charset=utf-8",
+          "Content-Disposition": 'attachment; filename="deterministic-paperback-onix-3.1.xml"',
+        },
+        body: '<?xml version="1.0" encoding="UTF-8"?><ONIXMessage release="3.1"><Header/><Product/></ONIXMessage>',
+      });
+      return;
+    }
+
+    if (path === "/functions/v1/import-citations") {
+      const body = requestBody(route);
+      state.citationImportRequests.push(body);
+      if (body.commit === true) {
+        await fulfillJson(route, { inserted: 1, skipped: 0 });
+      } else {
+        const items = Array.isArray(body.items) ? body.items : [];
+        await fulfillJson(route, {
+          preview: items.map((item) => ({
+            ...(item as Record<string, unknown>),
+            _dup_key: false,
+            _dup_doi: false,
+            _will_skip: false,
+          })),
+          would_insert: items.length,
+        });
+      }
       return;
     }
 
@@ -560,6 +630,83 @@ test("generate form invokes the real generation route and follows the returned b
   await expect(page).toHaveURL(new RegExp(`/book/${BOOK_ID}$`), { timeout: 5_000 });
 });
 
+
+test("publishing command center saves trade metadata and downloads ONIX through server authorities", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  await loginThroughMockedAuth(page);
+
+  await page.goto(`/book/${BOOK_ID}/publishing`);
+  await expect(page.getByRole("heading", { name: "Publishing Command Center" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("heading", { name: "Trade Distribution Metadata" })).toBeVisible({ timeout: 10_000 });
+
+  await expect.poll(() =>
+    state.distributionRequests.filter((request) => request.action === "get").length
+  ).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Save distribution metadata" }).click();
+  await expect.poll(() =>
+    state.distributionRequests.filter((request) => request.action === "save").length
+  ).toBe(1);
+
+  const saved = state.distributionRequests.find((request) => request.action === "save");
+  expect(saved).toMatchObject({
+    bookId: BOOK_ID,
+    productForm: "paperback",
+    publicationDate: "2026-10-01",
+    warengruppeCode: "1110",
+    priceType: "04",
+    priceCents: 1999,
+    currency: "EUR",
+    priceCountry: "DE",
+  });
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: "Export ONIX 3.1" }).click();
+  const download = await downloadPromise;
+
+  await expect.poll(() => state.onixRequests.length).toBe(1);
+  expect(state.onixRequests[0]).toMatchObject({
+    bookId: BOOK_ID,
+    productForm: "paperback",
+  });
+  expect(download.suggestedFilename()).toBe("scrolllibrary-paperback-onix-3.1.xml");
+});
+
+test("citation manager previews duplicates before committing a bulk import", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  await loginThroughMockedAuth(page);
+
+  await page.goto(`/book/${BOOK_ID}/publishing`);
+  await expect(page.getByRole("heading", { name: "Evidence & Citations" })).toBeVisible({ timeout: 10_000 });
+
+  await page.getByRole("button", { name: "Import JSON" }).click();
+  const input = page.getByLabel("Citation import JSON");
+  await expect(input).toBeVisible();
+
+  const fixture = [{
+    citation_key: "smith2026",
+    source_type: "journal_article",
+    citation_text: "Deterministic evidence fixture",
+    authors: [{ family: "Smith", given: "Ada" }],
+    doi: "10.0000/deterministic",
+  }];
+  await input.fill(JSON.stringify(fixture));
+
+  await page.getByRole("button", { name: "Preview import" }).click();
+  await expect.poll(() => state.citationImportRequests.length).toBe(1);
+  expect(state.citationImportRequests[0]).toMatchObject({
+    book_id: BOOK_ID,
+    commit: false,
+  });
+  await expect(page.getByRole("button", { name: "Import 1" })).toBeEnabled();
+
+  await page.getByRole("button", { name: "Import 1" }).click();
+  await expect.poll(() => state.citationImportRequests.length).toBe(2);
+  expect(state.citationImportRequests[1]).toMatchObject({
+    book_id: BOOK_ID,
+    commit: true,
+  });
+});
 
 test("authenticated generated book exports a non-placeholder PDF through the real Download UI", async ({ page }) => {
   const state = await installDeterministicBackend(page);
