@@ -104,6 +104,7 @@ const chapter = {
 type MockState = {
   checkoutRequests: Array<Record<string, unknown>>;
   listingWrites: Array<Record<string, unknown>>;
+  generationRequests: Array<Record<string, unknown>>;
 };
 
 async function fulfillJson(route: Route, body: unknown, status = 200, headers: Record<string, string> = {}) {
@@ -126,7 +127,11 @@ function requestBody(route: Route): Record<string, unknown> {
 }
 
 async function installDeterministicBackend(page: Page): Promise<MockState> {
-  const state: MockState = { checkoutRequests: [], listingWrites: [] };
+  const state: MockState = {
+    checkoutRequests: [],
+    listingWrites: [],
+    generationRequests: [],
+  };
 
   await page.addInitScript(() => {
     localStorage.setItem("sl_onboarding_completed", "true");
@@ -172,6 +177,23 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
 
     if (path === "/functions/v1/check-subscription") {
       await fulfillJson(route, { subscribed: false, tier: "free", subscription_end: null });
+      return;
+    }
+
+    if (path === "/functions/v1/generate-book") {
+      state.generationRequests.push(requestBody(route));
+      await fulfillJson(route, {
+        success: true,
+        message: "Book created successfully",
+        bookId: BOOK_ID,
+        jobId: "55555555-5555-4555-8555-555555555555",
+        outline: {
+          bookTitle: BOOK_TITLE,
+          chapters: [
+            { chapterNumber: 1, title: "The Reader Contract" },
+          ],
+        },
+      });
       return;
     }
 
@@ -354,4 +376,39 @@ test("creator publish settings persist storefront visibility and slug through th
     blurb: "A release-ready storefront description.",
   });
   await expect(page.getByText("Saved", { exact: true }).first()).toBeVisible();
+});
+
+
+test("generate form invokes the real generation route and follows the returned book id", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  await loginThroughMockedAuth(page);
+
+  await page.goto("/generate");
+  await expect(page.locator("#title")).toBeVisible({ timeout: 10_000 });
+  await page.locator("#title").fill(BOOK_TITLE);
+  await page.locator("#description").fill(
+    "A deterministic generation fixture proving that the shipped Generate page reaches the generate-book Edge Function.",
+  );
+
+  // The first Radix select on the page is Category.
+  await page.getByRole("combobox").first().click();
+  await page.getByRole("option", { name: "Technology" }).click();
+
+  await page.getByRole("radio", { name: /Standard Text/i }).click();
+  await page.getByRole("button", { name: /Generate Book/i }).click();
+
+  await expect.poll(() => state.generationRequests.length).toBe(1);
+  expect(state.generationRequests[0]).toMatchObject({
+    title: BOOK_TITLE,
+    category: "technology",
+    numChapters: 5,
+    wordCount: 4000,
+    language: "en",
+    bookType: "text",
+    extendedBookType: "text",
+    academicMode: false,
+    deepResearch: false,
+  });
+
+  await expect(page).toHaveURL(new RegExp(`/book/${BOOK_ID}$`), { timeout: 5_000 });
 });
