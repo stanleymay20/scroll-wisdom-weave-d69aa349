@@ -321,11 +321,52 @@ serve(async (req) => {
 
       const { data: existing, error: existingError } = await supabase
         .from("book_purchases")
-        .select("id, status, amount_cents")
+        .select("id, status, amount_cents, currency, listing_id, book_id, buyer_user_id")
         .eq("stripe_session_id", session.id)
         .maybeSingle();
       if (existingError) {
         throw new Error(`Purchase lookup failed: ${existingError.message}`);
+      }
+
+      const expectedAmount = Number(session.metadata?.expected_amount_cents ?? NaN);
+      const expectedCurrency = String(session.metadata?.expected_currency ?? "").toLowerCase();
+      const sessionAmount = Number(session.amount_total ?? NaN);
+      const sessionCurrency = String(session.currency ?? "").toLowerCase();
+
+      if (
+        !Number.isInteger(expectedAmount) ||
+        expectedAmount < 0 ||
+        !Number.isInteger(sessionAmount) ||
+        sessionAmount !== expectedAmount
+      ) {
+        throw new Error(
+          `Checkout amount authority mismatch: expected=${expectedAmount} actual=${sessionAmount}`,
+        );
+      }
+      if (
+        !expectedCurrency ||
+        !sessionCurrency ||
+        sessionCurrency !== expectedCurrency
+      ) {
+        throw new Error(
+          `Checkout currency authority mismatch: expected=${expectedCurrency} actual=${sessionCurrency}`,
+        );
+      }
+
+      if (existing) {
+        if (
+          existing.listing_id !== listingId ||
+          existing.book_id !== bookId ||
+          existing.buyer_user_id !== buyerUserId
+        ) {
+          throw new Error("Checkout identity does not match the persisted pending purchase");
+        }
+        if (
+          Number(existing.amount_cents ?? NaN) !== sessionAmount ||
+          String(existing.currency ?? "").toLowerCase() !== sessionCurrency
+        ) {
+          throw new Error("Checkout amount/currency does not match the persisted pending purchase");
+        }
       }
 
       // A retry may arrive after the purchase row was persisted but before the
