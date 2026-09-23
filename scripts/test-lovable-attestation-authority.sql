@@ -2,7 +2,11 @@
 
 \ir ../drizzle/migrations/0009_converge_publishing_identity_p4_attestation_authority.sql
 
-DO $$
+-- Keep the convergence migration applied, but make all behavioral fixtures
+-- transaction-scoped so CI/local verification leaves no synthetic user/book.
+BEGIN;
+
+DO $
 DECLARE
   v_user uuid := '92000000-0000-4000-8000-000000000001';
   v_book uuid;
