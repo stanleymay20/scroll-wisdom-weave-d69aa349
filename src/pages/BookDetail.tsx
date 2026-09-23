@@ -401,7 +401,7 @@ export default function BookDetail() {
           )}
 
           {/* Mobile Cover Controls */}
-          {isMobile && isOwner && (
+          {isMobile && isOwner && !book.current_publication_id && (
             <div className="px-4 mt-4 space-y-2">
               <div className="flex gap-2">
                 <Select value={coverTheme} onValueChange={setCoverTheme}>
