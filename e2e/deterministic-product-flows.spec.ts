@@ -116,6 +116,7 @@ type MockState = {
   onixRequests: Array<Record<string, unknown>>;
   citationImportRequests: Array<Record<string, unknown>>;
   qualityFunctionCalls: string[];
+  connectRequests: Array<Record<string, unknown>>;
 };
 
 async function fulfillJson(route: Route, body: unknown, status = 200, headers: Record<string, string> = {}) {
@@ -149,6 +150,7 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     onixRequests: [],
     citationImportRequests: [],
     qualityFunctionCalls: [],
+    connectRequests: [],
   };
 
   await page.addInitScript(() => {
@@ -228,6 +230,44 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
           type: "text",
           version: "1.0",
         },
+      });
+      return;
+    }
+
+    if (path === "/functions/v1/creator-payout-profile") {
+      if (method === "GET") {
+        await fulfillJson(route, {
+          profile: {
+            user_id: USER_ID,
+            payout_method: "unset",
+            stripe_connect_status: "not_started",
+            payout_email: null,
+            country_code: null,
+            tax_form_status: "not_required",
+          },
+        });
+      } else {
+        await fulfillJson(route, {
+          profile: {
+            user_id: USER_ID,
+            payout_method: "manual",
+            stripe_connect_status: "not_started",
+            payout_email: "creator@example.test",
+            country_code: "DE",
+            tax_form_status: "not_required",
+          },
+        });
+      }
+      return;
+    }
+
+    if (path === "/functions/v1/stripe-connect-onboarding") {
+      state.connectRequests.push(requestBody(route));
+      await fulfillJson(route, {
+        status: "pending",
+        message: "Continue on Stripe to finish payout verification.",
+        can_receive_payouts: false,
+        onboarding_url: "https://connect.stripe.test/onboarding/session_e2e",
       });
       return;
     }
@@ -812,4 +852,32 @@ test("public certificate verification renders not-found without making a validit
   await expect(page.getByRole("heading", { name: "Not Found" })).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("SLC-MISSING-404", { exact: true })).toBeVisible();
   await expect(page.getByRole("heading", { name: "Verified & Valid" })).toHaveCount(0);
+});
+
+
+test("creator payout page starts Stripe Connect with the real registered return path", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  await loginThroughMockedAuth(page);
+
+  await page.route("https://connect.stripe.test/**", async (route) => {
+    await route.fulfill({
+      status: 200,
+      contentType: "text/html",
+      body: "<html><body>Stripe Connect fixture</body></html>",
+    });
+  });
+
+  await page.goto("/account/payouts");
+  await expect(page.getByRole("heading", { name: "Payout settings" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("Not connected", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Start Stripe Connect onboarding" }).click();
+
+  await expect.poll(() => state.connectRequests.length).toBe(1);
+  expect(state.connectRequests[0]).toEqual({
+    action: "start",
+    return_path: "/account/payouts",
+  });
+
+  await expect(page).toHaveURL("https://connect.stripe.test/onboarding/session_e2e", { timeout: 10_000 });
 });
