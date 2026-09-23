@@ -282,9 +282,7 @@ serve(async (req) => {
           stripe_event_id: event.id,
           purchase_id: purchaseId,
           payload: { error: ledgerErr.message, source },
-          dead_letter_reason: source.includes("refund")
-            ? "refund_ledger_write_failed"
-            : "sale_ledger_write_failed",
+          dead_letter_reason: "sale_ledger_write_failed",
         });
         throw new Error(`Purchase ledger write failed: ${ledgerErr.message}`);
       }
@@ -472,6 +470,144 @@ serve(async (req) => {
       });
     };
 
+    const reconcileRefund = async (
+      refund: Stripe.Refund,
+      source: string,
+    ) => {
+      const status = String(refund.status ?? "unknown");
+
+      if (status !== "succeeded") {
+        const terminalFailure = status === "failed" || status === "canceled";
+        const { error: requestStateError } = await supabase
+          .from("refund_requests")
+          .update({
+            status: terminalFailure ? "failed" : "processing",
+            error_message: terminalFailure
+              ? `Stripe refund status: ${status}`
+              : null,
+            ...(terminalFailure ? { processed_at: new Date().toISOString() } : {}),
+          })
+          .eq("stripe_refund_id", refund.id);
+        if (requestStateError) {
+          throw new Error(`Refund request status sync failed: ${requestStateError.message}`);
+        }
+
+        logStep("Refund not yet ledgerable", {
+          refundId: refund.id,
+          status,
+          source,
+        });
+        return;
+      }
+
+      const paymentIntentId = typeof refund.payment_intent === "string"
+        ? refund.payment_intent
+        : refund.payment_intent?.id ?? null;
+
+      if (!paymentIntentId) {
+        logStep("Refund has no payment intent; not a book purchase candidate", {
+          refundId: refund.id,
+          source,
+        });
+        return;
+      }
+
+      const { data: purchase, error: purchaseError } = await supabase
+        .from("book_purchases")
+        .select("id,buyer_user_id,amount_cents,status")
+        .eq("stripe_payment_intent", paymentIntentId)
+        .maybeSingle();
+      if (purchaseError) {
+        throw new Error(`Refund purchase lookup failed: ${purchaseError.message}`);
+      }
+      if (!purchase) {
+        // Subscription or another non-book payment: this webhook owns only the
+        // ScrollLibrary book-purchase ledger for refund accounting.
+        logStep("Refund does not map to a book purchase", {
+          refundId: refund.id,
+          paymentIntentId,
+          source,
+        });
+        return;
+      }
+
+      const { data: ledgerData, error: ledgerError } = await supabase.rpc(
+        "record_purchase_refund_ledger",
+        {
+          _purchase_id: purchase.id,
+          _refund_event_id: refund.id,
+          _refund_amount_cents: refund.amount,
+        },
+      );
+
+      if (ledgerError) {
+        await logFinancialEvent(supabase, {
+          event_type: "ledger_write_failed",
+          severity: "error",
+          actor: "webhook",
+          correlation_id: corr,
+          stripe_event_id: event.id,
+          purchase_id: purchase.id,
+          user_id: purchase.buyer_user_id,
+          payload: {
+            error: ledgerError.message,
+            kind: "refund",
+            refund_id: refund.id,
+            amount_cents: refund.amount,
+            source,
+          },
+          dead_letter_reason: "refund_ledger_write_failed",
+        });
+        throw new Error(`Refund ledger write failed: ${ledgerError.message}`);
+      }
+
+      const ledger = (ledgerData ?? {}) as {
+        ok?: boolean;
+        idempotent?: boolean;
+        fully_refunded?: boolean;
+        refunded_total_cents?: number;
+        remaining_cents?: number;
+        reason?: string;
+      };
+      if (ledger.ok !== true) {
+        throw new Error(
+          `Refund ledger rejected event: ${ledger.reason ?? "unknown"}`,
+        );
+      }
+
+      const { error: requestStateError } = await supabase
+        .from("refund_requests")
+        .update({
+          status: "processed",
+          stripe_refund_id: refund.id,
+          processed_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq("stripe_refund_id", refund.id);
+      if (requestStateError) {
+        throw new Error(`Refund request completion sync failed: ${requestStateError.message}`);
+      }
+
+      await logFinancialEvent(supabase, {
+        event_type: "refund_issued",
+        severity: "warn",
+        actor: "webhook",
+        correlation_id: corr,
+        stripe_event_id: event.id,
+        purchase_id: purchase.id,
+        user_id: purchase.buyer_user_id,
+        payload: {
+          refund_id: refund.id,
+          amount_cents: refund.amount,
+          source,
+          idempotent: ledger.idempotent === true,
+          fully_refunded: ledger.fully_refunded === true,
+          refunded_total_cents: ledger.refunded_total_cents ?? null,
+          remaining_cents: ledger.remaining_cents ?? null,
+        },
+      });
+    };
+
     let processedOk = true;
     let processError: string | null = null;
 
@@ -552,34 +688,32 @@ serve(async (req) => {
           break;
         }
 
+        case "refund.created":
+        case "refund.updated":
+        case "refund.failed": {
+          const refund = event.data.object as Stripe.Refund;
+          await reconcileRefund(refund, event.type);
+          break;
+        }
+
         case "charge.refunded": {
           const charge = event.data.object as Stripe.Charge;
-          if (charge.payment_intent) {
-            const { data: refunded, error: refundWriteError } = await supabase.from("book_purchases")
-              .update({ status: "refunded" })
-              .eq("stripe_payment_intent", charge.payment_intent as string)
-              .select("id, buyer_user_id, amount_cents");
-            if (refundWriteError) {
-              throw new Error(`Refund purchase status write failed: ${refundWriteError.message}`);
-            }
-            for (const p of refunded ?? []) {
-              const { error: ledgerErr } = await supabase.rpc("record_purchase_ledger", { _purchase_id: p.id });
-              if (ledgerErr) {
-                await logFinancialEvent(supabase, {
-                  event_type: "ledger_write_failed", severity: "error", actor: "webhook",
-                  correlation_id: corr, stripe_event_id: event.id, purchase_id: p.id,
-                  payload: { error: ledgerErr.message, kind: "refund" },
-                  dead_letter_reason: "refund_ledger_write_failed",
-                });
-                throw new Error(`Refund ledger write failed: ${ledgerErr.message}`);
-              } else {
-                await logFinancialEvent(supabase, {
-                  event_type: "refund_issued", severity: "warn", actor: "webhook",
-                  correlation_id: corr, stripe_event_id: event.id, purchase_id: p.id, user_id: p.buyer_user_id,
-                  payload: { amount_cents: p.amount_cents },
-                });
-              }
-            }
+
+          // charge.refunded fires for partial as well as full refunds. Treat it
+          // as a reconciliation signal and process each concrete Stripe refund
+          // by its own refund ID. This keeps multiple partial refunds append-only
+          // and idempotent.
+          let refunds = charge.refunds?.data ?? [];
+          if (charge.refunds?.has_more || refunds.length === 0) {
+            const page = await stripe.refunds.list({
+              charge: charge.id,
+              limit: 100,
+            });
+            refunds = page.data;
+          }
+
+          for (const refund of refunds) {
+            await reconcileRefund(refund, "charge.refunded");
           }
           break;
         }
