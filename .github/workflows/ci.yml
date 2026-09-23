@@ -87,6 +87,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-commerce-ledger-lifecycle.sql
       - name: Assert Stripe webhook claim, dead-letter and replay lifecycle
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-stripe-webhook-claim-lifecycle.sql
+      - name: Assert canonical Stripe billing-customer identity
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-billing-customer-identity.sql
       - name: Assert unfinished ownership transfer mutations remain disabled for GA
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-ownership-transfer-ga-disabled.sql
       - name: Assert browser roles hold no privilege RLS cannot restrain
@@ -158,6 +160,7 @@ jobs:
           deno check supabase/functions/_shared/figure-export.ts
           deno check supabase/functions/_shared/cron-auth.ts
           deno check supabase/functions/_shared/stripe-connect.ts
+          deno check supabase/functions/_shared/billing-customer.ts
       - name: Type-check critical financial Edge Functions
         run: |
           deno check supabase/functions/create-checkout/index.ts
@@ -165,6 +168,8 @@ jobs:
           deno check supabase/functions/check-subscription/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
           deno check supabase/functions/stripe-connect-onboarding/index.ts
+          deno check supabase/functions/create-book-checkout/index.ts
+          deno check supabase/functions/admin-force-stripe-resync/index.ts
       - name: Type-check authority and metered usage Edge Functions
         run: |
           deno check supabase/functions/claim-admin/index.ts
@@ -300,5 +305,7 @@ jobs:
         run: bun run audit:edge-auth
       - name: Reject orphaned Edge Functions
         run: bun run audit:function-reachability
+      - name: Reject email-based Stripe customer ownership
+        run: bun scripts/check-billing-customer-identity.mjs
       - name: Reject high or critical production dependency vulnerabilities
         run: bun run audit:dependencies
