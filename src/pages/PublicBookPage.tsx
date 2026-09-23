@@ -228,7 +228,7 @@ export default function PublicBookPage() {
                 {checkoutBusy
                   ? "Starting checkout…"
                   : data.price_cents > 0
-                    ? `Buy for ${(data.price_cents / 100).toFixed(2)}`
+                    ? "Buy for $" + (data.price_cents / 100).toFixed(2)
                     : "Get free copy"}
               </Button>
               <ShareDialog title={data.book.title} bookId={data.book.id} description={description} />
