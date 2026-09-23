@@ -38,7 +38,7 @@ RETURNS trigger
 LANGUAGE plpgsql
 SECURITY DEFINER
 SET search_path = ''
-AS $
+AS $scroll_identity$
 BEGIN
   IF TG_TABLE_NAME = 'works' THEN
     IF NEW.scroll_work_id IS DISTINCT FROM OLD.scroll_work_id THEN
@@ -55,7 +55,7 @@ BEGIN
 
   RETURN NEW;
 END;
-$;
+$scroll_identity$;
 
 REVOKE ALL ON FUNCTION public.tg_protect_scroll_identity()
   FROM PUBLIC, anon, authenticated;
