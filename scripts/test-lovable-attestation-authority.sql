@@ -12,6 +12,27 @@ DECLARE
   v_ready boolean;
   v_count integer;
 BEGIN
+  -- Match the real books.user_id foreign-key boundary. The auth trigger may
+  -- create a profile as a side effect; the whole fixture is rolled back.
+  INSERT INTO auth.users (
+    id, instance_id, aud, role, email, encrypted_password,
+    email_confirmed_at, created_at, updated_at,
+    raw_app_meta_data, raw_user_meta_data
+  )
+  VALUES (
+    v_user,
+    '00000000-0000-0000-0000-000000000000',
+    'authenticated',
+    'authenticated',
+    'attestation-convergence@example.test',
+    'x',
+    now(),
+    now(),
+    now(),
+    '{}'::jsonb,
+    '{}'::jsonb
+  );
+
   -- Trust-boundary grants.
   IF has_function_privilege(
        'anon',
