@@ -224,6 +224,43 @@ test("DOCX upload extracts the manuscript in-browser before invoking process-doc
   expect(extracted).toContain("Durable Import");
   expect(extracted).toContain("Microsoft Word content");
 });
+
+test("PDF upload extracts real rendered page text with the bundled PDF.js worker", async ({ page }) => {
+  const state = await installBackend(page);
+
+  await page.setContent(`
+    <main>
+      <h1>Chapter 1 PDF Extraction Fixture</h1>
+      <p>This deterministic PDF proves that ScrollLibrary parses real rendered page text with its bundled PDF.js worker before sending manuscript content to the server.</p>
+      <p>The fixture deliberately contains more than two hundred characters so the authenticated ingestion path cannot pass by filename alone or by an empty extraction.</p>
+      <h2>Chapter 2 Production Import</h2>
+      <p>The final paragraph gives the regression test a second distinctive phrase and enough body text to validate the complete browser extraction step.</p>
+    </main>
+  `);
+  const buffer = await page.pdf({ format: "A4", printBackground: true });
+
+  await login(page);
+  await page.goto("/upload");
+  await page.locator("#file-input").setInputFiles({
+    name: "upload-pipeline-fixture.pdf",
+    mimeType: "application/pdf",
+    buffer,
+  });
+  await page.getByRole("button", { name: "Process & Create Learning Path" }).click();
+
+  await expect(page.getByRole("heading", { name: "Learning Path Created!" })).toBeVisible({ timeout: 15_000 });
+  expect(state.requests).toHaveLength(1);
+  expect(state.requests[0]).toMatchObject({
+    documentName: "upload-pipeline-fixture.pdf",
+    sourceType: "uploaded",
+    language: "en",
+  });
+  const extracted = String(state.requests[0].documentText ?? "");
+  expect(extracted.length).toBeGreaterThan(200);
+  expect(extracted).toContain("PDF Extraction Fixture");
+  expect(extracted).toContain("Production Import");
+  expect(extracted).toContain("bundled PDF.js worker");
+});
 test("oversized upload is rejected in the browser and never reaches process-document", async ({ page }) => {
   const state = await installBackend(page);
   await login(page);
