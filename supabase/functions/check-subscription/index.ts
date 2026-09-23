@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { getBillingCustomerId } from "../_shared/billing-customer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -45,9 +46,7 @@ serve(async (req) => {
     const { data: claimsData, error: claimsError } = await supabaseClient.auth.getClaims(token);
     const claims = claimsData?.claims;
     const userId = typeof claims?.sub === "string" ? claims.sub : null;
-    const userEmail = typeof claims?.email === "string" ? claims.email : null;
-
-    if (claimsError || !userId || !userEmail) {
+    if (claimsError || !userId) {
       logStep("JWT validation failed");
       return response({ subscribed: false, tier: "free" });
     }
@@ -65,8 +64,7 @@ serve(async (req) => {
     const stripeKey = Deno.env.get("STRIPE_SECRET_KEY");
     if (stripeKey) {
       const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-      const customers = await stripe.customers.list({ email: userEmail, limit: 1 });
-      const customerId = customers.data[0]?.id ?? null;
+      const customerId = await getBillingCustomerId(supabaseClient, userId);
 
       if (customerId) {
         // A creator may also hold a generation-plan subscription. Never let an
