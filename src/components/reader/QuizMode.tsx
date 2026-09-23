@@ -86,7 +86,7 @@ const BLOOM_COLORS: Record<string, string> = {
 /**
  * Contract 8 / 6B / 6C assessment UI.
  *
- * Important trust boundary: the browser never receives the answer key when the
+ * Important trust boundary: The browser never receives the answer key when the
  * assessment starts and never computes credential evidence. Each answer is
  * locked and scored by `assessment-session`; final score/integrity are returned
  * only after the server persists the authoritative attempt.
