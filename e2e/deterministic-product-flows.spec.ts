@@ -99,12 +99,15 @@ const chapter = {
   chapter_number: 1,
   title: "The Reader Contract",
   content: "The mocked reader content proves that the public sample renders through the real Markdown reader surface.",
+  word_count: 18,
+  is_generated: true,
 };
 
 type MockState = {
   checkoutRequests: Array<Record<string, unknown>>;
   listingWrites: Array<Record<string, unknown>>;
   generationRequests: Array<Record<string, unknown>>;
+  exportRequests: Array<Record<string, unknown>>;
 };
 
 async function fulfillJson(route: Route, body: unknown, status = 200, headers: Record<string, string> = {}) {
@@ -131,6 +134,7 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     checkoutRequests: [],
     listingWrites: [],
     generationRequests: [],
+    exportRequests: [],
   };
 
   await page.addInitScript(() => {
@@ -197,6 +201,25 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path === "/functions/v1/export-book") {
+      state.exportRequests.push(requestBody(route));
+      const payload = Buffer.concat([
+        Buffer.from("%PDF-1.4\n"),
+        Buffer.alloc(2048, 32),
+        Buffer.from("\n%%EOF\n"),
+      ]);
+      await route.fulfill({
+        status: 200,
+        headers: {
+          "Content-Type": "application/pdf",
+          "Content-Disposition": 'attachment; filename="deterministic-reader-book.pdf"',
+          "Cache-Control": "no-store",
+        },
+        body: payload,
+      });
+      return;
+    }
+
     if (path === "/functions/v1/publishing-identity") {
       await fulfillJson(route, {
         book: { id: BOOK_ID, title: BOOK_TITLE },
@@ -257,10 +280,20 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       await fulfillJson(route, [{
         id: BOOK_ID,
         title: BOOK_TITLE,
+        description: "A deterministic book used to verify export and reader browser contracts.",
+        category: "technology",
+        creator_id: USER_ID,
         user_id: USER_ID,
         cover_image_url: "https://example.test/cover.jpg",
+        author_ai_agent: "E2E Creator",
+        total_chapters: 1,
+        is_published: false,
+        language: "en",
         ai_assistance_level: "assisted",
-        book_type: "nonfiction",
+        book_type: "text",
+        source_type: "generated",
+        work_id: null,
+        current_publication_id: null,
       }], 200, { "content-range": "0-0/1" });
       return;
     }
@@ -411,4 +444,29 @@ test("generate form invokes the real generation route and follows the returned b
   });
 
   await expect(page).toHaveURL(new RegExp(`/book/${BOOK_ID}$`), { timeout: 5_000 });
+});
+
+
+test("authenticated generated book exports a non-placeholder PDF through the real Download UI", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  await loginThroughMockedAuth(page);
+
+  await page.goto(`/book/${BOOK_ID}`);
+  await expect(page.getByRole("heading", { name: BOOK_TITLE }).first()).toBeVisible({ timeout: 10_000 });
+
+  await page.getByRole("button", { name: /Download/i }).first().click();
+  await expect(page.getByRole("dialog")).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("button", { name: /PDF/i }).first().click();
+  const download = await downloadPromise;
+
+  await expect.poll(() => state.exportRequests.length).toBe(1);
+  expect(state.exportRequests[0]).toMatchObject({
+    bookId: BOOK_ID,
+    format: "pdf",
+    isAcademicMode: false,
+    citationStyle: "APA",
+  });
+  expect(download.suggestedFilename()).toBe("deterministic-reader-book.pdf");
 });
