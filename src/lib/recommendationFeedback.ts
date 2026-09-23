@@ -27,9 +27,8 @@ function sessionId(): string {
 
 export async function logRecommendationEvent(ev: RecEvent): Promise<void> {
   try {
-    const { data: { user } } = await supabase.auth.getUser();
     await supabase.functions.invoke("log-recommendation-feedback", {
-      body: { ...ev, session_id: sessionId(), user_id: user?.id ?? null },
+      body: { ...ev, session_id: sessionId() },
     });
   } catch { /* swallow */ }
 }
@@ -37,9 +36,8 @@ export async function logRecommendationEvent(ev: RecEvent): Promise<void> {
 export async function logRecommendationBatch(events: RecEvent[]): Promise<void> {
   if (!events.length) return;
   try {
-    const { data: { user } } = await supabase.auth.getUser();
     await supabase.functions.invoke("log-recommendation-feedback", {
-      body: { session_id: sessionId(), user_id: user?.id ?? null, items: events },
+      body: { session_id: sessionId(), items: events },
     });
   } catch { /* swallow */ }
 }

@@ -10,7 +10,7 @@ import { Footer } from "@/components/layout/Footer";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { MobileBookDetailHeader } from "@/components/mobile/MobileBookDetailHeader";
 import { Button } from "@/components/ui/button";
-import { ChevronLeft, Loader2, RefreshCw, Palette, Flag } from "lucide-react";
+import { ChevronLeft, Loader2, RefreshCw, Palette } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -29,7 +29,6 @@ import { useBookDetailData } from "@/hooks/useBookDetailData";
 import { GentleOfflineBanner } from "@/components/ui/gentle-offline-banner";
 import { CertificateStatusPanel } from "@/components/certificates";
 import { cn } from "@/lib/utils";
-import { checkPublishingGate, type PublishingGateResult } from "@/lib/bookAuditIntegration";
 import { isAcademicCategory } from "@/lib/academicCategories";
 import { ChiefEditorPanel } from "@/components/books/ChiefEditorPanel";
 import { CodeAuditPanel } from "@/components/books/CodeAuditPanel";
@@ -64,7 +63,6 @@ export default function BookDetail() {
   const [isGeneratingAll, setIsGeneratingAll] = useState(false);
   const [generationProgress, setGenerationProgress] = useState({ current: 0, total: 0 });
   const [isGeneratingCover, setIsGeneratingCover] = useState(false);
-  const [isUpdatingPublish, setIsUpdatingPublish] = useState(false);
   const [coverTheme, setCoverTheme] = useState("classic");
   const [coverAuthorName, setCoverAuthorName] = useState("");
   const [regenDialogOpen, setRegenDialogOpen] = useState(false);
@@ -72,8 +70,6 @@ export default function BookDetail() {
   const [editIntent, setEditIntent] = useState("");
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [auditResult, setAuditResult] = useState<PublishingGateResult | null>(null);
-  const [showAuditDialog, setShowAuditDialog] = useState(false);
 
   const isOwner = user && (book?.creator_id === user.id || book?.user_id === user.id);
 
@@ -123,7 +119,12 @@ export default function BookDetail() {
           chapterId: chapter.id, bookTitle: book.title, chapterTitle: chapter.title, chapterNumber: chapter.chapter_number,
           keyTopics, category: book.category, language: book.language || "en", bookType: book.book_type || "text",
           academicMode: shouldEnableAcademicMode, citationStyle: 'APA',
-          ...(regenerate ? { regenerate: true, originalContent: chapter.content, editIntent: editIntentText } : {}),
+          ...(regenerate ? {
+            regenerate: true,
+            isRegeneration: true,
+            originalContent: chapter.content,
+            editIntent: editIntentText,
+          } : {}),
         },
       });
       if (response.error) throw new Error(response.error.message);
@@ -233,30 +234,6 @@ export default function BookDetail() {
     }
   };
 
-  const handleTogglePublish = async () => {
-    if (!book || !isOwner) return;
-    if (!book.is_published) {
-      const chaptersForAudit = chapters.map(ch => ({ id: ch.id, content: ch.content || '', is_generated: ch.is_generated }));
-      const gateResult = checkPublishingGate(book.id, book.book_type, chaptersForAudit, book.category, book.source_type);
-      setAuditResult(gateResult);
-      if (!gateResult.canPublish) { setShowAuditDialog(true); toast({ title: "Publishing Blocked", description: `${gateResult.blockerReasons.length} issue(s) must be fixed.`, variant: "destructive" }); return; }
-      if (gateResult.warnings.length > 0) toast({ title: "Publishing Warnings", description: `${gateResult.warnings.length} warning(s) found.`, variant: "default" });
-    }
-    setIsUpdatingPublish(true);
-    try {
-      const newPublishState = !book.is_published;
-      const { error } = await supabase.from("books").update({ is_published: newPublishState }).eq("id", book.id);
-      if (error) throw error;
-      setBook(prev => prev ? { ...prev, is_published: newPublishState } : null);
-      toast({ title: newPublishState ? t('book.published') : t('book.unpublished'), description: newPublishState ? t('book.publishedDesc') : t('book.unpublishedDesc') });
-    } catch (error) {
-      console.error("Error updating publish status:", error);
-      toast({ title: t('book.failedToUpdate'), description: t('book.couldNotChangePublishStatus'), variant: "destructive" });
-    } finally {
-      setIsUpdatingPublish(false);
-    }
-  };
-
   const handleUpdateBookType = async (nextType: "text" | "illustrated" | "comic") => {
     if (!book || !isOwner) return;
     const prevType = book.book_type || "text";
@@ -362,13 +339,13 @@ export default function BookDetail() {
           <Textarea value={editIntent} onChange={(e) => setEditIntent(e.target.value)} placeholder='e.g. "Shorten by 30%", "Make it more academic"' className="min-h-[120px]" />
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={async () => {
+            <Button type="button" onClick={async () => {
               const intent = editIntent.trim();
               if (!regenTarget) return;
               if (!intent) { toast({ title: "Edit intent required", description: "Please specify what you want to change.", variant: "destructive" }); return; }
               setRegenDialogOpen(false);
               await runChapterGeneration({ chapter: regenTarget, regenerate: true, editIntentText: intent });
-            }}>Regenerate</AlertDialogAction>
+            }}>Regenerate</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
@@ -391,8 +368,8 @@ export default function BookDetail() {
               {isOwner && (
                 <BookOwnerControls
                   book={book} chapters={chapters} isMobile={false}
-                  isUpdatingPublish={isUpdatingPublish} isDeleting={isDeleting} deleteDialogOpen={deleteDialogOpen}
-                  onTogglePublish={handleTogglePublish} onUpdateBookType={handleUpdateBookType}
+                  isDeleting={isDeleting} deleteDialogOpen={deleteDialogOpen}
+                  onUpdateBookType={handleUpdateBookType}
                   onArchive={handleArchiveBook} onDelete={handleDeleteBook} onDeleteDialogChange={setDeleteDialogOpen}
                   onChaptersChange={setChapters} onBookUpdate={(updates) => { setBook(prev => prev ? { ...prev, ...(updates.preface !== undefined ? { description: updates.preface || null } : {}), ...(updates.title !== undefined ? { title: updates.title } : {}) } : null); }}
                 />
@@ -424,7 +401,7 @@ export default function BookDetail() {
           )}
 
           {/* Mobile Cover Controls */}
-          {isMobile && isOwner && (
+          {isMobile && isOwner && !book.current_publication_id && (
             <div className="px-4 mt-4 space-y-2">
               <div className="flex gap-2">
                 <Select value={coverTheme} onValueChange={setCoverTheme}>
@@ -462,8 +439,8 @@ export default function BookDetail() {
             <div className="px-4 mt-4 space-y-4">
               <BookOwnerControls
                 book={book} chapters={chapters} isMobile={true}
-                isUpdatingPublish={isUpdatingPublish} isDeleting={isDeleting} deleteDialogOpen={deleteDialogOpen}
-                onTogglePublish={handleTogglePublish} onUpdateBookType={handleUpdateBookType}
+                isDeleting={isDeleting} deleteDialogOpen={deleteDialogOpen}
+                onUpdateBookType={handleUpdateBookType}
                 onArchive={handleArchiveBook} onDelete={handleDeleteBook} onDeleteDialogChange={setDeleteDialogOpen}
                 onChaptersChange={setChapters} onBookUpdate={(updates) => { setBook(prev => prev ? { ...prev, ...(updates.preface !== undefined ? { description: updates.preface || null } : {}), ...(updates.title !== undefined ? { title: updates.title } : {}) } : null); }}
               />
@@ -490,23 +467,6 @@ export default function BookDetail() {
         </div>
       </main>
 
-      {/* Audit Dialog */}
-      <AlertDialog open={showAuditDialog} onOpenChange={setShowAuditDialog}>
-        <AlertDialogContent className="max-w-lg">
-          <AlertDialogHeader>
-            <AlertDialogTitle className="flex items-center gap-2"><Flag className="h-5 w-5 text-destructive" />Publishing Blocked</AlertDialogTitle>
-            <AlertDialogDescription asChild>
-              <div className="space-y-3">
-                <p>This book cannot be published due to quality issues:</p>
-                {auditResult?.blockerReasons.map((reason, i) => <p key={i} className="text-sm text-destructive">• {reason}</p>)}
-                {auditResult?.warnings.map((warning, i) => <p key={i} className="text-sm text-amber-600">⚠ {warning}</p>)}
-                {auditResult?.auditResult && <p className="text-xs text-muted-foreground mt-2">Audit Score: {auditResult.auditResult.score}/100</p>}
-              </div>
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter><AlertDialogCancel>Close</AlertDialogCancel></AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
     </>
   );
 

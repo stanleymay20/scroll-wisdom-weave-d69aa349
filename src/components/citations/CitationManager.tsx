@@ -12,7 +12,7 @@ import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, Plus, ShieldCheck, Trash2, Pencil, X } from "lucide-react";
+import { FileUp, Loader2, Plus, ShieldCheck, Trash2, Pencil, X } from "lucide-react";
 import { formatCitation, sourceTypeLabel, type CitationRecord } from "@/lib/citationStyles";
 import { resolveDesign, type DesignSettings } from "@/lib/publisherDesign";
 
@@ -58,6 +58,13 @@ export function CitationManager({ bookId, design }: Props) {
   const [editing, setEditing] = useState<Draft | null>(null);
   const [saving, setSaving] = useState(false);
   const [verifyingId, setVerifyingId] = useState<string | null>(null);
+  const [importOpen, setImportOpen] = useState(false);
+  const [importText, setImportText] = useState("");
+  const [importing, setImporting] = useState(false);
+  const [importPreview, setImportPreview] = useState<{
+    items: Array<Record<string, unknown> & { _will_skip?: boolean; _dup_key?: boolean; _dup_doi?: boolean }>;
+    wouldInsert: number;
+  } | null>(null);
   const style = resolveDesign(design).citation_style;
 
   const load = useCallback(async (isCurrent: () => boolean = () => true) => {
@@ -149,6 +156,84 @@ export function CitationManager({ bookId, design }: Props) {
     await load();
   };
 
+  const parseImportItems = (): Array<Record<string, unknown>> => {
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(importText);
+    } catch {
+      throw new Error("Paste valid CSL-style JSON");
+    }
+    const items = Array.isArray(parsed)
+      ? parsed
+      : parsed && typeof parsed === "object" && Array.isArray((parsed as { items?: unknown }).items)
+        ? (parsed as { items: unknown[] }).items
+        : null;
+    if (!items?.length) throw new Error("JSON must be a non-empty array, or an object with an items array");
+    if (items.length > 200) throw new Error("Import at most 200 citations at a time");
+    return items as Array<Record<string, unknown>>;
+  };
+
+  const previewImport = async () => {
+    setImporting(true);
+    try {
+      const items = parseImportItems();
+      const { data, error } = await supabase.functions.invoke("import-citations", {
+        body: { book_id: bookId, items, commit: false },
+      });
+      if (error) throw error;
+      const result = data as {
+        preview?: Array<Record<string, unknown> & { _will_skip?: boolean; _dup_key?: boolean; _dup_doi?: boolean }>;
+        would_insert?: number;
+      };
+      setImportPreview({
+        items: result.preview ?? [],
+        wouldInsert: Number(result.would_insert ?? 0),
+      });
+      toast({
+        title: "Import preview ready",
+        description: `${Number(result.would_insert ?? 0)} new citation(s) can be inserted.`,
+      });
+    } catch (error) {
+      setImportPreview(null);
+      toast({
+        title: "Import preview failed",
+        description: error instanceof Error ? error.message : "Invalid citation import",
+        variant: "destructive",
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const commitImport = async () => {
+    if (!importPreview) return;
+    setImporting(true);
+    try {
+      const items = parseImportItems();
+      const { data, error } = await supabase.functions.invoke("import-citations", {
+        body: { book_id: bookId, items, commit: true },
+      });
+      if (error) throw error;
+      const result = data as { inserted?: number; skipped?: number };
+      toast({
+        title: "Citations imported",
+        description: `Inserted ${result.inserted ?? 0}; skipped ${result.skipped ?? 0} duplicate(s).`,
+      });
+      setImportOpen(false);
+      setImportText("");
+      setImportPreview(null);
+      await load();
+    } catch (error) {
+      toast({
+        title: "Citation import failed",
+        description: error instanceof Error ? error.message : "Import failed",
+        variant: "destructive",
+      });
+    } finally {
+      setImporting(false);
+    }
+  };
+
   const preview = useMemo(
     () => rows.slice(0, 3).map((r) => formatCitation(r, style)),
     [rows, style],
@@ -163,7 +248,12 @@ export function CitationManager({ bookId, design }: Props) {
             Structured sources rendered in your chosen style ({style.toUpperCase()}). Use <code>[cite:key]</code> inline in chapters.
           </p>
         </div>
-        <Button onClick={() => startEdit()} size="sm"><Plus className="h-4 w-4 mr-1" />Add citation</Button>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={() => { setImportOpen(true); setImportPreview(null); }} size="sm">
+            <FileUp className="h-4 w-4 mr-1" />Import JSON
+          </Button>
+          <Button onClick={() => startEdit()} size="sm"><Plus className="h-4 w-4 mr-1" />Add citation</Button>
+        </div>
       </div>
 
       {loading ? (
@@ -211,6 +301,68 @@ export function CitationManager({ bookId, design }: Props) {
         <div className="text-xs text-muted-foreground border-t pt-3">
           <div className="font-medium mb-1 text-foreground">References preview</div>
           {preview.map((p, i) => <div key={i} className="truncate">{i + 1}. {p}</div>)}
+        </div>
+      )}
+
+      {importOpen && (
+        <div className="fixed inset-0 z-50 bg-background/80 flex items-center justify-center p-4">
+          <Card className="w-full max-w-3xl max-h-[90vh] overflow-y-auto p-6 space-y-4">
+            <div className="flex items-center justify-between gap-3">
+              <div>
+                <h3 className="font-semibold text-foreground">Bulk citation import</h3>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Paste a CSL-style JSON array using ScrollLibrary citation field names. Preview detects
+                  duplicate citation keys and DOIs before commit.
+                </p>
+              </div>
+              <Button variant="ghost" size="sm" onClick={() => { setImportOpen(false); setImportPreview(null); }}>
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+
+            <Textarea
+              aria-label="Citation import JSON"
+              rows={14}
+              value={importText}
+              onChange={(event) => { setImportText(event.target.value); setImportPreview(null); }}
+              placeholder={'[{"citation_key":"smith2025","source_type":"journal_article","citation_text":"Article title","authors":[{"family":"Smith","given":"Ada"}],"doi":"10.xxxx/example"}]'}
+              className="font-mono text-xs"
+            />
+
+            {importPreview && (
+              <div className="rounded-md border p-3 space-y-2">
+                <div className="text-sm font-medium">
+                  {importPreview.wouldInsert} new · {importPreview.items.length - importPreview.wouldInsert} duplicate/skipped
+                </div>
+                <div className="max-h-48 overflow-y-auto space-y-1">
+                  {importPreview.items.slice(0, 30).map((item, index) => (
+                    <div key={index} className="flex items-center justify-between gap-3 text-xs border-b border-border/40 py-1">
+                      <span className="font-mono truncate">{String(item.citation_key ?? `item-${index + 1}`)}</span>
+                      <Badge variant={item._will_skip ? "secondary" : "default"}>
+                        {item._will_skip
+                          ? item._dup_key ? "duplicate key" : item._dup_doi ? "duplicate DOI" : "skip"
+                          : "insert"}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2">
+              <Button variant="outline" onClick={() => void previewImport()} disabled={importing || !importText.trim()}>
+                {importing && !importPreview ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                Preview import
+              </Button>
+              <Button
+                onClick={() => void commitImport()}
+                disabled={importing || !importPreview || importPreview.wouldInsert === 0}
+              >
+                {importing && importPreview ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <FileUp className="h-4 w-4 mr-2" />}
+                Import {importPreview?.wouldInsert ?? 0}
+              </Button>
+            </div>
+          </Card>
         </div>
       )}
 

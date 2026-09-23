@@ -259,7 +259,7 @@ Deno.serve(async (req) => {
     const recipientName = profile?.full_name?.trim() || user.email?.split('@')[0] || 'ScrollLibrary learner';
 
     const { data: existing, error: existingError } = await service.from('publishing_certificates')
-      .select('id,certificate_number,certificate_type,issued_at,book_content_hash,metadata')
+      .select('id,certificate_number,certificate_type,issued_at,book_content_hash,verification_hash,metadata')
       .eq('user_id', user.id)
       .eq('book_id', bookId)
       .eq('certificate_type', certificateType)
@@ -278,6 +278,7 @@ Deno.serve(async (req) => {
             certificateNumber: existing.certificate_number,
             certificateType: existing.certificate_type,
             issuedAt: existing.issued_at,
+            verificationHash: existing.verification_hash,
             issuer: CERTIFICATE_ISSUER,
             recipient: { name: recipientName },
             book: { id: bookId, title: book.title },
@@ -354,12 +355,12 @@ Deno.serve(async (req) => {
       assessment_contract_passed: true,
       evidence_snapshot: evidenceSnapshot,
       metadata,
-    }).select('id,certificate_number,certificate_type,issued_at').single();
+    }).select('id,certificate_number,certificate_type,issued_at,verification_hash').single();
 
     if (insertError || !certificate) {
       if (insertError?.code === '23505') {
         const { data: raced } = await service.from('publishing_certificates')
-          .select('id,certificate_number,certificate_type,issued_at')
+          .select('id,certificate_number,certificate_type,issued_at,verification_hash')
           .eq('user_id', user.id)
           .eq('book_id', bookId)
           .eq('certificate_type', certificateType)
@@ -378,6 +379,7 @@ Deno.serve(async (req) => {
         certificateNumber: certificate.certificate_number,
         certificateType: certificate.certificate_type,
         issuedAt: certificate.issued_at,
+        verificationHash: certificate.verification_hash,
         issuer: CERTIFICATE_ISSUER,
         recipient: { name: recipientName },
         book: { id: bookId, title: book.title },

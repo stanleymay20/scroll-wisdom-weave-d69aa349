@@ -100,7 +100,9 @@ export function AdminReliabilityTab() {
     try {
       const { data, error } = await supabase.functions.invoke("admin-ledger-reconcile");
       if (error) throw error;
-      toast.success(`Scanned ${data?.scanned ?? 0} · ${data?.discrepancies ?? 0} discrepancies · ${data?.healed ?? 0} healed`);
+      toast.success(
+        `Scanned ${data?.scanned ?? 0} · ${data?.discrepancies ?? 0} discrepancies · ${data?.healed_sales ?? 0} sale rows healed · ${data?.refund_discrepancies ?? 0} refund issues require Stripe event evidence`,
+      );
       load();
     } catch (e: any) {
       toast.error(e?.message ?? "Reconcile failed");

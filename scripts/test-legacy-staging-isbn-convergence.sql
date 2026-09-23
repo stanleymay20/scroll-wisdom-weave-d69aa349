@@ -58,6 +58,10 @@ ALTER TABLE public.books
 \ir ../supabase/migrations/20260912100000_legacy_staging_publications_book_id_compat.sql
 \ir ../supabase/migrations/20260906235000_live_publication_schema_convergence.sql
 \ir ../supabase/migrations/20260906235500_scroll_identity_layer.sql
+-- The historical identity layer used a shared RECORD trigger body that was
+-- unsafe when fired on publications. Reapply the canonical record-safety
+-- convergence before any later publication minting functions are exercised.
+\ir ../supabase/migrations/20260923054000_scroll_identity_trigger_record_safety.sql
 \ir ../supabase/migrations/20260907024300_isbn_provenance_and_publication_atomicity.sql
 \ir ../supabase/migrations/20260907024310_imprint_verification_drift.sql
 \ir ../supabase/migrations/20260907193000_isbn_governance_separation_and_atomic_mint.sql

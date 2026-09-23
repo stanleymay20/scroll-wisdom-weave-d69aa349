@@ -20,6 +20,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { MobileLayout } from "@/components/layout/MobileLayout";
 import { cn } from "@/lib/utils";
 import { SEO } from "@/components/SEO";
+import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 
 type UploadStep = 'input' | 'processing' | 'done';
 
@@ -68,6 +69,7 @@ export default function UploadPage() {
   const [resultTitle, setResultTitle] = useState('');
   const [resultChapters, setResultChapters] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  const [serverProcessing, setServerProcessing] = useState(false);
 
   // Input states
   const [file, setFile] = useState<File | null>(null);
@@ -156,8 +158,9 @@ export default function UploadPage() {
     if (f.type === 'application/pdf' || f.name.endsWith('.pdf')) {
       setProgressMessage('Extracting text from PDF...');
       const pdfjsLib = await import('pdfjs-dist');
-      // Pin to a stable mjs worker matching the loaded version
-      pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+      // Bundle the exact matching worker with ScrollLibrary. Manuscript ingestion
+      // must not depend on a third-party CDN being reachable at runtime.
+      pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
 
       const arrayBuffer = await f.arrayBuffer();
       const pdf = await pdfjsLib.getDocument({ data: arrayBuffer }).promise;
@@ -212,9 +215,15 @@ export default function UploadPage() {
       setStep('input');
       setProgress(0);
       setProgressMessage('');
-      toast({ title: "Cancelled", description: "Upload was cancelled." });
+      setServerProcessing(false);
+      toast({
+        title: serverProcessing ? "Stopped waiting" : "Cancelled",
+        description: serverProcessing
+          ? "ScrollLibrary stopped waiting for the server response. If processing had already started, the imported book may still finish and appear in your Library."
+          : "Document processing was cancelled before server analysis started.",
+      });
     }
-  }, [stopProgressTimers, toast]);
+  }, [serverProcessing, stopProgressTimers, toast]);
 
   // ---------------------------------------------------------------------
   // Process
@@ -301,10 +310,15 @@ export default function UploadPage() {
         setTimeout(() => isMountedRef.current && setProgressMessage(msg), ms),
       );
 
-      // Single-attempt invoke with structured-error handling.
+      // Single-attempt invoke with structured-error handling. Once an Edge
+      // Function has accepted the request, client-side cancellation cannot
+      // guarantee rollback of server-side side effects. The UI therefore
+      // switches from "Cancel" to the truthful "Stop waiting" state.
+      setServerProcessing(true);
       const { data, error } = await supabase.functions.invoke('process-document', {
         body: { documentText, documentName, sourceType, language },
       });
+      setServerProcessing(false);
 
       stopProgressTimers();
       if (abort.signal.aborted) return;
@@ -336,6 +350,7 @@ export default function UploadPage() {
       });
     } catch (err) {
       stopProgressTimers();
+      setServerProcessing(false);
       if ((err as { name?: string })?.name === 'AbortError' || abort.signal.aborted) return;
       console.error('Upload error:', err);
       if (isMountedRef.current) {
@@ -559,10 +574,12 @@ export default function UploadPage() {
           <p className="text-muted-foreground mb-6" aria-live="polite">{progressMessage}</p>
           <Progress value={progress} className="max-w-md mx-auto mb-4" />
           <p className="text-xs text-muted-foreground mb-6">
-            This may take 15–30 seconds depending on document length.
+            {serverProcessing
+              ? "Server analysis has started. You can stop waiting, but work already accepted by the server may still finish and appear in your Library."
+              : "This may take 15–30 seconds depending on document length."}
           </p>
           <Button variant="outline" onClick={cancelProcessing} className="gap-2">
-            <X className="h-4 w-4" /> Cancel
+            <X className="h-4 w-4" /> {serverProcessing ? "Stop waiting" : "Cancel"}
           </Button>
         </motion.div>
       )}

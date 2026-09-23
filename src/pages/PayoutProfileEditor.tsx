@@ -111,7 +111,7 @@ export default function PayoutProfileEditor() {
   const callConnect = async (action: "start" | "refresh") => {
     setConnectBusy(true);
     const { data, error } = await supabase.functions.invoke("stripe-connect-onboarding", {
-      body: { action, return_path: "/payout-profile" },
+      body: { action, return_path: "/account/payouts" },
     });
     setConnectBusy(false);
 

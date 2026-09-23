@@ -99,7 +99,7 @@ Deno.serve(async (req) => {
 
     const { data: book, error: legacyErr } = await sc
       .from("books")
-      .select("id,creator_id")
+      .select("id,creator_id,current_publication_id")
       .eq("id", body.bookId)
       .maybeSingle();
     if (legacyErr) return serverError(legacyErr);
@@ -131,6 +131,13 @@ Deno.serve(async (req) => {
       authorized = !!admin;
     }
     if (!authorized) return forbidden("Not the owner of this book");
+    if (book.current_publication_id != null) {
+      return json({
+        success: false,
+        error: "CERTIFIED_PUBLICATION_IMMUTABLE",
+        message: "Create a revision before changing the cover of a certified publication.",
+      }, 409);
+    }
 
     if (!isOwnedCoverStorageUrl(body.assetUrl, supabaseUrl, auth.userId, body.bookId)) {
       return badRequest("Cover URL must be an uploaded book-images cover owned by this user and book.");

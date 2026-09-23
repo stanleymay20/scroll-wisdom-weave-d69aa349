@@ -11,13 +11,13 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useToast } from '@/hooks/use-toast';
-import { 
-  createCertificate, 
-  Certificate, 
-  CertificateRecipient,
+import {
+  Certificate,
+  CERTIFICATE_ISSUER,
   CERTIFICATE_TYPES,
-  CertificateType 
+  CertificateType
 } from '@/lib/certificateAuthority';
+import { supabase } from '@/integrations/supabase/client';
 import {
   evaluateCertificateEligibility,
   getEligibilityStatusText,
@@ -76,6 +76,7 @@ export function CertificateGenerator({
 }: CertificateGeneratorProps) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [certificate, setCertificate] = useState<Certificate | null>(null);
+  const [issuedType, setIssuedType] = useState<CertificateType | null>(null);
   const { toast } = useToast();
 
   // 6C.1 — Evaluate eligibility using pure function
@@ -124,36 +125,90 @@ export function CertificateGenerator({
     setIsGenerating(true);
 
     try {
-      // Simulate server-side revalidation
-      await new Promise(resolve => setTimeout(resolve, 1500));
-
-      const recipient: CertificateRecipient = {
-        name: userName,
-        email: userEmail,
-        userId,
-      };
-
-      const newCertificate = await createCertificate(recipient, {
-        bookTitle,
-        bookType,
-        completionDate: new Date(),
-        wordCount,
-        chaptersCompleted,
-        totalChapters,
-        learningLevel,
+      const { data, error } = await supabase.functions.invoke('validate-certificate', {
+        body: {
+          bookId,
+          requestedType: selectedType,
+        },
       });
 
+      if (error) {
+        let message = error.message || 'Certificate authority rejected the request.';
+        try {
+          const context = (error as { context?: { json?: () => Promise<unknown> } }).context;
+          if (context?.json) {
+            const payload = await context.json() as { error?: string };
+            if (payload?.error) message = payload.error;
+          }
+        } catch {
+          // Keep the transport error if the body is unavailable.
+        }
+        throw new Error(message);
+      }
+
+      const response = data as {
+        success?: boolean;
+        alreadyIssued?: boolean;
+        certificate?: {
+          id?: string;
+          certificateNumber?: string;
+          certificateType?: CertificateType;
+          issuedAt?: string;
+          verificationHash?: string | null;
+          recipient?: { name?: string };
+          book?: { id?: string; title?: string };
+        };
+        error?: string;
+      };
+
+      if (!response.success || !response.certificate?.id || !response.certificate.certificateNumber) {
+        throw new Error(response.error || 'Certificate authority returned an invalid issuance response.');
+      }
+
+      const serverType = response.certificate.certificateType === 'mastery'
+        ? 'mastery'
+        : 'completion';
+      const issuedAt = response.certificate.issuedAt
+        ? new Date(response.certificate.issuedAt)
+        : new Date();
+
+      const newCertificate: Certificate = {
+        id: response.certificate.id,
+        issuer: CERTIFICATE_ISSUER,
+        recipient: {
+          name: response.certificate.recipient?.name || userName,
+          email: userEmail,
+          userId,
+        },
+        content: {
+          certificateId: response.certificate.certificateNumber,
+          bookTitle: response.certificate.book?.title || bookTitle,
+          bookType,
+          completionDate: issuedAt,
+          wordCount,
+          chaptersCompleted,
+          totalChapters,
+          learningLevel,
+        },
+        verificationHash: response.certificate.verificationHash || '',
+        scrollPublishingCode: response.certificate.certificateNumber,
+        issuedAt,
+      };
+
+      setIssuedType(serverType);
       setCertificate(newCertificate);
       onCertificateGenerated?.(newCertificate);
 
       toast({
-        title: 'Certificate Generated! 🎉',
-        description: `Your ${CERTIFICATE_TYPES[selectedType].displayName} has been created and verified.`,
+        title: response.alreadyIssued ? 'Certificate Ready' : 'Certificate Generated! 🎉',
+        description: `Your ${CERTIFICATE_TYPES[serverType].displayName} is server-issued and verifiable.`,
       });
     } catch (error) {
       toast({
         title: 'Generation Failed',
-        description: 'Unable to generate certificate. Please try again.',
+        description: error instanceof Error
+          ? error.message
+          : 'Unable to generate certificate. Please try again.',
         variant: 'destructive',
       });
     } finally {
@@ -174,11 +229,11 @@ export function CertificateGenerator({
       <div className="space-y-6">
         <CertificateDisplay 
           certificate={certificate} 
-          certificateType={selectedType}
+          certificateType={issuedType ?? selectedType}
           onDownload={handleDownload}
         />
         <div className="flex justify-center">
-          <Button variant="outline" onClick={() => setCertificate(null)}>
+          <Button variant="outline" onClick={() => { setCertificate(null); setIssuedType(null); }}>
             View Eligibility Status
           </Button>
         </div>

@@ -30,17 +30,29 @@ interface BookWithProgress {
 
 interface ChapterProgress {
   id: string;
-  is_generated: boolean;
+}
+
+interface ReadingProgress {
+  chapter_id: string;
+  percent: number;
 }
 
 interface QuizAttempt {
+  id: string;
   chapter_id: string;
   score: number;
+  submitted_at: string | null;
+  assessment_session_id: string | null;
 }
 
 interface IntegrityLog {
+  quiz_attempt_id: string | null;
   integrity_score: number;
+  severity: string | null;
+  details: Record<string, unknown> | null;
 }
+
+const ASSESSMENT_CONTRACT_VERSION = 'ARC-1.0';
 
 export default function CertificateStatus() {
   const { bookId } = useParams<{ bookId: string }>();
@@ -78,13 +90,31 @@ export default function CertificateStatus() {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('chapters')
-        .select('id, is_generated')
+        .select('id')
         .eq('book_id', bookId);
       
       if (error) throw error;
       return data as ChapterProgress[];
     },
     enabled: !!bookId,
+  });
+
+  // Contract 6C: reading evidence, not chapter generation state, determines coverage.
+  const { data: readingProgress } = useQuery({
+    queryKey: ['certificate-reading-progress', bookId, session?.user?.id],
+    queryFn: async () => {
+      if (!session?.user?.id) return [];
+
+      const { data, error } = await supabase
+        .from('reading_progress')
+        .select('chapter_id, percent')
+        .eq('book_id', bookId)
+        .eq('user_id', session.user.id);
+
+      if (error) throw error;
+      return data as ReadingProgress[];
+    },
+    enabled: !!bookId && !!session?.user?.id,
   });
 
   // Fetch quiz attempts for this book
@@ -95,9 +125,13 @@ export default function CertificateStatus() {
       
       const { data, error } = await supabase
         .from('quiz_attempts')
-        .select('chapter_id, score')
+        .select('id, chapter_id, score, submitted_at, assessment_session_id')
         .eq('book_id', bookId)
-        .eq('user_id', session.user.id);
+        .eq('user_id', session.user.id)
+        .eq('assessment_contract_passed', true)
+        .eq('assessment_contract_version', ASSESSMENT_CONTRACT_VERSION)
+        .not('assessment_session_id', 'is', null)
+        .order('submitted_at', { ascending: true });
       
       if (error) throw error;
       return data as QuizAttempt[];
@@ -113,7 +147,7 @@ export default function CertificateStatus() {
       
       const { data, error } = await supabase
         .from('assessment_integrity_logs')
-        .select('integrity_score')
+        .select('quiz_attempt_id, integrity_score, severity, details')
         .eq('book_id', bookId)
         .eq('user_id', session.user.id);
       
@@ -143,27 +177,72 @@ export default function CertificateStatus() {
     enabled: !!bookId && !!session?.user?.id,
   });
 
-  // Calculate metrics
+  // Calculate metrics from the same evidence classes used by the server issuer.
   const totalChapters = book?.total_chapters || chapters?.length || 0;
-  const completedChapters = chapters?.filter(c => c.is_generated).length || 0;
-  const progressPercent = totalChapters > 0 ? Math.round((completedChapters / totalChapters) * 100) : 0;
-  
-  const quizzesSubmitted = quizAttempts?.length || 0;
-  const quizzesRequired = totalChapters;
-  const averageScore = quizAttempts && quizAttempts.length > 0
-    ? quizAttempts.reduce((sum, q) => sum + q.score, 0) / quizAttempts.length
+  const chapterIds = new Set((chapters ?? []).map((chapter) => chapter.id));
+
+  const maxReadByChapter = new Map<string, number>();
+  for (const row of readingProgress ?? []) {
+    if (!chapterIds.has(row.chapter_id)) continue;
+    maxReadByChapter.set(
+      row.chapter_id,
+      Math.max(maxReadByChapter.get(row.chapter_id) ?? 0, Number(row.percent ?? 0)),
+    );
+  }
+  const completedChapters = [...maxReadByChapter.values()].filter((percent) => percent >= 80).length;
+  const progressPercent = totalChapters > 0
+    ? Math.round((completedChapters / totalChapters) * 100)
     : 0;
-  
-  const integrityScore = integrityLogs && integrityLogs.length > 0
-    ? integrityLogs.reduce((sum, l) => sum + l.integrity_score, 0) / integrityLogs.length
-    : 1.0; // Default to 1.0 if no integrity data (assume clean)
 
-  const allChaptersComplete = completedChapters === totalChapters && totalChapters > 0;
+  // Match server latest-per-chapter assessment semantics.
+  const latestAttemptByChapter = new Map<string, QuizAttempt>();
+  for (const attempt of quizAttempts ?? []) {
+    if (!chapterIds.has(attempt.chapter_id)) continue;
+    latestAttemptByChapter.set(attempt.chapter_id, attempt);
+  }
+  const authoritativeAttempts = [...latestAttemptByChapter.values()];
+  const quizzesSubmitted = authoritativeAttempts.length;
+  const quizzesRequired = totalChapters;
+  const averageScore = authoritativeAttempts.length > 0
+    ? authoritativeAttempts.reduce((sum, attempt) => sum + Number(attempt.score ?? 0), 0) / authoritativeAttempts.length
+    : 0;
+
+  const attemptIds = new Set(authoritativeAttempts.map((attempt) => attempt.id));
+  const sessionIds = new Set(
+    authoritativeAttempts
+      .map((attempt) => attempt.assessment_session_id)
+      .filter((id): id is string => Boolean(id)),
+  );
+  const trustedIntegrity = (integrityLogs ?? []).filter((row) => {
+    const details = row.details && typeof row.details === 'object' ? row.details : {};
+    return details.server_scored === true
+      && Boolean(row.quiz_attempt_id && attemptIds.has(row.quiz_attempt_id))
+      && typeof details.assessment_session_id === 'string'
+      && sessionIds.has(details.assessment_session_id);
+  });
+  const integrityEvidenceComplete = authoritativeAttempts.length > 0
+    && trustedIntegrity.length >= authoritativeAttempts.length;
+  const integrityScore = trustedIntegrity.length > 0
+    ? trustedIntegrity.reduce((sum, row) => sum + Number(row.integrity_score ?? 0), 0) / trustedIntegrity.length
+    : 0;
+  const hasRejectFlags = !integrityEvidenceComplete || trustedIntegrity.some((row) => {
+    const details = row.details && typeof row.details === 'object' ? row.details : {};
+    return row.severity === 'reject' || details.classification === 'reject';
+  });
+  const hasReviewFlags = trustedIntegrity.some((row) => {
+    const details = row.details && typeof row.details === 'object' ? row.details : {};
+    return row.severity === 'review' || details.classification === 'review';
+  });
+
+  const coverageThresholdMet = totalChapters > 0 && completedChapters / totalChapters >= 0.8;
   const allQuizzesComplete = quizzesSubmitted >= quizzesRequired && quizzesRequired > 0;
-  const scoreThresholdMet = averageScore >= 70;
-  const integrityThresholdMet = integrityScore >= 0.6;
+  const masteryScoreThresholdMet = averageScore >= 90;
+  const integrityThresholdMet = integrityEvidenceComplete && integrityScore >= 0.6;
 
-  const isEligible = allChaptersComplete && allQuizzesComplete && scoreThresholdMet && integrityThresholdMet;
+  const isEligible = coverageThresholdMet
+    && allQuizzesComplete
+    && integrityThresholdMet
+    && !hasRejectFlags;
 
   if (bookLoading) {
     return (
@@ -284,12 +363,12 @@ export default function CertificateStatus() {
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <span className="flex items-center gap-2">
-                    {allChaptersComplete ? (
+                    {coverageThresholdMet ? (
                       <CheckCircle2 className="h-5 w-5 text-green-500" />
                     ) : (
                       <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30" />
                     )}
-                    All Chapters Completed
+                    Read ≥80% of Required Chapters
                   </span>
                   <span className="text-sm text-muted-foreground">
                     {completedChapters}/{totalChapters}
@@ -316,18 +395,18 @@ export default function CertificateStatus() {
               {/* Score Threshold */}
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  {scoreThresholdMet ? (
+                  {masteryScoreThresholdMet ? (
                     <CheckCircle2 className="h-5 w-5 text-green-500" />
                   ) : (
                     <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30" />
                   )}
-                  Average Score ≥ 70%
+                  Average Assessment Score
                 </span>
                 <span className={cn(
                   "text-sm font-medium",
-                  scoreThresholdMet ? "text-green-600" : "text-muted-foreground"
+                  masteryScoreThresholdMet ? "text-green-600" : "text-muted-foreground"
                 )}>
-                  {averageScore.toFixed(0)}%
+                  {averageScore.toFixed(0)}% · mastery target 90%
                 </span>
               </div>
 
@@ -375,6 +454,8 @@ export default function CertificateStatus() {
                     integrityScore={integrityScore}
                     quizzesRequired={quizzesRequired}
                     quizzesSubmitted={quizzesSubmitted}
+                    hasRejectFlags={hasRejectFlags}
+                    hasReviewFlags={hasReviewFlags}
                   />
                 </>
               ) : (

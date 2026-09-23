@@ -49,6 +49,10 @@ export function AdminFinanceTab() {
   const [loading, setLoading] = useState(true);
   const [feeDraft, setFeeDraft] = useState<string>("");
   const [saving, setSaving] = useState(false);
+  const [rollingUp, setRollingUp] = useState(false);
+  const [refundPurchaseId, setRefundPurchaseId] = useState("");
+  const [refundAmount, setRefundAmount] = useState("");
+  const [refunding, setRefunding] = useState(false);
 
   const load = async () => {
     setLoading(true);
@@ -80,6 +84,80 @@ export function AdminFinanceTab() {
       toast.success(`Platform fee updated to ${(bps / 100).toFixed(2)}%`);
       void trackStorefrontEvent(null, "platform_fee_updated", { bps });
       void load();
+    }
+  };
+
+  const refreshAnalytics = async () => {
+    setRollingUp(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke("analytics-cohort-rollup");
+      if (error) throw error;
+      toast.success(`Analytics refreshed for ${result?.days ?? 30} days`);
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Analytics refresh failed");
+    } finally {
+      setRollingUp(false);
+    }
+  };
+
+  const issueRefund = async () => {
+    const purchaseId = refundPurchaseId.trim();
+    const dollars = Number(refundAmount);
+    const amountCents = Math.round(dollars * 100);
+    const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+    if (!uuid.test(purchaseId)) {
+      toast.error("Enter a valid purchase UUID");
+      return;
+    }
+    if (!Number.isFinite(dollars) || dollars <= 0 || amountCents <= 0) {
+      toast.error("Enter the exact refund amount in dollars");
+      return;
+    }
+    if (!window.confirm(
+      `Issue a ${fmt(amountCents)} refund for purchase ${purchaseId}? This moves real money.`,
+    )) return;
+
+    setRefunding(true);
+    try {
+      const { data: result, error } = await supabase.functions.invoke("admin-refund-purchase", {
+        headers: { "x-idempotency-key": crypto.randomUUID() },
+        body: {
+          purchase_id: purchaseId,
+          amount_cents: amountCents,
+          reason: "requested_by_customer",
+        },
+      });
+      if (error) {
+        let message = error.message || "Refund failed";
+        try {
+          const context = (error as any)?.context;
+          if (context && typeof context.json === "function") {
+            const payload = await context.json();
+            if (payload?.error) message = payload.error;
+          }
+        } catch {
+          // Preserve the transport error when the response body is unavailable.
+        }
+        throw new Error(message);
+      }
+      if (result?.pending) {
+        toast.info(`Refund ${result.refund_id ?? ""} is pending at Stripe`);
+      } else {
+        toast.success(
+          result?.fully_refunded
+            ? "Full refund completed and access revoked"
+            : `Partial refund completed · ${fmt(Number(result?.remaining_cents ?? 0))} remains refundable`,
+        );
+      }
+      setRefundPurchaseId("");
+      setRefundAmount("");
+      await load();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Refund failed");
+    } finally {
+      setRefunding(false);
     }
   };
 
@@ -121,6 +199,54 @@ export function AdminFinanceTab() {
           )}
         </CardContent>
       </Card>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Analytics maintenance</CardTitle></CardHeader>
+          <CardContent>
+            <p className="text-xs text-muted-foreground mb-3">
+              Recompute the server-owned daily finance and funnel rollups used below.
+            </p>
+            <Button variant="outline" onClick={refreshAnalytics} disabled={rollingUp}>
+              {rollingUp ? "Refreshing…" : "Refresh 30-day analytics"}
+            </Button>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2"><CardTitle className="text-sm">Issue controlled refund</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <p className="text-xs text-muted-foreground">
+              Enter the exact purchase UUID and refund amount. The server enforces admin authorization,
+              Stripe idempotency, remaining balance, and partial-refund ledger reconciliation.
+            </p>
+            <Input
+              aria-label="Refund purchase UUID"
+              placeholder="Purchase UUID"
+              value={refundPurchaseId}
+              onChange={(event) => setRefundPurchaseId(event.target.value)}
+              className="font-mono text-xs"
+            />
+            <Input
+              aria-label="Refund amount in dollars"
+              type="number"
+              inputMode="decimal"
+              min="0.01"
+              step="0.01"
+              placeholder="Refund amount (USD)"
+              value={refundAmount}
+              onChange={(event) => setRefundAmount(event.target.value)}
+            />
+            <Button
+              variant="destructive"
+              onClick={issueRefund}
+              disabled={refunding || !refundPurchaseId.trim() || !refundAmount}
+            >
+              {refunding ? "Issuing refund…" : "Issue refund"}
+            </Button>
+          </CardContent>
+        </Card>
+      </div>
 
       <div className="grid md:grid-cols-2 gap-4">
         <Card>
@@ -217,7 +343,7 @@ export function AdminFinanceTab() {
           <CardHeader className="pb-2"><CardTitle className="text-sm">Daily activity (last 30d)</CardTitle></CardHeader>
           <CardContent>
             {(data.cohorts ?? []).length === 0 ? (
-              <div className="text-sm text-muted-foreground">No daily rollup yet. Run analytics-cohort-rollup.</div>
+              <div className="text-sm text-muted-foreground">No daily rollup yet. Use “Refresh 30-day analytics” above.</div>
             ) : (
               <>
                 <div className="text-xs text-muted-foreground mb-2">Daily snapshots — not true cohort retention.</div>

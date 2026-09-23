@@ -20,7 +20,6 @@
 /supabase/functions/admin-refund-purchase/      @stanleymay20
 /supabase/functions/admin-ledger-reconcile/     @stanleymay20
 /supabase/functions/admin-force-stripe-resync/  @stanleymay20
-/supabase/functions/backfill-earnings-ledger/   @stanleymay20
 /supabase/functions/creator-earnings-summary/   @stanleymay20
 /supabase/functions/creator-payout-profile/     @stanleymay20
 /supabase/functions/_shared/entitlements.ts     @stanleymay20

@@ -17,7 +17,7 @@ interface SubscriptionContextType {
   isSubscribed: boolean;
   subscriptionEnd: string | null;
   isLoading: boolean;
-  checkSubscription: () => Promise<void>;
+  checkSubscription: (force?: boolean) => Promise<void>;
   canGenerateBooks: boolean;
   maxWordCount: number;
   dailyLimitInfo: DailyLimitInfo;

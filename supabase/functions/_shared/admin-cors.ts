@@ -1,7 +1,7 @@
 const DEFAULT_ADMIN_ORIGIN = "https://scrolllibrary.org";
 
 const ADMIN_ALLOW_HEADERS =
-  "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version";
+  "authorization, x-client-info, apikey, content-type, x-idempotency-key, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version";
 
 const ADMIN_ALLOW_METHODS = "POST, OPTIONS";
 

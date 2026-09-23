@@ -3,6 +3,7 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { payoutMethodForStatus, payoutStatusFromAccount } from "../_shared/stripe-connect.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { correlationId, logFinancialEvent, logFraudSignal, evaluateSeverity } from "../_shared/observability.ts";
+import { resolveUserIdForBillingCustomer } from "../_shared/billing-customer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -122,14 +123,24 @@ serve(async (req) => {
           attempts: webhookClaim.attempts,
         },
       });
+      const retryLater = webhookClaim.in_flight === true && webhookClaim.terminal !== true;
       return new Response(JSON.stringify({
-        received: true,
+        received: !retryLater,
         deduped: true,
         status: webhookClaim.status,
         duplicate_kind: duplicateKind,
+        ...(retryLater ? { retry: true } : {}),
       }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json", "x-correlation-id": corr },
-        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "x-correlation-id": corr,
+          ...(retryLater ? { "Retry-After": "5" } : {}),
+        },
+        // Never acknowledge a non-terminal in-flight event as complete. If the
+        // first worker later fails its final status write, Stripe must still
+        // deliver again instead of treating the event as permanently handled.
+        status: retryLater ? 503 : 200,
       });
     }
 
@@ -188,17 +199,19 @@ serve(async (req) => {
       });
       if (error) {
         logStep("Creator entitlement sync failed", { error: error.message, userId });
-      } else {
-        logStep("Creator entitlement synced", { userId, tier: creatorTier, status: subscription.status });
+        throw new Error(`Creator entitlement sync failed: ${error.message}`);
       }
+      logStep("Creator entitlement synced", { userId, tier: creatorTier, status: subscription.status });
     };
 
     const updateProfilePlan = async (authUserId: string, plan: ValidPlan) => {
       const { error } = await supabase.from("profiles")
         .update({ plan, updated_at: new Date().toISOString() })
         .eq("user_id", authUserId);
-      if (error) logStep("Error updating profile plan", { error: error.message });
-      return error;
+      if (error) {
+        logStep("Error updating profile plan", { error: error.message });
+        throw new Error(`Profile plan update failed: ${error.message}`);
+      }
     };
 
     const syncPlanSubscription = async (
@@ -225,25 +238,405 @@ serve(async (req) => {
           : null,
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" });
-      if (error) logStep("Plan subscription sync failed", { userId, status: subscription.status });
+      if (error) {
+        logStep("Plan subscription sync failed", { userId, status: subscription.status, error: error.message });
+        throw new Error(`Plan subscription sync failed: ${error.message}`);
+      }
     };
 
-    const findUserByEmail = async (email: string) => {
-      const { data: users, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (error || !users?.users) return null;
-      return users.users.find((u) => u.email === email) || null;
+    const findUserIdByCustomer = async (customerId: string): Promise<string | null> =>
+      await resolveUserIdForBillingCustomer(supabase, customerId);
+
+
+    const writePurchaseLedger = async (
+      purchaseId: string,
+      buyerUserId: string | null,
+      source: string,
+      amountCents: number,
+    ) => {
+      const { error: ledgerErr } = await supabase.rpc("record_purchase_ledger", {
+        _purchase_id: purchaseId,
+      });
+      if (ledgerErr) {
+        await logFinancialEvent(supabase, {
+          event_type: "ledger_write_failed",
+          severity: "error",
+          actor: "webhook",
+          correlation_id: corr,
+          stripe_event_id: event.id,
+          purchase_id: purchaseId,
+          payload: { error: ledgerErr.message, source },
+          dead_letter_reason: "sale_ledger_write_failed",
+        });
+        throw new Error(`Purchase ledger write failed: ${ledgerErr.message}`);
+      }
+      await logFinancialEvent(supabase, {
+        event_type: "ledger_written",
+        severity: "info",
+        actor: "webhook",
+        correlation_id: corr,
+        stripe_event_id: event.id,
+        purchase_id: purchaseId,
+        user_id: buyerUserId,
+        payload: { source, amount_cents: amountCents },
+      });
     };
 
-    const findUserIdByCustomer = async (customerId: string): Promise<string | null> => {
-      const { data: linked } = await supabase.from("subscriptions")
-        .select("user_id")
-        .eq("stripe_customer_id", customerId)
+    const settleBookPurchase = async (
+      session: Stripe.Checkout.Session,
+      source: "checkout_completed" | "checkout_async_succeeded",
+    ) => {
+      const listingId = session.metadata?.listing_id;
+      const bookId = session.metadata?.book_id;
+      if (!listingId || !bookId) {
+        throw new Error("Book purchase checkout is missing listing/book metadata");
+      }
+
+      const buyerUserId = session.metadata?.buyer_user_id || null;
+      const email = session.customer_details?.email ?? session.customer_email ?? null;
+      if (!buyerUserId) {
+        throw new Error("Paid book purchase is missing authenticated buyer metadata");
+      }
+
+      const sessionCustomerId = typeof session.customer === "string"
+        ? session.customer
+        : session.customer?.id ?? null;
+      if (!sessionCustomerId) {
+        throw new Error("Paid book purchase is missing Stripe customer identity");
+      }
+      const linkedBuyerUserId = await findUserIdByCustomer(sessionCustomerId);
+      if (linkedBuyerUserId !== buyerUserId) {
+        throw new Error("Paid book purchase customer/user identity mismatch");
+      }
+
+      const { data: existing, error: existingError } = await supabase
+        .from("book_purchases")
+        .select("id, status, amount_cents, currency, listing_id, book_id, buyer_user_id")
+        .eq("stripe_session_id", session.id)
         .maybeSingle();
-      if (linked?.user_id) return linked.user_id;
+      if (existingError) {
+        throw new Error(`Purchase lookup failed: ${existingError.message}`);
+      }
 
-      const customer = await stripe.customers.retrieve(customerId);
-      if (!customer || customer.deleted || !("email" in customer) || !customer.email) return null;
-      return (await findUserByEmail(customer.email))?.id ?? null;
+      const expectedAmount = Number(session.metadata?.expected_amount_cents ?? NaN);
+      const expectedCurrency = String(session.metadata?.expected_currency ?? "").toLowerCase();
+      const sessionAmount = Number(session.amount_total ?? NaN);
+      const sessionCurrency = String(session.currency ?? "").toLowerCase();
+
+      if (
+        !Number.isInteger(expectedAmount) ||
+        expectedAmount < 0 ||
+        !Number.isInteger(sessionAmount) ||
+        sessionAmount !== expectedAmount
+      ) {
+        throw new Error(
+          `Checkout amount authority mismatch: expected=${expectedAmount} actual=${sessionAmount}`,
+        );
+      }
+      if (
+        !expectedCurrency ||
+        !sessionCurrency ||
+        sessionCurrency !== expectedCurrency
+      ) {
+        throw new Error(
+          `Checkout currency authority mismatch: expected=${expectedCurrency} actual=${sessionCurrency}`,
+        );
+      }
+
+      if (existing) {
+        if (
+          existing.listing_id !== listingId ||
+          existing.book_id !== bookId ||
+          existing.buyer_user_id !== buyerUserId
+        ) {
+          throw new Error("Checkout identity does not match the persisted pending purchase");
+        }
+        if (
+          Number(existing.amount_cents ?? NaN) !== sessionAmount ||
+          String(existing.currency ?? "").toLowerCase() !== sessionCurrency
+        ) {
+          throw new Error("Checkout amount/currency does not match the persisted pending purchase");
+        }
+      }
+
+      // A retry may arrive after the purchase row was persisted but before the
+      // webhook claim was finalized. Re-run the idempotent ledger writer so a
+      // transient ledger failure heals instead of being skipped forever.
+      if (existing && (existing.status === "paid" || existing.status === "refunded")) {
+        await writePurchaseLedger(
+          existing.id,
+          buyerUserId,
+          existing.status === "refunded" ? "refund_replay" : source + "_replay",
+          Number(existing.amount_cents ?? session.amount_total ?? 0),
+        );
+        logStep("Purchase replay reconciled", {
+          sessionId: session.id,
+          purchaseId: existing.id,
+          status: existing.status,
+        });
+        return;
+      }
+
+      const updatePayload = {
+        status: "paid" as const,
+        buyer_user_id: buyerUserId,
+        buyer_email: email,
+        stripe_payment_intent: session.payment_intent as string | null,
+        amount_cents: session.amount_total ?? 0,
+        currency: (session.currency ?? "usd").toLowerCase(),
+        purchased_at: new Date().toISOString(),
+        correlation_id: corr,
+      };
+
+      let purchaseId: string | null = existing?.id ?? null;
+      if (existing) {
+        const { error: purchaseUpdateError } = await supabase
+          .from("book_purchases")
+          .update(updatePayload)
+          .eq("id", existing.id);
+        if (purchaseUpdateError) {
+          throw new Error(`Paid purchase update failed: ${purchaseUpdateError.message}`);
+        }
+      } else {
+        const { data: upserted, error: purchaseUpsertError } = await supabase
+          .from("book_purchases")
+          .upsert({
+            ...updatePayload,
+            listing_id: listingId,
+            book_id: bookId,
+            stripe_session_id: session.id,
+          }, { onConflict: "stripe_session_id" })
+          .select("id")
+          .maybeSingle();
+        if (purchaseUpsertError) {
+          throw new Error(`Paid purchase upsert failed: ${purchaseUpsertError.message}`);
+        }
+        purchaseId = upserted?.id ?? null;
+      }
+
+      if (!purchaseId) {
+        throw new Error("Paid purchase persistence returned no purchase id");
+      }
+
+      await writePurchaseLedger(
+        purchaseId,
+        buyerUserId,
+        source,
+        updatePayload.amount_cents,
+      );
+
+      const { error: storefrontEventError } = await supabase
+        .from("storefront_events")
+        .insert([
+          {
+            listing_id: listingId,
+            event_type: "checkout_completed",
+            user_id: buyerUserId,
+            session_id: session.metadata?.attribution_session_id || null,
+            metadata: { session_id: session.id, source, correlation_id: corr },
+          },
+          {
+            listing_id: listingId,
+            event_type: "full_book_unlocked",
+            user_id: buyerUserId,
+            session_id: session.metadata?.attribution_session_id || null,
+            metadata: { session_id: session.id, source, correlation_id: corr },
+          },
+        ]);
+      if (storefrontEventError) {
+        // Entitlement authority is the paid purchase row; telemetry failure must
+        // not roll money state back. Record it for reconciliation instead.
+        await logFinancialEvent(supabase, {
+          event_type: "storefront_event_write_failed",
+          severity: "warn",
+          actor: "webhook",
+          correlation_id: corr,
+          stripe_event_id: event.id,
+          purchase_id: purchaseId,
+          user_id: buyerUserId,
+          payload: { error: storefrontEventError.message, source },
+        });
+      }
+
+      const attrSessionId = session.metadata?.attribution_session_id;
+      if (attrSessionId) {
+        const { error: attrErr } = await supabase
+          .from("attribution_sessions")
+          .update({
+            converted_purchase_id: purchaseId,
+            converted_at: new Date().toISOString(),
+            user_id: buyerUserId,
+            last_seen_at: new Date().toISOString(),
+          })
+          .eq("session_id", attrSessionId)
+          .is("converted_purchase_id", null);
+        if (attrErr) {
+          await logFinancialEvent(supabase, {
+            event_type: "attribution_stitch_failed",
+            severity: "warn",
+            actor: "webhook",
+            correlation_id: corr,
+            stripe_event_id: event.id,
+            purchase_id: purchaseId,
+            payload: { session_id: attrSessionId, error: attrErr.message },
+          });
+        }
+      }
+
+      await logFinancialEvent(supabase, {
+        event_type: "checkout_completed",
+        severity: "info",
+        actor: "webhook",
+        correlation_id: corr,
+        stripe_event_id: event.id,
+        purchase_id: purchaseId,
+        user_id: buyerUserId,
+        payload: {
+          session_id: session.id,
+          book_id: bookId,
+          amount_cents: updatePayload.amount_cents,
+          attribution_source: session.metadata?.attribution_source || null,
+          settlement_source: source,
+        },
+      });
+    };
+
+    const reconcileRefund = async (
+      refund: Stripe.Refund,
+      source: string,
+    ) => {
+      const status = String(refund.status ?? "unknown");
+
+      if (status !== "succeeded") {
+        const terminalFailure = status === "failed" || status === "canceled";
+        const { error: requestStateError } = await supabase
+          .from("refund_requests")
+          .update({
+            status: terminalFailure ? "failed" : "processing",
+            error_message: terminalFailure
+              ? `Stripe refund status: ${status}`
+              : null,
+            ...(terminalFailure ? { processed_at: new Date().toISOString() } : {}),
+          })
+          .eq("stripe_refund_id", refund.id);
+        if (requestStateError) {
+          throw new Error(`Refund request status sync failed: ${requestStateError.message}`);
+        }
+
+        logStep("Refund not yet ledgerable", {
+          refundId: refund.id,
+          status,
+          source,
+        });
+        return;
+      }
+
+      const paymentIntentId = typeof refund.payment_intent === "string"
+        ? refund.payment_intent
+        : refund.payment_intent?.id ?? null;
+
+      if (!paymentIntentId) {
+        logStep("Refund has no payment intent; not a book purchase candidate", {
+          refundId: refund.id,
+          source,
+        });
+        return;
+      }
+
+      const { data: purchase, error: purchaseError } = await supabase
+        .from("book_purchases")
+        .select("id,buyer_user_id,amount_cents,status")
+        .eq("stripe_payment_intent", paymentIntentId)
+        .maybeSingle();
+      if (purchaseError) {
+        throw new Error(`Refund purchase lookup failed: ${purchaseError.message}`);
+      }
+      if (!purchase) {
+        // Subscription or another non-book payment: this webhook owns only the
+        // ScrollLibrary book-purchase ledger for refund accounting.
+        logStep("Refund does not map to a book purchase", {
+          refundId: refund.id,
+          paymentIntentId,
+          source,
+        });
+        return;
+      }
+
+      const { data: ledgerData, error: ledgerError } = await supabase.rpc(
+        "record_purchase_refund_ledger",
+        {
+          _purchase_id: purchase.id,
+          _refund_event_id: refund.id,
+          _refund_amount_cents: refund.amount,
+        },
+      );
+
+      if (ledgerError) {
+        await logFinancialEvent(supabase, {
+          event_type: "ledger_write_failed",
+          severity: "error",
+          actor: "webhook",
+          correlation_id: corr,
+          stripe_event_id: event.id,
+          purchase_id: purchase.id,
+          user_id: purchase.buyer_user_id,
+          payload: {
+            error: ledgerError.message,
+            kind: "refund",
+            refund_id: refund.id,
+            amount_cents: refund.amount,
+            source,
+          },
+          dead_letter_reason: "refund_ledger_write_failed",
+        });
+        throw new Error(`Refund ledger write failed: ${ledgerError.message}`);
+      }
+
+      const ledger = (ledgerData ?? {}) as {
+        ok?: boolean;
+        idempotent?: boolean;
+        fully_refunded?: boolean;
+        refunded_total_cents?: number;
+        remaining_cents?: number;
+        reason?: string;
+      };
+      if (ledger.ok !== true) {
+        throw new Error(
+          `Refund ledger rejected event: ${ledger.reason ?? "unknown"}`,
+        );
+      }
+
+      const { error: requestStateError } = await supabase
+        .from("refund_requests")
+        .update({
+          status: "processed",
+          stripe_refund_id: refund.id,
+          processed_at: new Date().toISOString(),
+          error_message: null,
+        })
+        .eq("stripe_refund_id", refund.id);
+      if (requestStateError) {
+        throw new Error(`Refund request completion sync failed: ${requestStateError.message}`);
+      }
+
+      await logFinancialEvent(supabase, {
+        event_type: "refund_issued",
+        severity: "warn",
+        actor: "webhook",
+        correlation_id: corr,
+        stripe_event_id: event.id,
+        purchase_id: purchase.id,
+        user_id: purchase.buyer_user_id,
+        payload: {
+          refund_id: refund.id,
+          amount_cents: refund.amount,
+          source,
+          idempotent: ledger.idempotent === true,
+          fully_refunded: ledger.fully_refunded === true,
+          refunded_total_cents: ledger.refunded_total_cents ?? null,
+          remaining_cents: ledger.remaining_cents ?? null,
+        },
+      });
     };
 
     let processedOk = true;
@@ -255,98 +648,16 @@ serve(async (req) => {
           const session = event.data.object as Stripe.Checkout.Session;
 
           if (session.mode === "payment" && session.metadata?.kind === "book_purchase") {
-            const listingId = session.metadata.listing_id;
-            const bookId = session.metadata.book_id;
-            const metaBuyerUserId = session.metadata.buyer_user_id || null;
-            const email = session.customer_details?.email ?? session.customer_email ?? null;
-
-            let buyerUserId: string | null = metaBuyerUserId || null;
-            if (!buyerUserId && email) {
-              const u = await findUserByEmail(email);
-              buyerUserId = u?.id ?? null;
-            }
-
-            const { data: existing } = await supabase.from("book_purchases")
-              .select("id, status").eq("stripe_session_id", session.id).maybeSingle();
-
-            if (existing && (existing.status === "paid" || existing.status === "refunded")) {
-              logStep("Purchase replay ignored", { sessionId: session.id });
-              break;
-            }
-
-            const updatePayload = {
-              status: "paid" as const,
-              buyer_user_id: buyerUserId,
-              buyer_email: email,
-              stripe_payment_intent: session.payment_intent as string | null,
-              amount_cents: session.amount_total ?? 0,
-              currency: (session.currency ?? "usd").toLowerCase(),
-              purchased_at: new Date().toISOString(),
-              correlation_id: corr,
-            };
-
-            let purchaseId: string | null = existing?.id ?? null;
-            if (existing) {
-              await supabase.from("book_purchases").update(updatePayload).eq("id", existing.id);
+            // checkout.session.completed can precede settlement for delayed
+            // payment methods. Only grant the book after Stripe says "paid".
+            if (session.payment_status === "paid") {
+              await settleBookPurchase(session, "checkout_completed");
             } else {
-              const { data: upserted } = await supabase.from("book_purchases").upsert({
-                ...updatePayload, listing_id: listingId, book_id: bookId, stripe_session_id: session.id,
-              }, { onConflict: "stripe_session_id" }).select("id").maybeSingle();
-              purchaseId = upserted?.id ?? null;
+              logStep("Book checkout completed but payment is still pending", {
+                sessionId: session.id,
+                paymentStatus: session.payment_status,
+              });
             }
-
-            if (purchaseId) {
-              const { error: ledgerErr } = await supabase.rpc("record_purchase_ledger", { _purchase_id: purchaseId });
-              if (ledgerErr) {
-                await logFinancialEvent(supabase, {
-                  event_type: "ledger_write_failed", severity: "error", actor: "webhook",
-                  correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId,
-                  payload: { error: ledgerErr.message },
-                });
-              } else {
-                await logFinancialEvent(supabase, {
-                  event_type: "ledger_written", severity: "info", actor: "webhook",
-                  correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId,
-                  user_id: buyerUserId, payload: { source: "checkout_completed", amount_cents: updatePayload.amount_cents },
-                });
-              }
-            }
-
-            await supabase.from("storefront_events").insert([
-              { listing_id: listingId, event_type: "checkout_completed", user_id: buyerUserId,
-                session_id: session.metadata?.attribution_session_id || null,
-                metadata: { session_id: session.id, source: "webhook", correlation_id: corr } },
-              { listing_id: listingId, event_type: "full_book_unlocked", user_id: buyerUserId,
-                session_id: session.metadata?.attribution_session_id || null,
-                metadata: { session_id: session.id, source: "webhook", correlation_id: corr } },
-            ]);
-
-            // Phase 2.1d.1 — stitch attribution_sessions → purchase
-            const attrSessionId = session.metadata?.attribution_session_id;
-            if (attrSessionId && purchaseId) {
-              const { error: attrErr } = await supabase.from("attribution_sessions")
-                .update({
-                  converted_purchase_id: purchaseId,
-                  converted_at: new Date().toISOString(),
-                  user_id: buyerUserId ?? undefined,
-                  last_seen_at: new Date().toISOString(),
-                })
-                .eq("session_id", attrSessionId)
-                .is("converted_purchase_id", null); // never overwrite a prior conversion
-              if (attrErr) {
-                await logFinancialEvent(supabase, {
-                  event_type: "attribution_stitch_failed", severity: "warn", actor: "webhook",
-                  correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId,
-                  payload: { session_id: attrSessionId, error: attrErr.message },
-                });
-              }
-            }
-
-            await logFinancialEvent(supabase, {
-              event_type: "checkout_completed", severity: "info", actor: "webhook",
-              correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId,
-              user_id: buyerUserId, payload: { session_id: session.id, book_id: bookId, amount_cents: updatePayload.amount_cents, attribution_source: session.metadata?.attribution_source || null },
-            });
             break;
           }
 
@@ -355,8 +666,25 @@ serve(async (req) => {
             const productId = subscription.items.data[0]?.price?.product as string;
             const planTier = getPlanTierFromProductId(productId);
             const metadataUserId = session.metadata?.userId || null;
-            const customerEmail = session.customer_details?.email ?? session.customer_email ?? null;
-            const userId = metadataUserId || (customerEmail ? (await findUserByEmail(customerEmail))?.id ?? null : null);
+            const creatorTier = getCreatorTierFromProductId(productId);
+            const recognizedProduct = planTier !== null || creatorTier !== "free";
+            const sessionCustomerId = typeof session.customer === "string"
+              ? session.customer
+              : session.customer?.id ?? null;
+
+            if (recognizedProduct && (!metadataUserId || !sessionCustomerId)) {
+              throw new Error(`Recognized subscription product ${productId} is missing canonical user/customer identity`);
+            }
+
+            let userId: string | null = null;
+            if (metadataUserId && sessionCustomerId) {
+              const linkedUserId = await findUserIdByCustomer(sessionCustomerId);
+              if (linkedUserId !== metadataUserId) {
+                throw new Error("Subscription checkout customer/user identity mismatch");
+              }
+              userId = metadataUserId;
+            }
+
             if (userId) {
               if (planTier) {
                 await updateProfilePlan(userId, planTier);
@@ -366,9 +694,17 @@ serve(async (req) => {
               await logFinancialEvent(supabase, {
                 event_type: "subscription_started", severity: "info", actor: "webhook",
                 correlation_id: corr, stripe_event_id: event.id, user_id: userId,
-                payload: { plan_tier: planTier, creator_tier: getCreatorTierFromProductId(productId), product_id: productId },
+                payload: { plan_tier: planTier, creator_tier: creatorTier, product_id: productId },
               });
             }
+          }
+          break;
+        }
+
+        case "checkout.session.async_payment_succeeded": {
+          const session = event.data.object as Stripe.Checkout.Session;
+          if (session.mode === "payment" && session.metadata?.kind === "book_purchase") {
+            await settleBookPurchase(session, "checkout_async_succeeded");
           }
           break;
         }
@@ -377,8 +713,11 @@ serve(async (req) => {
         case "checkout.session.async_payment_failed": {
           const session = event.data.object as Stripe.Checkout.Session;
           if (session.metadata?.kind === "book_purchase") {
-            await supabase.from("book_purchases")
+            const { error: failedPurchaseError } = await supabase.from("book_purchases")
               .update({ status: "failed" }).eq("stripe_session_id", session.id);
+            if (failedPurchaseError) {
+              throw new Error(`Failed checkout status write failed: ${failedPurchaseError.message}`);
+            }
             await supabase.from("storefront_events").insert({
               listing_id: session.metadata.listing_id, event_type: "checkout_failed",
               metadata: { session_id: session.id, reason: event.type, correlation_id: corr },
@@ -392,28 +731,32 @@ serve(async (req) => {
           break;
         }
 
+        case "refund.created":
+        case "refund.updated":
+        case "refund.failed": {
+          const refund = event.data.object as Stripe.Refund;
+          await reconcileRefund(refund, event.type);
+          break;
+        }
+
         case "charge.refunded": {
           const charge = event.data.object as Stripe.Charge;
-          if (charge.payment_intent) {
-            const { data: refunded } = await supabase.from("book_purchases")
-              .update({ status: "refunded" })
-              .eq("stripe_payment_intent", charge.payment_intent as string)
-              .select("id, buyer_user_id, amount_cents");
-            for (const p of refunded ?? []) {
-              const { error: ledgerErr } = await supabase.rpc("record_purchase_ledger", { _purchase_id: p.id });
-              if (ledgerErr) {
-                await logFinancialEvent(supabase, {
-                  event_type: "ledger_write_failed", severity: "error", actor: "webhook",
-                  correlation_id: corr, stripe_event_id: event.id, purchase_id: p.id, payload: { error: ledgerErr.message, kind: "refund" },
-                });
-              } else {
-                await logFinancialEvent(supabase, {
-                  event_type: "refund_issued", severity: "warn", actor: "webhook",
-                  correlation_id: corr, stripe_event_id: event.id, purchase_id: p.id, user_id: p.buyer_user_id,
-                  payload: { amount_cents: p.amount_cents },
-                });
-              }
-            }
+
+          // charge.refunded fires for partial as well as full refunds. Treat it
+          // as a reconciliation signal and process each concrete Stripe refund
+          // by its own refund ID. This keeps multiple partial refunds append-only
+          // and idempotent.
+          let refunds = charge.refunds?.data ?? [];
+          if (charge.refunds?.has_more || refunds.length === 0) {
+            const page = await stripe.refunds.list({
+              charge: charge.id,
+              limit: 100,
+            });
+            refunds = page.data;
+          }
+
+          for (const refund of refunds) {
+            await reconcileRefund(refund, "charge.refunded");
           }
           break;
         }
@@ -484,7 +827,12 @@ serve(async (req) => {
             const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
             const productId = subscription.items.data[0]?.price?.product as string;
             const planTier = getPlanTierFromProductId(productId);
+            const creatorTier = getCreatorTierFromProductId(productId);
             const userId = await findUserIdByCustomer(invoice.customer as string);
+            const recognizedProduct = planTier !== null || creatorTier !== "free";
+            if (recognizedProduct && !userId) {
+              throw new Error(`Paid subscription product ${productId} could not be mapped to a user`);
+            }
             if (userId) {
               if (planTier) {
                 await updateProfilePlan(userId, planTier);
@@ -501,7 +849,12 @@ serve(async (req) => {
           const productId = subscription.items.data[0]?.price?.product as string;
           const planTier = getPlanTierFromProductId(productId);
           const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+          const creatorTier = getCreatorTierFromProductId(productId);
           const userId = await findUserIdByCustomer(customerId);
+          const recognizedProduct = planTier !== null || creatorTier !== "free";
+          if (recognizedProduct && !userId) {
+            throw new Error(`Updated subscription product ${productId} could not be mapped to a user`);
+          }
           if (userId) {
             if (planTier) {
               const effectivePlan: ValidPlan = subscription.status === "active" ? planTier : "free";
@@ -518,7 +871,12 @@ serve(async (req) => {
           const productId = subscription.items.data[0]?.price?.product as string;
           const planTier = getPlanTierFromProductId(productId);
           const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+          const creatorTier = getCreatorTierFromProductId(productId);
           const userId = await findUserIdByCustomer(customerId);
+          const recognizedProduct = planTier !== null || creatorTier !== "free";
+          if (recognizedProduct && !userId) {
+            throw new Error(`Canceled subscription product ${productId} could not be mapped to a user`);
+          }
           if (userId) {
             if (planTier) {
               await updateProfilePlan(userId, "free");
@@ -534,13 +892,17 @@ serve(async (req) => {
           let userId: string | null = null;
           let email: string | null = null;
           try {
-            const customer = await stripe.customers.retrieve(invoice.customer as string);
-            if (customer && !customer.deleted && "email" in customer && customer.email) {
-              email = customer.email;
-              const user = await findUserByEmail(customer.email);
-              userId = user?.id ?? null;
+            const customerId = typeof invoice.customer === "string"
+              ? invoice.customer
+              : invoice.customer?.id ?? null;
+            if (customerId) {
+              userId = await findUserIdByCustomer(customerId);
+              const customer = await stripe.customers.retrieve(customerId);
+              if (customer && !customer.deleted && "email" in customer) {
+                email = customer.email ?? null;
+              }
             }
-          } catch (_) { /* best-effort */ }
+          } catch (_) { /* best-effort identity/log enrichment */ }
 
           // Phase 4.1 — move creator entitlement into 7-day grace period on payment failure.
           if (userId && invoice.subscription) {
@@ -597,11 +959,14 @@ serve(async (req) => {
           // Matched on the stored account id, never on metadata: metadata is
           // writable through the Stripe dashboard, and this decides where
           // money goes.
-          const { data: profile } = await supabase
+          const { data: profile, error: profileLookupError } = await supabase
             .from("creator_payout_profiles")
             .select("user_id, payout_method, stripe_connect_status")
             .eq("stripe_connect_account_id", account.id)
             .maybeSingle();
+          if (profileLookupError) {
+            throw new Error(`Connect payout profile lookup failed: ${profileLookupError.message}`);
+          }
 
           if (!profile) {
             // An account we did not create, or one whose profile row was
@@ -630,7 +995,7 @@ serve(async (req) => {
               correlation_id: corr, stripe_event_id: event.id, user_id: profile.user_id,
               payload: { account_id: account.id, status, error: updateError.message },
             });
-            break;
+            throw new Error(`Connect payout status write failed: ${updateError.message}`);
           }
 
           if (previous !== status) {
@@ -661,13 +1026,16 @@ serve(async (req) => {
     // are dead-lettered for the reliability dashboard's DLQ view.
     const isFatal = !processedOk;
     const deadLetter = isFatal && attemptsAfter >= 3;
-    await supabase.from("stripe_webhook_events").update({
+    const { error: finalizeWebhookError } = await supabase.from("stripe_webhook_events").update({
       status: deadLetter ? "dead_lettered" : (processedOk ? "processed" : "failed"),
       last_error: processError,
       processed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       ...(deadLetter ? { dead_letter_reason: processError ?? "max_attempts_exceeded", dead_lettered_at: new Date().toISOString() } : {}),
     }).eq("stripe_event_id", event.id);
+    if (finalizeWebhookError) {
+      throw new Error(`Webhook finalization write failed: ${finalizeWebhookError.message}`);
+    }
 
     if (!processedOk) {
       await logFinancialEvent(supabase, {

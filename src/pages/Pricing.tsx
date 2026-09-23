@@ -112,16 +112,30 @@ export default function Pricing() {
   const { toast } = useToast();
   const { t } = useLanguage();
 
-  // Handle post-checkout redirect
+  // Handle post-checkout redirect. The query string is not entitlement
+  // authority: verify with the server before claiming activation.
   useEffect(() => {
     if (searchParams.get("success") === "true") {
-      toast({
-        title: "Subscription activated!",
-        description: "Welcome! Your features are now unlocked.",
-      });
-      checkSubscription();
-      refreshEntitlements();
-      setSearchParams({}, { replace: true });
+      void (async () => {
+        const { data, error } = await supabase.functions.invoke("check-subscription");
+
+        if (!error && data?.subscribed === true) {
+          toast({
+            title: "Subscription activated!",
+            description: "Welcome! Your features are now unlocked.",
+          });
+        } else {
+          toast({
+            title: "Payment received — confirming subscription",
+            description: "Stripe returned successfully, but your entitlement is still being confirmed. Refresh in a moment if it does not update automatically.",
+            variant: "default",
+          });
+        }
+
+        await checkSubscription(true);
+        await refreshEntitlements();
+        setSearchParams({}, { replace: true });
+      })();
     } else if (searchParams.get("canceled") === "true") {
       toast({
         title: "Checkout canceled",
@@ -130,7 +144,7 @@ export default function Pricing() {
       });
       setSearchParams({}, { replace: true });
     }
-  }, [searchParams]);
+  }, [searchParams, checkSubscription, refreshEntitlements, setSearchParams, toast]);
 
   const handleSelectPlan = async (planTierKey: SubscriptionTier) => {
     if (!user) {

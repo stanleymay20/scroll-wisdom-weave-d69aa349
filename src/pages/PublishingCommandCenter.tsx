@@ -20,6 +20,7 @@ import TypographyReport from "@/components/publish/TypographyReport";
 import PublishabilityQAPanel from "@/components/publish/PublishabilityQAPanel";
 import { DePublicationCompliancePanel } from "@/components/publish/DePublicationCompliancePanel";
 import { DeDistributionStartPanel } from "@/components/publish/DeDistributionStartPanel";
+import { DistributionMetadataPanel } from "@/components/publish/DistributionMetadataPanel";
 
 interface Audit {
   id: string;
@@ -138,6 +139,7 @@ export default function PublishingCommandCenter() {
         <>
           <PublishabilityQAPanel bookId={bookId} />
           <DePublicationCompliancePanel bookId={bookId} />
+          <DistributionMetadataPanel bookId={bookId} />
           <DeDistributionStartPanel bookId={bookId} />
           <TypographyReport bookId={bookId} />
           <div className="grid gap-6 lg:grid-cols-2">

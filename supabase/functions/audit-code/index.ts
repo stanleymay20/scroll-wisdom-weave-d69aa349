@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { requireUser, serviceClient, enforceDurableRateLimit } from "../_shared/http.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -235,6 +236,16 @@ serve(async (req) => {
   const auditStartTime = Date.now();
 
   try {
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
+    const limited = await enforceDurableRateLimit(serviceClient(), {
+      name: "audit-code",
+      key: auth.userId,
+      limit: 20,
+      windowSec: 600,
+    });
+    if (limited) return limited;
+
     const requestBody = await req.json();
 
     // ============================================================

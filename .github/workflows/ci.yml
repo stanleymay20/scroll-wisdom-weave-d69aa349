@@ -81,8 +81,18 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-account-deletion-certificate-retention.sql
       - name: Assert scheduled releases actually materialize
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-release-materialization.sql
+      - name: Assert release scheduling entitlement cannot be bypassed through RLS
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-release-schedule-entitlement-rls.sql
       - name: Assert the payout write surface stays server-owned
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-payout-surface.sql
+      - name: Assert purchase, ledger, entitlement and refund lifecycle
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-commerce-ledger-lifecycle.sql
+      - name: Assert Stripe webhook claim, dead-letter and replay lifecycle
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-stripe-webhook-claim-lifecycle.sql
+      - name: Assert canonical Stripe billing-customer identity
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-billing-customer-identity.sql
+      - name: Assert unfinished ownership transfer mutations remain disabled for GA
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-ownership-transfer-ga-disabled.sql
       - name: Assert browser roles hold no privilege RLS cannot restrain
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-browser-role-truncate.sql
       - name: Rebuild hardened ISBN schema from verified legacy staging shape
@@ -91,6 +101,28 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-governance-db-security.sql
       - name: Assert independent ISBN provenance review separation
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
+      - name: Apply and verify Lovable ISBN final-invariants convergence delta
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-lovable-isbn-final-invariants.sql
+      - name: Re-assert ISBN governance after Lovable convergence delta
+        run: |
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-governance-db-security.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
+      - name: Apply and behaviorally verify Lovable publication-attestation authority delta
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-lovable-attestation-authority.sql
+      - name: Apply and verify Lovable ISBN governance RPC delta
+        run: |
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-lovable-isbn-governance-rpcs.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-governance-db-security.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
+      - name: Rebuild and verify Lovable product identity, distribution and compliance delta
+        run: |
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-lovable-publication-products-compliance.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-de-publication-compliance.sql
+      - name: Apply and behaviorally verify Lovable atomic publication mint delta
+        run: |
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-lovable-atomic-publication-mint.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-governance-db-security.sql
+          psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
       - name: Assert atomic book-generation quota reservation contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-book-generation-quota-db-security.sql
       - name: Assert durable rate limit and stale-job sweeper contract
@@ -130,6 +162,7 @@ jobs:
           deno check supabase/functions/_shared/figure-export.ts
           deno check supabase/functions/_shared/cron-auth.ts
           deno check supabase/functions/_shared/stripe-connect.ts
+          deno check supabase/functions/_shared/billing-customer.ts
       - name: Type-check critical financial Edge Functions
         run: |
           deno check supabase/functions/create-checkout/index.ts
@@ -137,6 +170,8 @@ jobs:
           deno check supabase/functions/check-subscription/index.ts
           deno check supabase/functions/stripe-webhook/index.ts
           deno check supabase/functions/stripe-connect-onboarding/index.ts
+          deno check supabase/functions/create-book-checkout/index.ts
+          deno check supabase/functions/admin-force-stripe-resync/index.ts
       - name: Type-check authority and metered usage Edge Functions
         run: |
           deno check supabase/functions/claim-admin/index.ts
@@ -188,6 +223,14 @@ jobs:
       - name: Test financial alerting contract
         run: |
           deno test supabase/functions/_shared/observability_test.ts
+      - name: Pin chapter regeneration edit-intent and persistence contract
+        run: node scripts/check-chapter-regeneration-contract.mjs
+      - name: Pin assessment answer-key, scoring and evidence authority
+        run: node scripts/check-assessment-authority-contract.mjs
+      - name: Pin cover provenance and certified-artwork immutability
+        run: node scripts/check-cover-provenance-contract.mjs
+      - name: Pin serialized release UI, RLS, cron and materialization contract
+        run: node scripts/check-release-schedule-contract.mjs
       - name: Test publication trust engines
         run: |
           deno test supabase/functions/_shared/isbn_test.ts
@@ -268,5 +311,13 @@ jobs:
         run: bun run audit:secrets
       - name: Reject per-instance rate limiting on metered endpoints
         run: bun run audit:rate-limits
+      - name: Require compensating auth on verify_jwt=false Edge Functions
+        run: bun run audit:edge-auth
+      - name: Reject orphaned Edge Functions
+        run: bun run audit:function-reachability
+      - name: Reject email-based Stripe customer ownership
+        run: bun scripts/check-billing-customer-identity.mjs
+      - name: Reject browser publication authority
+        run: bun scripts/check-browser-publication-authority.mjs
       - name: Reject high or critical production dependency vulnerabilities
         run: bun run audit:dependencies

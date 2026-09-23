@@ -53,7 +53,20 @@ serve(async (req) => {
     if (velIp) return velIp;
 
     const session_id = (parsed as any).session_id ?? null;
-    const user_id = (parsed as any).user_id ?? null;
+
+    // Never trust a caller-supplied user_id on this anonymous telemetry
+    // endpoint. Bind identity only when a valid bearer token is present;
+    // otherwise record the event as anonymous.
+    let user_id: string | null = null;
+    const authHeader = req.headers.get("Authorization") ?? req.headers.get("authorization");
+    if (authHeader?.startsWith("Bearer ")) {
+      const token = authHeader.slice("Bearer ".length).trim();
+      if (token) {
+        const { data: authData, error: authError } = await sc.auth.getUser(token);
+        if (!authError && authData?.user?.id) user_id = authData.user.id;
+      }
+    }
+
     const items: any[] = Array.isArray((parsed as any).items)
       ? (parsed as any).items
       : [parsed];

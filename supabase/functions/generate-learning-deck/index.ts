@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.87.1";
+import { requireUser, serviceClient, enforceDurableRateLimit, forbidden, json } from "../_shared/http.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -51,11 +52,39 @@ serve(async (req) => {
   }
 
   try {
+    const auth = await requireUser(req);
+    if (auth instanceof Response) return auth;
+    const admin = serviceClient();
+    const limited = await enforceDurableRateLimit(admin, {
+      name: "generate-learning-deck",
+      key: auth.userId,
+      limit: 10,
+      windowSec: 600,
+    });
+    if (limited) return limited;
+
     const { bookId, params, bookTitle } = await req.json() as {
       bookId: string;
       params: DeckGenerationParams;
       bookTitle: string;
     };
+
+    const { data: sourceBook, error: sourceBookError } = await admin
+      .from("books")
+      .select("id,user_id,is_published")
+      .eq("id", bookId)
+      .maybeSingle();
+    if (sourceBookError || !sourceBook) return json({ error: "Book not found" }, 404);
+
+    if (sourceBook.user_id !== auth.userId && !sourceBook.is_published) {
+      const { data: libraryRow } = await admin
+        .from("user_library")
+        .select("id")
+        .eq("user_id", auth.userId)
+        .eq("book_id", bookId)
+        .maybeSingle();
+      if (!libraryRow) return forbidden("You do not have access to this book");
+    }
 
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {

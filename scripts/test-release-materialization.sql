@@ -25,6 +25,22 @@ DECLARE
   _result jsonb;
   _status text;
 BEGIN
+  -- When pg_cron is available in the target database, the migration must
+  -- actually register the canonical five-minute materializer. The Edge worker
+  -- is only a secret-protected operational fallback now.
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    IF NOT EXISTS (
+      SELECT 1
+      FROM cron.job
+      WHERE jobname = 'materialize_due_releases_every_5_min'
+        AND schedule = '*/5 * * * *'
+        AND command = 'SELECT public.materialize_due_releases();'
+        AND active IS TRUE
+    ) THEN
+      RAISE EXCEPTION 'canonical release materialization cron job is missing or misconfigured';
+    END IF;
+  END IF;
+
   -- Two authors: one entitled to schedule releases, one whose tier lapsed.
   INSERT INTO auth.users (id) VALUES (_entitled), (_revoked);
 

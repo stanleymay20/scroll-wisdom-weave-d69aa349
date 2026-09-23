@@ -54,8 +54,9 @@ export default function BookPublishSettings() {
   const [suggesting, setSuggesting] = useState(false);
   const [bundling, setBundling] = useState<"" | BundleKind>("");
   const [publishingGumroad, setPublishingGumroad] = useState(false);
-  const { entitlements } = useCreatorEntitlements();
+  const { entitlements, loading: entitlementsLoading } = useCreatorEntitlements();
   const canPublishExternal = entitlements.can_publish_external;
+  const canScheduleReleases = entitlements.can_schedule_releases;
   const [publishingShopify, setPublishingShopify] = useState(false);
   // Tracked per-platform so the user sees "Auditing → Building bundle → Creating product".
   const [oneClickStage, setOneClickStage] = useState<{ platform: "gumroad" | "shopify"; label: string } | null>(null);
@@ -65,6 +66,15 @@ export default function BookPublishSettings() {
   // Author-declared AI-assistance level. Required for KDP submission.
   const [aiLevel, setAiLevel] = useState<"" | "none" | "assisted" | "generated">("");
   const [savingAiLevel, setSavingAiLevel] = useState(false);
+  const [publishingCanonical, setPublishingCanonical] = useState(false);
+  const [exportingManifest, setExportingManifest] = useState(false);
+  const [canonicalPublication, setCanonicalPublication] = useState<{
+    publication_id: string;
+    version: string;
+    content_hash: string;
+    published_at: string;
+    idempotent?: boolean;
+  } | null>(null);
 
   const [form, setForm] = useState({
     listing_id: "",
@@ -93,7 +103,7 @@ export default function BookPublishSettings() {
       // 20260604201230_elite_publishing_metadata.sql. Cast to any until the
       // generated Supabase types catch up.
       const { data: b } = await (supabase.from("books") as any)
-        .select("id, title, user_id, cover_image_url, ai_assistance_level")
+        .select("id, title, user_id, cover_image_url, ai_assistance_level, work_id, current_publication_id, language")
         .eq("id", bookId).maybeSingle();
       if (!b || b.user_id !== user.id) { toast.error("Not your book"); navigate("/dashboard"); return; }
       setBook(b);
@@ -119,6 +129,133 @@ export default function BookPublishSettings() {
       setLoading(false);
     })();
   }, [bookId, navigate]);
+
+  async function publishCanonicalWork() {
+    if (!book?.work_id) {
+      toast.error("This book does not have a canonical work identity yet.");
+      return;
+    }
+
+    setPublishingCanonical(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("publish-work", {
+        body: {
+          work_id: book.work_id,
+          edition_kind: "original",
+          language: book.language || "en",
+        },
+      });
+
+      if (error) {
+        let message = error.message || "Canonical publication failed";
+        try {
+          const context = (error as any)?.context;
+          if (context && typeof context.json === "function") {
+            const payload = await context.json();
+            if (payload?.reason === "publication_trust_gates" && Array.isArray(payload.blockers)) {
+              message = `Publication blocked: ${payload.blockers.join(", ")}`;
+            } else if (payload?.reason) {
+              message = `Publication blocked: ${String(payload.reason).replace(/_/g, " ")}`;
+            } else if (payload?.error) {
+              message = payload.error;
+            }
+          }
+        } catch {
+          // Keep the transport error if the Edge response body is unavailable.
+        }
+        throw new Error(message);
+      }
+
+      const result = data as {
+        publication_id?: string;
+        version?: string;
+        content_hash?: string;
+        published_at?: string;
+        idempotent?: boolean;
+      };
+      if (
+        !result?.publication_id ||
+        !result.version ||
+        !result.content_hash ||
+        !result.published_at
+      ) {
+        throw new Error("Canonical publication returned an incomplete authority record.");
+      }
+
+      setCanonicalPublication({
+        publication_id: result.publication_id,
+        version: result.version,
+        content_hash: result.content_hash,
+        published_at: result.published_at,
+        idempotent: result.idempotent,
+      });
+      setBook((current: any) => current
+        ? { ...current, current_publication_id: result.publication_id }
+        : current);
+
+      toast.success(
+        result.idempotent
+          ? `Canonical publication already current (v${result.version})`
+          : `Canonical publication minted (v${result.version})`,
+      );
+    } catch (e: any) {
+      toast.error(e?.message ?? "Canonical publication failed");
+    } finally {
+      setPublishingCanonical(false);
+    }
+  }
+
+  async function exportCanonicalManifest() {
+    const publicationId = canonicalPublication?.publication_id || book?.current_publication_id;
+    if (!publicationId) {
+      toast.error("Create the canonical Publication before exporting its manifest.");
+      return;
+    }
+
+    setExportingManifest(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("export-publication", {
+        body: {
+          publication_id: publicationId,
+          format: "manifest",
+        },
+      });
+      if (error) throw error;
+
+      const result = data as {
+        export_id?: string;
+        exported_at?: string;
+        canonical?: Record<string, unknown>;
+        verify_url?: string;
+      };
+      if (!result?.export_id || !result.canonical) {
+        throw new Error("Publication manifest authority returned an incomplete result.");
+      }
+
+      const blob = new Blob([
+        JSON.stringify({
+          export_id: result.export_id,
+          exported_at: result.exported_at,
+          verify_url: result.verify_url,
+          publication_id: publicationId,
+          canonical: result.canonical,
+        }, null, 2),
+      ], { type: "application/json" });
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = `scrolllibrary-publication-${publicationId.slice(0, 8)}-manifest.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+      toast.success("Verifiable publication manifest exported");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Publication manifest export failed");
+    } finally {
+      setExportingManifest(false);
+    }
+  }
 
   async function recordPublication() {
     if (!bookId || !newPub.url.trim()) { toast.error("URL required"); return; }
@@ -327,6 +464,64 @@ export default function BookPublishSettings() {
 
         {bookId && <div className="mt-6"><EliteReadinessPanel bookId={bookId} /></div>}
         {bookId && <div className="mt-6"><PublishingIdentityPanel bookId={bookId} /></div>}
+
+        <Card className="mt-6 p-4 sm:p-6 border-primary/25">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+            <div className="min-w-0">
+              <h2 className="text-lg font-semibold">Canonical publication</h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Freeze the current verified work into an immutable Publication with a content hash,
+                edition identity, publisher/ISBN provenance, and publication certificate. This does
+                not make the storefront listing public.
+              </p>
+              {(canonicalPublication || book?.current_publication_id) && (
+                <div className="mt-3 text-xs text-muted-foreground space-y-1">
+                  <div>
+                    Publication: <span className="font-mono text-foreground">
+                      {(canonicalPublication?.publication_id || book?.current_publication_id || "").slice(0, 12)}…
+                    </span>
+                  </div>
+                  {canonicalPublication && (
+                    <>
+                      <div>Version: <span className="font-medium text-foreground">{canonicalPublication.version}</span></div>
+                      <div>
+                        Content hash: <span className="font-mono text-foreground">
+                          {canonicalPublication.content_hash.slice(0, 16)}…
+                        </span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+            </div>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={publishCanonicalWork}
+                disabled={publishingCanonical || !book?.work_id}
+              >
+                {publishingCanonical
+                  ? "Publishing…"
+                  : book?.current_publication_id
+                    ? "Mint current edition"
+                    : "Create canonical publication"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={exportCanonicalManifest}
+                disabled={exportingManifest || !(canonicalPublication?.publication_id || book?.current_publication_id)}
+              >
+                {exportingManifest ? "Exporting…" : "Export verified manifest"}
+              </Button>
+            </div>
+          </div>
+          {!book?.work_id && (
+            <p className="mt-3 text-xs text-destructive">
+              Canonical work identity is missing. Publication is disabled until the book is linked to a Work.
+            </p>
+          )}
+        </Card>
 
         {/* Three-step primary path: Price → Cover → Publish on ScrollLibrary */}
         <Card className="mt-6 p-4 sm:p-6 bg-gradient-to-br from-primary/5 via-card to-card border-primary/20">
@@ -724,7 +919,28 @@ export default function BookPublishSettings() {
         {/* Serialized publishing */}
         {bookId && book?.user_id && (
           <div className="mt-6">
-            <ReleaseScheduleSection bookId={bookId} ownerUserId={book.user_id} />
+            {entitlementsLoading ? (
+              <Card className="p-5 text-sm text-muted-foreground">
+                Checking serialized-release access…
+              </Card>
+            ) : canScheduleReleases ? (
+              <ReleaseScheduleSection bookId={bookId} ownerUserId={book.user_id} />
+            ) : (
+              <Card className="p-5">
+                <div className="flex items-start gap-3">
+                  <Lock className="h-5 w-5 text-muted-foreground mt-0.5" aria-hidden="true" />
+                  <div className="space-y-2">
+                    <div className="font-medium">Serialized release schedules are locked</div>
+                    <p className="text-sm text-muted-foreground">
+                      Upgrade to a creator plan with release scheduling before creating or changing a drip-release queue.
+                    </p>
+                    <Button asChild variant="outline" size="sm">
+                      <Link to="/pricing">View creator plans</Link>
+                    </Button>
+                  </div>
+                </div>
+              </Card>
+            )}
           </div>
         )}
 

@@ -17,12 +17,15 @@ serve(async (req) => {
 
     const { data: ledger } = await sc
       .from("creator_earnings_ledger")
-      .select("entry_type,gross_cents,platform_fee_cents,creator_net_cents,currency,creator_user_id,book_id,book_title_snapshot,creator_display_name_snapshot,occurred_at")
+      .select("purchase_id,entry_type,gross_cents,platform_fee_cents,creator_net_cents,currency,creator_user_id,book_id,book_title_snapshot,creator_display_name_snapshot,occurred_at")
       .order("occurred_at", { ascending: false })
       .limit(5000);
 
     const sales = (ledger ?? []).filter((r) => r.entry_type === "sale");
     const refunds = (ledger ?? []).filter((r) => r.entry_type === "refund" || r.entry_type === "chargeback");
+    const refundedPurchaseIds = new Set(
+      refunds.map((r) => r.purchase_id).filter((id): id is string => Boolean(id)),
+    );
 
     const totals = {
       currency: sales[0]?.currency ?? "usd",
@@ -33,8 +36,9 @@ serve(async (req) => {
       gross_cents: sales.reduce((a, r) => a + (r.gross_cents ?? 0), 0),
       refund_cents: -refunds.reduce((a, r) => a + (r.gross_cents ?? 0), 0),
       sales_count: sales.length,
-      refund_count: refunds.length,
-      refund_rate: sales.length ? refunds.length / sales.length : 0,
+      refund_count: refundedPurchaseIds.size,
+      refund_event_count: refunds.length,
+      refund_rate: sales.length ? refundedPurchaseIds.size / sales.length : 0,
     };
 
     // Failed payments
