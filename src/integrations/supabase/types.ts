@@ -170,8 +170,14 @@ export type Database = {
           chapter_id: string | null
           created_at: string
           details: Json | null
+          focus_loss_count: number
           id: string
           integrity_score: number | null
+          paste_count: number
+          quiz_attempt_id: string | null
+          session_duration_ms: number | null
+          severity: string | null
+          suspicious_timing: boolean
           user_id: string
           violation_type: string | null
         }
@@ -180,8 +186,14 @@ export type Database = {
           chapter_id?: string | null
           created_at?: string
           details?: Json | null
+          focus_loss_count?: number
           id?: string
           integrity_score?: number | null
+          paste_count?: number
+          quiz_attempt_id?: string | null
+          session_duration_ms?: number | null
+          severity?: string | null
+          suspicious_timing?: boolean
           user_id: string
           violation_type?: string | null
         }
@@ -190,8 +202,14 @@ export type Database = {
           chapter_id?: string | null
           created_at?: string
           details?: Json | null
+          focus_loss_count?: number
           id?: string
           integrity_score?: number | null
+          paste_count?: number
+          quiz_attempt_id?: string | null
+          session_duration_ms?: number | null
+          severity?: string | null
+          suspicious_timing?: boolean
           user_id?: string
           violation_type?: string | null
         }
@@ -208,6 +226,13 @@ export type Database = {
             columns: ["chapter_id"]
             isOneToOne: false
             referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assessment_integrity_logs_quiz_attempt_id_fkey"
+            columns: ["quiz_attempt_id"]
+            isOneToOne: false
+            referencedRelation: "quiz_attempts"
             referencedColumns: ["id"]
           },
         ]
@@ -4212,35 +4237,72 @@ export type Database = {
       quiz_attempts: {
         Row: {
           answers: Json | null
+          assessment_contract_passed: boolean
+          assessment_contract_version: string | null
+          assessment_manifest_hash: string | null
+          assessment_session_id: string | null
+          attempt_number: number
           book_id: string
           chapter_id: string | null
+          coding_question_count: number
+          correct_answers: number
           created_at: string
           id: string
           score: number | null
+          submitted_at: string
+          tier_breakdown: Json
+          time_spent_seconds: number | null
           total_questions: number | null
           user_id: string
         }
         Insert: {
           answers?: Json | null
+          assessment_contract_passed?: boolean
+          assessment_contract_version?: string | null
+          assessment_manifest_hash?: string | null
+          assessment_session_id?: string | null
+          attempt_number?: number
           book_id: string
           chapter_id?: string | null
+          coding_question_count?: number
+          correct_answers?: number
           created_at?: string
           id?: string
           score?: number | null
+          submitted_at?: string
+          tier_breakdown?: Json
+          time_spent_seconds?: number | null
           total_questions?: number | null
           user_id: string
         }
         Update: {
           answers?: Json | null
+          assessment_contract_passed?: boolean
+          assessment_contract_version?: string | null
+          assessment_manifest_hash?: string | null
+          assessment_session_id?: string | null
+          attempt_number?: number
           book_id?: string
           chapter_id?: string | null
+          coding_question_count?: number
+          correct_answers?: number
           created_at?: string
           id?: string
           score?: number | null
+          submitted_at?: string
+          tier_breakdown?: Json
+          time_spent_seconds?: number | null
           total_questions?: number | null
           user_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "quiz_attempts_assessment_session_id_fkey"
+            columns: ["assessment_session_id"]
+            isOneToOne: false
+            referencedRelation: "assessment_sessions"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "quiz_attempts_book_id_fkey"
             columns: ["book_id"]
