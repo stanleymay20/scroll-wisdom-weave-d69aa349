@@ -286,7 +286,7 @@ serve(async (req) => {
             ? "refund_ledger_write_failed"
             : "sale_ledger_write_failed",
         });
-        throw new Error(\`Purchase ledger write failed: \${ledgerErr.message}\`);
+        throw new Error(`Purchase ledger write failed: ${ledgerErr.message}`);
       }
       await logFinancialEvent(supabase, {
         event_type: "ledger_written",
@@ -327,7 +327,7 @@ serve(async (req) => {
         .eq("stripe_session_id", session.id)
         .maybeSingle();
       if (existingError) {
-        throw new Error(\`Purchase lookup failed: \${existingError.message}\`);
+        throw new Error(`Purchase lookup failed: ${existingError.message}`);
       }
 
       // A retry may arrive after the purchase row was persisted but before the
@@ -366,7 +366,7 @@ serve(async (req) => {
           .update(updatePayload)
           .eq("id", existing.id);
         if (purchaseUpdateError) {
-          throw new Error(\`Paid purchase update failed: \${purchaseUpdateError.message}\`);
+          throw new Error(`Paid purchase update failed: ${purchaseUpdateError.message}`);
         }
       } else {
         const { data: upserted, error: purchaseUpsertError } = await supabase
@@ -380,7 +380,7 @@ serve(async (req) => {
           .select("id")
           .maybeSingle();
         if (purchaseUpsertError) {
-          throw new Error(\`Paid purchase upsert failed: \${purchaseUpsertError.message}\`);
+          throw new Error(`Paid purchase upsert failed: ${purchaseUpsertError.message}`);
         }
         purchaseId = upserted?.id ?? null;
       }
