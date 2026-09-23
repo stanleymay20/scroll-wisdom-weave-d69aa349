@@ -270,7 +270,6 @@ export default function UploadPage() {
 
         const { data: scrapeData, error: scrapeError } = await supabase.functions.invoke('firecrawl-scrape', {
           body: { url: url.trim() },
-          signal: abort.signal,
         });
 
         if (abort.signal.aborted) return;
@@ -311,14 +310,13 @@ export default function UploadPage() {
         setTimeout(() => isMountedRef.current && setProgressMessage(msg), ms),
       );
 
-      // Single-attempt invoke with structured-error handling. The AbortSignal
-      // cancels the client request when possible. Once an Edge Function has
-      // already begun side effects, HTTP cancellation cannot guarantee server
-      // rollback, so the UI deliberately says "Stop waiting" during this phase.
+      // Single-attempt invoke with structured-error handling. Once an Edge
+      // Function has accepted the request, client-side cancellation cannot
+      // guarantee rollback of server-side side effects. The UI therefore
+      // switches from "Cancel" to the truthful "Stop waiting" state.
       setServerProcessing(true);
       const { data, error } = await supabase.functions.invoke('process-document', {
         body: { documentText, documentName, sourceType, language },
-        signal: abort.signal,
       });
       setServerProcessing(false);
 
