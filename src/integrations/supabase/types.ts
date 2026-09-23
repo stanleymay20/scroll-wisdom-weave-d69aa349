@@ -2180,6 +2180,7 @@ export type Database = {
           rev_share_surcharge_bps: number
           rev_share_surcharge_cents: number
           risk_score: number | null
+          source_event_id: string | null
         }
         Insert: {
           available_at?: string | null
@@ -2210,6 +2211,7 @@ export type Database = {
           rev_share_surcharge_bps?: number
           rev_share_surcharge_cents?: number
           risk_score?: number | null
+          source_event_id?: string | null
         }
         Update: {
           available_at?: string | null
@@ -2240,6 +2242,7 @@ export type Database = {
           rev_share_surcharge_bps?: number
           rev_share_surcharge_cents?: number
           risk_score?: number | null
+          source_event_id?: string | null
         }
         Relationships: []
       }
@@ -4491,6 +4494,7 @@ export type Database = {
           currency: string
           error_message: string | null
           id: string
+          idempotency_key: string | null
           metadata: Json
           processed_at: string | null
           processed_by: string | null
@@ -4513,6 +4517,7 @@ export type Database = {
           currency?: string
           error_message?: string | null
           id?: string
+          idempotency_key?: string | null
           metadata?: Json
           processed_at?: string | null
           processed_by?: string | null
@@ -4535,6 +4540,7 @@ export type Database = {
           currency?: string
           error_message?: string | null
           id?: string
+          idempotency_key?: string | null
           metadata?: Json
           processed_at?: string | null
           processed_by?: string | null
@@ -5999,6 +6005,14 @@ export type Database = {
         Returns: undefined
       }
       record_purchase_ledger: { Args: { _purchase_id: string }; Returns: Json }
+      record_purchase_refund_ledger: {
+        Args: {
+          _purchase_id: string
+          _refund_event_id: string
+          _refund_amount_cents: number
+        }
+        Returns: Json
+      }
       set_platform_fee: { Args: { _bps: number }; Returns: Json }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
