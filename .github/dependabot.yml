@@ -18,14 +18,15 @@ updates:
         patterns:
           - "*"
 
-  # Application dependencies resolved from bun.lock.
+  # Application dependencies are Bun-native and resolved from bun.lock.
   #
-  # CI installs with `bun install --frozen-lockfile`, so any update must land as
-  # a lockfile change or the install fails. `bun run audit:dependencies` gates
-  # high and critical production advisories against the time-boxed baseline in
-  # security/audit-exceptions.json; Dependabot is what keeps that baseline from
-  # growing between reviews.
-  - package-ecosystem: "npm"
+  # CI installs with `bun install --frozen-lockfile`, so Dependabot must update
+  # package.json and bun.lock together. GitHub's dedicated Bun ecosystem supports
+  # the text-based bun.lock used by this repository.
+  #
+  # `bun run audit:dependencies` gates high and critical production advisories
+  # against the time-boxed baseline in security/audit-exceptions.json.
+  - package-ecosystem: "bun"
     directory: "/"
     schedule:
       interval: "weekly"
