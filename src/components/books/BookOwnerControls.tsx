@@ -1,9 +1,8 @@
 import { useState, useEffect } from "react";
 import { Link } from "react-router-dom";
-import { Loader2, Trash2, Archive, Network, DollarSign, ArrowRight, Pencil } from "lucide-react";
+import { Loader2, Trash2, Archive, Network, DollarSign, ArrowRight, Pencil, ShieldCheck } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Switch } from "@/components/ui/switch";
 import { Label } from "@/components/ui/label";
 import { RadioGroup, RadioGroupItem } from "@/components/ui/radio-group";
 import {
@@ -38,10 +37,8 @@ interface BookOwnerControlsProps {
   book: BookData;
   chapters: ChapterData[];
   isMobile: boolean;
-  isUpdatingPublish: boolean;
   isDeleting: boolean;
   deleteDialogOpen: boolean;
-  onTogglePublish: () => void;
   onUpdateBookType: (type: "text" | "illustrated" | "comic") => void;
   onArchive: () => void;
   onDelete: () => void;
@@ -51,8 +48,8 @@ interface BookOwnerControlsProps {
 }
 
 export function BookOwnerControls({
-  book, chapters, isMobile, isUpdatingPublish, isDeleting, deleteDialogOpen,
-  onTogglePublish, onUpdateBookType, onArchive, onDelete, onDeleteDialogChange,
+  book, chapters, isMobile, isDeleting, deleteDialogOpen,
+  onUpdateBookType, onArchive, onDelete, onDeleteDialogChange,
   onChaptersChange, onBookUpdate,
 }: BookOwnerControlsProps) {
   const { t } = useLanguage();
@@ -159,22 +156,24 @@ export function BookOwnerControls({
         className={isMobile ? "mt-4" : "mt-6"}
       />
 
-      {/* Publish Toggle */}
+      {/* Canonical publication authority */}
       <div className={`flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50 ${isMobile ? "" : "mt-6"}`}>
         <div className="flex-1">
-          <Label htmlFor={`publish-toggle${idSuffix}`} className="text-foreground font-medium">
-            {t('book.publishToLibrary')}
+          <Label className="text-foreground font-medium">
+            {book.is_published ? "Publication" : t('book.publishToLibrary')}
           </Label>
           <p className="text-sm text-muted-foreground">
-            {book.is_published ? t('book.publicDesc') : t('book.privateDesc')}
+            {book.is_published
+              ? "Manage the certified publication, distribution identity, and release settings."
+              : "Complete publisher identity, quality gates, and publication settings before publishing."}
           </p>
         </div>
-        <Switch
-          id={`publish-toggle${idSuffix}`}
-          checked={book.is_published ?? false}
-          onCheckedChange={onTogglePublish}
-          disabled={isUpdatingPublish}
-        />
+        <Button asChild size="sm" variant={book.is_published ? "outline" : "default"}>
+          <Link to={`/book/${book.id}/publish`}>
+            <ShieldCheck className="h-4 w-4 mr-2" />
+            {book.is_published ? "Manage publication" : "Publish"}
+          </Link>
+        </Button>
       </div>
 
       {/* Distribution & Insights */}
