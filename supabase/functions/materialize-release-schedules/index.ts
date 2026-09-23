@@ -3,7 +3,7 @@
 // and broadcasts a followed_author_release notification to the author's followers
 // (deduped at the DB level by uniq_creator_notifications_follow_release).
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { authorizeCronRequest, CRON_SECRET_HEADER } from "../_shared/cron-auth.ts";
+import { authorizeCronRequest } from "../_shared/cron-auth.ts";
 
 const cors = {
   "Access-Control-Allow-Origin": "*",
