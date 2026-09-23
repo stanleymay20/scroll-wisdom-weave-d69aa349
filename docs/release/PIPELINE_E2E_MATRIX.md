@@ -14,7 +14,7 @@ Legend: **PASS** = evidence exists and is release-gated; **PARTIAL** = useful ev
 | P03 | Subscription checkout → Stripe webhook → plan entitlement → billing portal/cancel | MISSING | MISSING | PARTIAL — webhook/financial boundary hardening | MISSING Stripe test-mode lifecycle | BLOCK |
 | P04 | Generate book → job/book/chapters → library → book route | PASS — generation UI contract | PARTIAL | PASS — atomic quota reservation | MISSING real AI/provider full-book run | BLOCK |
 | P05 | Upload TXT/DOCX/PDF/URL → extraction → process-document → library → reader | PASS — real browser extraction for TXT/DOCX/PDF | MISSING full local/deployed ingestion | PARTIAL — server auth/rate-limit/rollback | N/A | BLOCK |
-| P06 | Edit/regenerate chapter → persisted version → reader → publication state invalidation | MISSING | MISSING | PARTIAL | N/A | BLOCK |
+| P06 | Edit/regenerate chapter → persisted version → reader → publication state invalidation | PASS — revision dialog/edit-intent browser contract | PARTIAL — real AI regeneration still unproven | PASS/PARTIAL — server edit-intent + persisted-content ratchet; hash-bound attestations stale automatically | N/A | BLOCK |
 | P07 | Research/citations → duplicate preview/import → evidence/source persistence | PASS — citation import UI | MISSING research-to-persisted-evidence path | PARTIAL | MISSING provider-backed research proof | BLOCK |
 | P08 | Cover/media → storage → rights provenance → current publication hash | MISSING | MISSING | PARTIAL | N/A | BLOCK |
 | P09 | Editorial → proofread → QA → production render → final certification | PASS — browser drives full orchestrator | PARTIAL | PASS — scope-bound attestation/hash tests | MISSING production-like real artifact run | BLOCK |
