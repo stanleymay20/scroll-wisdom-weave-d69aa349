@@ -25,6 +25,9 @@ serve(async (req) => {
     const sum = (rows: any[], key: string) => rows.reduce((a, r) => a + (r[key] ?? 0), 0);
     const sales = (ledger ?? []).filter((r) => r.entry_type === "sale");
     const refunds = (ledger ?? []).filter((r) => r.entry_type === "refund" || r.entry_type === "chargeback");
+    const refundedPurchaseIds = new Set(
+      refunds.map((r) => r.purchase_id).filter((id): id is string => Boolean(id)),
+    );
 
     const totals = {
       currency: sales[0]?.currency ?? "usd",
@@ -33,7 +36,8 @@ serve(async (req) => {
       net_cents: sum(sales, "creator_net_cents") + sum(refunds, "creator_net_cents"),
       refund_cents: -sum(refunds, "gross_cents"),
       sales_count: sales.length,
-      refund_count: refunds.length,
+      refund_count: refundedPurchaseIds.size,
+      refund_event_count: refunds.length,
       available_payout_cents: (ledger ?? [])
         .filter((r) => r.payout_status === "available")
         .reduce((a, r) => a + (r.creator_net_cents ?? 0), 0),
@@ -57,8 +61,16 @@ serve(async (req) => {
       const cur = bookMap.get(k) ?? { book_id: k, title: r.book_title_snapshot, sales: 0, gross: 0, net: 0, refunds: 0 };
       cur.sales += 1; cur.gross += r.gross_cents; cur.net += r.creator_net_cents; bookMap.set(k, cur);
     }
+    const refundedBookPurchases = new Set<string>();
     for (const r of refunds) {
-      const cur = bookMap.get(r.book_id); if (cur) { cur.refunds += 1; cur.net += r.creator_net_cents; }
+      const cur = bookMap.get(r.book_id);
+      if (!cur) continue;
+      const refundKey = `${r.book_id}:${r.purchase_id}`;
+      if (!refundedBookPurchases.has(refundKey)) {
+        cur.refunds += 1;
+        refundedBookPurchases.add(refundKey);
+      }
+      cur.net += r.creator_net_cents;
     }
     const top_books = [...bookMap.values()].sort((a, b) => b.gross - a.gross).slice(0, 10);
 
@@ -138,7 +150,7 @@ serve(async (req) => {
     const arpu_cents = funnel.checkout_completed > 0
       ? Math.round(totals.gross_cents / funnel.checkout_completed) : 0;
     const refund_rate = totals.sales_count > 0
-      ? totals.refund_count / totals.sales_count : 0;
+      ? refundedPurchaseIds.size / totals.sales_count : 0;
 
     // Phase 2.1d.1 — per-book revenue per visitor (RPV).
     // Count DISTINCT session_id per listing (not raw view rows) so reloads
