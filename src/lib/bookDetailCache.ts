@@ -31,6 +31,7 @@ export interface CachedBookDetail {
   book_type: string | null;
   language: string | null;
   is_published: boolean | null;
+  current_publication_id: string | null;
   creator_id: string | null;
   author_ai_agent: string | null;
 }
@@ -276,6 +277,7 @@ export function transformLibraryItemToCache(item: {
       book_type: item.books.book_type ?? 'text',
       language: null,
       is_published: null,
+      current_publication_id: null,
       creator_id: null,
       author_ai_agent: null,
     },
