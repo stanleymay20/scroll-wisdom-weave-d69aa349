@@ -307,5 +307,7 @@ jobs:
         run: bun run audit:function-reachability
       - name: Reject email-based Stripe customer ownership
         run: bun scripts/check-billing-customer-identity.mjs
+      - name: Reject browser publication authority
+        run: bun scripts/check-browser-publication-authority.mjs
       - name: Reject high or critical production dependency vulnerabilities
         run: bun run audit:dependencies
