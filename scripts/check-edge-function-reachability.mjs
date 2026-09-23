@@ -80,7 +80,7 @@ for (const fn of functionNames) {
   const invokePattern = new RegExp(
     "functions\\.invoke\\s*\\(\\s*[\\\"'\x60]" +
       escaped +
-      "[\\\"'\x60]",
+      "(?:[\\\"'\x60]|/)",
   );
   const directHttpPatterns = ["/functions/v1/" + fn, "functions/v1/" + fn];
 
@@ -89,10 +89,20 @@ for (const fn of functionNames) {
   // orphaned function look wired.
   const wrapperPattern = new RegExp(
     "(?:invokeFunction|invokePublishFunction|invokeEdgeFunction)" +
-      "\\s*\\(\\s*[\\\"'\\x60]" +
+      "(?:<[^>\\n]+>)?\\s*\\(\\s*[\\\"'\\x60]" +
       escaped +
       "[\\\"'\\x60]",
   );
+
+  // Some server orchestrators dispatch a fixed producer registry through a
+  // dynamic /functions/v1/${config.path} call. Count that only when the same
+  // executable file contains BOTH the literal path entry and the actual
+  // dynamic Edge dispatch.
+  const registryPathPattern = new RegExp(
+    "path\\s*:\\s*[\\\"']" + escaped + "[\\\"']",
+  );
+  const dynamicRegistryDispatchPattern =
+    /\/functions\/v1\/\$\{config\.path\}/;
 
   let found = null;
   for (const file of files) {
@@ -101,7 +111,11 @@ for (const fn of functionNames) {
     if (
       invokePattern.test(body) ||
       wrapperPattern.test(body) ||
-      directHttpPatterns.some((pattern) => body.includes(pattern))
+      directHttpPatterns.some((pattern) => body.includes(pattern)) ||
+      (
+        registryPathPattern.test(body) &&
+        dynamicRegistryDispatchPattern.test(body)
+      )
     ) {
       found = relative(root, file);
       break;
