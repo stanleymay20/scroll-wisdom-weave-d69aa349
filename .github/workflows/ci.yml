@@ -225,6 +225,8 @@ jobs:
           deno test supabase/functions/_shared/observability_test.ts
       - name: Pin chapter regeneration edit-intent and persistence contract
         run: node scripts/check-chapter-regeneration-contract.mjs
+      - name: Pin assessment answer-key, scoring and evidence authority
+        run: node scripts/check-assessment-authority-contract.mjs
       - name: Pin cover provenance and certified-artwork immutability
         run: node scripts/check-cover-provenance-contract.mjs
       - name: Pin serialized release UI, RLS, cron and materialization contract
