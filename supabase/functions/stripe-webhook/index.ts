@@ -245,15 +245,17 @@ serve(async (req) => {
 
     const findUserByEmail = async (email: string) => {
       const { data: users, error } = await supabase.auth.admin.listUsers({ page: 1, perPage: 1000 });
-      if (error || !users?.users) return null;
+      if (error) throw new Error(`User lookup failed: ${error.message}`);
+      if (!users?.users) return null;
       return users.users.find((u) => u.email === email) || null;
     };
 
     const findUserIdByCustomer = async (customerId: string): Promise<string | null> => {
-      const { data: linked } = await supabase.from("subscriptions")
+      const { data: linked, error: linkedError } = await supabase.from("subscriptions")
         .select("user_id")
         .eq("stripe_customer_id", customerId)
         .maybeSingle();
+      if (linkedError) throw new Error(`Customer subscription lookup failed: ${linkedError.message}`);
       if (linked?.user_id) return linked.user_id;
 
       const customer = await stripe.customers.retrieve(customerId);
@@ -498,7 +500,12 @@ serve(async (req) => {
             const planTier = getPlanTierFromProductId(productId);
             const metadataUserId = session.metadata?.userId || null;
             const customerEmail = session.customer_details?.email ?? session.customer_email ?? null;
+            const creatorTier = getCreatorTierFromProductId(productId);
             const userId = metadataUserId || (customerEmail ? (await findUserByEmail(customerEmail))?.id ?? null : null);
+            const recognizedProduct = planTier !== null || creatorTier !== "free";
+            if (recognizedProduct && !userId) {
+              throw new Error(`Recognized subscription product ${productId} could not be mapped to a user`);
+            }
             if (userId) {
               if (planTier) {
                 await updateProfilePlan(userId, planTier);
@@ -508,7 +515,7 @@ serve(async (req) => {
               await logFinancialEvent(supabase, {
                 event_type: "subscription_started", severity: "info", actor: "webhook",
                 correlation_id: corr, stripe_event_id: event.id, user_id: userId,
-                payload: { plan_tier: planTier, creator_tier: getCreatorTierFromProductId(productId), product_id: productId },
+                payload: { plan_tier: planTier, creator_tier: creatorTier, product_id: productId },
               });
             }
           }
@@ -643,7 +650,12 @@ serve(async (req) => {
             const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
             const productId = subscription.items.data[0]?.price?.product as string;
             const planTier = getPlanTierFromProductId(productId);
+            const creatorTier = getCreatorTierFromProductId(productId);
             const userId = await findUserIdByCustomer(invoice.customer as string);
+            const recognizedProduct = planTier !== null || creatorTier !== "free";
+            if (recognizedProduct && !userId) {
+              throw new Error(`Paid subscription product ${productId} could not be mapped to a user`);
+            }
             if (userId) {
               if (planTier) {
                 await updateProfilePlan(userId, planTier);
@@ -660,7 +672,12 @@ serve(async (req) => {
           const productId = subscription.items.data[0]?.price?.product as string;
           const planTier = getPlanTierFromProductId(productId);
           const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+          const creatorTier = getCreatorTierFromProductId(productId);
           const userId = await findUserIdByCustomer(customerId);
+          const recognizedProduct = planTier !== null || creatorTier !== "free";
+          if (recognizedProduct && !userId) {
+            throw new Error(`Updated subscription product ${productId} could not be mapped to a user`);
+          }
           if (userId) {
             if (planTier) {
               const effectivePlan: ValidPlan = subscription.status === "active" ? planTier : "free";
@@ -677,7 +694,12 @@ serve(async (req) => {
           const productId = subscription.items.data[0]?.price?.product as string;
           const planTier = getPlanTierFromProductId(productId);
           const customerId = typeof subscription.customer === "string" ? subscription.customer : subscription.customer.id;
+          const creatorTier = getCreatorTierFromProductId(productId);
           const userId = await findUserIdByCustomer(customerId);
+          const recognizedProduct = planTier !== null || creatorTier !== "free";
+          if (recognizedProduct && !userId) {
+            throw new Error(`Canceled subscription product ${productId} could not be mapped to a user`);
+          }
           if (userId) {
             if (planTier) {
               await updateProfilePlan(userId, "free");
