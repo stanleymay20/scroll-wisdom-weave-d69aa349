@@ -274,6 +274,36 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path === "/functions/v1/validate-certificate") {
+      const body = requestBody(route);
+      state.certificateIssuanceRequests.push(body);
+
+      if (state.certificateAuthorityReject) {
+        await fulfillJson(route, {
+          error: "Server evidence no longer qualifies for certificate issuance.",
+          code: "CERTIFICATE_NOT_ELIGIBLE",
+        }, 403);
+        return;
+      }
+
+      await fulfillJson(route, {
+        success: true,
+        alreadyIssued: false,
+        certificate: {
+          id: "c1000000-0000-4000-8000-000000000001",
+          certificateNumber: "SLC-E2E-ISSUED-001",
+          certificateType: "completion",
+          issuedAt: "2026-09-23T13:00:00.000Z",
+          verificationHash: "issued-local-reference-e2e",
+          recipient: { name: "E2E Learner" },
+          book: { id: BOOK_ID, title: BOOK_TITLE },
+          coveragePercentage: 100,
+          integrityScore: 0.95,
+        },
+      }, 201);
+      return;
+    }
+
     if (path === "/functions/v1/verify-certificate") {
       const body = requestBody(route);
       if (body.certificateNumber === "SLC-MISSING-404") {
@@ -765,6 +795,57 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path === "/rest/v1/reading_progress") {
+      const rows = state.certificateEvidenceReady
+        ? [{ chapter_id: chapter.id, percent: 100 }]
+        : [];
+      await fulfillJson(route, rows, 200, {
+        "content-range": rows.length ? "0-0/1" : "*/0",
+      });
+      return;
+    }
+
+    if (path === "/rest/v1/quiz_attempts") {
+      const rows = state.certificateEvidenceReady
+        ? [{
+            id: "c2000000-0000-4000-8000-000000000001",
+            chapter_id: chapter.id,
+            score: 95,
+            submitted_at: "2026-09-23T12:30:00.000Z",
+            assessment_session_id: "c3000000-0000-4000-8000-000000000001",
+          }]
+        : [];
+      await fulfillJson(route, rows, 200, {
+        "content-range": rows.length ? "0-0/1" : "*/0",
+      });
+      return;
+    }
+
+    if (path === "/rest/v1/assessment_integrity_logs") {
+      const rows = state.certificateEvidenceReady
+        ? [{
+            quiz_attempt_id: "c2000000-0000-4000-8000-000000000001",
+            integrity_score: 0.95,
+            severity: "trusted",
+            details: {
+              server_scored: true,
+              assessment_session_id: "c3000000-0000-4000-8000-000000000001",
+              classification: "trusted",
+            },
+          }]
+        : [];
+      await fulfillJson(route, rows, 200, {
+        "content-range": rows.length ? "0-0/1" : "*/0",
+      });
+      return;
+    }
+
+    if (path === "/rest/v1/publishing_certificates") {
+      const wantsSingle = (request.headers()["accept"] ?? "").includes("application/vnd.pgrst.object+json");
+      await fulfillJson(route, wantsSingle ? null : [], 200, { "content-range": "*/0" });
+      return;
+    }
+
     if (path === "/rest/v1/profiles") {
       await fulfillJson(route, [{
         id: USER_ID,
@@ -1213,6 +1294,56 @@ test("Retry publication review drives the shipped quality pipeline through final
 
 
 test("eligible learner requests certificate issuance from the server authority without sending client proof", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  state.certificateEvidenceReady = true;
+  await loginThroughMockedAuth(page);
+
+  await page.goto(`/book/${BOOK_ID}/certificate`);
+
+  await expect(page.getByRole("heading", { name: "Certificate Eligibility" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("You're Eligible!", { exact: true })).toBeVisible();
+
+  const generate = page.getByRole("button", { name: "Generate Completion Certificate" });
+  await expect(generate).toBeEnabled();
+  await generate.click();
+
+  await expect.poll(() => state.certificateIssuanceRequests.length).toBe(1);
+  expect(state.certificateIssuanceRequests[0]).toEqual({
+    bookId: BOOK_ID,
+    requestedType: "completion",
+  });
+  expect(Object.keys(state.certificateIssuanceRequests[0]).sort()).toEqual([
+    "bookId",
+    "requestedType",
+  ]);
+
+  await expect(page.getByText("SPC: SLC-E2E-ISSUED-001", { exact: true })).toBeVisible();
+  await expect(page.getByText("E2E Learner", { exact: true })).toBeVisible();
+  await expect(page.getByText("Preview / Unverifiable", { exact: true })).toBeVisible();
+  await expect(page.getByText("Server Verified", { exact: true })).toHaveCount(0);
+});
+
+test("client-visible eligibility cannot manufacture a certificate when server authority rejects issuance", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  state.certificateEvidenceReady = true;
+  state.certificateAuthorityReject = true;
+  await loginThroughMockedAuth(page);
+
+  await page.goto(`/book/${BOOK_ID}/certificate`);
+  await expect(page.getByText("You're Eligible!", { exact: true })).toBeVisible({ timeout: 10_000 });
+
+  await page.getByRole("button", { name: "Generate Completion Certificate" }).click();
+
+  await expect.poll(() => state.certificateIssuanceRequests.length).toBe(1);
+  await expect(
+    page.getByText("Server evidence no longer qualifies for certificate issuance.", { exact: true }),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText(/SPC: SLC-E2E-ISSUED-001/)).toHaveCount(0);
+  await expect(page.getByRole("button", { name: "Generate Completion Certificate" })).toBeVisible();
+});
+
+
+test("eligible learner requests certificate issuance from the server without sending client-computed proof", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   state.certificateEvidenceReady = true;
   await loginThroughMockedAuth(page);
