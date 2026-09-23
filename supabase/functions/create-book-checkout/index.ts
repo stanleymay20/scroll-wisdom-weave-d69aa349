@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
+import { ensureBillingCustomer } from "../_shared/billing-customer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -262,8 +263,12 @@ serve(async (req) => {
     if (paidRisk) return paidRisk;
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
-    const customers = await stripe.customers.list({ email: buyerEmail, limit: 1 });
-    const customerId = customers.data[0]?.id;
+    const customerId = await ensureBillingCustomer(
+      sb,
+      stripe,
+      { id: buyerUserId, email: buyerEmail },
+      "book_checkout",
+    );
 
     const clientIdempotencyKey = cleanText(req.headers.get("x-idempotency-key"), 80);
     if (
@@ -282,7 +287,6 @@ serve(async (req) => {
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
       customer: customerId,
-      customer_email: customerId ? undefined : buyerEmail,
       client_reference_id: `${listing.id}:${buyerUserId}`.slice(0, 200),
       line_items: [
         {
