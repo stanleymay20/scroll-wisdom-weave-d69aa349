@@ -16,6 +16,10 @@ import {
 } from "../_shared/http.ts";
 import { adminOriginGuard, withAdminOriginAllowList } from "../_shared/admin-cors.ts";
 import { correlationId } from "../_shared/observability.ts";
+import {
+  getBillingCustomerId,
+  resolveUserIdForBillingCustomer,
+} from "../_shared/billing-customer.ts";
 
 const Body = z.object({
   user_id: z.string().uuid(),
@@ -89,13 +93,24 @@ serve(async (req) => {
       .eq("user_id", parsed.user_id)
       .maybeSingle();
 
-    let stripeCustomerId = entitlement?.stripe_customer_id as string | null | undefined;
+    let stripeCustomerId = await getBillingCustomerId(sc, parsed.user_id);
     let subscription: Stripe.Subscription | null = null;
 
     if (entitlement?.stripe_subscription_id) {
       try {
         subscription = await stripe.subscriptions.retrieve(entitlement.stripe_subscription_id as string);
-        stripeCustomerId = subscription.customer as string;
+        const subscriptionCustomerId = typeof subscription.customer === "string"
+          ? subscription.customer
+          : subscription.customer.id;
+        const linkedUserId = await resolveUserIdForBillingCustomer(
+          sc,
+          stripe,
+          subscriptionCustomerId,
+        );
+        if (linkedUserId !== parsed.user_id) {
+          throw new Error("BILLING_CUSTOMER_USER_MISMATCH");
+        }
+        stripeCustomerId = subscriptionCustomerId;
       } catch (_e) {
         // Fall through to customer lookup below. Subscription may have been deleted.
       }
@@ -108,21 +123,6 @@ serve(async (req) => {
         limit: 20,
       });
       subscription = pickBestSubscription(subs.data);
-    }
-
-    // If the DB has no Stripe customer yet, try to resolve by Supabase auth email.
-    if (!subscription && !stripeCustomerId) {
-      const { data: userData } = await sc.auth.admin.getUserById(parsed.user_id);
-      const email = userData?.user?.email;
-      if (email) {
-        const customers = await stripe.customers.list({ email, limit: 5 });
-        const customer = customers.data[0];
-        if (customer) {
-          stripeCustomerId = customer.id;
-          const subs = await stripe.subscriptions.list({ customer: customer.id, status: "all", limit: 20 });
-          subscription = pickBestSubscription(subs.data);
-        }
-      }
     }
 
     const tier = creatorTierFromSubscription(subscription);
