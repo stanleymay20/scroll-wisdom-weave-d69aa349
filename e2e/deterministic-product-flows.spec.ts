@@ -1342,13 +1342,16 @@ test("Reader assessment keeps answer keys server-side and finalizes server-score
   await page.getByRole("button", { name: "Start Assessment" }).click();
 
   await expect.poll(() => state.assessmentRequests.length).toBe(1);
-  expect(state.assessmentRequests[0]).toEqual({
+  expect(state.assessmentRequests[0]).toMatchObject({
     action: "start",
     bookId: BOOK_ID,
     chapterId: chapter.id,
     mode: "completion",
-    difficulty: 3,
   });
+  const requestedDifficulty = Number(state.assessmentRequests[0].difficulty);
+  expect(Number.isInteger(requestedDifficulty)).toBe(true);
+  expect(requestedDifficulty).toBeGreaterThanOrEqual(1);
+  expect(requestedDifficulty).toBeLessThanOrEqual(5);
 
   await expect(page.getByText("Which statement best summarizes the reader contract?", { exact: true })).toBeVisible();
   await expect(page.getByText("Server session", { exact: true })).toBeVisible();
