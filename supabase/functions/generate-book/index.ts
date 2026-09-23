@@ -416,9 +416,27 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       throw new Error(`Failed to save chapters: ${chaptersError.message}`);
     }
 
-    // The book and its chapters are durably persisted, so the reserved slot is
-    // legitimately consumed. Everything below is non-fatal bookkeeping and must
-    // not trigger a refund.
+    // Library linkage is part of successful creation, not optional bookkeeping.
+    // A book the owner cannot discover must never be reported as a success.
+    const { error: libraryError } = await sc.from("user_library").insert({
+      user_id: user.id, book_id: book.id, progress_percent: 0, last_read_chapter: 1,
+    });
+    if (libraryError) {
+      console.error("[GENERATE-BOOK] Library error:", libraryError);
+      await sc.from("generation_jobs").update({
+        status: 'failed',
+        error_code: 'GENERATION_FAILED',
+        error_message: 'Failed to add generated book to library',
+      }).eq("id", jobId);
+      await sc.from("chapters").delete().eq("book_id", book.id);
+      await sc.from("generation_jobs").delete().eq("id", jobId);
+      await sc.from("books").delete().eq("id", book.id);
+      await refundReservation();
+      throw new Error("Failed to add generated book to your library. Please try again.");
+    }
+
+    // The book, outline chapters, job, and owner library linkage are now
+    // durably persisted, so the reserved generation slot is legitimately used.
     reservationActive = false;
 
     // Outline phase only — the book is NOT generated yet. Keep the job open so
@@ -430,13 +448,6 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       error_code: null,
       error_message: null,
     }).eq("id", jobId);
-
-
-    // Add to library
-    const { error: libraryError } = await sc.from("user_library").insert({
-      user_id: user.id, book_id: book.id, progress_percent: 0, last_read_chapter: 1,
-    });
-    if (libraryError) console.error("[GENERATE-BOOK] Library error:", libraryError);
 
     console.log(`[GENERATE-BOOK] Done. Daily: ${reservation.books_used}/${dailyLimit === -1 ? "unlimited" : dailyLimit}`);
 
