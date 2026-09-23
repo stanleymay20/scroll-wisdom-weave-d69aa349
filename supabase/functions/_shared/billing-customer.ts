@@ -52,6 +52,10 @@ async function insertLink(
     const byCustomer = await getLinkByCustomer(sc, customerId);
 
     if (byUser === customerId && byCustomer === userId) return customerId;
+
+    // A concurrent request may have linked another freshly-created customer
+    // to this same user first. Returning that winner is safe; the caller will
+    // retire its unused loser customer.
     if (byUser && byCustomer === null) return byUser;
   }
 
