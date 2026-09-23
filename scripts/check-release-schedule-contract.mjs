@@ -25,8 +25,6 @@ requireText(migration, "CREATE OR REPLACE FUNCTION public.materialize_due_releas
 requireText(migration, "materialize_due_releases_every_5_min", "canonical cron job name");
 requireText(migration, "'*/5 * * * *'", "five-minute release cadence");
 requireText(migration, "'SELECT public.materialize_due_releases();'", "cron SQL command");
-requireText(migration, ".eq", ""); // harmless sentinel removed below
-failures.pop(); // keep helper uniform without requiring JS semantics in SQL.
 
 for (const policy of [
   "release_schedules_entitled_insert",
