@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 
+const checkout = readFileSync("supabase/functions/create-book-checkout/index.ts", "utf8");
 const webhook = readFileSync("supabase/functions/stripe-webhook/index.ts", "utf8");
 const replay = readFileSync("supabase/functions/admin-webhook-replay/index.ts", "utf8");
 const adminRefund = readFileSync("supabase/functions/admin-refund-purchase/index.ts", "utf8");
@@ -23,6 +24,36 @@ function rejectText(source, needle, label) {
   if (source.includes(needle)) failures.push(label + " regressed");
 }
 
+requireText(
+  checkout,
+  'req.headers.get("x-idempotency-key")',
+  "paid checkout idempotency header",
+);
+requireText(
+  checkout,
+  "security_dependency_unavailable",
+  "checkout fail-closed security dependency response",
+);
+rejectText(
+  checkout,
+  "Fail open to avoid false payment outages",
+  "checkout velocity fail-open fallback",
+);
+requireText(
+  webhook,
+  "Checkout amount authority mismatch",
+  "webhook amount authority check",
+);
+requireText(
+  webhook,
+  "Checkout currency authority mismatch",
+  "webhook currency authority check",
+);
+requireText(
+  webhook,
+  "Checkout identity does not match the persisted pending purchase",
+  "webhook purchase identity binding",
+);
 requireText(
   webhook,
   'case "checkout.session.async_payment_succeeded"',
