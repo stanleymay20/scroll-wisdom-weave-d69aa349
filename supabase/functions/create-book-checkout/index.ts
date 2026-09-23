@@ -95,17 +95,40 @@ serve(async (req) => {
       "anonymous";
     const checkVelocity = async (name: string, key: string, limit: number, windowSec: number) => {
       try {
-        const { data } = await sb.rpc("check_velocity", {
+        const { data, error } = await sb.rpc("check_velocity", {
           _key: `${name}:${key}`,
           _limit: limit,
           _window_seconds: windowSec,
         });
-        if ((data as any)?.ok === false) {
-          const retry = Number((data as any)?.retry_after ?? windowSec);
+        if (error || !data || typeof (data as any).ok !== "boolean") {
+          log("Velocity dependency unavailable", {
+            correlationId,
+            name,
+            error: error?.message ?? "invalid_velocity_response",
+          });
+          return publicError(
+            "Checkout security checks are temporarily unavailable",
+            "security_dependency_unavailable",
+            503,
+            30,
+          );
+        }
+        if ((data as any).ok === false) {
+          const retry = Number((data as any).retry_after ?? windowSec);
           return publicError("Rate limit exceeded", "rate_limited", 429, retry);
         }
-      } catch (_e) {
-        // Fail open to avoid false payment outages if the velocity table is temporarily unavailable.
+      } catch (error) {
+        log("Velocity dependency threw", {
+          correlationId,
+          name,
+          error: error instanceof Error ? error.message : String(error),
+        });
+        return publicError(
+          "Checkout security checks are temporarily unavailable",
+          "security_dependency_unavailable",
+          503,
+          30,
+        );
       }
       return null;
     };
@@ -157,21 +180,31 @@ serve(async (req) => {
     const userLimit = await checkVelocity("checkout:user", buyerUserId, 20, 60);
     if (userLimit) return userLimit;
 
-    const { data: prior } = await sb
+    const { data: prior, error: priorError } = await sb
       .from("book_purchases")
       .select("id")
       .eq("buyer_user_id", buyerUserId)
       .eq("book_id", book.id)
       .eq("status", "paid")
       .maybeSingle();
+    if (priorError) throw priorError;
     if (prior) return json({ already_owned: true });
 
     // Risk-tier gate for buyers.
     const riskCheck = async (action: "free_unlock" | "paid_checkout") => {
-      const { data } = await sb.from("user_risk_scores")
+      const { data, error } = await sb.from("user_risk_scores")
         .select("tier, manual_override_tier")
         .eq("user_id", buyerUserId)
         .maybeSingle();
+      if (error) {
+        log("Risk dependency unavailable", { correlationId, error: error.message });
+        return publicError(
+          "Checkout risk checks are temporarily unavailable",
+          "security_dependency_unavailable",
+          503,
+          30,
+        );
+      }
       const tier = (data as any)?.manual_override_tier ?? (data as any)?.tier ?? "low";
       const blocks = tier === "blocked" ? true : tier === "high" ? action === "free_unlock" : false;
       if (!blocks) return null;
@@ -233,9 +266,18 @@ serve(async (req) => {
     const customerId = customers.data[0]?.id;
 
     const clientIdempotencyKey = cleanText(req.headers.get("x-idempotency-key"), 80);
-    const stripeIdempotencyKey = clientIdempotencyKey
-      ? `book_checkout:${listing.id}:${buyerUserId}:${clientIdempotencyKey}`.slice(0, 255)
-      : undefined;
+    if (
+      !clientIdempotencyKey ||
+      !/^[A-Za-z0-9][A-Za-z0-9._:-]{7,79}$/.test(clientIdempotencyKey)
+    ) {
+      return publicError(
+        "Checkout idempotency key required",
+        "idempotency_key_required",
+        400,
+      );
+    }
+    const stripeIdempotencyKey =
+      `book_checkout:${listing.id}:${buyerUserId}:${clientIdempotencyKey}`.slice(0, 255);
 
     const session = await stripe.checkout.sessions.create({
       mode: "payment",
@@ -277,7 +319,7 @@ serve(async (req) => {
         attribution_referrer: attrReferrer,
         attribution_landing_path: attrLanding,
       },
-    }, stripeIdempotencyKey ? { idempotencyKey: stripeIdempotencyKey } : undefined);
+    }, { idempotencyKey: stripeIdempotencyKey });
 
     const { error: pendingError } = await sb.from("book_purchases").insert({
       listing_id: listing.id,
