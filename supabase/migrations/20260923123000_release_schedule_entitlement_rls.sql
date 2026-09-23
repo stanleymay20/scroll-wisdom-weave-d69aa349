@@ -15,9 +15,15 @@ LANGUAGE sql
 STABLE
 SECURITY DEFINER
 SET search_path = ''
-AS $
-  SELECT public.current_user_can_schedule_releases()
-$;
+AS '
+  SELECT COALESCE(
+    (
+      public.get_user_entitlements((SELECT auth.uid()))
+      ->> ''can_schedule_releases''
+    )::boolean,
+    false
+  )
+';
 
 REVOKE ALL ON FUNCTION public.current_user_can_schedule_releases()
   FROM PUBLIC, anon;
