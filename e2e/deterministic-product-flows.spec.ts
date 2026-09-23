@@ -108,6 +108,7 @@ type MockState = {
   listingWrites: Array<Record<string, unknown>>;
   generationRequests: Array<Record<string, unknown>>;
   exportRequests: Array<Record<string, unknown>>;
+  qualityFunctionCalls: string[];
 };
 
 async function fulfillJson(route: Route, body: unknown, status = 200, headers: Record<string, string> = {}) {
@@ -135,6 +136,7 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     listingWrites: [],
     generationRequests: [],
     exportRequests: [],
+    qualityFunctionCalls: [],
   };
 
   await page.addInitScript(() => {
@@ -197,6 +199,57 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
             { chapterNumber: 1, title: "The Reader Contract" },
           ],
         },
+      });
+      return;
+    }
+
+    if (path === "/functions/v1/chief-editor-audit") {
+      state.qualityFunctionCalls.push("chief-editor-audit");
+      await fulfillJson(route, {
+        auditId: "66666666-6666-4666-8666-666666666666",
+        certificationEligible: true,
+        certificationBlockers: [],
+        scores: { overall: 96, structural: 97, academic: 95, pedagogical: 96 },
+        chapterSuggestions: [],
+        penalties: [],
+        flaggedSections: [],
+      });
+      return;
+    }
+
+    if (path === "/functions/v1/proofread-chapter") {
+      state.qualityFunctionCalls.push("proofread-chapter");
+      await fulfillJson(route, { success: true, changed: true, applied: 2 });
+      return;
+    }
+
+    if (path === "/functions/v1/qa-publishability-audit") {
+      state.qualityFunctionCalls.push("qa-publishability-audit");
+      await fulfillJson(route, {
+        report: { status: "ready", score: 98, blockerCount: 0 },
+      });
+      return;
+    }
+
+    if (path === "/functions/v1/certify-production-render") {
+      state.qualityFunctionCalls.push("certify-production-render");
+      await fulfillJson(route, {
+        passed: true,
+        status: "ready",
+        score: 99,
+        fileHash: "fixture-production-hash",
+        metrics: { pageCount: 12 },
+        issues: [],
+      });
+      return;
+    }
+
+    if (path === "/functions/v1/finalize-publication-certification") {
+      state.qualityFunctionCalls.push("finalize-publication-certification");
+      await fulfillJson(route, {
+        ready: true,
+        jobStatus: "completed",
+        authority: "server_attestations",
       });
       return;
     }
@@ -281,7 +334,7 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
         id: BOOK_ID,
         title: BOOK_TITLE,
         description: "A deterministic book used to verify export and reader browser contracts.",
-        category: "technology",
+        category: "fiction",
         creator_id: USER_ID,
         user_id: USER_ID,
         cover_image_url: "https://example.test/cover.jpg",
@@ -315,6 +368,16 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
         daily_book_count: 0,
         last_book_date: null,
         plan: "free",
+      }], 200, { "content-range": "0-0/1" });
+      return;
+    }
+
+    if (path === "/rest/v1/generation_jobs") {
+      await fulfillJson(route, [{
+        id: "55555555-5555-4555-8555-555555555555",
+        status: "partial",
+        book_id: BOOK_ID,
+        metadata: {},
       }], 200, { "content-range": "0-0/1" });
       return;
     }
@@ -469,4 +532,26 @@ test("authenticated generated book exports a non-placeholder PDF through the rea
     citationStyle: "APA",
   });
   expect(download.suggestedFilename()).toBe("deterministic-reader-book.pdf");
+});
+
+
+test("Retry publication review drives the shipped quality pipeline through final server certification", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  await loginThroughMockedAuth(page);
+
+  await page.goto(`/book/${BOOK_ID}`);
+  await expect(page.getByRole("heading", { name: BOOK_TITLE }).first()).toBeVisible({ timeout: 10_000 });
+
+  const retry = page.getByRole("button", { name: /Retry publication review/i });
+  await expect(retry).toBeVisible({ timeout: 10_000 });
+  await retry.click();
+
+  await expect(page.getByText("Publication candidate verified", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect.poll(() => state.qualityFunctionCalls).toEqual([
+    "chief-editor-audit",
+    "proofread-chapter",
+    "qa-publishability-audit",
+    "certify-production-render",
+    "finalize-publication-certification",
+  ]);
 });
