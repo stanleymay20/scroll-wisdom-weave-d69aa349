@@ -339,13 +339,13 @@ export default function BookDetail() {
           <Textarea value={editIntent} onChange={(e) => setEditIntent(e.target.value)} placeholder='e.g. "Shorten by 30%", "Make it more academic"' className="min-h-[120px]" />
           <AlertDialogFooter>
             <AlertDialogCancel>Cancel</AlertDialogCancel>
-            <AlertDialogAction onClick={async () => {
+            <Button type="button" onClick={async () => {
               const intent = editIntent.trim();
               if (!regenTarget) return;
               if (!intent) { toast({ title: "Edit intent required", description: "Please specify what you want to change.", variant: "destructive" }); return; }
               setRegenDialogOpen(false);
               await runChapterGeneration({ chapter: regenTarget, regenerate: true, editIntentText: intent });
-            }}>Regenerate</AlertDialogAction>
+            }}>Regenerate</Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
