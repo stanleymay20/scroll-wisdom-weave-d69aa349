@@ -29,8 +29,8 @@ Legend: **PASS** = evidence exists and is release-gated; **PARTIAL** = useful ev
 | P18 | Library → reader → generated chapter → reload → highlight/profile isolation | N/A | PASS — `real-reader-library.spec.ts` | PASS | N/A | PASS |
 | P19 | Reader → knowledge graph / Socratic Q&A → persisted learning state | MISSING | MISSING | PARTIAL | MISSING provider-backed AI proof | BLOCK |
 | P20 | Assessment session → mastery → durable assessment state | MISSING | MISSING | PARTIAL | N/A | BLOCK |
-| P21 | Mastery/eligibility → certificate issuance → retained credential | MISSING issuance journey | MISSING | PASS/PARTIAL — certificate authority/retention SQL | N/A | BLOCK |
-| P22 | Certificate → public verification / batch verification | MISSING | MISSING | PARTIAL | N/A | BLOCK |
+| P21 | Mastery/eligibility → certificate issuance → retained credential | PASS — eligible issuance + server-rejection browser contracts; learner route protected | PARTIAL — real Supabase evidence-to-issuance lifecycle not yet exercised | PASS/PARTIAL — server re-derives reading/ARC/integrity evidence; retention/security contracts exist | N/A | BLOCK until real-backend issuance is proven |
+| P22 | Certificate → public verification / batch verification | PASS — valid and not-found public verification render server status | PARTIAL — real issued credential → public verification round trip not yet exercised | PARTIAL — verifier fail-closed/hash contracts; batch path still needs journey proof | N/A | BLOCK |
 | P23 | Privacy → data export + account deletion + retained-certificate semantics | PARTIAL — deletion UI | PARTIAL | PASS — account deletion/certificate retention | N/A | BLOCK until data export is E2E |
 
 ## Secondary / deliberately non-GA surfaces
