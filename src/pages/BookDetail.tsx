@@ -12,6 +12,10 @@ import { MobileBookDetailHeader } from "@/components/mobile/MobileBookDetailHead
 import { Button } from "@/components/ui/button";
 import { ChevronLeft, Loader2, RefreshCw, Palette } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { supabase } from "@/integrations/supabase/client";
 import { useToast } from "@/hooks/use-toast";
@@ -115,7 +119,12 @@ export default function BookDetail() {
           chapterId: chapter.id, bookTitle: book.title, chapterTitle: chapter.title, chapterNumber: chapter.chapter_number,
           keyTopics, category: book.category, language: book.language || "en", bookType: book.book_type || "text",
           academicMode: shouldEnableAcademicMode, citationStyle: 'APA',
-          ...(regenerate ? { regenerate: true, originalContent: chapter.content, editIntent: editIntentText } : {}),
+          ...(regenerate ? {
+            regenerate: true,
+            isRegeneration: true,
+            originalContent: chapter.content,
+            editIntent: editIntentText,
+          } : {}),
         },
       });
       if (response.error) throw new Error(response.error.message);
