@@ -221,6 +221,8 @@ jobs:
       - name: Test financial alerting contract
         run: |
           deno test supabase/functions/_shared/observability_test.ts
+      - name: Pin chapter regeneration edit-intent and persistence contract
+        run: node scripts/check-chapter-regeneration-contract.mjs
       - name: Test publication trust engines
         run: |
           deno test supabase/functions/_shared/isbn_test.ts
