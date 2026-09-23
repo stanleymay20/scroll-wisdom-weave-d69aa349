@@ -654,7 +654,7 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
           "content-range": created.length ? `0-${created.length - 1}/${created.length}` : "*/0",
         });
       } else if (method === "DELETE") {
-        await fulfillJson(route, [], 204);
+        await route.fulfill({ status: 204 });
       } else {
         await fulfillJson(route, [], 200, { "content-range": "*/0" });
       }
