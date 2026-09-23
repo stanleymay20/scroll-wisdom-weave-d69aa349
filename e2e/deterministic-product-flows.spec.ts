@@ -123,6 +123,9 @@ type MockState = {
   subscriptionCheckoutRequests: Array<Record<string, unknown>>;
   coverRegistrationRequests: Array<Record<string, unknown>>;
   coverStorageWrites: string[];
+  scheduleWrites: Array<Record<string, unknown>>;
+  scheduleItemWrites: Array<Record<string, unknown>>;
+  canScheduleReleases: boolean;
   portalCalls: number;
   subscriptionTier: "free" | "student" | "premium" | "prophet_tier";
 };
@@ -163,6 +166,9 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     subscriptionCheckoutRequests: [],
     coverRegistrationRequests: [],
     coverStorageWrites: [],
+    scheduleWrites: [],
+    scheduleItemWrites: [],
+    canScheduleReleases: false,
     portalCalls: 0,
     subscriptionTier: "free",
   };
@@ -325,6 +331,23 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     if (path === "/functions/v1/customer-portal") {
       state.portalCalls += 1;
       await fulfillJson(route, { url: BILLING_PORTAL_URL });
+      return;
+    }
+
+    if (path === "/functions/v1/get-entitlements") {
+      await fulfillJson(route, {
+        user_id: USER_ID,
+        tier: state.canScheduleReleases ? "creator_pro" : "free",
+        can_publish_external: state.canScheduleReleases,
+        can_schedule_releases: state.canScheduleReleases,
+        can_use_collections_unlimited: state.canScheduleReleases,
+        priority_generation: false,
+        monthly_generation_bonus: 0,
+        rev_share_surcharge_bps: state.canScheduleReleases ? 0 : 1000,
+        source: "deterministic-e2e",
+        expires_at: null,
+        is_default: !state.canScheduleReleases,
+      });
       return;
     }
 
@@ -590,6 +613,54 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path === "/rest/v1/release_schedules") {
+      if (method === "POST") {
+        const body = requestBody(route);
+        state.scheduleWrites.push(body);
+        const row = {
+          id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          book_id: BOOK_ID,
+          owner_user_id: USER_ID,
+          cadence: body.cadence ?? "weekly",
+          start_at: body.start_at,
+          channel: body.channel ?? "platform",
+          early_access_tier: body.early_access_tier ?? null,
+          status: "draft",
+          metadata: {},
+          created_at: "2026-09-23T12:00:00.000Z",
+          updated_at: "2026-09-23T12:00:00.000Z",
+        };
+        const wantsSingle = (request.headers()["accept"] ?? "").includes("application/vnd.pgrst.object+json");
+        await fulfillJson(route, wantsSingle ? row : [row], 201, { "content-range": "0-0/1" });
+      } else {
+        const wantsSingle = (request.headers()["accept"] ?? "").includes("application/vnd.pgrst.object+json");
+        await fulfillJson(route, wantsSingle ? null : [], 200, { "content-range": "*/0" });
+      }
+      return;
+    }
+
+    if (path === "/rest/v1/release_schedule_items") {
+      if (method === "POST") {
+        const body = requestBody(route);
+        const rows = Array.isArray(body) ? body : [body];
+        state.scheduleItemWrites.push(...rows);
+        const created = rows.map((row, index) => ({
+          ...row,
+          id: `bbbbbbbb-bbbb-4bbb-8bbb-${String(index + 1).padStart(12, "0")}`,
+          released_at: null,
+          error_message: null,
+        }));
+        await fulfillJson(route, created, 201, {
+          "content-range": created.length ? `0-${created.length - 1}/${created.length}` : "*/0",
+        });
+      } else if (method === "DELETE") {
+        await fulfillJson(route, [], 204);
+      } else {
+        await fulfillJson(route, [], 200, { "content-range": "*/0" });
+      }
+      return;
+    }
+
     if (path === "/rest/v1/chapters") {
       await fulfillJson(route, [chapter], 200, { "content-range": "0-0/1" });
       return;
@@ -686,6 +757,60 @@ test("paid checkout CTA sends the listing id and consumes the returned Stripe ch
   );
   await expect.poll(() => page.evaluate(() => (window as typeof window & { __lastCheckoutUrl?: string }).__lastCheckoutUrl)).toBe(CHECKOUT_URL);
   await expect(page).toHaveURL(new RegExp(`/store/${SLUG}$`));
+});
+
+
+test("free creator sees serialized release scheduling locked and cannot create a schedule", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  state.canScheduleReleases = false;
+  await loginThroughMockedAuth(page);
+
+  await page.goto(`/book/${BOOK_ID}/publish`);
+
+  await expect(
+    page.getByText("Serialized release schedules are locked", { exact: true }),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: "Create schedule" })).toHaveCount(0);
+  await expect(page.getByRole("link", { name: "View creator plans" })).toHaveAttribute("href", "/pricing");
+  expect(state.scheduleWrites).toHaveLength(0);
+});
+
+test("entitled creator creates a serialized release schedule and chapter release items", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  state.canScheduleReleases = true;
+  await loginThroughMockedAuth(page);
+
+  await page.goto(`/book/${BOOK_ID}/publish`);
+
+  await expect(page.getByText("Serialized release schedule", { exact: true })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: "Create schedule" })).toBeVisible();
+
+  // Keep the default weekly/platform settings; set a deterministic local time.
+  await page.getByLabel("First release").fill("2026-10-01T09:00");
+  await page.getByRole("button", { name: "Create schedule" }).click();
+
+  await expect.poll(() => state.scheduleWrites.length).toBe(1);
+  expect(state.scheduleWrites[0]).toMatchObject({
+    book_id: BOOK_ID,
+    owner_user_id: USER_ID,
+    cadence: "weekly",
+    channel: "platform",
+  });
+  expect(String(state.scheduleWrites[0].start_at)).toMatch(/^2026-10-01T/);
+  await expect(page.getByText("Schedule saved", { exact: true })).toBeVisible();
+
+  await page.getByRole("button", { name: "Regenerate releases" }).click();
+
+  await expect.poll(() => state.scheduleItemWrites.length).toBe(1);
+  expect(state.scheduleItemWrites[0]).toMatchObject({
+    schedule_id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    chapter_id: chapter.id,
+    chapter_number: chapter.chapter_number,
+    status: "scheduled",
+  });
+  await expect(page.getByText("Generated 1 release", { exact: true })).toBeVisible();
+  await expect(page.getByText("Ch. 1", { exact: true })).toBeVisible();
+  await expect(page.getByText("scheduled", { exact: true }).last()).toBeVisible();
 });
 
 test("creator publish settings persist storefront visibility and slug through the protected UI", async ({ page }) => {
