@@ -635,6 +635,35 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path === "/functions/v1/de-publication-compliance") {
+      const body = requestBody(route);
+      const productForm = String(body.productForm ?? "paperback");
+      await fulfillJson(route, {
+        book: { id: BOOK_ID, title: BOOK_TITLE },
+        jurisdiction: "DE",
+        productForm,
+        canonicalLanguage: "en",
+        canonicalEditionLabel: "First edition",
+        publisherMode: "kdp_independent",
+        imprint: null,
+        publishedAt: null,
+        dnbDueAt: null,
+        declaration: null,
+        preReleaseChecks: [],
+        postReleaseChecks: [],
+        preReleaseReady: false,
+        postReleaseReady: false,
+        overallReady: false,
+        statusLabel: "REQUIRES_ATTENTION",
+        assurance: {
+          legalCertification: false,
+          message: "Deterministic browser fixture; no legal certification.",
+        },
+        legalSources: [],
+      });
+      return;
+    }
+
     if (path.startsWith("/functions/v1/")) {
       await fulfillJson(route, { ok: true });
       return;
@@ -780,7 +809,8 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     }
 
     if (path === "/rest/v1/chapters") {
-      await fulfillJson(route, [chapter], 200, { "content-range": "0-0/1" });
+      const wantsSingle = (request.headers()["accept"] ?? "").includes("application/vnd.pgrst.object+json");
+      await fulfillJson(route, wantsSingle ? chapter : [chapter], 200, { "content-range": "0-0/1" });
       return;
     }
 
@@ -1266,7 +1296,7 @@ test("authenticated generated book exports a non-placeholder PDF through the rea
     isAcademicMode: false,
     citationStyle: "APA",
   });
-  expect(download.suggestedFilename()).toBe("deterministic-reader-book.pdf");
+  expect(download.suggestedFilename()).toBe(`${BOOK_TITLE}.pdf`);
 });
 
 
