@@ -43,4 +43,4 @@ jobs:
       - name: Test exact-origin admin CORS contract
         run: deno test --config supabase/functions/deno.json supabase/functions/_shared/admin-cors_test.ts
       - name: Pin Stripe settlement, dead-letter and replay reliability contracts
-        run: bun scripts/check-financial-edge-reliability.mjs
+        run: node scripts/check-financial-edge-reliability.mjs
