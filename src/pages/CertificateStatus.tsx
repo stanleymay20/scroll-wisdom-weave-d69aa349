@@ -395,7 +395,7 @@ export default function CertificateStatus() {
               {/* Score Threshold */}
               <div className="flex items-center justify-between">
                 <span className="flex items-center gap-2">
-                  {scoreThresholdMet ? (
+                  {masteryScoreThresholdMet ? (
                     <CheckCircle2 className="h-5 w-5 text-green-500" />
                   ) : (
                     <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30" />
