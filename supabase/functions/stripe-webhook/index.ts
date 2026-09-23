@@ -261,6 +261,215 @@ serve(async (req) => {
       return (await findUserByEmail(customer.email))?.id ?? null;
     };
 
+
+    const writePurchaseLedger = async (
+      purchaseId: string,
+      buyerUserId: string | null,
+      source: string,
+      amountCents: number,
+    ) => {
+      const { error: ledgerErr } = await supabase.rpc("record_purchase_ledger", {
+        _purchase_id: purchaseId,
+      });
+      if (ledgerErr) {
+        await logFinancialEvent(supabase, {
+          event_type: "ledger_write_failed",
+          severity: "error",
+          actor: "webhook",
+          correlation_id: corr,
+          stripe_event_id: event.id,
+          purchase_id: purchaseId,
+          payload: { error: ledgerErr.message, source },
+          dead_letter_reason: source.includes("refund")
+            ? "refund_ledger_write_failed"
+            : "sale_ledger_write_failed",
+        });
+        throw new Error(\`Purchase ledger write failed: \${ledgerErr.message}\`);
+      }
+      await logFinancialEvent(supabase, {
+        event_type: "ledger_written",
+        severity: "info",
+        actor: "webhook",
+        correlation_id: corr,
+        stripe_event_id: event.id,
+        purchase_id: purchaseId,
+        user_id: buyerUserId,
+        payload: { source, amount_cents: amountCents },
+      });
+    };
+
+    const settleBookPurchase = async (
+      session: Stripe.Checkout.Session,
+      source: "checkout_completed" | "checkout_async_succeeded",
+    ) => {
+      const listingId = session.metadata?.listing_id;
+      const bookId = session.metadata?.book_id;
+      if (!listingId || !bookId) {
+        throw new Error("Book purchase checkout is missing listing/book metadata");
+      }
+
+      const metaBuyerUserId = session.metadata?.buyer_user_id || null;
+      const email = session.customer_details?.email ?? session.customer_email ?? null;
+      let buyerUserId: string | null = metaBuyerUserId;
+      if (!buyerUserId && email) {
+        const u = await findUserByEmail(email);
+        buyerUserId = u?.id ?? null;
+      }
+      if (!buyerUserId) {
+        throw new Error("Paid book purchase could not be mapped to an authenticated buyer");
+      }
+
+      const { data: existing, error: existingError } = await supabase
+        .from("book_purchases")
+        .select("id, status, amount_cents")
+        .eq("stripe_session_id", session.id)
+        .maybeSingle();
+      if (existingError) {
+        throw new Error(\`Purchase lookup failed: \${existingError.message}\`);
+      }
+
+      // A retry may arrive after the purchase row was persisted but before the
+      // webhook claim was finalized. Re-run the idempotent ledger writer so a
+      // transient ledger failure heals instead of being skipped forever.
+      if (existing && (existing.status === "paid" || existing.status === "refunded")) {
+        await writePurchaseLedger(
+          existing.id,
+          buyerUserId,
+          existing.status === "refunded" ? "refund_replay" : source + "_replay",
+          Number(existing.amount_cents ?? session.amount_total ?? 0),
+        );
+        logStep("Purchase replay reconciled", {
+          sessionId: session.id,
+          purchaseId: existing.id,
+          status: existing.status,
+        });
+        return;
+      }
+
+      const updatePayload = {
+        status: "paid" as const,
+        buyer_user_id: buyerUserId,
+        buyer_email: email,
+        stripe_payment_intent: session.payment_intent as string | null,
+        amount_cents: session.amount_total ?? 0,
+        currency: (session.currency ?? "usd").toLowerCase(),
+        purchased_at: new Date().toISOString(),
+        correlation_id: corr,
+      };
+
+      let purchaseId: string | null = existing?.id ?? null;
+      if (existing) {
+        const { error: purchaseUpdateError } = await supabase
+          .from("book_purchases")
+          .update(updatePayload)
+          .eq("id", existing.id);
+        if (purchaseUpdateError) {
+          throw new Error(\`Paid purchase update failed: \${purchaseUpdateError.message}\`);
+        }
+      } else {
+        const { data: upserted, error: purchaseUpsertError } = await supabase
+          .from("book_purchases")
+          .upsert({
+            ...updatePayload,
+            listing_id: listingId,
+            book_id: bookId,
+            stripe_session_id: session.id,
+          }, { onConflict: "stripe_session_id" })
+          .select("id")
+          .maybeSingle();
+        if (purchaseUpsertError) {
+          throw new Error(\`Paid purchase upsert failed: \${purchaseUpsertError.message}\`);
+        }
+        purchaseId = upserted?.id ?? null;
+      }
+
+      if (!purchaseId) {
+        throw new Error("Paid purchase persistence returned no purchase id");
+      }
+
+      await writePurchaseLedger(
+        purchaseId,
+        buyerUserId,
+        source,
+        updatePayload.amount_cents,
+      );
+
+      const { error: storefrontEventError } = await supabase
+        .from("storefront_events")
+        .insert([
+          {
+            listing_id: listingId,
+            event_type: "checkout_completed",
+            user_id: buyerUserId,
+            session_id: session.metadata?.attribution_session_id || null,
+            metadata: { session_id: session.id, source, correlation_id: corr },
+          },
+          {
+            listing_id: listingId,
+            event_type: "full_book_unlocked",
+            user_id: buyerUserId,
+            session_id: session.metadata?.attribution_session_id || null,
+            metadata: { session_id: session.id, source, correlation_id: corr },
+          },
+        ]);
+      if (storefrontEventError) {
+        // Entitlement authority is the paid purchase row; telemetry failure must
+        // not roll money state back. Record it for reconciliation instead.
+        await logFinancialEvent(supabase, {
+          event_type: "storefront_event_write_failed",
+          severity: "warn",
+          actor: "webhook",
+          correlation_id: corr,
+          stripe_event_id: event.id,
+          purchase_id: purchaseId,
+          user_id: buyerUserId,
+          payload: { error: storefrontEventError.message, source },
+        });
+      }
+
+      const attrSessionId = session.metadata?.attribution_session_id;
+      if (attrSessionId) {
+        const { error: attrErr } = await supabase
+          .from("attribution_sessions")
+          .update({
+            converted_purchase_id: purchaseId,
+            converted_at: new Date().toISOString(),
+            user_id: buyerUserId,
+            last_seen_at: new Date().toISOString(),
+          })
+          .eq("session_id", attrSessionId)
+          .is("converted_purchase_id", null);
+        if (attrErr) {
+          await logFinancialEvent(supabase, {
+            event_type: "attribution_stitch_failed",
+            severity: "warn",
+            actor: "webhook",
+            correlation_id: corr,
+            stripe_event_id: event.id,
+            purchase_id: purchaseId,
+            payload: { session_id: attrSessionId, error: attrErr.message },
+          });
+        }
+      }
+
+      await logFinancialEvent(supabase, {
+        event_type: "checkout_completed",
+        severity: "info",
+        actor: "webhook",
+        correlation_id: corr,
+        stripe_event_id: event.id,
+        purchase_id: purchaseId,
+        user_id: buyerUserId,
+        payload: {
+          session_id: session.id,
+          book_id: bookId,
+          amount_cents: updatePayload.amount_cents,
+          attribution_source: session.metadata?.attribution_source || null,
+          settlement_source: source,
+        },
+      });
+    };
+
     let processedOk = true;
     let processError: string | null = null;
 
@@ -270,116 +479,16 @@ serve(async (req) => {
           const session = event.data.object as Stripe.Checkout.Session;
 
           if (session.mode === "payment" && session.metadata?.kind === "book_purchase") {
-            const listingId = session.metadata.listing_id;
-            const bookId = session.metadata.book_id;
-            const metaBuyerUserId = session.metadata.buyer_user_id || null;
-            const email = session.customer_details?.email ?? session.customer_email ?? null;
-
-            let buyerUserId: string | null = metaBuyerUserId || null;
-            if (!buyerUserId && email) {
-              const u = await findUserByEmail(email);
-              buyerUserId = u?.id ?? null;
-            }
-
-            const { data: existing, error: existingError } = await supabase.from("book_purchases")
-              .select("id, status").eq("stripe_session_id", session.id).maybeSingle();
-            if (existingError) {
-              throw new Error(`Purchase lookup failed: ${existingError.message}`);
-            }
-
-            if (existing && (existing.status === "paid" || existing.status === "refunded")) {
-              logStep("Purchase replay ignored", { sessionId: session.id });
-              break;
-            }
-
-            const updatePayload = {
-              status: "paid" as const,
-              buyer_user_id: buyerUserId,
-              buyer_email: email,
-              stripe_payment_intent: session.payment_intent as string | null,
-              amount_cents: session.amount_total ?? 0,
-              currency: (session.currency ?? "usd").toLowerCase(),
-              purchased_at: new Date().toISOString(),
-              correlation_id: corr,
-            };
-
-            let purchaseId: string | null = existing?.id ?? null;
-            if (existing) {
-              const { error: purchaseUpdateError } = await supabase
-                .from("book_purchases")
-                .update(updatePayload)
-                .eq("id", existing.id);
-              if (purchaseUpdateError) {
-                throw new Error(`Paid purchase update failed: ${purchaseUpdateError.message}`);
-              }
+            // checkout.session.completed can precede settlement for delayed
+            // payment methods. Only grant the book after Stripe says "paid".
+            if (session.payment_status === "paid") {
+              await settleBookPurchase(session, "checkout_completed");
             } else {
-              const { data: upserted, error: purchaseUpsertError } = await supabase.from("book_purchases").upsert({
-                ...updatePayload, listing_id: listingId, book_id: bookId, stripe_session_id: session.id,
-              }, { onConflict: "stripe_session_id" }).select("id").maybeSingle();
-              if (purchaseUpsertError) {
-                throw new Error(`Paid purchase upsert failed: ${purchaseUpsertError.message}`);
-              }
-              purchaseId = upserted?.id ?? null;
+              logStep("Book checkout completed but payment is still pending", {
+                sessionId: session.id,
+                paymentStatus: session.payment_status,
+              });
             }
-
-            if (!purchaseId) {
-              throw new Error("Paid purchase persistence returned no purchase id");
-            }
-
-            if (purchaseId) {
-              const { error: ledgerErr } = await supabase.rpc("record_purchase_ledger", { _purchase_id: purchaseId });
-              if (ledgerErr) {
-                await logFinancialEvent(supabase, {
-                  event_type: "ledger_write_failed", severity: "error", actor: "webhook",
-                  correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId,
-                  payload: { error: ledgerErr.message },
-                  dead_letter_reason: "sale_ledger_write_failed",
-                });
-                throw new Error(`Purchase ledger write failed: ${ledgerErr.message}`);
-              } else {
-                await logFinancialEvent(supabase, {
-                  event_type: "ledger_written", severity: "info", actor: "webhook",
-                  correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId,
-                  user_id: buyerUserId, payload: { source: "checkout_completed", amount_cents: updatePayload.amount_cents },
-                });
-              }
-            }
-
-            await supabase.from("storefront_events").insert([
-              { listing_id: listingId, event_type: "checkout_completed", user_id: buyerUserId,
-                session_id: session.metadata?.attribution_session_id || null,
-                metadata: { session_id: session.id, source: "webhook", correlation_id: corr } },
-              { listing_id: listingId, event_type: "full_book_unlocked", user_id: buyerUserId,
-                session_id: session.metadata?.attribution_session_id || null,
-                metadata: { session_id: session.id, source: "webhook", correlation_id: corr } },
-            ]);
-
-            // Phase 2.1d.1 — stitch attribution_sessions → purchase
-            const attrSessionId = session.metadata?.attribution_session_id;
-            if (attrSessionId && purchaseId) {
-              const { error: attrErr } = await supabase.from("attribution_sessions")
-                .update({
-                  converted_purchase_id: purchaseId,
-                  converted_at: new Date().toISOString(),
-                  user_id: buyerUserId ?? undefined,
-                  last_seen_at: new Date().toISOString(),
-                })
-                .eq("session_id", attrSessionId)
-                .is("converted_purchase_id", null); // never overwrite a prior conversion
-              if (attrErr) {
-                await logFinancialEvent(supabase, {
-                  event_type: "attribution_stitch_failed", severity: "warn", actor: "webhook",
-                  correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId,
-                  payload: { session_id: attrSessionId, error: attrErr.message },
-                });
-              }
-            }
-
-            await logFinancialEvent(supabase, {
-              event_type: "checkout_completed", severity: "info", actor: "webhook",
-              correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId,
-              user_id: buyerUserId, payload: { session_id: session.id, book_id: bookId, amount_cents: updatePayload.amount_cents, attribution_source: session.metadata?.attribution_source || null },
-            });
             break;
           }
 
@@ -402,6 +511,14 @@ serve(async (req) => {
                 payload: { plan_tier: planTier, creator_tier: getCreatorTierFromProductId(productId), product_id: productId },
               });
             }
+          }
+          break;
+        }
+
+        case "checkout.session.async_payment_succeeded": {
+          const session = event.data.object as Stripe.Checkout.Session;
+          if (session.mode === "payment" && session.metadata?.kind === "book_purchase") {
+            await settleBookPurchase(session, "checkout_async_succeeded");
           }
           break;
         }
