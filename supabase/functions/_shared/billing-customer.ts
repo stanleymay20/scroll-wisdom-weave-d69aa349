@@ -103,34 +103,49 @@ export async function ensureBillingCustomer(
 
 export async function resolveUserIdForBillingCustomer(
   sc: DbClient,
-  stripe: StripeClient,
   customerId: string,
 ): Promise<string | null> {
   const linked = await getLinkByCustomer(sc, customerId);
   if (linked) return linked;
 
-  // Compatibility path for old Stripe customers created before the canonical
-  // DB link existed. Only immutable application identity metadata is accepted;
-  // customer email is deliberately ignored.
-  const customer = await stripe.customers.retrieve(customerId);
-  if (!customer || customer.deleted) return null;
+  // Runtime compatibility for an old database that has not yet materialized
+  // billing_customer_links. Both fallback sources are server-owned Stripe
+  // authority tables. Stripe email and Stripe metadata are deliberately not
+  // accepted as ownership evidence.
+  const [{ data: plan, error: planError }, { data: creator, error: creatorError }] =
+    await Promise.all([
+      sc.from("subscriptions")
+        .select("user_id")
+        .eq("stripe_customer_id", customerId)
+        .maybeSingle(),
+      sc.from("creator_entitlements")
+        .select("user_id")
+        .eq("stripe_customer_id", customerId)
+        .maybeSingle(),
+    ]);
 
-  const metadataUserId = customer.metadata?.scrolllibrary_user_id;
-  if (!metadataUserId) return null;
+  if (planError) {
+    throw new Error(`Legacy plan customer lookup failed: ${planError.message}`);
+  }
+  if (creatorError) {
+    throw new Error(`Legacy creator customer lookup failed: ${creatorError.message}`);
+  }
 
-  const { data: userData, error: userError } =
-    await sc.auth.admin.getUserById(metadataUserId);
-  if (userError || !userData?.user?.id) return null;
+  const candidates = [...new Set(
+    [plan?.user_id, creator?.user_id].filter((value): value is string => Boolean(value)),
+  )];
 
-  const byUser = await getLinkByUser(sc, metadataUserId);
+  if (candidates.length > 1) {
+    throw new Error("BILLING_CUSTOMER_SHARED_ACROSS_USERS");
+  }
+  if (candidates.length === 0) return null;
+
+  const userId = candidates[0];
+  const byUser = await getLinkByUser(sc, userId);
   if (byUser && byUser !== customerId) {
     throw new Error("BILLING_CUSTOMER_ID_CONFLICT_FOR_USER");
   }
 
-  return await insertLink(
-    sc,
-    metadataUserId,
-    customerId,
-    "stripe_customer_metadata_backfill",
-  ).then(() => metadataUserId);
+  await insertLink(sc, userId, customerId, "legacy_runtime_backfill");
+  return userId;
 }
