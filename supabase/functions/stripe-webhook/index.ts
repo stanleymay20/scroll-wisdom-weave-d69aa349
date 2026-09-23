@@ -122,14 +122,24 @@ serve(async (req) => {
           attempts: webhookClaim.attempts,
         },
       });
+      const retryLater = webhookClaim.in_flight === true && webhookClaim.terminal !== true;
       return new Response(JSON.stringify({
-        received: true,
+        received: !retryLater,
         deduped: true,
         status: webhookClaim.status,
         duplicate_kind: duplicateKind,
+        ...(retryLater ? { retry: true } : {}),
       }), {
-        headers: { ...corsHeaders, "Content-Type": "application/json", "x-correlation-id": corr },
-        status: 200,
+        headers: {
+          ...corsHeaders,
+          "Content-Type": "application/json",
+          "x-correlation-id": corr,
+          ...(retryLater ? { "Retry-After": "5" } : {}),
+        },
+        // Never acknowledge a non-terminal in-flight event as complete. If the
+        // first worker later fails its final status write, Stripe must still
+        // deliver again instead of treating the event as permanently handled.
+        status: retryLater ? 503 : 200,
       });
     }
 
@@ -188,17 +198,19 @@ serve(async (req) => {
       });
       if (error) {
         logStep("Creator entitlement sync failed", { error: error.message, userId });
-      } else {
-        logStep("Creator entitlement synced", { userId, tier: creatorTier, status: subscription.status });
+        throw new Error(`Creator entitlement sync failed: ${error.message}`);
       }
+      logStep("Creator entitlement synced", { userId, tier: creatorTier, status: subscription.status });
     };
 
     const updateProfilePlan = async (authUserId: string, plan: ValidPlan) => {
       const { error } = await supabase.from("profiles")
         .update({ plan, updated_at: new Date().toISOString() })
         .eq("user_id", authUserId);
-      if (error) logStep("Error updating profile plan", { error: error.message });
-      return error;
+      if (error) {
+        logStep("Error updating profile plan", { error: error.message });
+        throw new Error(`Profile plan update failed: ${error.message}`);
+      }
     };
 
     const syncPlanSubscription = async (
@@ -225,7 +237,10 @@ serve(async (req) => {
           : null,
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" });
-      if (error) logStep("Plan subscription sync failed", { userId, status: subscription.status });
+      if (error) {
+        logStep("Plan subscription sync failed", { userId, status: subscription.status, error: error.message });
+        throw new Error(`Plan subscription sync failed: ${error.message}`);
+      }
     };
 
     const findUserByEmail = async (email: string) => {
@@ -266,8 +281,11 @@ serve(async (req) => {
               buyerUserId = u?.id ?? null;
             }
 
-            const { data: existing } = await supabase.from("book_purchases")
+            const { data: existing, error: existingError } = await supabase.from("book_purchases")
               .select("id, status").eq("stripe_session_id", session.id).maybeSingle();
+            if (existingError) {
+              throw new Error(`Purchase lookup failed: ${existingError.message}`);
+            }
 
             if (existing && (existing.status === "paid" || existing.status === "refunded")) {
               logStep("Purchase replay ignored", { sessionId: session.id });
@@ -287,12 +305,25 @@ serve(async (req) => {
 
             let purchaseId: string | null = existing?.id ?? null;
             if (existing) {
-              await supabase.from("book_purchases").update(updatePayload).eq("id", existing.id);
+              const { error: purchaseUpdateError } = await supabase
+                .from("book_purchases")
+                .update(updatePayload)
+                .eq("id", existing.id);
+              if (purchaseUpdateError) {
+                throw new Error(`Paid purchase update failed: ${purchaseUpdateError.message}`);
+              }
             } else {
-              const { data: upserted } = await supabase.from("book_purchases").upsert({
+              const { data: upserted, error: purchaseUpsertError } = await supabase.from("book_purchases").upsert({
                 ...updatePayload, listing_id: listingId, book_id: bookId, stripe_session_id: session.id,
               }, { onConflict: "stripe_session_id" }).select("id").maybeSingle();
+              if (purchaseUpsertError) {
+                throw new Error(`Paid purchase upsert failed: ${purchaseUpsertError.message}`);
+              }
               purchaseId = upserted?.id ?? null;
+            }
+
+            if (!purchaseId) {
+              throw new Error("Paid purchase persistence returned no purchase id");
             }
 
             if (purchaseId) {
@@ -302,7 +333,9 @@ serve(async (req) => {
                   event_type: "ledger_write_failed", severity: "error", actor: "webhook",
                   correlation_id: corr, stripe_event_id: event.id, purchase_id: purchaseId,
                   payload: { error: ledgerErr.message },
+                  dead_letter_reason: "sale_ledger_write_failed",
                 });
+                throw new Error(`Purchase ledger write failed: ${ledgerErr.message}`);
               } else {
                 await logFinancialEvent(supabase, {
                   event_type: "ledger_written", severity: "info", actor: "webhook",
@@ -377,8 +410,11 @@ serve(async (req) => {
         case "checkout.session.async_payment_failed": {
           const session = event.data.object as Stripe.Checkout.Session;
           if (session.metadata?.kind === "book_purchase") {
-            await supabase.from("book_purchases")
+            const { error: failedPurchaseError } = await supabase.from("book_purchases")
               .update({ status: "failed" }).eq("stripe_session_id", session.id);
+            if (failedPurchaseError) {
+              throw new Error(`Failed checkout status write failed: ${failedPurchaseError.message}`);
+            }
             await supabase.from("storefront_events").insert({
               listing_id: session.metadata.listing_id, event_type: "checkout_failed",
               metadata: { session_id: session.id, reason: event.type, correlation_id: corr },
@@ -395,17 +431,23 @@ serve(async (req) => {
         case "charge.refunded": {
           const charge = event.data.object as Stripe.Charge;
           if (charge.payment_intent) {
-            const { data: refunded } = await supabase.from("book_purchases")
+            const { data: refunded, error: refundWriteError } = await supabase.from("book_purchases")
               .update({ status: "refunded" })
               .eq("stripe_payment_intent", charge.payment_intent as string)
               .select("id, buyer_user_id, amount_cents");
+            if (refundWriteError) {
+              throw new Error(`Refund purchase status write failed: ${refundWriteError.message}`);
+            }
             for (const p of refunded ?? []) {
               const { error: ledgerErr } = await supabase.rpc("record_purchase_ledger", { _purchase_id: p.id });
               if (ledgerErr) {
                 await logFinancialEvent(supabase, {
                   event_type: "ledger_write_failed", severity: "error", actor: "webhook",
-                  correlation_id: corr, stripe_event_id: event.id, purchase_id: p.id, payload: { error: ledgerErr.message, kind: "refund" },
+                  correlation_id: corr, stripe_event_id: event.id, purchase_id: p.id,
+                  payload: { error: ledgerErr.message, kind: "refund" },
+                  dead_letter_reason: "refund_ledger_write_failed",
                 });
+                throw new Error(`Refund ledger write failed: ${ledgerErr.message}`);
               } else {
                 await logFinancialEvent(supabase, {
                   event_type: "refund_issued", severity: "warn", actor: "webhook",
@@ -597,11 +639,14 @@ serve(async (req) => {
           // Matched on the stored account id, never on metadata: metadata is
           // writable through the Stripe dashboard, and this decides where
           // money goes.
-          const { data: profile } = await supabase
+          const { data: profile, error: profileLookupError } = await supabase
             .from("creator_payout_profiles")
             .select("user_id, payout_method, stripe_connect_status")
             .eq("stripe_connect_account_id", account.id)
             .maybeSingle();
+          if (profileLookupError) {
+            throw new Error(`Connect payout profile lookup failed: ${profileLookupError.message}`);
+          }
 
           if (!profile) {
             // An account we did not create, or one whose profile row was
@@ -630,7 +675,7 @@ serve(async (req) => {
               correlation_id: corr, stripe_event_id: event.id, user_id: profile.user_id,
               payload: { account_id: account.id, status, error: updateError.message },
             });
-            break;
+            throw new Error(`Connect payout status write failed: ${updateError.message}`);
           }
 
           if (previous !== status) {
@@ -661,13 +706,16 @@ serve(async (req) => {
     // are dead-lettered for the reliability dashboard's DLQ view.
     const isFatal = !processedOk;
     const deadLetter = isFatal && attemptsAfter >= 3;
-    await supabase.from("stripe_webhook_events").update({
+    const { error: finalizeWebhookError } = await supabase.from("stripe_webhook_events").update({
       status: deadLetter ? "dead_lettered" : (processedOk ? "processed" : "failed"),
       last_error: processError,
       processed_at: new Date().toISOString(),
       updated_at: new Date().toISOString(),
       ...(deadLetter ? { dead_letter_reason: processError ?? "max_attempts_exceeded", dead_lettered_at: new Date().toISOString() } : {}),
     }).eq("stripe_event_id", event.id);
+    if (finalizeWebhookError) {
+      throw new Error(`Webhook finalization write failed: ${finalizeWebhookError.message}`);
+    }
 
     if (!processedOk) {
       await logFinancialEvent(supabase, {
