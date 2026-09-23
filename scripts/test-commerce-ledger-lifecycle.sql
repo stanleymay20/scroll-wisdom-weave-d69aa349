@@ -16,6 +16,11 @@ DECLARE
   v_refund record;
   v_rollup record;
 BEGIN
+  -- books.user_id and buyer ownership are anchored to auth.users.
+  -- These fixtures live only inside this transaction and are rolled back.
+  INSERT INTO auth.users (id)
+  VALUES (v_creator), (v_buyer);
+
   -- Both money writers are privileged server boundaries.
   IF has_function_privilege('anon', 'public.record_purchase_ledger(uuid)'::regprocedure, 'EXECUTE')
      OR has_function_privilege('authenticated', 'public.record_purchase_ledger(uuid)'::regprocedure, 'EXECUTE') THEN
