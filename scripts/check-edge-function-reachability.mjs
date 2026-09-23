@@ -43,6 +43,10 @@ function walk(dir, out = []) {
   return out;
 }
 
+function escapeRegex(value) {
+  return value.replace(/[.*+?^$\{\}()|[\]\\]/g, "\\$&");
+}
+
 const runtimeRoots = [
   "src",
   "supabase/functions",
@@ -71,19 +75,21 @@ for (const fn of functionNames) {
   }
 
   const ownPrefix = join(functionsRoot, fn) + "/";
-  const invocationPatterns = [
-    'functions.invoke("' + fn,
-    "functions.invoke('" + fn,
-    "functions.invoke(`" + fn,
-    "/functions/v1/" + fn,
-    "functions/v1/" + fn,
-  ];
+  const invokePattern = new RegExp(
+    "functions\\.invoke\\s*\\(\\s*[\\\"'\x60]" +
+      escapeRegex(fn) +
+      "[\\\"'\x60]",
+  );
+  const directHttpPatterns = ["/functions/v1/" + fn, "functions/v1/" + fn];
 
   let found = null;
   for (const file of files) {
     if (file.startsWith(ownPrefix)) continue;
     const body = readFileSync(file, "utf8");
-    if (invocationPatterns.some((pattern) => body.includes(pattern))) {
+    if (
+      invokePattern.test(body) ||
+      directHttpPatterns.some((pattern) => body.includes(pattern))
+    ) {
       found = relative(root, file);
       break;
     }
