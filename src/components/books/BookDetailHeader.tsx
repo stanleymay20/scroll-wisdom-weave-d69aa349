@@ -25,6 +25,7 @@ interface BookData {
   language: string | null;
   book_type: string | null;
   source_type: string | null;
+  current_publication_id: string | null;
 }
 
 interface ChapterData {
@@ -89,7 +90,7 @@ export function BookDetailHeader({
               <p className="text-sm text-muted-foreground text-center">No cover yet</p>
             </div>
           )}
-          {isOwner && (
+          {isOwner && !book.current_publication_id && (
             <div className="absolute inset-x-0 bottom-0 p-3 bg-background/70 backdrop-blur-sm border-t border-border/50">
               <div className="flex flex-col gap-2">
                 <input
@@ -132,6 +133,11 @@ export function BookDetailHeader({
                   />
                 )}
               </div>
+            </div>
+          )}
+          {isOwner && book.current_publication_id && (
+            <div className="absolute inset-x-0 bottom-0 p-3 bg-background/80 backdrop-blur-sm border-t border-border/50 text-xs text-muted-foreground">
+              Certified cover locked. Create a revision to change publication artwork.
             </div>
           )}
         </div>
