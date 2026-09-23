@@ -20,24 +20,24 @@ Deno.serve(async (req) => {
   // unauthenticated caller can drive privileged work and read back the ids of
   // every schedule it touched.
   //
-  // Enforcement is conditional on purpose. The job is scheduled outside this
-  // repository, so demanding the header unconditionally would stop whatever
-  // currently calls it — and for a release scheduler that means an author's
-  // chapters quietly never going live. Setting CRON_SECRET, and adding the
-  // header wherever the job is scheduled, closes the hole with no code change.
+  // The canonical scheduler is now database pg_cron calling
+  // public.materialize_due_releases() directly. This HTTP worker remains only
+  // as an operational fallback, so there is no longer a reliability reason to
+  // run it anonymously when CRON_SECRET is missing.
   const auth = authorizeCronRequest(req.headers, Deno.env.get("CRON_SECRET"));
-  if (auth.status === "rejected") {
-    console.warn("materialize-release-schedules: rejected", { reason: auth.reason });
-    return new Response(JSON.stringify({ ok: false, error: "unauthorized" }), {
-      status: 401,
+  if (auth.status !== "authorized") {
+    console.warn("materialize-release-schedules: rejected", {
+      reason: auth.status === "unconfigured" ? "cron_secret_unconfigured" : auth.reason,
+    });
+    return new Response(JSON.stringify({
+      ok: false,
+      error: auth.status === "unconfigured"
+        ? "scheduler_secret_unconfigured"
+        : "unauthorized",
+    }), {
+      status: auth.status === "unconfigured" ? 503 : 401,
       headers: { ...cors, "Content-Type": "application/json" },
     });
-  }
-  if (auth.status === "unconfigured") {
-    console.warn(
-      `materialize-release-schedules: CRON_SECRET is not set; running unauthenticated. ` +
-      `Set CRON_SECRET and send it as ${CRON_SECRET_HEADER} from the scheduler to close this.`,
-    );
   }
 
   const url = Deno.env.get("SUPABASE_URL")!;
@@ -127,10 +127,9 @@ Deno.serve(async (req) => {
       ok: true,
       processed, released, failed, notified,
       elapsed_ms: Date.now() - started,
-      // Per-item ids and error text go only to a caller that proved it is the
-      // scheduler. Counts are harmless and keep the response useful while
-      // CRON_SECRET is still unset.
-      ...(auth.verified ? { results } : {}),
+      // Per-item details are returned only after the scheduler proved the
+      // shared secret. This fallback never runs in an unverified mode.
+      results,
     }), { headers: { ...cors, "Content-Type": "application/json" } });
   } catch (e) {
     return new Response(JSON.stringify({
