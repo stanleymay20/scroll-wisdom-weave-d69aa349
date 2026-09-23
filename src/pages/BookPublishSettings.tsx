@@ -66,6 +66,7 @@ export default function BookPublishSettings() {
   const [aiLevel, setAiLevel] = useState<"" | "none" | "assisted" | "generated">("");
   const [savingAiLevel, setSavingAiLevel] = useState(false);
   const [publishingCanonical, setPublishingCanonical] = useState(false);
+  const [exportingManifest, setExportingManifest] = useState(false);
   const [canonicalPublication, setCanonicalPublication] = useState<{
     publication_id: string;
     version: string;
@@ -200,6 +201,58 @@ export default function BookPublishSettings() {
       toast.error(e?.message ?? "Canonical publication failed");
     } finally {
       setPublishingCanonical(false);
+    }
+  }
+
+  async function exportCanonicalManifest() {
+    const publicationId = canonicalPublication?.publication_id || book?.current_publication_id;
+    if (!publicationId) {
+      toast.error("Create the canonical Publication before exporting its manifest.");
+      return;
+    }
+
+    setExportingManifest(true);
+    try {
+      const { data, error } = await supabase.functions.invoke("export-publication", {
+        body: {
+          publication_id: publicationId,
+          format: "manifest",
+        },
+      });
+      if (error) throw error;
+
+      const result = data as {
+        export_id?: string;
+        exported_at?: string;
+        canonical?: Record<string, unknown>;
+        verify_url?: string;
+      };
+      if (!result?.export_id || !result.canonical) {
+        throw new Error("Publication manifest authority returned an incomplete result.");
+      }
+
+      const blob = new Blob([
+        JSON.stringify({
+          export_id: result.export_id,
+          exported_at: result.exported_at,
+          verify_url: result.verify_url,
+          publication_id: publicationId,
+          canonical: result.canonical,
+        }, null, 2),
+      ], { type: "application/json" });
+      const href = URL.createObjectURL(blob);
+      const anchor = document.createElement("a");
+      anchor.href = href;
+      anchor.download = `scrolllibrary-publication-${publicationId.slice(0, 8)}-manifest.json`;
+      document.body.appendChild(anchor);
+      anchor.click();
+      anchor.remove();
+      URL.revokeObjectURL(href);
+      toast.success("Verifiable publication manifest exported");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Publication manifest export failed");
+    } finally {
+      setExportingManifest(false);
     }
   }
 
@@ -440,18 +493,27 @@ export default function BookPublishSettings() {
                 </div>
               )}
             </div>
-            <Button
-              type="button"
-              onClick={publishCanonicalWork}
-              disabled={publishingCanonical || !book?.work_id}
-              className="shrink-0"
-            >
-              {publishingCanonical
-                ? "Publishing…"
-                : book?.current_publication_id
-                  ? "Mint current edition"
-                  : "Create canonical publication"}
-            </Button>
+            <div className="flex shrink-0 flex-wrap gap-2">
+              <Button
+                type="button"
+                onClick={publishCanonicalWork}
+                disabled={publishingCanonical || !book?.work_id}
+              >
+                {publishingCanonical
+                  ? "Publishing…"
+                  : book?.current_publication_id
+                    ? "Mint current edition"
+                    : "Create canonical publication"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={exportCanonicalManifest}
+                disabled={exportingManifest || !(canonicalPublication?.publication_id || book?.current_publication_id)}
+              >
+                {exportingManifest ? "Exporting…" : "Export verified manifest"}
+              </Button>
+            </div>
           </div>
           {!book?.work_id && (
             <p className="mt-3 text-xs text-destructive">
