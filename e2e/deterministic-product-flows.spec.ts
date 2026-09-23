@@ -526,7 +526,7 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     }
 
     if (path === "/rest/v1/books") {
-      await fulfillJson(route, [{
+      const bookFixture = {
         id: BOOK_ID,
         title: BOOK_TITLE,
         description: "A deterministic book used to verify export and reader browser contracts.",
@@ -543,7 +543,14 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
         source_type: "generated",
         work_id: WORK_ID,
         current_publication_id: null,
-      }], 200, { "content-range": "0-0/1" });
+      };
+      const wantsSingle = (request.headers()["accept"] ?? "").includes("application/vnd.pgrst.object+json");
+      await fulfillJson(
+        route,
+        wantsSingle ? bookFixture : [bookFixture],
+        200,
+        { "content-range": "0-0/1" },
+      );
       return;
     }
 
@@ -724,8 +731,8 @@ test("generate form invokes the real generation route and follows the returned b
     language: "en",
     bookType: "text",
     extendedBookType: "text",
-    academicMode: false,
-    deepResearch: false,
+    academicMode: true,
+    deepResearch: true,
   });
 
   await expect(page).toHaveURL(new RegExp(`/book/${BOOK_ID}$`), { timeout: 5_000 });
@@ -866,6 +873,7 @@ test("public certificate verification renders a server-authoritative valid learn
   await expect(page.getByText("E2E Learner", { exact: true })).toBeVisible();
   await expect(page.getByText("100%", { exact: true }).first()).toBeVisible();
   await expect(page.getByText(/Live SHA-256 matches issuance state/i)).toBeVisible();
+  await page.getByText("Technical provenance", { exact: true }).click();
   await expect(page.getByText("fixture-verification-token", { exact: false })).toBeVisible();
 });
 
@@ -912,6 +920,8 @@ test("pricing upgrade sends the canonical Premium tier and price to subscription
   const state = await installDeterministicBackend(page);
   await loginThroughMockedAuth(page);
 
+  await page.goto("/pricing");
+  await expect(page.getByRole("heading", { name: "Plans & Pricing" })).toBeVisible({ timeout: 10_000 });
   await page.evaluate(() => {
     const testWindow = window as typeof window & { __lastBillingUrl?: string };
     testWindow.__lastBillingUrl = undefined;
@@ -920,9 +930,6 @@ test("pricing upgrade sends the canonical Premium tier and price to subscription
       return testWindow;
     }) as typeof window.open;
   });
-
-  await page.goto("/pricing");
-  await expect(page.getByRole("heading", { name: "Plans & Pricing" })).toBeVisible({ timeout: 10_000 });
 
   const premiumCard = page.getByText("Premium", { exact: true }).first().locator("xpath=ancestor::*[contains(@class,'border')][1]");
   const premiumUpgrade = page.getByRole("button", { name: "Upgrade to Premium" }).first();
@@ -946,6 +953,7 @@ test("subscribed pricing page opens the server-created Stripe billing portal", a
   state.subscriptionTier = "premium";
   await loginThroughMockedAuth(page);
 
+  await page.goto("/pricing");
   await page.evaluate(() => {
     const testWindow = window as typeof window & { __lastBillingUrl?: string };
     testWindow.__lastBillingUrl = undefined;
@@ -954,8 +962,6 @@ test("subscribed pricing page opens the server-created Stripe billing portal", a
       return testWindow;
     }) as typeof window.open;
   });
-
-  await page.goto("/pricing");
   const manage = page.getByRole("button", { name: "Manage Subscription" }).first();
   await expect(manage).toBeVisible({ timeout: 10_000 });
   await manage.click();
@@ -975,7 +981,7 @@ test("post-checkout success only claims activation after server confirmation", a
   await page.goto("/pricing?success=true");
 
   await expect(page.getByText("Subscription activated!", { exact: true })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText(/features are now unlocked/i)).toBeVisible();
+  await expect(page.getByText("Welcome! Your features are now unlocked.", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/pricing$/, { timeout: 10_000 });
 });
 
