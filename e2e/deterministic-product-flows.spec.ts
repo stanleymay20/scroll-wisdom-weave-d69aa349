@@ -700,8 +700,7 @@ test("canonical publishing action invokes publish-work without changing storefro
 
   // Canonical publishing is independent of commercial listing visibility.
   expect(state.listingWrites).toHaveLength(0);
-  await expect(page.getByText("Version:", { exact: true })).toBeVisible();
-  await expect(page.getByText("1.0.0", { exact: true })).toBeVisible();
+  await expect(page.getByText(/Version:\s*1\.0\.0/)).toBeVisible();
 });
 
 test("generate form invokes the real generation route and follows the returned book id", async ({ page }) => {
