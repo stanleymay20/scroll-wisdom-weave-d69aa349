@@ -2,8 +2,14 @@ import { readFileSync } from "node:fs";
 
 const webhook = readFileSync("supabase/functions/stripe-webhook/index.ts", "utf8");
 const replay = readFileSync("supabase/functions/admin-webhook-replay/index.ts", "utf8");
+const adminRefund = readFileSync("supabase/functions/admin-refund-purchase/index.ts", "utf8");
+const adminCors = readFileSync("supabase/functions/_shared/admin-cors.ts", "utf8");
 const claimMigration = readFileSync(
   "supabase/migrations/20260923030500_stripe_webhook_claim_terminal_hardening.sql",
+  "utf8",
+);
+const refundMigration = readFileSync(
+  "supabase/migrations/20260923031500_partial_refund_ledger_events.sql",
   "utf8",
 );
 
@@ -58,6 +64,88 @@ requireText(
   "paid/refunded replay reconciliation",
 );
 
+requireText(
+  webhook,
+  'case "refund.created"',
+  "Stripe refund.created reconciliation handler",
+);
+requireText(
+  webhook,
+  'case "refund.updated"',
+  "Stripe refund.updated reconciliation handler",
+);
+requireText(
+  webhook,
+  '"record_purchase_refund_ledger"',
+  "event-specific partial-refund ledger call",
+);
+requireText(
+  webhook,
+  "charge.refunds?.has_more",
+  "charge.refunded pagination/reconciliation fallback",
+);
+rejectText(
+  webhook,
+  '.update({ status: "refunded" })',
+  "webhook direct full-purchase refund status write",
+);
+
+requireText(
+  adminRefund,
+  'req.headers.get("x-idempotency-key")',
+  "admin refund request idempotency key",
+);
+requireText(
+  adminRefund,
+  '"record_purchase_refund_ledger"',
+  "admin partial-refund ledger call",
+);
+requireText(
+  adminRefund,
+  "idempotencyKey:",
+  "Stripe refund idempotency option",
+);
+requireText(
+  adminRefund,
+  "refund:${purchase.id}:${idempotencyKey}",
+  "Stripe refund key bound to the logical admin request",
+);
+rejectText(
+  adminRefund,
+  '.update({ status: "refunded"',
+  "admin direct full-purchase refund status write",
+);
+requireText(
+  adminCors,
+  "x-idempotency-key",
+  "admin CORS idempotency header allowance",
+);
+
+requireText(
+  refundMigration,
+  "source_event_id text",
+  "append-only Stripe refund event identity",
+);
+requireText(
+  refundMigration,
+  "record_purchase_refund_ledger",
+  "partial-refund ledger function",
+);
+requireText(
+  refundMigration,
+  "creator_earnings_refund_source_event_unique",
+  "unique refund event ledger identity",
+);
+requireText(
+  refundMigration,
+  "IF v_fully_refunded THEN",
+  "access revocation only after cumulative full refund",
+);
+requireText(
+  refundMigration,
+  "refund_requests_purchase_idempotency_unique",
+  "admin refund request idempotency index",
+);
 requireText(
   replay,
   'last_error: "admin_replay_staged"',
