@@ -68,6 +68,8 @@ updates:
         update-types: ["version-update:semver-major"]
       - dependency-name: "framer-motion"
         update-types: ["version-update:semver-major"]
+      - dependency-name: "react-resizable-panels"
+        update-types: ["version-update:semver-major"]
       - dependency-name: "mermaid"
         update-types: ["version-update:semver-major"]
       - dependency-name: "sonner"
