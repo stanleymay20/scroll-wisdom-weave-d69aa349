@@ -34,7 +34,7 @@ function walk(dir, out = []) {
     if (stat.isDirectory()) {
       walk(path, out);
     } else if (
-      /\.(?:ts|tsx|js|mjs|sql|yml|yaml)$/.test(name) &&
+      /\.(?:ts|tsx|js|mjs|yml|yaml)$/.test(name) &&
       !/(?:_test|\.test|\.spec)\.(?:ts|tsx|js|mjs)$/.test(name)
     ) {
       out.push(path);
@@ -44,19 +44,19 @@ function walk(dir, out = []) {
 }
 
 function escapeRegex(value) {
-  return value.replace(/[.*+?^$\{\}()|[\]\\]/g, "\\$&");
+  return value.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
 }
 
 const runtimeRoots = [
   "src",
   "supabase/functions",
-  "supabase/migrations",
   ".github",
 ].map((path) => join(root, path));
 const files = runtimeRoots.flatMap((path) => walk(path));
 
 // These are entered by a trusted external system or intentionally public
-// network route rather than by another application module.
+// network route rather than by another application module. Every entry needs
+// a concrete operational reason; do not use this map as a junk drawer.
 const externalEntrypoints = new Map([
   ["stripe-webhook", "Stripe signed webhook"],
   ["gumroad-oauth-callback", "Gumroad OAuth callback"],
@@ -75,12 +75,24 @@ for (const fn of functionNames) {
   }
 
   const ownPrefix = join(functionsRoot, fn) + "/";
+  const escaped = escapeRegex(fn);
   const invokePattern = new RegExp(
     "functions\\.invoke\\s*\\(\\s*[\\\"'\x60]" +
-      escapeRegex(fn) +
+      escaped +
       "[\\\"'\x60]",
   );
   const directHttpPatterns = ["/functions/v1/" + fn, "functions/v1/" + fn];
+
+  // Wrapper helpers are common in this repository:
+  //   invokeFunction("isbn-admin-state", ...)
+  //   invokePublishFunction("publish-to-gumroad", ...)
+  //   call("storefront-user-api/...")
+  // A quoted slug in executable runtime code outside the function's own
+  // directory is therefore caller evidence. Config files and migrations are
+  // intentionally excluded so "declared" cannot masquerade as "reachable".
+  const quotedSlugPattern = new RegExp(
+    "[\\\"'\x60]" + escaped + "(?:/[^\\\"'\x60]*)?[\\\"'\x60]",
+  );
 
   let found = null;
   for (const file of files) {
@@ -88,7 +100,8 @@ for (const fn of functionNames) {
     const body = readFileSync(file, "utf8");
     if (
       invokePattern.test(body) ||
-      directHttpPatterns.some((pattern) => body.includes(pattern))
+      directHttpPatterns.some((pattern) => body.includes(pattern)) ||
+      quotedSlugPattern.test(body)
     ) {
       found = relative(root, file);
       break;
