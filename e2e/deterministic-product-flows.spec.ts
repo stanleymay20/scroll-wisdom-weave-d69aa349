@@ -7,6 +7,8 @@ import { expect, test, type Page, type Route } from "@playwright/test";
 const USER_ID = "11111111-1111-4111-8111-111111111111";
 const BOOK_ID = "22222222-2222-4222-8222-222222222222";
 const LISTING_ID = "33333333-3333-4333-8333-333333333333";
+const WORK_ID = "77777777-7777-4777-8777-777777777777";
+const PUBLICATION_ID = "88888888-8888-4888-8888-888888888888";
 const SLUG = "deterministic-reader-book";
 const BOOK_TITLE = "Deterministic Reader Book";
 const CHECKOUT_URL = "https://checkout.stripe.com/c/pay/cs_test_scrolllibrary";
@@ -109,6 +111,7 @@ type MockState = {
   listingWrites: Array<Record<string, unknown>>;
   generationRequests: Array<Record<string, unknown>>;
   exportRequests: Array<Record<string, unknown>>;
+  canonicalPublishRequests: Array<Record<string, unknown>>;
   qualityFunctionCalls: string[];
 };
 
@@ -138,6 +141,7 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
     listingWrites: [],
     generationRequests: [],
     exportRequests: [],
+    canonicalPublishRequests: [],
     qualityFunctionCalls: [],
   };
 
@@ -278,6 +282,22 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path === "/functions/v1/publish-work") {
+      state.canonicalPublishRequests.push(requestBody(route));
+      await fulfillJson(route, {
+        publication_id: PUBLICATION_ID,
+        certificate_id: "99999999-9999-4999-8999-999999999998",
+        version: "1.0.0",
+        content_hash: "a".repeat(64),
+        published_at: "2026-09-23T03:30:00.000Z",
+        publisher: { mode: "kdp_independent" },
+        scroll_identity: {},
+        identifiers: [],
+        idempotent: false,
+      });
+      return;
+    }
+
     if (path === "/functions/v1/publishing-identity") {
       await fulfillJson(route, {
         book: { id: BOOK_ID, title: BOOK_TITLE },
@@ -350,7 +370,7 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
         ai_assistance_level: "assisted",
         book_type: "text",
         source_type: "generated",
-        work_id: null,
+        work_id: WORK_ID,
         current_publication_id: null,
       }], 200, { "content-range": "0-0/1" });
       return;
@@ -483,6 +503,28 @@ test("creator publish settings persist storefront visibility and slug through th
   await expect(page.getByText("Saved", { exact: true }).first()).toBeVisible();
 });
 
+
+test("canonical publishing action invokes publish-work without changing storefront visibility", async ({ page }) => {
+  const state = await installDeterministicBackend(page);
+  await loginThroughMockedAuth(page);
+
+  await page.goto(`/book/${BOOK_ID}/publish`);
+  const publishButton = page.getByRole("button", { name: "Create canonical publication" });
+  await expect(publishButton).toBeVisible({ timeout: 10_000 });
+  await publishButton.click();
+
+  await expect.poll(() => state.canonicalPublishRequests.length).toBe(1);
+  expect(state.canonicalPublishRequests[0]).toMatchObject({
+    work_id: WORK_ID,
+    edition_kind: "original",
+    language: "en",
+  });
+
+  // Canonical publishing is independent of commercial listing visibility.
+  expect(state.listingWrites).toHaveLength(0);
+  await expect(page.getByText("Version:", { exact: true })).toBeVisible();
+  await expect(page.getByText("1.0.0", { exact: true })).toBeVisible();
+});
 
 test("generate form invokes the real generation route and follows the returned book id", async ({ page }) => {
   const state = await installDeterministicBackend(page);
