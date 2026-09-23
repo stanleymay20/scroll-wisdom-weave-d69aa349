@@ -227,6 +227,8 @@ jobs:
         run: node scripts/check-chapter-regeneration-contract.mjs
       - name: Pin cover provenance and certified-artwork immutability
         run: node scripts/check-cover-provenance-contract.mjs
+      - name: Pin serialized release UI, RLS, cron and materialization contract
+        run: node scripts/check-release-schedule-contract.mjs
       - name: Test publication trust engines
         run: |
           deno test supabase/functions/_shared/isbn_test.ts
