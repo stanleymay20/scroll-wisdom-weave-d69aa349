@@ -196,6 +196,42 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       return;
     }
 
+    if (path === "/functions/v1/verify-certificate") {
+      const body = requestBody(route);
+      if (body.certificateNumber === "SLC-MISSING-404") {
+        await fulfillJson(route, { error: "not_found" }, 404);
+        return;
+      }
+      await fulfillJson(route, {
+        found: true,
+        status: "valid",
+        valid: true,
+        certificateNumber: body.certificateNumber,
+        certificateType: "mastery",
+        issuedAt: "2026-09-20T12:00:00.000Z",
+        holder: "E2E Learner",
+        coveragePercentage: 100,
+        integrity: { score: 0.97, classification: "high" },
+        assessment: { contractVersion: "8.0", contractPassed: true },
+        provenance: {
+          contract: "content-sha256",
+          storedHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          currentHash: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+          hashMatch: true,
+        },
+        verificationHash: "fixture-verification-token",
+        book: {
+          id: BOOK_ID,
+          title: BOOK_TITLE,
+          currentTitle: BOOK_TITLE,
+          category: "technology",
+          type: "text",
+          version: "1.0",
+        },
+      });
+      return;
+    }
+
     if (path === "/functions/v1/check-subscription") {
       await fulfillJson(route, { subscribed: false, tier: "free", subscription_end: null });
       return;
@@ -752,4 +788,28 @@ test("Retry publication review drives the shipped quality pipeline through final
     "certify-production-render",
     "finalize-publication-certification",
   ]);
+});
+
+
+test("public certificate verification renders a server-authoritative valid learning record", async ({ page }) => {
+  await installDeterministicBackend(page);
+
+  await page.goto("/certificate/SLC-VALID-001");
+
+  await expect(page.getByRole("heading", { name: "Verified & Valid" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: BOOK_TITLE })).toBeVisible();
+  await expect(page.getByText("E2E Learner", { exact: true })).toBeVisible();
+  await expect(page.getByText("100%", { exact: true }).first()).toBeVisible();
+  await expect(page.getByText(/Live SHA-256 matches issuance state/i)).toBeVisible();
+  await expect(page.getByText("fixture-verification-token", { exact: false })).toBeVisible();
+});
+
+test("public certificate verification renders not-found without making a validity claim", async ({ page }) => {
+  await installDeterministicBackend(page);
+
+  await page.goto("/certificate/SLC-MISSING-404");
+
+  await expect(page.getByRole("heading", { name: "Not Found" })).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByText("SLC-MISSING-404", { exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Verified & Valid" })).toHaveCount(0);
 });
