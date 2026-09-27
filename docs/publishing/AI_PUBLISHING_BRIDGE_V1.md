@@ -62,11 +62,12 @@ A stale base hash is rejected with HTTP 409. Retrying the same `external_request
   "action": "list_proposals",
   "book_id": "<uuid>",
   "status": "proposed",
-  "limit": 50
+  "limit": 50,
+  "offset": 0
 }
 ```
 
-Returns bounded previews, not the full manuscript payload.
+Returns persisted previews bounded to 280 characters, not full manuscript bodies. The response also returns `has_more` and `next_offset`; clients should continue paging instead of assuming the first page is complete.
 
 ### `proposal_detail`
 
@@ -103,11 +104,13 @@ Acceptance is a database transaction. It re-checks ownership, chapter identity, 
 
 1. External AI has no direct canonical manuscript mutation path.
 2. Browser roles cannot insert/update/delete proposal authority or revision-ledger rows directly.
-3. The Edge function authenticates the user and uses service authority only after proving book ownership.
-4. `compute_chapter_authoring_hash` supplies optimistic concurrency for drafts.
-5. Existing `compute_book_publication_hash` remains the whole-publication certification authority.
-6. Accepted revisions to uncertified books change the publication scope hash; earlier attestations therefore stop matching without trusting the browser to announce the edit.
-7. Certified-live manuscripts stay immutable and require an explicit revision/edition workflow.
+3. Proposal list responses read only bounded preview fields; full proposed manuscript text is fetched only for an explicitly selected proposal.
+4. Proposal lists are paginated so older handoffs remain reachable as a book accumulates revisions.
+5. The Edge function authenticates the user and uses service authority only after proving book ownership.
+6. `compute_chapter_authoring_hash` supplies optimistic concurrency for drafts.
+7. Existing `compute_book_publication_hash` remains the whole-publication certification authority.
+8. Accepted revisions to uncertified books change the publication scope hash; earlier attestations therefore stop matching without trusting the browser to announce the edit.
+9. Certified-live manuscripts stay immutable and require an explicit revision/edition workflow.
 
 ## Product role
 
