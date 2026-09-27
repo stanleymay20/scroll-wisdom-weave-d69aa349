@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Flame, Zap, TrendingUp, Trophy, ChevronUp } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { Progress } from "@/components/ui/progress";
-import type { GamificationState } from "@/lib/gamificationEngine";
+import { displayedStreak, type GamificationState } from "@/lib/gamificationEngine";
 
 interface GamificationBarProps {
   state: GamificationState;
@@ -20,6 +20,7 @@ interface GamificationBarProps {
 
 export function GamificationBar({ state, xpProgress, streakStatus, className, compact }: GamificationBarProps) {
   const [expanded, setExpanded] = useState(false);
+  const streak = displayedStreak(state);
 
   return (
     <div className={cn("relative", className)}>
@@ -29,7 +30,7 @@ export function GamificationBar({ state, xpProgress, streakStatus, className, co
         className="flex items-center gap-2.5 w-full"
       >
         {/* Streak with fire animation */}
-        {state.streakCurrent > 0 && (
+        {streak > 0 && (
           <motion.div 
             className={cn(
               "flex items-center gap-1 px-2 py-1 rounded-full text-xs font-bold tabular-nums",
@@ -45,7 +46,7 @@ export function GamificationBar({ state, xpProgress, streakStatus, className, co
             >
               <Flame className="h-3.5 w-3.5" />
             </motion.div>
-            <span>{state.streakCurrent}</span>
+            <span>{streak}</span>
           </motion.div>
         )}
 

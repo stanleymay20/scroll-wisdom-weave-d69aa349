@@ -8,7 +8,7 @@ import { motion, AnimatePresence } from "framer-motion";
 import { X, BookOpen, ArrowRight, Flame, Zap } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
-import { loadLocalState } from "@/lib/gamificationEngine";
+import { displayedStreak, loadLocalState } from "@/lib/gamificationEngine";
 import { trackFunnelEvent } from "@/lib/readingFunnel";
 
 const INACTIVITY_KEY = 'scroll_last_session';
@@ -88,6 +88,7 @@ export function ReEngagementBanner() {
 
   const hoursAgo = (Date.now() - session.timestamp) / (1000 * 60 * 60);
   const gamState = loadLocalState();
+  const streak = displayedStreak(gamState);
   const remaining = 100 - Math.round(session.progress);
 
   return (
@@ -114,9 +115,9 @@ export function ReEngagementBanner() {
                 <p className="text-xs opacity-75 truncate">
                   Ch. {session.chapterNumber} · {formatTimeAgo(hoursAgo)}
                 </p>
-                {gamState.streakCurrent > 0 && (
+                {streak > 0 && (
                   <span className="flex items-center gap-0.5 text-xs opacity-80">
-                    <Flame className="h-3 w-3" /> {gamState.streakCurrent}d
+                    <Flame className="h-3 w-3" /> {streak}d
                   </span>
                 )}
                 {gamState.xp > 0 && (

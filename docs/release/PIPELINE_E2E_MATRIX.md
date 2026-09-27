@@ -24,7 +24,7 @@ Legend: **PASS** = evidence exists and is release-gated; **PARTIAL** = useful ev
 | P13 | Creator listing → storefront → sample reader | PASS | PARTIAL | PASS RLS/read isolation | N/A | PASS for beta surface |
 | P14 | Buy book → Stripe → purchase row → entitlement → full reader | PASS checkout UI wiring/idempotency | MISSING real Stripe/local webhook browser flow | PASS — sale/entitlement ledger lifecycle | MISSING Stripe test-mode round trip | BLOCK |
 | P15 | Sale → earnings ledger → partial/full refund → exact reversal | N/A | MISSING real Stripe refund webhook flow | PASS — partial-refund/idempotency/replay contracts | MISSING Stripe test-mode partial refund | BLOCK |
-| P16 | Creator payout profile → Stripe Connect onboarding → readiness → payout surface | MISSING | MISSING | PASS/PARTIAL — server-owned payout surface | MISSING Stripe Connect sandbox | BLOCK |
+| P16 | Creator payout profile → Stripe Connect onboarding → readiness → payout surface | PASS — onboarding start with the registered return path (`deterministic-product-flows.spec.ts`) | MISSING | PASS/PARTIAL — server-owned payout surface | MISSING Stripe Connect sandbox | BLOCK |
 | P17 | Export bundle → Gumroad/Shopify connection/publish → external publication record | MISSING | MISSING | PARTIAL | MISSING provider sandbox | BLOCK |
 | P18 | Library → reader → generated chapter → reload → highlight/profile isolation | N/A | PASS — `real-reader-library.spec.ts` | PASS | N/A | PASS |
 | P19 | Reader → knowledge graph / Socratic Q&A → persisted learning state | MISSING | MISSING | PARTIAL | MISSING provider-backed AI proof | BLOCK |

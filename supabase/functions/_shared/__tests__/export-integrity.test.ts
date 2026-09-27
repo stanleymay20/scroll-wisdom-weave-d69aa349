@@ -3,11 +3,9 @@
 // export event pipeline relies on. They do NOT require the edge runtime —
 // run via `deno test --allow-all`.
 import { assert, assertEquals, assertNotEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-
-async function sha256Hex(bytes: Uint8Array): Promise<string> {
-  const buf = await crypto.subtle.digest("SHA-256", bytes);
-  return Array.from(new Uint8Array(buf)).map((b) => b.toString(16).padStart(2, "0")).join("");
-}
+// The exporter's own hash, not a copy of it: a local re-implementation only
+// ever proved that WebCrypto works.
+import { computeSha256Hex as sha256Hex } from "../export/hash.ts";
 
 Deno.test("hash is deterministic for identical rendered bytes", async () => {
   const payload = new TextEncoder().encode("publication v1.0.0 :: canonical body");

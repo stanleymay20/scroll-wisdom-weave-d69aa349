@@ -11,7 +11,7 @@ ScrollLibrary is eligible for a GA decision only when every required control bel
 | Browser journeys | CI `e2e` against deterministic local services | Staging smoke run for auth, checkout, generation, export, account deletion, and administrative authorization |
 | Supply-chain security | CI audits the locked production dependency graph, scans committed secrets, and runs `CodeQL` | Enable GitHub Dependency Graph/Dependabot and review any platform security alerts; development-tool advisories remain visible for scheduled upgrade work |
 | Performance regression | `build` enforces bundle budgets | Staging Web Vitals and load-test report |
-| Artifact provenance | `dist/release.json` and commit-addressed CI artifact | Deployment record containing commit SHA, artifact digest, environment, actor, and timestamp |
+| Artifact provenance | `dist/release.json` and commit-addressed CI artifact. Every build, including a hosted rebuild, serves `/release.json` with `commit` and `commitSource`; only the CI artifact also lists per-file digests | Deployment record containing commit SHA, artifact digest, environment, actor, and timestamp |
 | Recovery | Not safely automatable from source control | Successful backup restore rehearsal and rollback exercise |
 
 ## Promotion policy
@@ -21,7 +21,7 @@ ScrollLibrary is eligible for a GA decision only when every required control bel
 3. Apply migrations to staging and run database advisors. Resolve all security findings and material performance findings.
 4. Execute the staging critical-journey checklist and record evidence against the commit in the release issue.
 5. Obtain release-owner approval, then promote the same artifact digest to production.
-6. Verify `/release.json` reports the intended commit and run production read-only smoke tests.
+6. Verify `/release.json` reports the intended commit and run production read-only smoke tests. A `commitSource` of `unavailable` means the build could not identify itself: treat the commit as unknown, not as current.
 7. Roll back immediately if authentication, authorization, checkout, publication, export, or deletion verification fails.
 
 Dependency exceptions live in `security/audit-exceptions.json`, are advisory-specific, and expire automatically. A new advisory always fails CI; renewal requires an explicit code review and updated risk rationale.
