@@ -134,7 +134,7 @@ export default function CertificateStatus() {
         .order('submitted_at', { ascending: true });
       
       if (error) throw error;
-      return data as QuizAttempt[];
+      return data as unknown as QuizAttempt[];
     },
     enabled: !!bookId && !!session?.user?.id,
   });

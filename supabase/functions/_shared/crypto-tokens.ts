@@ -31,7 +31,7 @@ async function loadKey(): Promise<CryptoKey> {
       `PLATFORM_TOKEN_ENCRYPTION_KEY must decode to 32 bytes (got ${keyBytes.length})`,
     );
   }
-  return crypto.subtle.importKey("raw", keyBytes, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
+  return crypto.subtle.importKey("raw", keyBytes as Uint8Array<ArrayBuffer>, { name: "AES-GCM" }, false, ["encrypt", "decrypt"]);
 }
 
 export async function encryptToken(plaintext: string): Promise<string> {
