@@ -1,0 +1,209 @@
+name: Stripe Test-Mode Lifecycle
+
+# The money journeys end to end: real Stripe test mode, real hosted Checkout,
+# webhooks delivered by the Stripe CLI to a disposable local Supabase stack.
+# See scripts/test-stripe-lifecycle.mjs for what is asserted.
+#
+# Needs the repository secret STRIPE_TEST_SECRET_KEY (an sk_test_ key). Until
+# it exists the lifecycle job is SKIPPED, not passed: a skipped check is not
+# evidence, and docs/release/PIPELINE_E2E_MATRIX.md must not treat it as such.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# One Stripe test account is shared by every run. Serialise across the whole
+# repository so one run's webhooks never interleave with another's.
+concurrency:
+  group: stripe-test-mode
+  cancel-in-progress: false
+
+env:
+  BUN_VERSION: 1.2.23
+  SUPABASE_CLI_VERSION: 2.111.0
+  # Allowed return origin in create-checkout, customer-portal and
+  # create-book-checkout; nothing needs to listen on it.
+  APP_ORIGIN: http://127.0.0.1:8080
+
+jobs:
+  preflight:
+    runs-on: ubuntu-latest
+    outputs:
+      configured: ${{ steps.key.outputs.configured }}
+    steps:
+      - id: key
+        env:
+          KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+          EVENT: ${{ github.event_name }}
+        run: |
+          if [ -n "$KEY" ]; then
+            echo "configured=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+          echo "configured=false" >> "$GITHUB_OUTPUT"
+          message="STRIPE_TEST_SECRET_KEY is not configured: the Stripe lifecycle did NOT run. P03/P14/P15/P16 remain unproven."
+          echo "::warning::$message"
+          echo "### Stripe lifecycle not run" >> "$GITHUB_STEP_SUMMARY"
+          echo "$message" >> "$GITHUB_STEP_SUMMARY"
+          # Asked for explicitly, a missing key is a failure, not a skip.
+          if [ "$EVENT" = "workflow_dispatch" ]; then exit 1; fi
+
+  lifecycle:
+    needs: preflight
+    if: needs.preflight.outputs.configured == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    env:
+      STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
+    steps:
+      - uses: actions/checkout@v7
+
+      - name: Refuse anything but a test-mode key
+        run: |
+          case "$STRIPE_SECRET_KEY" in
+            sk_test_*|rk_test_*) echo "Stripe key is test mode." ;;
+            *) echo "::error::STRIPE_TEST_SECRET_KEY must be a test-mode secret key (sk_test_ or rk_test_)."; exit 1 ;;
+          esac
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: ${{ env.BUN_VERSION }}
+
+      - run: bun install --frozen-lockfile
+
+      - name: Install pinned Supabase CLI
+        uses: supabase/setup-cli@v3.0.0
+        with:
+          version: ${{ env.SUPABASE_CLI_VERSION }}
+          github-token: ${{ github.token }}
+
+      - name: Install Stripe CLI from Stripe's signed apt repository
+        run: |
+          set -euo pipefail
+          curl -fsSL https://packages.stripe.dev/api/security/keypair/stripe-cli-gpg/public \
+            | gpg --dearmor | sudo tee /usr/share/keyrings/stripe.gpg > /dev/null
+          echo "deb [signed-by=/usr/share/keyrings/stripe.gpg] https://packages.stripe.dev/stripe-cli-debian-local stable main" \
+            | sudo tee /etc/apt/sources.list.d/stripe.list > /dev/null
+          sudo apt-get update -o Dir::Etc::sourcelist=sources.list.d/stripe.list -o Dir::Etc::sourceparts=- -o APT::Get::List-Cleanup=0
+          sudo apt-get install -y stripe
+          stripe version
+
+      - name: Isolate disposable Supabase project and host ports
+        run: python3 scripts/ci/isolate-supabase-ports.py
+
+      - name: Start fully migrated local Supabase stack
+        run: supabase start
+
+      - name: Export disposable local Supabase credentials
+        shell: bash
+        run: |
+          set -euo pipefail
+          supabase status -o env > /tmp/scrolllibrary-supabase.env
+          set -a
+          source /tmp/scrolllibrary-supabase.env
+          set +a
+          PUBLIC_KEY="${ANON_KEY:-${PUBLISHABLE_KEY:-}}"
+          ADMIN_KEY="${SERVICE_ROLE_KEY:-${SECRET_KEY:-}}"
+          if [ -z "${API_URL:-}" ] || [ -z "$PUBLIC_KEY" ] || [ -z "$ADMIN_KEY" ]; then
+            echo "Local Supabase did not expose the required API/public/admin credentials." >&2
+            exit 1
+          fi
+          {
+            echo "E2E_SUPABASE_URL=$API_URL"
+            echo "E2E_SUPABASE_ANON_KEY=$PUBLIC_KEY"
+            echo "E2E_SUPABASE_SERVICE_ROLE_KEY=$ADMIN_KEY"
+          } >> "$GITHUB_ENV"
+
+      - name: Ensure the Stripe test-mode catalogue
+        run: |
+          set -euo pipefail
+          catalogue="$(bun scripts/test-stripe-lifecycle.mjs catalogue)"
+          echo "STRIPE_CATALOGUE_JSON=$catalogue" >> "$GITHUB_ENV"
+
+      - name: Obtain the Stripe CLI webhook signing secret
+        run: |
+          set -euo pipefail
+          secret="$(stripe listen --print-secret --api-key "$STRIPE_SECRET_KEY")"
+          echo "::add-mask::$secret"
+          echo "STRIPE_WEBHOOK_SECRET=$secret" >> "$GITHUB_ENV"
+
+      - name: Serve Edge Functions with Stripe test-mode configuration
+        run: |
+          set -euo pipefail
+          env_file="$RUNNER_TEMP/stripe-functions.env"
+          umask 077
+          {
+            echo "STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY"
+            echo "STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET"
+            echo "STRIPE_CATALOGUE_JSON='$STRIPE_CATALOGUE_JSON'"
+            echo "APP_URL=$APP_ORIGIN"
+            echo "APP_ORIGIN=$APP_ORIGIN"
+            echo "PUBLIC_SITE_URL=$APP_ORIGIN"
+          } > "$env_file"
+          nohup supabase functions serve --env-file "$env_file" > "$RUNNER_TEMP/functions.log" 2>&1 &
+          for _ in $(seq 1 90); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' -X OPTIONS "$E2E_SUPABASE_URL/functions/v1/check-subscription" || true)"
+            if [ "$code" = "200" ]; then echo "Edge Functions are serving."; exit 0; fi
+            sleep 2
+          done
+          echo "Edge Functions did not become ready." >&2
+          tail -n 100 "$RUNNER_TEMP/functions.log" >&2
+          exit 1
+
+      - name: Forward Stripe test-mode webhooks to the local webhook
+        run: |
+          set -euo pipefail
+          target="$E2E_SUPABASE_URL/functions/v1/stripe-webhook"
+          events="checkout.session.completed,checkout.session.async_payment_succeeded,checkout.session.async_payment_failed,checkout.session.expired,invoice.paid,invoice.payment_failed,customer.subscription.updated,customer.subscription.deleted,charge.refunded,refund.created,refund.updated,refund.failed,account.updated"
+          nohup stripe listen --api-key "$STRIPE_SECRET_KEY" \
+            --forward-to "$target" --forward-connect-to "$target" \
+            --events "$events" > "$RUNNER_TEMP/stripe-listen.log" 2>&1 &
+          for _ in $(seq 1 60); do
+            if grep -q "Ready!" "$RUNNER_TEMP/stripe-listen.log"; then echo "Stripe CLI is forwarding."; exit 0; fi
+            sleep 1
+          done
+          echo "Stripe CLI did not start forwarding." >&2
+          cat "$RUNNER_TEMP/stripe-listen.log" >&2
+          exit 1
+
+      - name: Install Chromium for hosted Checkout
+        run: bunx playwright install --with-deps chromium
+
+      - name: Run the Stripe test-mode lifecycle
+        run: bun scripts/test-stripe-lifecycle.mjs run
+
+      - name: Publish lifecycle summary
+        if: always()
+        run: |
+          if [ -f stripe-lifecycle-evidence/summary.json ]; then
+            {
+              echo "### Stripe test-mode lifecycle"
+              echo '```json'
+              cat stripe-lifecycle-evidence/summary.json
+              echo '```'
+            } >> "$GITHUB_STEP_SUMMARY"
+          fi
+
+      - name: Show function and webhook logs on failure
+        if: failure()
+        run: |
+          echo "::group::Edge Functions (last 300 lines)"; tail -n 300 "$RUNNER_TEMP/functions.log" || true; echo "::endgroup::"
+          echo "::group::Stripe CLI forwarding (last 200 lines)"; tail -n 200 "$RUNNER_TEMP/stripe-listen.log" || true; echo "::endgroup::"
+
+      - name: Upload lifecycle evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: stripe-lifecycle-${{ github.sha }}
+          path: stripe-lifecycle-evidence/
+          if-no-files-found: ignore
+          retention-days: 30
+
+      - name: Stop disposable Supabase stack
+        if: always()
+        run: supabase stop --no-backup || true
