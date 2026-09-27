@@ -10,7 +10,7 @@
  * keeps test-mode objects in a separate namespace with different IDs, so the
  * only way to run checkout, webhooks and refunds end to end in test mode is
  * to point the code at test-mode products. STRIPE_CATALOGUE_JSON does that,
- * and nothing else can: it is refused outright alongside a live secret key,
+ * and nothing else can: it is refused outright alongside any live key,
  * so a test catalogue can never be charged against real cards.
  */
 
@@ -106,7 +106,8 @@ type EnvReader = (name: string) => string | undefined;
 export function resolveStripeCatalogue(env: EnvReader = (name) => Deno.env.get(name)): StripeCatalogue {
   const raw = env(CATALOGUE_OVERRIDE_ENV)?.trim();
   if (!raw) return LIVE_CATALOGUE;
-  if (env("STRIPE_SECRET_KEY")?.startsWith("sk_live_")) {
+  // Restricted keys (rk_live_) charge real cards too.
+  if (/^(sk|rk)_live_/.test(env("STRIPE_SECRET_KEY") ?? "")) {
     throw new Error(`${CATALOGUE_OVERRIDE_ENV} is set alongside a live Stripe key; refusing to use a non-live catalogue`);
   }
   return parseCatalogueOverride(raw);

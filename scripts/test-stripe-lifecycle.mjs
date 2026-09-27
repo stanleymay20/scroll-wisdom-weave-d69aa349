@@ -352,6 +352,11 @@ await journey("P03b", "Creator subscription → creator entitlement with a perio
 
 const PRICE_CENTS = 999;
 const PARTIAL_CENTS = 300;
+// Chapter 1 is the free sample: the "Sample chapters viewable via public
+// listing" policy lets anyone read chapters up to sample_chapters. So access
+// is measured against that window, not against zero.
+const SAMPLE_CHAPTERS = 1;
+const TOTAL_CHAPTERS = 2;
 let sale; // shared by P14 → P15
 
 await journey("P14", "Buy a book → purchase + sale ledger → buyer can read it", async () => {
@@ -363,7 +368,7 @@ await journey("P14", "Buy a book → purchase + sale ledger → buyer can read i
     description: "Disposable Stripe lifecycle fixture.",
     category: "technology",
     author_ai_agent: "ScrollLibrary CI",
-    total_chapters: 2,
+    total_chapters: TOTAL_CHAPTERS,
     is_published: false,
     is_featured: false,
     creator_id: seller.id,
@@ -373,18 +378,20 @@ await journey("P14", "Buy a book → purchase + sale ledger → buyer can read i
     source_type: "generated",
   }).select("id").single();
   if (bookError) throw bookError;
-  const { error: chapterError } = await admin.from("chapters").insert([1, 2].map((n) => ({
+  const chapterNumbers = Array.from({ length: TOTAL_CHAPTERS }, (_, i) => i + 1);
+  const { error: chapterError } = await admin.from("chapters").insert(chapterNumbers.map((n) => ({
     book_id: book.id, chapter_number: n, title: `Chapter ${n}`, is_generated: true,
     content: `Chapter ${n} of a disposable book used to prove that paying unlocks reading.`,
   })));
   if (chapterError) throw chapterError;
   const slug = `stripe-ci-${runTag}`;
   const { data: listing, error: listingError } = await admin.from("public_listings").insert({
-    book_id: book.id, slug, is_public: true, price_cents: PRICE_CENTS, currency: "usd", sample_chapters: 1,
+    book_id: book.id, slug, is_public: true, price_cents: PRICE_CENTS, currency: "usd", sample_chapters: SAMPLE_CHAPTERS,
   }).select("id").single();
   if (listingError) throw listingError;
 
-  check(await readableChapterCount(buyer, book.id) === 0, "buyer could read the book before paying");
+  const beforePurchase = await readableChapterCount(buyer, book.id);
+  check(beforePurchase === SAMPLE_CHAPTERS, "before paying, the buyer should read exactly the free sample", { beforePurchase });
 
   const started = await callFunction("create-book-checkout", buyer, { listing_id: listing.id },
     { "x-idempotency-key": `ci-${runTag}` });
@@ -412,7 +419,8 @@ await journey("P14", "Buy a book → purchase + sale ledger → buyer can read i
   check(ledger.length === 1 && ledger[0].entry_type === "sale" && ledger[0].gross_cents === PRICE_CENTS
     && ledger[0].creator_user_id === seller.id, "sale ledger is not exactly one sale for the seller", ledger);
 
-  check(await readableChapterCount(buyer, book.id) === 2, "buyer cannot read the book they paid for");
+  const afterPurchase = await readableChapterCount(buyer, book.id);
+  check(afterPurchase === TOTAL_CHAPTERS, "buyer cannot read the whole book they paid for", { afterPurchase });
 
   sale = { buyer, bookId: book.id, purchaseId: purchase.id, paymentIntent: purchase.stripe_payment_intent };
   return { purchase: purchase.id, payment_intent: purchase.stripe_payment_intent, ledger_rows: ledger.length };
@@ -444,7 +452,7 @@ await journey("P15", "Partial refund → exact reversal → duplicate is a no-op
     "partial refund was not reversed exactly once for its amount", afterPartial);
   const { data: stillPaid } = await admin.from("book_purchases").select("status").eq("id", sale.purchaseId).single();
   check(stillPaid.status === "paid", "a partial refund revoked the purchase", stillPaid);
-  check(await readableChapterCount(sale.buyer, sale.bookId) === 2, "a partial refund revoked reading access");
+  check(await readableChapterCount(sale.buyer, sale.bookId) === TOTAL_CHAPTERS, "a partial refund revoked reading access");
 
   // Stripe delivers at least once. Replay the refund event exactly as Stripe
   // would — same id, validly signed — and prove the ledger does not move.
@@ -471,7 +479,8 @@ await journey("P15", "Partial refund → exact reversal → duplicate is a no-op
   const { data: all } = await admin.from("creator_earnings_ledger").select("gross_cents").eq("purchase_id", sale.purchaseId);
   const net = all.reduce((sum, row) => sum + row.gross_cents, 0);
   check(net === 0, "sale and refunds do not net to zero", { rows: all, net });
-  check(await readableChapterCount(sale.buyer, sale.bookId) === 0, "buyer can still read a fully refunded book");
+  const afterRefund = await readableChapterCount(sale.buyer, sale.bookId);
+  check(afterRefund === SAMPLE_CHAPTERS, "after a full refund the buyer should be back to the free sample", { afterRefund });
 
   return { partial_refund: partial.id, final_refund: rest.id, ledger_rows: all.length, net_cents: net };
 });

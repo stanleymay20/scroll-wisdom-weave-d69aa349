@@ -55,12 +55,16 @@ Deno.test("a test override replaces the catalogue under a test key", () => {
   assertEquals(planTierForProduct(catalogue, "prod_TaQU3ILEUpbXOT"), null);
 });
 
-Deno.test("an override is refused alongside a live key", () => {
-  assertThrows(
-    () => resolveStripeCatalogue(env({ STRIPE_CATALOGUE_JSON: TEST_OVERRIDE, STRIPE_SECRET_KEY: "sk_live_x" })),
-    Error,
-    "live Stripe key",
-  );
+Deno.test("an override is refused alongside any live key, secret or restricted", () => {
+  for (const key of ["sk_live_x", "rk_live_x"]) {
+    assertThrows(
+      () => resolveStripeCatalogue(env({ STRIPE_CATALOGUE_JSON: TEST_OVERRIDE, STRIPE_SECRET_KEY: key })),
+      Error,
+      "live Stripe key",
+    );
+  }
+  // Restricted test keys are fine.
+  assertEquals(resolveStripeCatalogue(env({ STRIPE_CATALOGUE_JSON: TEST_OVERRIDE, STRIPE_SECRET_KEY: "rk_test_x" })).source, "override");
 });
 
 Deno.test("an incomplete or malformed override fails loudly instead of half-applying", () => {
