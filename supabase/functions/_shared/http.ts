@@ -74,11 +74,42 @@ export interface AuthedRequest {
   userId: string;
   email: string | null;
   role: string | null;
+  clientId: string | null;
+  isExternalOAuthClient: boolean;
   client: SupabaseClient;
   token: string;
 }
 
-export async function requireUser(req: Request): Promise<AuthedRequest | Response> {
+export interface RequireUserOptions {
+  /**
+   * External OAuth clients receive ordinary Supabase user access tokens with a
+   * client_id claim. They are denied by default because most ScrollLibrary Edge
+   * Functions carry privileged server-side mutation authority.
+   *
+   * Set this true only for an endpoint that deliberately implements its own
+   * narrower OAuth capability boundary (currently ai-publishing-bridge).
+   */
+  allowExternalOAuthClient?: boolean;
+}
+
+function decodeJwtStringClaim(token: string, claim: string): string | null {
+  try {
+    const [, payload] = token.split(".");
+    if (!payload) return null;
+    const normalized = payload.replace(/-/g, "+").replace(/_/g, "/");
+    const padded = normalized.padEnd(Math.ceil(normalized.length / 4) * 4, "=");
+    const decoded = JSON.parse(atob(padded)) as Record<string, unknown>;
+    const value = decoded[claim];
+    return typeof value === "string" && value.trim() ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+export async function requireUser(
+  req: Request,
+  options: RequireUserOptions = {},
+): Promise<AuthedRequest | Response> {
   const authHeader = req.headers.get("Authorization") ?? req.headers.get("authorization");
   if (!authHeader?.startsWith("Bearer ")) {
     return unauthorized("Missing bearer token");
@@ -102,6 +133,7 @@ export async function requireUser(req: Request): Promise<AuthedRequest | Respons
   let userId: string | null = null;
   let email: string | null = null;
   let role: string | null = null;
+  let clientId: string | null = null;
 
   try {
     // deno-lint-ignore no-explicit-any
@@ -112,6 +144,9 @@ export async function requireUser(req: Request): Promise<AuthedRequest | Respons
       userId = data.claims.sub;
       email = data.claims.email ?? null;
       role = data.claims.role ?? null;
+      clientId = typeof data.claims.client_id === "string"
+        ? data.claims.client_id
+        : null;
     } else {
       const { data, error } = await client.auth.getUser(token);
       if (error || !data?.user?.id) return unauthorized();
@@ -123,7 +158,26 @@ export async function requireUser(req: Request): Promise<AuthedRequest | Respons
     return unauthorized();
   }
 
-  return { userId: userId!, email, role, client, token };
+  // getUser() verifies token authenticity but does not expose every JWT claim.
+  // Decode only after successful verification so client_id cannot be spoofed.
+  clientId = clientId ?? decodeJwtStringClaim(token, "client_id");
+  const isExternalOAuthClient = clientId !== null;
+
+  if (isExternalOAuthClient && !options.allowExternalOAuthClient) {
+    return forbidden(
+      "External OAuth clients are not permitted to call this privileged endpoint.",
+    );
+  }
+
+  return {
+    userId: userId!,
+    email,
+    role,
+    clientId,
+    isExternalOAuthClient,
+    client,
+    token,
+  };
 }
 
 // ---------------------------------------------------------------------------
