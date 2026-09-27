@@ -1,7 +1,6 @@
 import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 import { createMcpHandler, McpServer } from "npm:@modelcontextprotocol/server@^2.0.0";
-import { pipeline } from "npm:@supabase/middleware@^0.5.0";
 import { withOAuthProtectedResource, withSupabase } from "npm:@supabase/server@^1.6.0";
 import { z } from "npm:zod@^4.3.6";
 
@@ -11,7 +10,44 @@ import {
 } from "../_shared/http.ts";
 
 const OAUTH_SECURITY = [{ type: "oauth2" as const, scopes: ["email"] }];
+const OAUTH_META = { securitySchemes: OAUTH_SECURITY };
 const DEFAULT_APP_ORIGIN = "https://scrolllibrary.org";
+
+const GenericObjectSchema = z.record(z.string(), z.unknown());
+
+const BookContextOutputSchema = z.object({
+  book: z.object({
+    id: z.string(),
+    title: z.string(),
+    work_id: z.string().nullable(),
+    current_publication_id: z.string().nullable(),
+    certified_live: z.boolean(),
+    updated_at: z.string().nullable(),
+  }),
+  chapters: z.array(z.object({
+    id: z.string(),
+    chapter_number: z.number(),
+    title: z.string(),
+    word_count: z.number().nullable(),
+    is_generated: z.boolean().nullable().optional(),
+    version_number: z.number().nullable(),
+    updated_at: z.string().nullable(),
+  })),
+  chapter: GenericObjectSchema.nullable(),
+  publication_scope_hash: z.string().nullable(),
+  authoring_contract: z.object({
+    canonical_mutation: z.string(),
+    certified_live_mutation: z.string(),
+    base_hash_required: z.boolean(),
+  }),
+});
+
+const HandoffListOutputSchema = z.object({
+  proposals: z.array(GenericObjectSchema),
+  has_more: z.boolean(),
+  next_offset: z.number().nullable(),
+  certified_live: z.boolean(),
+});
 
 type BridgeAction =
   | {
@@ -52,14 +88,6 @@ function publicOrigin(req: Request): string {
     return `${forwardedProto}://${forwardedHost}`;
   }
   return new URL(req.url).origin;
-}
-
-function mcpResourceUrl(req: Request): string {
-  return `${publicOrigin(req)}/functions/v1/mcp`;
-}
-
-function authorizationServerUrl(req: Request): string {
-  return `${publicOrigin(req)}/auth/v1`;
 }
 
 function appOrigin(): string {
@@ -140,15 +168,8 @@ async function callPublishingBridge(
 }
 
 Deno.serve(
-  pipeline(
-    [
-      withOAuthProtectedResource({
-        resourceServer: (req) => mcpResourceUrl(req),
-        authorizationServer: (req) => authorizationServerUrl(req),
-      }),
-      withSupabase({ auth: "user" }),
-    ],
-    async (req, { supabase }) => {
+  withOAuthProtectedResource(
+    withSupabase({ auth: "user" }, async (req, { supabase }) => {
       const {
         data: { user },
         error: userError,
@@ -197,7 +218,7 @@ Deno.serve(
               openWorldHint: false,
             },
             securitySchemes: OAUTH_SECURITY,
-            _meta: { "openai/profile": true },
+            _meta: { ...OAUTH_META, "openai/profile": true },
           },
           async () => {
             let fullName: string | null = null;
@@ -251,6 +272,7 @@ Deno.serve(
               openWorldHint: false,
             },
             securitySchemes: OAUTH_SECURITY,
+            _meta: OAUTH_META,
           },
           async ({ limit }) => {
             const { data, error } = await supabase
@@ -287,12 +309,14 @@ Deno.serve(
               book_id: z.string().uuid(),
               chapter_id: z.string().uuid().optional(),
             }),
+            outputSchema: BookContextOutputSchema,
             annotations: {
               readOnlyHint: true,
               destructiveHint: false,
               openWorldHint: false,
             },
             securitySchemes: OAUTH_SECURITY,
+            _meta: OAUTH_META,
           },
           async ({ book_id, chapter_id }) => {
             const response = await callPublishingBridge(req, {
@@ -324,12 +348,14 @@ Deno.serve(
               limit: z.number().int().min(1).max(100).default(50),
               offset: z.number().int().min(0).max(100000).default(0),
             }),
+            outputSchema: HandoffListOutputSchema,
             annotations: {
               readOnlyHint: true,
               destructiveHint: false,
               openWorldHint: false,
             },
             securitySchemes: OAUTH_SECURITY,
+            _meta: OAUTH_META,
           },
           async ({ book_id, status, limit, offset }) => {
             const response = await callPublishingBridge(req, {
@@ -353,12 +379,14 @@ Deno.serve(
             inputSchema: z.object({
               proposal_id: z.string().uuid(),
             }),
+            outputSchema: GenericObjectSchema,
             annotations: {
               readOnlyHint: true,
               destructiveHint: false,
               openWorldHint: false,
             },
             securitySchemes: OAUTH_SECURITY,
+            _meta: OAUTH_META,
           },
           async ({ proposal_id }) => {
             const response = await callPublishingBridge(req, {
@@ -388,12 +416,14 @@ Deno.serve(
               proposed_content: z.string().min(1).max(1000000),
               rationale: z.string().max(8000).optional(),
             }),
+            outputSchema: GenericObjectSchema,
             annotations: {
               readOnlyHint: false,
               destructiveHint: false,
               openWorldHint: false,
             },
             securitySchemes: OAUTH_SECURITY,
+            _meta: OAUTH_META,
           },
           async ({
             book_id,
@@ -452,6 +482,6 @@ Deno.serve(
       });
 
       return handler.fetch(req);
-    },
+    }),
   ),
 );
