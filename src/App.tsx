@@ -99,6 +99,7 @@ const CollectionPage = lazy(() => import("./pages/CollectionPage"));
 const CreatorIntelligence = lazy(() => import("./pages/CreatorIntelligence"));
 const CreatorBusinessHub = lazy(() => import("./pages/CreatorBusinessHub"));
 const CreatorAssets = lazy(() => import("./pages/CreatorAssets"));
+const KingdomWealthTools = lazy(() => import("./pages/KingdomWealthTools"));
 
 // Global enhancements are useful but do not need to block first paint.
 const DiagnosticsPanel = lazy(() => import("./components/system/DiagnosticsPanel").then(m => ({ default: m.DiagnosticsPanel })));
@@ -192,6 +193,7 @@ const App = () => (
                         <Route path="/about" element={<About />} />
                         <Route path="/contact" element={<Contact />} />
                         <Route path="/help" element={<Help />} />
+                        <Route path="/kingdom-wealth/tools" element={withRecovery('KingdomWealthTools', <KingdomWealthTools />)} />
                         <Route path="/dashboard" element={<ProtectedRoute><Dashboard /></ProtectedRoute>} />
                         <Route path="/privacy" element={<PrivacyPolicy />} />
                         <Route path="/terms" element={<TermsOfService />} />
