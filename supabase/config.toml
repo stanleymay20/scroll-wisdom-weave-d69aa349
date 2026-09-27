@@ -169,3 +169,17 @@ verify_jwt = false
 # requireUser(); canonical mutation remains service-owned and transactional.
 [functions.ai-publishing-bridge]
 verify_jwt = false
+
+# OAuth 2.1 identity provider for authenticated MCP clients.
+# Production enablement remains deployment-gated: verify ES256/RS256 signing
+# and the production Auth Site URL before pushing this configuration live.
+[auth.oauth_server]
+enabled = true
+authorization_url_path = "/oauth/consent"
+allow_dynamic_registration = true
+
+# MCP OAuth discovery and token validation are performed inside the function
+# by @supabase/server middleware. Gateway JWT verification must remain off so
+# unauthenticated clients can reach RFC 9728 protected-resource metadata.
+[functions.mcp]
+verify_jwt = false
