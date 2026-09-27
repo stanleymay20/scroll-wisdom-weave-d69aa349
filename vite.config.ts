@@ -3,11 +3,40 @@ import react from "@vitejs/plugin-react-swc";
 import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
+import { writeFileSync } from "node:fs";
+import type { Plugin } from "vite";
+import { resolveBuildCommit } from "./scripts/build-commit.mjs";
+
+/**
+ * Writes /release.json into every production build, not only the CI one.
+ *
+ * `build:release` already wrote a full artifact manifest, but only CI runs it.
+ * The hosted site is built with a plain `vite build`, so production had no
+ * release.json at all and nobody could tell which commit it was serving. This
+ * writes the identity part in every build; `build:release` still replaces it
+ * afterwards with the version that also lists each artifact's digest.
+ */
+function releaseIdentity(identity: { commit: string | null; commitSource: string; buildTime: string }): Plugin {
+  let outDir = "dist";
+  return {
+    name: "scrolllibrary-release-identity",
+    apply: "build",
+    configResolved(config) {
+      outDir = path.resolve(config.root, config.build.outDir);
+    },
+    closeBundle() {
+      const body = { schemaVersion: 1, ...identity };
+      writeFileSync(path.join(outDir, "release.json"), `${JSON.stringify(body, null, 2)}\n`);
+    },
+  };
+}
 
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const buildTime = process.env.BUILD_TIME ?? new Date().toISOString();
-  const buildId = process.env.VITE_BUILD_ID ?? process.env.GITHUB_SHA ?? `local-${buildTime}`;
+  const { commit, source: commitSource } = resolveBuildCommit();
+  // Also the Sentry release name, so errors group by the commit that threw them.
+  const buildId = commit ?? `local-${buildTime}`;
 
   return ({
   define: {
@@ -21,6 +50,7 @@ export default defineConfig(({ mode }) => {
   plugins: [
     react(),
     mode === "development" && componentTagger(),
+    releaseIdentity({ commit, commitSource, buildTime }),
     VitePWA({
       registerType: "autoUpdate",
       injectRegister: "auto",
@@ -266,6 +296,9 @@ export default defineConfig(({ mode }) => {
           /^\/storage\//,
           // OAuth redirect must always hit the network
           /^\/~oauth/,
+          // The deployed build's identity. Answered with the app shell, an
+          // installed PWA would show its 404 page instead of the file.
+          /^\/release\.json$/,
         ],
       },
       devOptions: {
