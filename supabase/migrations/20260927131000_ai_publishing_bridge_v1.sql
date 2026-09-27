@@ -24,6 +24,8 @@ CREATE TABLE IF NOT EXISTS public.ai_handoff_proposals (
     CHECK (base_content_hash ~ '^[0-9a-f]{64}$'),
   proposed_title text,
   proposed_content text NOT NULL,
+  proposed_content_preview text NOT NULL
+    CHECK (pg_catalog.char_length(proposed_content_preview) <= 280),
   proposed_content_hash text NOT NULL
     CHECK (proposed_content_hash ~ '^[0-9a-f]{64}$'),
   rationale text,
