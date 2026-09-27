@@ -42,6 +42,7 @@ const ListProposals = z.object({
   book_id: z.string().uuid(),
   status: z.enum(["proposed", "accepted", "rejected", "superseded"]).optional(),
   limit: z.number().int().min(1).max(100).default(50),
+  offset: z.number().int().min(0).max(100_000).default(0),
 });
 
 const ProposalDetail = z.object({
@@ -228,6 +229,7 @@ Deno.serve(async (req) => {
           base_content_hash: body.base_content_hash,
           proposed_title: body.proposed_title?.trim() || null,
           proposed_content: body.proposed_content,
+          proposed_content_preview: proposalPreview(body.proposed_content),
           proposed_content_hash: proposedContentHash,
           rationale: body.rationale ?? null,
           metadata: body.metadata ?? {},
@@ -268,26 +270,29 @@ Deno.serve(async (req) => {
       const book = await ownedBook(admin, auth.userId, body.book_id);
       if (!book) return forbidden("Book not found or not owned by user");
 
+      const limit = body.limit ?? 50;
+      const offset = body.offset ?? 0;
       let query = admin
         .from("ai_handoff_proposals")
-        .select("id,chapter_id,provider,source_model,operation,status,proposed_title,rationale,proposed_content,proposed_content_hash,base_content_hash,source_conversation_ref,created_at,decided_at")
+        .select("id,chapter_id,provider,source_model,operation,status,proposed_title,rationale,proposed_content_preview,proposed_content_hash,base_content_hash,source_conversation_ref,created_at,decided_at")
         .eq("user_id", auth.userId)
-        .eq("book_id", body.book_id)
-        .order("created_at", { ascending: false })
-        .limit(body.limit ?? 50);
+        .eq("book_id", body.book_id);
       if (body.status) query = query.eq("status", body.status);
 
-      const { data, error } = await query;
+      const { data, error } = await query
+        .order("created_at", { ascending: false })
+        .order("id", { ascending: false })
+        .range(offset, offset + limit);
       if (error) throw error;
 
-      const rows = (data ?? []).map((row) => ({
-        ...row,
-        proposed_content_preview: proposalPreview(row.proposed_content ?? ""),
-        proposed_content: undefined,
-      }));
+      const fetched = data ?? [];
+      const hasMore = fetched.length > limit;
+      const rows = fetched.slice(0, limit);
 
       return json({
         proposals: rows,
+        has_more: hasMore,
+        next_offset: hasMore ? offset + rows.length : null,
         certified_live: Boolean(book.current_publication_id),
       });
     }
