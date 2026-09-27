@@ -241,6 +241,8 @@ jobs:
           deno test supabase/functions/_shared/productionArtifactAudit_test.ts
           deno test supabase/functions/_shared/kdp-print-cover_test.ts
           deno test supabase/functions/_shared/kdp-cover-resolution_test.ts
+          deno test supabase/functions/_shared/kdp-print-product-form_test.ts
+          deno test supabase/functions/_shared/publicationScope_test.ts
       - name: Test editorial coverage, copyediting and illustration safety
         run: |
           deno test supabase/functions/_shared/audit-excerpt_test.ts
@@ -251,6 +253,19 @@ jobs:
           deno test supabase/functions/_shared/figure-export_test.ts
           deno test supabase/functions/_shared/cron-auth_test.ts
           deno test supabase/functions/_shared/stripe-connect_test.ts
+      - name: Test export renderers and export integrity
+        run: |
+          # export-book starts its HTTP server when imported, so its renderer
+          # tests need to bind a port; nothing else here needs a permission.
+          deno test --allow-net supabase/functions/export-book/_test.ts
+          deno test supabase/functions/export-publication/index.test.ts
+          deno test supabase/functions/_shared/__tests__/export-integrity.test.ts
+          deno test supabase/functions/_shared/export/__tests__/s6a-extraction.test.ts
+      - name: Test AI routing, attribution and risk scoring
+        run: |
+          deno test supabase/functions/_shared/ai-router.test.ts
+          deno test supabase/functions/attribution-tag/attribution_test.ts
+          deno test supabase/functions/evaluate-user-risk/evaluate_test.ts
 
   build:
     runs-on: ubuntu-latest
@@ -315,6 +330,8 @@ jobs:
         run: bun run audit:edge-auth
       - name: Reject orphaned Edge Functions
         run: bun run audit:function-reachability
+      - name: Reject Deno test files no workflow runs
+        run: bun run audit:deno-tests
       - name: Reject email-based Stripe customer ownership
         run: bun scripts/check-billing-customer-identity.mjs
       - name: Reject browser publication authority
