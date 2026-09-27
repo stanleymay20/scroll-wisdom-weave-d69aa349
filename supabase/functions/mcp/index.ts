@@ -182,7 +182,9 @@ Deno.serve(
         );
       }
 
-      const limited = await enforceDurableRateLimit(serviceClient(), {
+      const admin = serviceClient();
+
+      const limited = await enforceDurableRateLimit(admin, {
         name: "scrolllibrary-mcp",
         key: user.id,
         limit: 240,
@@ -222,7 +224,7 @@ Deno.serve(
           },
           async () => {
             let fullName: string | null = null;
-            const { data: profile } = await supabase
+            const { data: profile } = await admin
               .from("profiles")
               .select("full_name")
               .or(`user_id.eq.${user.id},id.eq.${user.id}`)
@@ -275,7 +277,7 @@ Deno.serve(
             _meta: OAUTH_META,
           },
           async ({ limit }) => {
-            const { data, error } = await supabase
+            const { data, error } = await admin
               .from("books")
               .select("id,title,current_publication_id,updated_at,user_id,creator_id")
               .or(`user_id.eq.${user.id},creator_id.eq.${user.id}`)
