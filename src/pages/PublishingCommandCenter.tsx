@@ -4,7 +4,7 @@
  * "Run Publishing Audit" action. Per-layer drilldowns land next.
  */
 import { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";
+import { Link, useParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -13,7 +13,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { EPIE_LAYERS, type CertificationTier } from "@/lib/epie";
-import { Loader2, Sparkles, ShieldCheck } from "lucide-react";
+import { Bot, Loader2, Sparkles, ShieldCheck } from "lucide-react";
 import CitationManager from "@/components/citations/CitationManager";
 import DesignSystemPanel from "@/components/publish/DesignSystemPanel";
 import TypographyReport from "@/components/publish/TypographyReport";
@@ -105,10 +105,20 @@ export default function PublishingCommandCenter() {
             Audit, humanize, validate, certify, and prepare your manuscript for controlled release.
           </p>
         </div>
-        <Button onClick={runAudit} disabled={running} size="lg">
-          {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
-          Run Publishing Audit
-        </Button>
+        <div className="flex flex-wrap gap-2">
+          {bookId && (
+            <Button asChild variant="outline" size="lg">
+              <Link to={`/book/${bookId}/ai-handoffs`}>
+                <Bot className="h-4 w-4 mr-2" />
+                AI Handoff Inbox
+              </Link>
+            </Button>
+          )}
+          <Button onClick={runAudit} disabled={running} size="lg">
+            {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <ShieldCheck className="h-4 w-4 mr-2" />}
+            Run Publishing Audit
+          </Button>
+        </div>
       </motion.div>
 
       {audit && (
