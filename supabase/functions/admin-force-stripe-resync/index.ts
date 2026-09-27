@@ -3,6 +3,8 @@
 // gate still appears locked due to delayed/missed webhook processing.
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
+import { creatorTierForProduct, resolveStripeCatalogue } from "../_shared/stripe-catalogue.ts";
+import { subscriptionPeriod } from "../_shared/stripe-fields.ts";
 
 import {
   json,
@@ -27,20 +29,15 @@ const Body = z.object({
 
 type CreatorTier = "free" | "creator" | "creator_pro";
 
-const CREATOR_PRODUCTS: Record<string, CreatorTier> = {
-  prod_UZv8Eine5sKy0j: "creator",
-  prod_UZv8yPrOGDBuWE: "creator_pro",
-};
-
 function creatorTierFromSubscription(subscription: Stripe.Subscription | null): CreatorTier {
   if (!subscription) return "free";
   const productId = subscription.items.data[0]?.price?.product as string | undefined;
-  return (productId && CREATOR_PRODUCTS[productId]) || "free";
+  return creatorTierForProduct(resolveStripeCatalogue(), productId) ?? "free";
 }
 
 function periodEndIso(subscription: Stripe.Subscription | null): string | null {
-  if (!subscription?.current_period_end) return null;
-  return new Date(subscription.current_period_end * 1000).toISOString();
+  // Basil keeps the period on the subscription item; see _shared/stripe-fields.ts.
+  return subscriptionPeriod(subscription).end;
 }
 
 function pickBestSubscription(subscriptions: Stripe.Subscription[]): Stripe.Subscription | null {

@@ -14,10 +14,13 @@ const logStep = (step: string, details?: Record<string, unknown>) => {
 };
 
 const getReturnOrigin = (req: Request): string => {
-  const configured = (Deno.env.get("APP_URL") || "https://scrolllibrary.app").replace(/\/+$/, "");
+  // scrolllibrary.org is the site; see create-checkout's getReturnOrigin.
+  const configured = (Deno.env.get("APP_URL") || "https://scrolllibrary.org").replace(/\/+$/, "");
   const requestOrigin = req.headers.get("origin")?.replace(/\/+$/, "");
   const allowed = new Set([
     configured,
+    "https://scrolllibrary.org",
+    "https://www.scrolllibrary.org",
     "https://scrolllibrary.app",
     "https://www.scrolllibrary.app",
     "https://scroll-wisdom-weave.lovable.app",

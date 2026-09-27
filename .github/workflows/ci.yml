@@ -162,6 +162,8 @@ jobs:
           deno check supabase/functions/_shared/figure-export.ts
           deno check supabase/functions/_shared/cron-auth.ts
           deno check supabase/functions/_shared/stripe-connect.ts
+          deno check supabase/functions/_shared/stripe-catalogue.ts
+          deno check supabase/functions/_shared/stripe-fields.ts
           deno check supabase/functions/_shared/billing-customer.ts
       - name: Type-check critical financial Edge Functions
         run: |
@@ -253,6 +255,10 @@ jobs:
           deno test supabase/functions/_shared/figure-export_test.ts
           deno test supabase/functions/_shared/cron-auth_test.ts
           deno test supabase/functions/_shared/stripe-connect_test.ts
+      - name: Test Stripe catalogue and API-shape compatibility
+        run: |
+          deno test supabase/functions/_shared/stripe-catalogue_test.ts
+          deno test supabase/functions/_shared/stripe-fields_test.ts
       - name: Test export renderers and export integrity
         run: |
           # export-book starts its HTTP server when imported, so its renderer

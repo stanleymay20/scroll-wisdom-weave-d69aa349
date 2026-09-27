@@ -11,7 +11,7 @@ Legend: **PASS** = evidence exists and is release-gated; **PARTIAL** = useful ev
 |---|---|---|---|---|---|---|
 | P01 | Public shell, legal routes, protected-route fail-closed, 404 | PASS — `public-smoke.spec.ts` | N/A | N/A | N/A | PASS |
 | P02 | Sign in → persisted session → protected route → RLS isolation | PARTIAL | PASS — `real-supabase.spec.ts` | PASS | N/A | PASS |
-| P03 | Subscription checkout → Stripe webhook → plan entitlement → billing portal/cancel | MISSING | MISSING | PARTIAL — webhook/financial boundary hardening | MISSING Stripe test-mode lifecycle | BLOCK |
+| P03 | Subscription checkout → Stripe webhook → plan entitlement → billing portal/cancel | MISSING | MISSING | PARTIAL — webhook/financial boundary hardening | NOT RUN — suite built (`stripe-test-mode.yml`: subscribe, portal, cancel, creator tier); runs once `STRIPE_TEST_SECRET_KEY` is set | BLOCK until that run is green |
 | P04 | Generate book → job/book/chapters → library → book route | PASS — generation UI contract | PARTIAL | PASS — atomic quota reservation | MISSING real AI/provider full-book run | BLOCK |
 | P05 | Upload TXT/DOCX/PDF/URL → extraction → process-document → library → reader | PASS — real browser extraction for TXT/DOCX/PDF | MISSING full local/deployed ingestion | PARTIAL — server auth/rate-limit/rollback | N/A | BLOCK |
 | P06 | Edit/regenerate chapter → persisted version → reader → publication state invalidation | PASS — revision dialog/edit-intent browser contract | PARTIAL — real AI regeneration still unproven | PASS/PARTIAL — server edit-intent + persisted-content ratchet; hash-bound attestations stale automatically | N/A | BLOCK |
@@ -22,9 +22,9 @@ Legend: **PASS** = evidence exists and is release-gated; **PARTIAL** = useful ev
 | P11 | Export PDF/EPUB/DOCX → validation → artifact → download | PASS — non-placeholder PDF browser download | PARTIAL | PASS — export integrity + EPUB conformance | MISSING retailer/platform preview proof | BLOCK |
 | P12 | Schedule release → scheduler/cron → materialized public release | PASS — free-user lock + entitled schedule/item creation browser contract | PARTIAL — repo/fresh-DB cron wiring proven; Lovable Test cron execution not yet observed | PASS — restrictive entitlement RLS, five-minute cron registration, due/future/lapsed/idempotency materialization tests | N/A | BLOCK until Test cron is verified |
 | P13 | Creator listing → storefront → sample reader | PASS | PARTIAL | PASS RLS/read isolation | N/A | PASS for beta surface |
-| P14 | Buy book → Stripe → purchase row → entitlement → full reader | PASS checkout UI wiring/idempotency | MISSING real Stripe/local webhook browser flow | PASS — sale/entitlement ledger lifecycle | MISSING Stripe test-mode round trip | BLOCK |
-| P15 | Sale → earnings ledger → partial/full refund → exact reversal | N/A | MISSING real Stripe refund webhook flow | PASS — partial-refund/idempotency/replay contracts | MISSING Stripe test-mode partial refund | BLOCK |
-| P16 | Creator payout profile → Stripe Connect onboarding → readiness → payout surface | PASS — onboarding start with the registered return path (`deterministic-product-flows.spec.ts`) | MISSING | PASS/PARTIAL — server-owned payout surface | MISSING Stripe Connect sandbox | BLOCK |
+| P14 | Buy book → Stripe → purchase row → entitlement → full reader | PASS checkout UI wiring/idempotency | MISSING real Stripe/local webhook browser flow | PASS — sale/entitlement ledger lifecycle | NOT RUN — suite built (`stripe-test-mode.yml`: hosted Checkout, purchase, sale ledger, buyer chapter access) | BLOCK until that run is green |
+| P15 | Sale → earnings ledger → partial/full refund → exact reversal | N/A | MISSING real Stripe refund webhook flow | PASS — partial-refund/idempotency/replay contracts | NOT RUN — suite built (`stripe-test-mode.yml`: partial refund, signed duplicate replay, full refund, access revoked) | BLOCK until that run is green |
+| P16 | Creator payout profile → Stripe Connect onboarding → readiness → payout surface | PASS — onboarding start with the registered return path (`deterministic-product-flows.spec.ts`) | MISSING | PASS/PARTIAL — server-owned payout surface | NOT RUN — suite built (`stripe-test-mode.yml`: Express account, persisted id, account.updated sync); verified payouts need hosted onboarding and stay unproven | BLOCK until that run is green |
 | P17 | Export bundle → Gumroad/Shopify connection/publish → external publication record | MISSING | MISSING | PARTIAL | MISSING provider sandbox | BLOCK |
 | P18 | Library → reader → generated chapter → reload → highlight/profile isolation | N/A | PASS — `real-reader-library.spec.ts` | PASS | N/A | PASS |
 | P19 | Reader → knowledge graph / Socratic Q&A → persisted learning state | MISSING | MISSING | PARTIAL | MISSING provider-backed AI proof | BLOCK |
@@ -45,6 +45,10 @@ These must be either E2E-proven **or explicitly disabled/removed** before they a
 - operational ledger backfill/reconciliation;
 - admin refund execution UI;
 - direct identifier-resolution API operational SLA.
+
+## Stripe test-mode evidence
+
+`stripe-test-mode.yml` runs `scripts/test-stripe-lifecycle.mjs` against real Stripe test mode and a disposable local Supabase stack, with webhooks delivered by the Stripe CLI. Without the `STRIPE_TEST_SECRET_KEY` repository secret its lifecycle job is **skipped**, and a skipped job is not evidence. P03, P14, P15 and P16 move only on a green run of that job at the exact release commit; its `summary.json` artifact is the record.
 
 ## Release rule
 

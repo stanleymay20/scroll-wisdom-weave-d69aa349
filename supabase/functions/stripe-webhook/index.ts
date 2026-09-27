@@ -4,6 +4,8 @@ import { payoutMethodForStatus, payoutStatusFromAccount } from "../_shared/strip
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { correlationId, logFinancialEvent, logFraudSignal, evaluateSeverity } from "../_shared/observability.ts";
 import { resolveUserIdForBillingCustomer } from "../_shared/billing-customer.ts";
+import { creatorTierForProduct, planTierForProduct, resolveStripeCatalogue } from "../_shared/stripe-catalogue.ts";
+import { invoiceSubscriptionId, subscriptionPeriod } from "../_shared/stripe-fields.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -44,6 +46,9 @@ serve(async (req) => {
     if (!stripeKey) throw new Error("STRIPE_SECRET_KEY is not set");
     if (!supabaseUrl || !supabaseServiceKey) throw new Error("Supabase configuration missing");
     if (!webhookSecret) throw new Error("STRIPE_WEBHOOK_SECRET must be configured");
+    // Resolved before the event is claimed: a misconfigured catalogue must
+    // fail like any other missing configuration, not after a claim is held.
+    const catalogue = resolveStripeCatalogue();
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
     const supabase = createClient(supabaseUrl, supabaseServiceKey, { auth: { persistSession: false } });
@@ -153,26 +158,17 @@ serve(async (req) => {
     });
 
     // ---- Plan mapping ----
+    // Products map to tiers through _shared/stripe-catalogue.ts, the one copy
+    // of that map. Generation plans and creator tiers stay separate domains.
     type ValidPlan = "free" | "premium" | "prophet_tier" | "student";
     type PaidPlan = Exclude<ValidPlan, "free">;
-    const getPlanTierFromProductId = (productId: string | null | undefined): PaidPlan | null => {
-      const productMap: Record<string, PaidPlan> = {
-        prod_TaQU3ILEUpbXOT: "premium",
-        prod_U0fmlf14TPlMKj: "prophet_tier", // current Institutional product
-        prod_TaQWA7MSUntiMy: "prophet_tier", // legacy Institutional product
-        prod_TaQSrotoUkTuPC: "student",
-      };
-      return productId ? productMap[productId] ?? null : null;
-    };
+    const getPlanTierFromProductId = (productId: string | null | undefined): PaidPlan | null =>
+      planTierForProduct(catalogue, productId);
 
     // Phase 4.1 — Creator-tier product mapping (separate from generation plans).
     type CreatorTier = "free" | "creator" | "creator_pro";
-    const CREATOR_PRODUCTS: Record<string, CreatorTier> = {
-      prod_UZv8Eine5sKy0j: "creator",
-      prod_UZv8yPrOGDBuWE: "creator_pro",
-    };
     const getCreatorTierFromProductId = (productId: string | null | undefined): CreatorTier =>
-      (productId && CREATOR_PRODUCTS[productId]) || "free";
+      creatorTierForProduct(catalogue, productId) ?? "free";
 
     const syncCreatorEntitlement = async (
       userId: string,
@@ -185,9 +181,8 @@ serve(async (req) => {
       // domains. Never revoke creator entitlement because an unrelated plan was
       // canceled or updated.
       if (creatorTier === "free") return;
-      const periodEnd = subscription.current_period_end
-        ? new Date(subscription.current_period_end * 1000).toISOString()
-        : null;
+      // Basil keeps the period on the subscription item; see _shared/stripe-fields.ts.
+      const periodEnd = subscriptionPeriod(subscription).end;
       const { error } = await supabase.rpc("sync_creator_entitlement_from_stripe", {
         _user_id: userId,
         _tier: creatorTier,
@@ -224,18 +219,15 @@ serve(async (req) => {
         : subscription.customer.id;
       const productId = subscription.items.data[0]?.price?.product as string | undefined;
       if (!getPlanTierFromProductId(productId)) return;
+      const period = subscriptionPeriod(subscription);
       const { error } = await supabase.from("subscriptions").upsert({
         user_id: userId,
         tier,
         stripe_customer_id: customerId,
         stripe_subscription_id: subscription.id,
         status: subscription.status,
-        current_period_start: subscription.current_period_start
-          ? new Date(subscription.current_period_start * 1000).toISOString()
-          : null,
-        current_period_end: subscription.current_period_end
-          ? new Date(subscription.current_period_end * 1000).toISOString()
-          : null,
+        current_period_start: period.start,
+        current_period_end: period.end,
         updated_at: new Date().toISOString(),
       }, { onConflict: "user_id" });
       if (error) {
@@ -823,8 +815,11 @@ serve(async (req) => {
 
         case "invoice.paid": {
           const invoice = event.data.object as Stripe.Invoice;
-          if (invoice.subscription) {
-            const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
+          // Basil moved this to invoice.parent.subscription_details; reading only
+          // the old field skipped every basil-shaped renewal.
+          const invoiceSubscription = invoiceSubscriptionId(invoice);
+          if (invoiceSubscription) {
+            const subscription = await stripe.subscriptions.retrieve(invoiceSubscription);
             const productId = subscription.items.data[0]?.price?.product as string;
             const planTier = getPlanTierFromProductId(productId);
             const creatorTier = getCreatorTierFromProductId(productId);
@@ -905,9 +900,10 @@ serve(async (req) => {
           } catch (_) { /* best-effort identity/log enrichment */ }
 
           // Phase 4.1 — move creator entitlement into 7-day grace period on payment failure.
-          if (userId && invoice.subscription) {
+          const failedSubscription = invoiceSubscriptionId(invoice);
+          if (userId && failedSubscription) {
             try {
-              const subscription = await stripe.subscriptions.retrieve(invoice.subscription as string);
+              const subscription = await stripe.subscriptions.retrieve(failedSubscription);
               await syncCreatorEntitlement(userId, subscription);
             } catch (e) {
               logStep("Grace period sync failed", { error: e instanceof Error ? e.message : String(e) });
@@ -933,7 +929,7 @@ serve(async (req) => {
             correlation_id: corr, stripe_event_id: event.id, user_id: userId,
             payload: {
               invoice_id: invoice.id,
-              subscription: invoice.subscription,
+              subscription: failedSubscription,
               attempt_count: invoice.attempt_count,
               amount_due: invoice.amount_due,
               currency: invoice.currency,

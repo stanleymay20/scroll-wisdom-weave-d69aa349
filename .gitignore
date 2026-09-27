@@ -44,3 +44,6 @@ playwright-report/
 
 # TypeScript incremental build state, emitted by `tsc -b` (project references).
 *.tsbuildinfo
+
+# Stripe test-mode lifecycle evidence (uploaded as a CI artifact)
+stripe-lifecycle-evidence/
