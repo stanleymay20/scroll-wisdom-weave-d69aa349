@@ -113,8 +113,16 @@ export async function signInWithPasswordFallback(email: string, password: string
   };
 }
 
-export async function signUpFallback(email: string, password: string, metadata: Record<string, unknown>) {
-  const response = await fetch(`${AUTH_BASE_URL}/signup`, {
+export async function signUpFallback(
+  email: string,
+  password: string,
+  metadata: Record<string, unknown>,
+  emailRedirectTo?: string,
+) {
+  const signupUrl = new URL(`${AUTH_BASE_URL}/signup`);
+  if (emailRedirectTo) signupUrl.searchParams.set("redirect_to", emailRedirectTo);
+
+  const response = await fetch(signupUrl.toString(), {
     method: 'POST',
     headers: AUTH_HEADERS,
     body: JSON.stringify({
