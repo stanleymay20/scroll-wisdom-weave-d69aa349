@@ -23,7 +23,7 @@ After controlled deployment:
 https://lrricdforqfkaaciammv.supabase.co/functions/v1/mcp
 ```
 
-The endpoint uses MCP Streamable HTTP and Supabase Auth as its OAuth 2.1 authorization server.
+The endpoint uses MCP Streamable HTTP and Supabase Auth as its OAuth 2.1 authorization server. OAuth access tokens are treated as **connector credentials**, not generic ScrollLibrary user API credentials.
 
 ## OAuth
 
@@ -45,6 +45,19 @@ verify_jwt = false
 - `withSupabase({ auth: "user" })` — validates the OAuth bearer token and provides an RLS-scoped Supabase client.
 
 The consent UI is `/oauth/consent`.
+
+### Capability isolation
+
+Supabase OAuth tokens include a `client_id` claim. ScrollLibrary uses that claim as a hard capability boundary:
+
+- `requireUser()` rejects external OAuth tokens by default on privileged Edge Functions.
+- `ai-publishing-bridge` is the sole privileged opt-in; OAuth clients may read context/list handoffs/submit proposals, but `accept_proposal` and `reject_proposal` return 403.
+- PostgREST runs `enforce_external_oauth_data_api_boundary()` as `pgrst.db_pre_request`, so OAuth client tokens cannot call tables/views/RPC directly.
+- Restrictive RLS policies deny OAuth client tokens on every current RLS-protected public table and `storage.objects`, closing direct Realtime/Storage paths.
+- The MCP server validates the OAuth identity, then uses server-owned reads with explicit user ownership filters. The bearer itself never needs direct Data API access.
+- CI asserts the PostgREST guard, RLS coverage, sole Edge opt-in, and absence of canonical-decision tools.
+
+This keeps dynamic MCP client registration from silently turning a proposal-only connector into a full user bearer.
 
 ### Production prerequisite
 
@@ -102,6 +115,8 @@ Use the same endpoint. Supabase Auth performs OAuth 2.1 login/consent and each t
 - External model identity strings (`provider`, `source_model`) are provenance labels, not security principals.
 - Authorization is derived only from the validated OAuth user.
 - Tool inputs are untrusted and validated with Zod.
-- The MCP adapter does not expose the service role to tool handlers.
-- Proposal mutation is delegated to the already-hardened AI Publishing Bridge using the same bearer token.
-- Canonical acceptance remains server-owned and author-mediated.
+- The MCP adapter never returns or exposes the service-role credential; server-owned reads are narrowly filtered to the validated user's identity.
+- The external OAuth bearer is blocked from generic PostgREST/RPC, RLS-backed Realtime, and Storage access.
+- Privileged Edge functions reject external OAuth tokens by default.
+- Proposal mutation is delegated to the already-hardened AI Publishing Bridge using the same validated bearer token.
+- Canonical acceptance remains first-party, server-owned and author-mediated.
