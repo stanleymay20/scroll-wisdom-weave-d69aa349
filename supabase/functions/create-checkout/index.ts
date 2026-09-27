@@ -2,6 +2,11 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { ensureBillingCustomer } from "../_shared/billing-customer.ts";
+import {
+  clientPriceMatchesTier,
+  isBillableTier,
+  resolveStripeCatalogue,
+} from "../_shared/stripe-catalogue.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -13,27 +18,20 @@ const logStep = (step: string, details?: Record<string, unknown>) => {
   console.log(`[CREATE-CHECKOUT] ${step}${detailsStr}`);
 };
 
-type BillableTier = "student" | "premium" | "prophet_tier" | "creator" | "creator_pro";
-
 // The server, not the browser, is the authority for which Stripe price belongs
-// to each entitlement tier. Keep these in sync with the Stripe catalogue.
-const PRICE_BY_TIER: Record<BillableTier, string> = {
-  student: "price_1SdFbTJYFIBeCvefKzHWUrcb",
-  premium: "price_1SdFddJYFIBeCvefJr1ZY92E",
-  prophet_tier: "price_1T2eR8JYFIBeCvefx02IXTz6",
-  creator: "price_1TalITJYFIBeCvefdkr4LeL7",
-  creator_pro: "price_1TalIUJYFIBeCvefHU67sm3O",
-};
-
-const isBillableTier = (value: unknown): value is BillableTier =>
-  typeof value === "string" && Object.prototype.hasOwnProperty.call(PRICE_BY_TIER, value);
+// to each entitlement tier. The catalogue lives in _shared/stripe-catalogue.ts.
 
 const getReturnOrigin = (req: Request): string => {
-  const configured = (Deno.env.get("APP_URL") || "https://scrolllibrary.app").replace(/\/+$/, "");
+  // scrolllibrary.org is the site. This used to default to, and only allow,
+  // scrolllibrary.app — so unless APP_URL was set, a subscriber who paid on
+  // .org was sent back to a different domain.
+  const configured = (Deno.env.get("APP_URL") || "https://scrolllibrary.org").replace(/\/+$/, "");
   const requestOrigin = req.headers.get("origin")?.replace(/\/+$/, "");
 
   const allowed = new Set([
     configured,
+    "https://scrolllibrary.org",
+    "https://www.scrolllibrary.org",
     "https://scrolllibrary.app",
     "https://www.scrolllibrary.app",
     "https://scroll-wisdom-weave.lovable.app",
@@ -71,9 +69,11 @@ serve(async (req) => {
       });
     }
 
-    const priceId = PRICE_BY_TIER[tier];
-    // Older clients still send priceId. Reject any mismatch instead of trusting it.
-    if (requestedPriceId && requestedPriceId !== priceId) {
+    const catalogue = resolveStripeCatalogue();
+    const priceId = catalogue.prices[tier];
+    // Older clients still send priceId. It is never charged; a mismatch is
+    // rejected rather than trusted.
+    if (!clientPriceMatchesTier(catalogue, tier, requestedPriceId)) {
       logStep("Rejected price/tier mismatch", { tier });
       return new Response(JSON.stringify({ error: "Invalid price for subscription tier" }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },

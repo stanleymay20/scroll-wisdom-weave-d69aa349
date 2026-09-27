@@ -2,6 +2,8 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { getBillingCustomerId } from "../_shared/billing-customer.ts";
+import { planTierForProduct, resolveStripeCatalogue } from "../_shared/stripe-catalogue.ts";
+import { subscriptionPeriod } from "../_shared/stripe-fields.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -9,13 +11,6 @@ const corsHeaders = {
 };
 
 type PlanTier = "free" | "student" | "premium" | "prophet_tier";
-
-const PRODUCT_TO_TIER: Record<string, Exclude<PlanTier, "free">> = {
-  prod_TaQU3ILEUpbXOT: "premium",
-  prod_U0fmlf14TPlMKj: "prophet_tier",
-  prod_TaQWA7MSUntiMy: "prophet_tier", // legacy institutional product
-  prod_TaQSrotoUkTuPC: "student",
-};
 
 const logStep = (step: string, details?: Record<string, unknown>) => {
   const detailsStr = details ? ` - ${JSON.stringify(details)}` : "";
@@ -78,10 +73,14 @@ serve(async (req) => {
 
         for (const subscription of subscriptions.data) {
           const productId = String(subscription.items.data[0]?.price?.product ?? "");
-          const tier = PRODUCT_TO_TIER[productId];
+          const tier = planTierForProduct(resolveStripeCatalogue(), productId);
           if (!tier) continue;
 
-          const subscriptionEnd = new Date(subscription.current_period_end * 1000).toISOString();
+          // Under the pinned basil API the period lives on the subscription
+          // item. Reading subscription.current_period_end gave undefined, and
+          // new Date(NaN).toISOString() threw — so every Stripe subscriber was
+          // answered "subscribed: false" and never saw "Subscription activated".
+          const subscriptionEnd = subscriptionPeriod(subscription).end;
           await syncProfilePlan(tier);
           return response({
             subscribed: true,
