@@ -274,7 +274,7 @@ Deno.serve(async (req) => {
         .eq("user_id", auth.userId)
         .eq("book_id", body.book_id)
         .order("created_at", { ascending: false })
-        .limit(body.limit);
+        .limit(body.limit ?? 50);
       if (body.status) query = query.eq("status", body.status);
 
       const { data, error } = await query;
