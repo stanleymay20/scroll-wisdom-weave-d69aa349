@@ -498,6 +498,20 @@ export function getStreakStatus(state: GamificationState): 'active' | 'at_risk' 
   return 'broken';
 }
 
+/**
+ * The streak to show a reader right now.
+ *
+ * streakCurrent is only recalculated when the reader next does something, so
+ * the stored number outlives the streak itself: someone away for twelve days
+ * still has an 8 on file. Showing it tells a returning reader they have a
+ * streak they already lost — on the banner whose whole job is winning them
+ * back. A streak is still alive today and yesterday; after that it is gone.
+ */
+export function displayedStreak(state: GamificationState): number {
+  const status = getStreakStatus(state);
+  return status === 'active' || status === 'at_risk' ? state.streakCurrent : 0;
+}
+
 export function getStreakMessage(status: string, streak: number): string {
   switch (status) {
     case 'active': return `🔥 ${streak} Day Streak — Keep it alive!`;
