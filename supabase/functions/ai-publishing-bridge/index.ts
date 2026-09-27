@@ -98,7 +98,7 @@ Deno.serve(async (req) => {
   if (req.method !== "POST") return badRequest("POST required");
 
   try {
-    const auth = await requireUser(req);
+    const auth = await requireUser(req, { allowExternalOAuthClient: true });
     if (auth instanceof Response) return auth;
 
     const admin = serviceClient();
@@ -329,6 +329,11 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "accept_proposal") {
+      if (auth.isExternalOAuthClient) {
+        return forbidden(
+          "External OAuth clients may submit proposals but cannot accept them into the canonical manuscript.",
+        );
+      }
       const { data, error } = await admin.rpc("accept_ai_handoff_proposal", {
         p_user_id: auth.userId,
         p_proposal_id: body.proposal_id,
@@ -344,6 +349,11 @@ Deno.serve(async (req) => {
     }
 
     if (body.action === "reject_proposal") {
+      if (auth.isExternalOAuthClient) {
+        return forbidden(
+          "External OAuth clients may not decide canonical proposal outcomes.",
+        );
+      }
       const { data, error } = await admin.rpc("reject_ai_handoff_proposal", {
         p_user_id: auth.userId,
         p_proposal_id: body.proposal_id,
