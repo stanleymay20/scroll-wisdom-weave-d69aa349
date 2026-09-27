@@ -22,6 +22,7 @@ for (const [path, heading] of [
   ["/about", /about/i],
   ["/privacy", /privacy/i],
   ["/terms", /terms/i],
+  ["/kingdom-wealth/tools", /companion tools/i],
 ] as const) {
   test(`${path} renders its legal/public surface`, async ({ page }) => {
     await page.goto(path);
