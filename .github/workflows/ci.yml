@@ -95,6 +95,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-ownership-transfer-ga-disabled.sql
       - name: Assert browser roles hold no privilege RLS cannot restrain
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-browser-role-truncate.sql
+      - name: Assert AI Publishing Bridge remains proposal-only for browser roles
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-ai-publishing-bridge-db-security.sql
       - name: Rebuild hardened ISBN schema from verified legacy staging shape
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-legacy-staging-isbn-convergence.sql
       - name: Assert ISBN governance, RLS and transactional mint contract
@@ -157,6 +159,7 @@ jobs:
         run: |
           deno check supabase/functions/_shared/error-tracking.ts
           deno check supabase/functions/_shared/http.ts
+          deno check supabase/functions/_shared/ai-handoff.ts
           deno check supabase/functions/_shared/figure-data.ts
           deno check supabase/functions/_shared/figure-layout.ts
           deno check supabase/functions/_shared/figure-export.ts
@@ -186,6 +189,7 @@ jobs:
         run: |
           deno check supabase/functions/generate-book/index.ts
           deno check supabase/functions/generate-chapter/index.ts
+          deno check supabase/functions/ai-publishing-bridge/index.ts
           deno check supabase/functions/generate-cover/index.ts
           deno check supabase/functions/generate-cover-raw/index.ts
           deno check supabase/functions/process-document/index.ts
@@ -245,6 +249,7 @@ jobs:
           deno test supabase/functions/_shared/kdp-cover-resolution_test.ts
           deno test supabase/functions/_shared/kdp-print-product-form_test.ts
           deno test supabase/functions/_shared/publicationScope_test.ts
+          deno test supabase/functions/_shared/ai-handoff_test.ts
       - name: Test editorial coverage, copyediting and illustration safety
         run: |
           deno test supabase/functions/_shared/audit-excerpt_test.ts

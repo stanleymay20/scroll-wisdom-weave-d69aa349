@@ -78,6 +78,7 @@ const VerifyExport = lazy(() => import("./pages/VerifyExport"));
 const CitationGraph = lazy(() => import("./pages/CitationGraph"));
 const StudySession = lazy(() => import("./pages/StudySession"));
 const PublishingCommandCenter = lazy(() => import("./pages/PublishingCommandCenter"));
+const AiHandoffs = lazy(() => import("./pages/AiHandoffs"));
 const Cognition = lazy(() => import("./pages/Cognition"));
 const DataExport = lazy(() => import("./pages/DataExport"));
 const Storefront = lazy(() => import("./pages/Storefront"));
@@ -239,6 +240,7 @@ const App = () => (
                         <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />
                         <Route path="/account/data-export" element={<ProtectedRoute><DataExport /></ProtectedRoute>} />
                         <Route path="/book/:bookId/publishing" element={withRecovery('PublishingCommandCenter', <ProtectedRoute><PublishingCommandCenter /></ProtectedRoute>)} />
+                        <Route path="/book/:bookId/ai-handoffs" element={withRecovery('AiHandoffs', <ProtectedRoute><AiHandoffs /></ProtectedRoute>)} />
 
                         {/* Storefront (public) */}
                         <Route path="/store" element={withRecovery('Storefront', <Storefront />)} />

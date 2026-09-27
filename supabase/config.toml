@@ -164,3 +164,8 @@ verify_jwt = false
 
 [functions.proofread-chapter]
 verify_jwt = false
+
+# External AI authoring boundary. Bearer auth is verified internally with
+# requireUser(); canonical mutation remains service-owned and transactional.
+[functions.ai-publishing-bridge]
+verify_jwt = false
