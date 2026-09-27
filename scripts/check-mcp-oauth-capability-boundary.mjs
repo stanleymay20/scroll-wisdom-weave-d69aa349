@@ -1,4 +1,4 @@
-import { readFileSync } from "node:fs";
+import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const root = process.cwd();
@@ -17,11 +17,19 @@ if (!/client_id/.test(http) || !/allowExternalOAuthClient/.test(http)) {
 }
 
 const explicitOAuthOptIns = [];
-for (const path of [
-  "supabase/functions/ai-publishing-bridge/index.ts",
-]) {
-  const source = readFileSync(join(root, path), "utf8");
-  if (/allowExternalOAuthClient:\s*true/.test(source)) explicitOAuthOptIns.push(path);
+const functionsRoot = join(root, "supabase/functions");
+for (const name of readdirSync(functionsRoot)) {
+  const dir = join(functionsRoot, name);
+  if (name === "_shared" || !statSync(dir).isDirectory()) continue;
+  const path = join(dir, "index.ts");
+  try {
+    const source = readFileSync(path, "utf8");
+    if (/allowExternalOAuthClient:\s*true/.test(source)) {
+      explicitOAuthOptIns.push(`supabase/functions/${name}/index.ts`);
+    }
+  } catch {
+    // Not every function directory is required to expose index.ts.
+  }
 }
 
 if (
