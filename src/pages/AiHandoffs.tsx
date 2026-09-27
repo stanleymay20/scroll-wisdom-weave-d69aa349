@@ -55,6 +55,12 @@ interface ProposalSummary {
   decided_at: string | null;
 }
 
+interface ProposalPage {
+  proposals: ProposalSummary[];
+  has_more: boolean;
+  next_offset: number | null;
+}
+
 interface ProposalDetail {
   proposal: ProposalSummary & {
     proposed_content: string;
@@ -103,6 +109,8 @@ export default function AiHandoffs() {
   const [status, setStatus] = useState<ProposalStatus>("proposed");
   const [selected, setSelected] = useState<ProposalDetail | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMore, setHasMore] = useState(false);
   const [detailLoading, setDetailLoading] = useState(false);
   const [decisionLoading, setDecisionLoading] = useState(false);
 
@@ -127,15 +135,17 @@ export default function AiHandoffs() {
     try {
       const [bookContext, proposalData] = await Promise.all([
         invoke<BookContext>({ action: "book_context", book_id: bookId }),
-        invoke<{ proposals: ProposalSummary[] }>({
+        invoke<ProposalPage>({
           action: "list_proposals",
           book_id: bookId,
           status,
-          limit: 100,
+          limit: 50,
+          offset: 0,
         }),
       ]);
       setContext(bookContext);
       setProposals(proposalData.proposals ?? []);
+      setHasMore(proposalData.has_more === true);
       setSelected((current) => {
         if (!current) return null;
         const stillVisible = (proposalData.proposals ?? []).some(
@@ -157,6 +167,36 @@ export default function AiHandoffs() {
   useEffect(() => {
     void load();
   }, [load]);
+
+  const loadMore = async () => {
+    if (!bookId || loadingMore || !hasMore) return;
+    setLoadingMore(true);
+    try {
+      const page = await invoke<ProposalPage>({
+        action: "list_proposals",
+        book_id: bookId,
+        status,
+        limit: 50,
+        offset: proposals.length,
+      });
+      setProposals((current) => {
+        const seen = new Set(current.map((proposal) => proposal.id));
+        return [
+          ...current,
+          ...(page.proposals ?? []).filter((proposal) => !seen.has(proposal.id)),
+        ];
+      });
+      setHasMore(page.has_more === true);
+    } catch (error) {
+      toast({
+        title: "Could not load more proposals",
+        description: error instanceof Error ? error.message : "Unknown error",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingMore(false);
+    }
+  };
 
   const openProposal = async (proposalId: string) => {
     setDetailLoading(true);
@@ -352,6 +392,18 @@ export default function AiHandoffs() {
                   </button>
                 );
               })}
+              {hasMore && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => void loadMore()}
+                  disabled={loadingMore}
+                >
+                  {loadingMore && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                  Load more proposals
+                </Button>
+              )}
             </div>
           )}
         </Card>
