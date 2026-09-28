@@ -1464,6 +1464,7 @@ export type Database = {
       books: {
         Row: {
           academic_level: string | null
+          ai_assistance_level: string | null
           author_ai_agent: string | null
           author_display_name: string | null
           author_mode: string | null
@@ -1503,6 +1504,7 @@ export type Database = {
         }
         Insert: {
           academic_level?: string | null
+          ai_assistance_level?: string | null
           author_ai_agent?: string | null
           author_display_name?: string | null
           author_mode?: string | null
@@ -1542,6 +1544,7 @@ export type Database = {
         }
         Update: {
           academic_level?: string | null
+          ai_assistance_level?: string | null
           author_ai_agent?: string | null
           author_display_name?: string | null
           author_mode?: string | null
