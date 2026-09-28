@@ -8,6 +8,13 @@
       "when": 1788696868550,
       "tag": "0000_harden_profile_authority",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1790587436668,
+      "tag": "0001_fix_ai_assistance_level_and_buyer_policies",
+      "breakpoints": true
     }
   ]
 }

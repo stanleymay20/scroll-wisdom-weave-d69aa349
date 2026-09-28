@@ -102,9 +102,10 @@ export default function BookPublishSettings() {
       // ai_assistance_level / isbn / dedication / epigraph were added in
       // 20260604201230_elite_publishing_metadata.sql. Cast to any until the
       // generated Supabase types catch up.
-      const { data: b } = await (supabase.from("books") as any)
+      const { data: b, error: bookErr } = await (supabase.from("books") as any)
         .select("id, title, user_id, cover_image_url, ai_assistance_level, work_id, current_publication_id, language")
         .eq("id", bookId).maybeSingle();
+      if (bookErr) { toast.error("Couldn't load this book. Please try again."); setLoading(false); return; }
       if (!b || b.user_id !== user.id) { toast.error("Not your book"); navigate("/dashboard"); return; }
       setBook(b);
       setAiLevel(b.ai_assistance_level ?? "");
