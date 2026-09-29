@@ -15,7 +15,7 @@ import { Sparkles, Package, BookOpen, Heart, Store, ShoppingBag, FileText, Exter
 import { Badge } from "@/components/ui/badge";
 import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
 import { publishExternallyOneClick, waitForBundle } from "@/lib/oneClickPublish";
-import { PMF_MODE } from "@/lib/config";
+import { PMF_MODE, FEATURES } from "@/lib/config";
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { Lock } from "lucide-react";
 import { ExportQualityPanel } from "@/components/publish/ExportQualityPanel";
@@ -919,7 +919,7 @@ export default function BookPublishSettings() {
 
 
         {/* Serialized publishing */}
-        {bookId && book?.user_id && (
+        {FEATURES.enableReleaseScheduling && bookId && book?.user_id && (
           <div className="mt-6">
             {entitlementsLoading ? (
               <Card className="p-5 text-sm text-muted-foreground">
