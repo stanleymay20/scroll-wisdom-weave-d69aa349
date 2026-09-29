@@ -4,7 +4,7 @@ import { ErrorCode, errorResponse } from "../_shared/error-codes.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
 import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
 import { normalizeGeneratedOutline, type NormalizedOutlineChapter } from "../_shared/outline-normalizer.ts";
-import { sanitizeFictionContract } from "../_shared/fiction-context.ts";
+import { buildFictionOutlineInstructions, sanitizeFictionContract } from "../_shared/fiction-context.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -278,6 +278,8 @@ serve(async (req) => {
     } else if (effectiveBookType === "technical" || effectiveBookType === "academic") {
       const academicLabel = effectiveBookType === "technical" ? "TECHNICAL GUIDE" : "ACADEMIC TEXTBOOK";
       typeInstr = `${academicLabel}. Use literal descriptive titles, learning objectives, technical tone. NO metaphorical titles (e.g. "Journey", "Wizard"). Use "Chapter X: [Topic]" format.`;
+    } else if (effectiveBookType === "fiction") {
+      typeInstr = buildFictionOutlineInstructions(safeFictionConfig);
     } else if (effectiveBookType === "text") {
       typeInstr = "STANDARD TEXT. Clear, informative chapter titles. Adapt structure to the subject matter. No forced bestseller hooks unless naturally appropriate.";
     } else if (effectiveBookType === "bestseller" || bestsellerMode) {
@@ -289,8 +291,12 @@ serve(async (req) => {
     const refInstr = (enableReferences || academicMode || isAcademicType)
       ? `Include "references" array per chapter: {"author","title","year","type"}.` : "";
 
-    const bestsellerBoost = (bestsellerMode && !isAcademicType && effectiveBookType !== "comic" && effectiveBookType !== "workbook")
-      ? "BESTSELLER MODE: Provocative titles, hooks, named principles, transformation promises." : "";
+    const bestsellerBoost = (
+      bestsellerMode
+      && ["text", "illustrated", "bestseller"].includes(effectiveBookType)
+    )
+      ? "BESTSELLER MODE: Provocative titles, hooks, named principles, transformation promises."
+      : "";
 
     // Build transformation instructions if provided
     const transformInstr = transformationPrompt 
