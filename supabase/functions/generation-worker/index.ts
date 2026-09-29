@@ -323,8 +323,14 @@ serve(async (req) => {
       chapterNumber: nextChapter.chapter_number,
     });
   } catch (error) {
-    const message = error instanceof Error ? error.message : String(error);
-    console.error("[GENERATION-WORKER] Fatal worker error:", message);
+    const internalMessage = error instanceof Error ? error.message : String(error);
+    console.error("[GENERATION-WORKER] Fatal worker error:", internalMessage);
+
+    // Never expose caught exception details to callers or user-readable job
+    // state. Upstream/database errors can contain implementation details,
+    // identifiers, query fragments, or other sensitive diagnostic context.
+    const publicMessage =
+      "Book generation could not continue. Retry generation or contact support with the job ID.";
 
     try {
       await supabase.rpc("finish_generation_job_step", {
@@ -333,7 +339,7 @@ serve(async (req) => {
         _current_chapter: job.current_chapter || 0,
         _status: "partial",
         _error_code: "GENERATION_WORKER_FAILED",
-        _error_message: message.slice(0, 1000),
+        _error_message: publicMessage,
       });
     } catch (finishError) {
       console.error("[GENERATION-WORKER] Failed to release lease after error:", finishError);
@@ -343,7 +349,7 @@ serve(async (req) => {
       success: false,
       state: "partial",
       jobId,
-      error: message,
+      error: publicMessage,
       code: "GENERATION_WORKER_FAILED",
     }, 500);
   }
