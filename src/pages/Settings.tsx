@@ -130,11 +130,8 @@ export default function Settings() {
     navigate("/account/delete");
   };
 
-  const handleExportData = async () => {
-    toast({
-      title: t('settings.dataExport'),
-      description: t('settings.dataExportDesc'),
-    });
+  const handleExportData = () => {
+    navigate("/account/data-export");
   };
 
   // Helper to update a single setting
