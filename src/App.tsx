@@ -61,7 +61,6 @@ const HealthCheck = lazy(() => import("./pages/HealthCheck"));
 const AdminRecovery = lazy(() => import("./pages/AdminRecovery"));
 const PMFDashboard = lazy(() => import("./pages/PMFDashboard"));
 const AuditDashboard = lazy(() => import("./pages/AuditDashboard"));
-const UploadPage = lazy(() => import("./pages/Upload"));
 const MasteryDashboard = lazy(() => import("./pages/MasteryDashboard"));
 const MasteryModel = lazy(() => import("./pages/MasteryModel"));
 const QuickLearn = lazy(() => import("./pages/QuickLearn"));
@@ -223,7 +222,6 @@ const App = () => (
                         <Route path="/admin-recovery" element={<ProtectedRoute><AdminRecovery /></ProtectedRoute>} />
                         <Route path="/pmf" element={<AdminRoute><PMFDashboard /></AdminRoute>} />
                         <Route path="/audit-dashboard" element={<AdminRoute><AuditDashboard /></AdminRoute>} />
-                        <Route path="/upload" element={withRecovery('Upload', <ProtectedRoute><UploadPage /></ProtectedRoute>)} />
                         <Route path="/dashboard/mastery" element={withRecovery('MasteryDashboard', <ProtectedRoute><MasteryDashboard /></ProtectedRoute>)} />
                         <Route path="/docs/mastery-model" element={<MasteryModel />} />
                         <Route path="/quick-learn" element={withRecovery('QuickLearn', <QuickLearn />)} />
