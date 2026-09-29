@@ -80,18 +80,20 @@ if (bookIds.length === 0) {
 }
 
 const url = requiredEnv("QUALIFICATION_SUPABASE_URL");
-const serviceRoleKey = process.env.QUALIFICATION_SUPABASE_SERVICE_ROLE_KEY?.trim();
+const serverSecret =
+  process.env.QUALIFICATION_SUPABASE_SECRET_KEY?.trim()
+  || process.env.QUALIFICATION_SUPABASE_SERVICE_ROLE_KEY?.trim();
 const publishableKey = process.env.QUALIFICATION_SUPABASE_PUBLISHABLE_KEY?.trim();
 const userJwt = process.env.QUALIFICATION_USER_JWT?.trim();
 
-if (!serviceRoleKey && (!publishableKey || !userJwt)) {
+if (!serverSecret && (!publishableKey || !userJwt)) {
   throw new Error(
-    "Provide QUALIFICATION_SUPABASE_SERVICE_ROLE_KEY, or both QUALIFICATION_SUPABASE_PUBLISHABLE_KEY and QUALIFICATION_USER_JWT.",
+    "Provide QUALIFICATION_SUPABASE_SECRET_KEY (preferred) or QUALIFICATION_SUPABASE_SERVICE_ROLE_KEY (legacy), or both QUALIFICATION_SUPABASE_PUBLISHABLE_KEY and QUALIFICATION_USER_JWT.",
   );
 }
 
-const supabase = serviceRoleKey
-  ? createClient(url, serviceRoleKey, {
+const supabase = serverSecret
+  ? createClient(url, serverSecret, {
       auth: {
         persistSession: false,
         autoRefreshToken: false,
