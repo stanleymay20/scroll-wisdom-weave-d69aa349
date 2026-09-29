@@ -30,7 +30,7 @@ interface PlanConfig {
 const plans: PlanConfig[] = [
   {
     name: "Free",
-    description: "Try ScrollLibrary — no credit card needed",
+    description: "Start your first book — no credit card needed",
     price: "$0",
     period: "forever",
     icon: BookOpen,
@@ -47,8 +47,8 @@ const plans: PlanConfig[] = [
     ],
   },
   {
-    name: "Student",
-    description: "For learners who need more content",
+    name: "Creator",
+    description: "For authors creating books regularly",
     price: `$${SUBSCRIPTION_TIERS.student.monthlyPrice}`,
     period: "/month",
     icon: Zap,
@@ -65,8 +65,8 @@ const plans: PlanConfig[] = [
     ],
   },
   {
-    name: "Premium",
-    description: "Full power for professionals & educators",
+    name: "Creator Pro",
+    description: "For serious authors and publishing-ready projects",
     price: `$${SUBSCRIPTION_TIERS.premium.monthlyPrice}`,
     period: "/month",
     icon: Sparkles,
@@ -84,8 +84,8 @@ const plans: PlanConfig[] = [
     ],
   },
   {
-    name: "Institutional",
-    description: "For universities & organizations",
+    name: "Teams",
+    description: "For publishers, universities & organizations",
     price: `$${SUBSCRIPTION_TIERS.prophet_tier.monthlyPrice}`,
     period: "/month",
     icon: Building2,
@@ -265,10 +265,10 @@ export default function Pricing() {
             {/* Header */}
             <div className="text-center mb-16">
               <h1 className="text-4xl md:text-5xl font-display font-bold text-foreground mb-4">
-                Plans & Pricing
+                Publishing plans
               </h1>
               <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                Start free. Paid upgrades reopen after the payment lifecycle passes its GA validation gate.
+                Start creating free. Choose more capacity and publishing tools as your catalogue grows. Paid upgrades remain gated until the payment lifecycle passes GA validation.
               </p>
             </div>
 
@@ -356,10 +356,10 @@ export default function Pricing() {
               <div className="text-center mb-10">
                 <Badge className="mb-3">For Creators</Badge>
                 <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-3">
-                  Sell your work, your way
+                  Publish and sell, your way
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto">
-                  Free creators can list on the ScrollLibrary marketplace. External publishing integrations will be enabled only after their provider E2E gates pass.
+                  List books on the ScrollLibrary marketplace now. External publishing integrations remain gated until their provider E2E checks pass.
                 </p>
               </div>
 
