@@ -93,7 +93,7 @@ const plans: PlanConfig[] = [
       { text: "Expanded book generation allowance", included: true },
       { text: "Expanded text-to-speech allowance", included: true },
       { text: "Premium voice providers after validation", included: false },
-      { text: "Cinematic video generation", included: true },
+      { text: "Cinematic video after GA", included: false },
       { text: "Batch generation after GA", included: false },
       { text: "AI research assistant after provider validation", included: false },
       { text: "PDF, EPUB & DOCX exports", included: true },
