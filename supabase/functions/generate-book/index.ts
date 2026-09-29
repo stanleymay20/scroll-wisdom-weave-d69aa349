@@ -490,6 +490,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
         contractVersion: 2,
         targetChapterWords: wordCount,
         phase: "drafting",
+        orchestrator: "server_worker",
       },
     }).select('id').single();
 
@@ -562,9 +563,48 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
 
     console.log(`[GENERATE-BOOK] Done. Daily: ${reservation.books_used}/${dailyLimit === -1 ? "unlimited" : dailyLimit}`);
 
+    // Initial full-book drafting is server-owned. Dispatch only after the book,
+    // chapters, job, and library linkage are durably committed. One worker
+    // invocation generates one leased chapter and dispatches the next step.
+    let backgroundGenerationStarted = false;
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      const dispatch = fetch(SUPABASE_URL + "/functions/v1/generation-worker", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ jobId }),
+      }).then(async (workerResponse) => {
+        if (!workerResponse.ok) {
+          console.error(
+            "[GENERATE-BOOK] Background worker dispatch failed:",
+            workerResponse.status,
+            await workerResponse.text(),
+          );
+        }
+      }).catch((workerError) => {
+        console.error("[GENERATE-BOOK] Background worker dispatch exception:", workerError);
+      });
+
+      const edgeRuntime = (globalThis as any).EdgeRuntime;
+      if (edgeRuntime?.waitUntil) {
+        edgeRuntime.waitUntil(dispatch);
+        backgroundGenerationStarted = true;
+      } else {
+        console.warn("[GENERATE-BOOK] EdgeRuntime.waitUntil unavailable; book remains resumable by generation-worker");
+      }
+    }
+
     return new Response(JSON.stringify({
-      success: true, message: "Book created successfully",
-      bookId: book.id, jobId, outline: bookOutline,
+      success: true,
+      message: "Book created successfully",
+      bookId: book.id,
+      jobId,
+      outline: bookOutline,
+      backgroundGenerationStarted,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {
