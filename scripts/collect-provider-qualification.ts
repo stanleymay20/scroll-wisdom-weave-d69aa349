@@ -7,9 +7,12 @@ import {
   type ProviderQualificationSample,
   type QualifiableBookType,
 } from "../supabase/functions/_shared/provider-qualification.ts";
+import {
+  validateContract6Content,
+  type GovernedBookType,
+} from "../supabase/functions/_shared/contract6-governance.ts";
 
 type ReviewEntry = {
-  specializedContractPassed?: boolean;
   visualAssetGatePassed?: boolean;
   humanReview?: {
     reviewer: string;
@@ -134,7 +137,7 @@ for (const bookId of bookIds) {
 
   const { data: chapters, error: chapterError } = await supabase
     .from("chapters")
-    .select("id,chapter_number,is_generated,content,version_number")
+    .select("id,chapter_number,title,is_generated,content,version_number")
     .eq("book_id", bookId)
     .order("chapter_number", { ascending: true });
 
@@ -214,6 +217,27 @@ for (const bookId of bookIds) {
   }
 
   const review = reviews.books?.[bookId] || {};
+  const contractViolations = chapterRows.flatMap((chapter) => {
+    const chapterContent = typeof chapter.content === "string" ? chapter.content : "";
+    if (!chapter.is_generated || !chapterContent.trim()) {
+      return [{ chapter: chapter.chapter_number, code: "INCOMPLETE_CHAPTER" }];
+    }
+
+    const result = validateContract6Content(
+      chapterContent,
+      bookType as GovernedBookType,
+      typeof chapter.title === "string" ? chapter.title : undefined,
+    );
+
+    return result.violations
+      .filter((violation) => violation.severity === "critical" || violation.severity === "high")
+      .map((violation) => ({
+        chapter: chapter.chapter_number,
+        code: violation.code,
+      }));
+  });
+  const specializedContractPassed = contractViolations.length === 0;
+
   const currentReady =
     job?.status === "completed"
     && boolean(publicationQuality.ready);
@@ -266,15 +290,20 @@ for (const bookId of bookIds) {
       production: productionPassed ? "passed" : currentReady ? "blocked" : "missing",
     },
     specialized: {
-      contractPassed: review.specializedContractPassed === true,
+      contractPassed: specializedContractPassed,
       codeAuditsRequired: bookType === "technical" ? codeChapters.length : undefined,
       codeAuditsPassed: bookType === "technical" ? codeAuditsPassed : undefined,
       visualAssetGatePassed: ["illustrated", "children", "comic"].includes(bookType)
-        ? (review.visualAssetGatePassed ?? (rightsPassed && productionPassed))
+        ? (rightsPassed && productionPassed && review.visualAssetGatePassed !== false)
         : undefined,
-      notes: telemetryComplete
-        ? undefined
-        : "Generation job lacks post-qualification chapter-attempt telemetry; regenerate a fresh qualification sample.",
+      notes: [
+        telemetryComplete
+          ? null
+          : "Generation job lacks post-qualification chapter-attempt telemetry; regenerate a fresh qualification sample.",
+        contractViolations.length
+          ? `Contract 6 blockers: ${contractViolations.slice(0, 12).map((item) => `ch${item.chapter}:${item.code}`).join(", ")}`
+          : null,
+      ].filter(Boolean).join(" | ") || undefined,
     },
     humanReview: review.humanReview,
   });
