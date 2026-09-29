@@ -21,6 +21,7 @@ import { RouteTelemetry } from "@/components/observability/RouteTelemetry";
 import { GlobalAttributionBeacon } from "@/components/observability/AttributionBeacon";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
+import { FEATURES } from "@/lib/config";
 
 // Keep only the homepage eager. Every route-only surface is loaded on demand so
 // it cannot inflate first-paint JavaScript for users who never visit that route.
@@ -224,7 +225,7 @@ const App = () => (
                         <Route path="/audit-dashboard" element={<AdminRoute><AuditDashboard /></AdminRoute>} />
                         <Route path="/dashboard/mastery" element={withRecovery('MasteryDashboard', <ProtectedRoute><MasteryDashboard /></ProtectedRoute>)} />
                         <Route path="/docs/mastery-model" element={<MasteryModel />} />
-                        <Route path="/quick-learn" element={withRecovery('QuickLearn', <QuickLearn />)} />
+                        {FEATURES.enableAdvancedAuthoring && <Route path="/quick-learn" element={withRecovery('QuickLearn', <QuickLearn />)} />}
                         <Route path="/experiments" element={<AdminRoute><ExperimentReport /></AdminRoute>} />
                         <Route path="/admin/ops" element={<AdminRoute><AdminOps /></AdminRoute>} />
                         <Route path="/admin/entitlements" element={<AdminRoute><AdminEntitlements /></AdminRoute>} />
@@ -232,12 +233,12 @@ const App = () => (
                         <Route path="/organizations/analytics" element={<ProtectedRoute><OrgAnalytics /></ProtectedRoute>} />
                         <Route path="/verify-certificate" element={<VerifyLookup />} />
                         <Route path="/verify/:exportId" element={<VerifyExport />} />
-                        <Route path="/book/:bookId/citation-graph" element={withRecovery('CitationGraph', <ProtectedRoute><CitationGraph /></ProtectedRoute>)} />
-                        <Route path="/study" element={withRecovery('StudySession', <ProtectedRoute><StudySession /></ProtectedRoute>)} />
-                        <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />
+                        {FEATURES.enableAdvancedAuthoring && <Route path="/book/:bookId/citation-graph" element={withRecovery('CitationGraph', <ProtectedRoute><CitationGraph /></ProtectedRoute>)} />}
+                        {FEATURES.enableAdvancedAuthoring && <Route path="/study" element={withRecovery('StudySession', <ProtectedRoute><StudySession /></ProtectedRoute>)} />}
+                        {FEATURES.enableAdvancedAuthoring && <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />}
                         <Route path="/account/data-export" element={<ProtectedRoute><DataExport /></ProtectedRoute>} />
-                        <Route path="/book/:bookId/publishing" element={withRecovery('PublishingCommandCenter', <ProtectedRoute><PublishingCommandCenter /></ProtectedRoute>)} />
-                        <Route path="/book/:bookId/ai-handoffs" element={withRecovery('AiHandoffs', <ProtectedRoute><AiHandoffs /></ProtectedRoute>)} />
+                        {FEATURES.enableEditorialPipeline && <Route path="/book/:bookId/publishing" element={withRecovery('PublishingCommandCenter', <ProtectedRoute><PublishingCommandCenter /></ProtectedRoute>)} />}
+                        {FEATURES.enableAdvancedAuthoring && <Route path="/book/:bookId/ai-handoffs" element={withRecovery('AiHandoffs', <ProtectedRoute><AiHandoffs /></ProtectedRoute>)} />}
 
                         {/* Storefront (public) */}
                         <Route path="/store" element={withRecovery('Storefront', <Storefront />)} />
@@ -247,7 +248,7 @@ const App = () => (
                         <Route path="/series/:slug" element={withRecovery('Series', <SeriesPage />)} />
                         <Route path="/book/:bookId/publish" element={withRecovery('BookPublishSettings', <ProtectedRoute><BookPublishSettings /></ProtectedRoute>)} />
                         <Route path="/account/author" element={withRecovery('AuthorProfileEditor', <ProtectedRoute><AuthorProfileEditor /></ProtectedRoute>)} />
-                        <Route path="/account/exports" element={withRecovery('ExportJobs', <ProtectedRoute><ExportJobsPage /></ProtectedRoute>)} />
+                        {FEATURES.enableExports && <Route path="/account/exports" element={withRecovery('ExportJobs', <ProtectedRoute><ExportJobsPage /></ProtectedRoute>)} />}
                         <Route path="/store/:slug/success" element={withRecovery('PurchaseSuccess', <PurchaseSuccess />)} />
                         <Route path="/store/:slug/read-full" element={withRecovery('FullBookReader', <ProtectedRoute><FullBookReader /></ProtectedRoute>)} />
                         <Route path="/account/library/purchases" element={withRecovery('PurchasedLibrary', <ProtectedRoute><PurchasedLibrary /></ProtectedRoute>)} />
