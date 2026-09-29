@@ -36,6 +36,7 @@ import { BookDetailHeader } from "@/components/books/BookDetailHeader";
 import { CustomCoverUploadButton } from "@/components/books/CustomCoverUploadButton";
 import { BookOwnerControls } from "@/components/books/BookOwnerControls";
 import { ChapterList } from "@/components/books/ChapterList";
+import { FEATURES } from "@/lib/config";
 
 interface ChapterData {
   id: string;
@@ -381,7 +382,7 @@ export default function BookDetail() {
                   progressPercent={Math.round((chapters.filter(ch => ch.is_generated).length / Math.max(chapters.length, 1)) * 100)} className="mt-6" />
               )}
 
-              {isOwner && hasGeneratedChapters && (
+              {FEATURES.enableEditorialPipeline && isOwner && hasGeneratedChapters && (
                 <>
                   <ChiefEditorPanel bookId={book.id} chapters={chapterMapForPanels} className="mt-6" />
                   <CodeAuditPanel bookId={book.id} chapters={chapterMapForPanels} className="mt-6" />
@@ -393,7 +394,7 @@ export default function BookDetail() {
           )}
 
           {/* Mobile Panels */}
-          {isMobile && isOwner && hasGeneratedChapters && (
+          {FEATURES.enableEditorialPipeline && isMobile && isOwner && hasGeneratedChapters && (
             <div className="px-4 mt-4 space-y-4">
               <ChiefEditorPanel bookId={book.id} chapters={chapterMapForPanels} />
               <CodeAuditPanel bookId={book.id} chapters={chapterMapForPanels} />
@@ -401,7 +402,7 @@ export default function BookDetail() {
           )}
 
           {/* Mobile Cover Controls */}
-          {isMobile && isOwner && !book.current_publication_id && (
+          {FEATURES.enableCustomCover && isMobile && isOwner && !book.current_publication_id && (
             <div className="px-4 mt-4 space-y-2">
               <div className="flex gap-2">
                 <Select value={coverTheme} onValueChange={setCoverTheme}>
@@ -426,10 +427,12 @@ export default function BookDetail() {
           {/* Mobile Export/Report */}
           {isMobile && (
             <div className="px-4 mt-4 flex flex-wrap gap-2">
-              <ExportDialog bookId={book.id} title={book.title} hasGeneratedChapters={hasGeneratedChapters}
-                coverImageUrl={book.cover_image_url} authorName={book.author_ai_agent || undefined}
-                bookType={book.book_type || 'text'} chapterContents={chapters.filter(ch => ch.is_generated).map(ch => ch.content || '')}
-                chapters={chapters.filter(ch => ch.is_generated).map(ch => ({ chapter_number: ch.chapter_number, content: ch.content }))} />
+              {FEATURES.enableExports && (
+                <ExportDialog bookId={book.id} title={book.title} hasGeneratedChapters={hasGeneratedChapters}
+                  coverImageUrl={book.cover_image_url} authorName={book.author_ai_agent || undefined}
+                  bookType={book.book_type || 'text'} chapterContents={chapters.filter(ch => ch.is_generated).map(ch => ch.content || '')}
+                  chapters={chapters.filter(ch => ch.is_generated).map(ch => ({ chapter_number: ch.chapter_number, content: ch.content }))} />
+              )}
               <ReportContentDialog contentType="book" contentId={book.id} contentTitle={book.title} />
             </div>
           )}
