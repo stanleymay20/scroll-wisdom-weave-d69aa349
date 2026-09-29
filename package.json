@@ -35,7 +35,8 @@
     "audit:contracts": "bun scripts/check-contract-parity.mjs",
     "audit:dependencies": "bun scripts/check-dependency-audit.mjs",
     "audit:bundle": "bun scripts/check-bundle-budget.mjs",
-    "ci": "bun run typecheck && bun run lint && bun run test && bun run audit:contracts && bun run audit:edge-auth && bun run audit:function-reachability && bun run audit:deno-tests && bun run build:release && bun run audit:secrets && bun run audit:dependencies"
+    "ci": "bun run typecheck && bun run lint && bun run test && bun run audit:contracts && bun run audit:edge-auth && bun run audit:function-reachability && bun run audit:deno-tests && bun run build:release && bun run audit:secrets && bun run audit:dependencies",
+    "qualification:collect": "bun scripts/collect-provider-qualification.ts"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",
