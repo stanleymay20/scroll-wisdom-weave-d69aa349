@@ -23,7 +23,7 @@ VALUES
 -- The underlying entitlement policies remain installed for the post-GA
 -- re-enable path, but the final GA launch migration removes browser mutation
 -- privileges entirely. Both layers are intentional and must remain true.
-DO $
+DO $$
 BEGIN
   IF (
     SELECT count(*)
@@ -52,7 +52,7 @@ BEGIN
     RAISE EXCEPTION 'service role lost release scheduling authority';
   END IF;
 END
-$;
+$$;
 
 -- Seed a historical schedule/item for the free user as the trusted DB owner.
 -- The free owner must retain read visibility but lose mutation rights.
@@ -152,7 +152,7 @@ SELECT set_config(
   true
 );
 
-DO $
+DO $$
 BEGIN
   BEGIN
     INSERT INTO public.release_schedules(
@@ -169,7 +169,7 @@ BEGIN
     WHEN insufficient_privilege THEN NULL;
   END;
 END
-$;
+$$;
 
 RESET ROLE;
 ROLLBACK;
