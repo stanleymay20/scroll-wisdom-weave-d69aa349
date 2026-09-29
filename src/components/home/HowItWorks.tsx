@@ -1,28 +1,28 @@
 import { motion } from "framer-motion";
-import { Upload, BookOpen, HelpCircle, Award } from "lucide-react";
+import { Sparkles, BookOpen, HelpCircle, Award } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useNavigate } from "react-router-dom";
 
 const steps = [
   {
     number: "1",
-    title: "Upload or Generate",
+    title: "Generate",
     description:
-      "Upload your PDF textbook or generate a structured study guide on any topic.",
-    icon: Upload,
+      "Generate a structured study guide on a topic you want to master.",
+    icon: Sparkles,
     mockup: (
       <div className="bg-card border border-border rounded-lg p-3 text-xs space-y-2">
         <div className="flex items-center gap-2">
           <div className="w-6 h-6 rounded bg-primary/10 flex items-center justify-center">
-            <Upload className="h-3 w-3 text-primary" />
+            <Sparkles className="h-3 w-3 text-primary" />
           </div>
-          <span className="font-medium text-foreground text-[11px]">Add a Book</span>
+          <span className="font-medium text-foreground text-[11px]">Generate a Book</span>
         </div>
         <div className="flex items-center gap-2 bg-muted/50 rounded p-2">
           <BookOpen className="h-4 w-4 text-primary flex-shrink-0" />
-          <span className="text-foreground font-medium">AI Fundamentals.pdf</span>
+          <span className="text-foreground font-medium">AI Fundamentals</span>
         </div>
-        <p className="text-muted-foreground text-[10px]">Drag a file to upload or enter a topic to generate</p>
+        <p className="text-muted-foreground text-[10px]">Enter a topic and choose the depth you want to study</p>
         <div className="bg-primary text-primary-foreground rounded px-2 py-1 text-center text-[10px] font-medium">
           Generate Study Guide →
         </div>
