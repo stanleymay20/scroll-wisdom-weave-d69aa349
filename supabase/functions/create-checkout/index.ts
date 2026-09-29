@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { ensureBillingCustomer } from "../_shared/billing-customer.ts";
+import { externalPaymentWritesEnabled } from "../_shared/ga-release-flags.ts";
 import {
   clientPriceMatchesTier,
   isBillableTier,
@@ -45,6 +46,16 @@ const getReturnOrigin = (req: Request): string => {
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
+  }
+
+  if (!externalPaymentWritesEnabled()) {
+    return new Response(JSON.stringify({
+      error: "Paid upgrades are temporarily unavailable while payment validation is completing.",
+      code: "ga_payments_disabled",
+    }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+      status: 503,
+    });
   }
 
   const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
