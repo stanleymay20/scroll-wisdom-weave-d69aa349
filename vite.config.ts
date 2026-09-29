@@ -32,6 +32,11 @@ function releaseIdentity(identity: { commit: string | null; commitSource: string
   };
 }
 
+// PWA/offline recovery is deliberately outside the GA launch scope until its
+// upgrade/offline E2E gate is proven. Keep the code in-tree, but do not emit a
+// service worker or install manifest in GA builds.
+const GA_PWA_ENABLED = false;
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const buildTime = process.env.BUILD_TIME ?? new Date().toISOString();
@@ -55,7 +60,7 @@ export default defineConfig(({ mode }) => {
     react(),
     mode === "development" && componentTagger(),
     releaseIdentity({ commit, commitSource, buildTime, sourceFingerprint, sourceFingerprintFiles }),
-    VitePWA({
+    GA_PWA_ENABLED && VitePWA({
       registerType: "autoUpdate",
       injectRegister: "auto",
       includeAssets: ["favicon.png", "favicon-16x16.png", "favicon-32x32.png", "apple-touch-icon.png", "logo.png", "offline.html"],
