@@ -30,6 +30,18 @@ export type ExportFormat = typeof EXPORT_FORMATS[number];
 // ===========================================
 export const PMF_MODE = true; // GA launch scope: core Generate → Read → Quiz → Certificate
 
+function explicitClientFlag(value: string | undefined): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+// Specialized book generation is released independently from the broader post-GA
+// surface. This lets one empirically qualified mode open without implicitly
+// enabling payments, exports, study tooling, or other PMF-disabled features.
+export const SPECIALIZED_AUTHORING_ENABLED = explicitClientFlag(
+  import.meta.env.VITE_SPECIALIZED_AUTHORING_ENABLED,
+);
+
 export const FEATURES = {
   enableTTS: true,
   enableAICovers: !PMF_MODE,
@@ -55,6 +67,7 @@ export const FEATURES = {
   enablePaidCheckout: !PMF_MODE,
   enableSubscriptionCheckout: !PMF_MODE,
   enableStripeConnect: !PMF_MODE,
+  enableSpecializedAuthoring: SPECIALIZED_AUTHORING_ENABLED,
   enableAdvancedAuthoring: !PMF_MODE,
   enableChapterRegeneration: !PMF_MODE,
   enableCustomCover: !PMF_MODE,
