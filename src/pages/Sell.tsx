@@ -37,6 +37,7 @@ import {
   Users, TrendingUp, PartyPopper, Pencil, Store, ShoppingBag,
 } from "lucide-react";
 import { publishExternallyOneClick, waitForBundle } from "@/lib/oneClickPublish";
+import { PMF_MODE } from "@/lib/config";
 
 const EMAIL_RE = /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/;
 
@@ -454,7 +455,7 @@ export default function Sell() {
             books={books} value={draft.publish}
             onChange={(p) => setDraft((d) => ({ ...d, publish: p }))}
             onBack={() => setStep(2)} onNext={publishAndContinue} saving={savingStep}
-            canPublishExternal={entitlements.can_publish_external}
+            canPublishExternal={!PMF_MODE && entitlements.can_publish_external}
             entitlementTier={entitlements.tier} entitlementLoading={entLoading}
             editing={editingListing}
             loadError={booksLoadError}
@@ -466,7 +467,7 @@ export default function Sell() {
             slug={publishedListing.slug}
             bookId={draft.publish.book_id}
             listingId={publishedListing.id}
-            canPublishExternal={entitlements.can_publish_external}
+            canPublishExternal={!PMF_MODE && entitlements.can_publish_external}
             onReset={() => { localStorage.removeItem(DRAFT_KEY); setDraft(EMPTY_DRAFT); setPublishedListing(null); setStep(0); }}
           />
         )}
@@ -500,7 +501,7 @@ function StepWelcome({ onStart, entitlementTier }: { onStart: () => void; entitl
         <div className="grid grid-cols-2 gap-3 mt-6">
           {[
             { icon: DollarSign, label: "Sell books" },
-            { icon: Globe, label: "Publish externally" },
+            { icon: Globe, label: "Release scheduling" },
             { icon: TrendingUp, label: "Earn revenue" },
             { icon: Users, label: "Build audience" },
           ].map(({ icon: Icon, label }) => (
@@ -813,7 +814,7 @@ function StepPublish({
                 Publish to Gumroad, Substack & more
               </div>
               <p className="text-xs text-muted-foreground">
-                External publishing and release scheduling unlock on the Creator plan.
+                Release scheduling is available by plan. Third-party publishing is outside the GA launch scope.
               </p>
               <Button asChild variant="outline" size="sm">
                 <Link to="/pricing#creator">See Creator plans <ArrowRight className="h-3.5 w-3.5" /></Link>
@@ -922,7 +923,7 @@ function StepLaunch({
         </p>
         {!canPublishExternal ? (
           <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
-            <span><Lock className="h-3.5 w-3.5 inline mr-1.5" aria-hidden />External publishing requires the Creator plan.</span>
+            <span><Lock className="h-3.5 w-3.5 inline mr-1.5" aria-hidden />Third-party publishing is outside the GA launch scope.</span>
             <Button asChild size="sm" variant="default"><Link to="/pricing#creator">Upgrade</Link></Button>
           </div>
         ) : (
@@ -954,7 +955,7 @@ function StepLaunch({
               </div>
             )}
             <p className="mt-3 text-[11px] text-muted-foreground">
-              Connect Gumroad / Shopify first in{" "}
+              Third-party connections will reopen after provider E2E validation.{" "}
               <Link to="/account/intelligence" className="text-primary hover:underline">Publishing Intelligence</Link>.
             </p>
           </>
@@ -1021,7 +1022,7 @@ function EducationCards({ tier }: { tier: string }) {
   const items = [
     { icon: DollarSign, title: "How creators earn", body: "Set any price. We process payments and credit your ledger after the platform fee." },
     { icon: ShieldCheck, title: "Platform fee", body: "ScrollLibrary keeps 10% of each sale on Free, less on Creator plans. No hidden costs." },
-    { icon: Globe, title: "Why external publishing matters", body: "Bundle once, publish to Gumroad, Substack, KDP and more — without retyping metadata." },
+    { icon: Globe, title: "GA storefront scope", body: "Publish to the ScrollLibrary storefront now. Third-party publishing integrations return after provider E2E validation." },
   ];
   return (
     <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
@@ -1037,7 +1038,7 @@ function EducationCards({ tier }: { tier: string }) {
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
             <div>
               <div className="font-medium text-sm">Upgrade to Creator</div>
-              <p className="text-xs text-muted-foreground mt-1">Lower fees, external publishing, release scheduling, priority generation.</p>
+              <p className="text-xs text-muted-foreground mt-1">Lower marketplace fees, release scheduling, and priority generation. Third-party publishing is post-GA.</p>
             </div>
             <Button asChild size="sm" variant="outline"><Link to="/pricing#creator">See plans</Link></Button>
           </div>
