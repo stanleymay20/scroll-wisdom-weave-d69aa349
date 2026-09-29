@@ -28,8 +28,8 @@ function passingSample(
       terminalStatus: "completed",
       expectedChapters: 12,
       generatedChapters: 12,
-      providerCalls: 14,
-      providerFailures: 0,
+      chapterAttempts: 14,
+      chapterFailures: 0,
       regenerationPasses: 1,
     },
     editorial: {
@@ -103,17 +103,17 @@ Deno.test("visual modes require a visual asset gate", () => {
   assert(result.blockers.some((blocker) => blocker.includes("visual asset/rights/rendering")));
 });
 
-Deno.test("provider and regeneration instability block a sample", () => {
+Deno.test("chapter-attempt and regeneration instability block a sample", () => {
   const sample = passingSample("reference");
-  sample.generation.providerCalls = 10;
-  sample.generation.providerFailures = 2;
+  sample.generation.chapterAttempts = 10;
+  sample.generation.chapterFailures = 2;
   sample.generation.regenerationPasses = 4;
 
   const result = evaluateQualificationSample(sample);
   assertEquals(result.passed, false);
-  assert(result.providerFailureRate > 0.05);
+  assert(result.chapterFailureRate > 0.05);
   assert(result.regenerationRate > 0.15);
-  assert(result.blockers.some((blocker) => blocker.includes("provider failure rate")));
+  assert(result.blockers.some((blocker) => blocker.includes("chapter-attempt failure rate")));
   assert(result.blockers.some((blocker) => blocker.includes("regeneration rate")));
 });
 
