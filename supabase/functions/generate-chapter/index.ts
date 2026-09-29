@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs, parseRawFigureMarkers, summarizeFigureSpecs, VISUAL_DENSITY, buildFigureImagePrompt, buildFigureMarker, figureImageMarkdown, replaceFigureMarker, resolveFigureRendering, stripFigureMarkers, type VisualType } from "../_shared/visual-intelligence.ts";
 import { checkRateLimit, errorResponse, ErrorCode } from "../_shared/error-codes.ts";
 import { COMIC_STYLE_PRESETS, COMIC_SUB_TYPE_DEFINITIONS, buildStoryArchitectPrompt, buildScriptwriterPrompt, buildVisualDirectorPrompt, buildLearningAgentPrompt, buildContinuityGuardianPrompt, buildEnhancedComicSystemPrompt, buildEnhancedComicChapterPrompt, buildComicSystemPrompt, buildComicChapterPrompt } from "../_shared/generation/comic-prompts.ts";
-import { advancedAuthoringEnabled, advancedBookTypeEnabled } from "../_shared/ga-release-flags.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled, qualificationBookTypeEnabled } from "../_shared/ga-release-flags.ts";
 import { secretsMatch } from "../_shared/cron-auth.ts";
 import { buildFictionContinuityContext, sanitizeFictionContract } from "../_shared/fiction-context.ts";
 import { buildChildrenSystemPrompt } from "../_shared/children-contract.ts";
@@ -1946,16 +1946,6 @@ serve(async (req) => {
     );
   }
 
-  if ((requestBody?.regenerate === true || requestBody?.isRegeneration === true) && !advancedAuthoringEnabled()) {
-    return new Response(JSON.stringify({
-      error: "Chapter regeneration is outside the current GA launch scope.",
-      code: "GA_ADVANCED_AUTHORING_DISABLED",
-    }), {
-      status: 422,
-      headers: { ...corsHeaders, "Content-Type": "application/json" },
-    });
-  }
-
   // Health check (no auth required)
   if (requestBody?.healthCheck) {
     return new Response(
@@ -2297,8 +2287,26 @@ serve(async (req) => {
     // Cast bookDetails to any for new fields not yet in generated types
     const bookData = bookDetails as any;
     const effectiveBookType = bookData?.book_type || bookType;
+    const qualificationAccess =
+      isAdmin
+      && effectiveBookType !== "text"
+      && qualificationBookTypeEnabled(effectiveBookType);
 
-    if (effectiveBookType !== "text" && !advancedBookTypeEnabled(effectiveBookType)) {
+    if (isRegeneration && !advancedAuthoringEnabled() && !qualificationAccess) {
+      return new Response(JSON.stringify({
+        error: "Chapter regeneration is outside the current GA launch scope.",
+        code: "GA_ADVANCED_AUTHORING_DISABLED",
+      }), {
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (
+      effectiveBookType !== "text"
+      && !advancedBookTypeEnabled(effectiveBookType)
+      && !qualificationAccess
+    ) {
       return new Response(JSON.stringify({
         error: "This specialized book type has not completed provider qualification.",
         code: "GA_BOOK_TYPE_NOT_QUALIFIED",
