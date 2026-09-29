@@ -1148,10 +1148,10 @@ function validateWorkbookStructure(content: string): ValidationResult {
 
   return {
     valid: errors.length === 0,
-    blocked: errors.some(e => e.severity === 'critical'),
+    blocked: errors.length > 0,
     errors,
     warnings,
-    failureMessage: errors.length > 0 
+    failureMessage: errors.length > 0
       ? '❌ **WORKBOOK STRUCTURE VIOLATION**: Must be interactive with prompts, not prose-heavy.'
       : undefined,
   };
@@ -3036,11 +3036,23 @@ Return JSON only:
       const workbookData = await workbookResponse.json();
       let workbookContent = workbookData.choices?.[0]?.message?.content || "";
       
-      // VALIDATE workbook structure
+      // VALIDATE workbook structure. Specialized book-type contracts fail
+      // closed: an invalid workbook must never be persisted as generated.
       const workbookValidation = validateWorkbookStructure(workbookContent);
       if (!workbookValidation.valid && !isAdmin) {
         console.log("[GENERATE-CHAPTER] WORKBOOK VALIDATION FAILED:", workbookValidation.errors);
-        // Log warnings but don't block - workbook can regenerate
+        return new Response(JSON.stringify({
+          error: workbookValidation.failureMessage || "Workbook structure validation failed",
+          code: "WORKBOOK_STRUCTURE_INVALID",
+          validation: {
+            valid: false,
+            errors: workbookValidation.errors,
+            warnings: workbookValidation.warnings,
+          },
+        }), {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       
       // Add workbook front matter
