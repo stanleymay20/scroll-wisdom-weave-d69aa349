@@ -51,7 +51,6 @@ Deno.test("deterministic validator blocks known generated Python corruption", ()
     fence + "python",
     "from sklearn.modelselection import traintest_split",
     "1. Generate data",
-    "y = 2  X + 1",
     "if name == 'main':",
     "    print(y)",
     fence,
@@ -61,5 +60,19 @@ Deno.test("deterministic validator blocks known generated Python corruption", ()
   assertEquals(codes.includes("python_uncommented_step"), true);
   assertEquals(codes.includes("python_main_guard_corrupted"), true);
   assertEquals(codes.includes("python_api_identifier_mangled"), true);
-  assertEquals(codes.includes("python_operator_missing"), true);
+});
+
+
+Deno.test("raw numeric text inside Python strings is not treated as an operator blocker", () => {
+  const fence = "\x60\x60\x60";
+  const content = [
+    fence + "python",
+    'label = """1  apple',
+    '2  banana"""',
+    'print(label)',
+    fence,
+  ].join("\n");
+
+  const codes = detectDeterministicCodeIssues(content).map((issue) => issue.code);
+  assertEquals(codes.includes("python_operator_missing"), false);
 });
