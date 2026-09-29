@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { advancedAuthoringEnabled, externalPaymentWritesEnabled } from "./ga-release-flags.ts";
+import { advancedAuthoringEnabled, externalPaymentWritesEnabled, publicationMintEnabled } from "./ga-release-flags.ts";
 
 Deno.test("GA payment writes default closed for empty or invalid values", () => {
   for (const value of ["", "false", "0", "no", "enabled", "TRUE-ish"]) {
@@ -23,5 +23,18 @@ Deno.test("GA advanced authoring defaults closed for empty or invalid values", (
 Deno.test("GA advanced authoring opens only for explicit affirmative values", () => {
   for (const value of ["true", "TRUE", "1", "yes"]) {
     assertEquals(advancedAuthoringEnabled(value), true);
+  }
+});
+
+
+Deno.test("GA publication mint defaults closed for empty or invalid values", () => {
+  for (const value of ["", "false", "0", "no", "enabled"]) {
+    assertEquals(publicationMintEnabled(value), false);
+  }
+});
+
+Deno.test("GA publication mint opens only for explicit affirmative values", () => {
+  for (const value of ["true", "TRUE", "1", "yes"]) {
+    assertEquals(publicationMintEnabled(value), true);
   }
 });
