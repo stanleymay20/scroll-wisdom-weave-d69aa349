@@ -60,7 +60,7 @@ export default defineConfig(({ mode }) => {
     react(),
     mode === "development" && componentTagger(),
     releaseIdentity({ commit, commitSource, buildTime, sourceFingerprint, sourceFingerprintFiles }),
-    GA_PWA_ENABLED && VitePWA({
+    ...(GA_PWA_ENABLED ? VitePWA({
       registerType: "autoUpdate",
       injectRegister: "auto",
       includeAssets: ["favicon.png", "favicon-16x16.png", "favicon-32x32.png", "apple-touch-icon.png", "logo.png", "offline.html"],
@@ -313,7 +313,7 @@ export default defineConfig(({ mode }) => {
       devOptions: {
         enabled: false
       }
-    })
+    }) : []),
   ].filter(Boolean),
   resolve: {
     alias: {
