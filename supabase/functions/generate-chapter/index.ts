@@ -3955,7 +3955,29 @@ BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
         ILLUSTRATED_ACADEMIC_CATEGORIES.includes(category?.toLowerCase())
       );
       
-      if (isIllustratedAcademic) {
+      if (isChildrens) {
+        console.log("[GENERATE-CHAPTER] CHILDREN pipeline active");
+        systemPrompt = `You are ScrollLibrary — CHILDREN'S PICTURE-BOOK PIPELINE.
+
+IDENTITY: Children's Author · Early-Literacy Educator · Story Editor
+
+CORE RULES:
+- Write for ages 4-10 using concrete, age-appropriate language.
+- Keep sentences short and easy to read aloud.
+- Build one emotionally clear story arc: character → problem → attempts → resolution → warm close.
+- Let the lesson emerge from what the character does; never preach or lecture.
+- Preserve emotional safety. Fear or conflict may exist, but avoid graphic harm, cruelty, or adult themes.
+- Use repetition, rhythm, sensory detail, and dialogue when they improve read-aloud quality.
+- Keep character names, traits, setting details, and relationships consistent.
+- Every illustration marker must depict a concrete story moment the text actually supports.
+- Do NOT force business frameworks, named principles, KPIs, takeaways, statistics, citations, or adult self-help mechanics.
+- Do NOT write an executive summary, academic objectives, or marketing copy.
+- No AI meta-commentary, generation notes, or placeholders.
+
+${MASTER_FORMATTING_CONTRACT}
+
+LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
+      } else if (isIllustratedAcademic) {
         // ACADEMIC ILLUSTRATED PIPELINE — scholarly content with pedagogical visuals
         console.log("[GENERATE-CHAPTER] ACADEMIC ILLUSTRATED pipeline active");
         
@@ -4053,7 +4075,7 @@ Before output, verify:
 [ ] Text references connect to the figures
 [ ] ${isChildrens ? 'Word count under 1500 words' : 'Content depth matches text-only bestseller standard'}
 [ ] NO figures without descriptive text
-[ ] Bestseller mechanics present (hook, named principle, takeaways)
+[ ] ${isChildrens ? 'Age-appropriate story arc, consistent characters, and a warm resolution are present' : 'Bestseller mechanics present (hook, named principle, takeaways)'}
 
 If ANY check fails → REWRITE
 
@@ -4145,11 +4167,15 @@ REQUIREMENTS:
 - Every figure must serve the ${isIllustratedAcademic ? 'learning objective' : 'story/learning'}
 - Text must flow naturally around figure markers
 - NO AI-sounding phrases ("Let's dive in", "In this chapter we will explore")
-${isIllustratedAcademic ? '- Include in-text citations for ALL factual claims\n- Use proper academic terminology\n- Exercises at chapter end' : '- Include real-world examples with SPECIFIC NUMBERS\n- Every paragraph must deliver VALUE'}
+${isChildrens
+  ? '- Keep language concrete, warm, read-aloud friendly, and age-appropriate\n- Do not force statistics, named principles, or adult takeaways'
+  : isIllustratedAcademic
+    ? '- Include in-text citations for ALL factual claims\n- Use proper academic terminology\n- Exercises at chapter end'
+    : '- Include real-world examples with SPECIFIC NUMBERS\n- Every paragraph must deliver VALUE'}
 ${isIllustratedBusiness ? '- Include markdown tables for frameworks and models\n- Include quantitative examples with dollar amounts, percentages, multiples' : ''}
 ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts — do NOT repeat introductions' : ''}
 
-BEGIN WRITING THE FULL ${isIllustratedAcademic ? 'ACADEMIC' : 'BESTSELLER-GRADE'} ILLUSTRATED CHAPTER:`;
+BEGIN WRITING THE FULL ${isChildrens ? "CHILDREN'S" : isIllustratedAcademic ? 'ACADEMIC' : 'BESTSELLER-GRADE'} ILLUSTRATED CHAPTER:`;
     } else if (effectiveBookType === 'professional') {
       // ===========================================
       // PROFESSIONAL / BUSINESS GUIDE PIPELINE
