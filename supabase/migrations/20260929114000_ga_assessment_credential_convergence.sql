@@ -64,6 +64,39 @@ ALTER TABLE public.publishing_certificates
   ADD COLUMN IF NOT EXISTS evidence_snapshot jsonb NOT NULL DEFAULT '{}'::jsonb;
 
 -- 5. The authoritative quiz table must identify the chapter it assessed.
+--
+-- Older hosted schemas can have multiple browser-authored retries but no
+-- attempt_number column. ADD COLUMN above backfills all such rows to 1, which
+-- would make the unique index fail. Preserve already-distinct numbering, but
+-- deterministically renumber only groups that currently contain collisions.
+WITH colliding_groups AS (
+  SELECT user_id, book_id, chapter_id
+  FROM public.quiz_attempts
+  GROUP BY user_id, book_id, chapter_id
+  HAVING count(*) <> count(DISTINCT attempt_number)
+),
+ranked AS (
+  SELECT
+    qa.id,
+    row_number() OVER (
+      PARTITION BY qa.user_id, qa.book_id, qa.chapter_id
+      ORDER BY qa.submitted_at, qa.created_at, qa.id
+    )::integer AS stable_attempt_number
+  FROM public.quiz_attempts AS qa
+  WHERE EXISTS (
+    SELECT 1
+    FROM colliding_groups AS cg
+    WHERE cg.user_id = qa.user_id
+      AND cg.book_id = qa.book_id
+      AND cg.chapter_id IS NOT DISTINCT FROM qa.chapter_id
+  )
+)
+UPDATE public.quiz_attempts AS qa
+SET attempt_number = ranked.stable_attempt_number
+FROM ranked
+WHERE qa.id = ranked.id
+  AND qa.attempt_number IS DISTINCT FROM ranked.stable_attempt_number;
+
 CREATE UNIQUE INDEX IF NOT EXISTS quiz_attempts_one_numbered_attempt
   ON public.quiz_attempts(user_id, book_id, chapter_id, attempt_number);
 
