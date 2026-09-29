@@ -384,7 +384,6 @@ export default function Pricing() {
                     popular: true,
                     features: [
                       "Everything in Free",
-                      "Release schedules + follower broadcasts",
                       "Unlimited collections",
                       "0% marketplace surcharge",
                       "Core marketplace analytics",
