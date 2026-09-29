@@ -1,1 +1,1 @@
-- [ ] P04 GA blocker: real provider-backed generate-book/generate-chapter smoke on Test, verify persistence, cleanup fixture (in progress)
+- [x] P04 GA blocker: provider-backed generation smoke PASSED on Test; fixture cleaned up
