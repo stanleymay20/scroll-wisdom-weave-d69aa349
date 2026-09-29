@@ -5,6 +5,7 @@ import { checkRateLimit, errorResponse, ErrorCode } from "../_shared/error-codes
 import { COMIC_STYLE_PRESETS, COMIC_SUB_TYPE_DEFINITIONS, buildStoryArchitectPrompt, buildScriptwriterPrompt, buildVisualDirectorPrompt, buildLearningAgentPrompt, buildContinuityGuardianPrompt, buildEnhancedComicSystemPrompt, buildEnhancedComicChapterPrompt, buildComicSystemPrompt, buildComicChapterPrompt } from "../_shared/generation/comic-prompts.ts";
 import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
 import { secretsMatch } from "../_shared/cron-auth.ts";
+import { buildFictionContinuityContext, sanitizeFictionContract } from "../_shared/fiction-context.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -2225,12 +2226,20 @@ serve(async (req) => {
       line_weight_hint: string | null;
       character_sheet: any;
       layout_template: number | null;
+      text_in_image: boolean | null;
+      scenes_per_panel: number | null;
+      comic_sub_type: string | null;
+      comic_sub_type_config: any;
+      character_sheet_config: any;
+      comic_learning_config: any;
+      fiction_config: any;
+      style_profile: any;
     } | null = null;
 
     if (chapter) {
       const { data: book } = await supabase
         .from("books")
-        .select("creator_id, user_id, book_type")
+        .select("creator_id, user_id, book_type, workbook_density, comic_style_id, palette_hint, line_weight_hint, character_sheet, layout_template, text_in_image, scenes_per_panel, comic_sub_type, comic_sub_type_config, character_sheet_config, comic_learning_config, fiction_config, style_profile")
         .eq("id", chapter.book_id)
         .single();
 
@@ -2251,11 +2260,28 @@ serve(async (req) => {
     const effectiveComicStyle = bookData?.comic_style_id || comicStyle;
     const effectiveLayoutTemplate = bookData?.layout_template || 5;
     const effectiveWorkbookDensity = bookData?.workbook_density || 'medium';
-    const effectiveCharacterSheet = bookData?.character_sheet || {};
+    const effectiveCharacterSheet = bookData?.character_sheet_config
+      || bookData?.character_sheet
+      || {};
     const effectivePaletteHint = bookData?.palette_hint || '';
     const effectiveLineWeightHint = bookData?.line_weight_hint || '';
     const effectiveTextInImage = bookData?.text_in_image ?? true;
     const effectiveScenesPerPanel = bookData?.scenes_per_panel || 1;
+    const effectiveComicSubType = bookData?.comic_sub_type
+      || (requestBody?.comicSubType as string)
+      || 'entertainment';
+    const effectiveComicSubTypeConfig = bookData?.comic_sub_type_config
+      || (requestBody?.comicSubTypeConfig as any)
+      || {};
+    const effectiveComicLearningConfig = bookData?.comic_learning_config
+      || (requestBody?.comicLearningConfig as any)
+      || {};
+    const effectiveFictionConfig = sanitizeFictionContract(
+      bookData?.fiction_config || requestBody?.fictionConfig || {},
+    );
+    const effectiveStyleProfile = bookData?.style_profile
+      || requestBody?.styleProfile
+      || {};
 
     const effectiveWordCount = isAdmin ? wordCount : Math.min(wordCount, maxWordCount);
     
@@ -2473,8 +2499,8 @@ BEGIN REVISION:`;
       console.log(`[GENERATE-CHAPTER] Comic style: ${effectiveComicStyle}, Panels: ${effectiveLayoutTemplate}`);
       
       // Extract comic sub-type and learning config from already-parsed requestBody
-      const comicSubType = (requestBody?.comicSubType as string) || 'entertainment';
-      const comicLearningConfig = (requestBody?.comicLearningConfig as any) || null;
+      const comicSubType = effectiveComicSubType;
+      const comicLearningConfig = effectiveComicLearningConfig;
       const characterSheetConfig = (requestBody?.characterSheetConfig as any) || effectiveCharacterSheet;
       
       console.log(`[GENERATE-CHAPTER] Comic sub-type: ${comicSubType}, Has learning: ${comicLearningConfig?.objectives?.length > 0}`);
