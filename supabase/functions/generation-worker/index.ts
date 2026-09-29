@@ -225,18 +225,37 @@ serve(async (req) => {
       .eq("id", jobId);
     if (attemptTelemetryError) throw attemptTelemetryError;
 
-    const chapterResponse = await fetch(
-      SUPABASE_URL + "/functions/v1/generate-chapter",
-      {
-        method: "POST",
-        headers: {
-          Authorization: "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
-          "Content-Type": "application/json",
-          "x-generation-worker-token": workerToken,
+    let chapterResponse: Response;
+    try {
+      chapterResponse = await fetch(
+        SUPABASE_URL + "/functions/v1/generate-chapter",
+        {
+          method: "POST",
+          headers: {
+            Authorization: "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+            "Content-Type": "application/json",
+            "x-generation-worker-token": workerToken,
+          },
+          body: JSON.stringify(chapterPayload),
         },
-        body: JSON.stringify(chapterPayload),
-      },
-    );
+      );
+    } catch (error) {
+      const networkFailureMetadata = {
+        ...attemptMetadata,
+        qualificationTelemetry: {
+          chapterAttempts: telemetry.chapterAttempts + 1,
+          chapterFailures: telemetry.chapterFailures + 1,
+        },
+      };
+      const { error: networkTelemetryError } = await supabase
+        .from("generation_jobs")
+        .update({ metadata: networkFailureMetadata })
+        .eq("id", jobId);
+      if (networkTelemetryError) {
+        console.error("[GENERATION-WORKER] Failed to persist network failure telemetry:", networkTelemetryError);
+      }
+      throw error;
+    }
 
     const chapterResult = await chapterResponse.json().catch(() => ({}));
     if (!chapterResponse.ok || chapterResult?.error) {
@@ -301,7 +320,7 @@ serve(async (req) => {
 
     if (progress >= job.total_chapters) {
       const metadata = {
-        ...(job.metadata || {}),
+        ...attemptMetadata,
         phase: "quality_review",
         draftCompletedAt: new Date().toISOString(),
       };
