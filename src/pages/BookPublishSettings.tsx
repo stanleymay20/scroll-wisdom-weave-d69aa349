@@ -64,7 +64,7 @@ export default function BookPublishSettings() {
   const [pubs, setPubs] = useState<any[]>([]);
   const [newPub, setNewPub] = useState<{ platform: BundleKind | "other"; url: string }>({ platform: "kdp", url: "" });
   const [qualityReport, setQualityReport] = useState<ExportQualityReport | null>(null);
-  // Author-declared AI-assistance level. Required for KDP submission.
+  // Author-declared AI-assistance level retained as platform-neutral transparency metadata.
   const [aiLevel, setAiLevel] = useState<"" | "none" | "assisted" | "generated">("");
   const [savingAiLevel, setSavingAiLevel] = useState(false);
   const [publishingCanonical, setPublishingCanonical] = useState(false);
@@ -684,16 +684,15 @@ export default function BookPublishSettings() {
         </div>
 
 
-        {/* AI assistance declaration — required by Amazon KDP since 2023.
-            Missing this blocks the KDP bundle from generating. */}
+        {/* Platform-neutral AI assistance transparency metadata. */}
         <Card className="mt-6 p-4 sm:p-6">
           <h2 className="text-lg font-semibold flex items-center gap-2">
             <ShieldCheck className="w-5 h-5" /> AI use disclosure
             {aiLevel && <Badge variant="secondary" className="ml-auto capitalize">{aiLevel}</Badge>}
           </h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Amazon KDP requires every author to declare AI use before publishing. The bundle ships
-            the matching disclosure text in <code>ai-disclosure.md</code>.
+            Record how AI contributed to this work. ScrollLibrary keeps the declaration with the
+            publishing metadata so future distribution exports can generate the appropriate disclosure.
           </p>
           <div className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
             {([
@@ -718,7 +717,7 @@ export default function BookPublishSettings() {
           {!aiLevel && (
             <div className="mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs flex items-start gap-2">
               <AlertCircle className="w-3.5 h-3.5 text-amber-600 mt-0.5 shrink-0" aria-hidden />
-              <span>Set a disclosure level before publishing to Amazon KDP — bundles are refused without it.</span>
+              <span>Set a disclosure level to keep the work's AI provenance explicit and portable.</span>
             </div>
           )}
         </Card>
@@ -796,8 +795,7 @@ export default function BookPublishSettings() {
           <div className="mt-6 border-t border-border pt-4">
             <p className="text-sm font-medium flex items-center gap-2"><Zap className="w-4 h-4" aria-hidden="true" /> Direct publishing</p>
             <p className="text-xs text-muted-foreground mt-1">
-              Auto-create the product on a connected platform. Connect accounts in{" "}
-              <Link to="/account/intelligence" className="text-primary hover:underline">Publishing Intelligence</Link>.
+              Auto-create the product on a connected platform after the post-GA provider lifecycle is re-enabled.
             </p>
             {!canPublishExternal && (
               <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
