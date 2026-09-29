@@ -39,7 +39,7 @@ const plans: PlanConfig[] = [
       { text: "1 book per month (up to 4,000 words/ch)", included: true },
       { text: "5 min text-to-speech", included: true },
       { text: "Voice AI after GA validation", included: false },
-      { text: "Basic PDF export", included: true },
+      { text: "PDF export after GA validation", included: FEATURES.enableExports },
       { text: "1 quiz & 1 certificate per book", included: true },
       { text: "AI-generated covers after provider validation", included: false },
       { text: "AI image generation after provider validation", included: false },
@@ -58,7 +58,7 @@ const plans: PlanConfig[] = [
       { text: "Up to 4,000 words per chapter", included: true },
       { text: "30 min text-to-speech", included: true },
       { text: "AI images after provider validation", included: false },
-      { text: "PDF, EPUB, DOCX exports", included: true },
+      { text: "PDF, EPUB, DOCX exports after GA validation", included: FEATURES.enableExports },
       { text: "AI-generated covers after provider validation", included: false },
       { text: "Unlimited quizzes & certificates", included: true },
       { text: "Cinematic video after GA", included: false },
@@ -77,7 +77,7 @@ const plans: PlanConfig[] = [
       { text: "Up to 6,000 words per chapter", included: true },
       { text: "60 min text-to-speech", included: true },
       { text: "AI images after provider validation", included: false },
-      { text: "PDF, EPUB & DOCX exports", included: true },
+      { text: "PDF, EPUB & DOCX exports after GA validation", included: FEATURES.enableExports },
       { text: "Cinematic video after GA", included: false },
       { text: "Commercial publishing rights", included: true },
       { text: "Priority support", included: true },
@@ -97,7 +97,7 @@ const plans: PlanConfig[] = [
       { text: "Cinematic video after GA", included: false },
       { text: "Batch generation after GA", included: false },
       { text: "AI research assistant after provider validation", included: false },
-      { text: "PDF, EPUB & DOCX exports", included: true },
+      { text: "PDF, EPUB & DOCX exports after GA validation", included: FEATURES.enableExports },
       { text: "Dedicated support", included: true },
     ],
   },
@@ -251,7 +251,7 @@ export default function Pricing() {
     <div className="min-h-screen flex flex-col">
       <SEO
         title="Pricing | ScrollLibrary"
-        description="Publishing plans for authors, creators, and teams. Create AI-native books, export professional formats, and grow into commercial publishing workflows."
+        description="Plans for authors, creators, and teams. Create structured AI-native books today; advanced publishing capabilities remain gated until GA validation."
         canonical="/pricing"
       />
       <Navbar />
@@ -268,7 +268,7 @@ export default function Pricing() {
                 Publishing plans
               </h1>
               <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                Start creating free. Choose more capacity and publishing tools as your catalogue grows. Paid upgrades remain gated until the payment lifecycle passes GA validation.
+                Start creating free. More capacity and advanced publishing tools unlock only as their GA validation gates pass.
               </p>
             </div>
 
