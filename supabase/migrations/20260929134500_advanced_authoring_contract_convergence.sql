@@ -19,7 +19,8 @@ ALTER TABLE public.books
   ADD COLUMN IF NOT EXISTS character_sheet_config jsonb NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS comic_learning_config jsonb NOT NULL DEFAULT '{}'::jsonb,
   ADD COLUMN IF NOT EXISTS fiction_config jsonb NOT NULL DEFAULT '{}'::jsonb,
-  ADD COLUMN IF NOT EXISTS style_profile jsonb NOT NULL DEFAULT '{}'::jsonb;
+  ADD COLUMN IF NOT EXISTS style_profile jsonb NOT NULL DEFAULT '{}'::jsonb,
+  ADD COLUMN IF NOT EXISTS target_chapter_words integer NOT NULL DEFAULT 4000;
 
 DO $constraints$
 BEGIN
@@ -41,6 +42,16 @@ BEGIN
     ALTER TABLE public.books
       ADD CONSTRAINT books_layout_template_valid
       CHECK (layout_template BETWEEN 3 AND 6);
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM pg_constraint
+    WHERE conname = 'books_target_chapter_words_valid'
+      AND conrelid = 'public.books'::regclass
+  ) THEN
+    ALTER TABLE public.books
+      ADD CONSTRAINT books_target_chapter_words_valid
+      CHECK (target_chapter_words BETWEEN 500 AND 16000);
   END IF;
 
   IF NOT EXISTS (
