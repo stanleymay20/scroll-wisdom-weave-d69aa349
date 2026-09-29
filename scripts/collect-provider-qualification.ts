@@ -80,21 +80,36 @@ if (bookIds.length === 0) {
 }
 
 const url = requiredEnv("QUALIFICATION_SUPABASE_URL");
-const publishableKey = requiredEnv("QUALIFICATION_SUPABASE_PUBLISHABLE_KEY");
-const userJwt = requiredEnv("QUALIFICATION_USER_JWT");
+const serviceRoleKey = process.env.QUALIFICATION_SUPABASE_SERVICE_ROLE_KEY?.trim();
+const publishableKey = process.env.QUALIFICATION_SUPABASE_PUBLISHABLE_KEY?.trim();
+const userJwt = process.env.QUALIFICATION_USER_JWT?.trim();
 
-const supabase = createClient(url, publishableKey, {
-  auth: {
-    persistSession: false,
-    autoRefreshToken: false,
-    detectSessionInUrl: false,
-  },
-  global: {
-    headers: {
-      Authorization: `Bearer ${userJwt}`,
-    },
-  },
-});
+if (!serviceRoleKey && (!publishableKey || !userJwt)) {
+  throw new Error(
+    "Provide QUALIFICATION_SUPABASE_SERVICE_ROLE_KEY, or both QUALIFICATION_SUPABASE_PUBLISHABLE_KEY and QUALIFICATION_USER_JWT.",
+  );
+}
+
+const supabase = serviceRoleKey
+  ? createClient(url, serviceRoleKey, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+    })
+  : createClient(url, publishableKey!, {
+      auth: {
+        persistSession: false,
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+      },
+      global: {
+        headers: {
+          Authorization: `Bearer ${userJwt!}`,
+        },
+      },
+    });
 
 const reviews: ReviewFile = reviewsPath
   ? JSON.parse(readFileSync(reviewsPath, "utf8"))
