@@ -15,6 +15,9 @@ concurrency:
   group: codeql-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  RELEASE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   analyze:
     name: Analyze JavaScript and TypeScript

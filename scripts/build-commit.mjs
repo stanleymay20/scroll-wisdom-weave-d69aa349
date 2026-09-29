@@ -73,9 +73,12 @@ export function commitFromGitDirectory(root = process.cwd()) {
 }
 
 /**
- * @returns {{ commit: string | null, source: "GITHUB_SHA" | "VITE_BUILD_ID" | "git" | "unavailable" }}
+ * @returns {{ commit: string | null, source: "RELEASE_COMMIT_SHA" | "GITHUB_SHA" | "VITE_BUILD_ID" | "git" | "unavailable" }}
  */
 export function resolveBuildCommit(env = process.env, root = process.cwd()) {
+  const release = env.RELEASE_COMMIT_SHA?.trim().toLowerCase();
+  if (release && SHA.test(release)) return { commit: release, source: "RELEASE_COMMIT_SHA" };
+
   const fromCi = env.GITHUB_SHA?.trim().toLowerCase();
   if (fromCi && SHA.test(fromCi)) return { commit: fromCi, source: "GITHUB_SHA" };
 

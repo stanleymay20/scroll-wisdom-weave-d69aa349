@@ -11,6 +11,9 @@ concurrency:
   group: dependency-review-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  RELEASE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   dependency-review:
     name: Review dependency changes

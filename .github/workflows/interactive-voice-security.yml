@@ -36,6 +36,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  RELEASE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   DENO_VERSION: 2.9.6
   SUPABASE_CLI_VERSION: 2.111.0
 

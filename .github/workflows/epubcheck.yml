@@ -15,6 +15,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  RELEASE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   BUN_VERSION: 1.2.23
   DENO_VERSION: 2.9.6
   EPUBCHECK_VERSION: 5.3.0

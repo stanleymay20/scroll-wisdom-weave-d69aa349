@@ -13,6 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  RELEASE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   BUN_VERSION: 1.2.23
   DENO_VERSION: 2.9.6
   SUPABASE_CLI_VERSION: 2.111.0
@@ -326,7 +327,7 @@ jobs:
       - name: Upload commit-addressed release artifact
         uses: actions/upload-artifact@v7
         with:
-          name: web-release-${{ github.sha }}
+          name: web-release-${{ env.RELEASE_COMMIT_SHA }}
           path: dist/
           if-no-files-found: error
           retention-days: 30

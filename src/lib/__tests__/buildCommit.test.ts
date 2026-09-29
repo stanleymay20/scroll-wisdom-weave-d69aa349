@@ -84,6 +84,11 @@ describe("resolveBuildCommit", () => {
     expect(() => requireReleaseCommit({ GITHUB_SHA: A }, withGit())).toThrow(/does not match/);
   });
 
+  it("binds PR builds to the reviewed head instead of the synthetic merge SHA", () => {
+    expect(requireReleaseCommit({ RELEASE_COMMIT_SHA: B, GITHUB_SHA: A }, withGit())).toEqual({ commit: B, source: "RELEASE_COMMIT_SHA" });
+    expect(() => requireReleaseCommit({ RELEASE_COMMIT_SHA: A, GITHUB_SHA: B }, withGit())).toThrow(/does not match/);
+  });
+
   it("accepts the exact checkout SHA", () => {
     expect(requireReleaseCommit({ GITHUB_SHA: B }, withGit()).commit).toBe(B);
   });
