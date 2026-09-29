@@ -139,6 +139,7 @@ jobs:
           umask 077
           {
             echo "STRIPE_SECRET_KEY=$STRIPE_SECRET_KEY"
+            echo "GA_PAYMENTS_ENABLED=true"
             echo "STRIPE_WEBHOOK_SECRET=$STRIPE_WEBHOOK_SECRET"
             echo "STRIPE_CATALOGUE_JSON='$STRIPE_CATALOGUE_JSON'"
             echo "APP_URL=$APP_ORIGIN"
