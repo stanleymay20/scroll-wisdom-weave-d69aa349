@@ -9,7 +9,6 @@ import { SettingsProvider } from "@/contexts/SettingsContext";
 import { AudioProvider } from "@/contexts/AudioContext";
 import React, { useEffect, Suspense, lazy } from "react";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
-import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ErrorBoundaryWithRecovery } from "@/components/ErrorBoundaryWithRecovery";
 import { createLogger, setTraceId } from "@/lib/logger";
@@ -46,8 +45,6 @@ const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const ModerationDashboard = lazy(() => import("./pages/ModerationDashboard"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const AdminPanel = lazy(() => import("./pages/AdminPanel"));
-const Install = lazy(() => import("./pages/Install"));
-const PWATest = lazy(() => import("./pages/PWATest"));
 const Diagnostics = lazy(() => import("./pages/Diagnostics"));
 const CertificateVerify = lazy(() => import("./pages/CertificateVerify"));
 const CertificateStatus = lazy(() => import("./pages/CertificateStatus"));
@@ -106,7 +103,6 @@ const KingdomWealthTools = lazy(() => import("./pages/KingdomWealthTools"));
 const DiagnosticsPanel = lazy(() => import("./components/system/DiagnosticsPanel").then(m => ({ default: m.DiagnosticsPanel })));
 const ReEngagementBanner = lazy(() => import("./components/gamification/ReEngagementBanner").then(m => ({ default: m.ReEngagementBanner })));
 const GlobalAudioPlayer = lazy(() => import("./components/audio/GlobalAudioPlayer").then(m => ({ default: m.GlobalAudioPlayer })));
-const PWAInstallPrompt = lazy(() => import("./components/pwa/PWAInstallPrompt").then(m => ({ default: m.PWAInstallPrompt })));
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
 const OnboardingDialog = lazy(() => import("./components/onboarding/OnboardingDialog").then(m => ({ default: m.OnboardingDialog })));
 
@@ -156,6 +152,14 @@ function AppInitializer() {
     // PHASE 7: Initialize observability (Web Vitals, analytics sink, long-task warnings)
     initObservability();
 
+    // PWA/offline recovery is outside the GA launch scope. Retire workers from
+    // older builds so a stale service worker cannot keep serving old chunks.
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker.getRegistrations().then((registrations) =>
+        Promise.all(registrations.map((registration) => registration.unregister()))
+      );
+    }
+
     logger.info('Application initialized');
   }, []);
   return null;
@@ -173,7 +177,6 @@ const App = () => (
                 <Toaster />
                 <Sonner />
                 <OfflineIndicator />
-                <PWAUpdateNotification />
                 <BrowserRouter>
                   {/* PHASE 7: Per-navigation telemetry (logs route changes + dwell time) */}
                   <RouteTelemetry />
@@ -203,8 +206,6 @@ const App = () => (
                         <Route path="/sell" element={withRecovery('Sell', <ProtectedRoute><Sell /></ProtectedRoute>)} />
                         <Route path="/sell/analytics" element={withRecovery('SellAnalytics', <ProtectedRoute><SellAnalytics /></ProtectedRoute>)} />
                         <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
-                        <Route path="/install" element={<Install />} />
-                        <Route path="/pwa-test" element={<PWATest />} />
                         <Route path="/diagnostics" element={<AdminRoute><Diagnostics /></AdminRoute>} />
                         <Route path="/book/:id" element={withRecovery('BookDetail', <BookDetail />)} />
                         <Route path="/book/:bookId/certificate" element={withRecovery('CertificateStatus', <ProtectedRoute><CertificateStatus /></ProtectedRoute>)} />
@@ -268,7 +269,6 @@ const App = () => (
 
                   <Suspense fallback={null}>
                     <ReEngagementBanner />
-                    <PWAInstallPrompt />
                     <GlobalAudioPlayer />
                     <DiagnosticsPanel />
                     <CookieConsent />
