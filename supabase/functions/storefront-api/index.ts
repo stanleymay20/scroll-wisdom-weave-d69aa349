@@ -41,7 +41,7 @@ function badRequest(msg: string) {
 }
 
 // Public-safe projections
-const BOOK_FIELDS = "id, title, description, cover_image_url, category, total_chapters, user_id";
+const BOOK_FIELDS = "id, title, description, cover_image_url, category, total_chapters, user_id, language, current_publication_id";
 const LISTING_FIELDS =
   "id, slug, blurb, subtitle, amazon_description, price_cents, currency, sample_chapters, cover_override_url, license_type, seo_keywords, series_id, series_order, created_at, updated_at";
 
@@ -71,6 +71,7 @@ function shapeListing(row: any) {
           category: b.category,
           total_chapters: b.total_chapters ?? 0,
           author_user_id: b.user_id,
+          language: b.language ?? null,
         }
       : null,
   };
@@ -213,6 +214,37 @@ async function handleBook(sc: any, url: URL): Promise<Response> {
   if (!data) return notFound();
 
   const shaped: any = shapeListing(data);
+
+  // Publication metadata is frozen at publication time. Expose only the
+  // bibliographic fields that are useful to public readers and search engines.
+  if (data.book?.current_publication_id) {
+    const { data: pub } = await sc.from("publications")
+      .select("language, published_at, snapshot")
+      .eq("id", data.book.current_publication_id)
+      .eq("status", "published")
+      .maybeSingle();
+
+    if (pub) {
+      const snap = pub.snapshot && typeof pub.snapshot === "object"
+        ? pub.snapshot as Record<string, unknown>
+        : {};
+      const stringValue = (value: unknown) =>
+        typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+      shaped.publication = {
+        language: stringValue(pub.language) ?? stringValue(snap.language) ?? shaped.book?.language ?? null,
+        published_at: stringValue(pub.published_at),
+        publisher:
+          stringValue(snap.publisher_imprint)
+          ?? stringValue(snap.publisher_name)
+          ?? stringValue(snap.publisher)
+          ?? stringValue(snap.imprint),
+        isbn:
+          stringValue(snap.isbn_13)
+          ?? stringValue(snap.isbn)
+          ?? stringValue(snap.isbn_10),
+      };
+    }
+  }
 
   // Attach author + series in parallel
   const [authorRes, seriesRes] = await Promise.all([
