@@ -163,14 +163,6 @@ export function detectDeterministicCodeIssues(content: string): DeterministicCod
       }
     }
 
-    if (/\b\d+(?:\.\d+)?\s{2,}[A-Za-z_]\w*\b/.test(source)) {
-      add(
-        issues,
-        block,
-        "python_operator_missing",
-        "Code block " + (block.index + 1) + " appears to have a missing operator between a numeric literal and identifier.",
-      );
-    }
   }
 
   return issues;
