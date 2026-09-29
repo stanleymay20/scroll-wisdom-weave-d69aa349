@@ -55,4 +55,10 @@ export const FEATURES = {
   enablePaidCheckout: !PMF_MODE,
   enableSubscriptionCheckout: !PMF_MODE,
   enableStripeConnect: !PMF_MODE,
+  enableAdvancedAuthoring: !PMF_MODE,
+  enableChapterRegeneration: !PMF_MODE,
+  enableCustomCover: !PMF_MODE,
+  enableExports: !PMF_MODE,
+  enableEditorialPipeline: !PMF_MODE,
+  enableReleaseScheduling: !PMF_MODE,
 };
