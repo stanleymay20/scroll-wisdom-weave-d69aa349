@@ -50,7 +50,7 @@ Deno.serve(async (req) => {
     // so this function can run before the additive books.user_id migration lands.
     const { data: book, error: bookErr } = await sc
       .from("books")
-      .select("id, creator_id, cover_image_url, book_type")
+      .select("id, creator_id, cover_image_url, book_type, total_chapters")
       .eq("id", bookId)
       .maybeSingle();
     if (bookErr) return serverError(bookErr);
@@ -86,7 +86,7 @@ Deno.serve(async (req) => {
 
     const { data: chapters, error: chErr } = await sc
       .from("chapters")
-      .select("chapter_number, title, content")
+      .select("chapter_number, title, content, is_generated, word_count")
       .eq("book_id", bookId)
       .order("chapter_number", { ascending: true });
     if (chErr) return serverError(chErr);
@@ -101,8 +101,14 @@ Deno.serve(async (req) => {
         chapter_number: c.chapter_number,
         title: c.title ?? "",
         content: c.content,
+        is_generated: c.is_generated,
+        word_count: c.word_count,
       })),
-      { hasCover: !!book.cover_image_url, bookType: book.book_type },
+      {
+        hasCover: !!book.cover_image_url,
+        bookType: book.book_type,
+        expectedChapterCount: book.total_chapters,
+      },
     );
 
     const { data: inserted, error: insErr } = await sc
