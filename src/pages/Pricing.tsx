@@ -37,12 +37,12 @@ const plans: PlanConfig[] = [
     features: [
       { text: "1 book per month (up to 4,000 words/ch)", included: true },
       { text: "5 min text-to-speech", included: true },
-      { text: "5 min voice interaction", included: true },
+      { text: "Voice AI after GA validation", included: false },
       { text: "Basic PDF export", included: true },
       { text: "1 quiz & 1 certificate per book", included: true },
-      { text: "AI-generated covers", included: false },
-      { text: "AI image generation", included: false },
-      { text: "Cinematic video", included: false },
+      { text: "AI-generated covers after provider validation", included: false },
+      { text: "AI image generation after provider validation", included: false },
+      { text: "Cinematic video after GA", included: false },
     ],
   },
   {
@@ -55,12 +55,12 @@ const plans: PlanConfig[] = [
     features: [
       { text: "Up to 10 books per month", included: true },
       { text: "Up to 4,000 words per chapter", included: true },
-      { text: "30 min TTS & voice interaction", included: true },
-      { text: "20 AI images per month", included: true },
+      { text: "30 min text-to-speech", included: true },
+      { text: "AI images after provider validation", included: false },
       { text: "PDF, EPUB, DOCX exports", included: true },
-      { text: "AI-generated covers", included: true },
+      { text: "AI-generated covers after provider validation", included: false },
       { text: "Unlimited quizzes & certificates", included: true },
-      { text: "Cinematic video", included: false },
+      { text: "Cinematic video after GA", included: false },
     ],
   },
   {
@@ -74,10 +74,10 @@ const plans: PlanConfig[] = [
     features: [
       { text: "Up to 30 books per month", included: true },
       { text: "Up to 6,000 words per chapter", included: true },
-      { text: "60 min TTS · 2 hrs voice interaction", included: true },
-      { text: "100 AI images per month", included: true },
-      { text: "All exports (PDF, EPUB, DOCX, KDP)", included: true },
-      { text: "Cinematic video generation", included: true },
+      { text: "60 min text-to-speech", included: true },
+      { text: "AI images after provider validation", included: false },
+      { text: "PDF, EPUB & DOCX exports", included: true },
+      { text: "Cinematic video after GA", included: false },
       { text: "Commercial publishing rights", included: true },
       { text: "Priority support", included: true },
     ],
@@ -90,13 +90,13 @@ const plans: PlanConfig[] = [
     icon: Building2,
     tierKey: "prophet_tier",
     features: [
-      { text: "Unlimited books & AI images", included: true },
-      { text: "Unlimited TTS & voice interaction", included: true },
-      { text: "ElevenLabs premium voices", included: true },
+      { text: "Expanded book generation allowance", included: true },
+      { text: "Expanded text-to-speech allowance", included: true },
+      { text: "Premium voice providers after validation", included: false },
       { text: "Cinematic video generation", included: true },
-      { text: "Batch generation", included: true },
-      { text: "AI research assistant", included: true },
-      { text: "All exports (incl. KDP-ready PDF)", included: true },
+      { text: "Batch generation after GA", included: false },
+      { text: "AI research assistant after provider validation", included: false },
+      { text: "PDF, EPUB & DOCX exports", included: true },
       { text: "Dedicated support", included: true },
     ],
   },
@@ -341,7 +341,7 @@ export default function Pricing() {
                   Sell your work, your way
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto">
-                  Free creators can list on the marketplace. Upgrade to publish directly to Gumroad, Shopify, Substack, Patreon &amp; Etsy — and keep 100% of platform-side revenue.
+                  Free creators can list on the ScrollLibrary marketplace. External publishing integrations will be enabled only after their provider E2E gates pass.
                 </p>
               </div>
 
@@ -366,11 +366,11 @@ export default function Pricing() {
                     popular: true,
                     features: [
                       "Everything in Free",
-                      "Publish to Gumroad, Shopify, Substack, Patreon, Etsy",
                       "Release schedules + follower broadcasts",
+                      "External publishing integrations after GA validation",
                       "Unlimited collections",
                       "0% marketplace surcharge",
-                      "Full analytics",
+                      "Core marketplace analytics",
                     ],
                   },
                   {
@@ -381,7 +381,7 @@ export default function Pricing() {
                     features: [
                       "Everything in Creator",
                       "Priority generation queue",
-                      "Advanced analytics",
+                      "Advanced analytics after GA validation",
                       "+50 monthly generation bonus",
                       "Best for publishing businesses",
                     ],
