@@ -16,6 +16,7 @@ import { figureDataFor, parseRawFigureMarkers } from "./visual-intelligence.ts";
 import { auditChapterArtifacts, type ContentIssue } from "./content-quality.ts";
 import { parseBookToCanonical, type CanonicalChapter } from "./canonicalContent.ts";
 import { auditBookForExport, type ExportIssue } from "./exportQuality.ts";
+import { detectDeterministicCodeIssues } from "./technical-code-quality.ts";
 
 export type QAStatus = "ready" | "needs_review" | "blocked";
 export type QASeverity = "blocker" | "warning" | "info";
@@ -378,6 +379,17 @@ export function auditBookForPublishability(
     }
     issues.push(...detectRenderingIssues(ch.content ?? "", ch.chapter_number));
     issues.push(...detectCitationGaps(ch.content ?? "", ch.chapter_number));
+
+    for (const codeIssue of detectDeterministicCodeIssues(ch.content ?? "")) {
+      issues.push({
+        severity: codeIssue.severity,
+        code: codeIssue.code,
+        category: "technical",
+        chapter: ch.chapter_number,
+        message: `Chapter ${ch.chapter_number}: ${codeIssue.message}`,
+        hint: "Repair the code and rerun the content-bound STO audit before publication.",
+      });
+    }
   }
 
   // 2. Canonical / structural / export audit
@@ -405,6 +417,38 @@ export function auditBookForPublishability(
     infoCount,
     totals: exportReport.totals,
     issues,
+    byCategory,
+  };
+}
+
+
+/**
+ * Add server-derived evidence issues (for example, missing content-bound code
+ * audits) without weakening the deterministic score/status calculation.
+ */
+export function appendQAIssues(report: QAReport, extra: QAIssue[]): QAReport {
+  if (extra.length === 0) return report;
+
+  const issues = [...report.issues, ...extra];
+  const blockerCount = issues.filter((i) => i.severity === "blocker").length;
+  const warningCount = issues.filter((i) => i.severity === "warning").length;
+  const infoCount = issues.filter((i) => i.severity === "info").length;
+  const score = Math.max(0, 100 - blockerCount * 20 - warningCount * 4 - infoCount);
+  const status: QAStatus = blockerCount > 0 ? "blocked" : warningCount > 0 ? "needs_review" : "ready";
+
+  const byCategory: Record<string, number> = {};
+  for (const issue of issues) {
+    byCategory[issue.category] = (byCategory[issue.category] ?? 0) + 1;
+  }
+
+  return {
+    ...report,
+    issues,
+    blockerCount,
+    warningCount,
+    infoCount,
+    score,
+    status,
     byCategory,
   };
 }
