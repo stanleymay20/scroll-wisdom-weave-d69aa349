@@ -115,7 +115,10 @@ export default function PublicBookPage() {
 
   const cover = data.cover_override_url || data.book.cover_image_url || "";
   const description = data.blurb || data.amazon_description || data.book.description || data.subtitle || data.book.title;
-  const price = data.price_cents > 0 ? "$" + (data.price_cents / 100).toFixed(2) : "Free";
+  const currencyCode = (data.currency || "USD").toUpperCase();
+  const price = data.price_cents > 0
+    ? new Intl.NumberFormat(undefined, { style: "currency", currency: currencyCode }).format(data.price_cents / 100)
+    : "Free";
   const canonicalUrl = `https://scrolllibrary.org/store/${data.slug}`;
   const authorUrl = author ? `https://scrolllibrary.org/authors/${author.slug}` : undefined;
   const seoTitle = author
@@ -152,7 +155,7 @@ export default function PublicBookPage() {
         "@type": "Offer",
         url: canonicalUrl,
         price: (data.price_cents / 100).toFixed(2),
-        priceCurrency: data.currency.toUpperCase(),
+        priceCurrency: currencyCode,
         availability: "https://schema.org/InStock",
       } : undefined,
     },
@@ -294,7 +297,7 @@ export default function PublicBookPage() {
                   : data.price_cents > 0 && !FEATURES.enablePaidCheckout
                     ? "Paid purchases temporarily unavailable"
                     : data.price_cents > 0
-                      ? "Buy for $" + (data.price_cents / 100).toFixed(2)
+                      ? `Buy for ${price}`
                       : "Get free copy"}
               </Button>
               <ShareDialog title={data.book.title} bookId={data.book.id} description={description} />
