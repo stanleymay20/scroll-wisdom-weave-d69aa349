@@ -3178,6 +3178,32 @@ ${summaries}
       }
     }
 
+    if (effectiveBookType === 'fiction' && chapter?.book_id) {
+      const { data: fictionPriorChapters, error: fictionMemoryError } = await supabase
+        .from("chapters")
+        .select("chapter_number, title, content")
+        .eq("book_id", chapter.book_id)
+        .eq("is_generated", true)
+        .lt("chapter_number", chapterNumber)
+        .order("chapter_number", { ascending: true })
+        .limit(100);
+
+      if (fictionMemoryError) {
+        console.error("[GENERATE-CHAPTER] Fiction continuity load failed:", fictionMemoryError);
+        throw new Error("Unable to load fiction continuity state");
+      }
+
+      previousChaptersContext = buildFictionContinuityContext(
+        effectiveFictionConfig,
+        fictionPriorChapters || [],
+      );
+      console.log(
+        "[GENERATE-CHAPTER] Fiction story bible built from "
+          + String(fictionPriorChapters?.length || 0)
+          + " prior chapters",
+      );
+    }
+
     let systemPrompt: string;
     let chapterPrompt: string;
     
@@ -3935,6 +3961,62 @@ REQUIREMENTS:
 ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts' : ''}
 
 BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
+
+    } else if (effectiveBookType === 'fiction') {
+      // ===========================================
+      // FICTION / NOVEL PIPELINE
+      // Story-bible governed, continuity-first, prose-only narrative.
+      // ===========================================
+      console.log("[GENERATE-CHAPTER] Using FICTION pipeline");
+
+      const styleProfileParts = [
+        effectiveStyleProfile?.tone ? "Tone profile: " + String(effectiveStyleProfile.tone).slice(0, 300) : "",
+        effectiveStyleProfile?.complexity ? "Complexity: " + String(effectiveStyleProfile.complexity).slice(0, 120) : "",
+        effectiveStyleProfile?.formality ? "Formality: " + String(effectiveStyleProfile.formality).slice(0, 120) : "",
+        effectiveStyleProfile?.vocabulary ? "Vocabulary: " + String(effectiveStyleProfile.vocabulary).slice(0, 300) : "",
+      ].filter(Boolean).join("\n");
+
+      systemPrompt = [
+        "You are ScrollLibrary — FICTION / NOVEL PIPELINE.",
+        "IDENTITY: Novelist · Scene Architect · Continuity Editor.",
+        "Write immersive narrative prose, not instructional or expository content.",
+        "Honor the authoritative story bible, POV, world rules, character motivations, relationships, injuries, possessions, knowledge, secrets, chronology, and unresolved promises.",
+        "Every scene needs a character objective, resistance/conflict, a meaningful turn, and a consequence that changes what comes next.",
+        "Prefer concrete action, sensory detail, dialogue and subtext over explanation of emotions.",
+        "Characters must act from established motives; do not move them merely to satisfy the outline.",
+        "Dialogue must sound character-specific and should usually carry subtext rather than exposition.",
+        "Do not repeat prior reveals, introductions, descriptions, or backstory unless the repetition has a new dramatic purpose.",
+        "Do not use textbook structures, learning objectives, key takeaways, frameworks, bullet-point advice, citations, or chapter summaries.",
+        "Do not add AI meta-commentary, writing notes, scene labels, TODOs, placeholders, or commentary to the author.",
+        "Do not imitate a named living author. Use only the abstract style attributes supplied in the book's durable style profile.",
+        styleProfileParts,
+        "LANGUAGE: Write EXCLUSIVELY in " + languageName + ".",
+      ].filter(Boolean).join("\n\n");
+
+      chapterPrompt = [
+        previousChaptersContext,
+        "CURRENT CHAPTER CONTRACT",
+        "Book: " + bookTitle,
+        "Chapter " + String(chapterNumber) + ": " + chapterTitle,
+        "Genre: " + effectiveFictionConfig.genre,
+        "POV: " + effectiveFictionConfig.pov,
+        effectiveFictionConfig.tone ? "Tone: " + effectiveFictionConfig.tone : "",
+        effectiveFictionConfig.themes ? "Themes: " + effectiveFictionConfig.themes : "",
+        "Target length: approximately " + String(targetWords) + " words.",
+        "Chapter outline topics/beats:",
+        keyTopics?.length
+          ? keyTopics.map((topic: string, index: number) => String(index + 1) + ". " + topic).join("\n")
+          : "Advance the chapter title and current plot trajectory without inventing a disconnected subplot.",
+        "",
+        "SCENE QUALITY REQUIREMENTS:",
+        "1. Open inside a concrete moment, choice, image, action, or consequence; avoid an essay-like introduction.",
+        "2. Preserve the declared POV consistently. Do not head-hop in first/third-limited POV.",
+        "3. Advance at least one external plot thread and one character/emotional thread.",
+        "4. Carry forward unresolved state from earlier chapters and leave the story measurably changed by the end.",
+        "5. Vary scene rhythm and paragraph length naturally; avoid repetitive chapter architecture.",
+        "6. End with earned forward pressure: a decision, consequence, revelation, reversal, question, or emotional turn.",
+        "7. Return ONLY the finished chapter prose. No analysis or author notes.",
+      ].filter(Boolean).join("\n");
 
     } else if (effectiveBookType === 'illustrated' || effectiveBookType === 'children') {
       // ===========================================
