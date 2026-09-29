@@ -69,3 +69,20 @@ export function advancedBookTypeEnabled(
   return qualifiedAdvancedBookTypes(qualifiedTypesValue).has(normalized);
 }
 
+export function qualificationBookTypeEnabled(
+  bookType: string,
+  value?: string | null,
+): boolean {
+  const normalized = String(bookType || "").trim().toLowerCase();
+  if (!ADVANCED_BOOK_TYPES.has(normalized)) return false;
+
+  const raw = String(
+    value === undefined ? Deno.env.get("PROVIDER_QUALIFICATION_BOOK_TYPES") ?? "" : value ?? "",
+  );
+
+  return raw
+    .split(",")
+    .map((item) => item.trim().toLowerCase())
+    .some((item) => item === normalized);
+}
+
