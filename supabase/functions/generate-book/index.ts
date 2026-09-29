@@ -138,9 +138,10 @@ serve(async (req) => {
     // Parse request body
     const body = await req.json();
     const {
-      title: rawTitle, description: rawDescription, category, numChapters, language = "en", customCover,
+      title: rawTitle, description: rawDescription, category, numChapters, wordCount = 4000, language = "en", customCover,
       bookType = "text", extendedBookType = null,
       enableReferences = false, academicMode = false, deepResearch = false, bestsellerMode = false,
+      citationStyle = "APA",
       authorMode = "ai", authorDisplayName: rawAuthorName = null, penName: rawPenName = null,
       transformationPrompt: rawTransformationPrompt = null,
       workbookDensity = null,
@@ -225,6 +226,12 @@ serve(async (req) => {
 
     if (typeof numChapters !== 'number' || !Number.isInteger(numChapters) || numChapters < 1 || numChapters > 100) {
       return new Response(JSON.stringify({ error: "Invalid chapter count." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    if (typeof wordCount !== "number" || !Number.isInteger(wordCount) || wordCount < 500 || wordCount > 16000) {
+      return new Response(JSON.stringify({ error: "Invalid target chapter word count." }), {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -459,6 +466,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       comic_learning_config: effectiveBookType === "comic" ? safeComicLearningConfig : {},
       fiction_config: effectiveBookType === "fiction" ? safeFictionConfig : {},
       style_profile: safeStyleProfile,
+      target_chapter_words: wordCount,
     }).select().single();
 
     if (bookError) {
@@ -480,6 +488,8 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
         model: generationModel,
         language,
         contractVersion: 2,
+        targetChapterWords: wordCount,
+        phase: "drafting",
       },
     }).select('id').single();
 
@@ -499,7 +509,14 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       chapter_number: ch.chapterNumber,
       title: ch.title,
       content: `## ${ch.title}\n\n${ch.description}\n\n### Key Topics\n${(ch.keyTopics || []).map((t: string) => `- ${t}`).join("\n")}\n\n*Full chapter content is being generated...*`,
-      word_count: 0, is_generated: false,
+      word_count: 0,
+      is_generated: false,
+      academic_mode: academicMode === true || isAcademicType,
+      citation_style: sanitize(citationStyle, 32) || "APA",
+      generation_outline: {
+        description: ch.description || "",
+        keyTopics: Array.isArray(ch.keyTopics) ? ch.keyTopics.slice(0, 12) : [],
+      },
     }));
 
     const { error: chaptersError } = await sc.from("chapters").insert(chaptersToInsert);
