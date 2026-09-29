@@ -15,6 +15,7 @@ import { Sparkles, Package, BookOpen, Heart, Store, ShoppingBag, FileText, Exter
 import { Badge } from "@/components/ui/badge";
 import { ReleaseScheduleSection } from "@/components/publish/ReleaseScheduleSection";
 import { publishExternallyOneClick, waitForBundle } from "@/lib/oneClickPublish";
+import { PMF_MODE } from "@/lib/config";
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { Lock } from "lucide-react";
 import { ExportQualityPanel } from "@/components/publish/ExportQualityPanel";
@@ -55,7 +56,7 @@ export default function BookPublishSettings() {
   const [bundling, setBundling] = useState<"" | BundleKind>("");
   const [publishingGumroad, setPublishingGumroad] = useState(false);
   const { entitlements, loading: entitlementsLoading } = useCreatorEntitlements();
-  const canPublishExternal = entitlements.can_publish_external;
+  const canPublishExternal = !PMF_MODE && entitlements.can_publish_external;
   const canScheduleReleases = entitlements.can_schedule_releases;
   const [publishingShopify, setPublishingShopify] = useState(false);
   // Tracked per-platform so the user sees "Auditing → Building bundle → Creating product".
@@ -758,7 +759,7 @@ export default function BookPublishSettings() {
           <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2 text-sm font-medium hover:bg-muted/30 rounded-lg">
             <span className="flex items-center gap-2">
               <ExternalLink className="w-4 h-4 text-muted-foreground" />
-              Publish Everywhere <span className="text-xs font-normal text-muted-foreground">(Advanced — KDP, Gumroad, Shopify, Substack, Patreon, Etsy)</span>
+              Publish Everywhere <span className="text-xs font-normal text-muted-foreground">(Post-GA — KDP, Gumroad, Shopify, Substack, Patreon, Etsy)</span>
             </span>
             <span className="text-xs text-muted-foreground group-open:rotate-180 transition-transform">▾</span>
           </summary>
@@ -774,7 +775,7 @@ export default function BookPublishSettings() {
           <div className="mt-4 grid grid-cols-2 sm:grid-cols-3 gap-2">
             {BUNDLE_BUTTONS.map(({ kind, label, icon: Icon, variant }) => {
               const isExternal = kind !== "kdp";
-              const locked = isExternal && !canPublishExternal;
+              const locked = PMF_MODE || (isExternal && !canPublishExternal);
               return (
                 <Button
                   key={kind}
@@ -801,7 +802,7 @@ export default function BookPublishSettings() {
               <div className="mt-3 rounded-md border border-primary/30 bg-primary/5 px-3 py-2 text-xs flex flex-wrap items-center justify-between gap-2">
                 <span className="text-foreground">
                   <Lock className="w-3.5 h-3.5 inline mr-1.5" aria-hidden="true" />
-                  External publishing requires <strong>Creator</strong> (€19/mo) or higher.
+                  External publishing is outside the GA launch scope and will reopen after provider E2E validation.
                 </span>
                 <Button size="sm" variant="default" onClick={() => navigate("/pricing#creator")}>
                   Upgrade
