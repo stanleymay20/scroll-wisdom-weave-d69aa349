@@ -1,9 +1,10 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs, parseRawFigureMarkers, summarizeFigureSpecs, VISUAL_DENSITY, buildFigureImagePrompt, buildFigureMarker, figureImageMarkdown, replaceFigureMarker, resolveFigureRendering, stripFigureMarkers, type VisualType } from "../_shared/visual-intelligence.ts";
-import { checkRateLimit, errorResponse, ErrorCode } from "../_shared/error-codes.ts";
+import { errorResponse, ErrorCode } from "../_shared/error-codes.ts";
 import { COMIC_STYLE_PRESETS, COMIC_SUB_TYPE_DEFINITIONS, buildStoryArchitectPrompt, buildScriptwriterPrompt, buildVisualDirectorPrompt, buildLearningAgentPrompt, buildContinuityGuardianPrompt, buildEnhancedComicSystemPrompt, buildEnhancedComicChapterPrompt, buildComicSystemPrompt, buildComicChapterPrompt } from "../_shared/generation/comic-prompts.ts";
-import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled, qualificationBookTypeEnabled } from "../_shared/ga-release-flags.ts";
+import { enforceDurableRateLimit } from "../_shared/http.ts";
 import { secretsMatch } from "../_shared/cron-auth.ts";
 import { buildFictionContinuityContext, sanitizeFictionContract } from "../_shared/fiction-context.ts";
 import { buildChildrenSystemPrompt } from "../_shared/children-contract.ts";
@@ -1964,47 +1965,6 @@ serve(async (req) => {
     );
   }
   
-  // OCR check endpoint (requires auth, handled below)
-  if (requestBody?.ocrCheck && (requestBody as Record<string, unknown>)?.imageUrl) {
-    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
-    if (!LOVABLE_API_KEY) {
-      return new Response(JSON.stringify({ error: "API key not configured" }), {
-        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
-      });
-    }
-    
-    try {
-      const ocrResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-        method: "POST",
-        headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
-        body: JSON.stringify({
-          model: "google/gemini-2.5-flash-lite",
-          messages: [{
-            role: "user",
-            content: [
-              { type: "text", text: `Analyze this comic panel image. List ALL visible text including speech bubbles, captions, and any words. Return JSON: {"hasText": boolean, "foundText": ["word1", "word2", ...]}` },
-              { type: "image_url", image_url: { url: requestBody.imageUrl as string } }
-            ]
-          }],
-        }),
-      });
-      
-      if (ocrResponse.ok) {
-        const ocrData = await ocrResponse.json();
-        const content = ocrData.choices?.[0]?.message?.content || "";
-        const jsonMatch = content.match(/\{[\s\S]*\}/);
-        const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { hasText: false, foundText: [] };
-        return new Response(JSON.stringify({ ocrResult: result }), {
-          headers: { ...corsHeaders, "Content-Type": "application/json" }
-        });
-      }
-    } catch (e) {
-      console.error("[OCR] Error:", e);
-    }
-    return new Response(JSON.stringify({ ocrResult: { hasText: false, foundText: [] } }), {
-      headers: { ...corsHeaders, "Content-Type": "application/json" }
-    });
-  }
 
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
@@ -2098,7 +2058,7 @@ serve(async (req) => {
       user = { id: authData.user.id };
     }
     const editIntent_raw = (requestBody?.editIntent as string | null) || null;
-    const isChiefEditorRewrite = editIntent_raw?.startsWith('[CHIEF_EDITOR_REWRITE]') || false;
+    const isChiefEditorRewrite = advancedAuthoringEnabled() && (editIntent_raw?.startsWith('[CHIEF_EDITOR_REWRITE]') || false);
     // SECURITY: model selection is server-owned. A legacy `forceModel` field from older
     // clients is ignored (never used for routing) — logged only so we can retire it.
     if (requestBody && Object.prototype.hasOwnProperty.call(requestBody, 'forceModel')) {
@@ -2107,13 +2067,64 @@ serve(async (req) => {
 
     console.log(`[GENERATE-CHAPTER] User: ${user.id.slice(0, 8)}...`);
 
-    // Rate limiting: max 30 chapter generations per hour per user
+    // All paid paths, including OCR, are authenticated and globally metered.
     if (!isInternalWorker) {
-      const rl = checkRateLimit(`gen-chapter:${user.id}`, 30, 60 * 60 * 1000);
-      if (!rl.allowed) {
-        return errorResponse(ErrorCode.RATE_LIMITED, 'Too many chapter generations. Please wait before generating more.', corsHeaders, { retryAfterMs: rl.retryAfterMs });
-      }
+      const limited = await enforceDurableRateLimit(supabase, {
+        name: "generate-chapter", key: user.id, limit: 30, windowSec: 3600,
+      });
+      if (limited) return limited;
     }
+
+    if (requestBody?.ocrCheck && requestBody?.imageUrl) {
+      if (!advancedAuthoringEnabled()) {
+        return new Response(JSON.stringify({ error: "OCR is outside the current GA scope.", code: "GA_ADVANCED_AUTHORING_DISABLED" }), {
+          status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      if (typeof requestBody.imageUrl !== "string" || requestBody.imageUrl.length > 8192) {
+        return new Response(JSON.stringify({ error: "Invalid image URL" }), {
+          status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
+    if (!LOVABLE_API_KEY) {
+      return new Response(JSON.stringify({ error: "API key not configured" }), {
+        status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" }
+      });
+    }
+
+    try {
+      const ocrResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${LOVABLE_API_KEY}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: "google/gemini-2.5-flash-lite",
+          messages: [{
+            role: "user",
+            content: [
+              { type: "text", text: `Analyze this comic panel image. List ALL visible text including speech bubbles, captions, and any words. Return JSON: {"hasText": boolean, "foundText": ["word1", "word2", ...]}` },
+              { type: "image_url", image_url: { url: requestBody.imageUrl as string } }
+            ]
+          }],
+        }),
+      });
+
+      if (ocrResponse.ok) {
+        const ocrData = await ocrResponse.json();
+        const content = ocrData.choices?.[0]?.message?.content || "";
+        const jsonMatch = content.match(/\{[\s\S]*\}/);
+        const result = jsonMatch ? JSON.parse(jsonMatch[0]) : { hasText: false, foundText: [] };
+        return new Response(JSON.stringify({ ocrResult: result }), {
+          headers: { ...corsHeaders, "Content-Type": "application/json" }
+        });
+      }
+    } catch (e) {
+      console.error("[OCR] Error:", e);
+    }
+    return new Response(JSON.stringify({ ocrResult: { hasText: false, foundText: [] } }), {
+      headers: { ...corsHeaders, "Content-Type": "application/json" }
+    });
+  }
 
     // Check admin status
     const { data: userRoles } = await supabase
@@ -2186,8 +2197,14 @@ serve(async (req) => {
         .eq("id", chapterId)
         .single();
       
-      existingContent = existingChapter?.content || null;
+      existingContent = existingChapter?.content ?? null;
       const wasGenerated = existingChapter?.is_generated || false;
+      if (!advancedAuthoringEnabled() && (wasGenerated || editIntent)) {
+        return new Response(JSON.stringify({ error: "Chapter rewrites are outside the current GA scope.", code: "GA_ADVANCED_AUTHORING_DISABLED" }), {
+          status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       
       // EDIT CONTROL: If regenerating existing content, require edit intent
       if (wasGenerated && existingContent && existingContent.length > 100) {
@@ -2293,10 +2310,35 @@ serve(async (req) => {
       }
     }
 
+    if (!chapterId || !chapter || !bookDetails) {
+      return new Response(JSON.stringify({ error: "Chapter not found or inaccessible" }), {
+        status: 404, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const saveGeneratedChapter = async (patch: Record<string, unknown>) => {
+      const { data: saved, error } = await supabase.rpc("save_generated_chapter_fenced", {
+        _chapter_id: chapterId, _user_id: user.id,
+        _expected_content: existingContent, _patch: patch,
+        _job_id: isInternalWorker ? internalJobId : null,
+        _worker_token: isInternalWorker ? req.headers.get("x-generation-worker-token") : null,
+      });
+      if (error || saved !== true) {
+        throw new Error("Chapter changed or generation lease expired; generated content was not saved. Retry from the current revision.");
+      }
+    };
+
     // Use book-level settings if available, otherwise use request params
     // Cast bookDetails to any for new fields not yet in generated types
     const bookData = bookDetails as any;
     const effectiveBookType = bookData?.book_type || bookType;
+    if (!advancedBookTypeEnabled(effectiveBookType)
+        && !(isAdmin && qualificationBookTypeEnabled(effectiveBookType))) {
+      return new Response(JSON.stringify({ error: "This book mode is not qualified for public release.", code: "GA_BOOK_TYPE_NOT_QUALIFIED" }), {
+        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const effectiveComicStyle = bookData?.comic_style_id || comicStyle;
     const effectiveLayoutTemplate = bookData?.layout_template || 5;
     const effectiveWorkbookDensity = bookData?.workbook_density || 'medium';
@@ -2750,7 +2792,7 @@ This is MANDATORY. No exceptions.`;
       }
       
       // Final validation check after all retries
-      if (comicValidation && comicValidation.blocked && !isAdmin) {
+      if (comicValidation && comicValidation.blocked) {
         console.log("[GENERATE-CHAPTER] COMIC VALIDATION FAILED after all retries");
         
         const missingPanels = comicValidation.panelDialogues
@@ -3066,18 +3108,13 @@ Return JSON only:
       comicMetadata.dialogueCount = comicValidation?.totalDialogueCount || 0;
       comicMetadata.generatedAt = new Date().toISOString();
 
-      const { error: updateError } = await supabase
-        .from("chapters")
-        .update({
+      await saveGeneratedChapter({
           content: finalComicContent,
           word_count: actualWordCount,
           is_generated: true,
           updated_at: new Date().toISOString(),
           comic_metadata: comicMetadata,
-        })
-        .eq("id", chapterId);
-
-      if (updateError) throw new Error(`Failed to save: ${updateError.message}`);
+        });
 
       // Count total dialogues from the validated content
       const finalDialogueCount = comicValidation?.totalDialogueCount || 0;
@@ -3151,7 +3188,7 @@ Return JSON only:
       // VALIDATE workbook structure. Specialized book-type contracts fail
       // closed: an invalid workbook must never be persisted as generated.
       const workbookValidation = validateWorkbookContract(workbookContent);
-      if (!workbookValidation.valid && !isAdmin) {
+      if (!workbookValidation.valid) {
         console.log("[GENERATE-CHAPTER] WORKBOOK VALIDATION FAILED:", workbookValidation.errors);
         return new Response(JSON.stringify({
           error: workbookValidation.failureMessage || "Workbook structure validation failed",
@@ -3179,17 +3216,12 @@ Return JSON only:
       const finalContent = frontMatter + workbookContent;
       const actualWordCount = finalContent.split(/\s+/).filter((w: string) => w.length > 0).length;
 
-      const { error: updateError } = await supabase
-        .from("chapters")
-        .update({
+      await saveGeneratedChapter({
           content: finalContent,
           word_count: actualWordCount,
           is_generated: true,
           updated_at: new Date().toISOString(),
-        })
-        .eq("id", chapterId);
-
-      if (updateError) throw new Error(`Failed to save: ${updateError.message}`);
+        });
 
       return new Response(JSON.stringify({
         success: true,
@@ -5628,8 +5660,8 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
       const criticalViolation = contract6Validation.violations[0];
       console.log(`[CONTRACT 6] VIOLATION DETECTED: ${criticalViolation.code} - ${criticalViolation.message}`);
       
-      // For non-admin users, block the content and return error
-      if (!isAdmin) {
+      // Qualification callers must meet the same content contract.
+      {
         console.log(`[CONTRACT 6] BLOCKING content for book type: ${effectiveBookType}`);
         return new Response(JSON.stringify({
           error: `CONTRACT 6 VIOLATION: ${criticalViolation.message}`,
@@ -5638,8 +5670,6 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
           shouldRegenerate: true,
           userMessage: contract6Validation.userMessage,
         }), { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } });
-      } else {
-        console.log(`[CONTRACT 6] Admin override - saving content despite violations`);
       }
     } else if (!contract6Validation.valid) {
       // Log non-critical violations but allow content
@@ -5690,12 +5720,7 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
       updateData.research_metadata = researchResult.metadata;
     }
 
-    const { error: updateError } = await supabase
-      .from("chapters")
-      .update(updateData)
-      .eq("id", chapterId);
-
-    if (updateError) throw new Error(`Failed to save: ${updateError.message}`);
+    await saveGeneratedChapter(updateData);
 
     console.log(`[GENERATE-CHAPTER] Chapter ${chapterNumber} saved (${actualWordCount} words)`);
 
@@ -5787,7 +5812,8 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
                 await supabase
                   .from("chapters")
                   .update({ chapter_references: refs })
-                  .eq("id", chapterId);
+                  .eq("id", chapterId)
+                  .eq("content", finalContent);
                 console.log(`[GENERATE-REFERENCES] Attached ${refs.length} refs to chapter ${chapterId.slice(0,8)}`);
               } else {
                 console.log(`[GENERATE-REFERENCES] No refs returned for chapter ${chapterId.slice(0,8)} (likely no PERPLEXITY_API_KEY)`);

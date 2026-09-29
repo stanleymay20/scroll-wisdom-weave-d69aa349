@@ -4,8 +4,9 @@ import path from "path";
 import { componentTagger } from "lovable-tagger";
 import { VitePWA } from "vite-plugin-pwa";
 import { writeFileSync } from "node:fs";
+import { execFileSync } from "node:child_process";
 import type { Plugin } from "vite";
-import { resolveBuildCommit } from "./scripts/build-commit.mjs";
+import { resolveBuildCommit, requireReleaseCommit } from "./scripts/build-commit.mjs";
 import { computeSourceFingerprint } from "./scripts/source-fingerprint.mjs";
 
 /**
@@ -28,6 +29,7 @@ function releaseIdentity(identity: { commit: string | null; commitSource: string
     closeBundle() {
       const body = { schemaVersion: 1, ...identity };
       writeFileSync(path.join(outDir, "release.json"), `${JSON.stringify(body, null, 2)}\n`);
+      execFileSync(process.execPath, ["scripts/create-release-manifest.mjs"], { stdio: "inherit" });
     },
   };
 }
@@ -40,7 +42,7 @@ const GA_PWA_ENABLED = false;
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const buildTime = process.env.BUILD_TIME ?? new Date().toISOString();
-  const { commit, source: commitSource } = resolveBuildCommit();
+  const { commit, source: commitSource } = mode === "production" ? requireReleaseCommit() : resolveBuildCommit();
   const source = computeSourceFingerprint();
   const sourceFingerprint = source.value;
   const sourceFingerprintFiles = source.files;

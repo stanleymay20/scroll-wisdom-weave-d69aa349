@@ -129,6 +129,8 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
       - name: Assert atomic book-generation quota reservation contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-book-generation-quota-db-security.sql
+      - name: Assert expired workers and stale revisions cannot overwrite chapters
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-generated-chapter-fencing.sql
       - name: Assert durable rate limit and stale-job sweeper contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-rate-limit-and-sweeper-db-security.sql
       - name: Assert Germany publication-compliance security contract
@@ -273,6 +275,8 @@ jobs:
         run: node scripts/check-stripe-webhook-event-contract.mjs
       - name: Test GA financial release switches
         run: deno test supabase/functions/_shared/ga-release-flags_test.ts
+      - name: Red-team direct generation handler boundaries
+        run: deno test -A --no-check --config supabase/functions/deno.json scripts/test-generation-boundaries.ts
       - name: Test GA external-payment switch
         run: deno test supabase/functions/_shared/ga-release-flags_test.ts
 
