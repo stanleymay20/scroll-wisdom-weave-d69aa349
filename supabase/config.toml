@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.generate-chapter]
 verify_jwt = false
 
+[functions.generation-worker]
+verify_jwt = false
+
 [functions.generate-cover]
 verify_jwt = false
 
