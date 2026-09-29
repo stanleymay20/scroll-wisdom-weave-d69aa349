@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { requireUser, serviceClient } from "../_shared/http.ts";
 import { ErrorCode, errorResponse } from "../_shared/error-codes.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
-import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled } from "../_shared/ga-release-flags.ts";
 import { normalizeGeneratedOutline, type NormalizedOutlineChapter } from "../_shared/outline-normalizer.ts";
 import { buildFictionOutlineInstructions, sanitizeFictionContract } from "../_shared/fiction-context.ts";
 
@@ -191,9 +191,10 @@ serve(async (req) => {
     const safeCharacterSheetConfig = safeJsonObject(characterSheetConfig, 24000, "Character sheet config");
     const safeComicLearningConfig = safeJsonObject(comicLearningConfig, 16000, "Comic learning config");
 
-    if (!advancedAuthoringEnabled()) {
+    {
       const requestedExtendedType = typeof extendedBookType === "string" ? extendedBookType : null;
       const requestedBookType = typeof bookType === "string" ? bookType : "text";
+      const requestedType = (requestedExtendedType || requestedBookType).trim().toLowerCase();
       const advancedRequested = Boolean(customCover)
         || enableReferences === true
         || academicMode === true
@@ -203,10 +204,21 @@ serve(async (req) => {
         || requestedBookType !== "text"
         || (requestedExtendedType !== null && requestedExtendedType !== "text");
 
-      if (advancedRequested) {
+      if (advancedRequested && !advancedAuthoringEnabled()) {
         return new Response(JSON.stringify({
           error: "This advanced authoring mode is outside the current GA launch scope.",
           code: "GA_ADVANCED_AUTHORING_DISABLED",
+        }), {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      if (requestedType !== "text" && !advancedBookTypeEnabled(requestedType)) {
+        return new Response(JSON.stringify({
+          error: "This specialized book type has not completed provider qualification.",
+          code: "GA_BOOK_TYPE_NOT_QUALIFIED",
+          bookType: requestedType,
         }), {
           status: 422,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
