@@ -2545,6 +2545,37 @@ BEGIN REVISION:`;
       }
     }
 
+    // Non-academic factual prose uses research as a truth constraint without
+    // being forced into academic citation style. Structured source evidence is
+    // persisted separately on the chapter for later verification.
+    const factualSourcePack =
+      researchResult?.references?.length
+        ? `
+===========================================
+VERIFIED FACTUAL SOURCE PACK
+===========================================
+Use these sources as the factual boundary for dates, statistics, named companies,
+historical events, empirical findings, market claims, and real-world case studies.
+
+${researchResult.references.slice(0, 15).map((ref, index) =>
+  `${index + 1}. ${ref.author} (${ref.year}). "${ref.title}"`
+    + (ref.journal ? ` — ${ref.journal}` : "")
+    + (ref.doi ? ` DOI: ${ref.doi}` : "")
+    + (ref.url && !ref.doi ? ` URL: ${ref.url}` : "")
+).join("\n")}
+
+FACTUAL-GROUNDING RULES:
+- Never invent a date, statistic, monetary amount, company outcome, study result, or historical detail.
+- A specific factual claim must be supported by the source pack or omitted/qualified.
+- Do not fabricate case studies to satisfy a structural requirement.
+- Do not use academic parenthetical citation syntax unless this is an academic pipeline.
+- Natural attribution is allowed (for example, "A World Bank report found...").
+- Do not quote source text verbatim; synthesize it.
+- If the source pack does not support a requested specific, use a general explanation instead.
+===========================================
+`
+        : '';
+
     // ===========================================
     // COMIC BOOK GENERATION
     // ===========================================
