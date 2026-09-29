@@ -127,10 +127,10 @@ export function MobileHome() {
       {/* Welcome Hero for Mobile */}
       <section className="mb-6 pt-2" aria-labelledby="mobile-hero-title">
         <h1 id="mobile-hero-title" className="font-display text-[26px] leading-tight font-bold text-foreground mb-1 tracking-tight">
-          Create. Publish. Grow.
+          Create. Read. Master.
         </h1>
         <p className="text-sm text-muted-foreground mb-4">
-          From first idea to publication-ready book in one intelligent workspace.
+          Create structured AI-native books now. Advanced publishing workflows unlock only after GA validation.
         </p>
         <div className="flex gap-2.5 w-full">
           <Link
