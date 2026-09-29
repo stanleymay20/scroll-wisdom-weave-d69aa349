@@ -3443,8 +3443,8 @@ Teach through EQUATIONS, PROOFS, and WORKED EXAMPLES.`;
 
 LANGUAGE: Generate ALL content in ${languageName}.
 
-${isChildrens ? 'Story beats:' : 'Key topics:'}
-${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || (isChildrens ? '1. Continue the story arc from the chapter title and established characters' : '1. Comprehensive coverage')}
+Key topics:
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
 
 REQUIREMENTS:
 1. Write approximately ${targetWords} words in ${languageName}
