@@ -31,7 +31,7 @@ export interface QualificationPolicy {
   minimumHumanReviewedSamples: number;
   minimumEditorialScore: number;
   minimumPublishabilityScore: number;
-  maximumProviderFailureRate: number;
+  maximumChapterFailureRate: number;
   maximumRegenerationRate: number;
   requiresEvidenceGate: boolean;
   requiresTechnicalCodeCoverage: boolean;
@@ -48,8 +48,8 @@ export interface ProviderQualificationSample {
     terminalStatus: "completed" | "partial" | "failed";
     expectedChapters: number;
     generatedChapters: number;
-    providerCalls: number;
-    providerFailures: number;
+    chapterAttempts: number;
+    chapterFailures: number;
     regenerationPasses: number;
   };
   editorial: {
@@ -88,7 +88,7 @@ export interface SampleQualificationResult {
   sampleId: string;
   passed: boolean;
   blockers: string[];
-  providerFailureRate: number;
+  chapterFailureRate: number;
   regenerationRate: number;
 }
 
@@ -107,7 +107,7 @@ export interface BookTypeQualificationResult {
 const BASE_POLICY = {
   minimumEditorialScore: 85,
   minimumPublishabilityScore: 92,
-  maximumProviderFailureRate: 0.05,
+  maximumChapterFailureRate: 0.05,
   maximumRegenerationRate: 0.15,
   humanReviewMinimum: 8.5,
 } as const;
@@ -208,7 +208,7 @@ export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPo
     minimumSamples: 5,
     minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
-    maximumProviderFailureRate: 0.03,
+    maximumChapterFailureRate: 0.03,
     maximumRegenerationRate: 0.20,
     requiresEvidenceGate: false,
     requiresTechnicalCodeCoverage: false,
@@ -221,7 +221,7 @@ export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPo
     minimumSamples: 5,
     minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
-    maximumProviderFailureRate: 0.03,
+    maximumChapterFailureRate: 0.03,
     maximumRegenerationRate: 0.20,
     requiresEvidenceGate: false,
     requiresTechnicalCodeCoverage: false,
@@ -264,13 +264,13 @@ export function evaluateQualificationSample(
     );
   }
 
-  const providerFailureRate = boundedRate(
-    sample.generation.providerFailures,
-    sample.generation.providerCalls,
+  const chapterFailureRate = boundedRate(
+    sample.generation.chapterFailures,
+    sample.generation.chapterAttempts,
   );
-  if (providerFailureRate > policy.maximumProviderFailureRate) {
+  if (chapterFailureRate > policy.maximumChapterFailureRate) {
     blockers.push(
-      `provider failure rate ${(providerFailureRate * 100).toFixed(1)}% exceeds ${(policy.maximumProviderFailureRate * 100).toFixed(1)}%`,
+      `chapter-attempt failure rate ${(chapterFailureRate * 100).toFixed(1)}% exceeds ${(policy.maximumChapterFailureRate * 100).toFixed(1)}%`,
     );
   }
 
@@ -354,7 +354,7 @@ export function evaluateQualificationSample(
     sampleId: sample.sampleId,
     passed: blockers.length === 0,
     blockers,
-    providerFailureRate,
+    chapterFailureRate,
     regenerationRate,
   };
 }
