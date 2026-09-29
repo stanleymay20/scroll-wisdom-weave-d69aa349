@@ -6,6 +6,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import { writeFileSync } from "node:fs";
 import type { Plugin } from "vite";
 import { resolveBuildCommit } from "./scripts/build-commit.mjs";
+import { computeSourceFingerprint } from "./scripts/source-fingerprint.mjs";
 
 /**
  * Writes /release.json into every production build, not only the CI one.
@@ -16,7 +17,7 @@ import { resolveBuildCommit } from "./scripts/build-commit.mjs";
  * writes the identity part in every build; `build:release` still replaces it
  * afterwards with the version that also lists each artifact's digest.
  */
-function releaseIdentity(identity: { commit: string | null; commitSource: string; buildTime: string }): Plugin {
+function releaseIdentity(identity: { commit: string | null; commitSource: string; buildTime: string; sourceFingerprint: string; sourceFingerprintFiles: number }): Plugin {
   let outDir = "dist";
   return {
     name: "scrolllibrary-release-identity",
@@ -35,6 +36,9 @@ function releaseIdentity(identity: { commit: string | null; commitSource: string
 export default defineConfig(({ mode }) => {
   const buildTime = process.env.BUILD_TIME ?? new Date().toISOString();
   const { commit, source: commitSource } = resolveBuildCommit();
+  const source = computeSourceFingerprint();
+  const sourceFingerprint = source.value;
+  const sourceFingerprintFiles = source.files;
   // Also the Sentry release name, so errors group by the commit that threw them.
   const buildId = commit ?? `local-${buildTime}`;
 
@@ -50,7 +54,7 @@ export default defineConfig(({ mode }) => {
   plugins: [
     react(),
     mode === "development" && componentTagger(),
-    releaseIdentity({ commit, commitSource, buildTime }),
+    releaseIdentity({ commit, commitSource, buildTime, sourceFingerprint, sourceFingerprintFiles }),
     VitePWA({
       registerType: "autoUpdate",
       injectRegister: "auto",
