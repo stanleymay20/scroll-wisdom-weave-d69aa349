@@ -13,7 +13,9 @@ import {
   corsHeaders, preflight, json, badRequest, unauthorized, forbidden,
   serverError, requireUser, validateBody, z, serviceClient, enforceDurableRateLimit,
 } from "../_shared/http.ts";
-import { auditBookForPublishability } from "../_shared/qaPublishability.ts";
+import { appendQAIssues, auditBookForPublishability, type QAIssue } from "../_shared/qaPublishability.ts";
+import { hasTechnicalCode } from "../_shared/technical-code-quality.ts";
+import { sha256Hex } from "../_shared/content-hash.ts";
 import { captureBookScopeHash, recordBoundAttestation, scopeStabilityError } from "../_shared/publicationScope.ts";
 
 
@@ -86,7 +88,7 @@ Deno.serve(async (req) => {
 
     const { data: chapters, error: chErr } = await sc
       .from("chapters")
-      .select("chapter_number, title, content, is_generated, word_count")
+      .select("id, chapter_number, title, content, is_generated, word_count, version_number")
       .eq("book_id", bookId)
       .order("chapter_number", { ascending: true });
     if (chErr) return serverError(chErr);
@@ -96,7 +98,7 @@ Deno.serve(async (req) => {
     if (scopeLoadError) return json({ error: scopeLoadError }, 409);
     const auditScopeHash = scopeAfter as string;
 
-    const report = auditBookForPublishability(
+    let report = auditBookForPublishability(
       (chapters ?? []).map((c) => ({
         chapter_number: c.chapter_number,
         title: c.title ?? "",
@@ -110,6 +112,51 @@ Deno.serve(async (req) => {
         expectedChapterCount: book.total_chapters,
       },
     );
+
+    // Technical code must have a passing STO audit for the exact current
+    // chapter bytes. Any edit changes the hash and automatically invalidates
+    // the old review without requiring mutation or cleanup triggers.
+    const technicalChapters = (chapters ?? []).filter(
+      (chapter) => hasTechnicalCode(chapter.content ?? ""),
+    );
+
+    if (technicalChapters.length > 0) {
+      const chapterEvidence = await Promise.all(
+        technicalChapters.map(async (chapter) => ({
+          id: chapter.id,
+          number: chapter.chapter_number,
+          hash: await sha256Hex(chapter.content ?? ""),
+        })),
+      );
+
+      const { data: codeAudits, error: codeAuditErr } = await sc
+        .from("chapter_code_audits")
+        .select("chapter_id, content_hash, passed, score, risk_level, created_at")
+        .in("chapter_id", chapterEvidence.map((chapter) => chapter.id))
+        .eq("passed", true);
+      if (codeAuditErr) return serverError(codeAuditErr);
+
+      const technicalIssues: QAIssue[] = [];
+      for (const chapter of chapterEvidence) {
+        const currentPass = (codeAudits ?? []).some(
+          (audit) => audit.chapter_id === chapter.id
+            && audit.content_hash === chapter.hash
+            && audit.passed === true,
+        );
+        if (!currentPass) {
+          technicalIssues.push({
+            severity: "blocker",
+            code: "technical_code_audit_required",
+            category: "technical",
+            chapter: chapter.number,
+            message: `Chapter ${chapter.number}: code has no passing STO audit for the current manuscript bytes.`,
+            hint: "Run Code Audit, resolve high-risk findings, and rerun after every code edit.",
+          });
+        }
+      }
+
+      report = appendQAIssues(report, technicalIssues);
+    }
 
     const { data: inserted, error: insErr } = await sc
       .from("book_qa_reports")
