@@ -2254,6 +2254,37 @@ serve(async (req) => {
       }
     }
 
+    if (!isInternalWorker && !isRegeneration && chapter?.book_id) {
+      const { data: activeDraftJob, error: activeDraftJobError } = await supabase
+        .from("generation_jobs")
+        .select("id, status, metadata")
+        .eq("book_id", chapter.book_id)
+        .in("status", ["pending", "generating", "partial"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (activeDraftJobError) throw activeDraftJobError;
+
+      const metadata = activeDraftJob?.metadata && typeof activeDraftJob.metadata === "object"
+        ? activeDraftJob.metadata as Record<string, unknown>
+        : {};
+      if (
+        activeDraftJob
+        && metadata.orchestrator === "server_worker"
+        && metadata.phase === "drafting"
+      ) {
+        return new Response(JSON.stringify({
+          error: "Initial drafting is already owned by the server generation worker.",
+          code: "SERVER_GENERATION_ACTIVE",
+          jobId: activeDraftJob.id,
+        }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
     // Use book-level settings if available, otherwise use request params
     // Cast bookDetails to any for new fields not yet in generated types
     const bookData = bookDetails as any;
