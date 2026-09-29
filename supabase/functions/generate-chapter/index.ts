@@ -3,7 +3,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs, parseRawFigureMarkers, summarizeFigureSpecs, VISUAL_DENSITY, buildFigureImagePrompt, buildFigureMarker, figureImageMarkdown, replaceFigureMarker, resolveFigureRendering, stripFigureMarkers, type VisualType } from "../_shared/visual-intelligence.ts";
 import { checkRateLimit, errorResponse, ErrorCode } from "../_shared/error-codes.ts";
 import { COMIC_STYLE_PRESETS, COMIC_SUB_TYPE_DEFINITIONS, buildStoryArchitectPrompt, buildScriptwriterPrompt, buildVisualDirectorPrompt, buildLearningAgentPrompt, buildContinuityGuardianPrompt, buildEnhancedComicSystemPrompt, buildEnhancedComicChapterPrompt, buildComicSystemPrompt, buildComicChapterPrompt } from "../_shared/generation/comic-prompts.ts";
-import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled } from "../_shared/ga-release-flags.ts";
 import { secretsMatch } from "../_shared/cron-auth.ts";
 import { buildFictionContinuityContext, sanitizeFictionContract } from "../_shared/fiction-context.ts";
 import { buildChildrenSystemPrompt } from "../_shared/children-contract.ts";
@@ -2297,6 +2297,18 @@ serve(async (req) => {
     // Cast bookDetails to any for new fields not yet in generated types
     const bookData = bookDetails as any;
     const effectiveBookType = bookData?.book_type || bookType;
+
+    if (effectiveBookType !== "text" && !advancedBookTypeEnabled(effectiveBookType)) {
+      return new Response(JSON.stringify({
+        error: "This specialized book type has not completed provider qualification.",
+        code: "GA_BOOK_TYPE_NOT_QUALIFIED",
+        bookType: effectiveBookType,
+      }), {
+        status: 422,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const effectiveComicStyle = bookData?.comic_style_id || comicStyle;
     const effectiveLayoutTemplate = bookData?.layout_template || 5;
     const effectiveWorkbookDensity = bookData?.workbook_density || 'medium';
