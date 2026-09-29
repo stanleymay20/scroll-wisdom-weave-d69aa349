@@ -84,6 +84,9 @@ jobs:
       - name: Seed reader ownership fixtures in disposable database
         run: psql "$E2E_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/seed-ga-reader-fixtures.sql
 
+      - name: Exercise self-service data export lifecycle
+        run: bun scripts/test-data-export-e2e.mjs
+
       - name: Exercise authoritative mastery certificate lifecycle
         run: bun scripts/test-mastery-certificate-e2e.mjs
 
