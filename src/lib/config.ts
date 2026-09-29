@@ -28,7 +28,7 @@ export type ExportFormat = typeof EXPORT_FORMATS[number];
 // PMF MODE: Feature flags
 // Only Generate → Read → Quiz → Certificate
 // ===========================================
-export const PMF_MODE = false; // All features enabled
+export const PMF_MODE = true; // GA launch scope: core Generate → Read → Quiz → Certificate
 
 export const FEATURES = {
   enableTTS: true,
@@ -43,9 +43,11 @@ export const FEATURES = {
   enableLearningDecks: !PMF_MODE,
   enableCodePlayground: !PMF_MODE,
   enableVoiceConversation: !PMF_MODE,
+  enableInteractiveQA: !PMF_MODE,
   enableDeepResearch: !PMF_MODE,
   enableSkillRadar: !PMF_MODE,
   enableComicMode: !PMF_MODE,
   enableChapterVideo: !PMF_MODE,
-  enableKnowledgeGraph: true,
+  enableKnowledgeGraph: !PMF_MODE,
+  enableStudyMusic: !PMF_MODE,
 };
