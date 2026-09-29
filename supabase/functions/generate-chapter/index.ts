@@ -4,6 +4,7 @@ import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs,
 import { checkRateLimit, errorResponse, ErrorCode } from "../_shared/error-codes.ts";
 import { COMIC_STYLE_PRESETS, COMIC_SUB_TYPE_DEFINITIONS, buildStoryArchitectPrompt, buildScriptwriterPrompt, buildVisualDirectorPrompt, buildLearningAgentPrompt, buildContinuityGuardianPrompt, buildEnhancedComicSystemPrompt, buildEnhancedComicChapterPrompt, buildComicSystemPrompt, buildComicChapterPrompt } from "../_shared/generation/comic-prompts.ts";
 import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
+import { secretsMatch } from "../_shared/cron-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -2005,23 +2006,86 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Authenticate user
+    // Authenticate either a real user JWT or the tightly-scoped internal
+    // generation worker. The worker cannot nominate an arbitrary user: its
+    // identity is derived from the persisted generation job, and the chapter
+    // must belong to that job's book.
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Authentication required" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const token = authHeader.slice("Bearer ".length).trim();
+    const internalJobId =
+      typeof requestBody?.internalGenerationJobId === "string"
+        ? requestBody.internalGenerationJobId
+        : null;
+    const requestedChapterId =
+      typeof requestBody?.chapterId === "string"
+        ? requestBody.chapterId
+        : null;
+    const isInternalWorker =
+      !!internalJobId
+      && secretsMatch(token, SUPABASE_SERVICE_ROLE_KEY);
+
+    let user: { id: string } | null = null;
+
+    if (isInternalWorker) {
+      if (!requestedChapterId) {
+        return new Response(JSON.stringify({ error: "Internal worker chapterId required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: workerJob, error: workerJobError } = await supabase
+        .from("generation_jobs")
+        .select("id, user_id, book_id, status, worker_lease_token, worker_lease_until")
+        .eq("id", internalJobId)
+        .maybeSingle();
+      if (workerJobError) throw workerJobError;
+
+      const leaseToken = req.headers.get("x-generation-worker-token");
+      const leaseActive =
+        !!workerJob?.worker_lease_token
+        && workerJob.worker_lease_token === leaseToken
+        && !!workerJob.worker_lease_until
+        && new Date(workerJob.worker_lease_until).getTime() > Date.now();
+
+      if (!workerJob || workerJob.status === "completed" || !leaseActive) {
+        return new Response(JSON.stringify({ error: "Invalid or expired generation worker lease" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: workerChapter, error: workerChapterError } = await supabase
+        .from("chapters")
+        .select("id, book_id")
+        .eq("id", requestedChapterId)
+        .maybeSingle();
+      if (workerChapterError) throw workerChapterError;
+
+      if (!workerChapter || workerChapter.book_id !== workerJob.book_id) {
+        return new Response(JSON.stringify({ error: "Chapter does not belong to generation job" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      user = { id: workerJob.user_id };
+    } else {
+      const { data: authData, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !authData.user) {
+        return new Response(JSON.stringify({ error: "Invalid authentication" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      user = { id: authData.user.id };
     }
     const editIntent_raw = (requestBody?.editIntent as string | null) || null;
     const isChiefEditorRewrite = editIntent_raw?.startsWith('[CHIEF_EDITOR_REWRITE]') || false;
@@ -2034,9 +2098,11 @@ serve(async (req) => {
     console.log(`[GENERATE-CHAPTER] User: ${user.id.slice(0, 8)}...`);
 
     // Rate limiting: max 30 chapter generations per hour per user
-    const rl = checkRateLimit(`gen-chapter:${user.id}`, 30, 60 * 60 * 1000);
-    if (!rl.allowed) {
-      return errorResponse(ErrorCode.RATE_LIMITED, 'Too many chapter generations. Please wait before generating more.', corsHeaders, { retryAfterMs: rl.retryAfterMs });
+    if (!isInternalWorker) {
+      const rl = checkRateLimit(`gen-chapter:${user.id}`, 30, 60 * 60 * 1000);
+      if (!rl.allowed) {
+        return errorResponse(ErrorCode.RATE_LIMITED, 'Too many chapter generations. Please wait before generating more.', corsHeaders, { retryAfterMs: rl.retryAfterMs });
+      }
     }
 
     // Check admin status
@@ -2150,7 +2216,8 @@ serve(async (req) => {
 
     // Get book with all style/workbook fields
     let bookDetails: {
-      creator_id: string;
+      creator_id: string | null;
+      user_id: string | null;
       book_type: string;
       workbook_density: string | null;
       comic_style_id: string | null;
@@ -2163,13 +2230,13 @@ serve(async (req) => {
     if (chapter) {
       const { data: book } = await supabase
         .from("books")
-        .select("creator_id, book_type")
+        .select("creator_id, user_id, book_type")
         .eq("id", chapter.book_id)
         .single();
 
       bookDetails = book as typeof bookDetails;
 
-      if (book && book.creator_id !== user.id && !isAdmin) {
+      if (book && book.creator_id !== user.id && book.user_id !== user.id && !isAdmin) {
         return new Response(JSON.stringify({ error: "Not authorized" }), {
           status: 403,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
