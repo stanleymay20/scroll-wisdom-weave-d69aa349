@@ -3,6 +3,7 @@ import { requireUser, serviceClient } from "../_shared/http.ts";
 import { ErrorCode, errorResponse } from "../_shared/error-codes.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
 import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
+import { normalizeGeneratedOutline } from "../_shared/outline-normalizer.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -365,23 +366,27 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     const outlineData = await outlineResponse.json();
     const outlineContent = outlineData.choices?.[0]?.message?.content;
 
-    let bookOutline;
+    let parsedOutline: unknown = {};
     try {
-      const jsonMatch = outlineContent.match(/\{[\s\S]*\}/);
-      bookOutline = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-      if (!bookOutline) throw new Error("No JSON");
+      const jsonMatch = typeof outlineContent === "string"
+        ? outlineContent.match(/\{[\s\S]*\}/)
+        : null;
+      parsedOutline = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
     } catch {
-      console.error("[GENERATE-BOOK] Parse fallback");
-      bookOutline = {
-        bookTitle: title,
-        bookDescription: description || "A comprehensive exploration of the topic",
-        chapters: Array.from({ length: effectiveChapters }, (_, i) => ({
-          chapterNumber: i + 1, title: `Chapter ${i + 1}`,
-          description: "Content pending generation", keyTopics: ["Topic 1", "Topic 2", "Topic 3"],
-        })),
-      };
+      console.error("[GENERATE-BOOK] Outline parse failed; deterministic normalizer will fill the requested structure");
+      parsedOutline = {};
     }
 
+    const bookOutline = normalizeGeneratedOutline(
+      parsedOutline,
+      effectiveChapters,
+      title,
+      description || "A comprehensive exploration of the topic",
+    );
+
+    console.log(
+      `[GENERATE-BOOK] Outline normalized to exactly ${bookOutline.chapters.length}/${effectiveChapters} chapters`,
+    );
     console.log("[GENERATE-BOOK] Outline ready, saving...");
 
     // Save book
