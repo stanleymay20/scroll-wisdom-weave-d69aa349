@@ -70,6 +70,20 @@ function codeBearing(content: string): boolean {
     || /```[\w+.-]*\s*\n[\s\S]*?```/.test(content);
 }
 
+function markdownImageCount(content: string): number {
+  return (content.match(/!\[[^\]]*\]\([^)]+\)/g) || []).length;
+}
+
+function comicPanelCount(content: string): number {
+  const bracketed = content.match(/\[PANEL\s*\d+\]/gi) || [];
+  const plain = content.match(/(?:^|\n)Panel\s+\d+\s*(?:\n|$)/gi) || [];
+  return Math.max(bracketed.length, plain.length);
+}
+
+function comicPanelImageCount(content: string): number {
+  return (content.match(/!\[Panel\s*\d+[^\]]*\]\([^)]+\)/gi) || []).length;
+}
+
 function sha256(content: string): string {
   return createHash("sha256").update(content, "utf8").digest("hex");
 }
@@ -235,12 +249,29 @@ for (const bookId of bookIds) {
       typeof chapter.title === "string" ? chapter.title : undefined,
     );
 
-    return result.violations
+    const blockers = result.violations
       .filter((violation) => violation.severity === "critical" || violation.severity === "high")
       .map((violation) => ({
         chapter: chapter.chapter_number,
         code: violation.code,
       }));
+
+    const images = markdownImageCount(chapterContent);
+    if (bookType === "illustrated" && images < 3) {
+      blockers.push({ chapter: chapter.chapter_number, code: "ILLUSTRATED_VISUAL_DENSITY" });
+    }
+    if (bookType === "children" && images < 4) {
+      blockers.push({ chapter: chapter.chapter_number, code: "CHILDREN_VISUAL_DENSITY" });
+    }
+    if (bookType === "comic") {
+      const panels = comicPanelCount(chapterContent);
+      const panelImages = comicPanelImageCount(chapterContent);
+      if (panels < 4 || panelImages < 4 || panelImages / Math.max(1, panels) < 0.8) {
+        blockers.push({ chapter: chapter.chapter_number, code: "COMIC_PANEL_IMAGE_COVERAGE" });
+      }
+    }
+
+    return blockers;
   });
   const specializedContractPassed = contractViolations.length === 0;
 
