@@ -16,8 +16,14 @@ type ReviewEntry = {
   visualAssetGatePassed?: boolean;
   humanReview?: {
     reviewer: string;
-    score: number;
     criticalIssues: number;
+    dimensions: {
+      contentIntegrity: number;
+      coherence: number;
+      typeFidelity: number;
+      readerValue: number;
+      editorialPolish: number;
+    };
   };
 };
 
@@ -305,7 +311,23 @@ for (const bookId of bookIds) {
           : null,
       ].filter(Boolean).join(" | ") || undefined,
     },
-    humanReview: review.humanReview,
+    humanReview: review.humanReview
+      ? {
+          reviewer: review.humanReview.reviewer,
+          criticalIssues: numeric(review.humanReview.criticalIssues),
+          score: (() => {
+            const dimensions = review.humanReview!.dimensions;
+            const values = [
+              numeric(dimensions?.contentIntegrity),
+              numeric(dimensions?.coherence),
+              numeric(dimensions?.typeFidelity),
+              numeric(dimensions?.readerValue),
+              numeric(dimensions?.editorialPolish),
+            ];
+            return values.reduce((sum, value) => sum + value, 0) / values.length;
+          })(),
+        }
+      : undefined,
   });
 }
 
