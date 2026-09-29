@@ -30,6 +30,7 @@ interface Data {
   cover_override_url: string | null;
   license_type: string;
   seo_keywords: string[];
+  updated_at: string;
   publication?: {
     language: string | null;
     published_at: string | null;
@@ -61,6 +62,7 @@ function toLocal(l: StoreListing): Data {
     cover_override_url: l.cover_override_url,
     license_type: l.license_type,
     seo_keywords: l.seo_keywords ?? [],
+    updated_at: l.updated_at,
     publication: l.publication ?? null,
     book: l.book ? {
       id: l.book.id,
