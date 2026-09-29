@@ -264,6 +264,9 @@ jobs:
         run: node scripts/check-stripe-webhook-event-contract.mjs
       - name: Test GA financial release switches
         run: deno test supabase/functions/_shared/ga-release-flags_test.ts
+      - name: Test GA external-payment switch
+        run: deno test supabase/functions/_shared/ga-release-flags_test.ts
+
       - name: Test Stripe catalogue and API-shape compatibility
         run: |
           deno test supabase/functions/_shared/stripe-catalogue_test.ts
