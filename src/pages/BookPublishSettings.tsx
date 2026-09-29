@@ -291,7 +291,7 @@ export default function BookPublishSettings() {
         book_id: bookId,
         slug: form.slug || slugify(book.title),
         is_public: form.is_public,
-        price_cents: Number(form.price_cents) || 0,
+        price_cents: FEATURES.enablePaidCheckout ? (Number(form.price_cents) || 0) : 0,
         sample_chapters: Math.max(0, Number(form.sample_chapters) || 1),
         blurb: form.blurb || null,
         subtitle: form.subtitle || null,
@@ -452,21 +452,18 @@ export default function BookPublishSettings() {
         </Link>
         <h1 className="text-2xl sm:text-3xl font-bold mt-2 break-words">Publish: {book?.title}</h1>
 
-        {/* Two-stage lifecycle explainer — Publishing ≠ Listing */}
         <Card className="mt-4 p-4 sm:p-5 border-border/60 bg-muted/30">
-          <div className="text-sm font-medium">Publishing and listing are two separate steps.</div>
-          <ul className="mt-2 space-y-1.5 text-xs sm:text-sm text-muted-foreground">
-            <li><span className="font-medium text-foreground">Publishing</span> makes the work immutable and verifiable — it mints a certified Publication with a content hash and a downloadable certificate.</li>
-            <li><span className="font-medium text-foreground">Listing</span> makes it commercially discoverable on the storefront. You control price, slug, samples, and visibility below.</li>
-          </ul>
-          <div className="mt-2 text-xs text-muted-foreground">
-            A published work stays private until you flip <span className="font-medium text-foreground">Public on storefront</span>.
-          </div>
+          <div className="text-sm font-medium">Storefront listing</div>
+          <p className="mt-2 text-xs sm:text-sm text-muted-foreground">
+            GA supports listing your generated book on ScrollLibrary for discovery, samples, and free access.
+            Canonical publication, publisher identity, ISBN assignment, and paid sales remain closed until their release gates pass.
+          </p>
         </Card>
 
-        {bookId && <div className="mt-6"><EliteReadinessPanel bookId={bookId} /></div>}
-        {bookId && <div className="mt-6"><PublishingIdentityPanel bookId={bookId} /></div>}
+        {FEATURES.enableCanonicalPublication && bookId && <div className="mt-6"><EliteReadinessPanel bookId={bookId} /></div>}
+        {FEATURES.enableCanonicalPublication && bookId && <div className="mt-6"><PublishingIdentityPanel bookId={bookId} /></div>}
 
+        {FEATURES.enableCanonicalPublication && (
         <Card className="mt-6 p-4 sm:p-6 border-primary/25">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
             <div className="min-w-0">
@@ -524,6 +521,7 @@ export default function BookPublishSettings() {
             </p>
           )}
         </Card>
+        )}
 
         {/* Three-step primary path: Price → Cover → Publish on ScrollLibrary */}
         <Card className="mt-6 p-4 sm:p-6 bg-gradient-to-br from-primary/5 via-card to-card border-primary/20">
@@ -532,12 +530,12 @@ export default function BookPublishSettings() {
             <Badge variant="secondary" className="ml-auto">Recommended</Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            The fastest path: set a price, confirm your cover, flip the switch. ScrollLibrary handles checkout,
-            delivery, and payouts. No external accounts, no OAuth, no webhooks.
+            The GA path is intentionally simple: confirm the listing details, choose a sample, and make the book public.
+            Paid checkout and automated payouts remain closed until their payment lifecycle gate passes.
           </p>
           <ol className="mt-4 grid grid-cols-1 sm:grid-cols-3 gap-2">
             {[
-              { n: 1, label: "Set price", ok: (form.price_cents ?? 0) >= 0 && form.slug.length > 0, hint: "Free or paid — both work." },
+              { n: 1, label: FEATURES.enablePaidCheckout ? "Set price" : "Free access", ok: form.slug.length > 0, hint: FEATURES.enablePaidCheckout ? "Free or paid." : "GA listings are free while paid checkout is closed." },
               { n: 2, label: "Confirm cover", ok: !!(book?.cover_image_url || form.cover_override_url), hint: "Used everywhere your book appears." },
               { n: 3, label: "Make public", ok: form.is_public, hint: "Flips the switch above." },
             ].map((step) => (
@@ -552,14 +550,16 @@ export default function BookPublishSettings() {
               </li>
             ))}
           </ol>
+          {FEATURES.enablePaidCheckout && FEATURES.enableStripeConnect && (
           <div className="mt-4 flex flex-wrap gap-2">
             <Button variant="outline" size="sm" onClick={() => navigate("/sell")} className="min-h-10">
-              <Sparkles className="w-4 h-4 mr-2" /> Get paid in minutes
+              <Sparkles className="w-4 h-4 mr-2" /> Set up paid sales
             </Button>
             <span className="text-xs text-muted-foreground self-center">
-              Stripe Connect onboarding — one screen, then payouts are automatic.
+              Stripe Connect onboarding enables automated payouts.
             </span>
           </div>
+          )}
         </Card>
 
 
@@ -582,10 +582,14 @@ export default function BookPublishSettings() {
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
-              <Label htmlFor="pub-price">Price (USD)</Label>
+              <Label htmlFor="pub-price">{FEATURES.enablePaidCheckout ? "Price (USD)" : "Price"}</Label>
               <Input id="pub-price" type="number" inputMode="decimal" min={0} className="text-foreground caret-foreground"
-                value={(form.price_cents / 100).toString()}
+                value={FEATURES.enablePaidCheckout ? (form.price_cents / 100).toString() : "0"}
+                disabled={!FEATURES.enablePaidCheckout}
                 onChange={(e) => setForm({ ...form, price_cents: Math.round(parseFloat(e.target.value || "0") * 100) })} />
+              {!FEATURES.enablePaidCheckout && (
+                <p className="mt-1 text-xs text-muted-foreground">Paid listings reopen after Stripe lifecycle validation.</p>
+              )}
             </div>
             <div>
               <Label htmlFor="pub-samples">Sample chapters</Label>
