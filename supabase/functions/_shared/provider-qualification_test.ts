@@ -150,3 +150,22 @@ Deno.test("qualification release order preserves the staged reopening plan", () 
     "fiction",
   ]);
 });
+
+
+Deno.test("human review cannot pass with an out-of-range score", () => {
+  const sample = passingSample("academic");
+  sample.humanReview = { reviewer: "reviewer", score: 11, criticalIssues: 0 };
+
+  const result = evaluateQualificationSample(sample);
+  assertEquals(result.passed, false);
+  assert(result.blockers.some((blocker) => blocker.includes("between 0 and 10")));
+});
+
+Deno.test("human review critical issue count must be non-negative", () => {
+  const sample = passingSample("academic");
+  sample.humanReview = { reviewer: "reviewer", score: 9, criticalIssues: -1 };
+
+  const result = evaluateQualificationSample(sample);
+  assertEquals(result.passed, false);
+  assert(result.blockers.some((blocker) => blocker.includes("non-negative integer")));
+});
