@@ -21,7 +21,7 @@ export const translations: Record<Language, Record<string, string>> = {
     // Navigation
     'nav.home': 'Home',
     'nav.explore': 'Explore',
-    'nav.generate': 'Generate Book',
+    'nav.generate': 'Create',
     'nav.library': 'My Library',
     'nav.pricing': 'Pricing',
     'nav.signin': 'Sign In',
@@ -900,7 +900,7 @@ export const translations: Record<Language, Record<string, string>> = {
     
     'nav.home': 'Accueil',
     'nav.explore': 'Explorer',
-    'nav.generate': 'Générer un livre',
+    'nav.generate': 'Créer',
     'nav.library': 'Ma Bibliothèque',
     'nav.pricing': 'Tarifs',
     'nav.signin': 'Connexion',
@@ -1567,7 +1567,7 @@ export const translations: Record<Language, Record<string, string>> = {
     
     'nav.home': 'Startseite',
     'nav.explore': 'Entdecken',
-    'nav.generate': 'Buch Generieren',
+    'nav.generate': 'Erstellen',
     'nav.library': 'Meine Bibliothek',
     'nav.pricing': 'Preise',
     'nav.signin': 'Anmelden',
@@ -2233,7 +2233,7 @@ export const translations: Record<Language, Record<string, string>> = {
     
     'nav.home': 'Inicio',
     'nav.explore': 'Explorar',
-    'nav.generate': 'Generar Libro',
+    'nav.generate': 'Crear',
     'nav.library': 'Mi Biblioteca',
     'nav.pricing': 'Precios',
     'nav.signin': 'Iniciar sesión',
@@ -2899,7 +2899,7 @@ export const translations: Record<Language, Record<string, string>> = {
     
     'nav.home': 'الرئيسية',
     'nav.explore': 'استكشاف',
-    'nav.generate': 'إنشاء كتاب',
+    'nav.generate': 'إنشاء',
     'nav.library': 'مكتبتي',
     'nav.pricing': 'الأسعار',
     'nav.signin': 'تسجيل الدخول',
@@ -3565,7 +3565,7 @@ export const translations: Record<Language, Record<string, string>> = {
     
     'nav.home': 'Nyumbani',
     'nav.explore': 'Gundua',
-    'nav.generate': 'Tengeneza Kitabu',
+    'nav.generate': 'Unda',
     'nav.library': 'Maktaba Yangu',
     'nav.pricing': 'Bei',
     'nav.signin': 'Ingia',
