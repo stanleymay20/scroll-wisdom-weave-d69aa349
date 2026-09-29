@@ -3,7 +3,7 @@ import { requireUser, serviceClient } from "../_shared/http.ts";
 import { ErrorCode, errorResponse } from "../_shared/error-codes.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
 import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
-import { normalizeGeneratedOutline } from "../_shared/outline-normalizer.ts";
+import { normalizeGeneratedOutline, type NormalizedOutlineChapter } from "../_shared/outline-normalizer.ts";
 import { sanitizeFictionContract } from "../_shared/fiction-context.ts";
 
 const corsHeaders = {
@@ -505,7 +505,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     console.log(`[GENERATE-BOOK] Job ${jobId.slice(0, 8)}... created`);
 
     // Save chapters
-    const chaptersToInsert = bookOutline.chapters.map((ch: any) => ({
+    const chaptersToInsert = bookOutline.chapters.map((ch: NormalizedOutlineChapter) => ({
       book_id: book.id,
       chapter_number: ch.chapterNumber,
       title: ch.title,
@@ -589,7 +589,11 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
         console.error("[GENERATE-BOOK] Background worker dispatch exception:", workerError);
       });
 
-      const edgeRuntime = (globalThis as any).EdgeRuntime;
+      const edgeRuntime = (
+        globalThis as typeof globalThis & {
+          EdgeRuntime?: { waitUntil: (promise: Promise<unknown>) => void };
+        }
+      ).EdgeRuntime;
       if (edgeRuntime?.waitUntil) {
         edgeRuntime.waitUntil(dispatch);
         backgroundGenerationStarted = true;
