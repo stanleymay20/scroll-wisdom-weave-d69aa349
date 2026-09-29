@@ -6,6 +6,7 @@ import { COMIC_STYLE_PRESETS, COMIC_SUB_TYPE_DEFINITIONS, buildStoryArchitectPro
 import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
 import { secretsMatch } from "../_shared/cron-auth.ts";
 import { buildFictionContinuityContext, sanitizeFictionContract } from "../_shared/fiction-context.ts";
+import { buildChildrenSystemPrompt } from "../_shared/children-contract.ts";
 import { validateWorkbookStructure as validateWorkbookContract } from "../_shared/authority-validator.ts";
 
 const corsHeaders = {
@@ -3442,8 +3443,8 @@ Teach through EQUATIONS, PROOFS, and WORKED EXAMPLES.`;
 
 LANGUAGE: Generate ALL content in ${languageName}.
 
-Key topics:
-${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+${isChildrens ? 'Story beats:' : 'Key topics:'}
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || (isChildrens ? '1. Continue the story arc from the chapter title and established characters' : '1. Comprehensive coverage')}
 
 REQUIREMENTS:
 1. Write approximately ${targetWords} words in ${languageName}
@@ -4150,26 +4151,7 @@ BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
       
       if (isChildrens) {
         console.log("[GENERATE-CHAPTER] CHILDREN pipeline active");
-        systemPrompt = `You are ScrollLibrary — CHILDREN'S PICTURE-BOOK PIPELINE.
-
-IDENTITY: Children's Author · Early-Literacy Educator · Story Editor
-
-CORE RULES:
-- Write for ages 4-10 using concrete, age-appropriate language.
-- Keep sentences short and easy to read aloud.
-- Build one emotionally clear story arc: character → problem → attempts → resolution → warm close.
-- Let the lesson emerge from what the character does; never preach or lecture.
-- Preserve emotional safety. Fear or conflict may exist, but avoid graphic harm, cruelty, or adult themes.
-- Use repetition, rhythm, sensory detail, and dialogue when they improve read-aloud quality.
-- Keep character names, traits, setting details, and relationships consistent.
-- Every illustration marker must depict a concrete story moment the text actually supports.
-- Do NOT force business frameworks, named principles, KPIs, takeaways, statistics, citations, or adult self-help mechanics.
-- Do NOT write an executive summary, academic objectives, or marketing copy.
-- No AI meta-commentary, generation notes, or placeholders.
-
-${MASTER_FORMATTING_CONTRACT}
-
-LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
+        systemPrompt = buildChildrenSystemPrompt(languageName);
       } else if (isIllustratedAcademic) {
         // ACADEMIC ILLUSTRATED PIPELINE — scholarly content with pedagogical visuals
         console.log("[GENERATE-CHAPTER] ACADEMIC ILLUSTRATED pipeline active");
@@ -4207,7 +4189,8 @@ ${illustratedInstitutionalPrompt}
 ${factualSourcePack}`;
       }
       
-      systemPrompt += `
+      if (!isChildrens) {
+        systemPrompt += `
 
 ===========================================
 ILLUSTRATED BOOK PIPELINE — HARD LOCK
@@ -4280,6 +4263,7 @@ ${FINAL_DIRECTIVE}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.
 Create comprehensive, bestseller-grade illustrated chapters where both the TEXT and VISUALS are world-class.`;
+      }
 
       const illustratedWordTarget = isChildrens ? 1200 : targetWords;
       
@@ -4357,7 +4341,7 @@ INSTITUTIONAL REQUIREMENTS (BUSINESS ILLUSTRATED BOOK):
 ` : ''}
 REQUIREMENTS:
 - Approximately ${illustratedWordTarget} words
-- Use proper Markdown formatting (## headings, **bold**, tables)
+${isChildrens ? '- Use natural story paragraphs and dialogue; do not use tables, code blocks, or instructional headings' : '- Use proper Markdown formatting (## headings, **bold**, tables)'}
 - Include ${isChildrens ? '4-5' : '3-4'} [FIGURE X: description] markers inline
 - Every figure must serve the ${isIllustratedAcademic ? 'learning objective' : 'story/learning'}
 - Text must flow naturally around figure markers
