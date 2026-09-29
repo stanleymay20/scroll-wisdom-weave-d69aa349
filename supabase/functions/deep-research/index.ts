@@ -520,6 +520,13 @@ serve(async (req) => {
         });
       }
 
+      if (typeof workerJob.user_id !== "string" || workerJob.user_id.length === 0) {
+        return new Response(JSON.stringify({ error: "Generation worker job has no authoritative owner" }), {
+          status: 409,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
       userId = workerJob.user_id;
       logStep("Authenticated generation worker", {
         userId: userId.slice(0, 8) + "...",
