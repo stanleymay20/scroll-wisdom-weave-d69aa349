@@ -84,7 +84,11 @@ A sample must satisfy all of the following:
 
 Technical additionally requires a current, content-hash-bound passing code audit for every code-bearing chapter.
 
-Illustrated, Children, and Comic additionally require current rights and production evidence for their visual assets.
+Illustrated, Children, and Comic additionally require current rights and production evidence for their visual assets. Qualification also proves that the rendered chapter content is actually visual:
+
+- Illustrated: at least **3 rendered images per chapter**.
+- Children: at least **4 rendered images per chapter**.
+- Comic: at least **4 panel images per chapter** and images for at least **80% of detected panels**.
 
 Comic and Fiction use a stricter maximum chapter-attempt failure rate of **3%** and require five complete samples.
 
