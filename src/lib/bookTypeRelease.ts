@@ -36,10 +36,10 @@ export function parseQualifiedBookTypes(value?: string | null): Set<ClientBookTy
 
 export function isBookTypeReleasedForClient(
   bookType: ClientBookType,
-  advancedAuthoringEnabled: boolean,
+  specializedAuthoringEnabled: boolean,
   qualifiedTypesValue: string | null | undefined = import.meta.env.VITE_QUALIFIED_BOOK_TYPES,
 ): boolean {
   if (bookType === "text") return true;
-  if (!advancedAuthoringEnabled || !ADVANCED_BOOK_TYPES.has(bookType)) return false;
+  if (!specializedAuthoringEnabled || !ADVANCED_BOOK_TYPES.has(bookType)) return false;
   return parseQualifiedBookTypes(qualifiedTypesValue).has(bookType);
 }
