@@ -25,6 +25,7 @@ During qualification, keep the public release controls closed. For example:
 PROVIDER_QUALIFICATION_BOOK_TYPES=academic
 GA_ADVANCED_AUTHORING_ENABLED=false
 GA_QUALIFIED_BOOK_TYPES=
+VITE_SPECIALIZED_AUTHORING_ENABLED=false
 VITE_QUALIFIED_BOOK_TYPES=
 ```
 
@@ -192,10 +193,12 @@ After the evidence artifact is reviewed:
 
 1. Add only the passed type to the server `GA_QUALIFIED_BOOK_TYPES` allow-list.
 2. Add the same type to `VITE_QUALIFIED_BOOK_TYPES`.
-3. Enable global advanced authoring only when product launch policy permits it.
-4. Redeploy from the exact reviewed `main` head.
-5. Run production verification.
-6. Revoke the qualification-only type from `PROVIDER_QUALIFICATION_BOOK_TYPES` if the campaign is complete.
+3. Set `VITE_SPECIALIZED_AUTHORING_ENABLED=true` for the specialized-generation surface only.
+4. Set `GA_ADVANCED_AUTHORING_ENABLED=true` on the backend when the qualified mode is deliberately released.
+5. **Do not disable `PMF_MODE` just to expose a qualified book type.** Payments, exports, study tooling, canonical publication controls, and other post-GA features remain independently closed.
+6. Redeploy from the exact reviewed `main` head.
+7. Run production verification.
+8. Revoke the qualification-only type from `PROVIDER_QUALIFICATION_BOOK_TYPES` if the campaign is complete.
 
 Never put an unqualified mode into a public allow-list merely to generate test data.
 
