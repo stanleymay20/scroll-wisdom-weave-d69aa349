@@ -251,7 +251,7 @@ export default function Pricing() {
     <div className="min-h-screen flex flex-col">
       <SEO
         title="Pricing | ScrollLibrary"
-        description="Simple plans for learners, students, and institutions. Generate AI-powered books, earn verified mastery certificates, and access institutional reporting."
+        description="Publishing plans for authors, creators, and teams. Create AI-native books, export professional formats, and grow into commercial publishing workflows."
         canonical="/pricing"
       />
       <Navbar />
