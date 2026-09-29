@@ -374,7 +374,7 @@ export default function Generate() {
           citationStyle,
           academicMode: FEATURES.enableAdvancedAuthoring && contentMode === "academic",
           deepResearch: FEATURES.enableAdvancedAuthoring && contentMode === "academic",
-          bestsellerMode: entitlements.isPaid || entitlements.isTrialMode ? bestsellerMode : false,
+          bestsellerMode: FEATURES.enableAdvancedAuthoring && (entitlements.isPaid || entitlements.isTrialMode) ? bestsellerMode : false,
           // Author & Imprint fields
           authorMode,
           authorDisplayName: sanitizedAuthorName || undefined,
@@ -406,7 +406,7 @@ export default function Generate() {
             samplePrompt: styleProfile.samplePrompt,
           } : null,
           // Transformation/upgrade prompt for book style and positioning
-          transformationPrompt: transformationPrompt.trim() || null,
+          transformationPrompt: FEATURES.enableAdvancedAuthoring ? (transformationPrompt.trim() || null) : null,
         },
       });
 
@@ -609,6 +609,7 @@ export default function Generate() {
                 />
               </div>
 
+              {FEATURES.enableAdvancedAuthoring && (
               {/* Transformation / Upgrade Prompt */}
               <div className="space-y-2">
                 <Label htmlFor="transformationPrompt" className="text-foreground flex items-center gap-2">
@@ -628,6 +629,7 @@ export default function Generate() {
                   Guide the AI's writing style, structure, and positioning. The more specific, the better the output.
                 </p>
               </div>
+              )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
