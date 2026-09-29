@@ -5,10 +5,10 @@ import { useNavigate } from "react-router-dom";
 
 const steps = [
   { number: "1", title: "Idea", description: "Describe the book you want to create. ScrollLibrary helps shape the direction and structure.", icon: Lightbulb },
-  { number: "2", title: "Create", description: "Build the manuscript with specialized authoring workflows while keeping the project coherent.", icon: PenLine },
-  { number: "3", title: "Review", description: "Refine the work and run the quality, continuity, and publication checks relevant to the book.", icon: ShieldCheck },
-  { number: "4", title: "Publish", description: "Prepare professional publishing files and move approved work toward your chosen channels.", icon: Send },
-  { number: "5", title: "Grow", description: "Use publishing and audience insights to improve distribution, reach, and future releases.", icon: TrendingUp },
+  { number: "2", title: "Create", description: "Build a structured manuscript with the GA authoring workflow and keep the project in one workspace.", icon: PenLine },
+  { number: "3", title: "Review", description: "Read the work, assess understanding, and refine the project using the capabilities available in the current GA scope.", icon: ShieldCheck },
+  { number: "4", title: "Publish", description: "Advanced exports and controlled publishing workflows become available only after their GA validation gates pass.", icon: Send },
+  { number: "5", title: "Grow", description: "As validated publishing workflows open, extend the same project toward distribution, audience, and future releases.", icon: TrendingUp },
 ];
 
 export function HowItWorks() {
@@ -22,7 +22,7 @@ export function HowItWorks() {
             One workspace. From idea to readers.
           </h2>
           <p className="text-muted-foreground mt-3 max-w-2xl mx-auto">
-            Powerful publishing infrastructure should feel simple. You focus on the book; ScrollLibrary guides the workflow.
+            Start with the capabilities that are validated today. Advanced publishing infrastructure stays gated until it is proven ready.
           </p>
         </motion.div>
 
