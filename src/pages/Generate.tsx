@@ -878,9 +878,9 @@ export default function Generate() {
                 </>
               )}
 
+              {/* Cover options are post-GA until provider/storage validation passes. */}
               {FEATURES.enableCustomCover && (
-              {/* Cover Option */}
-              <div className="space-y-3">
+                <div className="space-y-3">
                 <Label className="text-foreground">{t('generate.bookCover')}</Label>
                 <RadioGroup
                   value={coverOption}
