@@ -13,6 +13,7 @@ import { SUBSCRIPTION_TIERS, SubscriptionTier, CREATOR_SUBSCRIPTION_TIERS, Creat
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { FEATURES } from "@/lib/config";
 
 import { SEO } from "@/components/SEO";
 interface PlanConfig {
@@ -157,6 +158,14 @@ export default function Pricing() {
       return;
     }
 
+    if (!FEATURES.enableSubscriptionCheckout) {
+      toast({
+        title: "Paid upgrades are temporarily unavailable",
+        description: "The free GA experience remains available while the payment lifecycle completes validation.",
+      });
+      return;
+    }
+
     const tierConfig = SUBSCRIPTION_TIERS[planTierKey];
     if (!tierConfig.price_id) return;
 
@@ -185,6 +194,13 @@ export default function Pricing() {
   };
 
   const handleCreatorCheckout = async (creatorTier: CreatorTier) => {
+    if (!FEATURES.enableSubscriptionCheckout) {
+      toast({
+        title: "Paid Creator plans are temporarily unavailable",
+        description: "Free marketplace listing remains available during GA validation.",
+      });
+      return;
+    }
     if (!user) {
       navigate("/auth", { state: { redirectTo: "/pricing#creator" } });
       return;
@@ -252,7 +268,7 @@ export default function Pricing() {
                 Plans & Pricing
               </h1>
               <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                Start free. Scale as you grow.
+                Start free. Paid upgrades reopen after the payment lifecycle passes its GA validation gate.
               </p>
             </div>
 
@@ -314,7 +330,7 @@ export default function Pricing() {
                           className="w-full mt-4"
                           size="sm"
                           onClick={() => handleSelectPlan(plan.tierKey)}
-                          disabled={isCurrent || !!checkoutLoading}
+                          disabled={isCurrent || !!checkoutLoading || (plan.tierKey !== "free" && !FEATURES.enableSubscriptionCheckout)}
                         >
                           {checkoutLoading === plan.tierKey ? (
                             <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing...</>
@@ -322,6 +338,8 @@ export default function Pricing() {
                             "Current Plan"
                           ) : plan.tierKey === "free" ? (
                             "Get Started Free"
+                          ) : !FEATURES.enableSubscriptionCheckout ? (
+                            "Available after payment validation"
                           ) : (
                             `Upgrade to ${plan.name}`
                           )}
@@ -429,9 +447,13 @@ export default function Pricing() {
                           size="sm"
                           className="w-full mt-5"
                           onClick={() => handleCreatorCheckout(p.key as CreatorTier)}
-                          disabled={isLoading}
+                          disabled={isLoading || !FEATURES.enableSubscriptionCheckout}
                         >
-                          {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Redirecting...</> : `Upgrade to ${p.name}`}
+                          {isLoading
+                            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Redirecting...</>
+                            : !FEATURES.enableSubscriptionCheckout
+                              ? "Available after payment validation"
+                              : `Upgrade to ${p.name}`}
                         </Button>
                       )}
                     </Card>
