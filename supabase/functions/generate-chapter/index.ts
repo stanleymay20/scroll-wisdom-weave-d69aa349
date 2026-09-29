@@ -6,6 +6,7 @@ import { COMIC_STYLE_PRESETS, COMIC_SUB_TYPE_DEFINITIONS, buildStoryArchitectPro
 import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
 import { secretsMatch } from "../_shared/cron-auth.ts";
 import { buildFictionContinuityContext, sanitizeFictionContract } from "../_shared/fiction-context.ts";
+import { validateWorkbookStructure as validateWorkbookContract } from "../_shared/authority-validator.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -3064,7 +3065,7 @@ Return JSON only:
       
       // VALIDATE workbook structure. Specialized book-type contracts fail
       // closed: an invalid workbook must never be persisted as generated.
-      const workbookValidation = validateWorkbookStructure(workbookContent);
+      const workbookValidation = validateWorkbookContract(workbookContent);
       if (!workbookValidation.valid && !isAdmin) {
         console.log("[GENERATE-CHAPTER] WORKBOOK VALIDATION FAILED:", workbookValidation.errors);
         return new Response(JSON.stringify({
