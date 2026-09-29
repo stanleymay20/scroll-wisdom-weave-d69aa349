@@ -4202,7 +4202,9 @@ ${BESTSELLER_STRUCTURE_CONTRACT}
 
 ${NONFICTION_CONTRACT}
 
-${illustratedInstitutionalPrompt}`;
+${illustratedInstitutionalPrompt}
+
+${factualSourcePack}`;
       }
       
       systemPrompt += `
@@ -4386,6 +4388,8 @@ ${MASTER_FORMATTING_CONTRACT}
 
 ${buildVisualIntelligencePrompt('professional', chapterNumber, targetWords)}
 
+${factualSourcePack}
+
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
       chapterPrompt = `${previousChaptersContext}Write a PROFESSIONAL GUIDE Chapter ${chapterNumber}: "${chapterTitle}" for "${bookTitle}" in ${category.replace(/_/g, " ")}.
@@ -4437,6 +4441,8 @@ ${BORN_QUALITY_CONTRACT}
 ${MASTER_FORMATTING_CONTRACT}
 
 ${buildVisualIntelligencePrompt('reference', chapterNumber, targetWords)}
+
+${factualSourcePack}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
@@ -4537,6 +4543,8 @@ ${buildVisualIntelligencePrompt('bestseller', chapterNumber, targetWords)}
 
 ${institutionalPrompt}
 
+${factualSourcePack}
+
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
       } else {
         // STANDARD TEXT PIPELINE — Universal Core + Micro-Contract
@@ -4549,6 +4557,8 @@ ${BORN_QUALITY_CONTRACT}
 ${MASTER_FORMATTING_CONTRACT}
 
 ${buildVisualIntelligencePrompt('text', chapterNumber, targetWords)}
+
+${factualSourcePack}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
       }
