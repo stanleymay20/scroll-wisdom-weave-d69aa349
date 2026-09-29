@@ -24,7 +24,7 @@ import { useToast } from "@/hooks/use-toast";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
 import { getWordCountOptions, SUBSCRIPTION_TIERS } from "@/lib/subscription";
-import { LAUNCH_MODE, LAUNCH_MODE_CONFIG, isTrialActive, isLaunchModeActive } from "@/lib/config";
+import { LAUNCH_MODE, LAUNCH_MODE_CONFIG, PMF_MODE, FEATURES, isTrialActive, isLaunchModeActive } from "@/lib/config";
 import { useEntitlements } from "@/hooks/useEntitlements";
 import { TrialBanner } from "@/components/subscription/TrialBanner";
 import { LaunchBanner } from "@/components/subscription/LaunchBanner";
@@ -115,7 +115,7 @@ export default function Generate() {
   const [generationProgress, setGenerationProgress] = useState<string[]>([]);
   
   // New book type state
-  const [extendedBookType, setExtendedBookType] = useState<ExtendedBookType | null>(null);
+  const [extendedBookType, setExtendedBookType] = useState<ExtendedBookType | null>(PMF_MODE ? "text" : null);
   const [showBookTypeError, setShowBookTypeError] = useState(false);
   const [workbookDensity, setWorkbookDensity] = useState<"low" | "medium" | "high">("medium");
   const [comicStyleConfig, setComicStyleConfig] = useState<ComicStyleConfig>({
@@ -367,13 +367,13 @@ export default function Generate() {
           wordCount: getEffectiveWordCount(),
           language,
           userId: user.id,
-          customCover: coverOption === "upload" ? customCover : null,
-          bookType: getLegacyBookType(),
-          extendedBookType,
-          enableReferences: contentMode === "academic",
+          customCover: FEATURES.enableCustomCover && coverOption === "upload" ? customCover : null,
+          bookType: FEATURES.enableAdvancedAuthoring ? getLegacyBookType() : "text",
+          extendedBookType: FEATURES.enableAdvancedAuthoring ? extendedBookType : "text",
+          enableReferences: FEATURES.enableAdvancedAuthoring && contentMode === "academic",
           citationStyle,
-          academicMode: contentMode === "academic",
-          deepResearch: contentMode === "academic",
+          academicMode: FEATURES.enableAdvancedAuthoring && contentMode === "academic",
+          deepResearch: FEATURES.enableAdvancedAuthoring && contentMode === "academic",
           bestsellerMode: entitlements.isPaid || entitlements.isTrialMode ? bestsellerMode : false,
           // Author & Imprint fields
           authorMode,
@@ -665,19 +665,28 @@ export default function Generate() {
                 </div>
               </div>
 
-              {/* Book Type Selector - REQUIRED */}
-              <BookTypeSelector
-                value={extendedBookType ?? undefined}
-                onChange={(v) => {
-                  setExtendedBookType(v);
-                  setShowBookTypeError(false);
-                }}
-                disabled={isGenerating}
-                showError={showBookTypeError}
-              />
+              {/* GA launches with the proven standard-text pipeline. */}
+              {FEATURES.enableAdvancedAuthoring ? (
+                <BookTypeSelector
+                  value={extendedBookType ?? undefined}
+                  onChange={(v) => {
+                    setExtendedBookType(v);
+                    setShowBookTypeError(false);
+                  }}
+                  disabled={isGenerating}
+                  showError={showBookTypeError}
+                />
+              ) : (
+                <div className="rounded-lg border bg-muted/30 p-4">
+                  <p className="text-sm font-medium">Standard text book</p>
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Specialized academic, comic, workbook, reference, and illustrated pipelines reopen after their provider E2E gates pass.
+                  </p>
+                </div>
+              )}
 
               {/* Workbook Preview - shows when workbook selected */}
-              {extendedBookType === "workbook" && (
+              {FEATURES.enableAdvancedAuthoring && extendedBookType === "workbook" && (
                 <WorkbookPreview
                   title={title}
                   numChapters={parseInt(numChapters)}
@@ -686,7 +695,7 @@ export default function Generate() {
               )}
 
               {/* Comic Configuration - shows when comic selected */}
-              {extendedBookType === "comic" && (
+              {FEATURES.enableAdvancedAuthoring && extendedBookType === "comic" && (
                 <div className="space-y-4">
                   {/* Comic Sub-Type Selector */}
                   <ComicSubTypeSelector
@@ -745,7 +754,7 @@ export default function Generate() {
               )}
 
               {/* Fiction Writing Tools - shows when fiction selected */}
-              {extendedBookType === "fiction" && (
+              {FEATURES.enableAdvancedAuthoring && extendedBookType === "fiction" && (
                 <FictionWritingTools
                   value={fictionConfig}
                   onChange={setFictionConfig}
@@ -794,7 +803,7 @@ export default function Generate() {
               </div>
 
               {/* Content Mode Selection - Creative vs Academic (only for text types) */}
-              {(extendedBookType === "text" || extendedBookType === "academic" || extendedBookType === "reference") && (
+              {FEATURES.enableAdvancedAuthoring && (extendedBookType === "text" || extendedBookType === "academic" || extendedBookType === "reference") && (
                 <div className="space-y-4">
                   <ContentModeSelector
                     mode={contentMode}
@@ -849,22 +858,27 @@ export default function Generate() {
                 disabled={isGenerating}
               />
 
-              {/* Writing Style Cloning */}
-              <div className="bg-card border border-border rounded-xl p-5">
-                <StyleClonePanel
-                  styleProfile={styleProfile}
-                  onStyleProfileChange={setStyleProfile}
-                />
-              </div>
+              {FEATURES.enableAdvancedAuthoring && (
+                <>
+                  {/* Writing Style Cloning */}
+                  <div className="bg-card border border-border rounded-xl p-5">
+                    <StyleClonePanel
+                      styleProfile={styleProfile}
+                      onStyleProfileChange={setStyleProfile}
+                    />
+                  </div>
 
-              {/* Bestseller Mode Toggle - Premium Feature */}
-              <BestsellerModeToggle
-                enabled={bestsellerMode}
-                onToggle={setBestsellerMode}
-                isPaidTier={entitlements.isPaid || entitlements.isTrialMode || entitlements.isAdmin || entitlements.isProphet}
-                disabled={isGenerating}
-              />
+                  {/* Bestseller Mode Toggle - Premium Feature */}
+                  <BestsellerModeToggle
+                    enabled={bestsellerMode}
+                    onToggle={setBestsellerMode}
+                    isPaidTier={entitlements.isPaid || entitlements.isTrialMode || entitlements.isAdmin || entitlements.isProphet}
+                    disabled={isGenerating}
+                  />
+                </>
+              )}
 
+              {FEATURES.enableCustomCover && (
               {/* Cover Option */}
               <div className="space-y-3">
                 <Label className="text-foreground">{t('generate.bookCover')}</Label>
@@ -894,6 +908,7 @@ export default function Generate() {
                   <CoverUpload onCoverSelect={setCustomCover} currentCover={customCover} />
                 )}
               </div>
+              )}
 
               {/* Generate Button */}
               <Button
