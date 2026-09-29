@@ -2488,12 +2488,21 @@ BEGIN REVISION:`;
     // sources and are cited in their own discipline's voice downstream.
     // ===========================================
     const STEM_RESEARCH_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'engineering', 'data_science', 'computer_science', 'statistics'];
+    const FACTUAL_RESEARCH_CATEGORIES = [
+      'business', 'history', 'economics', 'finance', 'governance',
+      'political_science', 'management', 'entrepreneurship',
+    ];
     const RESEARCH_GROUNDED_BOOK_TYPES = ['academic', 'technical', 'reference', 'professional'];
-    const isStemResearchCategory = STEM_RESEARCH_CATEGORIES.includes(category?.toLowerCase());
+    const categoryKey = String(category || '').toLowerCase();
+    const isStemResearchCategory = STEM_RESEARCH_CATEGORIES.includes(categoryKey);
+    const isFactualResearchCategory = FACTUAL_RESEARCH_CATEGORIES.includes(categoryKey);
+    const proseTypeNeedsFactualGrounding =
+      ['text', 'bestseller', 'illustrated'].includes(String(effectiveBookType || '').toLowerCase())
+      && (isStemResearchCategory || isFactualResearchCategory);
     const needsAcademicResearch =
       academicMode === true ||
       RESEARCH_GROUNDED_BOOK_TYPES.includes(String(effectiveBookType || '').toLowerCase()) ||
-      ((bookType === 'illustrated' || bookType === 'text') && isStemResearchCategory);
+      proseTypeNeedsFactualGrounding;
     
     if (needsAcademicResearch) {
       console.log(`[GENERATE-CHAPTER] Academic research pipeline for bookType=${effectiveBookType} (request=${bookType}), category=${category}, academicMode=${academicMode}, stem=${isStemResearchCategory}`);
