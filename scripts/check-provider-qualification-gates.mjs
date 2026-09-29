@@ -15,6 +15,8 @@ const generateBook = read("supabase/functions/generate-book/index.ts");
 const generateChapter = read("supabase/functions/generate-chapter/index.ts");
 const clientRelease = read("src/lib/bookTypeRelease.ts");
 const selector = read("src/components/generate/BookTypeSelector.tsx");
+const generatePage = read("src/pages/Generate.tsx");
+const config = read("src/lib/config.ts");
 const collector = read("scripts/collect-provider-qualification.ts");
 
 for (const [needle, label] of [
@@ -36,7 +38,13 @@ for (const [source, label] of [
 }
 
 requireText(clientRelease, "VITE_QUALIFIED_BOOK_TYPES", "client qualification allow-list");
+requireText(config, "VITE_SPECIALIZED_AUTHORING_ENABLED", "independent client specialized-authoring switch");
 requireText(selector, "isBookTypeReleasedForClient", "book type selector release filter");
+requireText(selector, "enableSpecializedAuthoring", "selector specialized-authoring switch");
+requireText(generatePage, "enableSpecializedAuthoring", "generation page specialized-authoring switch");
+if (generatePage.includes("FEATURES.enableAdvancedAuthoring")) {
+  throw new Error("Generate page must not couple specialized book release to the broad advanced-authoring flag");
+}
 requireText(collector, "qualificationTelemetry", "collector reliability telemetry");
 requireText(collector, "validateContract6Content", "collector canonical specialized contract");
 requireText(collector, "COMIC_PANEL_IMAGE_COVERAGE", "collector comic visual coverage");
