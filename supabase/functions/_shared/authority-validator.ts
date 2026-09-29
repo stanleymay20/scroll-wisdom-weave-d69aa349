@@ -742,12 +742,13 @@ export function validateWorkbookStructure(
   const hasCriticalError = errors.some(e => e.severity === 'critical');
 
   return {
-    valid: !hasCriticalError && errors.length === 0,
-    blocked: hasCriticalError,
+    valid: errors.length === 0,
+    blocked: errors.length > 0,
     errors,
     warnings,
-    failureMessage: errors.length > 0 ? 
-      '❌ **WORKBOOK STRUCTURE VIOLATION**: Workbooks must be interactive with fill-in prompts, not prose-heavy.' : undefined,
+    failureMessage: errors.length > 0
+      ? '❌ **WORKBOOK STRUCTURE VIOLATION**: Workbooks must be interactive with fill-in prompts, not prose-heavy.'
+      : undefined,
   };
 }
 
@@ -826,6 +827,10 @@ export function runQualityGate(
     const workbookResult = validateWorkbookStructure(content);
     allErrors.push(...workbookResult.errors);
     allWarnings.push(...workbookResult.warnings);
+
+    if (workbookResult.blocked || !workbookResult.valid) {
+      return workbookResult;
+    }
   }
 
   // Check if any critical errors block generation
