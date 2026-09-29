@@ -103,23 +103,65 @@ export default function PublicBookPage() {
 
 
   const cover = data.cover_override_url || data.book.cover_image_url || "";
-  const description = data.blurb || data.book.description || "";
-  const price = data.price_cents > 0 ? `$${(data.price_cents / 100).toFixed(2)}` : "Free";
+  const description = data.blurb || data.amazon_description || data.book.description || data.subtitle || data.book.title;
+  const price = data.price_cents > 0 ? `${(data.price_cents / 100).toFixed(2)}` : "Free";
+  const canonicalUrl = `https://scrolllibrary.org/store/${data.slug}`;
+  const authorUrl = author ? `https://scrolllibrary.org/authors/${author.slug}` : undefined;
+  const seoTitle = author
+    ? `${data.book.title} | ${author.display_name}`
+    : `${data.book.title} | ScrollLibrary`;
 
-  const jsonLd = {
-    "@context": "https://schema.org",
-    "@type": "Book",
-    name: data.book.title,
-    description,
-    image: cover || undefined,
-    author: author ? { "@type": "Person", name: author.display_name } : undefined,
-    offers: data.price_cents > 0 ? {
-      "@type": "Offer",
-      price: (data.price_cents / 100).toFixed(2),
-      priceCurrency: data.currency.toUpperCase(),
-      availability: "https://schema.org/InStock",
-    } : undefined,
-  };
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "Book",
+      "@id": `${canonicalUrl}#book`,
+      url: canonicalUrl,
+      name: data.book.title,
+      alternateName: data.subtitle || undefined,
+      description,
+      image: cover || undefined,
+      author: author ? {
+        "@type": "Person",
+        name: author.display_name,
+        url: authorUrl,
+      } : undefined,
+      publisher: {
+        "@type": "Organization",
+        name: "ScrollLibrary Press",
+        url: "https://scrolllibrary.org",
+      },
+      genre: data.book.category || undefined,
+      keywords: data.seo_keywords.length > 0 ? data.seo_keywords.join(", ") : undefined,
+      dateModified: data.updated_at || undefined,
+      mainEntityOfPage: canonicalUrl,
+      offers: data.price_cents > 0 ? {
+        "@type": "Offer",
+        url: canonicalUrl,
+        price: (data.price_cents / 100).toFixed(2),
+        priceCurrency: data.currency.toUpperCase(),
+        availability: "https://schema.org/InStock",
+      } : undefined,
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "BreadcrumbList",
+      itemListElement: [
+        {
+          "@type": "ListItem",
+          position: 1,
+          name: "Store",
+          item: "https://scrolllibrary.org/store",
+        },
+        {
+          "@type": "ListItem",
+          position: 2,
+          name: data.book.title,
+          item: canonicalUrl,
+        },
+      ],
+    },
+  ];
 
   async function handleBuy() {
     if (data!.price_cents > 0 && !FEATURES.enablePaidCheckout) {
@@ -200,7 +242,7 @@ export default function PublicBookPage() {
     <ResponsiveShell>
     <div className="min-h-screen bg-background">
       <SEO
-        title={`${data.book.title} — ScrollLibrary`}
+        title={seoTitle}
         description={(description).slice(0, 158)}
         canonical={`/store/${data.slug}`}
         type="book"
@@ -254,6 +296,9 @@ export default function PublicBookPage() {
               <p><span className="font-medium text-foreground">Chapters:</span> {data.book.total_chapters || "—"}</p>
               <p><span className="font-medium text-foreground">License:</span> {data.license_type}</p>
               <p><span className="font-medium text-foreground">Sample:</span> First {data.sample_chapters} chapter{data.sample_chapters === 1 ? "" : "s"}</p>
+              {data.seo_keywords.length > 0 && (
+                <p><span className="font-medium text-foreground">Topics:</span> {data.seo_keywords.slice(0, 8).join(", ")}</p>
+              )}
             </div>
             {data.book && <ReviewsSection bookId={data.book.id} listingId={data.id} />}
           </div>
