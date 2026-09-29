@@ -8,7 +8,7 @@ Deno.test("workbook contract blocks prose-only output", () => {
   );
 
   assertEquals(result.valid, false);
-  assertEquals(result.blocked, false);
+  assertEquals(result.blocked, true);
   assertEquals(result.errors.some((error) => error.code === "NO_INTERACTIVE_ELEMENTS"), true);
 });
 
