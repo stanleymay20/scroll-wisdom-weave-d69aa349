@@ -23,6 +23,15 @@ export function advancedAuthoringEnabled(value?: string | null): boolean {
 }
 
 
+export function specializedAuthoringEnabled(value?: string | null): boolean {
+  const normalized = String(
+    value === undefined ? Deno.env.get("GA_SPECIALIZED_AUTHORING_ENABLED") ?? "" : value ?? "",
+  ).trim().toLowerCase();
+
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+
 export function publicationMintEnabled(value?: string | null): boolean {
   const normalized = String(
     value === undefined ? Deno.env.get("GA_PUBLICATION_MINT_ENABLED") ?? "" : value ?? "",
@@ -65,7 +74,7 @@ export function advancedBookTypeEnabled(
   const normalized = String(bookType || "").trim().toLowerCase();
   if (normalized === "text") return true;
   if (!ADVANCED_BOOK_TYPES.has(normalized)) return false;
-  if (!advancedAuthoringEnabled(advancedValue)) return false;
+  if (!specializedAuthoringEnabled(advancedValue)) return false;
   return qualifiedAdvancedBookTypes(qualifiedTypesValue).has(normalized);
 }
 
