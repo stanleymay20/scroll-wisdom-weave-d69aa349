@@ -13,6 +13,14 @@ export interface StoreBook {
   category: string;
   total_chapters: number;
   author_user_id: string;
+  language: string | null;
+}
+
+export interface StorePublicationMetadata {
+  language: string | null;
+  published_at: string | null;
+  publisher: string | null;
+  isbn: string | null;
 }
 
 export interface StoreListing {
@@ -31,6 +39,7 @@ export interface StoreListing {
   series_order: number | null;
   updated_at: string;
   book: StoreBook | null;
+  publication?: StorePublicationMetadata | null;
   author?: { slug: string; display_name: string; avatar_url: string | null; bio?: string | null } | null;
   series?: { slug: string; title: string } | null;
   /** Optional explanation labels (from recommendation rails). */
