@@ -4287,8 +4287,8 @@ CITATION REQUIREMENTS:
 
 LANGUAGE: Generate ALL content in ${languageName}.
 ${illustratedSourcesSection}
-Key topics:
-${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+${isChildrens ? 'Story beats:' : 'Key topics:'}
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || (isChildrens ? '1. Continue the story arc from the chapter title and established characters' : '1. Comprehensive coverage')}
 
 ILLUSTRATION PLACEMENT (MANDATORY):
 Insert exactly ${isChildrens ? '4-5' : '3-4'} [FIGURE X: description] markers throughout the text.
