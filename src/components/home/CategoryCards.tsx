@@ -1,6 +1,6 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Upload, Sparkles, Database } from "lucide-react";
+import { Sparkles, Database } from "lucide-react";
 
 const cards = [
   {
@@ -9,13 +9,6 @@ const cards = [
     icon: Database,
     to: "/library",
     gradient: "from-blue-500 to-blue-700",
-  },
-  {
-    title: "Upload a Book",
-    description: "Upload PDF or EPUB textbooks. We parse chapters, enable highlights, notes, and generate quizzes automatically.",
-    icon: Upload,
-    to: "/upload",
-    gradient: "from-sky-400 to-cyan-600",
   },
   {
     title: "Generate Study Guide",
@@ -30,7 +23,7 @@ export function CategoryCards() {
   return (
     <section className="py-12 bg-background">
       <div className="container mx-auto px-4 max-w-6xl">
-        <div className="grid md:grid-cols-3 gap-5">
+        <div className="grid md:grid-cols-2 gap-5 max-w-4xl mx-auto">
           {cards.map((card, i) => (
             <motion.div
               key={card.title}
