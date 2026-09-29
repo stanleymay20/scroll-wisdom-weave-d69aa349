@@ -76,6 +76,11 @@ for (const type of ["academic", "technical", "reference", "professional", "bests
     bookType = "text";
   });
 }
+Deno.test("legacy academic flag cannot route a text chapter into an unqualified pipeline", async () => {
+  const response = await handle(request({ chapterId: "chapter", bookType: "text", academicMode: true }));
+  assertEquals(response.status, 422); assertEquals((await response.json()).code, "GA_BOOK_TYPE_NOT_QUALIFIED");
+  assertEquals(gatewayCalls, 0);
+});
 Deno.test("admin qualification allow-list does not authorize ordinary users", async () => {
   bookType = "technical"; Deno.env.set("PROVIDER_QUALIFICATION_BOOK_TYPES", "technical");
   const response = await handle(request({ chapterId: "chapter" }));

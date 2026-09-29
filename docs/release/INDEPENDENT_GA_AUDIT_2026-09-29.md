@@ -80,3 +80,5 @@ The initial audit PR run completed a fresh Supabase migration replay, database l
 Fresh CI then correctly rejected two newly published high-severity undici advisories affecting locked 7.29.0. Override/lock updated to patched 7.29.1 without adding an exception. The static chapter-regeneration scanner was updated to require the fenced RPC instead of the removed unsafe direct UPDATE.
 
 P1 R10 (release assurance): default PR checkout tests GitHub's synthetic merge commit, while workflow head_sha identifies the candidate branch. Mandatory PR gates now explicitly checkout pull_request.head.sha (or github.sha on push/dispatch). Merge-result and candidate-head evidence must remain distinct. All new candidate gates must rerun. Hosting/protection enforcement remains unverified.
+
+Additional payload-path review found legacy academicMode=true could route a persisted text chapter into academic generation despite a text-only type gate. The candidate now gates the actual academic routing mode; creation also independently checks academic/bestseller legacy flags. A direct-handler regression rejects this without provider calls.

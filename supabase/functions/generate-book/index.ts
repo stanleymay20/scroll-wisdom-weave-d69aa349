@@ -248,8 +248,9 @@ serve(async (req) => {
     const safeBookType = VALID_BOOK_TYPES.includes(bookType) ? bookType : 'text';
 
     const effectiveBookType = safeExtendedBookType || safeBookType;
-    if (!advancedBookTypeEnabled(effectiveBookType)
-        && !(isAdmin && qualificationBookTypeEnabled(effectiveBookType))) {
+    const requestedModes = [effectiveBookType, ...(academicMode === true ? ["academic"] : []), ...(bestsellerMode === true ? ["bestseller"] : [])];
+    if (requestedModes.some(mode => !advancedBookTypeEnabled(mode)
+        && !(isAdmin && qualificationBookTypeEnabled(mode)))) {
       return new Response(JSON.stringify({ error: "This book mode is not qualified for public release.", code: "GA_BOOK_TYPE_NOT_QUALIFIED" }), {
         status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });

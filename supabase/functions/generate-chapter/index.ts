@@ -2332,8 +2332,10 @@ serve(async (req) => {
     // Cast bookDetails to any for new fields not yet in generated types
     const bookData = bookDetails as any;
     const effectiveBookType = bookData?.book_type || bookType;
-    if (!advancedBookTypeEnabled(effectiveBookType)
-        && !(isAdmin && qualificationBookTypeEnabled(effectiveBookType))) {
+    const routedMode = academicMode && !["academic", "technical", "reference", "professional"].includes(effectiveBookType)
+      ? "academic" : effectiveBookType;
+    if (!advancedBookTypeEnabled(routedMode)
+        && !(isAdmin && qualificationBookTypeEnabled(routedMode))) {
       return new Response(JSON.stringify({ error: "This book mode is not qualified for public release.", code: "GA_BOOK_TYPE_NOT_QUALIFIED" }), {
         status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
