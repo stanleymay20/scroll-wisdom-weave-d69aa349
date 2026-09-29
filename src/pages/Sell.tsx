@@ -796,7 +796,7 @@ function StepPublish({
                 <div className="rounded-md border bg-muted/30 p-3 text-xs flex items-start gap-2">
                   <Sparkles className="h-3.5 w-3.5 text-primary shrink-0 mt-0.5" aria-hidden />
                   <div className="space-y-1">
-                    <p>Need SEO keywords, release schedules, external bundles, or Amazon KDP exports?</p>
+                    <p>Need SEO keywords, release schedules, or detailed export quality controls?</p>
                     <Link to={`/book/${value.book_id}/publish`} className="text-primary hover:underline inline-flex items-center gap-1">
                       Open full publishing settings <ExternalLink className="h-3 w-3" />
                     </Link>
@@ -807,7 +807,7 @@ function StepPublish({
           </div>
 
           {/* Entitlement upsell */}
-          {!entitlementLoading && !canPublishExternal && entitlementTier === "free" && (
+          {!PMF_MODE && !entitlementLoading && !canPublishExternal && entitlementTier === "free" && (
             <div className="rounded-lg border border-primary/30 bg-primary/5 p-4 space-y-2">
               <div className="flex items-center gap-2 text-sm font-medium">
                 <Lock className="h-4 w-4 text-primary" aria-hidden />
@@ -912,7 +912,8 @@ function StepLaunch({
         </div>
       </Card>
 
-      {/* One-click external selling */}
+      {/* Third-party publishing is deliberately absent from the GA UI until provider E2E passes. */}
+      {!PMF_MODE && (
       <Card className="p-5 md:p-6">
         <div className="flex items-center gap-2">
           <Globe className="h-4 w-4 text-primary" aria-hidden />
@@ -961,6 +962,7 @@ function StepLaunch({
           </>
         )}
       </Card>
+      )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Card className="p-4">
@@ -971,8 +973,8 @@ function StepLaunch({
         </Card>
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">More</div>
-          <div className="font-medium mt-1">Bundles & schedules</div>
-          <p className="text-xs text-muted-foreground mt-1">Substack, Patreon, KDP, release schedules.</p>
+          <div className="font-medium mt-1">Publishing settings</div>
+          <p className="text-xs text-muted-foreground mt-1">Release schedules, listing quality, and export settings.</p>
           <Button asChild size="sm" variant="outline" className="mt-3">
             <Link to={`/book/${bookId}/publish`}>Open publishing center</Link>
           </Button>
