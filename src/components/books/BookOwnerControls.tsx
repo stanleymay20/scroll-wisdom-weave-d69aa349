@@ -14,6 +14,7 @@ import { ScormExportDialog } from "@/components/export/ScormExportDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { FEATURES } from "@/lib/config";
 
 
 interface BookData {
@@ -156,6 +157,7 @@ export function BookOwnerControls({
         className={isMobile ? "mt-4" : "mt-6"}
       />
 
+      {FEATURES.enableEditorialPipeline && (
       {/* Canonical publication authority */}
       <div className={`flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50 ${isMobile ? "" : "mt-6"}`}>
         <div className="flex-1">
@@ -175,7 +177,9 @@ export function BookOwnerControls({
           </Link>
         </Button>
       </div>
+      )}
 
+      {(FEATURES.enableExports || FEATURES.enableAdvancedAuthoring) && (
       {/* Distribution & Insights */}
       <div className="p-4 rounded-xl bg-muted/30 border border-border/50 mt-4">
         <Label className="text-foreground font-medium">Distribution & insights</Label>
@@ -192,7 +196,9 @@ export function BookOwnerControls({
           </Button>
         </div>
       </div>
+      )}
 
+      {FEATURES.enableAdvancedAuthoring && (
       {/* Book Type */}
       <div className="p-4 rounded-xl bg-muted/30 border border-border/50 mt-4">
         <Label className="text-foreground font-medium">{t('book.bookType')}</Label>
@@ -217,6 +223,7 @@ export function BookOwnerControls({
           </div>
         </RadioGroup>
       </div>
+      )}
 
       {/* Danger Zone */}
       <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/20 mt-4">
