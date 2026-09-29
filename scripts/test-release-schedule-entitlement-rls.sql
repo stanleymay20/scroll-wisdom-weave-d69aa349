@@ -20,6 +20,40 @@ VALUES
   ('95100000-0000-4000-8000-000000000001', '95000000-0000-4000-8000-000000000001', 'Entitled RLS Book', 'non_fiction'),
   ('95100000-0000-4000-8000-000000000002', '95000000-0000-4000-8000-000000000002', 'Free RLS Book', 'non_fiction');
 
+-- The underlying entitlement policies remain installed for the post-GA
+-- re-enable path, but the final GA launch migration removes browser mutation
+-- privileges entirely. Both layers are intentional and must remain true.
+DO $
+BEGIN
+  IF (
+    SELECT count(*)
+    FROM pg_policies
+    WHERE schemaname = 'public'
+      AND (
+        (tablename = 'release_schedules' AND policyname LIKE 'release_schedules_entitled_%')
+        OR
+        (tablename = 'release_schedule_items' AND policyname LIKE 'release_schedule_items_entitled_%')
+      )
+  ) <> 6 THEN
+    RAISE EXCEPTION 'release scheduling entitlement RLS policy set is incomplete';
+  END IF;
+
+  IF has_table_privilege('authenticated', 'public.release_schedules', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.release_schedules', 'UPDATE')
+     OR has_table_privilege('authenticated', 'public.release_schedules', 'DELETE')
+     OR has_table_privilege('authenticated', 'public.release_schedule_items', 'INSERT')
+     OR has_table_privilege('authenticated', 'public.release_schedule_items', 'UPDATE')
+     OR has_table_privilege('authenticated', 'public.release_schedule_items', 'DELETE') THEN
+    RAISE EXCEPTION 'GA browser release-scheduling mutation privileges unexpectedly enabled';
+  END IF;
+
+  IF NOT has_table_privilege('service_role', 'public.release_schedules', 'INSERT')
+     OR NOT has_table_privilege('service_role', 'public.release_schedule_items', 'INSERT') THEN
+    RAISE EXCEPTION 'service role lost release scheduling authority';
+  END IF;
+END
+$;
+
 -- Seed a historical schedule/item for the free user as the trusted DB owner.
 -- The free owner must retain read visibility but lose mutation rights.
 INSERT INTO public.release_schedules(
@@ -110,49 +144,32 @@ BEGIN
 END
 $$;
 
--- Entitled owner: direct browser-style creation is allowed.
+-- Entitled owner: the entitlement policy remains correct, but the GA launch
+-- privilege boundary must still fail closed until hosted due-item E2E is proven.
 SELECT set_config(
   'request.jwt.claim.sub',
   '95000000-0000-4000-8000-000000000001',
   true
 );
 
-INSERT INTO public.release_schedules(
-  id, book_id, owner_user_id, cadence, channel, start_at
-)
-VALUES(
-  '95200000-0000-4000-8000-000000000001',
-  '95100000-0000-4000-8000-000000000001',
-  '95000000-0000-4000-8000-000000000001',
-  'weekly', 'platform', now()
-);
-
-INSERT INTO public.release_schedule_items(
-  id, schedule_id, chapter_number, release_at, status
-)
-VALUES(
-  '95300000-0000-4000-8000-000000000001',
-  '95200000-0000-4000-8000-000000000001',
-  1, now() + interval '1 day', 'scheduled'
-);
-
-DO $$
+DO $
 BEGIN
-  IF NOT EXISTS (
-    SELECT 1 FROM public.release_schedules
-    WHERE id = '95200000-0000-4000-8000-000000000001'
-  ) THEN
-    RAISE EXCEPTION 'entitled owner could not create schedule';
-  END IF;
-
-  IF NOT EXISTS (
-    SELECT 1 FROM public.release_schedule_items
-    WHERE id = '95300000-0000-4000-8000-000000000001'
-  ) THEN
-    RAISE EXCEPTION 'entitled owner could not create release item';
-  END IF;
+  BEGIN
+    INSERT INTO public.release_schedules(
+      id, book_id, owner_user_id, cadence, channel, start_at
+    )
+    VALUES(
+      '95200000-0000-4000-8000-000000000001',
+      '95100000-0000-4000-8000-000000000001',
+      '95000000-0000-4000-8000-000000000001',
+      'weekly', 'platform', now()
+    );
+    RAISE EXCEPTION 'entitled owner bypassed GA browser scheduling lock';
+  EXCEPTION
+    WHEN insufficient_privilege THEN NULL;
+  END;
 END
-$$;
+$;
 
 RESET ROLE;
 ROLLBACK;
