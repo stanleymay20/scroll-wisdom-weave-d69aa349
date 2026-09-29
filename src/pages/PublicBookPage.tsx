@@ -113,7 +113,7 @@ export default function PublicBookPage() {
 
   const cover = data.cover_override_url || data.book.cover_image_url || "";
   const description = data.blurb || data.amazon_description || data.book.description || data.subtitle || data.book.title;
-  const price = data.price_cents > 0 ? `${(data.price_cents / 100).toFixed(2)}` : "Free";
+  const price = data.price_cents > 0 ? "$" + (data.price_cents / 100).toFixed(2) : "Free";
   const canonicalUrl = `https://scrolllibrary.org/store/${data.slug}`;
   const authorUrl = author ? `https://scrolllibrary.org/authors/${author.slug}` : undefined;
   const seoTitle = author
