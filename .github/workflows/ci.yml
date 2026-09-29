@@ -265,6 +265,7 @@ jobs:
           deno test supabase/functions/_shared/outline-normalizer_test.ts
           deno test supabase/functions/_shared/technical-code-quality_test.ts
           deno test supabase/functions/_shared/fiction-context_test.ts
+          deno test supabase/functions/_shared/children-contract_test.ts
           deno test supabase/functions/_shared/authority-validator_workbook_test.ts
           deno test supabase/functions/_shared/cron-auth_test.ts
           deno test supabase/functions/_shared/stripe-connect_test.ts
