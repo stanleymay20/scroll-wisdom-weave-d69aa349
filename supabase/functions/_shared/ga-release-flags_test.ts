@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { advancedAuthoringEnabled, advancedBookTypeEnabled, externalPaymentWritesEnabled, publicationMintEnabled, qualifiedAdvancedBookTypes } from "./ga-release-flags.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled, externalPaymentWritesEnabled, publicationMintEnabled, qualificationBookTypeEnabled, qualifiedAdvancedBookTypes } from "./ga-release-flags.ts";
 
 Deno.test("GA payment writes default closed for empty or invalid values", () => {
   for (const value of ["", "false", "0", "no", "enabled", "TRUE-ish"]) {
@@ -62,4 +62,11 @@ Deno.test("only explicitly qualified advanced modes open", () => {
   assertEquals(advancedBookTypeEnabled("technical", "true", "academic,technical"), true);
   assertEquals(advancedBookTypeEnabled("fiction", "true", "academic,technical"), false);
   assertEquals(advancedBookTypeEnabled("text", "false", ""), true);
+});
+
+
+Deno.test("qualification access is independent from public release allow-list", () => {
+  assertEquals(qualificationBookTypeEnabled("academic", "academic,technical"), true);
+  assertEquals(qualificationBookTypeEnabled("fiction", "academic,technical"), false);
+  assertEquals(qualificationBookTypeEnabled("text", "text,academic"), false);
 });
