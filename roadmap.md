@@ -1,0 +1,1 @@
+- [x] P04 GA blocker: provider-backed generation smoke PASSED on Test; fixture cleaned up
