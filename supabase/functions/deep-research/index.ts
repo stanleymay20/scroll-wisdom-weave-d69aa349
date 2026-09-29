@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { secretsMatch } from "../_shared/cron-auth.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -485,30 +486,69 @@ serve(async (req) => {
       });
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      logStep("Auth error", { error: authError?.message });
-      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
+    const token = authHeader.replace("Bearer ", "").trim();
+    const requestBody = await req.json().catch(() => ({}));
+    const internalJobId = req.headers.get("x-generation-job-id");
+    const workerLeaseToken = req.headers.get("x-generation-worker-token");
+    const isInternalWorker =
+      !!internalJobId
+      && !!workerLeaseToken
+      && secretsMatch(token, SUPABASE_SERVICE_ROLE_KEY);
+
+    let userId: string | null = null;
+
+    if (isInternalWorker) {
+      const { data: workerJob, error: workerJobError } = await supabase
+        .from("generation_jobs")
+        .select("id, user_id, status, worker_lease_token, worker_lease_until")
+        .eq("id", internalJobId)
+        .maybeSingle();
+
+      if (workerJobError) throw workerJobError;
+
+      const leaseActive =
+        !!workerJob?.worker_lease_token
+        && workerJob.worker_lease_token === workerLeaseToken
+        && !!workerJob.worker_lease_until
+        && new Date(workerJob.worker_lease_until).getTime() > Date.now()
+        && workerJob.status !== "completed";
+
+      if (!workerJob || !leaseActive) {
+        return new Response(JSON.stringify({ error: "Invalid or expired generation worker lease" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      userId = workerJob.user_id;
+      logStep("Authenticated generation worker", {
+        userId: userId.slice(0, 8) + "...",
+        jobId: internalJobId.slice(0, 8) + "...",
       });
+    } else {
+      const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !user) {
+        logStep("Auth error", { error: authError?.message });
+        return new Response(JSON.stringify({ error: "Invalid authentication" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      userId = user.id;
+      logStep("Authenticated user", { userId: userId.slice(0, 8) + "..." });
     }
 
-    logStep("Authenticated user", { userId: user.id.slice(0, 8) + "..." });
-
-    // Check user tier for Deep Research access
+    // Check the real owning user's tier even for server-worker invocations.
     const { data: profile } = await supabase
       .from("profiles")
       .select("plan")
-      .eq("id", user.id)
+      .eq("id", userId)
       .single();
 
     const { data: roleData } = await supabase
       .from("user_roles")
       .select("role")
-      .eq("user_id", user.id);
+      .eq("user_id", userId);
 
     const isAdmin = roleData?.some(r => r.role === "admin");
     const userPlan = profile?.plan || "free";
@@ -524,7 +564,7 @@ serve(async (req) => {
       category, 
       keyTopics = [],
       mode = 'full' // 'quick' | 'full' | 'exhaustive'
-    } = await req.json();
+    } = requestBody;
 
     if (!topic) {
       return new Response(JSON.stringify({ error: "Topic is required" }), {
