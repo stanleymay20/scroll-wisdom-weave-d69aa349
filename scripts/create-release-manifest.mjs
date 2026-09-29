@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { readdir, readFile, stat, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { resolveBuildCommit } from "./build-commit.mjs";
+import { computeSourceFingerprint } from "./source-fingerprint.mjs";
 
 const dist = path.resolve("dist");
 const walk = async (dir) => (await Promise.all((await readdir(dir, { withFileTypes: true })).map(async (entry) => {
@@ -22,6 +23,7 @@ for (const file of files) {
 // Same resolution as the Vite build, so the identity written there and the
 // full manifest written here can never name different commits.
 const { commit, source: commitSource } = resolveBuildCommit();
+const source = computeSourceFingerprint();
 let buildTime = process.env.BUILD_TIME;
 if (!buildTime) {
   // Keep the time the Vite build stamped rather than the time of this step.
@@ -36,6 +38,8 @@ const manifest = {
   commit,
   commitSource,
   buildTime: buildTime ?? new Date().toISOString(),
+  sourceFingerprint: source.value,
+  sourceFingerprintFiles: source.files,
   artifacts,
 };
 await writeFile(path.join(dist, "release.json"), `${JSON.stringify(manifest, null, 2)}\n`);

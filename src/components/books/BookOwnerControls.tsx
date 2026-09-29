@@ -14,6 +14,7 @@ import { ScormExportDialog } from "@/components/export/ScormExportDialog";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
 import { toast } from "@/hooks/use-toast";
+import { FEATURES } from "@/lib/config";
 
 
 interface BookData {
@@ -156,8 +157,9 @@ export function BookOwnerControls({
         className={isMobile ? "mt-4" : "mt-6"}
       />
 
-      {/* Canonical publication authority */}
-      <div className={`flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50 ${isMobile ? "" : "mt-6"}`}>
+      {/* Canonical publication authority is post-GA. */}
+      {FEATURES.enableEditorialPipeline && (
+        <div className={`flex items-center gap-4 p-4 rounded-xl bg-muted/30 border border-border/50 ${isMobile ? "" : "mt-6"}`}>
         <div className="flex-1">
           <Label className="text-foreground font-medium">
             {book.is_published ? "Publication" : t('book.publishToLibrary')}
@@ -175,9 +177,11 @@ export function BookOwnerControls({
           </Link>
         </Button>
       </div>
+      )}
 
-      {/* Distribution & Insights */}
-      <div className="p-4 rounded-xl bg-muted/30 border border-border/50 mt-4">
+      {/* Distribution and citation tooling are post-GA. */}
+      {(FEATURES.enableExports || FEATURES.enableAdvancedAuthoring) && (
+        <div className="p-4 rounded-xl bg-muted/30 border border-border/50 mt-4">
         <Label className="text-foreground font-medium">Distribution & insights</Label>
         <p className="text-sm text-muted-foreground mt-1 mb-3">
           Export to your LMS or inspect how concepts, claims, and sources connect.
@@ -192,9 +196,11 @@ export function BookOwnerControls({
           </Button>
         </div>
       </div>
+      )}
 
-      {/* Book Type */}
-      <div className="p-4 rounded-xl bg-muted/30 border border-border/50 mt-4">
+      {/* Specialized book-type mutation is post-GA. */}
+      {FEATURES.enableAdvancedAuthoring && (
+        <div className="p-4 rounded-xl bg-muted/30 border border-border/50 mt-4">
         <Label className="text-foreground font-medium">{t('book.bookType')}</Label>
         <p className="text-sm text-muted-foreground mt-1">{t('book.bookTypeDesc')}</p>
         <RadioGroup
@@ -217,6 +223,7 @@ export function BookOwnerControls({
           </div>
         </RadioGroup>
       </div>
+      )}
 
       {/* Danger Zone */}
       <div className="p-4 rounded-xl bg-destructive/5 border border-destructive/20 mt-4">

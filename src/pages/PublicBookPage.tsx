@@ -15,6 +15,7 @@ import { ShareDialog } from "@/components/books/ShareDialog";
 import { ResponsiveShell } from "@/components/layout/ResponsiveShell";
 import { SocialProofBadges } from "@/components/storefront/SocialProofBadges";
 import { ReviewsSection } from "@/components/storefront/ReviewsSection";
+import { FEATURES } from "@/lib/config";
 
 // Local view type retains existing shape used by the page below.
 interface Data {
@@ -121,6 +122,10 @@ export default function PublicBookPage() {
   };
 
   async function handleBuy() {
+    if (data!.price_cents > 0 && !FEATURES.enablePaidCheckout) {
+      toast.info("Paid purchases reopen after the payment lifecycle passes GA validation.");
+      return;
+    }
     if (checkoutInFlight.current) return;
     checkoutInFlight.current = true;
     setCheckoutBusy(true);
@@ -224,12 +229,18 @@ export default function PublicBookPage() {
               <Button onClick={() => { trackStorefrontEvent(data.id, "cta_click", { cta: "read_sample" }); navigate(`/store/${data.slug}/read`); }}>
                 Read sample
               </Button>
-              <Button variant="default" onClick={handleBuy} disabled={checkoutBusy}>
+              <Button
+                variant="default"
+                onClick={handleBuy}
+                disabled={checkoutBusy || (data.price_cents > 0 && !FEATURES.enablePaidCheckout)}
+              >
                 {checkoutBusy
                   ? "Starting checkout…"
-                  : data.price_cents > 0
-                    ? "Buy for $" + (data.price_cents / 100).toFixed(2)
-                    : "Get free copy"}
+                  : data.price_cents > 0 && !FEATURES.enablePaidCheckout
+                    ? "Paid purchases temporarily unavailable"
+                    : data.price_cents > 0
+                      ? "Buy for $" + (data.price_cents / 100).toFixed(2)
+                      : "Get free copy"}
               </Button>
               <ShareDialog title={data.book.title} bookId={data.book.id} description={description} />
             </div>

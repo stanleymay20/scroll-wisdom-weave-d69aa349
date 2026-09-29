@@ -9,7 +9,6 @@ import { SettingsProvider } from "@/contexts/SettingsContext";
 import { AudioProvider } from "@/contexts/AudioContext";
 import React, { useEffect, Suspense, lazy } from "react";
 import { OfflineIndicator } from "@/components/pwa/OfflineIndicator";
-import { PWAUpdateNotification } from "@/components/pwa/PWAUpdateNotification";
 import { ErrorBoundary } from "@/components/ErrorBoundary";
 import { ErrorBoundaryWithRecovery } from "@/components/ErrorBoundaryWithRecovery";
 import { createLogger, setTraceId } from "@/lib/logger";
@@ -22,6 +21,7 @@ import { RouteTelemetry } from "@/components/observability/RouteTelemetry";
 import { GlobalAttributionBeacon } from "@/components/observability/AttributionBeacon";
 import { ProtectedRoute } from "@/components/ProtectedRoute";
 import { AdminRoute } from "@/components/AdminRoute";
+import { FEATURES } from "@/lib/config";
 
 // Keep only the homepage eager. Every route-only surface is loaded on demand so
 // it cannot inflate first-paint JavaScript for users who never visit that route.
@@ -46,8 +46,6 @@ const TermsOfService = lazy(() => import("./pages/TermsOfService"));
 const ModerationDashboard = lazy(() => import("./pages/ModerationDashboard"));
 const Pricing = lazy(() => import("./pages/Pricing"));
 const AdminPanel = lazy(() => import("./pages/AdminPanel"));
-const Install = lazy(() => import("./pages/Install"));
-const PWATest = lazy(() => import("./pages/PWATest"));
 const Diagnostics = lazy(() => import("./pages/Diagnostics"));
 const CertificateVerify = lazy(() => import("./pages/CertificateVerify"));
 const CertificateStatus = lazy(() => import("./pages/CertificateStatus"));
@@ -64,7 +62,6 @@ const HealthCheck = lazy(() => import("./pages/HealthCheck"));
 const AdminRecovery = lazy(() => import("./pages/AdminRecovery"));
 const PMFDashboard = lazy(() => import("./pages/PMFDashboard"));
 const AuditDashboard = lazy(() => import("./pages/AuditDashboard"));
-const UploadPage = lazy(() => import("./pages/Upload"));
 const MasteryDashboard = lazy(() => import("./pages/MasteryDashboard"));
 const MasteryModel = lazy(() => import("./pages/MasteryModel"));
 const QuickLearn = lazy(() => import("./pages/QuickLearn"));
@@ -97,8 +94,6 @@ const PayoutProfileEditor = lazy(() => import("./pages/PayoutProfileEditor"));
 const Sell = lazy(() => import("./pages/Sell"));
 const SellAnalytics = lazy(() => import("./pages/SellAnalytics"));
 const CollectionPage = lazy(() => import("./pages/CollectionPage"));
-const CreatorIntelligence = lazy(() => import("./pages/CreatorIntelligence"));
-const CreatorBusinessHub = lazy(() => import("./pages/CreatorBusinessHub"));
 const CreatorAssets = lazy(() => import("./pages/CreatorAssets"));
 const KingdomWealthTools = lazy(() => import("./pages/KingdomWealthTools"));
 
@@ -106,7 +101,6 @@ const KingdomWealthTools = lazy(() => import("./pages/KingdomWealthTools"));
 const DiagnosticsPanel = lazy(() => import("./components/system/DiagnosticsPanel").then(m => ({ default: m.DiagnosticsPanel })));
 const ReEngagementBanner = lazy(() => import("./components/gamification/ReEngagementBanner").then(m => ({ default: m.ReEngagementBanner })));
 const GlobalAudioPlayer = lazy(() => import("./components/audio/GlobalAudioPlayer").then(m => ({ default: m.GlobalAudioPlayer })));
-const PWAInstallPrompt = lazy(() => import("./components/pwa/PWAInstallPrompt").then(m => ({ default: m.PWAInstallPrompt })));
 const CookieConsent = lazy(() => import("./components/legal/CookieConsent").then(m => ({ default: m.CookieConsent })));
 const OnboardingDialog = lazy(() => import("./components/onboarding/OnboardingDialog").then(m => ({ default: m.OnboardingDialog })));
 
@@ -156,6 +150,14 @@ function AppInitializer() {
     // PHASE 7: Initialize observability (Web Vitals, analytics sink, long-task warnings)
     initObservability();
 
+    // PWA/offline recovery is outside the GA launch scope. Retire workers from
+    // older builds so a stale service worker cannot keep serving old chunks.
+    if ("serviceWorker" in navigator) {
+      void navigator.serviceWorker.getRegistrations().then((registrations) =>
+        Promise.all(registrations.map((registration) => registration.unregister()))
+      );
+    }
+
     logger.info('Application initialized');
   }, []);
   return null;
@@ -173,7 +175,6 @@ const App = () => (
                 <Toaster />
                 <Sonner />
                 <OfflineIndicator />
-                <PWAUpdateNotification />
                 <BrowserRouter>
                   {/* PHASE 7: Per-navigation telemetry (logs route changes + dwell time) */}
                   <RouteTelemetry />
@@ -203,8 +204,6 @@ const App = () => (
                         <Route path="/sell" element={withRecovery('Sell', <ProtectedRoute><Sell /></ProtectedRoute>)} />
                         <Route path="/sell/analytics" element={withRecovery('SellAnalytics', <ProtectedRoute><SellAnalytics /></ProtectedRoute>)} />
                         <Route path="/admin" element={<AdminRoute><AdminPanel /></AdminRoute>} />
-                        <Route path="/install" element={<Install />} />
-                        <Route path="/pwa-test" element={<PWATest />} />
                         <Route path="/diagnostics" element={<AdminRoute><Diagnostics /></AdminRoute>} />
                         <Route path="/book/:id" element={withRecovery('BookDetail', <BookDetail />)} />
                         <Route path="/book/:bookId/certificate" element={withRecovery('CertificateStatus', <ProtectedRoute><CertificateStatus /></ProtectedRoute>)} />
@@ -224,10 +223,9 @@ const App = () => (
                         <Route path="/admin-recovery" element={<ProtectedRoute><AdminRecovery /></ProtectedRoute>} />
                         <Route path="/pmf" element={<AdminRoute><PMFDashboard /></AdminRoute>} />
                         <Route path="/audit-dashboard" element={<AdminRoute><AuditDashboard /></AdminRoute>} />
-                        <Route path="/upload" element={withRecovery('Upload', <ProtectedRoute><UploadPage /></ProtectedRoute>)} />
                         <Route path="/dashboard/mastery" element={withRecovery('MasteryDashboard', <ProtectedRoute><MasteryDashboard /></ProtectedRoute>)} />
                         <Route path="/docs/mastery-model" element={<MasteryModel />} />
-                        <Route path="/quick-learn" element={withRecovery('QuickLearn', <QuickLearn />)} />
+                        {FEATURES.enableAdvancedAuthoring && <Route path="/quick-learn" element={withRecovery('QuickLearn', <QuickLearn />)} />}
                         <Route path="/experiments" element={<AdminRoute><ExperimentReport /></AdminRoute>} />
                         <Route path="/admin/ops" element={<AdminRoute><AdminOps /></AdminRoute>} />
                         <Route path="/admin/entitlements" element={<AdminRoute><AdminEntitlements /></AdminRoute>} />
@@ -235,12 +233,12 @@ const App = () => (
                         <Route path="/organizations/analytics" element={<ProtectedRoute><OrgAnalytics /></ProtectedRoute>} />
                         <Route path="/verify-certificate" element={<VerifyLookup />} />
                         <Route path="/verify/:exportId" element={<VerifyExport />} />
-                        <Route path="/book/:bookId/citation-graph" element={withRecovery('CitationGraph', <ProtectedRoute><CitationGraph /></ProtectedRoute>)} />
-                        <Route path="/study" element={withRecovery('StudySession', <ProtectedRoute><StudySession /></ProtectedRoute>)} />
-                        <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />
+                        {FEATURES.enableAdvancedAuthoring && <Route path="/book/:bookId/citation-graph" element={withRecovery('CitationGraph', <ProtectedRoute><CitationGraph /></ProtectedRoute>)} />}
+                        {FEATURES.enableAdvancedAuthoring && <Route path="/study" element={withRecovery('StudySession', <ProtectedRoute><StudySession /></ProtectedRoute>)} />}
+                        {FEATURES.enableAdvancedAuthoring && <Route path="/cognition" element={withRecovery('Cognition', <ProtectedRoute><Cognition /></ProtectedRoute>)} />}
                         <Route path="/account/data-export" element={<ProtectedRoute><DataExport /></ProtectedRoute>} />
-                        <Route path="/book/:bookId/publishing" element={withRecovery('PublishingCommandCenter', <ProtectedRoute><PublishingCommandCenter /></ProtectedRoute>)} />
-                        <Route path="/book/:bookId/ai-handoffs" element={withRecovery('AiHandoffs', <ProtectedRoute><AiHandoffs /></ProtectedRoute>)} />
+                        {FEATURES.enableEditorialPipeline && <Route path="/book/:bookId/publishing" element={withRecovery('PublishingCommandCenter', <ProtectedRoute><PublishingCommandCenter /></ProtectedRoute>)} />}
+                        {FEATURES.enableAdvancedAuthoring && <Route path="/book/:bookId/ai-handoffs" element={withRecovery('AiHandoffs', <ProtectedRoute><AiHandoffs /></ProtectedRoute>)} />}
 
                         {/* Storefront (public) */}
                         <Route path="/store" element={withRecovery('Storefront', <Storefront />)} />
@@ -250,15 +248,13 @@ const App = () => (
                         <Route path="/series/:slug" element={withRecovery('Series', <SeriesPage />)} />
                         <Route path="/book/:bookId/publish" element={withRecovery('BookPublishSettings', <ProtectedRoute><BookPublishSettings /></ProtectedRoute>)} />
                         <Route path="/account/author" element={withRecovery('AuthorProfileEditor', <ProtectedRoute><AuthorProfileEditor /></ProtectedRoute>)} />
-                        <Route path="/account/exports" element={withRecovery('ExportJobs', <ProtectedRoute><ExportJobsPage /></ProtectedRoute>)} />
+                        {FEATURES.enableExports && <Route path="/account/exports" element={withRecovery('ExportJobs', <ProtectedRoute><ExportJobsPage /></ProtectedRoute>)} />}
                         <Route path="/store/:slug/success" element={withRecovery('PurchaseSuccess', <PurchaseSuccess />)} />
                         <Route path="/store/:slug/read-full" element={withRecovery('FullBookReader', <ProtectedRoute><FullBookReader /></ProtectedRoute>)} />
                         <Route path="/account/library/purchases" element={withRecovery('PurchasedLibrary', <ProtectedRoute><PurchasedLibrary /></ProtectedRoute>)} />
                         <Route path="/account/earnings" element={withRecovery('CreatorEarnings', <ProtectedRoute><CreatorEarnings /></ProtectedRoute>)} />
                         <Route path="/account/payouts" element={withRecovery('PayoutProfile', <ProtectedRoute><PayoutProfileEditor /></ProtectedRoute>)} />
                         <Route path="/collections/:owner/:slug" element={withRecovery('CollectionPage', <CollectionPage />)} />
-                        <Route path="/account/intelligence" element={withRecovery('CreatorIntelligence', <ProtectedRoute><CreatorIntelligence /></ProtectedRoute>)} />
-                        <Route path="/creator/business" element={withRecovery('CreatorBusinessHub', <ProtectedRoute><CreatorBusinessHub /></ProtectedRoute>)} />
                         <Route path="/creator/assets" element={withRecovery('CreatorAssets', <ProtectedRoute><CreatorAssets /></ProtectedRoute>)} />
 
                         <Route path="*" element={<NotFound />} />
@@ -268,7 +264,6 @@ const App = () => (
 
                   <Suspense fallback={null}>
                     <ReEngagementBanner />
-                    <PWAInstallPrompt />
                     <GlobalAudioPlayer />
                     <DiagnosticsPanel />
                     <CookieConsent />

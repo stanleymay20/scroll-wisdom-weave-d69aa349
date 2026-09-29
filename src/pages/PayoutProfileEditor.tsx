@@ -17,6 +17,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { toast } from "sonner";
 import { trackStorefrontEvent } from "@/lib/storefrontAnalytics";
+import { FEATURES } from "@/lib/config";
 
 interface Profile {
   user_id: string;
@@ -201,6 +202,7 @@ export default function PayoutProfileEditor() {
         </p>
       </div>
 
+      {FEATURES.enableStripeConnect ? (
       <Card>
         <CardHeader className="pb-3">
           <CardTitle className="text-base flex items-center gap-2">
@@ -233,6 +235,18 @@ export default function PayoutProfileEditor() {
           </div>
         </CardContent>
       </Card>
+      ) : (
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Stripe Connect</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Direct Stripe payouts are temporarily unavailable while the payment lifecycle completes GA validation.
+            </p>
+          </CardContent>
+        </Card>
+      )}
 
       <Card>
         <CardHeader className="pb-3"><CardTitle className="text-base">Payout details</CardTitle></CardHeader>
@@ -258,7 +272,9 @@ export default function PayoutProfileEditor() {
             <p className="text-xs text-muted-foreground mt-2">
               {connectStatus === "verified"
                 ? "Stripe Connect is active, so earnings are sent to your connected account. This preference applies only if you disconnect it."
-                : "Manual payouts are processed offline. Connect Stripe above for direct bank payouts."}
+                : FEATURES.enableStripeConnect
+                  ? "Manual payouts are processed offline. Connect Stripe above for direct bank payouts."
+                  : "Manual payout details can be saved now. Direct Stripe payouts reopen after payment validation."}
             </p>
           </div>
           <div className="text-xs text-muted-foreground">

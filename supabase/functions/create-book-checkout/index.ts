@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { ensureBillingCustomer } from "../_shared/billing-customer.ts";
+import { externalPaymentWritesEnabled } from "../_shared/ga-release-flags.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -82,8 +83,8 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const serviceRoleKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     const anonKey = Deno.env.get("SUPABASE_ANON_KEY");
-    if (!stripeKey || !supabaseUrl || !serviceRoleKey || !anonKey) {
-      log("Configuration missing", { correlationId, stripe: !!stripeKey, supabaseUrl: !!supabaseUrl, serviceRole: !!serviceRoleKey, anon: !!anonKey });
+    if (!supabaseUrl || !serviceRoleKey || !anonKey) {
+      log("Configuration missing", { correlationId, supabaseUrl: !!supabaseUrl, serviceRole: !!serviceRoleKey, anon: !!anonKey });
       return publicError("Checkout is temporarily unavailable", "service_unavailable", 503);
     }
 
@@ -257,6 +258,18 @@ serve(async (req) => {
       }
 
       return json({ free: true, redirect_url: `${origin}/store/${listing.slug}/success?free=1` });
+    }
+
+    if (!externalPaymentWritesEnabled()) {
+      return publicError(
+        "Paid purchases are temporarily unavailable while payment validation is completing.",
+        "ga_payments_disabled",
+        503,
+      );
+    }
+    if (!stripeKey) {
+      log("Paid checkout configuration missing", { correlationId, stripe: false });
+      return publicError("Checkout is temporarily unavailable", "service_unavailable", 503);
     }
 
     const paidRisk = await riskCheck("paid_checkout");

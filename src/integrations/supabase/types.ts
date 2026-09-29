@@ -237,6 +237,128 @@ export type Database = {
           },
         ]
       }
+      assessment_session_answers: {
+        Row: {
+          answered_at: string
+          id: string
+          is_correct: boolean
+          question_index: number
+          selected_index: number
+          session_id: string
+          user_id: string
+        }
+        Insert: {
+          answered_at?: string
+          id?: string
+          is_correct: boolean
+          question_index: number
+          selected_index: number
+          session_id: string
+          user_id: string
+        }
+        Update: {
+          answered_at?: string
+          id?: string
+          is_correct?: boolean
+          question_index?: number
+          selected_index?: number
+          session_id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assessment_session_answers_session_id_fkey"
+            columns: ["session_id"]
+            isOneToOne: false
+            referencedRelation: "assessment_sessions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      assessment_sessions: {
+        Row: {
+          assessment_contract_passed: boolean
+          assessment_contract_version: string
+          book_id: string
+          chapter_id: string
+          coding_question_count: number
+          completed_at: string | null
+          created_at: string
+          focus_loss_count: number
+          id: string
+          manifest_hash: string
+          mode: string
+          paste_count: number
+          question_count: number
+          questions: Json
+          started_at: string
+          status: string
+          suspicious_timing: boolean
+          telemetry_heartbeats: number
+          tier_breakdown: Json
+          user_id: string
+        }
+        Insert: {
+          assessment_contract_passed?: boolean
+          assessment_contract_version?: string
+          book_id: string
+          chapter_id: string
+          coding_question_count?: number
+          completed_at?: string | null
+          created_at?: string
+          focus_loss_count?: number
+          id?: string
+          manifest_hash: string
+          mode: string
+          paste_count?: number
+          question_count: number
+          questions: Json
+          started_at?: string
+          status?: string
+          suspicious_timing?: boolean
+          telemetry_heartbeats?: number
+          tier_breakdown?: Json
+          user_id: string
+        }
+        Update: {
+          assessment_contract_passed?: boolean
+          assessment_contract_version?: string
+          book_id?: string
+          chapter_id?: string
+          coding_question_count?: number
+          completed_at?: string | null
+          created_at?: string
+          focus_loss_count?: number
+          id?: string
+          manifest_hash?: string
+          mode?: string
+          paste_count?: number
+          question_count?: number
+          questions?: Json
+          started_at?: string
+          status?: string
+          suspicious_timing?: boolean
+          telemetry_heartbeats?: number
+          tier_breakdown?: Json
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "assessment_sessions_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "assessment_sessions_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       attribution_sessions: {
         Row: {
           converted_at: string | null
@@ -561,6 +683,71 @@ export type Database = {
           },
         ]
       }
+      book_asset_provenance: {
+        Row: {
+          asset_role: string
+          asset_url: string
+          attested_by: string | null
+          attribution: string | null
+          book_id: string
+          created_at: string
+          id: string
+          license: string | null
+          metadata: Json
+          model: string | null
+          provider: string | null
+          rights_basis: string
+          source_type: string
+          source_url: string | null
+          updated_at: string
+          user_attested: boolean
+        }
+        Insert: {
+          asset_role: string
+          asset_url: string
+          attested_by?: string | null
+          attribution?: string | null
+          book_id: string
+          created_at?: string
+          id?: string
+          license?: string | null
+          metadata?: Json
+          model?: string | null
+          provider?: string | null
+          rights_basis: string
+          source_type: string
+          source_url?: string | null
+          updated_at?: string
+          user_attested?: boolean
+        }
+        Update: {
+          asset_role?: string
+          asset_url?: string
+          attested_by?: string | null
+          attribution?: string | null
+          book_id?: string
+          created_at?: string
+          id?: string
+          license?: string | null
+          metadata?: Json
+          model?: string | null
+          provider?: string | null
+          rights_basis?: string
+          source_type?: string
+          source_url?: string | null
+          updated_at?: string
+          user_attested?: boolean
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_asset_provenance_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       book_audits: {
         Row: {
           academic_findings: Json
@@ -861,6 +1048,70 @@ export type Database = {
         }
         Relationships: []
       }
+      book_isbn_assignments: {
+        Row: {
+          assigned_at: string
+          assigned_by: string | null
+          book_id: string
+          edition_label: string
+          id: string
+          isbn_id: string
+          language: string
+          locked_at: string | null
+          locked_publication_id: string | null
+          metadata: Json
+          product_form: string
+        }
+        Insert: {
+          assigned_at?: string
+          assigned_by?: string | null
+          book_id: string
+          edition_label?: string
+          id?: string
+          isbn_id: string
+          language?: string
+          locked_at?: string | null
+          locked_publication_id?: string | null
+          metadata?: Json
+          product_form: string
+        }
+        Update: {
+          assigned_at?: string
+          assigned_by?: string | null
+          book_id?: string
+          edition_label?: string
+          id?: string
+          isbn_id?: string
+          language?: string
+          locked_at?: string | null
+          locked_publication_id?: string | null
+          metadata?: Json
+          product_form?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_isbn_assignments_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "book_isbn_assignments_isbn_id_fkey"
+            columns: ["isbn_id"]
+            isOneToOne: true
+            referencedRelation: "isbn_inventory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "book_isbn_assignments_locked_publication_fkey"
+            columns: ["locked_publication_id"]
+            isOneToOne: false
+            referencedRelation: "publications"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       book_knowledge_graphs: {
         Row: {
           book_id: string
@@ -898,6 +1149,63 @@ export type Database = {
             columns: ["book_id"]
             isOneToOne: true
             referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      book_publishing_profiles: {
+        Row: {
+          book_id: string
+          created_at: string
+          distribution_scope: string
+          ebook_identifier_strategy: string
+          edition_label: string
+          imprint_id: string | null
+          owner_user_id: string
+          print_identifier_strategy: string
+          publication_language: string
+          publisher_mode: string
+          updated_at: string
+        }
+        Insert: {
+          book_id: string
+          created_at?: string
+          distribution_scope?: string
+          ebook_identifier_strategy?: string
+          edition_label?: string
+          imprint_id?: string | null
+          owner_user_id: string
+          print_identifier_strategy?: string
+          publication_language?: string
+          publisher_mode?: string
+          updated_at?: string
+        }
+        Update: {
+          book_id?: string
+          created_at?: string
+          distribution_scope?: string
+          ebook_identifier_strategy?: string
+          edition_label?: string
+          imprint_id?: string | null
+          owner_user_id?: string
+          print_identifier_strategy?: string
+          publication_language?: string
+          publisher_mode?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "book_publishing_profiles_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: true
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "book_publishing_profiles_imprint_id_fkey"
+            columns: ["imprint_id"]
+            isOneToOne: false
+            referencedRelation: "publishing_imprints"
             referencedColumns: ["id"]
           },
         ]
@@ -1156,7 +1464,10 @@ export type Database = {
       books: {
         Row: {
           academic_level: string | null
+          ai_assistance_level: string | null
           author_ai_agent: string | null
+          author_display_name: string | null
+          author_mode: string | null
           book_type: string | null
           category: string
           cover_image_url: string | null
@@ -1165,14 +1476,20 @@ export type Database = {
           current_publication_id: string | null
           description: string | null
           design_settings: Json
+          edition_label: string | null
           id: string
           is_featured: boolean | null
           is_published: boolean | null
+          isbn: string | null
           language: string | null
           organization_id: string | null
+          pen_name: string | null
           publish_lock_reason: string | null
           publish_locked_at: string | null
           publish_locked_by: string | null
+          publisher_imprint: string | null
+          publisher_imprint_id: string | null
+          publisher_mode: string | null
           publishing_settings: Json
           source_content_hash: string | null
           source_document_name: string | null
@@ -1187,7 +1504,10 @@ export type Database = {
         }
         Insert: {
           academic_level?: string | null
+          ai_assistance_level?: string | null
           author_ai_agent?: string | null
+          author_display_name?: string | null
+          author_mode?: string | null
           book_type?: string | null
           category?: string
           cover_image_url?: string | null
@@ -1196,14 +1516,20 @@ export type Database = {
           current_publication_id?: string | null
           description?: string | null
           design_settings?: Json
+          edition_label?: string | null
           id?: string
           is_featured?: boolean | null
           is_published?: boolean | null
+          isbn?: string | null
           language?: string | null
           organization_id?: string | null
+          pen_name?: string | null
           publish_lock_reason?: string | null
           publish_locked_at?: string | null
           publish_locked_by?: string | null
+          publisher_imprint?: string | null
+          publisher_imprint_id?: string | null
+          publisher_mode?: string | null
           publishing_settings?: Json
           source_content_hash?: string | null
           source_document_name?: string | null
@@ -1218,7 +1544,10 @@ export type Database = {
         }
         Update: {
           academic_level?: string | null
+          ai_assistance_level?: string | null
           author_ai_agent?: string | null
+          author_display_name?: string | null
+          author_mode?: string | null
           book_type?: string | null
           category?: string
           cover_image_url?: string | null
@@ -1227,14 +1556,20 @@ export type Database = {
           current_publication_id?: string | null
           description?: string | null
           design_settings?: Json
+          edition_label?: string | null
           id?: string
           is_featured?: boolean | null
           is_published?: boolean | null
+          isbn?: string | null
           language?: string | null
           organization_id?: string | null
+          pen_name?: string | null
           publish_lock_reason?: string | null
           publish_locked_at?: string | null
           publish_locked_by?: string | null
+          publisher_imprint?: string | null
+          publisher_imprint_id?: string | null
+          publisher_mode?: string | null
           publishing_settings?: Json
           source_content_hash?: string | null
           source_document_name?: string | null
@@ -1260,6 +1595,13 @@ export type Database = {
             columns: ["organization_id"]
             isOneToOne: false
             referencedRelation: "organizations"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "books_publisher_imprint_id_fkey"
+            columns: ["publisher_imprint_id"]
+            isOneToOne: false
+            referencedRelation: "publishing_imprints"
             referencedColumns: ["id"]
           },
           {
@@ -2205,7 +2547,6 @@ export type Database = {
           rev_share_surcharge_bps: number
           rev_share_surcharge_cents: number
           risk_score: number | null
-          source_event_id: string | null
         }
         Insert: {
           available_at?: string | null
@@ -2236,7 +2577,6 @@ export type Database = {
           rev_share_surcharge_bps?: number
           rev_share_surcharge_cents?: number
           risk_score?: number | null
-          source_event_id?: string | null
         }
         Update: {
           available_at?: string | null
@@ -2267,7 +2607,6 @@ export type Database = {
           rev_share_surcharge_bps?: number
           rev_share_surcharge_cents?: number
           risk_score?: number | null
-          source_event_id?: string | null
         }
         Relationships: []
       }
@@ -3138,6 +3477,146 @@ export type Database = {
         }
         Relationships: []
       }
+      interactive_voice_usage: {
+        Row: {
+          month: string
+          seconds_used: number
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          month: string
+          seconds_used?: number
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          month?: string
+          seconds_used?: number
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: []
+      }
+      isbn_claim_requests: {
+        Row: {
+          agency_reference: string
+          created_at: string
+          id: string
+          imprint_id: string
+          isbn13: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          updated_at: string
+          user_id: string
+        }
+        Insert: {
+          agency_reference: string
+          created_at?: string
+          id?: string
+          imprint_id: string
+          isbn13: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id: string
+        }
+        Update: {
+          agency_reference?: string
+          created_at?: string
+          id?: string
+          imprint_id?: string
+          isbn13?: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          updated_at?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "isbn_claim_requests_imprint_id_fkey"
+            columns: ["imprint_id"]
+            isOneToOne: false
+            referencedRelation: "publishing_imprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      isbn_inventory: {
+        Row: {
+          added_by: string | null
+          claimed_by_user_id: string | null
+          created_at: string
+          id: string
+          imprint_id: string
+          isbn13: string
+          metadata: Json
+          provenance_batch_id: string | null
+          provenance_reference: string | null
+          provenance_status: string
+          provenance_verified_at: string | null
+          provenance_verified_by: string | null
+          source: string
+          status: string
+          updated_at: string
+        }
+        Insert: {
+          added_by?: string | null
+          claimed_by_user_id?: string | null
+          created_at?: string
+          id?: string
+          imprint_id: string
+          isbn13: string
+          metadata?: Json
+          provenance_batch_id?: string | null
+          provenance_reference?: string | null
+          provenance_status?: string
+          provenance_verified_at?: string | null
+          provenance_verified_by?: string | null
+          source: string
+          status?: string
+          updated_at?: string
+        }
+        Update: {
+          added_by?: string | null
+          claimed_by_user_id?: string | null
+          created_at?: string
+          id?: string
+          imprint_id?: string
+          isbn13?: string
+          metadata?: Json
+          provenance_batch_id?: string | null
+          provenance_reference?: string | null
+          provenance_status?: string
+          provenance_verified_at?: string | null
+          provenance_verified_by?: string | null
+          source?: string
+          status?: string
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "isbn_inventory_imprint_id_fkey"
+            columns: ["imprint_id"]
+            isOneToOne: false
+            referencedRelation: "publishing_imprints"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "isbn_inventory_provenance_batch_id_fkey"
+            columns: ["provenance_batch_id"]
+            isOneToOne: false
+            referencedRelation: "platform_isbn_pool_verification_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       learner_concept_states: {
         Row: {
           application_confidence: number
@@ -3265,6 +3744,47 @@ export type Database = {
             columns: ["chapter_id"]
             isOneToOne: false
             referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      mastery_attempts: {
+        Row: {
+          attempted_at: string
+          book_id: string
+          id: string
+          integrity_at_attempt: number | null
+          passed: boolean
+          reasons_failed: string[] | null
+          score_at_attempt: number | null
+          user_id: string
+        }
+        Insert: {
+          attempted_at?: string
+          book_id: string
+          id?: string
+          integrity_at_attempt?: number | null
+          passed?: boolean
+          reasons_failed?: string[] | null
+          score_at_attempt?: number | null
+          user_id: string
+        }
+        Update: {
+          attempted_at?: string
+          book_id?: string
+          id?: string
+          integrity_at_attempt?: number | null
+          passed?: boolean
+          reasons_failed?: string[] | null
+          score_at_attempt?: number | null
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "mastery_attempts_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
             referencedColumns: ["id"]
           },
         ]
@@ -3517,6 +4037,92 @@ export type Database = {
           value?: Json
         }
         Relationships: []
+      }
+      platform_isbn_pool_verification_batch_items: {
+        Row: {
+          batch_id: string
+          created_at: string
+          id: string
+          isbn_inventory_id: string
+          isbn13: string
+        }
+        Insert: {
+          batch_id: string
+          created_at?: string
+          id?: string
+          isbn_inventory_id: string
+          isbn13: string
+        }
+        Update: {
+          batch_id?: string
+          created_at?: string
+          id?: string
+          isbn_inventory_id?: string
+          isbn13?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_isbn_pool_verification_batch_it_isbn_inventory_id_fkey"
+            columns: ["isbn_inventory_id"]
+            isOneToOne: false
+            referencedRelation: "isbn_inventory"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "platform_isbn_pool_verification_batch_items_batch_id_fkey"
+            columns: ["batch_id"]
+            isOneToOne: false
+            referencedRelation: "platform_isbn_pool_verification_batches"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      platform_isbn_pool_verification_batches: {
+        Row: {
+          id: string
+          imprint_id: string
+          isbn_count: number
+          provenance_reference: string
+          review_notes: string | null
+          reviewed_at: string | null
+          reviewed_by: string | null
+          status: string
+          submitted_at: string
+          submitted_by: string
+        }
+        Insert: {
+          id?: string
+          imprint_id: string
+          isbn_count: number
+          provenance_reference: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by: string
+        }
+        Update: {
+          id?: string
+          imprint_id?: string
+          isbn_count?: number
+          provenance_reference?: string
+          review_notes?: string | null
+          reviewed_at?: string | null
+          reviewed_by?: string | null
+          status?: string
+          submitted_at?: string
+          submitted_by?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "platform_isbn_pool_verification_batches_imprint_id_fkey"
+            columns: ["imprint_id"]
+            isOneToOne: false
+            referencedRelation: "publishing_imprints"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       pmf_events: {
         Row: {
@@ -3801,8 +4407,66 @@ export type Database = {
           },
         ]
       }
+      publication_gate_attestations: {
+        Row: {
+          artifact: Json
+          book_id: string
+          chapter_id: string | null
+          created_at: string
+          gate: string
+          id: string
+          scope: string
+          scope_hash: string
+          source_record_id: string | null
+          status: string
+          user_id: string
+        }
+        Insert: {
+          artifact?: Json
+          book_id: string
+          chapter_id?: string | null
+          created_at?: string
+          gate: string
+          id?: string
+          scope?: string
+          scope_hash: string
+          source_record_id?: string | null
+          status: string
+          user_id: string
+        }
+        Update: {
+          artifact?: Json
+          book_id?: string
+          chapter_id?: string | null
+          created_at?: string
+          gate?: string
+          id?: string
+          scope?: string
+          scope_hash?: string
+          source_record_id?: string | null
+          status?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "publication_gate_attestations_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "publication_gate_attestations_chapter_id_fkey"
+            columns: ["chapter_id"]
+            isOneToOne: false
+            referencedRelation: "chapters"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       publications: {
         Row: {
+          book_id: string | null
           certificate_id: string | null
           content_hash: string | null
           created_at: string
@@ -3815,6 +4479,7 @@ export type Database = {
           parent_publication_id: string | null
           published_at: string | null
           published_by: string | null
+          release_request_key: string | null
           semver_major: number
           semver_minor: number
           semver_patch: number
@@ -3828,6 +4493,7 @@ export type Database = {
           work_id: string
         }
         Insert: {
+          book_id?: string | null
           certificate_id?: string | null
           content_hash?: string | null
           created_at?: string
@@ -3840,6 +4506,7 @@ export type Database = {
           parent_publication_id?: string | null
           published_at?: string | null
           published_by?: string | null
+          release_request_key?: string | null
           semver_major?: number
           semver_minor?: number
           semver_patch?: number
@@ -3853,6 +4520,7 @@ export type Database = {
           work_id: string
         }
         Update: {
+          book_id?: string | null
           certificate_id?: string | null
           content_hash?: string | null
           created_at?: string
@@ -3865,6 +4533,7 @@ export type Database = {
           parent_publication_id?: string | null
           published_at?: string | null
           published_by?: string | null
+          release_request_key?: string | null
           semver_major?: number
           semver_minor?: number
           semver_patch?: number
@@ -3878,6 +4547,13 @@ export type Database = {
           work_id?: string
         }
         Relationships: [
+          {
+            foreignKeyName: "publications_book_id_fkey"
+            columns: ["book_id"]
+            isOneToOne: false
+            referencedRelation: "books"
+            referencedColumns: ["id"]
+          },
           {
             foreignKeyName: "publications_certificate_fk"
             columns: ["certificate_id"]
@@ -4066,6 +4742,131 @@ export type Database = {
           },
         ]
       }
+      publishing_imprint_verifications: {
+        Row: {
+          id: string
+          imprint_id: string
+          notes: string | null
+          reviewed_at: string
+          reviewed_by: string
+          status: string
+          submitted_by: string | null
+          verification_method: string
+          verification_reference: string
+        }
+        Insert: {
+          id?: string
+          imprint_id: string
+          notes?: string | null
+          reviewed_at?: string
+          reviewed_by: string
+          status: string
+          submitted_by?: string | null
+          verification_method?: string
+          verification_reference: string
+        }
+        Update: {
+          id?: string
+          imprint_id?: string
+          notes?: string | null
+          reviewed_at?: string
+          reviewed_by?: string
+          status?: string
+          submitted_by?: string | null
+          verification_method?: string
+          verification_reference?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "publishing_imprint_verifications_imprint_id_fkey"
+            columns: ["imprint_id"]
+            isOneToOne: false
+            referencedRelation: "publishing_imprints"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      publishing_imprints: {
+        Row: {
+          agency_record_attested: boolean
+          agency_record_attested_at: string | null
+          agency_record_attested_by: string | null
+          country_code: string | null
+          created_at: string
+          id: string
+          imprint_name: string
+          isbn_agency_name: string | null
+          metadata: Json
+          owner_user_id: string | null
+          publisher_name: string
+          registrant_name: string | null
+          scope: string
+          updated_at: string
+          verification_method: string | null
+          verification_pending_method: string | null
+          verification_pending_notes: string | null
+          verification_pending_reference: string | null
+          verification_reference: string | null
+          verification_submitted_at: string | null
+          verification_submitted_by: string | null
+          verified: boolean
+          verified_at: string | null
+          verified_by: string | null
+        }
+        Insert: {
+          agency_record_attested?: boolean
+          agency_record_attested_at?: string | null
+          agency_record_attested_by?: string | null
+          country_code?: string | null
+          created_at?: string
+          id?: string
+          imprint_name: string
+          isbn_agency_name?: string | null
+          metadata?: Json
+          owner_user_id?: string | null
+          publisher_name: string
+          registrant_name?: string | null
+          scope: string
+          updated_at?: string
+          verification_method?: string | null
+          verification_pending_method?: string | null
+          verification_pending_notes?: string | null
+          verification_pending_reference?: string | null
+          verification_reference?: string | null
+          verification_submitted_at?: string | null
+          verification_submitted_by?: string | null
+          verified?: boolean
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Update: {
+          agency_record_attested?: boolean
+          agency_record_attested_at?: string | null
+          agency_record_attested_by?: string | null
+          country_code?: string | null
+          created_at?: string
+          id?: string
+          imprint_name?: string
+          isbn_agency_name?: string | null
+          metadata?: Json
+          owner_user_id?: string | null
+          publisher_name?: string
+          registrant_name?: string | null
+          scope?: string
+          updated_at?: string
+          verification_method?: string | null
+          verification_pending_method?: string | null
+          verification_pending_notes?: string | null
+          verification_pending_reference?: string | null
+          verification_reference?: string | null
+          verification_submitted_at?: string | null
+          verification_submitted_by?: string | null
+          verified?: boolean
+          verified_at?: string | null
+          verified_by?: string | null
+        }
+        Relationships: []
+      }
       publishing_readiness_snapshots: {
         Row: {
           audit_id: string | null
@@ -4241,17 +5042,13 @@ export type Database = {
           assessment_contract_version: string | null
           assessment_manifest_hash: string | null
           assessment_session_id: string | null
-          attempt_number: number
           book_id: string
           chapter_id: string | null
           coding_question_count: number
-          correct_answers: number
           created_at: string
           id: string
           score: number | null
-          submitted_at: string
           tier_breakdown: Json
-          time_spent_seconds: number | null
           total_questions: number | null
           user_id: string
         }
@@ -4261,17 +5058,13 @@ export type Database = {
           assessment_contract_version?: string | null
           assessment_manifest_hash?: string | null
           assessment_session_id?: string | null
-          attempt_number?: number
           book_id: string
           chapter_id?: string | null
           coding_question_count?: number
-          correct_answers?: number
           created_at?: string
           id?: string
           score?: number | null
-          submitted_at?: string
           tier_breakdown?: Json
-          time_spent_seconds?: number | null
           total_questions?: number | null
           user_id: string
         }
@@ -4281,17 +5074,13 @@ export type Database = {
           assessment_contract_version?: string | null
           assessment_manifest_hash?: string | null
           assessment_session_id?: string | null
-          attempt_number?: number
           book_id?: string
           chapter_id?: string | null
           coding_question_count?: number
-          correct_answers?: number
           created_at?: string
           id?: string
           score?: number | null
-          submitted_at?: string
           tier_breakdown?: Json
-          time_spent_seconds?: number | null
           total_questions?: number | null
           user_id?: string
         }
@@ -4371,6 +5160,33 @@ export type Database = {
             referencedColumns: ["id"]
           },
         ]
+      }
+      rate_limit_log: {
+        Row: {
+          created_at: string
+          endpoint: string
+          id: string
+          identifier: string
+          request_count: number
+          window_start: string
+        }
+        Insert: {
+          created_at?: string
+          endpoint: string
+          id?: string
+          identifier: string
+          request_count?: number
+          window_start?: string
+        }
+        Update: {
+          created_at?: string
+          endpoint?: string
+          id?: string
+          identifier?: string
+          request_count?: number
+          window_start?: string
+        }
+        Relationships: []
       }
       reading_goals: {
         Row: {
@@ -4556,7 +5372,6 @@ export type Database = {
           currency: string
           error_message: string | null
           id: string
-          idempotency_key: string | null
           metadata: Json
           processed_at: string | null
           processed_by: string | null
@@ -4579,7 +5394,6 @@ export type Database = {
           currency?: string
           error_message?: string | null
           id?: string
-          idempotency_key?: string | null
           metadata?: Json
           processed_at?: string | null
           processed_by?: string | null
@@ -4602,7 +5416,6 @@ export type Database = {
           currency?: string
           error_message?: string | null
           id?: string
-          idempotency_key?: string | null
           metadata?: Json
           processed_at?: string | null
           processed_by?: string | null
@@ -5816,6 +6629,20 @@ export type Database = {
       }
     }
     Views: {
+      admin_creator_subscription_overview: {
+        Row: {
+          active_creators: number | null
+          creator_pro_users: number | null
+          creator_users: number | null
+          estimated_mrr_cents: number | null
+          external_publications_count: number | null
+          failed_payment_users: number | null
+          grace_period_users: number | null
+          gumroad_connected_creators: number | null
+          shopify_connected_creators: number | null
+        }
+        Relationships: []
+      }
       recommendation_rail_metrics: {
         Row: {
           clicked: number | null
@@ -5842,6 +6669,45 @@ export type Database = {
           works_created: number
         }[]
       }
+      admin_get_creator_entitlement_detail: {
+        Args: { _target_user_id: string }
+        Returns: Json
+      }
+      admin_get_creator_entitlements: {
+        Args: {
+          _limit?: number
+          _offset?: number
+          _payment_status?: string
+          _search?: string
+          _tier?: string
+        }
+        Returns: {
+          created_at: string
+          current_period_end: string
+          email: string
+          external_publications_count: number
+          grace_period_until: string
+          gumroad_connected: boolean
+          latest_publish_blocked_at: string
+          payment_status: string
+          shopify_connected: boolean
+          source: string
+          stripe_customer_id: string
+          stripe_price_id: string
+          tier: string
+          total_count: number
+          updated_at: string
+          user_id: string
+        }[]
+      }
+      admin_get_creator_subscription_analytics: {
+        Args: { _days?: number }
+        Returns: Json
+      }
+      admin_override_creator_entitlement: {
+        Args: { _new_tier: string; _reason?: string; _target_user_id: string }
+        Returns: Json
+      }
       admin_set_creator_entitlement: {
         Args: {
           _expires_at?: string
@@ -5860,8 +6726,21 @@ export type Database = {
         Returns: Json
       }
       book_has_public_listing: { Args: { _book_id: string }; Returns: boolean }
+      book_requires_publication_evidence: {
+        Args: { p_book_id: string }
+        Returns: boolean
+      }
       check_velocity: {
         Args: { _key: string; _limit: number; _window_seconds: number }
+        Returns: Json
+      }
+      claim_stripe_webhook_event: {
+        Args: {
+          _correlation_id: string
+          _event_type: string
+          _payload: Json
+          _stripe_event_id: string
+        }
         Returns: Json
       }
       collection_owned_by: {
@@ -5875,6 +6754,10 @@ export type Database = {
       compute_book_elite_readiness: {
         Args: { _book_id: string }
         Returns: Json
+      }
+      compute_chapter_publication_hash: {
+        Args: { p_chapter_id: string }
+        Returns: string
       }
       compute_discovery_scores: {
         Args: { _limit?: number; _window_days?: number }
@@ -5895,6 +6778,19 @@ export type Database = {
           samples: number
           score: number
           views: number
+        }[]
+      }
+      consume_rate_limit: {
+        Args: {
+          _endpoint: string
+          _identifier: string
+          _limit: number
+          _window_seconds: number
+        }
+        Returns: {
+          allowed: boolean
+          request_count: number
+          retry_after_seconds: number
         }[]
       }
       ensure_individual_rights_holder: {
@@ -6045,6 +6941,7 @@ export type Database = {
         Args: { _org_id: string; _user_id: string }
         Returns: boolean
       }
+      is_valid_isbn13: { Args: { p_value: string }; Returns: boolean }
       log_audit_event: {
         Args: {
           _actor_id?: string
@@ -6057,6 +6954,7 @@ export type Database = {
         }
         Returns: string
       }
+      normalize_isbn13: { Args: { p_value: string }; Returns: string }
       notify_followers_on_schedule_release: {
         Args: { _item_id: string }
         Returns: number
@@ -6067,20 +6965,82 @@ export type Database = {
         Returns: undefined
       }
       record_purchase_ledger: { Args: { _purchase_id: string }; Returns: Json }
-      record_purchase_refund_ledger: {
+      release_book_generation: {
+        Args: { _books: number; _day: string; _user_id: string }
+        Returns: number
+      }
+      release_interactive_voice_seconds: {
+        Args: { _month: string; _seconds: number; _user_id: string }
+        Returns: number
+      }
+      release_tts_minutes: {
+        Args: { _minutes: number; _month: string; _user_id: string }
+        Returns: number
+      }
+      reserve_book_generation: {
+        Args: { _books: number; _day: string; _limit: number; _user_id: string }
+        Returns: {
+          allowed: boolean
+          books_used: number
+          remaining_books: number
+        }[]
+      }
+      reserve_interactive_voice_seconds: {
         Args: {
-          _purchase_id: string
-          _refund_event_id: string
-          _refund_amount_cents: number
+          _limit_seconds: number
+          _month: string
+          _seconds: number
+          _user_id: string
         }
-        Returns: Json
+        Returns: {
+          allowed: boolean
+          remaining_seconds: number
+          seconds_used: number
+        }[]
+      }
+      reserve_tts_minutes: {
+        Args: {
+          _limit: number
+          _minutes: number
+          _month: string
+          _user_id: string
+        }
+        Returns: {
+          allowed: boolean
+          minutes_used: number
+          remaining_minutes: number
+        }[]
       }
       set_platform_fee: { Args: { _bps: number }; Returns: Json }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
-      snapshot_creator_entitlement: {
-        Args: { _context_id?: string; _context_type: string; _user_id: string }
-        Returns: string
+      snapshot_creator_entitlement:
+        | {
+            Args: {
+              _context_id?: string
+              _context_type?: string
+              _metadata?: Json
+              _user_id: string
+            }
+            Returns: string
+          }
+        | {
+            Args: {
+              _context_id?: string
+              _context_type: string
+              _user_id: string
+            }
+            Returns: string
+          }
+      sweep_stale_jobs: {
+        Args: {
+          _export_timeout_minutes?: number
+          _generation_timeout_minutes?: number
+        }
+        Returns: {
+          export_jobs_failed: number
+          generation_jobs_failed: number
+        }[]
       }
       sync_creator_entitlement_from_stripe: {
         Args: {
@@ -6133,6 +7093,7 @@ export type Database = {
         | "collaborative_draft"
         | "private_review"
         | "internal_preview"
+        | "published_export"
       publication_status:
         | "draft"
         | "internal_review"
@@ -6330,6 +7291,7 @@ export const Constants = {
         "collaborative_draft",
         "private_review",
         "internal_preview",
+        "published_export",
       ],
       publication_status: [
         "draft",

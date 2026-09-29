@@ -2,7 +2,9 @@ import { defineConfig, devices } from "@playwright/test";
 
 export default defineConfig({
   testDir: "./e2e",
-  testMatch: /(?:public-smoke|deterministic-(?:product-flows|account-deletion|upload))\.spec\.ts/,
+  // Upload/ingestion is deliberately outside GA. The historical upload spec stays
+  // in-tree, while launch CI exercises the disabled route through product-flow gates.
+  testMatch: /(?:public-smoke|deterministic-(?:product-flows|account-deletion))\.spec\.ts/,
   fullyParallel: true,
   forbidOnly: Boolean(process.env.CI),
   retries: process.env.CI ? 2 : 0,

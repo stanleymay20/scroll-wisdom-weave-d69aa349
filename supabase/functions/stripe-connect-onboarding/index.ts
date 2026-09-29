@@ -10,6 +10,7 @@ import {
   validateBody,
   z,
 } from "../_shared/http.ts";
+import { externalPaymentWritesEnabled } from "../_shared/ga-release-flags.ts";
 import {
   payoutMethodForStatus,
   payoutStatusFromAccount,
@@ -74,6 +75,13 @@ serve(async (req) => {
 
   try {
     if (req.method !== "POST") return json({ error: "Method not allowed" }, 405);
+
+    if (!externalPaymentWritesEnabled()) {
+      return json({
+        error: "Stripe Connect onboarding is temporarily unavailable while payment validation is completing.",
+        code: "ga_payments_disabled",
+      }, 503);
+    }
 
     const auth = await requireUser(req);
     if (auth instanceof Response) return auth;

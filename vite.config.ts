@@ -6,6 +6,7 @@ import { VitePWA } from "vite-plugin-pwa";
 import { writeFileSync } from "node:fs";
 import type { Plugin } from "vite";
 import { resolveBuildCommit } from "./scripts/build-commit.mjs";
+import { computeSourceFingerprint } from "./scripts/source-fingerprint.mjs";
 
 /**
  * Writes /release.json into every production build, not only the CI one.
@@ -16,7 +17,7 @@ import { resolveBuildCommit } from "./scripts/build-commit.mjs";
  * writes the identity part in every build; `build:release` still replaces it
  * afterwards with the version that also lists each artifact's digest.
  */
-function releaseIdentity(identity: { commit: string | null; commitSource: string; buildTime: string }): Plugin {
+function releaseIdentity(identity: { commit: string | null; commitSource: string; buildTime: string; sourceFingerprint: string; sourceFingerprintFiles: number }): Plugin {
   let outDir = "dist";
   return {
     name: "scrolllibrary-release-identity",
@@ -31,10 +32,18 @@ function releaseIdentity(identity: { commit: string | null; commitSource: string
   };
 }
 
+// PWA/offline recovery is deliberately outside the GA launch scope until its
+// upgrade/offline E2E gate is proven. Keep the code in-tree, but do not emit a
+// service worker or install manifest in GA builds.
+const GA_PWA_ENABLED = false;
+
 // https://vitejs.dev/config/
 export default defineConfig(({ mode }) => {
   const buildTime = process.env.BUILD_TIME ?? new Date().toISOString();
   const { commit, source: commitSource } = resolveBuildCommit();
+  const source = computeSourceFingerprint();
+  const sourceFingerprint = source.value;
+  const sourceFingerprintFiles = source.files;
   // Also the Sentry release name, so errors group by the commit that threw them.
   const buildId = commit ?? `local-${buildTime}`;
 
@@ -50,8 +59,8 @@ export default defineConfig(({ mode }) => {
   plugins: [
     react(),
     mode === "development" && componentTagger(),
-    releaseIdentity({ commit, commitSource, buildTime }),
-    VitePWA({
+    releaseIdentity({ commit, commitSource, buildTime, sourceFingerprint, sourceFingerprintFiles }),
+    ...(GA_PWA_ENABLED ? VitePWA({
       registerType: "autoUpdate",
       injectRegister: "auto",
       includeAssets: ["favicon.png", "favicon-16x16.png", "favicon-32x32.png", "apple-touch-icon.png", "logo.png", "offline.html"],
@@ -304,7 +313,7 @@ export default defineConfig(({ mode }) => {
       devOptions: {
         enabled: false
       }
-    })
+    }) : []),
   ].filter(Boolean),
   resolve: {
     alias: {

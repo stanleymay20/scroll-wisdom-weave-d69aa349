@@ -2,6 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { requireUser, serviceClient } from "../_shared/http.ts";
 import { ErrorCode, errorResponse } from "../_shared/error-codes.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
+import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -137,7 +138,7 @@ serve(async (req) => {
     const {
       title: rawTitle, description: rawDescription, category, numChapters, language = "en", customCover,
       bookType = "text", extendedBookType = null,
-      enableReferences = false, academicMode = false, bestsellerMode = true,
+      enableReferences = false, academicMode = false, deepResearch = false, bestsellerMode = false,
       authorMode = "ai", authorDisplayName: rawAuthorName = null, penName: rawPenName = null,
       transformationPrompt: rawTransformationPrompt = null,
     } = body;
@@ -153,6 +154,29 @@ serve(async (req) => {
     const authorDisplayName = sanitize(rawAuthorName, 100);
     const penName = sanitize(rawPenName, 100);
     const transformationPrompt = sanitize(rawTransformationPrompt, 3000);
+
+    if (!advancedAuthoringEnabled()) {
+      const requestedExtendedType = typeof extendedBookType === "string" ? extendedBookType : null;
+      const requestedBookType = typeof bookType === "string" ? bookType : "text";
+      const advancedRequested = Boolean(customCover)
+        || enableReferences === true
+        || academicMode === true
+        || deepResearch === true
+        || bestsellerMode === true
+        || transformationPrompt.length > 0
+        || requestedBookType !== "text"
+        || (requestedExtendedType !== null && requestedExtendedType !== "text");
+
+      if (advancedRequested) {
+        return new Response(JSON.stringify({
+          error: "This advanced authoring mode is outside the current GA launch scope.",
+          code: "GA_ADVANCED_AUTHORING_DISABLED",
+        }), {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     if (!title || title.length < 1) {
       return errorResponse(ErrorCode.GENERATION_INVALID_INPUT, "Title is required.", corsHeaders);

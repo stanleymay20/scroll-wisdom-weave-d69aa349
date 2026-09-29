@@ -6,6 +6,7 @@ import { useLanguage } from "@/contexts/LanguageContext";
 import { useToast } from "@/hooks/use-toast";
 import { runPublicationQualityPipeline } from "@/lib/publicationPipeline";
 import { supabase } from "@/integrations/supabase/client";
+import { FEATURES } from "@/lib/config";
 
 interface ChapterData {
   id: string;
@@ -99,6 +100,7 @@ export function ChapterList({
   }, [bookId, isOwner]);
 
   const runQualityReview = useCallback(async () => {
+    if (!FEATURES.enableEditorialPipeline) return;
     setIsQualityReview(true);
     setLocalQualityStage("Preparing the completed draft for independent publication review…");
 
@@ -175,6 +177,11 @@ export function ChapterList({
 
     await onGenerateAll();
 
+    if (!FEATURES.enableEditorialPipeline) {
+      setLocalQualityStage(null);
+      return;
+    }
+
     // Fail closed: verify every chapter really exists with content before reviewing
     setLocalQualityStage("Verifying every chapter is complete…");
     const { data: verifyRows, error: verifyError } = await supabase
@@ -213,7 +220,7 @@ export function ChapterList({
 
     autoStartedRef.current = true;
     if (awaitingReview) {
-      void runQualityReview();
+      if (FEATURES.enableEditorialPipeline) void runQualityReview();
     } else {
       void handleGenerateAllAndCertify();
     }
@@ -221,7 +228,7 @@ export function ChapterList({
 
   const allGenerated = chapters.length > 0 && chapters.every(isCompleteChapter);
   const showRetryReview =
-    isOwner && allGenerated && !isBusy &&
+    FEATURES.enableEditorialPipeline && isOwner && allGenerated && !isBusy &&
     (latestJob?.status === "partial" || latestJob?.status === "failed");
 
   return (
@@ -310,7 +317,7 @@ export function ChapterList({
                       <div className="flex items-center gap-2 text-primary"><Loader2 className="h-5 w-5 animate-spin" /><span className="text-sm">{t('book.generating')}</span></div>
                     ) : isGenerated ? (
                       <div className="flex items-center gap-2">
-                        {isOwner && (
+                        {isOwner && FEATURES.enableChapterRegeneration && (
                           <Button variant="ghost" size="sm" onClick={(e) => onGenerateChapter(chapter, e)} title="Regenerate chapter" className="text-muted-foreground hover:text-primary">
                             <RefreshCw className="h-4 w-4" />
                           </Button>

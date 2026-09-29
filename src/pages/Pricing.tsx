@@ -13,6 +13,7 @@ import { SUBSCRIPTION_TIERS, SubscriptionTier, CREATOR_SUBSCRIPTION_TIERS, Creat
 import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
 import { useToast } from "@/hooks/use-toast";
 import { useLanguage } from "@/contexts/LanguageContext";
+import { FEATURES } from "@/lib/config";
 
 import { SEO } from "@/components/SEO";
 interface PlanConfig {
@@ -37,12 +38,12 @@ const plans: PlanConfig[] = [
     features: [
       { text: "1 book per month (up to 4,000 words/ch)", included: true },
       { text: "5 min text-to-speech", included: true },
-      { text: "5 min voice interaction", included: true },
+      { text: "Voice AI after GA validation", included: false },
       { text: "Basic PDF export", included: true },
       { text: "1 quiz & 1 certificate per book", included: true },
-      { text: "AI-generated covers", included: false },
-      { text: "AI image generation", included: false },
-      { text: "Cinematic video", included: false },
+      { text: "AI-generated covers after provider validation", included: false },
+      { text: "AI image generation after provider validation", included: false },
+      { text: "Cinematic video after GA", included: false },
     ],
   },
   {
@@ -55,12 +56,12 @@ const plans: PlanConfig[] = [
     features: [
       { text: "Up to 10 books per month", included: true },
       { text: "Up to 4,000 words per chapter", included: true },
-      { text: "30 min TTS & voice interaction", included: true },
-      { text: "20 AI images per month", included: true },
+      { text: "30 min text-to-speech", included: true },
+      { text: "AI images after provider validation", included: false },
       { text: "PDF, EPUB, DOCX exports", included: true },
-      { text: "AI-generated covers", included: true },
+      { text: "AI-generated covers after provider validation", included: false },
       { text: "Unlimited quizzes & certificates", included: true },
-      { text: "Cinematic video", included: false },
+      { text: "Cinematic video after GA", included: false },
     ],
   },
   {
@@ -74,10 +75,10 @@ const plans: PlanConfig[] = [
     features: [
       { text: "Up to 30 books per month", included: true },
       { text: "Up to 6,000 words per chapter", included: true },
-      { text: "60 min TTS · 2 hrs voice interaction", included: true },
-      { text: "100 AI images per month", included: true },
-      { text: "All exports (PDF, EPUB, DOCX, KDP)", included: true },
-      { text: "Cinematic video generation", included: true },
+      { text: "60 min text-to-speech", included: true },
+      { text: "AI images after provider validation", included: false },
+      { text: "PDF, EPUB & DOCX exports", included: true },
+      { text: "Cinematic video after GA", included: false },
       { text: "Commercial publishing rights", included: true },
       { text: "Priority support", included: true },
     ],
@@ -90,13 +91,13 @@ const plans: PlanConfig[] = [
     icon: Building2,
     tierKey: "prophet_tier",
     features: [
-      { text: "Unlimited books & AI images", included: true },
-      { text: "Unlimited TTS & voice interaction", included: true },
-      { text: "ElevenLabs premium voices", included: true },
-      { text: "Cinematic video generation", included: true },
-      { text: "Batch generation", included: true },
-      { text: "AI research assistant", included: true },
-      { text: "All exports (incl. KDP-ready PDF)", included: true },
+      { text: "Expanded book generation allowance", included: true },
+      { text: "Expanded text-to-speech allowance", included: true },
+      { text: "Premium voice providers after validation", included: false },
+      { text: "Cinematic video after GA", included: false },
+      { text: "Batch generation after GA", included: false },
+      { text: "AI research assistant after provider validation", included: false },
+      { text: "PDF, EPUB & DOCX exports", included: true },
       { text: "Dedicated support", included: true },
     ],
   },
@@ -157,6 +158,14 @@ export default function Pricing() {
       return;
     }
 
+    if (!FEATURES.enableSubscriptionCheckout) {
+      toast({
+        title: "Paid upgrades are temporarily unavailable",
+        description: "The free GA experience remains available while the payment lifecycle completes validation.",
+      });
+      return;
+    }
+
     const tierConfig = SUBSCRIPTION_TIERS[planTierKey];
     if (!tierConfig.price_id) return;
 
@@ -185,6 +194,13 @@ export default function Pricing() {
   };
 
   const handleCreatorCheckout = async (creatorTier: CreatorTier) => {
+    if (!FEATURES.enableSubscriptionCheckout) {
+      toast({
+        title: "Paid Creator plans are temporarily unavailable",
+        description: "Free marketplace listing remains available during GA validation.",
+      });
+      return;
+    }
     if (!user) {
       navigate("/auth", { state: { redirectTo: "/pricing#creator" } });
       return;
@@ -252,7 +268,7 @@ export default function Pricing() {
                 Plans & Pricing
               </h1>
               <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                Start free. Scale as you grow.
+                Start free. Paid upgrades reopen after the payment lifecycle passes its GA validation gate.
               </p>
             </div>
 
@@ -314,7 +330,7 @@ export default function Pricing() {
                           className="w-full mt-4"
                           size="sm"
                           onClick={() => handleSelectPlan(plan.tierKey)}
-                          disabled={isCurrent || !!checkoutLoading}
+                          disabled={isCurrent || !!checkoutLoading || (plan.tierKey !== "free" && !FEATURES.enableSubscriptionCheckout)}
                         >
                           {checkoutLoading === plan.tierKey ? (
                             <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing...</>
@@ -322,6 +338,8 @@ export default function Pricing() {
                             "Current Plan"
                           ) : plan.tierKey === "free" ? (
                             "Get Started Free"
+                          ) : !FEATURES.enableSubscriptionCheckout ? (
+                            "Available after payment validation"
                           ) : (
                             `Upgrade to ${plan.name}`
                           )}
@@ -341,7 +359,7 @@ export default function Pricing() {
                   Sell your work, your way
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto">
-                  Free creators can list on the marketplace. Upgrade to publish directly to Gumroad, Shopify, Substack, Patreon &amp; Etsy — and keep 100% of platform-side revenue.
+                  Free creators can list on the ScrollLibrary marketplace. External publishing integrations will be enabled only after their provider E2E gates pass.
                 </p>
               </div>
 
@@ -366,11 +384,9 @@ export default function Pricing() {
                     popular: true,
                     features: [
                       "Everything in Free",
-                      "Publish to Gumroad, Shopify, Substack, Patreon, Etsy",
-                      "Release schedules + follower broadcasts",
                       "Unlimited collections",
                       "0% marketplace surcharge",
-                      "Full analytics",
+                      "Core marketplace analytics",
                     ],
                   },
                   {
@@ -381,7 +397,6 @@ export default function Pricing() {
                     features: [
                       "Everything in Creator",
                       "Priority generation queue",
-                      "Advanced analytics",
                       "+50 monthly generation bonus",
                       "Best for publishing businesses",
                     ],
@@ -431,9 +446,13 @@ export default function Pricing() {
                           size="sm"
                           className="w-full mt-5"
                           onClick={() => handleCreatorCheckout(p.key as CreatorTier)}
-                          disabled={isLoading}
+                          disabled={isLoading || !FEATURES.enableSubscriptionCheckout}
                         >
-                          {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Redirecting...</> : `Upgrade to ${p.name}`}
+                          {isLoading
+                            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Redirecting...</>
+                            : !FEATURES.enableSubscriptionCheckout
+                              ? "Available after payment validation"
+                              : `Upgrade to ${p.name}`}
                         </Button>
                       )}
                     </Card>
