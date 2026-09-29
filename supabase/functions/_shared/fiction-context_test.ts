@@ -1,5 +1,5 @@
 import { assertEquals, assertStringIncludes } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { buildFictionContinuityContext, sanitizeFictionContract } from "./fiction-context.ts";
+import { buildFictionContinuityContext, buildFictionOutlineInstructions, sanitizeFictionContract } from "./fiction-context.ts";
 
 Deno.test("fiction contract sanitizes genre, POV and character limits", () => {
   const result = sanitizeFictionContract({
@@ -40,4 +40,28 @@ Deno.test("fiction memory contains every prior chapter plus recent scene tail", 
   assertStringIncludes(context, "The brass key is now in her coat pocket.");
   assertStringIncludes(context, "POV: third_limited");
   assertStringIncludes(context, "Nia [protagonist]");
+});
+
+
+Deno.test("fiction outline instructions preserve story architecture and exclude textbook routing", () => {
+  const prompt = buildFictionOutlineInstructions({
+    genre: "thriller",
+    pov: "first",
+    tone: "tense and spare",
+    setting: "Accra and Berlin in the present day.",
+    themes: "trust, ambition, memory",
+    characters: [
+      { name: "Kojo", role: "protagonist", motivation: "Find his missing brother", arc: "Learns to trust allies" },
+    ],
+    plotPoints: [
+      { label: "Midpoint", description: "Kojo learns the disappearance was staged." },
+    ],
+  });
+
+  assertStringIncludes(prompt, "FICTION / NOVEL OUTLINE CONSTITUTION");
+  assertStringIncludes(prompt, "Genre: thriller");
+  assertStringIncludes(prompt, "POV: first");
+  assertStringIncludes(prompt, "Kojo [protagonist]");
+  assertStringIncludes(prompt, "Treat keyTopics as STORY BEATS");
+  assertStringIncludes(prompt, "Do not use learning objectives");
 });
