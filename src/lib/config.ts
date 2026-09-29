@@ -50,4 +50,9 @@ export const FEATURES = {
   enableChapterVideo: !PMF_MODE,
   enableKnowledgeGraph: !PMF_MODE,
   enableStudyMusic: !PMF_MODE,
+  // External financial writes stay closed until the exact-head Stripe sandbox
+  // lifecycle has passed and production is deliberately opened.
+  enablePaidCheckout: !PMF_MODE,
+  enableSubscriptionCheckout: !PMF_MODE,
+  enableStripeConnect: !PMF_MODE,
 };
