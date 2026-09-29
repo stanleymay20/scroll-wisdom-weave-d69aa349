@@ -138,7 +138,7 @@ serve(async (req) => {
     const {
       title: rawTitle, description: rawDescription, category, numChapters, language = "en", customCover,
       bookType = "text", extendedBookType = null,
-      enableReferences = false, academicMode = false, deepResearch = false, bestsellerMode = true,
+      enableReferences = false, academicMode = false, deepResearch = false, bestsellerMode = false,
       authorMode = "ai", authorDisplayName: rawAuthorName = null, penName: rawPenName = null,
       transformationPrompt: rawTransformationPrompt = null,
     } = body;
@@ -162,6 +162,8 @@ serve(async (req) => {
         || enableReferences === true
         || academicMode === true
         || deepResearch === true
+        || bestsellerMode === true
+        || transformationPrompt.length > 0
         || requestedBookType !== "text"
         || (requestedExtendedType !== null && requestedExtendedType !== "text");
 
