@@ -30,6 +30,12 @@ interface Data {
   cover_override_url: string | null;
   license_type: string;
   seo_keywords: string[];
+  publication?: {
+    language: string | null;
+    published_at: string | null;
+    publisher: string | null;
+    isbn: string | null;
+  } | null;
   book: {
     id: string;
     title: string;
@@ -38,6 +44,7 @@ interface Data {
     category: string;
     user_id: string;
     total_chapters: number;
+    language: string | null;
   } | null;
 }
 
@@ -54,6 +61,7 @@ function toLocal(l: StoreListing): Data {
     cover_override_url: l.cover_override_url,
     license_type: l.license_type,
     seo_keywords: l.seo_keywords ?? [],
+    publication: l.publication ?? null,
     book: l.book ? {
       id: l.book.id,
       title: l.book.title,
@@ -62,6 +70,7 @@ function toLocal(l: StoreListing): Data {
       category: l.book.category,
       user_id: l.book.author_user_id,
       total_chapters: l.book.total_chapters,
+      language: l.book.language,
     } : null,
   };
 }
@@ -126,11 +135,13 @@ export default function PublicBookPage() {
         name: author.display_name,
         url: authorUrl,
       } : undefined,
-      publisher: {
+      publisher: data.publication?.publisher ? {
         "@type": "Organization",
-        name: "ScrollLibrary Press",
-        url: "https://scrolllibrary.org",
-      },
+        name: data.publication.publisher,
+      } : undefined,
+      isbn: data.publication?.isbn || undefined,
+      inLanguage: data.publication?.language || data.book.language || undefined,
+      datePublished: data.publication?.published_at || undefined,
       genre: data.book.category || undefined,
       keywords: data.seo_keywords.length > 0 ? data.seo_keywords.join(", ") : undefined,
       dateModified: data.updated_at || undefined,
