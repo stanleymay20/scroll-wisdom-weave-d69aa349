@@ -30,3 +30,42 @@ export function publicationMintEnabled(value?: string | null): boolean {
 
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
+
+const ADVANCED_BOOK_TYPES = new Set([
+  "academic",
+  "technical",
+  "reference",
+  "professional",
+  "bestseller",
+  "workbook",
+  "illustrated",
+  "children",
+  "comic",
+  "fiction",
+]);
+
+export function qualifiedAdvancedBookTypes(value?: string | null): Set<string> {
+  const raw = String(
+    value === undefined ? Deno.env.get("GA_QUALIFIED_BOOK_TYPES") ?? "" : value ?? "",
+  );
+
+  return new Set(
+    raw
+      .split(",")
+      .map((item) => item.trim().toLowerCase())
+      .filter((item) => ADVANCED_BOOK_TYPES.has(item)),
+  );
+}
+
+export function advancedBookTypeEnabled(
+  bookType: string,
+  advancedValue?: string | null,
+  qualifiedTypesValue?: string | null,
+): boolean {
+  const normalized = String(bookType || "").trim().toLowerCase();
+  if (normalized === "text") return true;
+  if (!ADVANCED_BOOK_TYPES.has(normalized)) return false;
+  if (!advancedAuthoringEnabled(advancedValue)) return false;
+  return qualifiedAdvancedBookTypes(qualifiedTypesValue).has(normalized);
+}
+
