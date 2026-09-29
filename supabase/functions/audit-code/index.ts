@@ -240,14 +240,6 @@ serve(async (req) => {
   try {
     const auth = await requireUser(req);
     if (auth instanceof Response) return auth;
-    const limited = await enforceDurableRateLimit(serviceClient(), {
-      name: "audit-code",
-      key: auth.userId,
-      limit: 20,
-      windowSec: 600,
-    });
-    if (limited) return limited;
-
     const requestBody = await req.json();
 
     // ============================================================
@@ -334,6 +326,60 @@ serve(async (req) => {
     const codeBlocks = extractTechnicalCodeBlocks(content);
     
     log("Code extraction", { codeBlockCount: codeBlocks.length, chapterNumber });
+
+    // A passing audit is evidence about exact immutable bytes. Reusing it is
+    // both safer and cheaper than spending AI/rate-limit budget again.
+    let currentContentHash: string | null = null;
+    if (chapterId && canonicalBookId) {
+      currentContentHash = await sha256Hex(content);
+      const { data: cachedAudit, error: cachedAuditError } = await sc
+        .from("chapter_code_audits")
+        .select("id, score, risk_level, code_block_count, result, audit_model, audit_prompt_version, created_at")
+        .eq("chapter_id", chapterId)
+        .eq("content_hash", currentContentHash)
+        .eq("passed", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cachedAuditError) throw cachedAuditError;
+      if (cachedAudit) {
+        log("Current content audit cache hit", {
+          chapterNumber,
+          auditId: cachedAudit.id,
+          contentHash: currentContentHash.slice(0, 12),
+        });
+        return new Response(JSON.stringify({
+          chapterId,
+          chapterTitle,
+          chapterNumber,
+          codeBlockCount: cachedAudit.code_block_count ?? codeBlocks.length,
+          auditId: cachedAudit.id,
+          contentHash: currentContentHash,
+          passed: true,
+          cached: true,
+          provenance: {
+            model: cachedAudit.audit_model,
+            promptVersion: cachedAudit.audit_prompt_version,
+            createdAt: cachedAudit.created_at,
+            cache: "exact_content_hash",
+          },
+          result: cachedAudit.result,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
+    // Premium tiers can contain up to 100 chapters. The automatic publication
+    // pipeline runs sequentially, so the uncached window must be large enough
+    // for one complete first-pass book. Exact-hash cache hits above consume no
+    // budget; the extra 20 calls allow bounded retries without starvation.
+    const limited = await enforceDurableRateLimit(sc, {
+      name: "audit-code",
+      key: auth.userId,
+      limit: 120,
+      windowSec: 600,
+    });
+    if (limited) return limited;
 
     if (codeBlocks.length === 0) {
       return new Response(JSON.stringify({
@@ -501,7 +547,7 @@ serve(async (req) => {
     let contentHash: string | null = null;
 
     if (chapterId && canonicalBookId) {
-      contentHash = await sha256Hex(content);
+      contentHash = currentContentHash || await sha256Hex(content);
       const { data: persisted, error: persistError } = await sc
         .from("chapter_code_audits")
         .insert({
