@@ -191,6 +191,7 @@ jobs:
         run: |
           deno check supabase/functions/generate-book/index.ts
           deno check supabase/functions/generate-chapter/index.ts
+          deno check supabase/functions/generation-worker/index.ts
           deno check supabase/functions/ai-publishing-bridge/index.ts
           deno check supabase/functions/generate-cover/index.ts
           deno check supabase/functions/generate-cover-raw/index.ts
