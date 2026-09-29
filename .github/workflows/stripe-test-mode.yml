@@ -62,6 +62,8 @@ jobs:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Refuse anything but a test-mode key
         run: |

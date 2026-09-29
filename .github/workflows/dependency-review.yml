@@ -19,6 +19,8 @@ jobs:
     steps:
       - name: Checkout repository
         uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Reject newly introduced vulnerable runtime dependencies
         uses: actions/dependency-review-action@v5
         with:

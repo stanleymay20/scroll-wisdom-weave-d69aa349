@@ -19,6 +19,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.2.23

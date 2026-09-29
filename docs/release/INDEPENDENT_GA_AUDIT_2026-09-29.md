@@ -72,3 +72,11 @@ P3: plain-build bundle warnings and legacy lint baseline remain; route lazy load
 - [ ] All ten specialized modes remain closed; PR #102 reviewed/rebased independently; no empirical qualification assumed.
 - [ ] Payments stay disabled; Stripe lifecycle cannot be called passed when skipped.
 - [ ] Keyboard/mobile/accessible error/progress/retry journeys and outage tests pass.
+
+## Fresh CI follow-up
+
+The initial audit PR run completed a fresh Supabase migration replay, database lint and the real PostgreSQL chapter-fencing regression script successfully. Browser E2E also passed in GitHub, resolving the local Chromium launch limitation for deterministic tests (not live authenticated journeys).
+
+Fresh CI then correctly rejected two newly published high-severity undici advisories affecting locked 7.29.0. Override/lock updated to patched 7.29.1 without adding an exception. The static chapter-regeneration scanner was updated to require the fenced RPC instead of the removed unsafe direct UPDATE.
+
+P1 R10 (release assurance): default PR checkout tests GitHub's synthetic merge commit, while workflow head_sha identifies the candidate branch. Mandatory PR gates now explicitly checkout pull_request.head.sha (or github.sha on push/dispatch). Merge-result and candidate-head evidence must remain distinct. All new candidate gates must rerun. Hosting/protection enforcement remains unverified.
