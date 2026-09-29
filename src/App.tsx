@@ -94,8 +94,6 @@ const PayoutProfileEditor = lazy(() => import("./pages/PayoutProfileEditor"));
 const Sell = lazy(() => import("./pages/Sell"));
 const SellAnalytics = lazy(() => import("./pages/SellAnalytics"));
 const CollectionPage = lazy(() => import("./pages/CollectionPage"));
-const CreatorIntelligence = lazy(() => import("./pages/CreatorIntelligence"));
-const CreatorBusinessHub = lazy(() => import("./pages/CreatorBusinessHub"));
 const CreatorAssets = lazy(() => import("./pages/CreatorAssets"));
 const KingdomWealthTools = lazy(() => import("./pages/KingdomWealthTools"));
 
@@ -258,8 +256,6 @@ const App = () => (
                         <Route path="/account/earnings" element={withRecovery('CreatorEarnings', <ProtectedRoute><CreatorEarnings /></ProtectedRoute>)} />
                         <Route path="/account/payouts" element={withRecovery('PayoutProfile', <ProtectedRoute><PayoutProfileEditor /></ProtectedRoute>)} />
                         <Route path="/collections/:owner/:slug" element={withRecovery('CollectionPage', <CollectionPage />)} />
-                        <Route path="/account/intelligence" element={withRecovery('CreatorIntelligence', <ProtectedRoute><CreatorIntelligence /></ProtectedRoute>)} />
-                        <Route path="/creator/business" element={withRecovery('CreatorBusinessHub', <ProtectedRoute><CreatorBusinessHub /></ProtectedRoute>)} />
                         <Route path="/creator/assets" element={withRecovery('CreatorAssets', <ProtectedRoute><CreatorAssets /></ProtectedRoute>)} />
 
                         <Route path="*" element={<NotFound />} />
