@@ -190,11 +190,14 @@ jobs:
         env:
           RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
           EXPECTED_FINGERPRINT: ${{ steps.source.outputs.fingerprint }}
+          PAYMENT_WRITES_DISABLED: ${{ steps.payment_gate.outputs.disabled }}
         shell: bash
         run: |
           set -euo pipefail
           node --input-type=module <<'NODE'
           import { readFileSync, writeFileSync } from "node:fs";
+
+          const paymentsDisabled = process.env.PAYMENT_WRITES_DISABLED === "true";
 
           const evidence = {
             schemaVersion: 1,
@@ -204,8 +207,8 @@ jobs:
             releaseSha: process.env.RELEASE_SHA,
             expectedSourceFingerprint: process.env.EXPECTED_FINGERPRINT,
             production: JSON.parse(readFileSync("live-release.json", "utf8")),
-            paymentWrites: ${{ steps.payment_gate.outputs.disabled == 'true' && '"disabled"' || '"enabled"' }},
-            stripeLifecycle: ${{ steps.payment_gate.outputs.disabled == 'true' && '"not_required_while_disabled"' || '"success"' }},
+            paymentWrites: paymentsDisabled ? "disabled" : "enabled",
+            stripeLifecycle: paymentsDisabled ? "not_required_while_disabled" : "success",
             result: "GA_PRODUCTION_VERIFICATION_PASS",
           };
 
