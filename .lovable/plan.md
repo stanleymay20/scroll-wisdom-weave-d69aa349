@@ -1,34 +1,29 @@
-# Plan: Reliable build/source identity for Lovable-hosted production builds
+# Plan: P04 — Real provider-backed generation smoke (diagnostics only, no code edits)
 
-## Findings (verified, not guessed)
+## Feasibility verdict: YES — all required capabilities exist
 
-**What the current code does**
-- `scripts/build-commit.mjs` resolves the commit in this order: `GITHUB_SHA` → `VITE_BUILD_ID` → reading the checkout's `.git` → `null` ("unavailable").
-- `vite.config.ts` injects the result as `__BUILD_ID__` and writes `dist/release.json` on every build.
+Verified against the actual function code and available tools:
 
-**Why production reports `commit: null / commitSource: unavailable`**
-- In this sandbox, `.git` exists as a worktree pointer (`gitdir: /nix/store/.../repo.git/worktrees/dev-server`), so the local/preview build resolves a commit from git. That is why preview builds have an identity.
-- Lovable's hosted production build runs a plain `vite build` in an environment where, per the evidence (production `/release.json` shows `unavailable`), none of the three sources exist: no `GITHUB_SHA`, no `VITE_BUILD_ID`, and no readable `.git` directory.
-- Lovable's official docs confirm there is **no supported platform variable that exposes the source commit SHA to the build**. The only build-time variable mechanisms Lovable documents are:
-  1. `VITE_*` variables from committed `.env` files (non-secret, injected by Vite), and
-  2. Workspace **build secrets** (Enterprise plan only, intended for things like npm tokens — and they are secrets, so they are the wrong tool for a public commit identity anyway).
+1. **Disposable user creation** — possible without any secret. The Test backend's auth signup endpoint (`/auth/v1/signup`) accepts the publishable anon key, which is not a secret. The signup response returns a real access token. No service-role key is needed or accessible (it is not available on Lovable Cloud, and none will be fabricated).
+2. **Authenticated invocation of the real provider path** — `generate-book/index.ts` and `generate-chapter/index.ts` both call `requireUser(req)` (verified at generate-book line 70) and use the server-side managed `LOVABLE_API_KEY` (generate-book line 197, generate-chapter line 1947). The key never leaves the server. Invocation uses `supabase--curl_edge_functions` with the disposable user's access token in the Authorization header.
+3. **Persistence verification** — `supabase--read_query` on Test confirms the book row, at least one chapter row with real (non-placeholder) generated content, and the library/ownership records.
+4. **Cleanup** — `supabase--run_sql` on Test deletes the fixture book, chapters, library rows, and the disposable auth user, returning counts so deletion is verified.
 
-**Conclusion:** Lovable does not expose a supported commit-SHA variable to `vite build`. The existing fallback chain is correct; the hosted build environment simply provides none of its inputs.
+## Execution steps (Test database only; Live untouched)
 
-## Recommended approach (safest supported option)
+1. Sign up a disposable user (`ga-p04-smoke-<timestamp>@example.invalid`) via the Test auth endpoint; capture the access token in-memory only (never logged or echoed).
+2. Invoke `generate-book` for a minimal free-tier book (free tier allows 1 book/day, up to 5 chapters — request 1–2 chapters to keep the smoke fast and cheap).
+3. Invoke `generate-chapter` for chapter 1 if generate-book does not persist chapter content itself.
+4. Verify via read queries: book exists with correct `creator_id`/`user_id`, chapter exists with substantial non-placeholder content, library record present.
+5. Clean up: delete chapters, book, library rows, and the auth user; verify zero remaining rows.
+6. Report: pass/fail per step, with the exact error if any step fails.
 
-Since Lovable builds from the Git repository, the only identity guaranteed to be present at build time is **content committed into the repo itself**. Plan:
+## Known risk that may legitimately fail the smoke
 
-1. **Add a committed identity file** `public/build-identity.json` (or a `src/` constant) containing the commit SHA, updated automatically on every push to the production branch by a small GitHub Actions workflow (the repo already has CI workflows). The workflow writes the SHA of the commit being built and commits it back (or updates it as part of the release flow).
-   - Because the file is in the repo, Lovable's build sees it with zero platform support.
-   - `release.json` generation reads this file as a new source (`source: "repo-file"`) before falling back to "unavailable".
-2. **Keep the existing fallback chain unchanged** — `GITHUB_SHA` (CI), `VITE_BUILD_ID` (manual override), `.git` (local/preview) all keep working; the repo file is added as an additional, Lovable-compatible source.
-3. **Honest fallback preserved:** if none of the sources exist, keep reporting `commit: null / unavailable` rather than guessing — a wrong identity is worse than none.
+The workspace AI spending limit was reached earlier this session (`403 credit_limit_reached`). If it is still in effect, step 2/3 will fail with that 403 — that is a valid diagnostic result (provider path correctly reached and correctly denied), not a code bug, and it will be reported as such rather than retried or worked around. Per gateway semantics, a 402/403 pauses the chain; no retries, no model switching.
 
-## Alternative considered and rejected
-- **Build secrets (Enterprise):** wrong tool — secrets are for credentials, plan-gated, and would still require manually copying a SHA per deploy.
-- **Build timestamp only:** already present (`buildTime`); identifies *when*, not *what* — insufficient as source identity on its own.
+## Explicit non-goals
 
-## Technical details
-- Files touched (after plan approval): `scripts/build-commit.mjs` (add repo-file source + tests in `src/lib/__tests__/buildCommit.test.ts`), new `.github/workflows/` step or script to stamp `public/build-identity.json`, `scripts/create-release-manifest.mjs` (unchanged — it reuses `resolveBuildCommit`).
-- No database, publish, or Live changes involved. Publishing remains gated on your explicit authorization.
+- No source code edits, no commits, no migrations, no Live/production changes.
+- No mocked or deterministic stand-ins; success is claimed only from real persisted provider output.
+- No secrets are read, printed, or exposed at any point.
