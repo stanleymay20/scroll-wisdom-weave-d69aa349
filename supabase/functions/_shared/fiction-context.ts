@@ -177,3 +177,48 @@ export function buildFictionContinuityContext(
     "",
   ].join("\n");
 }
+
+export function buildFictionOutlineInstructions(rawConfig: unknown): string {
+  const config = sanitizeFictionContract(rawConfig);
+
+  const characters = config.characters.length > 0
+    ? config.characters.slice(0, 12).map((character) =>
+        "- " + character.name + " [" + character.role + "]"
+        + (character.motivation ? " | wants: " + oneLine(character.motivation, 180) : "")
+        + (character.arc ? " | arc: " + oneLine(character.arc, 220) : "")
+      ).join("\n")
+    : "- No explicit character sheet supplied; establish a compact cast and preserve it.";
+
+  const plotRoadmap = config.plotPoints.length > 0
+    ? config.plotPoints.slice(0, 16).map((point, index) =>
+        String(index + 1) + ". " + point.label + ": " + oneLine(point.description, 260)
+      ).join("\n")
+    : "- Build a causal beginning → escalation → midpoint change → crisis → climax → resolution arc.";
+
+  return [
+    "FICTION / NOVEL OUTLINE CONSTITUTION.",
+    "Design a dramatic chapter-by-chapter story architecture, not an instructional outline.",
+    "Genre: " + config.genre,
+    "POV: " + config.pov,
+    config.tone ? "Tone: " + config.tone : "",
+    config.themes ? "Themes: " + config.themes : "",
+    config.setting ? "Setting/world rules: " + oneLine(config.setting, 900) : "",
+    "",
+    "CHARACTER CANON:",
+    characters,
+    "",
+    "PLOT ROADMAP:",
+    plotRoadmap,
+    "",
+    "OUTLINE RULES:",
+    "- Each chapter must change story state through a goal, resistance/conflict, turn, and consequence.",
+    "- Preserve causality: consequences from one chapter become conditions for the next.",
+    "- Track who knows what, relationships, injuries, possessions, promises, secrets, locations, and chronology.",
+    "- Keep the declared POV stable unless the supplied story design explicitly calls for a controlled shift.",
+    "- Chapter descriptions should identify the scene objective, pressure/conflict, turn/revelation, and resulting state.",
+    "- Treat keyTopics as STORY BEATS, not expository topics.",
+    "- Do not use learning objectives, key takeaways, frameworks, citations, self-help promises, or textbook structure.",
+    "- Do not restart the premise in later chapters or repeat reveals the reader already received.",
+  ].filter(Boolean).join("\n");
+}
+
