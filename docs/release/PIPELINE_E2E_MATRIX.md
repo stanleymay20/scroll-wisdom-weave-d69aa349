@@ -20,7 +20,7 @@ Legend: **PASS** = evidence exists and is release-gated; **PARTIAL** = useful ev
 | P09 | Editorial → proofread → QA → production render → final certification | PASS — browser drives full orchestrator | PARTIAL | PASS — scope-bound attestation/hash tests | MISSING production-like real artifact run | BLOCK |
 | P10 | Publisher identity/ISBN → independent review → assignment → atomic verified publication mint | PASS — canonical publish + admin ISBN UI surfaces | PARTIAL — Lovable Test convergence still in progress | PASS/IN-PROGRESS — deep SQL governance + mint gates | N/A | BLOCK |
 | P11 | Export PDF/EPUB/DOCX → validation → artifact → download | PASS — non-placeholder PDF browser download | PARTIAL | PASS — export integrity + EPUB conformance | MISSING retailer/platform preview proof | BLOCK |
-| P12 | Schedule release → scheduler/cron → materialized public release | PASS — free-user lock + entitled schedule/item creation browser contract | PARTIAL — repo/fresh-DB cron wiring proven; Lovable Test cron execution not yet observed | PASS — restrictive entitlement RLS, five-minute cron registration, due/future/lapsed/idempotency materialization tests | N/A | BLOCK until Test cron is verified |
+| P12 | Schedule release → scheduler/cron → materialized public release | PASS — free-user lock + entitled schedule/item creation browser contract | PARTIAL — production canonical cron registration and zero-work materializer smoke verified 2026-09-29; a due-item hosted E2E is still required | PASS — restrictive entitlement RLS, five-minute cron registration, due/future/lapsed/idempotency materialization tests | N/A | BLOCK until a due-item hosted E2E is verified |
 | P13 | Creator listing → storefront → sample reader | PASS | PARTIAL | PASS RLS/read isolation | N/A | PASS for beta surface |
 | P14 | Buy book → Stripe → purchase row → entitlement → full reader | PASS checkout UI wiring/idempotency | MISSING real Stripe/local webhook browser flow | PASS — sale/entitlement ledger lifecycle | NOT RUN — suite built (`stripe-test-mode.yml`: hosted Checkout, purchase, sale ledger, buyer chapter access) | BLOCK until that run is green |
 | P15 | Sale → earnings ledger → partial/full refund → exact reversal | N/A | MISSING real Stripe refund webhook flow | PASS — partial-refund/idempotency/replay contracts | NOT RUN — suite built (`stripe-test-mode.yml`: partial refund, signed duplicate replay, full refund, access revoked) | BLOCK until that run is green |
@@ -35,16 +35,17 @@ Legend: **PASS** = evidence exists and is release-gated; **PARTIAL** = useful ev
 
 ## Secondary / deliberately non-GA surfaces
 
-These must be either E2E-proven **or explicitly disabled/removed** before they are presented as supported public features:
+These must be either E2E-proven **or explicitly disabled/removed** before they are presented as supported public features.
 
-- ownership transfer (currently intended to remain GA-disabled until its workflow is proven);
-- cinematic/chapter video generation and narration;
-- study-music generation;
-- advanced creator/business analytics;
-- PWA/offline recovery;
-- operational ledger backfill/reconciliation;
-- admin refund execution UI;
-- direct identifier-resolution API operational SLA.
+GA launch state:
+- ownership transfer — **DISABLED** at the database mutation boundary;
+- cinematic/chapter video and interactive voice — **DISABLED** by GA PMF feature gates;
+- study-music generation — **DISABLED** by GA PMF feature gates;
+- advanced creator intelligence/business analytics — **DISABLED** at route registration; core marketplace analytics remain in beta scope;
+- PWA/offline recovery — **DISABLED** for GA: no service worker/install manifest is emitted, install/update routes are removed, and older service-worker registrations are retired;
+- operational ledger backfill/reconciliation — internal-only, not a supported public GA surface;
+- admin refund execution UI — internal-only, not a supported public GA surface;
+- direct identifier-resolution API operational SLA — not advertised as a public GA commitment.
 
 ## Stripe test-mode evidence
 
