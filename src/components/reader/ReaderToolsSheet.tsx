@@ -92,6 +92,7 @@ export function ReaderToolsSheet({
       label: "Voice AI",
       icon: <Mic className="h-5 w-5" />,
       onClick: onVoiceClick,
+      hidden: !FEATURES.enableVoiceConversation,
       variant: "primary",
     },
     {
@@ -99,6 +100,7 @@ export function ReaderToolsSheet({
       label: "Ask AI",
       icon: <MessageCircle className="h-5 w-5" />,
       onClick: onQAClick,
+      hidden: !FEATURES.enableInteractiveQA,
       variant: "default",
     },
     {
@@ -166,6 +168,7 @@ export function ReaderToolsSheet({
       label: "Study Music",
       icon: <Music className="h-5 w-5" />,
       onClick: onStudyMusicClick || (() => {}),
+      hidden: !FEATURES.enableStudyMusic,
     },
   ];
 
