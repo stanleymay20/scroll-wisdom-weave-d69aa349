@@ -263,6 +263,8 @@ jobs:
           deno test supabase/functions/_shared/qaPublishability_test.ts
           deno test supabase/functions/_shared/outline-normalizer_test.ts
           deno test supabase/functions/_shared/technical-code-quality_test.ts
+          deno test supabase/functions/_shared/fiction-context_test.ts
+          deno test supabase/functions/_shared/authority-validator_workbook_test.ts
           deno test supabase/functions/_shared/cron-auth_test.ts
           deno test supabase/functions/_shared/stripe-connect_test.ts
       - name: Pin production Stripe webhook event contract
