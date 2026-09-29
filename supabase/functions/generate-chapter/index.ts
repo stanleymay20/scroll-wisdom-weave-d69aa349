@@ -3092,7 +3092,7 @@ Return JSON only:
       }
 
       const workbookData = await workbookResponse.json();
-      let workbookContent = workbookData.choices?.[0]?.message?.content || "";
+      const workbookContent = workbookData.choices?.[0]?.message?.content || "";
       
       // VALIDATE workbook structure. Specialized book-type contracts fail
       // closed: an invalid workbook must never be persisted as generated.
