@@ -4,6 +4,7 @@ import { ErrorCode, errorResponse } from "../_shared/error-codes.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
 import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
 import { normalizeGeneratedOutline } from "../_shared/outline-normalizer.ts";
+import { sanitizeFictionContract } from "../_shared/fiction-context.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -142,6 +143,20 @@ serve(async (req) => {
       enableReferences = false, academicMode = false, deepResearch = false, bestsellerMode = false,
       authorMode = "ai", authorDisplayName: rawAuthorName = null, penName: rawPenName = null,
       transformationPrompt: rawTransformationPrompt = null,
+      workbookDensity = null,
+      comicStyleId = null,
+      paletteHint: rawPaletteHint = null,
+      lineWeightHint = null,
+      characterSheet = null,
+      layoutTemplate = null,
+      textInImage = true,
+      scenesPerPanel = 1,
+      comicSubType = null,
+      comicSubTypeConfig = null,
+      characterSheetConfig = null,
+      comicLearningConfig = null,
+      fictionConfig = null,
+      styleProfile = null,
     } = body;
 
     // ── Server-side input validation ──────────────────────
@@ -155,6 +170,25 @@ serve(async (req) => {
     const authorDisplayName = sanitize(rawAuthorName, 100);
     const penName = sanitize(rawPenName, 100);
     const transformationPrompt = sanitize(rawTransformationPrompt, 3000);
+    const paletteHint = sanitize(rawPaletteHint, 300);
+
+    const safeJsonObject = (value: unknown, maxChars: number, label: string): Record<string, unknown> => {
+      if (value == null) return {};
+      if (typeof value !== "object" || Array.isArray(value)) {
+        throw new Error(label + " must be an object");
+      }
+      const serialized = JSON.stringify(value);
+      if (serialized.length > maxChars) {
+        throw new Error(label + " is too large");
+      }
+      return JSON.parse(serialized) as Record<string, unknown>;
+    };
+
+    const safeFictionConfig = sanitizeFictionContract(fictionConfig);
+    const safeStyleProfile = safeJsonObject(styleProfile, 12000, "Style profile");
+    const safeComicSubTypeConfig = safeJsonObject(comicSubTypeConfig, 16000, "Comic subtype config");
+    const safeCharacterSheetConfig = safeJsonObject(characterSheetConfig, 24000, "Character sheet config");
+    const safeComicLearningConfig = safeJsonObject(comicLearningConfig, 16000, "Comic learning config");
 
     if (!advancedAuthoringEnabled()) {
       const requestedExtendedType = typeof extendedBookType === "string" ? extendedBookType : null;
@@ -399,6 +433,32 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       cover_image_url: customCover || null,
       creator_id: user.id, user_id: user.id,
       language, book_type: effectiveBookType,
+      workbook_density: effectiveBookType === "workbook"
+        ? (["low", "medium", "high"].includes(String(workbookDensity)) ? String(workbookDensity) : "medium")
+        : null,
+      comic_style_id: effectiveBookType === "comic" ? sanitize(comicStyleId, 64) || "children_book" : null,
+      palette_hint: effectiveBookType === "comic" ? paletteHint || null : null,
+      line_weight_hint: effectiveBookType === "comic" && ["thin", "medium", "bold"].includes(String(lineWeightHint))
+        ? String(lineWeightHint)
+        : null,
+      character_sheet: effectiveBookType === "comic"
+        ? (Object.keys(safeCharacterSheetConfig).length > 0
+            ? safeCharacterSheetConfig
+            : (sanitize(characterSheet, 4000) ? { description: sanitize(characterSheet, 4000) } : {}))
+        : {},
+      layout_template: effectiveBookType === "comic" && Number.isInteger(layoutTemplate)
+        ? Math.min(6, Math.max(3, Number(layoutTemplate)))
+        : 5,
+      text_in_image: effectiveBookType === "comic" ? Boolean(textInImage) : true,
+      scenes_per_panel: effectiveBookType === "comic" && Number.isInteger(scenesPerPanel)
+        ? Math.min(3, Math.max(1, Number(scenesPerPanel)))
+        : 1,
+      comic_sub_type: effectiveBookType === "comic" ? sanitize(comicSubType, 64) || "entertainment" : null,
+      comic_sub_type_config: effectiveBookType === "comic" ? safeComicSubTypeConfig : {},
+      character_sheet_config: effectiveBookType === "comic" ? safeCharacterSheetConfig : {},
+      comic_learning_config: effectiveBookType === "comic" ? safeComicLearningConfig : {},
+      fiction_config: effectiveBookType === "fiction" ? safeFictionConfig : {},
+      style_profile: safeStyleProfile,
     }).select().single();
 
     if (bookError) {
@@ -415,7 +475,12 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       status: 'generating',
       current_chapter: 0,
       total_chapters: effectiveChapters,
-      metadata: { bookType: effectiveBookType, model: generationModel, language },
+      metadata: {
+        bookType: effectiveBookType,
+        model: generationModel,
+        language,
+        contractVersion: 2,
+      },
     }).select('id').single();
 
     if (genJobError || !genJob?.id) {
