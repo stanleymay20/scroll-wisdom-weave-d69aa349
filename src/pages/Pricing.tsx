@@ -30,7 +30,7 @@ interface PlanConfig {
 const plans: PlanConfig[] = [
   {
     name: "Free",
-    description: "Try ScrollLibrary — no credit card needed",
+    description: "Start your first book — no credit card needed",
     price: "$0",
     period: "forever",
     icon: BookOpen,
@@ -39,7 +39,7 @@ const plans: PlanConfig[] = [
       { text: "1 book per month (up to 4,000 words/ch)", included: true },
       { text: "5 min text-to-speech", included: true },
       { text: "Voice AI after GA validation", included: false },
-      { text: "Basic PDF export", included: true },
+      { text: "PDF export after GA validation", included: FEATURES.enableExports },
       { text: "1 quiz & 1 certificate per book", included: true },
       { text: "AI-generated covers after provider validation", included: false },
       { text: "AI image generation after provider validation", included: false },
@@ -47,8 +47,8 @@ const plans: PlanConfig[] = [
     ],
   },
   {
-    name: "Student",
-    description: "For learners who need more content",
+    name: "Creator",
+    description: "For authors creating books regularly",
     price: `$${SUBSCRIPTION_TIERS.student.monthlyPrice}`,
     period: "/month",
     icon: Zap,
@@ -58,15 +58,15 @@ const plans: PlanConfig[] = [
       { text: "Up to 4,000 words per chapter", included: true },
       { text: "30 min text-to-speech", included: true },
       { text: "AI images after provider validation", included: false },
-      { text: "PDF, EPUB, DOCX exports", included: true },
+      { text: "PDF, EPUB, DOCX exports after GA validation", included: FEATURES.enableExports },
       { text: "AI-generated covers after provider validation", included: false },
       { text: "Unlimited quizzes & certificates", included: true },
       { text: "Cinematic video after GA", included: false },
     ],
   },
   {
-    name: "Premium",
-    description: "Full power for professionals & educators",
+    name: "Creator Pro",
+    description: "For serious authors and publishing-ready projects",
     price: `$${SUBSCRIPTION_TIERS.premium.monthlyPrice}`,
     period: "/month",
     icon: Sparkles,
@@ -77,15 +77,15 @@ const plans: PlanConfig[] = [
       { text: "Up to 6,000 words per chapter", included: true },
       { text: "60 min text-to-speech", included: true },
       { text: "AI images after provider validation", included: false },
-      { text: "PDF, EPUB & DOCX exports", included: true },
+      { text: "PDF, EPUB & DOCX exports after GA validation", included: FEATURES.enableExports },
       { text: "Cinematic video after GA", included: false },
       { text: "Commercial publishing rights", included: true },
       { text: "Priority support", included: true },
     ],
   },
   {
-    name: "Institutional",
-    description: "For universities & organizations",
+    name: "Teams",
+    description: "For publishers, universities & organizations",
     price: `$${SUBSCRIPTION_TIERS.prophet_tier.monthlyPrice}`,
     period: "/month",
     icon: Building2,
@@ -97,7 +97,7 @@ const plans: PlanConfig[] = [
       { text: "Cinematic video after GA", included: false },
       { text: "Batch generation after GA", included: false },
       { text: "AI research assistant after provider validation", included: false },
-      { text: "PDF, EPUB & DOCX exports", included: true },
+      { text: "PDF, EPUB & DOCX exports after GA validation", included: FEATURES.enableExports },
       { text: "Dedicated support", included: true },
     ],
   },
@@ -251,7 +251,7 @@ export default function Pricing() {
     <div className="min-h-screen flex flex-col">
       <SEO
         title="Pricing | ScrollLibrary"
-        description="Simple plans for learners, students, and institutions. Generate AI-powered books, earn verified mastery certificates, and access institutional reporting."
+        description="Plans for authors, creators, and teams. Create structured AI-native books today; advanced publishing capabilities remain gated until GA validation."
         canonical="/pricing"
       />
       <Navbar />
@@ -265,10 +265,10 @@ export default function Pricing() {
             {/* Header */}
             <div className="text-center mb-16">
               <h1 className="text-4xl md:text-5xl font-display font-bold text-foreground mb-4">
-                Plans & Pricing
+                Publishing plans
               </h1>
               <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                Start free. Paid upgrades reopen after the payment lifecycle passes its GA validation gate.
+                Start creating free. More capacity and advanced publishing tools unlock only as their GA validation gates pass.
               </p>
             </div>
 
@@ -356,10 +356,10 @@ export default function Pricing() {
               <div className="text-center mb-10">
                 <Badge className="mb-3">For Creators</Badge>
                 <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-3">
-                  Sell your work, your way
+                  Publish and sell, your way
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto">
-                  Free creators can list on the ScrollLibrary marketplace. External publishing integrations will be enabled only after their provider E2E gates pass.
+                  List books on the ScrollLibrary marketplace now. External publishing integrations remain gated until their provider E2E checks pass.
                 </p>
               </div>
 

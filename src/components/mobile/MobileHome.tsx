@@ -127,23 +127,23 @@ export function MobileHome() {
       {/* Welcome Hero for Mobile */}
       <section className="mb-6 pt-2" aria-labelledby="mobile-hero-title">
         <h1 id="mobile-hero-title" className="font-display text-[26px] leading-tight font-bold text-foreground mb-1 tracking-tight">
-          Generate. Read. Master.
+          Create. Read. Master.
         </h1>
         <p className="text-sm text-muted-foreground mb-4">
-          AI-native books with verified mastery proofs.
+          Create structured AI-native books now. Advanced publishing workflows unlock only after GA validation.
         </p>
         <div className="flex gap-2.5 w-full">
           <Link
             to="/generate"
             className="flex-1 inline-flex items-center justify-center min-h-11 px-4 rounded-full bg-primary text-primary-foreground text-sm font-semibold shadow-sm active:scale-[0.98] transition-transform"
           >
-            Generate a book
+            Create a book
           </Link>
           <Link
             to="/store"
             className="flex-1 inline-flex items-center justify-center min-h-11 px-4 rounded-full border border-border text-foreground text-sm font-semibold active:scale-[0.98] transition-transform"
           >
-            Browse library
+            Explore books
           </Link>
         </div>
       </section>
@@ -182,7 +182,7 @@ export function MobileHome() {
               to="/generate"
               className="inline-flex items-center justify-center min-h-11 px-5 rounded-full bg-primary text-primary-foreground text-sm font-semibold active:scale-[0.98] transition-transform"
             >
-              Generate now
+              Create your first book
             </Link>
           </div>
         )}
