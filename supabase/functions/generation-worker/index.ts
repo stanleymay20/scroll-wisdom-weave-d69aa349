@@ -34,9 +34,16 @@ function safeTopics(value: unknown): string[] {
     .slice(0, 12);
 }
 
-function classifyGenerationFailure(status: number, payload: any): string {
-  if (status === 402 || payload?.code === "ai_credits_exhausted") return "AI_CREDITS_EXHAUSTED";
-  if (status === 429 || payload?.code === "RATE_LIMITED") return "RATE_LIMITED";
+function responseCode(payload: unknown): string | undefined {
+  if (!payload || typeof payload !== "object" || Array.isArray(payload)) return undefined;
+  const code = (payload as Record<string, unknown>).code;
+  return typeof code === "string" ? code : undefined;
+}
+
+function classifyGenerationFailure(status: number, payload: unknown): string {
+  const code = responseCode(payload);
+  if (status === 402 || code === "ai_credits_exhausted") return "AI_CREDITS_EXHAUSTED";
+  if (status === 429 || code === "RATE_LIMITED") return "RATE_LIMITED";
   if (status >= 500) return "UPSTREAM_GENERATION_FAILED";
   return "CHAPTER_GENERATION_FAILED";
 }
@@ -297,7 +304,11 @@ serve(async (req) => {
       console.error("[GENERATION-WORKER] Continuation dispatch exception:", error);
     });
 
-    const edgeRuntime = (globalThis as any).EdgeRuntime;
+    const edgeRuntime = (
+      globalThis as typeof globalThis & {
+        EdgeRuntime?: { waitUntil: (promise: Promise<unknown>) => void };
+      }
+    ).EdgeRuntime;
     if (edgeRuntime?.waitUntil) {
       edgeRuntime.waitUntil(continuation);
     } else {
