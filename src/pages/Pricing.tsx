@@ -367,7 +367,6 @@ export default function Pricing() {
                     features: [
                       "Everything in Free",
                       "Release schedules + follower broadcasts",
-                      "External publishing integrations after GA validation",
                       "Unlimited collections",
                       "0% marketplace surcharge",
                       "Core marketplace analytics",
@@ -381,7 +380,6 @@ export default function Pricing() {
                     features: [
                       "Everything in Creator",
                       "Priority generation queue",
-                      "Advanced analytics after GA validation",
                       "+50 monthly generation bonus",
                       "Best for publishing businesses",
                     ],
