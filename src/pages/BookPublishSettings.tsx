@@ -754,7 +754,8 @@ export default function BookPublishSettings() {
           </ul>
         </Card>
 
-        {/* Advanced distribution — hidden by default. Most authors stop above. */}
+        {/* Advanced distribution stays out of the GA render until provider E2E passes. */}
+        {!PMF_MODE && (
         <details className="mt-6 group rounded-lg border border-border/60 bg-card/40">
           <summary className="cursor-pointer list-none px-4 py-3 flex items-center justify-between gap-2 text-sm font-medium hover:bg-muted/30 rounded-lg">
             <span className="flex items-center gap-2">
@@ -915,6 +916,7 @@ export default function BookPublishSettings() {
 
           </div>
         </details>
+        )}
 
 
 
