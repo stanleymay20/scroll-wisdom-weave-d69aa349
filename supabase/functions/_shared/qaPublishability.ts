@@ -16,6 +16,7 @@ import { figureDataFor, parseRawFigureMarkers } from "./visual-intelligence.ts";
 import { auditChapterArtifacts, type ContentIssue } from "./content-quality.ts";
 import { parseBookToCanonical, type CanonicalChapter } from "./canonicalContent.ts";
 import { auditBookForExport, type ExportIssue } from "./exportQuality.ts";
+import { detectDeterministicCodeIssues } from "./technical-code-quality.ts";
 
 export type QAStatus = "ready" | "needs_review" | "blocked";
 export type QASeverity = "blocker" | "warning" | "info";
@@ -32,6 +33,8 @@ export interface QAIssue {
     | "structure"      // chapters, headings, tables
     | "rendering"      // LaTeX, code truncation, figures, unicode
     | "citations"      // references / claims
+    | "generation"     // incomplete/mismatched generation state
+    | "technical"      // executable/code quality evidence
     | "export";        // export-specific (images, formats)
 }
 
@@ -57,6 +60,133 @@ export interface QAChapterInput {
   chapter_number: number;
   title: string;
   content: string | null;
+  /** Server generation truth. Omitted in legacy/unit-test callers. */
+  is_generated?: boolean | null;
+  /** Stored telemetry only; content is still re-inspected deterministically. */
+  word_count?: number | null;
+}
+
+// --- Generation/editorial completeness --------------------------------------
+
+const GENERATION_STUB_RE =
+  /(?:Full chapter content is being generated|Content pending generation|generation pending|chapter content pending)/i;
+const UNRESOLVED_EDITORIAL_RE =
+  /\[(?:requires verification|citation needed|source needed|verify(?: this)?(?: claim| source)?|fact[- ]?check(?: needed)?)\]/i;
+
+function detectGenerationIssues(
+  chapters: QAChapterInput[],
+  expectedChapterCount?: number | null,
+): QAIssue[] {
+  const issues: QAIssue[] = [];
+
+  if (chapters.length === 0) {
+    issues.push({
+      severity: "blocker",
+      code: "no_chapters",
+      category: "generation",
+      message: "Book contains no chapters.",
+      hint: "Generate the manuscript before running publication QA.",
+    });
+    return issues;
+  }
+
+  const seen = new Set<number>();
+  const duplicates = new Set<number>();
+  for (const chapter of chapters) {
+    if (seen.has(chapter.chapter_number)) duplicates.add(chapter.chapter_number);
+    seen.add(chapter.chapter_number);
+  }
+  if (duplicates.size > 0) {
+    issues.push({
+      severity: "blocker",
+      code: "duplicate_chapter_numbers",
+      category: "generation",
+      message: `Duplicate chapter numbers: ${[...duplicates].sort((a, b) => a - b).join(", ")}`,
+      hint: "Chapter numbering must be unique and sequential before publication.",
+    });
+  }
+
+  if (expectedChapterCount != null && expectedChapterCount > 0) {
+    if (chapters.length !== expectedChapterCount) {
+      issues.push({
+        severity: "blocker",
+        code: "chapter_count_mismatch",
+        category: "generation",
+        message: `Book declares ${expectedChapterCount} chapters but stores ${chapters.length}.`,
+        hint: "Regenerate or repair the outline so persisted chapter count matches the book contract.",
+      });
+    }
+
+    const missing: number[] = [];
+    for (let n = 1; n <= expectedChapterCount; n++) {
+      if (!seen.has(n)) missing.push(n);
+    }
+    if (missing.length > 0) {
+      issues.push({
+        severity: "blocker",
+        code: "missing_chapter_numbers",
+        category: "generation",
+        message: `Missing chapter number${missing.length === 1 ? "" : "s"}: ${missing.join(", ")}`,
+        hint: "Every declared chapter number must exist exactly once.",
+      });
+    }
+
+    const extras = [...seen].filter((n) => n < 1 || n > expectedChapterCount).sort((a, b) => a - b);
+    if (extras.length > 0) {
+      issues.push({
+        severity: "blocker",
+        code: "out_of_range_chapter_numbers",
+        category: "generation",
+        message: `Out-of-range chapter number${extras.length === 1 ? "" : "s"}: ${extras.join(", ")}`,
+        hint: "Persist only chapters within the server-authorized outline range.",
+      });
+    }
+  }
+
+  for (const chapter of chapters) {
+    const content = chapter.content ?? "";
+    if (chapter.is_generated === false) {
+      issues.push({
+        severity: "blocker",
+        code: "chapter_not_generated",
+        category: "generation",
+        chapter: chapter.chapter_number,
+        message: `Chapter ${chapter.chapter_number} is still an outline/draft shell.`,
+        hint: "Generate the full chapter before publication certification.",
+      });
+    }
+    if (!content.trim()) {
+      issues.push({
+        severity: "blocker",
+        code: "empty_chapter",
+        category: "generation",
+        chapter: chapter.chapter_number,
+        message: `Chapter ${chapter.chapter_number} has no manuscript content.`,
+        hint: "A publication candidate cannot contain empty chapters.",
+      });
+    } else if (GENERATION_STUB_RE.test(content)) {
+      issues.push({
+        severity: "blocker",
+        code: "generation_stub_visible",
+        category: "generation",
+        chapter: chapter.chapter_number,
+        message: `Chapter ${chapter.chapter_number} still contains generation placeholder text.`,
+        hint: "Replace the outline stub with the completed chapter.",
+      });
+    }
+    if (UNRESOLVED_EDITORIAL_RE.test(content)) {
+      issues.push({
+        severity: "blocker",
+        code: "unresolved_editorial_verification",
+        category: "citations",
+        chapter: chapter.chapter_number,
+        message: `Chapter ${chapter.chapter_number} contains an unresolved verification/editorial marker.`,
+        hint: "Verify, rewrite, or remove the unsupported claim before publication.",
+      });
+    }
+  }
+
+  return issues;
 }
 
 // --- Rendering risk detectors ------------------------------------------------
@@ -235,9 +365,12 @@ function fromExportIssue(i: ExportIssue): QAIssue {
 
 export function auditBookForPublishability(
   chapters: QAChapterInput[],
-  options: { hasCover: boolean; bookType?: string | null } = { hasCover: false },
+  options: { hasCover: boolean; bookType?: string | null; expectedChapterCount?: number | null } = { hasCover: false },
 ): QAReport {
   const issues: QAIssue[] = [];
+
+  // 0. Server-owned generation truth and editorial leakage.
+  issues.push(...detectGenerationIssues(chapters, options.expectedChapterCount));
 
   // 1. Content-artifact audit (AI preambles etc.)
   for (const ch of chapters) {
@@ -246,6 +379,17 @@ export function auditBookForPublishability(
     }
     issues.push(...detectRenderingIssues(ch.content ?? "", ch.chapter_number));
     issues.push(...detectCitationGaps(ch.content ?? "", ch.chapter_number));
+
+    for (const codeIssue of detectDeterministicCodeIssues(ch.content ?? "")) {
+      issues.push({
+        severity: codeIssue.severity,
+        code: codeIssue.code,
+        category: "technical",
+        chapter: ch.chapter_number,
+        message: `Chapter ${ch.chapter_number}: ${codeIssue.message}`,
+        hint: "Repair the code and rerun the content-bound STO audit before publication.",
+      });
+    }
   }
 
   // 2. Canonical / structural / export audit
@@ -273,6 +417,38 @@ export function auditBookForPublishability(
     infoCount,
     totals: exportReport.totals,
     issues,
+    byCategory,
+  };
+}
+
+
+/**
+ * Add server-derived evidence issues (for example, missing content-bound code
+ * audits) without weakening the deterministic score/status calculation.
+ */
+export function appendQAIssues(report: QAReport, extra: QAIssue[]): QAReport {
+  if (extra.length === 0) return report;
+
+  const issues = [...report.issues, ...extra];
+  const blockerCount = issues.filter((i) => i.severity === "blocker").length;
+  const warningCount = issues.filter((i) => i.severity === "warning").length;
+  const infoCount = issues.filter((i) => i.severity === "info").length;
+  const score = Math.max(0, 100 - blockerCount * 20 - warningCount * 4 - infoCount);
+  const status: QAStatus = blockerCount > 0 ? "blocked" : warningCount > 0 ? "needs_review" : "ready";
+
+  const byCategory: Record<string, number> = {};
+  for (const issue of issues) {
+    byCategory[issue.category] = (byCategory[issue.category] ?? 0) + 1;
+  }
+
+  return {
+    ...report,
+    issues,
+    blockerCount,
+    warningCount,
+    infoCount,
+    score,
+    status,
     byCategory,
   };
 }

@@ -14,7 +14,7 @@ for (const type of types) {
 
 const hardRanges = [
   ['workbook', 800, 1800],
-  ['children', 100, 500],
+  ['children', 800, 1500],
   ['fiction', 2000, 6000],
 ];
 for (const [type, min, max] of hardRanges) {

@@ -9,6 +9,7 @@ export const ACADEMIC_CATEGORIES = [
   'philosophy',
   'economics',
   'finance',
+  'business',
   'governance',
   'african_studies',
 ] as const;

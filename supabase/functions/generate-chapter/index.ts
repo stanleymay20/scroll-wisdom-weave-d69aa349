@@ -4,6 +4,10 @@ import { buildVisualIntelligencePrompt, extractFigureSpecs, validateFigureSpecs,
 import { checkRateLimit, errorResponse, ErrorCode } from "../_shared/error-codes.ts";
 import { COMIC_STYLE_PRESETS, COMIC_SUB_TYPE_DEFINITIONS, buildStoryArchitectPrompt, buildScriptwriterPrompt, buildVisualDirectorPrompt, buildLearningAgentPrompt, buildContinuityGuardianPrompt, buildEnhancedComicSystemPrompt, buildEnhancedComicChapterPrompt, buildComicSystemPrompt, buildComicChapterPrompt } from "../_shared/generation/comic-prompts.ts";
 import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
+import { secretsMatch } from "../_shared/cron-auth.ts";
+import { buildFictionContinuityContext, sanitizeFictionContract } from "../_shared/fiction-context.ts";
+import { buildChildrenSystemPrompt } from "../_shared/children-contract.ts";
+import { validateWorkbookStructure as validateWorkbookContract } from "../_shared/authority-validator.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -1147,10 +1151,10 @@ function validateWorkbookStructure(content: string): ValidationResult {
 
   return {
     valid: errors.length === 0,
-    blocked: errors.some(e => e.severity === 'critical'),
+    blocked: errors.length > 0,
     errors,
     warnings,
-    failureMessage: errors.length > 0 
+    failureMessage: errors.length > 0
       ? '❌ **WORKBOOK STRUCTURE VIOLATION**: Must be interactive with prompts, not prose-heavy.'
       : undefined,
   };
@@ -1468,19 +1472,26 @@ async function conductDeepResearch(
   category: string,
   keyTopics: string[],
   citationStyle: string,
-  authToken: string
+  authToken: string,
+  workerContext?: { jobId: string; leaseToken: string },
 ): Promise<ResearchResult> {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   
   console.log("[DEEP-RESEARCH] Starting deep research pipeline for:", topic.slice(0, 50));
 
   try {
+    const researchHeaders: Record<string, string> = {
+      "Authorization": `Bearer ${authToken}`,
+      "Content-Type": "application/json",
+    };
+    if (workerContext?.jobId && workerContext.leaseToken) {
+      researchHeaders["x-generation-job-id"] = workerContext.jobId;
+      researchHeaders["x-generation-worker-token"] = workerContext.leaseToken;
+    }
+
     const response = await fetch(`${SUPABASE_URL}/functions/v1/deep-research`, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${authToken}`,
-        "Content-Type": "application/json",
-      },
+      headers: researchHeaders,
       body: JSON.stringify({
         topic: `${topic}`,
         category,
@@ -2005,23 +2016,86 @@ serve(async (req) => {
 
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
-    // Authenticate user
+    // Authenticate either a real user JWT or the tightly-scoped internal
+    // generation worker. The worker cannot nominate an arbitrary user: its
+    // identity is derived from the persisted generation job, and the chapter
+    // must belong to that job's book.
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(JSON.stringify({ error: "Authentication required" }), {
         status: 401,
         headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
 
-    const token = authHeader.replace("Bearer ", "");
-    const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-    
-    if (authError || !user) {
-      return new Response(JSON.stringify({ error: "Invalid authentication" }), {
-        status: 401,
-        headers: { ...corsHeaders, "Content-Type": "application/json" },
-      });
+    const token = authHeader.slice("Bearer ".length).trim();
+    const internalJobId =
+      typeof requestBody?.internalGenerationJobId === "string"
+        ? requestBody.internalGenerationJobId
+        : null;
+    const requestedChapterId =
+      typeof requestBody?.chapterId === "string"
+        ? requestBody.chapterId
+        : null;
+    const isInternalWorker =
+      !!internalJobId
+      && secretsMatch(token, SUPABASE_SERVICE_ROLE_KEY);
+
+    let user: { id: string } | null = null;
+
+    if (isInternalWorker) {
+      if (!requestedChapterId) {
+        return new Response(JSON.stringify({ error: "Internal worker chapterId required" }), {
+          status: 400,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: workerJob, error: workerJobError } = await supabase
+        .from("generation_jobs")
+        .select("id, user_id, book_id, status, worker_lease_token, worker_lease_until")
+        .eq("id", internalJobId)
+        .maybeSingle();
+      if (workerJobError) throw workerJobError;
+
+      const leaseToken = req.headers.get("x-generation-worker-token");
+      const leaseActive =
+        !!workerJob?.worker_lease_token
+        && workerJob.worker_lease_token === leaseToken
+        && !!workerJob.worker_lease_until
+        && new Date(workerJob.worker_lease_until).getTime() > Date.now();
+
+      if (!workerJob || workerJob.status === "completed" || !leaseActive) {
+        return new Response(JSON.stringify({ error: "Invalid or expired generation worker lease" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: workerChapter, error: workerChapterError } = await supabase
+        .from("chapters")
+        .select("id, book_id")
+        .eq("id", requestedChapterId)
+        .maybeSingle();
+      if (workerChapterError) throw workerChapterError;
+
+      if (!workerChapter || workerChapter.book_id !== workerJob.book_id) {
+        return new Response(JSON.stringify({ error: "Chapter does not belong to generation job" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      user = { id: workerJob.user_id };
+    } else {
+      const { data: authData, error: authError } = await supabase.auth.getUser(token);
+      if (authError || !authData.user) {
+        return new Response(JSON.stringify({ error: "Invalid authentication" }), {
+          status: 401,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+      user = { id: authData.user.id };
     }
     const editIntent_raw = (requestBody?.editIntent as string | null) || null;
     const isChiefEditorRewrite = editIntent_raw?.startsWith('[CHIEF_EDITOR_REWRITE]') || false;
@@ -2034,9 +2108,11 @@ serve(async (req) => {
     console.log(`[GENERATE-CHAPTER] User: ${user.id.slice(0, 8)}...`);
 
     // Rate limiting: max 30 chapter generations per hour per user
-    const rl = checkRateLimit(`gen-chapter:${user.id}`, 30, 60 * 60 * 1000);
-    if (!rl.allowed) {
-      return errorResponse(ErrorCode.RATE_LIMITED, 'Too many chapter generations. Please wait before generating more.', corsHeaders, { retryAfterMs: rl.retryAfterMs });
+    if (!isInternalWorker) {
+      const rl = checkRateLimit(`gen-chapter:${user.id}`, 30, 60 * 60 * 1000);
+      if (!rl.allowed) {
+        return errorResponse(ErrorCode.RATE_LIMITED, 'Too many chapter generations. Please wait before generating more.', corsHeaders, { retryAfterMs: rl.retryAfterMs });
+      }
     }
 
     // Check admin status
@@ -2150,7 +2226,8 @@ serve(async (req) => {
 
     // Get book with all style/workbook fields
     let bookDetails: {
-      creator_id: string;
+      creator_id: string | null;
+      user_id: string | null;
       book_type: string;
       workbook_density: string | null;
       comic_style_id: string | null;
@@ -2158,20 +2235,59 @@ serve(async (req) => {
       line_weight_hint: string | null;
       character_sheet: any;
       layout_template: number | null;
+      text_in_image: boolean | null;
+      scenes_per_panel: number | null;
+      comic_sub_type: string | null;
+      comic_sub_type_config: any;
+      character_sheet_config: any;
+      comic_learning_config: any;
+      fiction_config: any;
+      style_profile: any;
     } | null = null;
 
     if (chapter) {
       const { data: book } = await supabase
         .from("books")
-        .select("creator_id, book_type")
+        .select("creator_id, user_id, book_type, workbook_density, comic_style_id, palette_hint, line_weight_hint, character_sheet, layout_template, text_in_image, scenes_per_panel, comic_sub_type, comic_sub_type_config, character_sheet_config, comic_learning_config, fiction_config, style_profile")
         .eq("id", chapter.book_id)
         .single();
 
       bookDetails = book as typeof bookDetails;
 
-      if (book && book.creator_id !== user.id && !isAdmin) {
+      if (book && book.creator_id !== user.id && book.user_id !== user.id && !isAdmin) {
         return new Response(JSON.stringify({ error: "Not authorized" }), {
           status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
+
+    if (!isInternalWorker && !isRegeneration && chapter?.book_id) {
+      const { data: activeDraftJob, error: activeDraftJobError } = await supabase
+        .from("generation_jobs")
+        .select("id, status, metadata")
+        .eq("book_id", chapter.book_id)
+        .in("status", ["pending", "generating", "partial"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (activeDraftJobError) throw activeDraftJobError;
+
+      const metadata = activeDraftJob?.metadata && typeof activeDraftJob.metadata === "object"
+        ? activeDraftJob.metadata as Record<string, unknown>
+        : {};
+      if (
+        activeDraftJob
+        && metadata.orchestrator === "server_worker"
+        && metadata.phase === "drafting"
+      ) {
+        return new Response(JSON.stringify({
+          error: "Initial drafting is already owned by the server generation worker.",
+          code: "SERVER_GENERATION_ACTIVE",
+          jobId: activeDraftJob.id,
+        }), {
+          status: 409,
           headers: { ...corsHeaders, "Content-Type": "application/json" },
         });
       }
@@ -2184,11 +2300,28 @@ serve(async (req) => {
     const effectiveComicStyle = bookData?.comic_style_id || comicStyle;
     const effectiveLayoutTemplate = bookData?.layout_template || 5;
     const effectiveWorkbookDensity = bookData?.workbook_density || 'medium';
-    const effectiveCharacterSheet = bookData?.character_sheet || {};
+    const effectiveCharacterSheet = bookData?.character_sheet_config
+      || bookData?.character_sheet
+      || {};
     const effectivePaletteHint = bookData?.palette_hint || '';
     const effectiveLineWeightHint = bookData?.line_weight_hint || '';
     const effectiveTextInImage = bookData?.text_in_image ?? true;
     const effectiveScenesPerPanel = bookData?.scenes_per_panel || 1;
+    const effectiveComicSubType = bookData?.comic_sub_type
+      || (requestBody?.comicSubType as string)
+      || 'entertainment';
+    const effectiveComicSubTypeConfig = bookData?.comic_sub_type_config
+      || (requestBody?.comicSubTypeConfig as any)
+      || {};
+    const effectiveComicLearningConfig = bookData?.comic_learning_config
+      || (requestBody?.comicLearningConfig as any)
+      || {};
+    const effectiveFictionConfig = sanitizeFictionContract(
+      bookData?.fiction_config || requestBody?.fictionConfig || {},
+    );
+    const effectiveStyleProfile = bookData?.style_profile
+      || requestBody?.styleProfile
+      || {};
 
     const effectiveWordCount = isAdmin ? wordCount : Math.min(wordCount, maxWordCount);
     
@@ -2356,12 +2489,21 @@ BEGIN REVISION:`;
     // sources and are cited in their own discipline's voice downstream.
     // ===========================================
     const STEM_RESEARCH_CATEGORIES = ['technology', 'science', 'medicine', 'law', 'engineering', 'data_science', 'computer_science', 'statistics'];
+    const FACTUAL_RESEARCH_CATEGORIES = [
+      'business', 'history', 'economics', 'finance', 'governance',
+      'political_science', 'management', 'entrepreneurship',
+    ];
     const RESEARCH_GROUNDED_BOOK_TYPES = ['academic', 'technical', 'reference', 'professional'];
-    const isStemResearchCategory = STEM_RESEARCH_CATEGORIES.includes(category?.toLowerCase());
+    const categoryKey = String(category || '').toLowerCase();
+    const isStemResearchCategory = STEM_RESEARCH_CATEGORIES.includes(categoryKey);
+    const isFactualResearchCategory = FACTUAL_RESEARCH_CATEGORIES.includes(categoryKey);
+    const proseTypeNeedsFactualGrounding =
+      ['text', 'bestseller', 'illustrated'].includes(String(effectiveBookType || '').toLowerCase())
+      && (isStemResearchCategory || isFactualResearchCategory);
     const needsAcademicResearch =
       academicMode === true ||
       RESEARCH_GROUNDED_BOOK_TYPES.includes(String(effectiveBookType || '').toLowerCase()) ||
-      ((bookType === 'illustrated' || bookType === 'text') && isStemResearchCategory);
+      proseTypeNeedsFactualGrounding;
     
     if (needsAcademicResearch) {
       console.log(`[GENERATE-CHAPTER] Academic research pipeline for bookType=${effectiveBookType} (request=${bookType}), category=${category}, academicMode=${academicMode}, stem=${isStemResearchCategory}`);
@@ -2371,7 +2513,13 @@ BEGIN REVISION:`;
         category,
         keyTopics || [chapterTitle],
         citationStyle,
-        token
+        token,
+        isInternalWorker && internalJobId
+          ? {
+              jobId: internalJobId,
+              leaseToken: req.headers.get("x-generation-worker-token") || "",
+            }
+          : undefined,
       );
       
       console.log(`[GENERATE-CHAPTER] Research complete: ${researchResult.metadata.source_count} sources`);
@@ -2398,6 +2546,37 @@ BEGIN REVISION:`;
       }
     }
 
+    // Non-academic factual prose uses research as a truth constraint without
+    // being forced into academic citation style. Structured source evidence is
+    // persisted separately on the chapter for later verification.
+    const factualSourcePack =
+      researchResult?.references?.length
+        ? `
+===========================================
+VERIFIED FACTUAL SOURCE PACK
+===========================================
+Use these sources as the factual boundary for dates, statistics, named companies,
+historical events, empirical findings, market claims, and real-world case studies.
+
+${researchResult.references.slice(0, 15).map((ref, index) =>
+  `${index + 1}. ${ref.author} (${ref.year}). "${ref.title}"`
+    + (ref.journal ? ` — ${ref.journal}` : "")
+    + (ref.doi ? ` DOI: ${ref.doi}` : "")
+    + (ref.url && !ref.doi ? ` URL: ${ref.url}` : "")
+).join("\n")}
+
+FACTUAL-GROUNDING RULES:
+- Never invent a date, statistic, monetary amount, company outcome, study result, or historical detail.
+- A specific factual claim must be supported by the source pack or omitted/qualified.
+- Do not fabricate case studies to satisfy a structural requirement.
+- Do not use academic parenthetical citation syntax unless this is an academic pipeline.
+- Natural attribution is allowed (for example, "A World Bank report found...").
+- Do not quote source text verbatim; synthesize it.
+- If the source pack does not support a requested specific, use a general explanation instead.
+===========================================
+`
+        : '';
+
     // ===========================================
     // COMIC BOOK GENERATION
     // ===========================================
@@ -2406,8 +2585,8 @@ BEGIN REVISION:`;
       console.log(`[GENERATE-CHAPTER] Comic style: ${effectiveComicStyle}, Panels: ${effectiveLayoutTemplate}`);
       
       // Extract comic sub-type and learning config from already-parsed requestBody
-      const comicSubType = (requestBody?.comicSubType as string) || 'entertainment';
-      const comicLearningConfig = (requestBody?.comicLearningConfig as any) || null;
+      const comicSubType = effectiveComicSubType;
+      const comicLearningConfig = effectiveComicLearningConfig;
       const characterSheetConfig = (requestBody?.characterSheetConfig as any) || effectiveCharacterSheet;
       
       console.log(`[GENERATE-CHAPTER] Comic sub-type: ${comicSubType}, Has learning: ${comicLearningConfig?.objectives?.length > 0}`);
@@ -2967,13 +3146,25 @@ Return JSON only:
       }
 
       const workbookData = await workbookResponse.json();
-      let workbookContent = workbookData.choices?.[0]?.message?.content || "";
+      const workbookContent = workbookData.choices?.[0]?.message?.content || "";
       
-      // VALIDATE workbook structure
-      const workbookValidation = validateWorkbookStructure(workbookContent);
+      // VALIDATE workbook structure. Specialized book-type contracts fail
+      // closed: an invalid workbook must never be persisted as generated.
+      const workbookValidation = validateWorkbookContract(workbookContent);
       if (!workbookValidation.valid && !isAdmin) {
         console.log("[GENERATE-CHAPTER] WORKBOOK VALIDATION FAILED:", workbookValidation.errors);
-        // Log warnings but don't block - workbook can regenerate
+        return new Response(JSON.stringify({
+          error: workbookValidation.failureMessage || "Workbook structure validation failed",
+          code: "WORKBOOK_STRUCTURE_INVALID",
+          validation: {
+            valid: false,
+            errors: workbookValidation.errors,
+            warnings: workbookValidation.warnings,
+          },
+        }), {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
       }
       
       // Add workbook front matter
@@ -3071,6 +3262,32 @@ ${summaries}
 `;
         console.log(`[GENERATE-CHAPTER] Content continuity context built (${previousChaptersContext.length} chars)`);
       }
+    }
+
+    if (effectiveBookType === 'fiction' && chapter?.book_id) {
+      const { data: fictionPriorChapters, error: fictionMemoryError } = await supabase
+        .from("chapters")
+        .select("chapter_number, title, content")
+        .eq("book_id", chapter.book_id)
+        .eq("is_generated", true)
+        .lt("chapter_number", chapterNumber)
+        .order("chapter_number", { ascending: true })
+        .limit(100);
+
+      if (fictionMemoryError) {
+        console.error("[GENERATE-CHAPTER] Fiction continuity load failed:", fictionMemoryError);
+        throw new Error("Unable to load fiction continuity state");
+      }
+
+      previousChaptersContext = buildFictionContinuityContext(
+        effectiveFictionConfig,
+        fictionPriorChapters || [],
+      );
+      console.log(
+        "[GENERATE-CHAPTER] Fiction story bible built from "
+          + String(fictionPriorChapters?.length || 0)
+          + " prior chapters",
+      );
     }
 
     let systemPrompt: string;
@@ -3831,6 +4048,62 @@ ${chapterNumber > 1 ? '- BUILD upon previous chapter concepts' : ''}
 
 BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
 
+    } else if (effectiveBookType === 'fiction') {
+      // ===========================================
+      // FICTION / NOVEL PIPELINE
+      // Story-bible governed, continuity-first, prose-only narrative.
+      // ===========================================
+      console.log("[GENERATE-CHAPTER] Using FICTION pipeline");
+
+      const styleProfileParts = [
+        effectiveStyleProfile?.tone ? "Tone profile: " + String(effectiveStyleProfile.tone).slice(0, 300) : "",
+        effectiveStyleProfile?.complexity ? "Complexity: " + String(effectiveStyleProfile.complexity).slice(0, 120) : "",
+        effectiveStyleProfile?.formality ? "Formality: " + String(effectiveStyleProfile.formality).slice(0, 120) : "",
+        effectiveStyleProfile?.vocabulary ? "Vocabulary: " + String(effectiveStyleProfile.vocabulary).slice(0, 300) : "",
+      ].filter(Boolean).join("\n");
+
+      systemPrompt = [
+        "You are ScrollLibrary — FICTION / NOVEL PIPELINE.",
+        "IDENTITY: Novelist · Scene Architect · Continuity Editor.",
+        "Write immersive narrative prose, not instructional or expository content.",
+        "Honor the authoritative story bible, POV, world rules, character motivations, relationships, injuries, possessions, knowledge, secrets, chronology, and unresolved promises.",
+        "Every scene needs a character objective, resistance/conflict, a meaningful turn, and a consequence that changes what comes next.",
+        "Prefer concrete action, sensory detail, dialogue and subtext over explanation of emotions.",
+        "Characters must act from established motives; do not move them merely to satisfy the outline.",
+        "Dialogue must sound character-specific and should usually carry subtext rather than exposition.",
+        "Do not repeat prior reveals, introductions, descriptions, or backstory unless the repetition has a new dramatic purpose.",
+        "Do not use textbook structures, learning objectives, key takeaways, frameworks, bullet-point advice, citations, or chapter summaries.",
+        "Do not add AI meta-commentary, writing notes, scene labels, TODOs, placeholders, or commentary to the author.",
+        "Do not imitate a named living author. Use only the abstract style attributes supplied in the book's durable style profile.",
+        styleProfileParts,
+        "LANGUAGE: Write EXCLUSIVELY in " + languageName + ".",
+      ].filter(Boolean).join("\n\n");
+
+      chapterPrompt = [
+        previousChaptersContext,
+        "CURRENT CHAPTER CONTRACT",
+        "Book: " + bookTitle,
+        "Chapter " + String(chapterNumber) + ": " + chapterTitle,
+        "Genre: " + effectiveFictionConfig.genre,
+        "POV: " + effectiveFictionConfig.pov,
+        effectiveFictionConfig.tone ? "Tone: " + effectiveFictionConfig.tone : "",
+        effectiveFictionConfig.themes ? "Themes: " + effectiveFictionConfig.themes : "",
+        "Target length: approximately " + String(targetWords) + " words.",
+        "Chapter outline topics/beats:",
+        keyTopics?.length
+          ? keyTopics.map((topic: string, index: number) => String(index + 1) + ". " + topic).join("\n")
+          : "Advance the chapter title and current plot trajectory without inventing a disconnected subplot.",
+        "",
+        "SCENE QUALITY REQUIREMENTS:",
+        "1. Open inside a concrete moment, choice, image, action, or consequence; avoid an essay-like introduction.",
+        "2. Preserve the declared POV consistently. Do not head-hop in first/third-limited POV.",
+        "3. Advance at least one external plot thread and one character/emotional thread.",
+        "4. Carry forward unresolved state from earlier chapters and leave the story measurably changed by the end.",
+        "5. Vary scene rhythm and paragraph length naturally; avoid repetitive chapter architecture.",
+        "6. End with earned forward pressure: a decision, consequence, revelation, reversal, question, or emotional turn.",
+        "7. Return ONLY the finished chapter prose. No analysis or author notes.",
+      ].filter(Boolean).join("\n");
+
     } else if (effectiveBookType === 'illustrated' || effectiveBookType === 'children') {
       // ===========================================
       // ILLUSTRATED / CHILDREN'S BOOK PIPELINE
@@ -3876,7 +4149,10 @@ BEGIN WRITING THE NON-STEM ACADEMIC CHAPTER:`;
         ILLUSTRATED_ACADEMIC_CATEGORIES.includes(category?.toLowerCase())
       );
       
-      if (isIllustratedAcademic) {
+      if (isChildrens) {
+        console.log("[GENERATE-CHAPTER] CHILDREN pipeline active");
+        systemPrompt = buildChildrenSystemPrompt(languageName);
+      } else if (isIllustratedAcademic) {
         // ACADEMIC ILLUSTRATED PIPELINE — scholarly content with pedagogical visuals
         console.log("[GENERATE-CHAPTER] ACADEMIC ILLUSTRATED pipeline active");
         
@@ -3908,10 +4184,13 @@ ${BESTSELLER_STRUCTURE_CONTRACT}
 
 ${NONFICTION_CONTRACT}
 
-${illustratedInstitutionalPrompt}`;
+${illustratedInstitutionalPrompt}
+
+${factualSourcePack}`;
       }
       
-      systemPrompt += `
+      if (!isChildrens) {
+        systemPrompt += `
 
 ===========================================
 ILLUSTRATED BOOK PIPELINE — HARD LOCK
@@ -3974,7 +4253,7 @@ Before output, verify:
 [ ] Text references connect to the figures
 [ ] ${isChildrens ? 'Word count under 1500 words' : 'Content depth matches text-only bestseller standard'}
 [ ] NO figures without descriptive text
-[ ] Bestseller mechanics present (hook, named principle, takeaways)
+[ ] ${isChildrens ? 'Age-appropriate story arc, consistent characters, and a warm resolution are present' : 'Bestseller mechanics present (hook, named principle, takeaways)'}
 
 If ANY check fails → REWRITE
 
@@ -3984,6 +4263,7 @@ ${FINAL_DIRECTIVE}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.
 Create comprehensive, bestseller-grade illustrated chapters where both the TEXT and VISUALS are world-class.`;
+      }
 
       const illustratedWordTarget = isChildrens ? 1200 : targetWords;
       
@@ -4007,8 +4287,8 @@ CITATION REQUIREMENTS:
 
 LANGUAGE: Generate ALL content in ${languageName}.
 ${illustratedSourcesSection}
-Key topics:
-${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || '1. Comprehensive coverage'}
+${isChildrens ? 'Story beats:' : 'Key topics:'}
+${keyTopics?.map((t: string, i: number) => `${i + 1}. ${t}`).join('\n') || (isChildrens ? '1. Continue the story arc from the chapter title and established characters' : '1. Comprehensive coverage')}
 
 ILLUSTRATION PLACEMENT (MANDATORY):
 Insert exactly ${isChildrens ? '4-5' : '3-4'} [FIGURE X: description] markers throughout the text.
@@ -4061,16 +4341,20 @@ INSTITUTIONAL REQUIREMENTS (BUSINESS ILLUSTRATED BOOK):
 ` : ''}
 REQUIREMENTS:
 - Approximately ${illustratedWordTarget} words
-- Use proper Markdown formatting (## headings, **bold**, tables)
+${isChildrens ? '- Use natural story paragraphs and dialogue; do not use tables, code blocks, or instructional headings' : '- Use proper Markdown formatting (## headings, **bold**, tables)'}
 - Include ${isChildrens ? '4-5' : '3-4'} [FIGURE X: description] markers inline
 - Every figure must serve the ${isIllustratedAcademic ? 'learning objective' : 'story/learning'}
 - Text must flow naturally around figure markers
 - NO AI-sounding phrases ("Let's dive in", "In this chapter we will explore")
-${isIllustratedAcademic ? '- Include in-text citations for ALL factual claims\n- Use proper academic terminology\n- Exercises at chapter end' : '- Include real-world examples with SPECIFIC NUMBERS\n- Every paragraph must deliver VALUE'}
+${isChildrens
+  ? '- Keep language concrete, warm, read-aloud friendly, and age-appropriate\n- Do not force statistics, named principles, or adult takeaways'
+  : isIllustratedAcademic
+    ? '- Include in-text citations for ALL factual claims\n- Use proper academic terminology\n- Exercises at chapter end'
+    : '- Include real-world examples with SPECIFIC NUMBERS\n- Every paragraph must deliver VALUE'}
 ${isIllustratedBusiness ? '- Include markdown tables for frameworks and models\n- Include quantitative examples with dollar amounts, percentages, multiples' : ''}
 ${chapterNumber > 1 ? '- CONTINUE from previous chapter concepts — do NOT repeat introductions' : ''}
 
-BEGIN WRITING THE FULL ${isIllustratedAcademic ? 'ACADEMIC' : 'BESTSELLER-GRADE'} ILLUSTRATED CHAPTER:`;
+BEGIN WRITING THE FULL ${isChildrens ? "CHILDREN'S" : isIllustratedAcademic ? 'ACADEMIC' : 'BESTSELLER-GRADE'} ILLUSTRATED CHAPTER:`;
     } else if (effectiveBookType === 'professional') {
       // ===========================================
       // PROFESSIONAL / BUSINESS GUIDE PIPELINE
@@ -4087,6 +4371,8 @@ ${BORN_QUALITY_CONTRACT}
 ${MASTER_FORMATTING_CONTRACT}
 
 ${buildVisualIntelligencePrompt('professional', chapterNumber, targetWords)}
+
+${factualSourcePack}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
@@ -4139,6 +4425,8 @@ ${BORN_QUALITY_CONTRACT}
 ${MASTER_FORMATTING_CONTRACT}
 
 ${buildVisualIntelligencePrompt('reference', chapterNumber, targetWords)}
+
+${factualSourcePack}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
 
@@ -4239,6 +4527,8 @@ ${buildVisualIntelligencePrompt('bestseller', chapterNumber, targetWords)}
 
 ${institutionalPrompt}
 
+${factualSourcePack}
+
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
       } else {
         // STANDARD TEXT PIPELINE — Universal Core + Micro-Contract
@@ -4251,6 +4541,8 @@ ${BORN_QUALITY_CONTRACT}
 ${MASTER_FORMATTING_CONTRACT}
 
 ${buildVisualIntelligencePrompt('text', chapterNumber, targetWords)}
+
+${factualSourcePack}
 
 LANGUAGE: Write EXCLUSIVELY in ${languageName}.`;
       }

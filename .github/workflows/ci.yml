@@ -111,6 +111,8 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
       - name: Apply and behaviorally verify Lovable publication-attestation authority delta
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-lovable-attestation-authority.sql
+      - name: Assert business books require factual publication evidence
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-business-evidence-policy.sql
       - name: Apply and verify Lovable ISBN governance RPC delta
         run: |
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-lovable-isbn-governance-rpcs.sql
@@ -189,6 +191,7 @@ jobs:
         run: |
           deno check supabase/functions/generate-book/index.ts
           deno check supabase/functions/generate-chapter/index.ts
+          deno check supabase/functions/generation-worker/index.ts
           deno check supabase/functions/ai-publishing-bridge/index.ts
           deno check supabase/functions/generate-cover/index.ts
           deno check supabase/functions/generate-cover-raw/index.ts
@@ -258,6 +261,12 @@ jobs:
           deno test supabase/functions/_shared/figure-data_test.ts
           deno test supabase/functions/_shared/figure-layout_test.ts
           deno test supabase/functions/_shared/figure-export_test.ts
+          deno test supabase/functions/_shared/qaPublishability_test.ts
+          deno test supabase/functions/_shared/outline-normalizer_test.ts
+          deno test supabase/functions/_shared/technical-code-quality_test.ts
+          deno test supabase/functions/_shared/fiction-context_test.ts
+          deno test supabase/functions/_shared/children-contract_test.ts
+          deno test supabase/functions/_shared/authority-validator_workbook_test.ts
           deno test supabase/functions/_shared/cron-auth_test.ts
           deno test supabase/functions/_shared/stripe-connect_test.ts
       - name: Pin production Stripe webhook event contract

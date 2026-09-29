@@ -1,5 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { requireUser, serviceClient, enforceDurableRateLimit } from "../_shared/http.ts";
+import { extractTechnicalCodeBlocks } from "../_shared/technical-code-quality.ts";
+import { sha256Hex } from "../_shared/content-hash.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -238,23 +240,72 @@ serve(async (req) => {
   try {
     const auth = await requireUser(req);
     if (auth instanceof Response) return auth;
-    const limited = await enforceDurableRateLimit(serviceClient(), {
-      name: "audit-code",
-      key: auth.userId,
-      limit: 20,
-      windowSec: 600,
-    });
-    if (limited) return limited;
-
     const requestBody = await req.json();
 
     // ============================================================
     // INPUT NORMALIZATION — Defensive defaults for all parameters
     // ============================================================
     const chapterId = (requestBody?.chapterId as string) || '';
-    const chapterTitle = (requestBody?.chapterTitle as string) || 'Untitled';
-    const chapterNumber = Number(requestBody?.chapterNumber) || 0;
-    const content = (requestBody?.content as string) || '';
+    let chapterTitle = (requestBody?.chapterTitle as string) || 'Untitled';
+    let chapterNumber = Number(requestBody?.chapterNumber) || 0;
+    let content = (requestBody?.content as string) || '';
+    const sc = serviceClient();
+    let canonicalBookId: string | null = null;
+    let canonicalChapterVersion = 1;
+
+    if (chapterId) {
+      const { data: storedChapter, error: chapterError } = await sc
+        .from("chapters")
+        .select("id, book_id, title, chapter_number, content, version_number")
+        .eq("id", chapterId)
+        .maybeSingle();
+
+      if (chapterError) throw chapterError;
+      if (!storedChapter) {
+        return new Response(JSON.stringify({ error: "Chapter not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      const { data: ownerBook, error: ownerError } = await sc
+        .from("books")
+        .select("id, creator_id, user_id")
+        .eq("id", storedChapter.book_id)
+        .maybeSingle();
+      if (ownerError) throw ownerError;
+      if (!ownerBook) {
+        return new Response(JSON.stringify({ error: "Book not found" }), {
+          status: 404,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      let authorized = ownerBook.creator_id === auth.userId || ownerBook.user_id === auth.userId;
+      if (!authorized) {
+        const { data: adminRole, error: adminError } = await sc
+          .from("user_roles")
+          .select("role")
+          .eq("user_id", auth.userId)
+          .eq("role", "admin")
+          .maybeSingle();
+        if (adminError) throw adminError;
+        authorized = !!adminRole;
+      }
+
+      if (!authorized) {
+        return new Response(JSON.stringify({ error: "Not authorized to audit this chapter" }), {
+          status: 403,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+
+      canonicalBookId = storedChapter.book_id;
+      canonicalChapterVersion = storedChapter.version_number || 1;
+      chapterTitle = storedChapter.title || chapterTitle;
+      chapterNumber = storedChapter.chapter_number || chapterNumber;
+      content = storedChapter.content || "";
+    }
 
     // Structured observability logging
     log("Input normalization", {
@@ -272,9 +323,63 @@ serve(async (req) => {
       });
     }
 
-    const codeBlocks = extractCodeBlocks(content);
+    const codeBlocks = extractTechnicalCodeBlocks(content);
     
     log("Code extraction", { codeBlockCount: codeBlocks.length, chapterNumber });
+
+    // A passing audit is evidence about exact immutable bytes. Reusing it is
+    // both safer and cheaper than spending AI/rate-limit budget again.
+    let currentContentHash: string | null = null;
+    if (chapterId && canonicalBookId) {
+      currentContentHash = await sha256Hex(content);
+      const { data: cachedAudit, error: cachedAuditError } = await sc
+        .from("chapter_code_audits")
+        .select("id, score, risk_level, code_block_count, result, audit_model, audit_prompt_version, created_at")
+        .eq("chapter_id", chapterId)
+        .eq("content_hash", currentContentHash)
+        .eq("passed", true)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (cachedAuditError) throw cachedAuditError;
+      if (cachedAudit) {
+        log("Current content audit cache hit", {
+          chapterNumber,
+          auditId: cachedAudit.id,
+          contentHash: currentContentHash.slice(0, 12),
+        });
+        return new Response(JSON.stringify({
+          chapterId,
+          chapterTitle,
+          chapterNumber,
+          codeBlockCount: cachedAudit.code_block_count ?? codeBlocks.length,
+          auditId: cachedAudit.id,
+          contentHash: currentContentHash,
+          passed: true,
+          cached: true,
+          provenance: {
+            model: cachedAudit.audit_model,
+            promptVersion: cachedAudit.audit_prompt_version,
+            createdAt: cachedAudit.created_at,
+            cache: "exact_content_hash",
+          },
+          result: cachedAudit.result,
+        }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
+      }
+    }
+
+    // Premium tiers can contain up to 100 chapters. The automatic publication
+    // pipeline runs sequentially, so the uncached window must be large enough
+    // for one complete first-pass book. Exact-hash cache hits above consume no
+    // budget; the extra 20 calls allow bounded retries without starvation.
+    const limited = await enforceDurableRateLimit(sc, {
+      name: "audit-code",
+      key: auth.userId,
+      limit: 120,
+      windowSec: 600,
+    });
+    if (limited) return limited;
 
     if (codeBlocks.length === 0) {
       return new Response(JSON.stringify({
@@ -430,8 +535,47 @@ serve(async (req) => {
       promptVersion: STO_PROMPT_VERSION,
     });
 
+    const normalizedScore = Number(auditResult.chapterScore);
+    const normalizedRisk = ["none", "low", "medium", "high"].includes(String(auditResult.riskLevel))
+      ? String(auditResult.riskLevel)
+      : "high";
+    const passed = Number.isFinite(normalizedScore)
+      && normalizedScore >= 8
+      && normalizedRisk !== "high";
+
+    let persistedAuditId: string | null = null;
+    let contentHash: string | null = null;
+
+    if (chapterId && canonicalBookId) {
+      contentHash = currentContentHash || await sha256Hex(content);
+      const { data: persisted, error: persistError } = await sc
+        .from("chapter_code_audits")
+        .insert({
+          book_id: canonicalBookId,
+          chapter_id: chapterId,
+          chapter_version: canonicalChapterVersion,
+          content_hash: contentHash,
+          score: Number.isFinite(normalizedScore) ? normalizedScore : 0,
+          risk_level: normalizedRisk,
+          code_block_count: codeBlocks.length,
+          passed,
+          audit_model: STO_AUDIT_MODEL,
+          audit_prompt_version: STO_PROMPT_VERSION,
+          result: auditResult,
+          created_by: auth.userId,
+        })
+        .select("id")
+        .single();
+
+      if (persistError) throw persistError;
+      persistedAuditId = persisted.id;
+    }
+
     return new Response(JSON.stringify({
       chapterId, chapterTitle, chapterNumber, codeBlockCount: codeBlocks.length,
+      auditId: persistedAuditId,
+      contentHash,
+      passed,
       provenance: { model: STO_AUDIT_MODEL, promptVersion: STO_PROMPT_VERSION, durationMs, parseStrategy },
       result: auditResult,
     }), { headers: { ...corsHeaders, 'Content-Type': 'application/json' } });
