@@ -609,9 +609,9 @@ export default function Generate() {
                 />
               </div>
 
+              {/* Transformation / upgrade prompt is post-GA advanced authoring. */}
               {FEATURES.enableAdvancedAuthoring && (
-              {/* Transformation / Upgrade Prompt */}
-              <div className="space-y-2">
+                <div className="space-y-2">
                 <Label htmlFor="transformationPrompt" className="text-foreground flex items-center gap-2">
                   <Wand2 className="h-4 w-4 text-primary" />
                   Transformation Prompt
