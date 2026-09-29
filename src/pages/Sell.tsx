@@ -956,8 +956,7 @@ function StepLaunch({
               </div>
             )}
             <p className="mt-3 text-[11px] text-muted-foreground">
-              Third-party connections will reopen after provider E2E validation.{" "}
-              <Link to="/account/intelligence" className="text-primary hover:underline">Publishing Intelligence</Link>.
+              Third-party connections will reopen after provider E2E validation.
             </p>
           </>
         )}
