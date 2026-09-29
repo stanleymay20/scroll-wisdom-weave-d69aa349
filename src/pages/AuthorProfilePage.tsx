@@ -50,6 +50,32 @@ export default function AuthorProfilePage() {
   const linkedinUrl = getSafeExternalUrl(author.linkedin_url);
   const xUrl = getSafeExternalUrl(author.x_url);
 
+  const authorUrl = `https://scrolllibrary.org/authors/${author.slug}`;
+  const sameAs = [websiteUrl, linkedinUrl, xUrl].filter((url): url is string => Boolean(url));
+  const jsonLd = [
+    {
+      "@context": "https://schema.org",
+      "@type": "Person",
+      "@id": `${authorUrl}#person`,
+      name: author.display_name,
+      url: authorUrl,
+      description: author.bio || undefined,
+      image: author.avatar_url || undefined,
+      sameAs: sameAs.length > 0 ? sameAs : undefined,
+    },
+    {
+      "@context": "https://schema.org",
+      "@type": "ItemList",
+      name: `Books by ${author.display_name}`,
+      itemListElement: books.map((book, index) => ({
+        "@type": "ListItem",
+        position: index + 1,
+        url: `https://scrolllibrary.org/store/${book.slug}`,
+        name: book.title,
+      })),
+    },
+  ];
+
   return (
     <ResponsiveShell>
     <div className="min-h-screen bg-background">
@@ -59,6 +85,7 @@ export default function AuthorProfilePage() {
         canonical={`/authors/${author.slug}`}
         type="profile"
         image={author.avatar_url ?? undefined}
+        jsonLd={jsonLd}
       />
       <div className="container mx-auto max-w-4xl px-4 py-10">
         <Card className="p-8 flex flex-col sm:flex-row gap-6 items-start">
