@@ -93,7 +93,7 @@ export function Navbar() {
           <div className="hidden md:flex items-center gap-6 lg:gap-8">
             <Link to="/explore" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Explore</Link>
             <Link to="/library" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.library')}</Link>
-            <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Create</Link>
+            <Link to="/generate" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">{t('nav.generate')}</Link>
             <Link to="/sell" className="text-sm text-primary hover:text-primary/80 transition-colors font-semibold">Publish</Link>
             <Link to="/pricing" className="text-sm text-muted-foreground hover:text-foreground transition-colors font-medium">Pricing</Link>
           </div>
