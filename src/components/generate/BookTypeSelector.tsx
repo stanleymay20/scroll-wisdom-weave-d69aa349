@@ -8,6 +8,7 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Badge } from "@/components/ui/badge";
 import { FEATURES } from "@/lib/config";
+import { isBookTypeReleasedForClient } from "@/lib/bookTypeRelease";
 
 /**
  * Book Type Selector
@@ -123,8 +124,14 @@ const ALL_BOOK_TYPES: BookTypeOption[] = [
   },
 ];
 
-// Filter by feature flags
-const BOOK_TYPES = ALL_BOOK_TYPES.filter(t => t.featureFlag !== false);
+// Release requires both the ordinary feature flag and empirical provider
+// qualification. The server repeats this check authoritatively; this prevents
+// the UI from advertising a mode that the backend will correctly reject.
+const BOOK_TYPES = ALL_BOOK_TYPES.filter(
+  (type) =>
+    type.featureFlag !== false
+    && isBookTypeReleasedForClient(type.value, FEATURES.enableAdvancedAuthoring),
+);
 
 
 export function BookTypeSelector({
