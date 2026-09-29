@@ -36,7 +36,7 @@ export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
               className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 text-sm text-primary mb-6"
             >
               <ShieldCheck className="h-3.5 w-3.5" />
-              AI-native publishing platform
+              AI-native book creation platform
             </motion.div>
 
             <motion.h1
@@ -46,7 +46,7 @@ export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
               className="font-display text-4xl md:text-5xl lg:text-6xl font-bold text-foreground mb-5 leading-[1.1]"
             >
               From idea to{" "}
-              <span className="text-primary">publishable book.</span>
+              <span className="text-primary">structured book.</span>
             </motion.h1>
 
             <motion.p
@@ -55,8 +55,8 @@ export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
               transition={{ duration: 0.5, delay: 0.1 }}
               className="text-base md:text-lg text-muted-foreground mb-8 leading-relaxed"
             >
-              Create, refine, verify, and prepare books for publication in one intelligent workspace.
-              ScrollLibrary handles the complexity behind the scenes so you can stay focused on the work.
+              Create structured AI-native books, read them, and verify learning in one intelligent workspace.
+              Advanced authoring and publishing workflows stay hidden until their GA validation gates pass.
             </motion.p>
 
             <motion.div
