@@ -100,6 +100,7 @@ import { saveResumeState, getResumeState, findCurrentParagraphAnchor, restorePos
 import { loadReaderProfile, classifyReader, getInterventionConfig, recordBookOpened, recordChapterCompleted, recordBookCompleted, syncStreakFromGamification } from "@/lib/readerSegmentation";
 import { requestInterruptionSlot, isInDeepFlow, getLastInterruptionTime } from "@/lib/calmnessRules";
 import { SectionCompletionTracker, type CompletionResult } from "@/lib/sectionCompletion";
+import { FEATURES } from "@/lib/config";
 
 interface BookData {
   id: string;
@@ -1889,7 +1890,7 @@ export default function Reader() {
       )}
 
       {/* Ask AI Panel — text-first Q&A */}
-      {chapter?.content && (
+      {FEATURES.enableInteractiveQA && chapter?.content && (
         <InteractiveQA
           isOpen={showQA}
           onClose={() => { setShowQA(false); setHighlightedText(""); }}
@@ -1905,7 +1906,7 @@ export default function Reader() {
       )}
 
       {/* Dedicated Voice AI */}
-      {showVoiceAI && chapter?.content && book && (
+      {FEATURES.enableVoiceConversation && showVoiceAI && chapter?.content && book && (
         <VoiceConversation
           chapterContent={chapter.content}
           chapterTitle={chapter.title}
@@ -1923,7 +1924,7 @@ export default function Reader() {
       )}
 
       {/* Code Playground */}
-      {chapter?.content && (
+      {FEATURES.enableCodePlayground && chapter?.content && (
         <CodePlayground
           isOpen={showPlayground}
           onClose={() => setShowPlayground(false)}
@@ -1934,7 +1935,7 @@ export default function Reader() {
       )}
 
       {/* Chapter Video Generator */}
-      {showChapterVideo && chapter?.content && book && (
+      {FEATURES.enableChapterVideo && showChapterVideo && chapter?.content && book && (
         <ChapterVideoGenerator
           bookId={bookId || ""}
           bookTitle={book.title}
@@ -1975,7 +1976,7 @@ export default function Reader() {
       )}
 
       {/* Flashcard Generator (controlled from Tools sheet) */}
-      {bookId && book && (
+      {FEATURES.enableFlashcards && bookId && book && (
         <FlashcardGenerator
           bookId={bookId}
           bookTitle={book.title}
@@ -1989,7 +1990,7 @@ export default function Reader() {
       )}
 
       {/* Learning Deck Generator (controlled from Tools sheet) */}
-      {bookId && book && (
+      {FEATURES.enableLearningDecks && bookId && book && (
         <LearningDeckGenerator
           bookId={bookId}
           bookTitle={book.title}
@@ -2004,7 +2005,7 @@ export default function Reader() {
       )}
 
       {/* Knowledge Graph — Cognitive Assimilation Interface */}
-      {chapter?.content && (
+      {FEATURES.enableKnowledgeGraph && chapter?.content && (
         <KnowledgeGraphPanel
           isOpen={showKnowledgeGraph}
           onClose={() => setShowKnowledgeGraph(false)}
@@ -2018,7 +2019,7 @@ export default function Reader() {
 
 
       {/* Study Music Player — stack above TTS player when both are open. */}
-      {showStudyMusic && (
+      {FEATURES.enableStudyMusic && showStudyMusic && (
         <div
           className="fixed left-4 right-4 sm:right-auto z-[55] flex justify-center sm:block"
           style={{
