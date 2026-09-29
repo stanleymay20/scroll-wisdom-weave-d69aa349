@@ -87,7 +87,7 @@ interface DraftState {
 const EMPTY_DRAFT: DraftState = {
   step: 0,
   profile: { display_name: "", bio: "", slug: "", avatar_url: "", website_url: "", x_url: "", linkedin_url: "" },
-  publish: { book_id: "", slug: "", blurb: "", price_cents: 900, sample_chapters: 1, is_public: true, cover_override_url: "" },
+  publish: { book_id: "", slug: "", blurb: "", price_cents: 0, sample_chapters: 1, is_public: true, cover_override_url: "" },
 };
 
 export default function Sell() {
@@ -329,7 +329,7 @@ export default function Sell() {
     }
     const baseSlug = draft.publish.slug || slugify(books.find(b => b.id === draft.publish.book_id)?.title ?? "");
     if (!baseSlug) { toast.error("URL slug is required"); return; }
-    const priceCents = Math.max(0, Math.floor(draft.publish.price_cents || 0));
+    const priceCents = PMF_MODE ? 0 : Math.max(0, Math.floor(draft.publish.price_cents || 0));
     const isPaid = priceCents > 0;
 
     setSavingStep(true);
@@ -688,9 +688,8 @@ function StepPublish({
         <p className="text-sm text-muted-foreground">
           You'll need at least one book to start selling. It only takes a minute.
         </p>
-        <div className="flex flex-col sm:flex-row gap-2 justify-center pt-2">
+        <div className="flex justify-center pt-2">
           <Button asChild size="lg"><Link to="/generate"><Sparkles className="h-4 w-4" />Generate a book</Link></Button>
-          <Button asChild variant="outline" size="lg"><Link to="/upload">Or upload one</Link></Button>
         </div>
         <Button variant="ghost" onClick={onBack} className="mt-2"><ArrowLeft className="h-4 w-4" />Back</Button>
       </Card>
@@ -711,7 +710,9 @@ function StepPublish({
         <p className="text-sm text-muted-foreground mt-1">
           {editing
             ? "Changes go live as soon as you save."
-            : "Pick a book, add a price, and you're live."}
+            : PMF_MODE
+              ? "Pick a book and publish it free during GA validation."
+              : "Pick a book, add a price, and you're live."}
         </p>
       </div>
 
@@ -741,12 +742,15 @@ function StepPublish({
             <div>
               <Label htmlFor="price">Price (USD)</Label>
               <Input id="price" inputMode="decimal" className="text-foreground caret-foreground mt-1.5"
-                value={(value.price_cents / 100).toFixed(2)}
+                value={PMF_MODE ? "0.00" : (value.price_cents / 100).toFixed(2)}
+                disabled={PMF_MODE}
                 onChange={(e) => {
                   const n = Number(e.target.value.replace(/[^0-9.]/g, "")) || 0;
                   onChange({ ...value, price_cents: Math.round(n * 100) });
                 }} />
-              <p className="text-xs text-muted-foreground mt-1">Set $0.00 to give it away.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                {PMF_MODE ? "GA storefront listings are free while paid checkout is under validation." : "Set $0.00 to give it away."}
+              </p>
             </div>
             <div>
               <Label htmlFor="samples">Free sample chapters</Label>
