@@ -230,6 +230,25 @@ async function handleBook(sc: any, url: URL): Promise<Response> {
         : {};
       const stringValue = (value: unknown) =>
         typeof value === "string" && value.trim().length > 0 ? value.trim() : null;
+      const isbnByFormat = snap.isbn_by_format
+        && typeof snap.isbn_by_format === "object"
+        && !Array.isArray(snap.isbn_by_format)
+        ? snap.isbn_by_format as Record<string, unknown>
+        : {};
+      const identifiers = Array.isArray(snap.identifiers) ? snap.identifiers : [];
+      const identifierIsbn = identifiers
+        .filter((identifier): identifier is Record<string, unknown> =>
+          !!identifier && typeof identifier === "object" && !Array.isArray(identifier))
+        .find((identifier) => {
+          const scheme = stringValue(identifier.scheme)?.toUpperCase() ?? "";
+          const form = stringValue(identifier.product_form)?.toLowerCase() ?? "";
+          return scheme.includes("ISBN") && (form === "epub" || form === "ebook");
+        });
+      const fallbackIdentifierIsbn = identifiers
+        .filter((identifier): identifier is Record<string, unknown> =>
+          !!identifier && typeof identifier === "object" && !Array.isArray(identifier))
+        .find((identifier) => (stringValue(identifier.scheme)?.toUpperCase() ?? "").includes("ISBN"));
+
       shaped.publication = {
         language: stringValue(pub.language) ?? stringValue(snap.language) ?? shaped.book?.language ?? null,
         published_at: stringValue(pub.published_at),
@@ -239,9 +258,13 @@ async function handleBook(sc: any, url: URL): Promise<Response> {
           ?? stringValue(snap.publisher)
           ?? stringValue(snap.imprint),
         isbn:
-          stringValue(snap.isbn_13)
+          stringValue(isbnByFormat.epub)
+          ?? stringValue(isbnByFormat.ebook)
+          ?? stringValue(identifierIsbn?.value)
+          ?? stringValue(snap.isbn_13)
           ?? stringValue(snap.isbn)
-          ?? stringValue(snap.isbn_10),
+          ?? stringValue(snap.isbn_10)
+          ?? stringValue(fallbackIdentifierIsbn?.value),
       };
     }
   }
