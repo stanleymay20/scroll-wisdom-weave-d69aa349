@@ -12,3 +12,12 @@ export function externalPaymentWritesEnabled(value?: string | null): boolean {
 
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
+
+
+export function advancedAuthoringEnabled(value?: string | null): boolean {
+  const normalized = String(
+    value === undefined ? Deno.env.get("GA_ADVANCED_AUTHORING_ENABLED") ?? "" : value ?? "",
+  ).trim().toLowerCase();
+
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
