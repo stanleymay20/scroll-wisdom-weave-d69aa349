@@ -358,6 +358,10 @@ jobs:
         run: bun run audit:edge-auth
       - name: Reject orphaned Edge Functions
         run: bun run audit:function-reachability
+      - name: Enforce generated-book qualification release wiring
+        run: bun run audit:provider-qualification-gates
+      - name: Compile qualification evidence collector
+        run: bun build scripts/collect-provider-qualification.ts --target=node --outdir=/tmp/provider-qualification-build
       - name: Reject Deno test files no workflow runs
         run: bun run audit:deno-tests
       - name: Reject email-based Stripe customer ownership
