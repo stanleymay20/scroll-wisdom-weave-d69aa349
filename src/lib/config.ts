@@ -32,7 +32,7 @@ export const PMF_MODE = true; // GA launch scope: core Generate → Read → Qui
 
 export const FEATURES = {
   enableTTS: true,
-  enableAICovers: true,
+  enableAICovers: !PMF_MODE,
   enableBatchGeneration: false,
   enableElevenLabsTTS: false,
   // PMF-disabled features
