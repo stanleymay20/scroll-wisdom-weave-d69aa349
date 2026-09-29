@@ -260,6 +260,8 @@ jobs:
           deno test supabase/functions/_shared/figure-export_test.ts
           deno test supabase/functions/_shared/cron-auth_test.ts
           deno test supabase/functions/_shared/stripe-connect_test.ts
+      - name: Pin production Stripe webhook event contract
+        run: node scripts/check-stripe-webhook-event-contract.mjs
       - name: Test Stripe catalogue and API-shape compatibility
         run: |
           deno test supabase/functions/_shared/stripe-catalogue_test.ts
