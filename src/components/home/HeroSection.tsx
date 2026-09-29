@@ -6,9 +6,9 @@ import heroCinematicBook from "@/assets/hero-cinematic-book.png";
 
 const FEATURES = [
   { icon: PenLine, title: "Create", desc: "Turn an idea into a structured, full-length book." },
-  { icon: CheckCircle2, title: "Review", desc: "Quality, continuity, and publication checks built in." },
-  { icon: BookOpen, title: "Publish", desc: "Prepare professional PDF, EPUB, and DOCX outputs." },
-  { icon: Rocket, title: "Grow", desc: "Move from finished manuscript toward readers and revenue." },
+  { icon: CheckCircle2, title: "Learn", desc: "Read, assess understanding, and keep your work in one place." },
+  { icon: BookOpen, title: "Refine", desc: "Build a strong manuscript before advanced publishing workflows open." },
+  { icon: Rocket, title: "Publishing path", desc: "Advanced publishing tools unlock only after their GA validation gates pass." },
 ];
 
 interface HeroSectionProps {
@@ -81,9 +81,9 @@ export function HeroSection({ onStartDemo: _onStartDemo }: HeroSectionProps) {
               transition={{ duration: 0.6, delay: 0.3 }}
               className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-muted-foreground"
             >
-              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Publication-aware quality checks</span>
-              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Multiple book types</span>
-              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Multi-format export</span>
+              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Structured book generation</span>
+              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Reading and mastery tools</span>
+              <span className="inline-flex items-center gap-1.5"><CheckCircle2 className="h-3.5 w-3.5 text-primary" /> Fail-closed GA feature gates</span>
             </motion.div>
           </div>
 
