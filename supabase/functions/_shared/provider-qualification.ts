@@ -337,12 +337,23 @@ export function evaluateQualificationSample(
   }
 
   if (sample.humanReview) {
-    if (sample.humanReview.score < policy.humanReviewMinimum) {
+    if (
+      !Number.isFinite(sample.humanReview.score)
+      || sample.humanReview.score < 0
+      || sample.humanReview.score > 10
+    ) {
+      blockers.push("human review score must be between 0 and 10");
+    } else if (sample.humanReview.score < policy.humanReviewMinimum) {
       blockers.push(
         `human review score ${sample.humanReview.score.toFixed(1)} < ${policy.humanReviewMinimum.toFixed(1)}`,
       );
     }
-    if (sample.humanReview.criticalIssues > 0) {
+    if (
+      !Number.isInteger(sample.humanReview.criticalIssues)
+      || sample.humanReview.criticalIssues < 0
+    ) {
+      blockers.push("human review critical-issue count must be a non-negative integer");
+    } else if (sample.humanReview.criticalIssues > 0) {
       blockers.push(`human review found ${sample.humanReview.criticalIssues} critical issue(s)`);
     }
     if (!sample.humanReview.reviewer.trim()) {
@@ -370,7 +381,9 @@ export function evaluateBookTypeQualification(
     const review = sample.humanReview;
     return !!review
       && review.reviewer.trim().length > 0
+      && Number.isFinite(review.score)
       && review.score >= policy.humanReviewMinimum
+      && review.score <= 10
       && review.criticalIssues === 0;
   }).length;
 
