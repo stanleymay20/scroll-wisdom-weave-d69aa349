@@ -11,6 +11,10 @@ on:
         description: Production site origin
         required: true
         default: https://scrolllibrary.org
+      functions_url:
+        description: Production Supabase Edge Functions origin
+        required: true
+        default: https://lrricdforqfkaaciammv.supabase.co/functions/v1
 
 permissions:
   contents: read
@@ -18,6 +22,7 @@ permissions:
 
 env:
   SITE_URL: ${{ inputs.site_url }}
+  FUNCTIONS_URL: ${{ inputs.functions_url }}
 
 jobs:
   verify-production:
@@ -117,7 +122,30 @@ jobs:
             echo "$workflow: success"
           done
 
-      - name: Require Stripe lifecycle to have run, not skipped
+      - name: Prove production payment-write posture
+        id: payment_gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          body_file="$(mktemp)"
+          code="$(curl --silent --show-error --output "$body_file" --write-out '%{http_code}' \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            "$FUNCTIONS_URL/create-checkout" || true)"
+          body="$(cat "$body_file")"
+          echo "create-checkout probe: HTTP $code $body"
+          gate_code="$(printf '%s' "$body" | jq -r '.code // empty' 2>/dev/null || true)"
+          if [ "$code" = "503" ] && [ "$gate_code" = "ga_payments_disabled" ]; then
+            echo "disabled=true" >> "$GITHUB_OUTPUT"
+            echo "Production payment writes are fail-closed."
+          else
+            echo "disabled=false" >> "$GITHUB_OUTPUT"
+            echo "Production payment writes are open; exact-head Stripe lifecycle proof is required."
+          fi
+
+      - name: Require Stripe lifecycle to have run, not skipped when payments are open
+        if: steps.payment_gate.outputs.disabled != 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
@@ -176,7 +204,8 @@ jobs:
             releaseSha: process.env.RELEASE_SHA,
             expectedSourceFingerprint: process.env.EXPECTED_FINGERPRINT,
             production: JSON.parse(readFileSync("live-release.json", "utf8")),
-            stripeLifecycle: "success",
+            paymentWrites: ${{ steps.payment_gate.outputs.disabled == 'true' && '"disabled"' || '"enabled"' }},
+            stripeLifecycle: ${{ steps.payment_gate.outputs.disabled == 'true' && '"not_required_while_disabled"' || '"success"' }},
             result: "GA_PRODUCTION_VERIFICATION_PASS",
           };
 
