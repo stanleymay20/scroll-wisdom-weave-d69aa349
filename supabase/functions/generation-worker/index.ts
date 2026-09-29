@@ -48,6 +48,24 @@ function classifyGenerationFailure(status: number, payload: unknown): string {
   return "CHAPTER_GENERATION_FAILED";
 }
 
+function qualificationTelemetry(metadata: Record<string, unknown> | null): {
+  chapterAttempts: number;
+  chapterFailures: number;
+} {
+  const raw = metadata?.qualificationTelemetry;
+  const record = raw && typeof raw === "object" && !Array.isArray(raw)
+    ? raw as Record<string, unknown>
+    : {};
+
+  const attempts = Number(record.chapterAttempts);
+  const failures = Number(record.chapterFailures);
+
+  return {
+    chapterAttempts: Number.isFinite(attempts) ? Math.max(0, Math.trunc(attempts)) : 0,
+    chapterFailures: Number.isFinite(failures) ? Math.max(0, Math.trunc(failures)) : 0,
+  };
+}
+
 serve(async (req) => {
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
@@ -193,6 +211,20 @@ serve(async (req) => {
       wordCount: Number(book.target_chapter_words) || 4000,
     };
 
+    const telemetry = qualificationTelemetry(job.metadata);
+    const attemptMetadata = {
+      ...(job.metadata || {}),
+      qualificationTelemetry: {
+        chapterAttempts: telemetry.chapterAttempts + 1,
+        chapterFailures: telemetry.chapterFailures,
+      },
+    };
+    const { error: attemptTelemetryError } = await supabase
+      .from("generation_jobs")
+      .update({ metadata: attemptMetadata })
+      .eq("id", jobId);
+    if (attemptTelemetryError) throw attemptTelemetryError;
+
     const chapterResponse = await fetch(
       SUPABASE_URL + "/functions/v1/generate-chapter",
       {
@@ -212,6 +244,19 @@ serve(async (req) => {
       const message = String(
         chapterResult?.error || "Chapter generation failed with HTTP " + chapterResponse.status,
       ).slice(0, 1000);
+
+      const failedMetadata = {
+        ...attemptMetadata,
+        qualificationTelemetry: {
+          chapterAttempts: telemetry.chapterAttempts + 1,
+          chapterFailures: telemetry.chapterFailures + 1,
+        },
+      };
+      const { error: failureTelemetryError } = await supabase
+        .from("generation_jobs")
+        .update({ metadata: failedMetadata })
+        .eq("id", jobId);
+      if (failureTelemetryError) throw failureTelemetryError;
 
       await supabase.rpc("finish_generation_job_step", {
         _job_id: jobId,
