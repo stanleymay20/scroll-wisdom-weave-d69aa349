@@ -344,6 +344,40 @@ CREATE POLICY "Buyers can read full chapters of purchased books" ON public.chapt
 GRANT EXECUTE ON FUNCTION public.user_owns_book_purchase(uuid, uuid) TO authenticated, service_role;
 -- END CONVERGENCE COPY: drizzle/migrations/0001_fix_ai_assistance_level_and_buyer_policies.sql
 
+
+-- Re-register the two pre-existing operational jobs that consolidated hosted
+-- database snapshots can preserve as functions while losing from cron.job.
+DO $ops_cron$
+BEGIN
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron') THEN
+    IF to_regprocedure('public.purge_velocity_buckets()') IS NULL THEN
+      RAISE EXCEPTION 'GA convergence failed: purge_velocity_buckets() missing';
+    END IF;
+    IF to_regprocedure('public.sweep_stale_jobs(integer,integer)') IS NULL THEN
+      RAISE EXCEPTION 'GA convergence failed: sweep_stale_jobs(integer,integer) missing';
+    END IF;
+
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'purge_velocity_buckets_hourly') THEN
+      PERFORM cron.unschedule('purge_velocity_buckets_hourly');
+    END IF;
+    PERFORM cron.schedule(
+      'purge_velocity_buckets_hourly',
+      '17 * * * *',
+      'SELECT public.purge_velocity_buckets();'
+    );
+
+    IF EXISTS (SELECT 1 FROM cron.job WHERE jobname = 'sweep_stale_jobs_every_10_min') THEN
+      PERFORM cron.unschedule('sweep_stale_jobs_every_10_min');
+    END IF;
+    PERFORM cron.schedule(
+      'sweep_stale_jobs_every_10_min',
+      '*/10 * * * *',
+      'SELECT public.sweep_stale_jobs();'
+    );
+  END IF;
+END
+$ops_cron$;
+
 -- Fail this migration if any GA invariant still failed to materialize.
 DO $ga$
 BEGIN
@@ -380,6 +414,26 @@ BEGIN
         AND tablename = 'release_schedule_items'
         AND policyname LIKE 'release_schedule_items_entitled_%') <> 3 THEN
     RAISE EXCEPTION 'GA convergence failed: release_schedule_items entitlement policy set incomplete';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron')
+     AND NOT EXISTS (
+       SELECT 1 FROM cron.job
+       WHERE jobname = 'purge_velocity_buckets_hourly'
+         AND schedule = '17 * * * *'
+         AND command = 'SELECT public.purge_velocity_buckets();'
+         AND active IS TRUE
+     ) THEN
+    RAISE EXCEPTION 'GA convergence failed: velocity-bucket cleanup cron missing or inactive';
+  END IF;
+  IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'pg_cron')
+     AND NOT EXISTS (
+       SELECT 1 FROM cron.job
+       WHERE jobname = 'sweep_stale_jobs_every_10_min'
+         AND schedule = '*/10 * * * *'
+         AND command = 'SELECT public.sweep_stale_jobs();'
+         AND active IS TRUE
+     ) THEN
+    RAISE EXCEPTION 'GA convergence failed: stale-job sweeper cron missing or inactive';
   END IF;
 END
 $ga$;
