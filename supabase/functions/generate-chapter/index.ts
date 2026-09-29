@@ -1471,19 +1471,26 @@ async function conductDeepResearch(
   category: string,
   keyTopics: string[],
   citationStyle: string,
-  authToken: string
+  authToken: string,
+  workerContext?: { jobId: string; leaseToken: string },
 ): Promise<ResearchResult> {
   const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
   
   console.log("[DEEP-RESEARCH] Starting deep research pipeline for:", topic.slice(0, 50));
 
   try {
+    const researchHeaders: Record<string, string> = {
+      "Authorization": `Bearer ${authToken}`,
+      "Content-Type": "application/json",
+    };
+    if (workerContext?.jobId && workerContext.leaseToken) {
+      researchHeaders["x-generation-job-id"] = workerContext.jobId;
+      researchHeaders["x-generation-worker-token"] = workerContext.leaseToken;
+    }
+
     const response = await fetch(`${SUPABASE_URL}/functions/v1/deep-research`, {
       method: "POST",
-      headers: {
-        "Authorization": `Bearer ${authToken}`,
-        "Content-Type": "application/json",
-      },
+      headers: researchHeaders,
       body: JSON.stringify({
         topic: `${topic}`,
         category,
@@ -2496,7 +2503,13 @@ BEGIN REVISION:`;
         category,
         keyTopics || [chapterTitle],
         citationStyle,
-        token
+        token,
+        isInternalWorker && internalJobId
+          ? {
+              jobId: internalJobId,
+              leaseToken: req.headers.get("x-generation-worker-token") || "",
+            }
+          : undefined,
       );
       
       console.log(`[GENERATE-CHAPTER] Research complete: ${researchResult.metadata.source_count} sources`);
