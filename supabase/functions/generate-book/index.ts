@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { requireUser, serviceClient } from "../_shared/http.ts";
 import { ErrorCode, errorResponse } from "../_shared/error-codes.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
-import { advancedAuthoringEnabled, advancedBookTypeEnabled } from "../_shared/ga-release-flags.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled, qualificationBookTypeEnabled } from "../_shared/ga-release-flags.ts";
 import { normalizeGeneratedOutline, type NormalizedOutlineChapter } from "../_shared/outline-normalizer.ts";
 import { buildFictionOutlineInstructions, sanitizeFictionContract } from "../_shared/fiction-context.ts";
 
@@ -204,7 +204,12 @@ serve(async (req) => {
         || requestedBookType !== "text"
         || (requestedExtendedType !== null && requestedExtendedType !== "text");
 
-      if (advancedRequested && !advancedAuthoringEnabled()) {
+      const qualificationAccess =
+        isAdmin
+        && requestedType !== "text"
+        && qualificationBookTypeEnabled(requestedType);
+
+      if (advancedRequested && !advancedAuthoringEnabled() && !qualificationAccess) {
         return new Response(JSON.stringify({
           error: "This advanced authoring mode is outside the current GA launch scope.",
           code: "GA_ADVANCED_AUTHORING_DISABLED",
@@ -214,7 +219,11 @@ serve(async (req) => {
         });
       }
 
-      if (requestedType !== "text" && !advancedBookTypeEnabled(requestedType)) {
+      if (
+        requestedType !== "text"
+        && !advancedBookTypeEnabled(requestedType)
+        && !qualificationAccess
+      ) {
         return new Response(JSON.stringify({
           error: "This specialized book type has not completed provider qualification.",
           code: "GA_BOOK_TYPE_NOT_QUALIFIED",
