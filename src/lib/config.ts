@@ -61,4 +61,5 @@ export const FEATURES = {
   enableExports: !PMF_MODE,
   enableEditorialPipeline: !PMF_MODE,
   enableReleaseScheduling: !PMF_MODE,
+  enableCanonicalPublication: !PMF_MODE,
 };
