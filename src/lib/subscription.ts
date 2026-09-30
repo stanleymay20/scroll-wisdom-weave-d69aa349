@@ -96,7 +96,7 @@ export const SUBSCRIPTION_TIERS = {
       aiCovers: true,
       batchGeneration: false,
       prioritySupport: true,
-      elevenLabsTTS: true,
+      elevenLabsTTS: false,
       cinematicVideo: true,
       seats: 1,
       marketplaceFeeBps: 500,
