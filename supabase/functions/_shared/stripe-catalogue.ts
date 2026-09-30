@@ -1,31 +1,27 @@
 /**
- * Which Stripe price and product belong to which ScrollLibrary tier.
+ * Stripe catalogue and reconciliation policy.
  *
- * This map used to be copied into four places — create-checkout (prices),
- * check-subscription, stripe-webhook and admin-force-stripe-resync (products)
- * — and the copies had already drifted: check-subscription knew no creator
- * products at all. It lives here once.
- *
- * The live IDs below are the defaults and are what production uses. Stripe
- * keeps test-mode objects in a separate namespace with different IDs, so the
- * only way to run checkout, webhooks and refunds end to end in test mode is
- * to point the code at test-mode products. STRIPE_CATALOGUE_JSON does that,
- * and nothing else can: it is refused outright alongside any live key,
- * so a test catalogue can never be charged against real cards.
+ * Historical live products/prices remain mapped so existing subscriptions keep
+ * reconciling correctly. New public checkout NEVER falls back to those legacy
+ * prices. The new sustainable Creator/Pro/Teams prices must be supplied through
+ * dedicated environment variables (or STRIPE_CATALOGUE_JSON in test mode).
  */
 
 export type PlanTier = "student" | "premium" | "prophet_tier";
 export type CreatorTier = "creator" | "creator_pro";
 export type BillableTier = PlanTier | CreatorTier;
+export type BillingInterval = "monthly" | "annual";
 
 export const PLAN_TIERS: readonly PlanTier[] = ["student", "premium", "prophet_tier"];
 export const CREATOR_TIERS: readonly CreatorTier[] = ["creator", "creator_pro"];
 export const BILLABLE_TIERS: readonly BillableTier[] = [...PLAN_TIERS, ...CREATOR_TIERS];
 
 export interface StripeCatalogue {
-  /** The one price a new checkout for each tier is charged at. */
+  /** Legacy/default monthly prices used for historical reconciliation and test overrides. */
   prices: Readonly<Record<BillableTier, string>>;
-  /** Every product that grants a tier, including retired ones still billing. */
+  /** Optional annual plan prices, used primarily by test-mode catalogue overrides. */
+  annualPrices?: Readonly<Partial<Record<PlanTier, string>>>;
+  /** Every product that grants a tier, including retired products still billing. */
   products: Readonly<Record<string, BillableTier>>;
   source: "live-default" | "override";
 }
@@ -41,8 +37,8 @@ export const LIVE_CATALOGUE: StripeCatalogue = Object.freeze({
   products: Object.freeze({
     prod_TaQSrotoUkTuPC: "student",
     prod_TaQU3ILEUpbXOT: "premium",
-    prod_U0fmlf14TPlMKj: "prophet_tier", // current Institutional product
-    prod_TaQWA7MSUntiMy: "prophet_tier", // legacy Institutional product
+    prod_U0fmlf14TPlMKj: "prophet_tier",
+    prod_TaQWA7MSUntiMy: "prophet_tier",
     prod_UZv8Eine5sKy0j: "creator",
     prod_UZv8yPrOGDBuWE: "creator_pro",
   }),
@@ -51,32 +47,42 @@ export const LIVE_CATALOGUE: StripeCatalogue = Object.freeze({
 
 export const CATALOGUE_OVERRIDE_ENV = "STRIPE_CATALOGUE_JSON";
 
+const PUBLIC_PRICE_ENV: Readonly<Record<PlanTier, Readonly<Record<BillingInterval, string>>>> = {
+  student: {
+    monthly: "STRIPE_PRICE_CREATOR_MONTHLY",
+    annual: "STRIPE_PRICE_CREATOR_ANNUAL",
+  },
+  premium: {
+    monthly: "STRIPE_PRICE_PRO_MONTHLY",
+    annual: "STRIPE_PRICE_PRO_ANNUAL",
+  },
+  prophet_tier: {
+    monthly: "STRIPE_PRICE_TEAMS_MONTHLY",
+    annual: "STRIPE_PRICE_TEAMS_ANNUAL",
+  },
+};
+
+const PUBLIC_PRODUCT_ENV: Readonly<Record<PlanTier, string>> = {
+  student: "STRIPE_PRODUCT_CREATOR",
+  premium: "STRIPE_PRODUCT_PRO",
+  prophet_tier: "STRIPE_PRODUCT_TEAMS",
+};
+
 export const isPlanTier = (value: unknown): value is PlanTier =>
   typeof value === "string" && (PLAN_TIERS as readonly string[]).includes(value);
 
 export const isCreatorTier = (value: unknown): value is CreatorTier =>
   typeof value === "string" && (CREATOR_TIERS as readonly string[]).includes(value);
 
-/**
- * Public GA checkout sells one simple subscription ladder only:
- * Creator, Pro and Teams (internal tiers student, premium, prophet_tier).
- *
- * Creator-tier publishing subscriptions remain in the catalogue solely so
- * Stripe can reconcile historical objects. They are not available for new
- * public checkout.
- */
+export const isBillingInterval = (value: unknown): value is BillingInterval =>
+  value === "monthly" || value === "annual";
+
 export const PUBLIC_CHECKOUT_TIERS: readonly PlanTier[] = PLAN_TIERS;
 export const isPublicCheckoutTier = isPlanTier;
 
 const isBillableTier = (value: unknown): value is BillableTier =>
   isPlanTier(value) || isCreatorTier(value);
 
-/**
- * Validate an override. Throws rather than falling back: a half-applied
- * catalogue would charge some tiers at test prices and others at live ones,
- * and a silent fallback to live IDs inside a test run would hide exactly the
- * misconfiguration this exists to catch.
- */
 export function parseCatalogueOverride(raw: string): StripeCatalogue {
   let parsed: unknown;
   try {
@@ -84,8 +90,15 @@ export function parseCatalogueOverride(raw: string): StripeCatalogue {
   } catch {
     throw new Error(`${CATALOGUE_OVERRIDE_ENV} is not valid JSON`);
   }
-  if (!parsed || typeof parsed !== "object") throw new Error(`${CATALOGUE_OVERRIDE_ENV} must be an object`);
-  const { prices, products } = parsed as { prices?: unknown; products?: unknown };
+  if (!parsed || typeof parsed !== "object") {
+    throw new Error(`${CATALOGUE_OVERRIDE_ENV} must be an object`);
+  }
+
+  const { prices, annualPrices, products } = parsed as {
+    prices?: unknown;
+    annualPrices?: unknown;
+    products?: unknown;
+  };
   if (!prices || typeof prices !== "object" || !products || typeof products !== "object") {
     throw new Error(`${CATALOGUE_OVERRIDE_ENV} needs both "prices" and "products"`);
   }
@@ -99,10 +112,28 @@ export function parseCatalogueOverride(raw: string): StripeCatalogue {
     priceMap[tier] = price;
   }
 
+  const annualMap: Partial<Record<PlanTier, string>> = {};
+  if (annualPrices !== undefined) {
+    if (!annualPrices || typeof annualPrices !== "object") {
+      throw new Error(`${CATALOGUE_OVERRIDE_ENV}.annualPrices must be an object`);
+    }
+    for (const tier of PLAN_TIERS) {
+      const price = (annualPrices as Record<string, unknown>)[tier];
+      if (typeof price !== "string" || !price.startsWith("price_")) {
+        throw new Error(`${CATALOGUE_OVERRIDE_ENV} has no annual price for tier "${tier}"`);
+      }
+      annualMap[tier] = price;
+    }
+  }
+
   const productMap: Record<string, BillableTier> = {};
   for (const [product, tier] of Object.entries(products as Record<string, unknown>)) {
-    if (!product.startsWith("prod_")) throw new Error(`${CATALOGUE_OVERRIDE_ENV} product "${product}" is not a product id`);
-    if (!isBillableTier(tier)) throw new Error(`${CATALOGUE_OVERRIDE_ENV} maps "${product}" to unknown tier "${String(tier)}"`);
+    if (!product.startsWith("prod_")) {
+      throw new Error(`${CATALOGUE_OVERRIDE_ENV} product "${product}" is not a product id`);
+    }
+    if (!isBillableTier(tier)) {
+      throw new Error(`${CATALOGUE_OVERRIDE_ENV} maps "${product}" to unknown tier "${String(tier)}"`);
+    }
     productMap[product] = tier;
   }
   for (const tier of BILLABLE_TIERS) {
@@ -113,6 +144,7 @@ export function parseCatalogueOverride(raw: string): StripeCatalogue {
 
   return Object.freeze({
     prices: Object.freeze(priceMap),
+    annualPrices: Object.freeze(annualMap),
     products: Object.freeze(productMap),
     source: "override" as const,
   });
@@ -120,37 +152,90 @@ export function parseCatalogueOverride(raw: string): StripeCatalogue {
 
 type EnvReader = (name: string) => string | undefined;
 
-export function resolveStripeCatalogue(env: EnvReader = (name) => Deno.env.get(name)): StripeCatalogue {
-  const raw = env(CATALOGUE_OVERRIDE_ENV)?.trim();
-  if (!raw) return LIVE_CATALOGUE;
-  // Restricted keys (rk_live_) charge real cards too.
-  if (/^(sk|rk)_live_/.test(env("STRIPE_SECRET_KEY") ?? "")) {
-    throw new Error(`${CATALOGUE_OVERRIDE_ENV} is set alongside a live Stripe key; refusing to use a non-live catalogue`);
+function addConfiguredPublicProducts(
+  base: StripeCatalogue,
+  env: EnvReader,
+): StripeCatalogue {
+  const products: Record<string, BillableTier> = { ...base.products };
+  for (const tier of PLAN_TIERS) {
+    const productId = env(PUBLIC_PRODUCT_ENV[tier])?.trim();
+    if (!productId) continue;
+    if (!productId.startsWith("prod_")) {
+      throw new Error(`${PUBLIC_PRODUCT_ENV[tier]} must be a Stripe product id`);
+    }
+    products[productId] = tier;
   }
-  return parseCatalogueOverride(raw);
+  return Object.freeze({
+    ...base,
+    products: Object.freeze(products),
+  });
 }
 
-export function planTierForProduct(catalogue: StripeCatalogue, productId: string | null | undefined): PlanTier | null {
+export function resolveStripeCatalogue(env: EnvReader = (name) => Deno.env.get(name)): StripeCatalogue {
+  const raw = env(CATALOGUE_OVERRIDE_ENV)?.trim();
+  if (raw) {
+    if (/^(sk|rk)_live_/.test(env("STRIPE_SECRET_KEY") ?? "")) {
+      throw new Error(`${CATALOGUE_OVERRIDE_ENV} is set alongside a live Stripe key; refusing a test catalogue`);
+    }
+    return parseCatalogueOverride(raw);
+  }
+  return addConfiguredPublicProducts(LIVE_CATALOGUE, env);
+}
+
+/**
+ * Resolve the price that may be used for NEW public checkout.
+ *
+ * Production intentionally fails closed when the new sustainable catalogue has
+ * not been provisioned. Historical $9/$19/$79 price IDs are reconciliation-only
+ * and are never a fallback for new checkout.
+ */
+export function publicCheckoutPrice(
+  catalogue: StripeCatalogue,
+  tier: PlanTier,
+  interval: BillingInterval,
+  env: EnvReader = (name) => Deno.env.get(name),
+): string | null {
+  if (catalogue.source === "override") {
+    const candidate = interval === "annual"
+      ? catalogue.annualPrices?.[tier] ?? null
+      : catalogue.prices[tier];
+    return candidate && candidate.startsWith("price_") ? candidate : null;
+  }
+
+  const candidate = env(PUBLIC_PRICE_ENV[tier])?.trim();
+  if (!candidate) return null;
+  if (!candidate.startsWith("price_")) {
+    throw new Error(`${PUBLIC_PRICE_ENV[tier][interval]} must be a Stripe price id`);
+  }
+  return candidate;
+}
+
+export function planTierForProduct(
+  catalogue: StripeCatalogue,
+  productId: string | null | undefined,
+): PlanTier | null {
   const tier = productId ? catalogue.products[productId] : undefined;
   return tier && (PLAN_TIERS as readonly string[]).includes(tier) ? tier as PlanTier : null;
 }
 
-export function creatorTierForProduct(catalogue: StripeCatalogue, productId: string | null | undefined): CreatorTier | null {
+export function creatorTierForProduct(
+  catalogue: StripeCatalogue,
+  productId: string | null | undefined,
+): CreatorTier | null {
   const tier = productId ? catalogue.products[productId] : undefined;
   return tier && (CREATOR_TIERS as readonly string[]).includes(tier) ? tier as CreatorTier : null;
 }
 
-/**
- * Whether a price a client sent is an acceptable description of a tier.
- *
- * The server always charges catalogue.prices[tier]; the client's price is
- * never used. It is only checked so a stale or tampered client fails loudly.
- * Clients carry the live catalogue, so under a test override the live price
- * for the same tier is also accepted — it names the same tier, not another.
- */
-export function clientPriceMatchesTier(catalogue: StripeCatalogue, tier: BillableTier, requested: unknown): boolean {
+// Compatibility helper for older clients/tests. New public clients no longer send
+// a priceId; they send tier + billingInterval and the server selects the price.
+export function clientPriceMatchesTier(
+  catalogue: StripeCatalogue,
+  tier: BillableTier,
+  requested: unknown,
+): boolean {
   if (requested === undefined || requested === null || requested === "") return true;
-  return requested === catalogue.prices[tier] || requested === LIVE_CATALOGUE.prices[tier];
+  if (catalogue.source === "override") return requested === catalogue.prices[tier];
+  return isCreatorTier(tier) && requested === LIVE_CATALOGUE.prices[tier];
 }
 
 export { isBillableTier };
