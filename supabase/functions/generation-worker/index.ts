@@ -178,7 +178,7 @@ serve(async (req) => {
 
       await releaseLease();
       const metadata = {
-        ...attemptMetadata,
+        ...(job.metadata || {}),
         phase: "quality_review",
         draftCompletedAt: new Date().toISOString(),
       };
