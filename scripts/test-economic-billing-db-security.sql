@@ -62,3 +62,51 @@ BEGIN
   END IF;
 END
 $$;
+
+
+-- Paying for a publishing service must never allocate an ISBN.
+DO $$
+DECLARE
+  v_user uuid := gen_random_uuid();
+  v_order uuid;
+  before_count bigint;
+  after_count bigint;
+  result jsonb;
+BEGIN
+  SELECT count(*) INTO before_count FROM public.isbn_inventory;
+
+  INSERT INTO public.billing_orders (
+    user_id, kind, sku, benefit_month, expected_amount_cents, currency,
+    stripe_customer_id, stripe_session_id
+  )
+  VALUES (
+    v_user, 'publishing_service', 'single_edition',
+    to_char((now() AT TIME ZONE 'UTC'), 'YYYY-MM'),
+    4900, 'usd', 'cus_test_billing_order', 'cs_test_billing_order'
+  )
+  RETURNING id INTO v_order;
+
+  result := public.settle_billing_order(
+    v_order,
+    'cs_test_billing_order',
+    'pi_test_billing_order',
+    'cus_test_billing_order'
+  );
+
+  IF COALESCE((result->>'ok')::boolean, false) IS NOT TRUE THEN
+    RAISE EXCEPTION 'publishing service order did not settle';
+  END IF;
+
+  SELECT count(*) INTO after_count FROM public.isbn_inventory;
+  IF after_count <> before_count THEN
+    RAISE EXCEPTION 'publishing service payment changed ISBN inventory';
+  END IF;
+
+  IF NOT EXISTS (
+    SELECT 1 FROM public.billing_orders
+    WHERE id = v_order AND status = 'paid' AND fulfilled_at IS NOT NULL
+  ) THEN
+    RAISE EXCEPTION 'publishing service order was not durably fulfilled';
+  END IF;
+END
+$$;
