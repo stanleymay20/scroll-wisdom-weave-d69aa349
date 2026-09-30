@@ -144,6 +144,8 @@ jobs:
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-generated-chapter-fencing.sql
       - name: Assert durable rate limit and stale-job sweeper contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-rate-limit-and-sweeper-db-security.sql
+      - name: Assert internal SECURITY DEFINER RPCs stay server-owned
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-ga-internal-rpc-privileges.sql
       - name: Assert Germany publication-compliance security contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-de-publication-compliance.sql
       - name: Fail on PostgreSQL function and schema errors
