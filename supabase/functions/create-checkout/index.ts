@@ -2,12 +2,15 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { ensureBillingCustomer } from "../_shared/billing-customer.ts";
-import { externalPaymentWritesEnabled } from "../_shared/ga-release-flags.ts";
+import { externalPaymentWritesEnabled, publisherSubscriptionsEnabled } from "../_shared/ga-release-flags.ts";
 import {
+  billingDomainForProduct,
+  billingDomainForTier,
   clientPriceMatchesTier,
   isBillableTier,
   resolveStripeCatalogue,
 } from "../_shared/stripe-catalogue.ts";
+import { subscriptionStatusBlocksNewCheckout } from "../_shared/stripe-fields.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -81,6 +84,16 @@ serve(async (req) => {
     }
 
     const catalogue = resolveStripeCatalogue();
+    const billingDomain = billingDomainForTier(tier);
+    if (billingDomain === "publisher" && !publisherSubscriptionsEnabled()) {
+      return new Response(JSON.stringify({
+        error: "Publisher subscriptions are not available in the current GA scope.",
+        code: "publisher_subscriptions_disabled",
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+        status: 503,
+      });
+    }
     const priceId = catalogue.prices[tier];
     // Older clients still send priceId. It is never charged; a mismatch is
     // rejected rather than trusted.
@@ -125,6 +138,68 @@ serve(async (req) => {
       "subscription_checkout",
     );
 
+    // Never create a second live subscription in the same authority domain.
+    // Users with an existing generation plan or publisher add-on must manage
+    // that subscription rather than stacking another recurring charge.
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 100,
+    });
+    const existing = subscriptions.data.find((subscription) => {
+      const productId = String(subscription.items.data[0]?.price?.product ?? "");
+      return billingDomainForProduct(catalogue, productId) === billingDomain
+        && subscriptionStatusBlocksNewCheckout(subscription.status);
+    });
+    if (existing) {
+      logStep("Blocked duplicate subscription checkout", {
+        userId: user.id,
+        billingDomain,
+        existingStatus: existing.status,
+      });
+      return new Response(JSON.stringify({
+        error: "A subscription in this billing category already exists. Manage the existing subscription before starting another.",
+        code: "subscription_already_exists",
+        billing_domain: billingDomain,
+        subscription_status: existing.status,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+        status: 409,
+      });
+    }
+
+    // Serialize unfinished hosted Checkout sessions. Two tabs must not be able
+    // to create two payable subscriptions before either one has produced a
+    // Stripe Subscription object.
+    const openSessions = await stripe.checkout.sessions.list({
+      customer: customerId,
+      status: "open",
+      limit: 100,
+    });
+    const sameDomainSessions = openSessions.data.filter((candidate) => {
+      if (candidate.mode !== "subscription" || candidate.metadata?.userId !== user.id) return false;
+      const candidateTier = candidate.metadata?.tier;
+      return isBillableTier(candidateTier) && billingDomainForTier(candidateTier) === billingDomain;
+    });
+    const exactSession = sameDomainSessions.find((candidate) => candidate.metadata?.tier === tier && candidate.url);
+    if (exactSession?.url) {
+      logStep("Reusing open Checkout session", { sessionId: exactSession.id, tier, billingDomain });
+      return new Response(JSON.stringify({ url: exactSession.url, reused: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+        status: 200,
+      });
+    }
+    if (sameDomainSessions.length > 0) {
+      return new Response(JSON.stringify({
+        error: "Another subscription checkout is already in progress in this billing category.",
+        code: "checkout_in_progress",
+        billing_domain: billingDomain,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+        status: 409,
+      });
+    }
+
     const origin = getReturnOrigin(req);
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -135,11 +210,20 @@ serve(async (req) => {
         },
       ],
       mode: "subscription",
+      client_reference_id: user.id,
       success_url: `${origin}/pricing?success=true`,
       cancel_url: `${origin}/pricing?canceled=true`,
       metadata: {
         userId: user.id,
         tier,
+        billingDomain,
+      },
+      subscription_data: {
+        metadata: {
+          userId: user.id,
+          tier,
+          billingDomain,
+        },
       },
     });
 
