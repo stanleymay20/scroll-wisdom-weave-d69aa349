@@ -3,7 +3,7 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { getBillingCustomerId } from "../_shared/billing-customer.ts";
 import { planTierForProduct, resolveStripeCatalogue } from "../_shared/stripe-catalogue.ts";
-import { subscriptionPeriod } from "../_shared/stripe-fields.ts";
+import { subscriptionPeriod, subscriptionStatusGrantsAccess } from "../_shared/stripe-fields.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -67,11 +67,12 @@ serve(async (req) => {
         // because Stripe returned it first.
         const subscriptions = await stripe.subscriptions.list({
           customer: customerId,
-          status: "active",
+          status: "all",
           limit: 20,
         });
 
         for (const subscription of subscriptions.data) {
+          if (!subscriptionStatusGrantsAccess(subscription.status)) continue;
           const productId = String(subscription.items.data[0]?.price?.product ?? "");
           const tier = planTierForProduct(resolveStripeCatalogue(), productId);
           if (!tier) continue;
@@ -100,7 +101,7 @@ serve(async (req) => {
       .from("subscriptions")
       .select("tier,status,current_period_end")
       .eq("user_id", userId)
-      .eq("status", "active")
+      .in("status", ["active", "trialing"])
       .maybeSingle();
 
     if (localError) {
