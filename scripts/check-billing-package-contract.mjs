@@ -36,6 +36,7 @@ requireText(checkout, 'code: "tier_not_publicly_sold"', "retired-tier rejection"
 requireText(checkout, 'status: "all"', "existing subscription scan");
 requireText(checkout, 'code: sameTier ? "existing_plan_subscription" : "plan_change_required"', "duplicate subscription rejection");
 requireText(checkout, 'status: "open"', "open Checkout Session reuse");
+requireText(checkout, 'code: "checkout_in_progress"', "single open plan checkout invariant");
 requireText(checkout, "planTierForProduct(catalogue, productId)", "same-domain subscription detection");
 
 // Paid plan access must follow Stripe subscription status, not checkout redirects.
