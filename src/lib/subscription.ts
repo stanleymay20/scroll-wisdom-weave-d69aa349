@@ -79,7 +79,7 @@ export const SUBSCRIPTION_TIERS = {
     publicId: 'pro',
     monthlyPrice: 69,
     annualPrice: 690,
-    legacyProductIds: ['prod_TaQU3ILEUpXOT'.replace('UpXOT', 'UpbXOT')],
+    legacyProductIds: ['prod_TaQU3ILEUpbXOT'],
     features: {
       canGenerateBooks: true,
       maxBooksPerMonth: 30,
