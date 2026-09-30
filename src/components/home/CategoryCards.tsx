@@ -4,15 +4,15 @@ import { Sparkles, Database } from "lucide-react";
 
 const cards = [
   {
-    title: "My Library",
-    description: "Your personal collection of uploaded books and generated study guides, with reading progress and mastery tracking.",
+    title: "Your Library",
+    description: "Keep your created and uploaded books together, continue reading, and return to the same project as it develops.",
     icon: Database,
     to: "/library",
     gradient: "from-blue-500 to-blue-700",
   },
   {
-    title: "Generate Study Guide",
-    description: "Enter any topic and get a structured book with chapters, summaries, quizzes, and a mastery certificate.",
+    title: "Create a Book",
+    description: "Start with a topic and build a structured multi-chapter book in one workspace, with learning tools available when you need them.",
     icon: Sparkles,
     to: "/generate",
     gradient: "from-indigo-500 to-purple-600",
