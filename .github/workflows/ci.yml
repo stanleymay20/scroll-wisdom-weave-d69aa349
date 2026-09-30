@@ -383,6 +383,8 @@ jobs:
         run: bun run audit:deno-tests
       - name: Reject email-based Stripe customer ownership
         run: bun scripts/check-billing-customer-identity.mjs
+      - name: Pin public billing package and duplicate-subscription guard
+        run: bun scripts/check-billing-package-contract.mjs
       - name: Reject browser publication authority
         run: bun scripts/check-browser-publication-authority.mjs
       - name: Reject high or critical production dependency vulnerabilities
