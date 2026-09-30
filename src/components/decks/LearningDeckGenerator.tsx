@@ -447,7 +447,7 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="student">Creator</SelectItem>
+                        <SelectItem value="student">Student</SelectItem>
                         <SelectItem value="lecturer">Lecturer</SelectItem>
                         <SelectItem value="employer">Employer</SelectItem>
                         <SelectItem value="peer-teaching">Peer Teaching</SelectItem>
