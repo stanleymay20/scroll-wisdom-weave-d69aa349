@@ -16,7 +16,7 @@ function passingSample(
   index = 1,
   human = true,
 ): ProviderQualificationSample {
-  const evidenceRequired = ["academic", "technical", "reference", "professional", "bestseller", "illustrated"].includes(bookType);
+  const evidenceRequired = ["academic", "technical", "reference", "professional"].includes(bookType);
   const visual = ["illustrated", "children", "comic"].includes(bookType);
   const technical = bookType === "technical";
 
@@ -140,7 +140,6 @@ Deno.test("fiction requires five samples and three independent human reviews", (
 
 Deno.test("qualification release order preserves the staged reopening plan", () => {
   assertEquals(qualificationReleaseOrder(), [
-    "text",
     "text",
     "academic",
     "technical",
