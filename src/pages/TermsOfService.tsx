@@ -9,7 +9,7 @@ export default function TermsOfService() {
     <div className="min-h-screen flex flex-col">
       <SEO
         title="Terms of Service | ScrollLibrary"
-        description="The terms governing your use of ScrollLibrary's AI-powered learning and mastery certification platform."
+        description="The terms governing your use of ScrollLibrary's AI-native book creation, reading, learning, and publishing platform."
         canonical="/terms"
       />
       <Navbar />
@@ -52,7 +52,7 @@ export default function TermsOfService() {
                 </p>
                 <ul className="list-disc list-inside space-y-2 text-muted-foreground">
                   <li>Generate books, courses, and educational content using AI</li>
-                  <li>Export content in multiple publishing formats</li>
+                  <li>Export content in supported publishing formats when those capabilities are enabled for your account</li>
                   <li>Access a library of AI-generated educational materials</li>
                   <li>Customize AI generation preferences and settings</li>
                 </ul>
@@ -65,7 +65,7 @@ export default function TermsOfService() {
                 </h2>
                 <div className="space-y-4 text-muted-foreground">
                   <p><strong className="text-foreground">Your Content:</strong> You retain ownership of all content you create using ScrollLibrary. This includes generated books, notes, and customizations.</p>
-                  <p><strong className="text-foreground">Commercial Rights:</strong> ScrollLibrary grants you a perpetual, worldwide, royalty-free license to use, publish, distribute, and sell any content you generate on our platform for commercial purposes.</p>
+                  <p><strong className="text-foreground">Commercial Use:</strong> ScrollLibrary does not claim ownership of your generated content. Your ability to use, publish, distribute, or sell generated content depends on applicable law and on any rights or restrictions attached to source material, prompts, uploads, or third-party content you use.</p>
                   <p><strong className="text-foreground">Platform Content:</strong> The ScrollLibrary platform, including its design, code, and branding, remains our intellectual property.</p>
                   <p><strong className="text-foreground">AI Attribution:</strong> Generated content may include metadata indicating AI assistance. This does not affect your ownership rights.</p>
                 </div>
