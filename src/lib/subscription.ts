@@ -184,24 +184,28 @@ export const USAGE_ADDONS = {
     price: 15,
     priceCents: 1500,
     aiTextWords: 250_000,
+    billingMode: 'one_time',
   },
   visual_50: {
     name: '+50 visual credits',
     price: 20,
     priceCents: 2000,
     visualCredits: 50,
+    billingMode: 'one_time',
   },
   audio_60: {
     name: '+60 audio credits',
     price: 15,
     priceCents: 1500,
     audioCredits: 60,
+    billingMode: 'one_time',
   },
   team_seat: {
     name: 'Additional Teams seat',
     price: 25,
     priceCents: 2500,
     seats: 1,
+    billingMode: 'recurring',
   },
 } as const;
 
