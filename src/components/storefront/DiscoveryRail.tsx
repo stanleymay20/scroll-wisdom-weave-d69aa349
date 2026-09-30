@@ -6,6 +6,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import type { StoreListing } from "@/lib/storefrontApi";
 import { logRecommendationBatch, logRecommendationEvent, type RecSource } from "@/lib/recommendationFeedback";
 import { SocialProofBadges } from "@/components/storefront/SocialProofBadges";
+import { FEATURES } from "@/lib/config";
 
 interface Props {
   title: string;
@@ -78,9 +79,11 @@ export function DiscoveryRail({ title, items, loading, emptyHint, source, onItem
                   )}
                   <div className="flex items-center gap-2 mt-2">
                     <Badge variant="secondary" className="text-[9px] sm:text-[10px] px-1.5 py-0">{l.book?.category ?? "General"}</Badge>
-                    <span className="text-[11px] sm:text-xs font-semibold ml-auto">
-                      {l.price_cents > 0 ? `$${(l.price_cents / 100).toFixed(2)}` : "Free"}
-                    </span>
+                    {(l.price_cents === 0 || FEATURES.enablePaidCheckout) && (
+                      <span className="text-[11px] sm:text-xs font-semibold ml-auto">
+                        {l.price_cents > 0 ? `${(l.price_cents / 100).toFixed(2)}` : "Free"}
+                      </span>
+                    )}
                   </div>
                   <SocialProofBadges
                     listingId={l.id}
