@@ -140,7 +140,7 @@ export function MobileHome() {
             Create a book
           </Link>
           <Link
-            to="/store"
+            to="/explore"
             className="flex-1 inline-flex items-center justify-center min-h-11 px-4 rounded-full border border-border text-foreground text-sm font-semibold active:scale-[0.98] transition-transform"
           >
             Explore books
@@ -155,7 +155,7 @@ export function MobileHome() {
 
       {/* Last Added Section */}
       <section className="mb-8" aria-labelledby="recently-added-heading">
-        <SectionHeader title="Recently Added" linkTo="/store" />
+        <SectionHeader title="Recently Added" linkTo="/explore" />
         {loading ? (
           <BookGridSkeleton count={6} />
         ) : lastAdded.length > 0 ? (
