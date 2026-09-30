@@ -34,6 +34,7 @@ export const SUBSCRIPTION_TIERS = {
       visualCredits: 0,
       aiImageQuota: 0, // compatibility alias for standard image credits
       aiCovers: false,
+      commercialRights: true, // ownership/commercial rights are not paywalled
       batchGeneration: false,
       prioritySupport: false,
       elevenLabsTTS: false,
@@ -63,6 +64,7 @@ export const SUBSCRIPTION_TIERS = {
       visualCredits: 10,
       aiImageQuota: 10,
       aiCovers: true,
+      commercialRights: true, // ownership/commercial rights are not paywalled
       batchGeneration: false,
       prioritySupport: false,
       elevenLabsTTS: false,
