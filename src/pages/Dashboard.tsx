@@ -337,20 +337,20 @@ export default function Dashboard() {
 
                   {/* Your workspace */}
                   <div className="space-y-6">
-                    {/* Primary CTA — marketplace-first publishing */}
+                    {/* Primary CTA — one GA publishing path */}
                     <Card className="bg-gradient-to-br from-primary/10 via-card to-card border-primary/30">
                       <CardContent className="p-5">
                         <div className="flex items-center gap-2 text-xs font-medium text-primary uppercase tracking-wide">
                           <Sparkles className="h-3.5 w-3.5" /> Publish your work
                         </div>
                         <h3 className="font-semibold text-foreground mt-2 text-lg leading-tight">
-                          Publish & Sell
+                          Publish your book
                         </h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Prepare your book for readers, set a price, and publish to the ScrollLibrary marketplace when it is ready.
+                          Prepare your book for readers and publish a free public ScrollLibrary listing. Paid sales stay closed until validation.
                         </p>
                         <Button variant="hero" className="w-full mt-4" onClick={() => navigate("/sell")}>
-                          Publish & Sell
+                          Publish
                         </Button>
                         <button
                           type="button"
