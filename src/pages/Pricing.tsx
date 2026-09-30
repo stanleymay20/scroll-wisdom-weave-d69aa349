@@ -87,13 +87,14 @@ const plans: PlanConfig[] = [
   },
 ];
 
-const publishingPackages = Object.values(PUBLISHING_SERVICE_PACKAGES);
-const usageAddons = Object.values(USAGE_ADDONS);
+const publishingPackages = Object.entries(PUBLISHING_SERVICE_PACKAGES);
+const usageAddons = Object.entries(USAGE_ADDONS);
 
 export default function Pricing() {
   const { user, tier, isSubscribed, checkSubscription } = useSubscription();
   const [billingCycle, setBillingCycle] = useState<BillingCycle>("monthly");
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [orderCheckoutLoading, setOrderCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
@@ -117,6 +118,18 @@ export default function Pricing() {
         await checkSubscription(true);
         setSearchParams({}, { replace: true });
       })();
+    } else if (searchParams.get("order_success") === "true") {
+      toast({
+        title: "Purchase received",
+        description: "Your purchase is being confirmed from Stripe before the entitlement is applied.",
+      });
+      setSearchParams({}, { replace: true });
+    } else if (searchParams.get("order_canceled") === "true") {
+      toast({
+        title: "Purchase canceled",
+        description: "No charges were made.",
+      });
+      setSearchParams({}, { replace: true });
     } else if (searchParams.get("canceled") === "true") {
       toast({
         title: "Checkout canceled",
@@ -158,6 +171,37 @@ export default function Pricing() {
       });
     } finally {
       setCheckoutLoading(null);
+    }
+  };
+
+  const handleOneTimePurchase = async (sku: string) => {
+    if (!user) {
+      navigate("/auth", { state: { redirectTo: "/pricing" } });
+      return;
+    }
+    if (!FEATURES.enablePaidCheckout) {
+      toast({
+        title: "Purchases are not open yet",
+        description: "The billing catalogue is implemented, but financial writes remain closed until validation passes.",
+      });
+      return;
+    }
+
+    setOrderCheckoutLoading(sku);
+    try {
+      const { data, error } = await supabase.functions.invoke("create-billing-order-checkout", {
+        body: { sku },
+      });
+      if (error) throw error;
+      if (data?.url) window.open(data.url, "_blank", "noopener");
+    } catch (error: any) {
+      toast({
+        title: "Unable to start purchase",
+        description: error?.message || "Please try again.",
+        variant: "destructive",
+      });
+    } finally {
+      setOrderCheckoutLoading(null);
     }
   };
 
@@ -313,16 +357,27 @@ export default function Pricing() {
                 </p>
               </div>
               <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-                {publishingPackages.map((pkg) => (
-                  <Card key={pkg.name}>
+                {publishingPackages.map(([sku, pkg]) => (
+                  <Card key={sku}>
                     <CardHeader>
                       <CardTitle className="text-lg">{pkg.name}</CardTitle>
                       <div><span className="text-2xl font-bold">${pkg.price}</span><span className="text-muted-foreground text-sm"> one-time</span></div>
                     </CardHeader>
-                    <CardContent className="space-y-2 text-sm">
+                    <CardContent className="space-y-3 text-sm">
                       <p className="text-muted-foreground">{pkg.description}</p>
                       <p><strong>Up to {pkg.maxIsbns}</strong> eligible format-specific ISBN{pkg.maxIsbns === 1 ? "" : "s"}</p>
-                      <Badge variant="outline">Opens with publishing GA gate</Badge>
+                      <p className="text-xs text-muted-foreground">Payment creates a publishing-service order. ISBN assignment occurs only after publication validation.</p>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="w-full"
+                        disabled={!FEATURES.enablePaidCheckout || !!orderCheckoutLoading}
+                        onClick={() => handleOneTimePurchase(sku)}
+                      >
+                        {orderCheckoutLoading === sku
+                          ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing…</>
+                          : FEATURES.enablePaidCheckout ? "Purchase service" : "Available after validation"}
+                      </Button>
                     </CardContent>
                   </Card>
                 ))}
@@ -338,15 +393,40 @@ export default function Pricing() {
                 </p>
               </div>
               <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-                {usageAddons.map((addon) => (
-                  <Card key={addon.name}>
-                    <CardContent className="p-5">
-                      <div className="font-medium">{addon.name}</div>
-                      <div className="mt-2 text-2xl font-bold">${addon.price}</div>
-                      <p className="mt-2 text-xs text-muted-foreground">One-time usage pack. Activation remains gated with paid billing.</p>
-                    </CardContent>
-                  </Card>
-                ))}
+                {usageAddons.map(([sku, addon]) => {
+                  const recurringSeat = addon.billingMode === "recurring";
+                  const canBuyUsage = isSubscribed && FEATURES.enablePaidCheckout && !recurringSeat;
+                  return (
+                    <Card key={sku}>
+                      <CardContent className="p-5 space-y-3">
+                        <div className="font-medium">{addon.name}</div>
+                        <div className="text-2xl font-bold">${addon.price}{recurringSeat ? <span className="text-sm font-normal text-muted-foreground">/month</span> : null}</div>
+                        <p className="text-xs text-muted-foreground">
+                          {recurringSeat
+                            ? "Recurring Teams seat. Seat billing opens with organization seat management."
+                            : "One-time compute pack applied to the current billing month after Stripe confirms payment."}
+                        </p>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="w-full"
+                          disabled={!canBuyUsage || !!orderCheckoutLoading}
+                          onClick={() => handleOneTimePurchase(sku)}
+                        >
+                          {recurringSeat
+                            ? "Seat billing after Teams GA"
+                            : !isSubscribed
+                              ? "Paid plan required"
+                              : !FEATURES.enablePaidCheckout
+                                ? "Available after validation"
+                                : orderCheckoutLoading === sku
+                                  ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing…</>
+                                  : "Buy usage pack"}
+                        </Button>
+                      </CardContent>
+                    </Card>
+                  );
+                })}
               </div>
             </section>
 
