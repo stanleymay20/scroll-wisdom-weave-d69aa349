@@ -94,6 +94,7 @@ export const SUBSCRIPTION_TIERS = {
       visualCredits: 60,
       aiImageQuota: 60,
       aiCovers: true,
+      commercialRights: true, // ownership/commercial rights are not paywalled
       batchGeneration: false,
       prioritySupport: true,
       elevenLabsTTS: false,
@@ -123,6 +124,7 @@ export const SUBSCRIPTION_TIERS = {
       visualCredits: 200,
       aiImageQuota: 200,
       aiCovers: true,
+      commercialRights: true, // ownership/commercial rights are not paywalled
       batchGeneration: true,
       prioritySupport: true,
       prophetMode: true,
