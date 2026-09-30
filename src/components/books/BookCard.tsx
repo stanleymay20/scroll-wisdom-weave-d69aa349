@@ -15,6 +15,7 @@ interface BookCardProps {
   coverImageUrl?: string;
   totalChapters?: number;
   index?: number;
+  href?: string;
 }
 
 export function BookCard({
@@ -25,6 +26,7 @@ export function BookCard({
   coverImageUrl,
   totalChapters = 0,
   index = 0,
+  href,
 }: BookCardProps) {
   const [isAddingToLibrary, setIsAddingToLibrary] = useState(false);
   const [isInLibrary, setIsInLibrary] = useState(false);
@@ -81,7 +83,7 @@ export function BookCard({
       transition={{ delay: Math.min(index * 0.05, 0.3), duration: 0.4, ease: "easeOut" }}
       className="h-full"
     >
-      <Link to={`/book/${id}`} className="block group h-full">
+      <Link to={href ?? `/book/${id}`} className="block group h-full">
         <div className="relative h-full bg-gradient-card rounded-xl overflow-hidden border border-border/50 book-card-hover shadow-card flex flex-col">
           {/* Book Cover */}
           <div className="aspect-[3/4] relative overflow-hidden flex-shrink-0">
