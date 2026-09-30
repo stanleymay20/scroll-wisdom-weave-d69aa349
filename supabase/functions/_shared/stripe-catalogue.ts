@@ -51,8 +51,25 @@ export const LIVE_CATALOGUE: StripeCatalogue = Object.freeze({
 
 export const CATALOGUE_OVERRIDE_ENV = "STRIPE_CATALOGUE_JSON";
 
+export const isPlanTier = (value: unknown): value is PlanTier =>
+  typeof value === "string" && (PLAN_TIERS as readonly string[]).includes(value);
+
+export const isCreatorTier = (value: unknown): value is CreatorTier =>
+  typeof value === "string" && (CREATOR_TIERS as readonly string[]).includes(value);
+
+/**
+ * Public GA checkout sells one simple subscription ladder only:
+ * Creator, Pro and Teams (internal tiers student, premium, prophet_tier).
+ *
+ * Creator-tier publishing subscriptions remain in the catalogue solely so
+ * Stripe can reconcile historical objects. They are not available for new
+ * public checkout.
+ */
+export const PUBLIC_CHECKOUT_TIERS: readonly PlanTier[] = PLAN_TIERS;
+export const isPublicCheckoutTier = isPlanTier;
+
 const isBillableTier = (value: unknown): value is BillableTier =>
-  typeof value === "string" && (BILLABLE_TIERS as readonly string[]).includes(value);
+  isPlanTier(value) || isCreatorTier(value);
 
 /**
  * Validate an override. Throws rather than falling back: a half-applied

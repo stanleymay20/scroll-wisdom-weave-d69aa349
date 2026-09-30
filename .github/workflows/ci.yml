@@ -283,6 +283,7 @@ jobs:
           deno test supabase/functions/_shared/technical-code-quality_test.ts
           deno test supabase/functions/_shared/fiction-context_test.ts
           deno test supabase/functions/_shared/children-contract_test.ts
+          deno test supabase/functions/_shared/provider-qualification_test.ts
           deno test supabase/functions/_shared/authority-validator_workbook_test.ts
           deno test supabase/functions/_shared/cron-auth_test.ts
           deno test supabase/functions/_shared/stripe-connect_test.ts
@@ -381,10 +382,16 @@ jobs:
         run: bun run audit:edge-auth
       - name: Reject orphaned Edge Functions
         run: bun run audit:function-reachability
+      - name: Enforce generated-book qualification release wiring
+        run: bun run audit:provider-qualification-gates
+      - name: Compile qualification evidence collector
+        run: bun build scripts/collect-provider-qualification.ts --target=node --outdir=/tmp/provider-qualification-build
       - name: Reject Deno test files no workflow runs
         run: bun run audit:deno-tests
       - name: Reject email-based Stripe customer ownership
         run: bun scripts/check-billing-customer-identity.mjs
+      - name: Pin public billing package and duplicate-subscription guard
+        run: bun scripts/check-billing-package-contract.mjs
       - name: Reject browser publication authority
         run: bun scripts/check-browser-publication-authority.mjs
       - name: Reject high or critical production dependency vulnerabilities

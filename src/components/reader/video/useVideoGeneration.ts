@@ -39,7 +39,7 @@ export function useVideoGeneration({
     toast: (opts: any) => void,
   ) => {
     if (!hasCinematicAccess) {
-      toast({ variant: "destructive", title: "Premium feature", description: "Cinematic video requires Premium or Institutional plan." });
+      toast({ variant: "destructive", title: "Pro feature", description: "Cinematic video requires Pro or Teams plan." });
       return;
     }
     setIsGenerating(true);

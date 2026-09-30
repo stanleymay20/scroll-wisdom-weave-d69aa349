@@ -5,9 +5,11 @@ import { ensureBillingCustomer } from "../_shared/billing-customer.ts";
 import { externalPaymentWritesEnabled } from "../_shared/ga-release-flags.ts";
 import {
   clientPriceMatchesTier,
-  isBillableTier,
+  isPublicCheckoutTier,
+  planTierForProduct,
   resolveStripeCatalogue,
 } from "../_shared/stripe-catalogue.ts";
+import { subscriptionStatusBlocksNewCheckout } from "../_shared/stripe-fields.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -73,8 +75,11 @@ serve(async (req) => {
     logStep("Function started");
 
     const { priceId: requestedPriceId, tier } = await req.json();
-    if (!isBillableTier(tier)) {
-      return new Response(JSON.stringify({ error: "Invalid subscription tier" }), {
+    if (!isPublicCheckoutTier(tier)) {
+      return new Response(JSON.stringify({
+        error: "This subscription is not available for new checkout.",
+        code: "tier_not_publicly_sold",
+      }), {
         headers: { ...corsHeaders, "Content-Type": "application/json" },
         status: 400,
       });
@@ -125,6 +130,76 @@ serve(async (req) => {
       "subscription_checkout",
     );
 
+    // One user may hold at most one live generation-plan subscription.
+    // Legacy publishing subscriptions are a separate reconciliation domain and
+    // do not block this check. This prevents repeat clicks or tier changes from
+    // silently creating a second recurring charge.
+    const subscriptions = await stripe.subscriptions.list({
+      customer: customerId,
+      status: "all",
+      limit: 100,
+    });
+    const existingPlanSubscription = subscriptions.data.find((subscription: Stripe.Subscription) => {
+      if (!subscriptionStatusBlocksNewCheckout(subscription.status)) return false;
+      const productId = String(subscription.items.data[0]?.price?.product ?? "");
+      return planTierForProduct(catalogue, productId) !== null;
+    });
+
+    if (existingPlanSubscription) {
+      const productId = String(existingPlanSubscription.items.data[0]?.price?.product ?? "");
+      const existingTier = planTierForProduct(catalogue, productId);
+      const sameTier = existingTier === tier;
+      return new Response(JSON.stringify({
+        error: sameTier
+          ? "You already have this ScrollLibrary plan. Manage the existing subscription instead of starting another."
+          : "You already have a ScrollLibrary plan. Manage or cancel it before starting a different plan.",
+        code: sameTier ? "existing_plan_subscription" : "plan_change_required",
+        existing_tier: existingTier,
+        requested_tier: tier,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+        status: 409,
+      });
+    }
+
+    // Reuse an unfinished Checkout Session for the same customer and tier.
+    // This closes the double-click / retry window before a subscription exists.
+    const openSessions = await stripe.checkout.sessions.list({
+      customer: customerId,
+      status: "open",
+      limit: 100,
+    });
+    const publicOpenSessions = openSessions.data.filter((candidate: Stripe.Checkout.Session) =>
+      candidate.mode === "subscription"
+      && candidate.metadata?.userId === user.id
+      && isPublicCheckoutTier(candidate.metadata?.tier)
+    );
+    const reusableSession = publicOpenSessions.find((candidate: Stripe.Checkout.Session) =>
+      candidate.metadata?.tier === tier
+      && typeof candidate.url === "string"
+      && candidate.url.length > 0
+    );
+    if (reusableSession?.url) {
+      logStep("Reusing open checkout session", { sessionId: reusableSession.id, tier });
+      return new Response(JSON.stringify({ url: reusableSession.url, reused: true }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+        status: 200,
+      });
+    }
+
+    const otherOpenPlan = publicOpenSessions[0];
+    if (otherOpenPlan) {
+      return new Response(JSON.stringify({
+        error: "Another ScrollLibrary plan checkout is already in progress. Finish or let that checkout expire before choosing a different plan.",
+        code: "checkout_in_progress",
+        existing_tier: otherOpenPlan.metadata?.tier ?? null,
+        requested_tier: tier,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+        status: 409,
+      });
+    }
+
     const origin = getReturnOrigin(req);
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -135,6 +210,13 @@ serve(async (req) => {
         },
       ],
       mode: "subscription",
+      client_reference_id: user.id,
+      subscription_data: {
+        metadata: {
+          userId: user.id,
+          tier,
+        },
+      },
       success_url: `${origin}/pricing?success=true`,
       cancel_url: `${origin}/pricing?canceled=true`,
       metadata: {

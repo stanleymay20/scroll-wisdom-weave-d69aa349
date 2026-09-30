@@ -6,6 +6,7 @@
  */
 
 import { supabase } from "@/integrations/supabase/client";
+import { relayPMFEvent } from "@/lib/pmfTracking";
 
 export type FunnelEventType =
   | 'book_opened'
@@ -79,15 +80,21 @@ export async function trackFunnelEvent(
     const userId = await getCachedUserId();
     if (!userId) return;
 
-    await supabase.from('pmf_events' as any).insert({
+    const eventMetadata = {
+      ...meta,
+      sessionDurationSec: meta.sessionDurationSec ?? getSessionStats().durationSec,
+      timestamp: Date.now(),
+    };
+
+    const { error } = await supabase.from('pmf_events' as any).insert({
       user_id: userId,
       event_type: eventType,
-      metadata: {
-        ...meta,
-        sessionDurationSec: meta.sessionDurationSec ?? getSessionStats().durationSec,
-        timestamp: Date.now(),
-      },
+      metadata: eventMetadata,
     });
+
+    if (!error && eventType === 'chapter_completed') {
+      relayPMFEvent('chapter_completed', eventMetadata);
+    }
   } catch {
     // Silent — never block UX for analytics
   }

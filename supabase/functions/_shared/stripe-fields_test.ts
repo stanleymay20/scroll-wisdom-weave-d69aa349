@@ -1,5 +1,10 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { invoiceSubscriptionId, subscriptionPeriod } from "./stripe-fields.ts";
+import {
+  invoiceSubscriptionId,
+  subscriptionPeriod,
+  subscriptionStatusBlocksNewCheckout,
+  subscriptionStatusGrantsAccess,
+} from "./stripe-fields.ts";
 
 const T0 = 1_790_000_000; // 2026-09-21T13:33:20Z
 const MONTH = 30 * 86_400;
@@ -47,4 +52,23 @@ Deno.test("a one-off invoice has no subscription", () => {
   assertEquals(invoiceSubscriptionId({ parent: null }), null);
   assertEquals(invoiceSubscriptionId({}), null);
   assertEquals(invoiceSubscriptionId(null), null);
+});
+
+
+Deno.test("subscription access is granted only for active or trialing states", () => {
+  for (const status of ["active", "trialing"]) {
+    assertEquals(subscriptionStatusGrantsAccess(status), true);
+  }
+  for (const status of ["past_due", "unpaid", "incomplete", "incomplete_expired", "canceled", "paused", null]) {
+    assertEquals(subscriptionStatusGrantsAccess(status), false);
+  }
+});
+
+Deno.test("only terminal subscription states allow a replacement checkout", () => {
+  for (const status of ["active", "trialing", "past_due", "unpaid", "incomplete", "paused", undefined]) {
+    assertEquals(subscriptionStatusBlocksNewCheckout(status), true);
+  }
+  for (const status of ["canceled", "incomplete_expired"]) {
+    assertEquals(subscriptionStatusBlocksNewCheckout(status), false);
+  }
 });

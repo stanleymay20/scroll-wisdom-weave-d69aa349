@@ -7,7 +7,7 @@
  * This does, against a disposable local Supabase stack and Stripe's real test
  * mode, with webhooks delivered by the Stripe CLI:
  *
- *   P03  subscribe (plan + creator tier) → webhook → entitlement →
+ *   P03  subscribe → webhook → entitlement → duplicate-subscription guard →
  *        check-subscription → billing portal → cancel → revoked
  *   P14  buy a book → webhook → purchase + sale ledger → buyer can read it
  *   P15  partial refund → exact reversal → duplicate delivery changes nothing
@@ -294,6 +294,16 @@ async function subscribe(user, tier, label) {
   const started = await callFunction("create-checkout", user, { tier });
   check(started.status === 200 && /^https:\/\/checkout\.stripe\.com\//.test(started.body.url ?? ""),
     `create-checkout did not return a Stripe Checkout URL for ${tier}`, started);
+
+  const retry = await callFunction("create-checkout", user, { tier });
+  check(retry.status === 200 && retry.body.reused === true && retry.body.url === started.body.url,
+    "same-tier retry did not reuse the open Checkout Session", retry);
+
+  const alternateTier = tier === "student" ? "premium" : "student";
+  const conflicting = await callFunction("create-checkout", user, { tier: alternateTier });
+  check(conflicting.status === 409 && conflicting.body.code === "checkout_in_progress",
+    "a second plan Checkout Session was allowed before the first completed", conflicting);
+
   await payOnHostedCheckout(started.body.url, `${APP_ORIGIN}/pricing?success=true`, label);
   const customer = await waitFor(`billing customer for ${label}`, () => billingCustomerOf(user.id), { timeoutMs: 30_000 });
   ourStripeIds.add(customer);
@@ -319,6 +329,18 @@ await journey("P03", "Subscribe → entitlement → check-subscription → porta
   check(status.body.subscribed === true && status.body.tier === "premium" && status.body.subscription_end,
     "check-subscription does not report the paid subscription", status.body);
 
+  const duplicate = await callFunction("create-checkout", user, { tier: "premium" });
+  check(duplicate.status === 409 && duplicate.body.code === "existing_plan_subscription",
+    "same-plan checkout did not fail closed against a duplicate recurring charge", duplicate);
+
+  const crossTier = await callFunction("create-checkout", user, { tier: "student" });
+  check(crossTier.status === 409 && crossTier.body.code === "plan_change_required",
+    "cross-tier checkout did not require management of the existing subscription", crossTier);
+
+  const retiredPublisher = await callFunction("create-checkout", user, { tier: "creator" });
+  check(retiredPublisher.status === 400 && retiredPublisher.body.code === "tier_not_publicly_sold",
+    "legacy publisher tier is still publicly sellable", retiredPublisher);
+
   const portal = await callFunction("customer-portal", user, {});
   check(portal.status === 200 && /^https:\/\/billing\.stripe\.com\//.test(portal.body.url ?? ""),
     "customer-portal did not return a Stripe billing portal URL", portal);
@@ -332,18 +354,6 @@ await journey("P03", "Subscribe → entitlement → check-subscription → porta
   check(after.body.subscribed === false, "check-subscription still reports a cancelled subscription", after.body);
 
   return { customer, subscription: sub.stripe_subscription_id, period_end: sub.current_period_end };
-});
-
-await journey("P03b", "Creator subscription → creator entitlement with a period end", async () => {
-  const user = await createUser("creator-sub");
-  await subscribe(user, "creator", "p03b-creator");
-  const entitlement = await waitFor("creator entitlement from the webhook", async () => {
-    const { data } = await admin.from("creator_entitlements").select("tier,payment_status,current_period_end")
-      .eq("user_id", user.id).maybeSingle();
-    return data?.tier === "creator" ? data : null;
-  });
-  check(entitlement.current_period_end, "creator entitlement stored without a period end", entitlement);
-  return entitlement;
 });
 
 // ---------------------------------------------------------------------------

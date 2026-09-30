@@ -29,24 +29,36 @@ jobs:
       - name: Validate ISBN checksums, allocation range and uniqueness
         run: node scripts/check-isbn-ledger.mjs
 
-      - name: Assert current KINGDOM WEALTH reservations
+      - name: Assert controlled ScrollLibrary Press assignments through sequence 005
         shell: bash
         run: |
           set -euo pipefail
           node - <<'NODE'
           const fs = require('fs');
           const ledger = JSON.parse(fs.readFileSync('docs/publishing/SCROLLLIBRARY_PRESS_ISBN_LEDGER.json', 'utf8'));
-          const expected = new Map([
-            ['978-3-67620-000-4', 'paperback'],
-            ['978-3-67620-001-1', 'hardcover'],
-            ['978-3-67620-002-8', 'epub'],
-          ]);
-          for (const [isbn, form] of expected) {
+          const expected = [
+            ['978-3-67620-000-4', 'KINGDOM WEALTH', 'paperback'],
+            ['978-3-67620-001-1', 'KINGDOM WEALTH', 'hardcover'],
+            ['978-3-67620-002-8', 'KINGDOM WEALTH', 'epub'],
+            ['978-3-67620-003-5', 'What Did the Black Man Do Wrong? From the Lie of Race to the Restoration of Human Dignity', 'paperback'],
+            ['978-3-67620-004-2', 'What Did the Black Man Do Wrong? From the Lie of Race to the Restoration of Human Dignity', 'hardcover'],
+            ['978-3-67620-005-9', 'What Did the Black Man Do Wrong? From the Lie of Race to the Restoration of Human Dignity', 'epub'],
+          ];
+          for (const [isbn, title, form] of expected) {
             const row = ledger.assignments.find((entry) => entry.isbn13 === isbn);
-            if (!row) throw new Error(`Missing controlled KINGDOM WEALTH reservation: ${isbn}`);
-            if (row.title !== 'KINGDOM WEALTH' || row.product_form !== form) {
-              throw new Error(`Controlled reservation drift for ${isbn}`);
+            if (!row) throw new Error(`Missing controlled ISBN assignment: ${isbn}`);
+            if (row.title !== title || row.product_form !== form || row.status !== 'assigned') {
+              throw new Error(`Controlled assignment drift for ${isbn}`);
             }
           }
-          console.log('PASS: KINGDOM WEALTH ISBN reservations are present and exact.');
+          if (ledger.assignments.length !== expected.length) {
+            throw new Error(`Unexpected assignment count: ${ledger.assignments.length}; expected ${expected.length}`);
+          }
+          if (ledger.control?.next_unassigned_candidate !== '978-3-67620-006-6') {
+            throw new Error(`Next ISBN candidate drifted: ${ledger.control?.next_unassigned_candidate}`);
+          }
+          if (ledger.control?.remaining_unassigned_count !== 994) {
+            throw new Error(`Remaining ISBN count drifted: ${ledger.control?.remaining_unassigned_count}`);
+          }
+          console.log('PASS: ScrollLibrary Press assignments 000-005 are exact; 006 is next candidate.');
           NODE

@@ -109,7 +109,7 @@ export function AuthorImprint({
           </div>
         )}
 
-        {/* Option: Pen name (Premium+) */}
+        {/* Option: Pen name (Pro+) */}
         <div className="flex items-center space-x-3 p-2 rounded-lg hover:bg-muted/50 transition-colors">
           <RadioGroupItem value="pen_name" id="author-pen" disabled={!canUsePenName} />
           <Label 
@@ -120,7 +120,7 @@ export function AuthorImprint({
             <span>Use pen name</span>
             {!canUsePenName && (
               <span className="text-xs text-muted-foreground flex items-center gap-1">
-                <Lock className="h-3 w-3" /> Premium
+                <Lock className="h-3 w-3" /> Pro
               </span>
             )}
           </Label>
@@ -157,7 +157,7 @@ export function AuthorImprint({
         </div>
       </RadioGroup>
 
-      {/* Publisher Imprint (Prophet/Admin only) */}
+      {/* Publisher Imprint (Teams/Admin only) */}
       {canUsePublisherImprint && (
         <div className="space-y-2 pt-2 border-t border-border/30">
           <Label className="flex items-center gap-2 text-sm">

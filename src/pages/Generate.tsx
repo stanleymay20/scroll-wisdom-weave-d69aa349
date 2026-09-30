@@ -49,6 +49,7 @@ import { cn } from "@/lib/utils";
 import { UsageGateModal, useUsageGate } from "@/components/subscription/UsageGateModal";
 import { parseGateError } from "@/lib/usageGate";
 import { useAccessGate } from "@/hooks/useAccessGate";
+import { trackBookGenerated } from "@/lib/pmfTracking";
 
 const CATEGORIES = [
   { value: "science", labelKey: "categories.science" },
@@ -368,13 +369,13 @@ export default function Generate() {
           language,
           userId: user.id,
           customCover: FEATURES.enableCustomCover && coverOption === "upload" ? customCover : null,
-          bookType: FEATURES.enableAdvancedAuthoring ? getLegacyBookType() : "text",
-          extendedBookType: FEATURES.enableAdvancedAuthoring ? extendedBookType : "text",
-          enableReferences: FEATURES.enableAdvancedAuthoring && contentMode === "academic",
+          bookType: FEATURES.enableSpecializedAuthoring ? getLegacyBookType() : "text",
+          extendedBookType: FEATURES.enableSpecializedAuthoring ? extendedBookType : "text",
+          enableReferences: FEATURES.enableSpecializedAuthoring && contentMode === "academic",
           citationStyle,
-          academicMode: FEATURES.enableAdvancedAuthoring && contentMode === "academic",
-          deepResearch: FEATURES.enableAdvancedAuthoring && contentMode === "academic",
-          bestsellerMode: FEATURES.enableAdvancedAuthoring && (entitlements.isPaid || entitlements.isTrialMode) ? bestsellerMode : false,
+          academicMode: FEATURES.enableSpecializedAuthoring && contentMode === "academic",
+          deepResearch: FEATURES.enableSpecializedAuthoring && contentMode === "academic",
+          bestsellerMode: FEATURES.enableSpecializedAuthoring && (entitlements.isPaid || entitlements.isTrialMode) ? bestsellerMode : false,
           // Author & Imprint fields
           authorMode,
           authorDisplayName: sanitizedAuthorName || undefined,
@@ -406,7 +407,7 @@ export default function Generate() {
             samplePrompt: styleProfile.samplePrompt,
           } : null,
           // Transformation/upgrade prompt for book style and positioning
-          transformationPrompt: FEATURES.enableAdvancedAuthoring ? (transformationPrompt.trim() || null) : null,
+          transformationPrompt: FEATURES.enableSpecializedAuthoring ? (transformationPrompt.trim() || null) : null,
         },
       });
 
@@ -432,6 +433,10 @@ export default function Generate() {
       });
 
       if (data?.bookId) {
+        // Count activation only after the server has successfully created the book.
+        // Marketing telemetry is fire-and-forget and cannot block navigation.
+        void trackBookGenerated(data.bookId, category);
+
         setTimeout(() => {
           navigate(`/book/${data.bookId}`);
         }, 1500);
@@ -610,7 +615,7 @@ export default function Generate() {
               </div>
 
               {/* Transformation / upgrade prompt is post-GA advanced authoring. */}
-              {FEATURES.enableAdvancedAuthoring && (
+              {FEATURES.enableSpecializedAuthoring && (
                 <div className="space-y-2">
                 <Label htmlFor="transformationPrompt" className="text-foreground flex items-center gap-2">
                   <Wand2 className="h-4 w-4 text-primary" />
@@ -668,7 +673,7 @@ export default function Generate() {
               </div>
 
               {/* GA launches with the proven standard-text pipeline. */}
-              {FEATURES.enableAdvancedAuthoring ? (
+              {FEATURES.enableSpecializedAuthoring ? (
                 <BookTypeSelector
                   value={extendedBookType ?? undefined}
                   onChange={(v) => {
@@ -688,7 +693,7 @@ export default function Generate() {
               )}
 
               {/* Workbook Preview - shows when workbook selected */}
-              {FEATURES.enableAdvancedAuthoring && extendedBookType === "workbook" && (
+              {FEATURES.enableSpecializedAuthoring && extendedBookType === "workbook" && (
                 <WorkbookPreview
                   title={title}
                   numChapters={parseInt(numChapters)}
@@ -697,7 +702,7 @@ export default function Generate() {
               )}
 
               {/* Comic Configuration - shows when comic selected */}
-              {FEATURES.enableAdvancedAuthoring && extendedBookType === "comic" && (
+              {FEATURES.enableSpecializedAuthoring && extendedBookType === "comic" && (
                 <div className="space-y-4">
                   {/* Comic Sub-Type Selector */}
                   <ComicSubTypeSelector
@@ -756,7 +761,7 @@ export default function Generate() {
               )}
 
               {/* Fiction Writing Tools - shows when fiction selected */}
-              {FEATURES.enableAdvancedAuthoring && extendedBookType === "fiction" && (
+              {FEATURES.enableSpecializedAuthoring && extendedBookType === "fiction" && (
                 <FictionWritingTools
                   value={fictionConfig}
                   onChange={setFictionConfig}
@@ -782,7 +787,7 @@ export default function Generate() {
                       </SelectContent>
                     </Select>
                     {tier === "prophet_tier" && (
-                      <p className="text-xs text-primary">Institutional tier — maximum word count enabled</p>
+                      <p className="text-xs text-primary">Teams plan — maximum word count enabled</p>
                     )}
                   </div>
                 )}
@@ -805,7 +810,7 @@ export default function Generate() {
               </div>
 
               {/* Content Mode Selection - Creative vs Academic (only for text types) */}
-              {FEATURES.enableAdvancedAuthoring && (extendedBookType === "text" || extendedBookType === "academic" || extendedBookType === "reference") && (
+              {FEATURES.enableSpecializedAuthoring && (extendedBookType === "text" || extendedBookType === "academic" || extendedBookType === "reference") && (
                 <div className="space-y-4">
                   <ContentModeSelector
                     mode={contentMode}
@@ -860,7 +865,7 @@ export default function Generate() {
                 disabled={isGenerating}
               />
 
-              {FEATURES.enableAdvancedAuthoring && (
+              {FEATURES.enableSpecializedAuthoring && (
                 <>
                   {/* Writing Style Cloning */}
                   <div className="bg-card border border-border rounded-xl p-5">
@@ -870,7 +875,7 @@ export default function Generate() {
                     />
                   </div>
 
-                  {/* Bestseller Mode Toggle - Premium Feature */}
+                  {/* Bestseller Mode Toggle - Pro Feature */}
                   <BestsellerModeToggle
                     enabled={bestsellerMode}
                     onToggle={setBestsellerMode}

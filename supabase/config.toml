@@ -172,3 +172,8 @@ verify_jwt = false
 # requireUser(); canonical mutation remains service-owned and transactional.
 [functions.ai-publishing-bridge]
 verify_jwt = false
+
+# Authenticated first-party telemetry bridge. Bearer validation is handled
+# internally with requireUser(); outbound requests are HMAC-signed.
+[functions.relay-growth-event]
+verify_jwt = false
