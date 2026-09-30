@@ -195,18 +195,28 @@ export function checkAccess(
     }
 
     case "interactive_voice": {
-      const limit = features.interactiveVoiceMinutes;
-      if (limit <= 0) return buildDenied("PLAN_REQUIRED", plan, {});
-      const used = Math.max(0, usage.voiceMinutesUsed ?? 0);
-      const remaining = Math.max(0, limit - used);
-      const u: UsageGateUsage = { audioMinutesUsed: used, audioMinutesLimit: limit };
-      if (used + cost > limit) return buildDenied("AUDIO_LIMIT_REACHED", plan, u);
-      const approaching = remaining > 0 && used / limit >= warnAt;
+      // One minute of interactive voice consumes three pooled audio credits.
+      // ttsMinutesUsed is a compatibility alias for the pooled credits used
+      // across narration and voice, matching the server-owned meter.
+      const creditLimit = features.audioCredits;
+      if (creditLimit <= 0) return buildDenied("PLAN_REQUIRED", plan, {});
+      const usedCredits = Math.max(0, usage.ttsMinutesUsed ?? 0);
+      const requestedCredits = Math.max(0, cost) * 3;
+      const remainingCredits = Math.max(0, creditLimit - usedCredits);
+      const remainingVoiceMinutes = remainingCredits / 3;
+      const u: UsageGateUsage = {
+        audioMinutesUsed: usedCredits / 3,
+        audioMinutesLimit: creditLimit / 3,
+      };
+      if (usedCredits + requestedCredits > creditLimit) {
+        return buildDenied("AUDIO_LIMIT_REACHED", plan, u);
+      }
+      const approaching = remainingCredits > 0 && usedCredits / creditLimit >= warnAt;
       return buildAllowed(
         plan,
         u,
-        remaining,
-        approaching ? `You have ${Math.ceil(remaining)} voice minutes left.` : null,
+        remainingVoiceMinutes,
+        approaching ? `You have about ${Math.floor(remainingVoiceMinutes)} interactive voice minutes left.` : null,
         approaching,
       );
     }
