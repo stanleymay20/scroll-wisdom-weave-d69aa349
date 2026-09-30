@@ -202,6 +202,12 @@ export function publicCheckoutPrice(
     return candidate && candidate.startsWith("price_") ? candidate : null;
   }
 
+  const productId = env(PUBLIC_PRODUCT_ENV[tier])?.trim();
+  if (!productId) return null;
+  if (!productId.startsWith("prod_")) {
+    throw new Error(PUBLIC_PRODUCT_ENV[tier] + " must be a Stripe product id");
+  }
+
   const candidate = env(PUBLIC_PRICE_ENV[tier][interval])?.trim();
   if (!candidate) return null;
   if (!candidate.startsWith("price_")) {
@@ -239,3 +245,16 @@ export function clientPriceMatchesTier(
 }
 
 export { isBillableTier };
+
+
+export function expectedPublicPlanAmountCents(
+  tier: PlanTier,
+  interval: BillingInterval,
+): number {
+  const amounts: Record<PlanTier, Record<BillingInterval, number>> = {
+    student: { monthly: 1900, annual: 19000 },
+    premium: { monthly: 6900, annual: 69000 },
+    prophet_tier: { monthly: 19900, annual: 199000 },
+  };
+  return amounts[tier][interval];
+}
