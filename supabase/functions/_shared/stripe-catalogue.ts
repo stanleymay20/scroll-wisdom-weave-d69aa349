@@ -202,7 +202,7 @@ export function publicCheckoutPrice(
     return candidate && candidate.startsWith("price_") ? candidate : null;
   }
 
-  const candidate = env(PUBLIC_PRICE_ENV[tier])?.trim();
+  const candidate = env(PUBLIC_PRICE_ENV[tier][interval])?.trim();
   if (!candidate) return null;
   if (!candidate.startsWith("price_")) {
     throw new Error(`${PUBLIC_PRICE_ENV[tier][interval]} must be a Stripe price id`);
