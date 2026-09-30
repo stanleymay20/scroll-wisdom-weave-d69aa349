@@ -4,6 +4,7 @@ import {
   clientPriceMatchesTier,
   creatorTierForProduct,
   LIVE_CATALOGUE,
+  isPublicCheckoutTier,
   parseCatalogueOverride,
   planTierForProduct,
   resolveStripeCatalogue,
@@ -39,6 +40,16 @@ Deno.test("live catalogue is exactly the mapping production has been using", () 
     prod_UZv8Eine5sKy0j: "creator",
     prod_UZv8yPrOGDBuWE: "creator_pro",
   });
+});
+
+
+Deno.test("public checkout exposes only the single generation-plan ladder", () => {
+  for (const tier of ["student", "premium", "prophet_tier"]) {
+    assert(isPublicCheckoutTier(tier));
+  }
+  assertEquals(isPublicCheckoutTier("creator"), false);
+  assertEquals(isPublicCheckoutTier("creator_pro"), false);
+  assertEquals(isPublicCheckoutTier("free"), false);
 });
 
 Deno.test("no override means the live catalogue", () => {

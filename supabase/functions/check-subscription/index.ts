@@ -67,11 +67,15 @@ serve(async (req) => {
         // because Stripe returned it first.
         const subscriptions = await stripe.subscriptions.list({
           customer: customerId,
-          status: "active",
-          limit: 20,
+          status: "all",
+          limit: 100,
         });
 
-        for (const subscription of subscriptions.data) {
+        const accessSubscriptions = subscriptions.data.filter((subscription: Stripe.Subscription) =>
+          subscription.status === "active" || subscription.status === "trialing"
+        );
+
+        for (const subscription of accessSubscriptions) {
           const productId = String(subscription.items.data[0]?.price?.product ?? "");
           const tier = planTierForProduct(resolveStripeCatalogue(), productId);
           if (!tier) continue;
@@ -100,7 +104,7 @@ serve(async (req) => {
       .from("subscriptions")
       .select("tier,status,current_period_end")
       .eq("user_id", userId)
-      .eq("status", "active")
+      .in("status", ["active", "trialing"])
       .maybeSingle();
 
     if (localError) {

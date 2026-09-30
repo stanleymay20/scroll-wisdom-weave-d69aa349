@@ -164,6 +164,8 @@ serve(async (req) => {
     type PaidPlan = Exclude<ValidPlan, "free">;
     const getPlanTierFromProductId = (productId: string | null | undefined): PaidPlan | null =>
       planTierForProduct(catalogue, productId);
+    const hasPlanAccess = (status: Stripe.Subscription.Status): boolean =>
+      status === "active" || status === "trialing";
 
     // Phase 4.1 — Creator-tier product mapping (separate from generation plans).
     type CreatorTier = "free" | "creator" | "creator_pro";
@@ -679,8 +681,9 @@ serve(async (req) => {
 
             if (userId) {
               if (planTier) {
-                await updateProfilePlan(userId, planTier);
-                await syncPlanSubscription(userId, subscription, planTier);
+                const effectivePlan: ValidPlan = hasPlanAccess(subscription.status) ? planTier : "free";
+                await updateProfilePlan(userId, effectivePlan);
+                await syncPlanSubscription(userId, subscription, effectivePlan);
               }
               await syncCreatorEntitlement(userId, subscription);
               await logFinancialEvent(supabase, {
@@ -830,8 +833,9 @@ serve(async (req) => {
             }
             if (userId) {
               if (planTier) {
-                await updateProfilePlan(userId, planTier);
-                await syncPlanSubscription(userId, subscription, planTier);
+                const effectivePlan: ValidPlan = hasPlanAccess(subscription.status) ? planTier : "free";
+                await updateProfilePlan(userId, effectivePlan);
+                await syncPlanSubscription(userId, subscription, effectivePlan);
               }
               await syncCreatorEntitlement(userId, subscription);
             }
@@ -852,7 +856,7 @@ serve(async (req) => {
           }
           if (userId) {
             if (planTier) {
-              const effectivePlan: ValidPlan = subscription.status === "active" ? planTier : "free";
+              const effectivePlan: ValidPlan = hasPlanAccess(subscription.status) ? planTier : "free";
               await updateProfilePlan(userId, effectivePlan);
               await syncPlanSubscription(userId, subscription, effectivePlan);
             }
@@ -899,14 +903,24 @@ serve(async (req) => {
             }
           } catch (_) { /* best-effort identity/log enrichment */ }
 
-          // Phase 4.1 — move creator entitlement into 7-day grace period on payment failure.
+          // Failed renewal is entitlement-significant for both billing domains.
+          // Generation-plan access fails closed unless Stripe still reports an
+          // access-bearing status; legacy publisher entitlements keep their
+          // explicit grace-period policy in syncCreatorEntitlement().
           const failedSubscription = invoiceSubscriptionId(invoice);
           if (userId && failedSubscription) {
             try {
               const subscription = await stripe.subscriptions.retrieve(failedSubscription);
+              const productId = String(subscription.items.data[0]?.price?.product ?? "");
+              const planTier = getPlanTierFromProductId(productId);
+              if (planTier) {
+                const effectivePlan: ValidPlan = hasPlanAccess(subscription.status) ? planTier : "free";
+                await updateProfilePlan(userId, effectivePlan);
+                await syncPlanSubscription(userId, subscription, effectivePlan);
+              }
               await syncCreatorEntitlement(userId, subscription);
             } catch (e) {
-              logStep("Grace period sync failed", { error: e instanceof Error ? e.message : String(e) });
+              logStep("Failed-payment entitlement sync failed", { error: e instanceof Error ? e.message : String(e) });
             }
           }
 

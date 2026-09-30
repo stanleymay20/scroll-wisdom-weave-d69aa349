@@ -49,6 +49,7 @@ import { cn } from "@/lib/utils";
 import { UsageGateModal, useUsageGate } from "@/components/subscription/UsageGateModal";
 import { parseGateError } from "@/lib/usageGate";
 import { useAccessGate } from "@/hooks/useAccessGate";
+import { trackBookGenerated } from "@/lib/pmfTracking";
 
 const CATEGORIES = [
   { value: "science", labelKey: "categories.science" },
@@ -432,6 +433,10 @@ export default function Generate() {
       });
 
       if (data?.bookId) {
+        // Count activation only after the server has successfully created the book.
+        // Marketing telemetry is fire-and-forget and cannot block navigation.
+        void trackBookGenerated(data.bookId, category);
+
         setTimeout(() => {
           navigate(`/book/${data.bookId}`);
         }, 1500);
@@ -782,7 +787,7 @@ export default function Generate() {
                       </SelectContent>
                     </Select>
                     {tier === "prophet_tier" && (
-                      <p className="text-xs text-primary">Institutional tier — maximum word count enabled</p>
+                      <p className="text-xs text-primary">Teams plan — maximum word count enabled</p>
                     )}
                   </div>
                 )}
@@ -870,7 +875,7 @@ export default function Generate() {
                     />
                   </div>
 
-                  {/* Bestseller Mode Toggle - Premium Feature */}
+                  {/* Bestseller Mode Toggle - Pro Feature */}
                   <BestsellerModeToggle
                     enabled={bestsellerMode}
                     onToggle={setBestsellerMode}

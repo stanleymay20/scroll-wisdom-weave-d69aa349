@@ -3,7 +3,7 @@
  * 
  * UI for generating verified learning decks from book content.
  * Shows eligibility status, generation options, and full slide preview.
- * Subscription-tier aware: Premium subscribers get enhanced features.
+ * Subscription-tier aware: Pro subscribers get enhanced features.
  */
 
 import { useState, useCallback, forwardRef } from 'react';
@@ -258,10 +258,10 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
           <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/10 border border-primary/30">
             <Crown className="h-4 w-4 text-primary" />
             <span className="text-sm font-medium text-primary">
-              {tier === 'prophet_tier' ? 'Prophet Tier' : tier === 'premium' ? 'Premium' : 'Student'} Subscriber
+              {tier === 'prophet_tier' ? 'Teams' : tier === 'premium' ? 'Pro' : 'Creator'} Subscriber
             </span>
             <Badge variant="outline" className="ml-auto text-xs">
-              Premium decks unlocked
+              Pro decks unlocked
             </Badge>
           </div>
         )}
@@ -269,7 +269,7 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
         {/* Learning Progress Tier Badge */}
         <div className="flex items-center gap-2">
           <Badge variant={effectiveTier === 'premium' ? 'default' : 'secondary'}>
-            {effectiveTier === 'premium' ? '⭐ Premium Deck' : '📄 Basic Deck'}
+            {effectiveTier === 'premium' ? '⭐ Pro Deck' : '📄 Basic Deck'}
           </Badge>
           {effectiveTier === 'basic' && !isPaidSubscriber && (
             <span className="text-xs text-muted-foreground">
@@ -307,7 +307,7 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
         {!isPaidSubscriber && effectiveTier === 'basic' && (
           <p className="text-xs text-primary/80 flex items-center gap-1">
             <Sparkles className="h-3 w-3" />
-            Upgrade to Premium for enhanced decks with visuals
+            Upgrade to Pro for enhanced decks with visuals
           </p>
         )}
       </div>
@@ -418,7 +418,7 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
                     effectiveTier === 'premium' ? 'text-primary' : 'text-emerald-600'
                   )} />
                   <span className="font-medium">
-                    {effectiveTier === 'premium' ? '⭐ Premium Deck Ready' : 'Basic Deck Ready'}
+                    {effectiveTier === 'premium' ? '⭐ Pro Deck Ready' : 'Basic Deck Ready'}
                   </span>
                 </div>
                 {renderEligibilityProgress()}
@@ -447,7 +447,7 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="student">Student</SelectItem>
+                        <SelectItem value="student">Creator</SelectItem>
                         <SelectItem value="lecturer">Lecturer</SelectItem>
                         <SelectItem value="employer">Employer</SelectItem>
                         <SelectItem value="peer-teaching">Peer Teaching</SelectItem>
@@ -582,7 +582,7 @@ export const LearningDeckGenerator = forwardRef<HTMLDivElement, LearningDeckGene
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4" />
-                    Generate {effectiveTier === 'premium' ? 'Premium' : 'Basic'} Deck
+                    Generate {effectiveTier === 'premium' ? 'Pro' : 'Basic'} Deck
                   </>
                 )}
               </Button>
