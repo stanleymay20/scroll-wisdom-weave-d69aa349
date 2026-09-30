@@ -20,7 +20,7 @@ export type PMFEventType =
   | 'upgrade_clicked'
   | 'paid_conversion';
 
-function relayToGrowthEngine(
+export function relayPMFEvent(
   eventType: PMFEventType,
   metadata: Record<string, unknown>,
 ) {
@@ -69,7 +69,7 @@ export async function trackPMFEvent(
       }));
     }
 
-    relayToGrowthEngine(eventType, metadata);
+    relayPMFEvent(eventType, metadata);
   } catch (error) {
     // Silent fail - never block UX for tracking
     console.debug('[PMF] Event track failed:', eventType, error);
