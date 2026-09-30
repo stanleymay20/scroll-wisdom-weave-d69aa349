@@ -13,19 +13,11 @@ on:
       - "supabase/migrations/**"
       - "scripts/test-interactive-voice-db-security.sql"
       - ".github/workflows/interactive-voice-security.yml"
+  # Every main commit can become the production release head. Run this
+  # proof on every main push so GA Production Verification can require exact-head
+  # security evidence without weakening the gate. PRs remain path-filtered.
   push:
     branches: [main]
-    paths:
-      - "src/components/reader/VoiceConversation.tsx"
-      - "supabase/config.toml"
-      - "supabase/functions/_shared/interactive-voice-gate.ts"
-      - "supabase/functions/_shared/interactive-voice-gate_test.ts"
-      - "supabase/functions/voice-stt/**"
-      - "supabase/functions/voice-tts/**"
-      - "supabase/functions/voice-conversation/**"
-      - "supabase/migrations/**"
-      - "scripts/test-interactive-voice-db-security.sql"
-      - ".github/workflows/interactive-voice-security.yml"
   workflow_dispatch:
 
 permissions:
