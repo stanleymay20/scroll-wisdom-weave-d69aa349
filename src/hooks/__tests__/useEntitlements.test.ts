@@ -13,7 +13,7 @@ const student: Entitlements = {
   canGenerateBooks: true,
   canUseAllFormats: false,
   canExportAllFormats: false,
-  hasCommercialRights: false,
+  hasCommercialRights: true,
   bypassAllLimits: false,
   canUseAiCovers: true,
   canUseTTS: true,
@@ -49,8 +49,8 @@ describe("ScrollLibrary entitlement boundaries", () => {
     expect(hasFeatureAccess(student, "aiCovers")).toBe(true);
   });
 
-  it("does not convert paid or legacy student status into unrestricted access", () => {
-    expect(hasFeatureAccess(student, "commercial")).toBe(false);
+  it("keeps ownership rights separate while paid status still does not grant unrestricted tooling", () => {
+    expect(hasFeatureAccess(student, "commercial")).toBe(true);
     expect(hasFeatureAccess(student, "allFormats")).toBe(false);
     expect(hasFeatureAccess(student, "elevenLabsTTS")).toBe(false);
     expect(hasFeatureAccess(student, "batch")).toBe(false);
