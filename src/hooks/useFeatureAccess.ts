@@ -52,7 +52,7 @@ export function useFeatureAccess() {
         if (!entitlements.canUseAiCovers) {
           return { 
             hasAccess: false, 
-            reason: 'AI cover generation requires Student tier or higher',
+            reason: 'AI cover generation requires Creator tier or higher',
             upgradeRequired: 'student'
           };
         }
@@ -62,7 +62,7 @@ export function useFeatureAccess() {
         if (!entitlements.canUseTTS) {
           return { 
             hasAccess: false, 
-            reason: 'Text-to-speech requires Student tier or higher',
+            reason: 'Text-to-speech requires Creator tier or higher',
             upgradeRequired: 'student'
           };
         }
@@ -74,7 +74,7 @@ export function useFeatureAccess() {
         }
         return { 
           hasAccess: false, 
-          reason: 'ElevenLabs TTS requires Institutional tier',
+          reason: 'ElevenLabs TTS requires Teams tier',
           upgradeRequired: 'prophet_tier'
         };
 
@@ -84,7 +84,7 @@ export function useFeatureAccess() {
         }
         return { 
           hasAccess: false, 
-          reason: 'Batch generation requires Institutional tier',
+          reason: 'Batch generation requires Teams tier',
           upgradeRequired: 'prophet_tier'
         };
 
@@ -107,7 +107,7 @@ export function useFeatureAccess() {
         }
         return { 
           hasAccess: false,
-          reason: 'EPUB export requires Student plan or higher',
+          reason: 'EPUB export requires Creator plan or higher',
           upgradeRequired: 'student'
         };
 
@@ -117,7 +117,7 @@ export function useFeatureAccess() {
         }
         return { 
           hasAccess: false,
-          reason: 'DOCX export requires Student plan or higher',
+          reason: 'DOCX export requires Creator plan or higher',
           upgradeRequired: 'student'
         };
 
@@ -127,7 +127,7 @@ export function useFeatureAccess() {
         }
         return { 
           hasAccess: false,
-          reason: 'KDP PDF export requires Premium plan or higher',
+          reason: 'KDP PDF export requires Pro plan or higher',
           upgradeRequired: 'premium'
         };
 
