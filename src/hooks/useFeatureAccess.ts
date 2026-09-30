@@ -94,7 +94,7 @@ export function useFeatureAccess() {
         }
         return { 
           hasAccess: false,
-          reason: 'Commercial publishing rights require Premium tier or higher',
+          reason: 'Commercial publishing rights require Pro tier or higher',
           upgradeRequired: 'premium'
         };
 
