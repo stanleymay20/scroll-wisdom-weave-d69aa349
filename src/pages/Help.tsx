@@ -73,7 +73,7 @@ export default function Help() {
     {
       icon: Download,
       title: "Exporting Books",
-      description: "Download in PDF, EPUB, DOCX",
+      description: "Advanced exports unlock after GA validation",
       link: "/library",
     },
     {
@@ -88,7 +88,7 @@ export default function Help() {
     <div className="min-h-screen flex flex-col">
       <SEO
         title="Help Center | ScrollLibrary"
-        description="Answers to common questions about generating books, earning certificates, billing, and institutional features."
+        description="Answers to common questions about creating books, reading, learning tools, account security, and GA-gated publishing capabilities."
         canonical="/help"
       />
       <Navbar />

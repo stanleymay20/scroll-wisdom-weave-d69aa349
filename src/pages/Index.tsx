@@ -104,16 +104,7 @@ const Index = () => {
           <ForYouSection />
         </Suspense>
         <Suspense fallback={<SectionSkeleton />}>
-          <GetInspiredSection />
-        </Suspense>
-        <Suspense fallback={<SectionSkeleton />}>
           <HowItWorks />
-        </Suspense>
-        <Suspense fallback={<SectionSkeleton />}>
-          <WhyDifferent />
-        </Suspense>
-        <Suspense fallback={<SectionSkeleton />}>
-          <PlatformClarification />
         </Suspense>
         <Suspense fallback={<SectionSkeleton />}>
           <FAQSection />

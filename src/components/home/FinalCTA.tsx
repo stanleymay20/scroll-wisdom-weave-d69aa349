@@ -31,7 +31,7 @@ export function FinalCTA() {
               </Link>
             </Button>
             <Button asChild variant="outline" size="lg">
-              <Link to="/docs/mastery-model">
+              <Link to="/explore">
                 {t('finalCta.generate')}
               </Link>
             </Button>
