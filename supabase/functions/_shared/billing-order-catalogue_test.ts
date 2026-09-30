@@ -36,3 +36,23 @@ Deno.test("one-time checkout price is environment-owned and fails closed", () =>
     "Stripe price id",
   );
 });
+
+
+Deno.test("one-time test override is accepted only with a test key", () => {
+  const override = JSON.stringify({ visual_50: "price_test_visual" });
+  assertEquals(
+    oneTimeBillingPrice("visual_50", env({
+      STRIPE_ONE_TIME_CATALOGUE_JSON: override,
+      STRIPE_SECRET_KEY: "sk_test_x",
+    })),
+    "price_test_visual",
+  );
+  assertThrows(
+    () => oneTimeBillingPrice("visual_50", env({
+      STRIPE_ONE_TIME_CATALOGUE_JSON: override,
+      STRIPE_SECRET_KEY: "sk_live_x",
+    })),
+    Error,
+    "live Stripe key",
+  );
+});
