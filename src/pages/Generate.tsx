@@ -49,6 +49,7 @@ import { cn } from "@/lib/utils";
 import { UsageGateModal, useUsageGate } from "@/components/subscription/UsageGateModal";
 import { parseGateError } from "@/lib/usageGate";
 import { useAccessGate } from "@/hooks/useAccessGate";
+import { trackBookGenerated } from "@/lib/pmfTracking";
 
 const CATEGORIES = [
   { value: "science", labelKey: "categories.science" },
@@ -432,6 +433,10 @@ export default function Generate() {
       });
 
       if (data?.bookId) {
+        // Count activation only after the server has successfully created the book.
+        // Marketing telemetry is fire-and-forget and cannot block navigation.
+        void trackBookGenerated(data.bookId, category);
+
         setTimeout(() => {
           navigate(`/book/${data.bookId}`);
         }, 1500);
