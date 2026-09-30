@@ -2,7 +2,6 @@ import {
   estimateConversationSeconds,
   estimateSpeechSeconds,
   estimateWebmSeconds,
-  INTERACTIVE_VOICE_LIMIT_MINUTES,
   normalizeVoicePlan,
 } from "./interactive-voice-gate.ts";
 
@@ -12,11 +11,11 @@ function assertEquals(actual: unknown, expected: unknown, label: string) {
   }
 }
 
-Deno.test("interactive voice limits match canonical plans", () => {
-  assertEquals(INTERACTIVE_VOICE_LIMIT_MINUTES.free, 5, "free");
-  assertEquals(INTERACTIVE_VOICE_LIMIT_MINUTES.student, 30, "student");
-  assertEquals(INTERACTIVE_VOICE_LIMIT_MINUTES.premium, 120, "premium");
-  assertEquals(INTERACTIVE_VOICE_LIMIT_MINUTES.prophet_tier, 300, "institutional");
+Deno.test("interactive voice uses the canonical billing plan namespace", () => {
+  assertEquals(normalizeVoicePlan("free"), "free", "free");
+  assertEquals(normalizeVoicePlan("student"), "student", "creator");
+  assertEquals(normalizeVoicePlan("premium"), "premium", "pro");
+  assertEquals(normalizeVoicePlan("prophet_tier"), "prophet_tier", "teams");
 });
 
 Deno.test("unknown plans fail closed to free", () => {
