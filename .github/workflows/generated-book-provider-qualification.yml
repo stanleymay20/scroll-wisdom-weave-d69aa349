@@ -4,10 +4,11 @@ on:
   workflow_dispatch:
     inputs:
       book_type:
-        description: Specialized authoring mode under qualification
+        description: Generated-book mode under empirical qualification
         required: true
         type: choice
         options:
+          - text
           - academic
           - technical
           - reference
