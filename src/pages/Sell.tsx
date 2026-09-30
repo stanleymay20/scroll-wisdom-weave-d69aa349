@@ -67,8 +67,14 @@ async function withSlugRetry<T>(baseSlug: string, run: (slug: string) => Promise
 }
 
 type Step = 0 | 1 | 2 | 3 | 4;
-const TOTAL_STEPS = 5;
-const STEP_LABELS = ["Welcome", "Profile", "Payouts", "Publish", "Launch"];
+const STEP_LABELS: Record<Step, string> = {
+  0: "Welcome",
+  1: "Profile",
+  2: "Payouts",
+  3: "Publish",
+  4: "Launch",
+};
+const VISIBLE_STEPS: Step[] = PMF_MODE ? [0, 1, 3, 4] : [0, 1, 2, 3, 4];
 const DRAFT_KEY = "sell_wizard_draft_v1";
 
 function slugify(s: string) {
@@ -122,8 +128,9 @@ export default function Sell() {
 
       // Override step from URL if present
       const urlStep = Number(params.get("step"));
-      const hasUrlStep = !Number.isNaN(urlStep) && urlStep >= 0 && urlStep < TOTAL_STEPS;
+      const hasUrlStep = Number.isInteger(urlStep) && urlStep >= 0 && urlStep <= 4;
       if (hasUrlStep) next = { ...next, step: urlStep as Step };
+      if (PMF_MODE && next.step === 2) next = { ...next, step: 3 };
 
       // Hydrate from existing author profile (server wins for already-saved fields)
       const { data: ap } = await supabase.from("author_profiles").select("*").eq("user_id", user.id).maybeSingle();
@@ -259,7 +266,11 @@ export default function Sell() {
     window.scrollTo({ top: 0, behavior: "smooth" });
   }, [setParams]);
 
-  const progress = useMemo(() => Math.round(((draft.step + 1) / TOTAL_STEPS) * 100), [draft.step]);
+  const visibleStepIndex = Math.max(0, VISIBLE_STEPS.indexOf(draft.step));
+  const progress = useMemo(
+    () => Math.round(((visibleStepIndex + 1) / VISIBLE_STEPS.length) * 100),
+    [visibleStepIndex],
+  );
 
   // --- Step actions -------------------------------------------------------
   async function saveProfileAndContinue() {
@@ -290,7 +301,7 @@ export default function Sell() {
       setDraft((d) => ({ ...d, profile: { ...d.profile, slug: savedSlug } }));
       setHasAuthorProfile(true);
       toast.success("Profile saved");
-      setStep(2);
+      setStep(PMF_MODE ? 3 : 2);
     } catch (e: any) {
       toast.error(friendlyError(e, "Could not save profile"));
     } finally { setSavingStep(false); }
@@ -410,7 +421,15 @@ export default function Sell() {
 
   return (
     <div className="min-h-dvh bg-background">
-      <SEO title="Start Selling — ScrollLibrary" description="Set up your creator profile, payouts, and publish your first book in minutes." noindex />
+      <SEO
+        title={PMF_MODE ? "Publish a Book — ScrollLibrary" : "Start Selling — ScrollLibrary"}
+        description={
+          PMF_MODE
+            ? "List a book free on the ScrollLibrary storefront during GA validation. Paid checkout and external publishing remain gated."
+            : "Set up your creator profile, payouts, and publish your first book in minutes."
+        }
+        noindex
+      />
 
       {/* Sticky progress header */}
       <header
@@ -421,11 +440,11 @@ export default function Sell() {
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Rocket className="h-4 w-4 text-primary" aria-hidden />
-              <span className="text-sm font-medium">Start Selling</span>
+              <span className="text-sm font-medium">{PMF_MODE ? "Publish a Book" : "Start Selling"}</span>
               <Badge variant="secondary" className="text-xs">{STEP_LABELS[draft.step]}</Badge>
             </div>
             <span className="text-xs text-muted-foreground" aria-live="polite">
-              Step {draft.step + 1} of {TOTAL_STEPS}
+              Step {visibleStepIndex + 1} of {VISIBLE_STEPS.length}
             </span>
           </div>
           <Progress value={progress} aria-label={`Onboarding progress ${progress}%`} className="h-1.5" />
@@ -444,7 +463,7 @@ export default function Sell() {
             onBack={() => setStep(0)} onNext={saveProfileAndContinue} saving={savingStep}
           />
         )}
-        {draft.step === 2 && (
+        {!PMF_MODE && draft.step === 2 && (
           <StepPayout
             profile={payoutProfile} setProfile={setPayoutProfile}
             onBack={() => setStep(1)} onNext={savePayoutAndContinue} saving={savingStep}
@@ -454,7 +473,7 @@ export default function Sell() {
           <StepPublish
             books={books} value={draft.publish}
             onChange={(p) => setDraft((d) => ({ ...d, publish: p }))}
-            onBack={() => setStep(2)} onNext={publishAndContinue} saving={savingStep}
+            onBack={() => setStep(PMF_MODE ? 1 : 2)} onNext={publishAndContinue} saving={savingStep}
             canPublishExternal={!PMF_MODE && entitlements.can_publish_external}
             entitlementTier={entitlements.tier} entitlementLoading={entLoading}
             editing={editingListing}
@@ -473,7 +492,7 @@ export default function Sell() {
         )}
 
         {/* Education cards — visible on welcome + payout for motivation */}
-        {(draft.step === 0 || draft.step === 2) && <EducationCards tier={entitlements.tier} />}
+        {(draft.step === 0 || (!PMF_MODE && draft.step === 2)) && <EducationCards tier={entitlements.tier} />}
       </main>
     </div>
   );
@@ -489,22 +508,28 @@ function StepWelcome({ onStart, entitlementTier }: { onStart: () => void; entitl
       <Card className="p-6 md:p-8 bg-gradient-to-br from-primary/5 via-background to-background border-primary/20">
         <div className="flex items-center gap-2 text-xs font-medium text-primary mb-3">
           <Sparkles className="h-3.5 w-3.5" />
-          <span>Creator economy on ScrollLibrary</span>
+          <span>{PMF_MODE ? "GA storefront publishing" : "Creator economy on ScrollLibrary"}</span>
         </div>
         <h1 className="text-3xl md:text-4xl font-display font-semibold tracking-tight">
-          Turn your knowledge into income.
+          {PMF_MODE ? "Publish your book to ScrollLibrary." : "Turn your knowledge into income."}
         </h1>
         <p className="mt-3 text-muted-foreground leading-relaxed">
-          Publish your books to a global storefront in minutes. Reach readers, build an audience,
-          and get paid — without juggling tax forms, platforms, or marketing tools.
+          {PMF_MODE
+            ? "List your book free on the ScrollLibrary storefront during GA validation. Paid checkout, payouts, release scheduling, and external publishing remain gated until validation passes."
+            : "Publish your books to a global storefront in minutes. Reach readers, build an audience, and get paid — without juggling tax forms, platforms, or marketing tools."}
         </p>
         <div className="grid grid-cols-2 gap-3 mt-6">
-          {[
+          {(PMF_MODE ? [
+            { icon: BookOpen, label: "Free storefront listing" },
+            { icon: Users, label: "Share with readers" },
+            { icon: ShieldCheck, label: "GA-gated advanced tools" },
+            { icon: Globe, label: "External publishing later" },
+          ] : [
             { icon: DollarSign, label: "Sell books" },
             { icon: Globe, label: "Release scheduling" },
             { icon: TrendingUp, label: "Earn revenue" },
             { icon: Users, label: "Build audience" },
-          ].map(({ icon: Icon, label }) => (
+          ]).map(({ icon: Icon, label }) => (
             <div key={label} className="flex items-center gap-2 rounded-lg border bg-card px-3 py-2.5">
               <Icon className="h-4 w-4 text-primary shrink-0" aria-hidden />
               <span className="text-sm font-medium">{label}</span>
@@ -512,7 +537,7 @@ function StepWelcome({ onStart, entitlementTier }: { onStart: () => void; entitl
           ))}
         </div>
         <Button size="lg" className="w-full mt-6 min-h-12" onClick={onStart}>
-          Start Selling <ArrowRight className="h-4 w-4 ml-1" />
+          {PMF_MODE ? "Publish a Book" : "Start Selling"} <ArrowRight className="h-4 w-4 ml-1" />
         </Button>
         <div className="mt-3 flex justify-center">
           <a href="/sell/analytics" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
@@ -686,7 +711,9 @@ function StepPublish({
         <BookOpen className="h-10 w-10 mx-auto text-muted-foreground" aria-hidden />
         <h2 className="text-2xl font-display font-semibold">Generate your first book</h2>
         <p className="text-sm text-muted-foreground">
-          You'll need at least one book to start selling. It only takes a minute.
+          {PMF_MODE
+            ? "You'll need at least one book before you can publish a storefront listing."
+            : "You'll need at least one book to start selling. It only takes a minute."}
         </p>
         <div className="flex justify-center pt-2">
           <Button asChild size="lg"><Link to="/generate"><Sparkles className="h-4 w-4" />Generate a book</Link></Button>
@@ -782,6 +809,7 @@ function StepPublish({
               onCheckedChange={(c) => onChange({ ...value, is_public: c })} />
           </div>
 
+          {!PMF_MODE && (
           {/* Advanced */}
           <div>
             <button type="button"
@@ -809,6 +837,7 @@ function StepPublish({
               </div>
             )}
           </div>
+          )}
 
           {/* Entitlement upsell */}
           {!PMF_MODE && !entitlementLoading && !canPublishExternal && entitlementTier === "free" && (
@@ -967,6 +996,7 @@ function StepLaunch({
       </Card>
       )}
 
+      {!PMF_MODE && (
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
         <Card className="p-4">
           <div className="text-xs text-muted-foreground">Next</div>
@@ -983,6 +1013,7 @@ function StepLaunch({
           </Button>
         </Card>
       </div>
+      )}
 
       <div className="text-center">
         <Button variant="ghost" onClick={onReset}>Publish another book</Button>
@@ -1024,11 +1055,17 @@ function StepNav({
 }
 
 function EducationCards({ tier }: { tier: string }) {
-  const items = [
-    { icon: DollarSign, title: "How creators earn", body: "Set any price. We process payments and credit your ledger after the platform fee." },
-    { icon: ShieldCheck, title: "Platform fee", body: "ScrollLibrary keeps 10% of each sale on Free, less on Creator plans. No hidden costs." },
-    { icon: Globe, title: "GA storefront scope", body: "Publish to the ScrollLibrary storefront now. Third-party publishing integrations return after provider E2E validation." },
-  ];
+  const items = PMF_MODE
+    ? [
+        { icon: BookOpen, title: "Free storefront listing", body: "Publish a public ScrollLibrary listing now without paid checkout." },
+        { icon: ShieldCheck, title: "Payments remain gated", body: "Pricing, paid checkout, fees, and payouts stay closed until their validation gates pass." },
+        { icon: Globe, title: "External publishing remains gated", body: "Third-party integrations return only after provider E2E validation." },
+      ]
+    : [
+        { icon: DollarSign, title: "How creators earn", body: "Set any price. We process payments and credit your ledger after the platform fee." },
+        { icon: ShieldCheck, title: "Platform fee", body: "ScrollLibrary keeps 10% of each sale on Free, less on Creator plans. No hidden costs." },
+        { icon: Globe, title: "GA storefront scope", body: "Publish to the ScrollLibrary storefront now. Third-party publishing integrations return after provider E2E validation." },
+      ];
   return (
     <div className="mt-6 grid grid-cols-1 sm:grid-cols-3 gap-3">
       {items.map(({ icon: Icon, title, body }) => (
@@ -1038,7 +1075,7 @@ function EducationCards({ tier }: { tier: string }) {
           <p className="text-xs text-muted-foreground mt-1 leading-relaxed">{body}</p>
         </Card>
       ))}
-      {tier === "free" && (
+      {!PMF_MODE && tier === "free" && (
         <Card className="p-4 sm:col-span-3 border-primary/30 bg-primary/5">
           <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:justify-between">
             <div>
