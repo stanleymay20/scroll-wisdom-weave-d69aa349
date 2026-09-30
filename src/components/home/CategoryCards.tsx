@@ -5,7 +5,7 @@ import { Sparkles, Database } from "lucide-react";
 const cards = [
   {
     title: "Your Library",
-    description: "Keep your created and uploaded books together, continue reading, and return to the same project as it develops.",
+    description: "Keep your created books together, continue reading, and return to the same project as it develops.",
     icon: Database,
     to: "/library",
     gradient: "from-blue-500 to-blue-700",
