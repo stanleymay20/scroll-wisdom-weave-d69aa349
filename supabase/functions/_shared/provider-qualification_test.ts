@@ -66,14 +66,16 @@ Deno.test("academic qualifies only after enough complete and human-reviewed samp
   const samples = [
     passingSample("academic", 1, true),
     passingSample("academic", 2, true),
-    passingSample("academic", 3, false),
+    passingSample("academic", 3, true),
+    passingSample("academic", 4, false),
+    passingSample("academic", 5, false),
   ];
 
   const result = evaluateBookTypeQualification("academic", samples);
   assertEquals(result.status, "qualified");
   assertEquals(result.qualified, true);
-  assertEquals(result.sampleCount, 3);
-  assertEquals(result.humanReviewedSamples, 2);
+  assertEquals(result.sampleCount, 5);
+  assertEquals(result.humanReviewedSamples, 3);
 });
 
 Deno.test("academic fails closed when publication evidence is missing", () => {
