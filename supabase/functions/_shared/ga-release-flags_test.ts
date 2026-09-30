@@ -1,5 +1,5 @@
 import { assertEquals } from "https://deno.land/std@0.224.0/assert/mod.ts";
-import { advancedAuthoringEnabled, advancedBookTypeEnabled, externalPaymentWritesEnabled, publicationMintEnabled, qualificationBookTypeEnabled, qualifiedAdvancedBookTypes, specializedAuthoringEnabled } from "./ga-release-flags.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled, externalPaymentWritesEnabled, publicationMintEnabled, publishingServiceBillingEnabled, qualificationBookTypeEnabled, qualifiedAdvancedBookTypes, specializedAuthoringEnabled } from "./ga-release-flags.ts";
 
 Deno.test("GA payment writes default closed for empty or invalid values", () => {
   for (const value of ["", "false", "0", "no", "enabled", "TRUE-ish"]) {
@@ -82,4 +82,17 @@ Deno.test("qualification access is independent from public release allow-list", 
   assertEquals(qualificationBookTypeEnabled("academic", "academic,technical"), true);
   assertEquals(qualificationBookTypeEnabled("fiction", "academic,technical"), false);
   assertEquals(qualificationBookTypeEnabled("text", "text,academic"), false);
+});
+
+
+Deno.test("publishing-service billing defaults closed independently of payment writes", () => {
+  for (const value of ["", "false", "0", "no", "enabled"]) {
+    assertEquals(publishingServiceBillingEnabled(value), false);
+  }
+});
+
+Deno.test("publishing-service billing opens only for explicit affirmative values", () => {
+  for (const value of ["true", "TRUE", "1", "yes", " Yes "]) {
+    assertEquals(publishingServiceBillingEnabled(value), true);
+  }
 });
