@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
-import { commitFromGitDirectory, resolveBuildCommit } from "../../../scripts/build-commit.mjs";
+import { commitFromGitDirectory, resolveBuildCommit, requireReleaseCommit } from "../../../scripts/build-commit.mjs";
 
 const A = "a".repeat(40);
 const B = "b".repeat(40);
@@ -72,8 +72,25 @@ describe("resolveBuildCommit", () => {
     expect(resolveBuildCommit({ GITHUB_SHA: "main" }, withGit())).toEqual({ commit: B, source: "git" });
   });
 
-  it("honours an explicit VITE_BUILD_ID over the checkout", () => {
-    expect(resolveBuildCommit({ VITE_BUILD_ID: "release-42" }, withGit())).toEqual({ commit: "release-42", source: "VITE_BUILD_ID" });
+  it("ignores a non-SHA VITE_BUILD_ID", () => {
+    expect(resolveBuildCommit({ VITE_BUILD_ID: "release-42" }, withGit())).toEqual({ commit: B, source: "git" });
+  });
+
+  it("refuses unidentified production builds", () => {
+    expect(() => requireReleaseCommit({}, repo({}))).toThrow(/exact 40-character/);
+  });
+
+  it("refuses a declared SHA that disagrees with the checkout", () => {
+    expect(() => requireReleaseCommit({ GITHUB_SHA: A }, withGit())).toThrow(/does not match/);
+  });
+
+  it("binds PR builds to the reviewed head instead of the synthetic merge SHA", () => {
+    expect(requireReleaseCommit({ RELEASE_COMMIT_SHA: B, GITHUB_SHA: A }, withGit())).toEqual({ commit: B, source: "RELEASE_COMMIT_SHA" });
+    expect(() => requireReleaseCommit({ RELEASE_COMMIT_SHA: A, GITHUB_SHA: B }, withGit())).toThrow(/does not match/);
+  });
+
+  it("accepts the exact checkout SHA", () => {
+    expect(requireReleaseCommit({ GITHUB_SHA: B }, withGit()).commit).toBe(B);
   });
 
   it("falls back to the checkout when nothing is declared — the hosted-build case", () => {

@@ -1,6 +1,9 @@
 name: Strict Null Ratchet
 
 on:
+  push:
+    branches: [main]
+  workflow_dispatch:
   pull_request:
 
 permissions:
@@ -10,12 +13,17 @@ concurrency:
   group: strict-null-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  RELEASE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
+
 jobs:
   hardened-directories:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: 1.2.23
