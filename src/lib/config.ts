@@ -54,6 +54,9 @@ export const FEATURES = {
   // lifecycle has passed and production is deliberately opened.
   enablePaidCheckout: !PMF_MODE,
   enableSubscriptionCheckout: !PMF_MODE,
+  // Publisher add-ons are a separate commercial surface and remain hidden even
+  // when generation-plan checkout is later enabled.
+  enablePublisherSubscriptions: false,
   enableStripeConnect: !PMF_MODE,
   enableAdvancedAuthoring: !PMF_MODE,
   enableChapterRegeneration: !PMF_MODE,
