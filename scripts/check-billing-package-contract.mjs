@@ -5,7 +5,10 @@ import { readFileSync } from "node:fs";
 const subscription = readFileSync("src/lib/subscription.ts", "utf8");
 const pricing = readFileSync("src/pages/Pricing.tsx", "utf8");
 const checkout = readFileSync("supabase/functions/create-checkout/index.ts", "utf8");
+const checkSubscription = readFileSync("supabase/functions/check-subscription/index.ts", "utf8");
 const webhook = readFileSync("supabase/functions/stripe-webhook/index.ts", "utf8");
+const stripeFields = readFileSync("supabase/functions/_shared/stripe-fields.ts", "utf8");
+const stripeFieldsTests = readFileSync("supabase/functions/_shared/stripe-fields_test.ts", "utf8");
 
 const requireText = (source, text, label) => {
   if (!source.includes(text)) {
@@ -41,8 +44,16 @@ requireText(checkout, 'status: "open"', "open Checkout Session reuse");
 requireText(checkout, 'code: "checkout_in_progress"', "single open plan checkout invariant");
 requireText(checkout, "planTierForProduct(catalogue, productId)", "same-domain subscription detection");
 
-// Paid plan access must follow Stripe subscription status, not checkout redirects.
-requireText(webhook, 'status === "active" || status === "trialing"', "access-bearing Stripe states");
+// Paid plan access must follow one shared Stripe status policy, not redirects or
+// duplicated literals that can drift across checkout, webhook and verification.
+requireText(stripeFields, "subscriptionStatusGrantsAccess", "shared access-status helper");
+requireText(stripeFields, 'status === "active" || status === "trialing"', "access-bearing Stripe states");
+requireText(stripeFields, "subscriptionStatusBlocksNewCheckout", "shared replacement-checkout helper");
+requireText(stripeFieldsTests, "subscription access is granted only for active or trialing states", "access-status tests");
+requireText(stripeFieldsTests, "only terminal subscription states allow a replacement checkout", "replacement-checkout tests");
+requireText(checkout, "subscriptionStatusBlocksNewCheckout(subscription.status)", "checkout uses shared status policy");
+requireText(webhook, "subscriptionStatusGrantsAccess(status)", "webhook uses shared access policy");
+requireText(checkSubscription, "subscriptionStatusGrantsAccess(subscription.status)", "subscription verification uses shared access policy");
 requireText(webhook, "Failed renewal is entitlement-significant for both billing domains.", "failed-renewal convergence");
 
 console.log("Billing package contract: PASS (Free → Creator → Pro → Teams; duplicate recurring checkout fenced)");
