@@ -43,8 +43,8 @@ export default function About() {
   return (
     <div className="min-h-screen flex flex-col">
       <SEO
-        title="About ScrollLibrary | AI Cognitive Mastery Platform"
-        description="Learn how ScrollLibrary uses Bloom-weighted AI assessments and cryptographic mastery records to certify what you actually understand."
+        title="About ScrollLibrary | AI-Native Book Creation & Learning"
+        description="Learn how ScrollLibrary combines structured AI-native book creation, reading, learning tools, and deliberately gated publishing capabilities."
         canonical="/about"
       />
       <Navbar />
