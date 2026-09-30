@@ -9,10 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { Check, Sparkles, Zap, BookOpen, Download, Volume2, Shield, Loader2, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
-import { SUBSCRIPTION_TIERS, SubscriptionTier, CREATOR_SUBSCRIPTION_TIERS, CreatorTier } from "@/lib/subscription";
-import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
+import { SUBSCRIPTION_TIERS, SubscriptionTier } from "@/lib/subscription";
 import { useToast } from "@/hooks/use-toast";
-import { useLanguage } from "@/contexts/LanguageContext";
 import { FEATURES } from "@/lib/config";
 
 import { SEO } from "@/components/SEO";
@@ -47,7 +45,7 @@ const plans: PlanConfig[] = [
     ],
   },
   {
-    name: "Creator",
+    name: SUBSCRIPTION_TIERS.student.name,
     description: "For authors creating books regularly",
     price: `$${SUBSCRIPTION_TIERS.student.monthlyPrice}`,
     period: "/month",
@@ -65,7 +63,7 @@ const plans: PlanConfig[] = [
     ],
   },
   {
-    name: "Creator Pro",
+    name: SUBSCRIPTION_TIERS.premium.name,
     description: "For serious authors and publishing-ready projects",
     price: `$${SUBSCRIPTION_TIERS.premium.monthlyPrice}`,
     period: "/month",
@@ -84,7 +82,7 @@ const plans: PlanConfig[] = [
     ],
   },
   {
-    name: "Teams",
+    name: SUBSCRIPTION_TIERS.prophet_tier.name,
     description: "For publishers, universities & organizations",
     price: `$${SUBSCRIPTION_TIERS.prophet_tier.monthlyPrice}`,
     period: "/month",
@@ -105,13 +103,11 @@ const plans: PlanConfig[] = [
 
 export default function Pricing() {
   const { user, tier, isSubscribed, checkSubscription } = useSubscription();
-  const { entitlements, refresh: refreshEntitlements } = useCreatorEntitlements();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { t } = useLanguage();
   const visiblePlans = FEATURES.enableSubscriptionCheckout
     ? plans
     : plans.filter((plan) => plan.tierKey === "free");
@@ -137,7 +133,6 @@ export default function Pricing() {
         }
 
         await checkSubscription(true);
-        await refreshEntitlements();
         setSearchParams({}, { replace: true });
       })();
     } else if (searchParams.get("canceled") === "true") {
@@ -148,7 +143,7 @@ export default function Pricing() {
       });
       setSearchParams({}, { replace: true });
     }
-  }, [searchParams, checkSubscription, refreshEntitlements, setSearchParams, toast]);
+  }, [searchParams, checkSubscription, setSearchParams, toast]);
 
   const handleSelectPlan = async (planTierKey: SubscriptionTier) => {
     if (!user) {
@@ -189,37 +184,6 @@ export default function Pricing() {
       toast({
         title: "Error",
         description: error.message || "Unable to start checkout. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setCheckoutLoading(null);
-    }
-  };
-
-  const handleCreatorCheckout = async (creatorTier: CreatorTier) => {
-    if (!FEATURES.enableSubscriptionCheckout) {
-      toast({
-        title: "Paid Creator plans are temporarily unavailable",
-        description: "Free marketplace listing remains available during GA validation.",
-      });
-      return;
-    }
-    if (!user) {
-      navigate("/auth", { state: { redirectTo: "/pricing#creator" } });
-      return;
-    }
-    const cfg = CREATOR_SUBSCRIPTION_TIERS[creatorTier];
-    setCheckoutLoading(`creator:${creatorTier}`);
-    try {
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { priceId: cfg.price_id, tier: creatorTier },
-      });
-      if (error) throw error;
-      if (data?.url) window.open(data.url, "_blank");
-    } catch (e: any) {
-      toast({
-        title: "Checkout error",
-        description: e.message || "Unable to start Creator checkout. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -268,10 +232,10 @@ export default function Pricing() {
             {/* Header */}
             <div className="text-center mb-16">
               <h1 className="text-4xl md:text-5xl font-display font-bold text-foreground mb-4">
-                Create and publish in GA
+                Create with one simple plan ladder
               </h1>
               <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
-                The current GA experience is free. Create, read, assess, and list books on ScrollLibrary while paid upgrades, exports, paid sales, and external publishing remain closed until their validation gates pass.
+                The current GA experience is free. When paid plans open, ScrollLibrary will use one clear ladder: Free, Creator, Pro, and Teams. Exports, paid sales, and external publishing remain gated until their own validation gates pass.
               </p>
             </div>
 
@@ -279,6 +243,8 @@ export default function Pricing() {
             <div className={`grid gap-6 mx-auto mb-16 ${visiblePlans.length === 1 ? "max-w-md grid-cols-1" : "max-w-6xl sm:grid-cols-2 lg:grid-cols-4"}`}>
               {visiblePlans.map((plan, index) => {
                 const isCurrent = isCurrentPlan(plan.tierKey);
+                const isPaidChoice = plan.tierKey !== "free";
+                const manageExisting = isSubscribed && isPaidChoice && !isCurrent;
                 
                 return (
                   <motion.div
@@ -332,13 +298,19 @@ export default function Pricing() {
                           variant={plan.popular ? "default" : "outline"}
                           className="w-full mt-4"
                           size="sm"
-                          onClick={() => handleSelectPlan(plan.tierKey)}
-                          disabled={isCurrent || !!checkoutLoading || (plan.tierKey !== "free" && !FEATURES.enableSubscriptionCheckout)}
+                          onClick={() => manageExisting ? handleManageSubscription() : handleSelectPlan(plan.tierKey)}
+                          disabled={
+                            isCurrent
+                            || !!checkoutLoading
+                            || (manageExisting ? portalLoading : (isPaidChoice && !FEATURES.enableSubscriptionCheckout))
+                          }
                         >
                           {checkoutLoading === plan.tierKey ? (
                             <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing...</>
                           ) : isCurrent ? (
                             "Current Plan"
+                          ) : manageExisting ? (
+                            portalLoading ? "Opening billing..." : "Manage current plan"
                           ) : plan.tierKey === "free" ? (
                             "Get Started Free"
                           ) : !FEATURES.enableSubscriptionCheckout ? (
@@ -355,130 +327,17 @@ export default function Pricing() {
             </div>
 
             {!FEATURES.enableSubscriptionCheckout && (
-              <div id="creator" className="mb-16 scroll-mt-24 rounded-2xl border border-border bg-muted/30 p-6 md:p-8 text-center">
+              <div id="billing" className="mb-16 scroll-mt-24 rounded-2xl border border-border bg-muted/30 p-6 md:p-8 text-center">
                 <Badge variant="secondary" className="mb-3">GA boundary</Badge>
                 <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-3">
                   Paid plans are not open yet
                 </h2>
                 <p className="text-muted-foreground max-w-2xl mx-auto mb-5">
-                  Use the Free GA plan today. Paid generation tiers and marketplace creator subscriptions will appear only after the payment lifecycle passes its validation gates.
+                  Use the Free GA plan today. Creator, Pro, and Teams will appear only after the payment lifecycle passes its validation gates.
                 </p>
                 <Button variant="outline" disabled>
                   Available after payment validation
                 </Button>
-              </div>
-            )}
-
-            {/* Creator tiers (Phase 4.0) */}
-            {FEATURES.enableSubscriptionCheckout && (
-              <div id="creator" className="mt-20 mb-16 scroll-mt-24">
-              <div className="text-center mb-10">
-                <Badge className="mb-3">Marketplace add-ons</Badge>
-                <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-3">
-                  Add marketplace publishing capacity
-                </h2>
-                <p className="text-muted-foreground max-w-xl mx-auto">
-                  Optional creator subscriptions extend marketplace publishing features. External provider integrations remain gated until their own E2E checks pass.
-                </p>
-              </div>
-
-              <div className="grid sm:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                {([
-                  {
-                    key: "free" as const,
-                    name: "Free", price: "€0", period: "forever",
-                    features: [
-                      "Public marketplace listing",
-                      "Basic analytics",
-                      "+10% marketplace rev-share surcharge",
-                      "No external publishing",
-                      "No release scheduling",
-                    ],
-                  },
-                  {
-                    key: "creator" as const,
-                    name: CREATOR_SUBSCRIPTION_TIERS.creator.name,
-                    price: `€${CREATOR_SUBSCRIPTION_TIERS.creator.monthlyPrice}`,
-                    period: "/month",
-                    popular: true,
-                    features: [
-                      "Everything in Free",
-                      "Unlimited collections",
-                      "0% marketplace surcharge",
-                      "Core marketplace analytics",
-                    ],
-                  },
-                  {
-                    key: "creator_pro" as const,
-                    name: CREATOR_SUBSCRIPTION_TIERS.creator_pro.name,
-                    price: `€${CREATOR_SUBSCRIPTION_TIERS.creator_pro.monthlyPrice}`,
-                    period: "/month",
-                    features: [
-                      "Everything in Creator",
-                      "Priority generation queue",
-                      "+50 monthly generation bonus",
-                      "Best for publishing businesses",
-                    ],
-                  },
-                ]).map((p) => {
-                  const isCurrent = entitlements.tier === p.key;
-                  const inGrace = isCurrent && (entitlements as any).payment_status === "grace_period";
-                  const loadingKey = `creator:${p.key}`;
-                  const isLoading = checkoutLoading === loadingKey;
-                  return (
-                    <Card key={p.name} className={`p-6 h-full flex flex-col ${p.popular ? "border-primary/50 shadow-lg shadow-primary/10" : ""} ${isCurrent ? "ring-2 ring-primary" : ""}`}>
-                      <div className="flex items-center gap-2 mb-3 min-h-[24px] flex-wrap">
-                        {p.popular && <Badge>Most Popular</Badge>}
-                        {isCurrent && <Badge variant="secondary">Your plan</Badge>}
-                        {inGrace && <Badge variant="destructive">Payment retry</Badge>}
-                      </div>
-                      <h3 className="text-xl font-display font-semibold">{p.name}</h3>
-                      <div className="mt-2">
-                        <span className="text-3xl font-bold text-foreground">{p.price}</span>
-                        <span className="text-muted-foreground text-sm">{p.period}</span>
-                      </div>
-                      <ul className="mt-4 space-y-2 text-sm flex-1">
-                        {p.features.map((f) => (
-                          <li key={f} className="flex items-start gap-2">
-                            <Check className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                            <span className="text-foreground">{f}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      {p.key === "free" ? (
-                        <Button variant="outline" size="sm" className="w-full mt-5" disabled>
-                          {isCurrent ? "Current" : "Default"}
-                        </Button>
-                      ) : isCurrent ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full mt-5"
-                          onClick={handleManageSubscription}
-                          disabled={portalLoading}
-                        >
-                          {portalLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Opening...</> : "Manage subscription"}
-                        </Button>
-                      ) : (
-                        <Button
-                          variant={p.popular ? "default" : "outline"}
-                          size="sm"
-                          className="w-full mt-5"
-                          onClick={() => handleCreatorCheckout(p.key as CreatorTier)}
-                          disabled={isLoading || !FEATURES.enableSubscriptionCheckout}
-                        >
-                          {isLoading
-                            ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Redirecting...</>
-                            : !FEATURES.enableSubscriptionCheckout
-                              ? "Available after payment validation"
-                              : `Upgrade to ${p.name}`}
-                        </Button>
-                      )}
-                    </Card>
-                  );
-                })}
-
-              </div>
               </div>
             )}
 
