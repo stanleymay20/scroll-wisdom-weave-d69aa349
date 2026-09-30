@@ -5559,8 +5559,43 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
             });
           }
 
-          // Generate ALL images in parallel to save time
-          const imageResults = imageDeadline <= Date.now() ? [] : await Promise.allSettled(
+          // Generated figures consume the same visual-credit pool as standalone
+          // images. One chapter figure = one visual credit.
+          let reservedFigureCredits = 0;
+          let figureCreditsAvailable = imageDeadline > Date.now();
+
+          if (figureCreditsAvailable && figuresToGenerate.length > 0) {
+            const visualLimit = isAdmin ? -1 : BILLING_PLAN_LIMITS[userPlan].visualCreditsPerMonth;
+            if (visualLimit <= 0) {
+              figureCreditsAvailable = false;
+              console.log("[VISUAL-INTELLIGENCE] Plan has no visual credits; skipping generated figures");
+            } else {
+              const { data: figureReservationData, error: figureReservationError } = await supabase.rpc(
+                "reserve_billing_usage",
+                {
+                  _user_id: user.id,
+                  _month: billingMonth,
+                  _metric: "visual_credits",
+                  _units: figuresToGenerate.length,
+                  _base_limit: visualLimit,
+                },
+              );
+              const figureReservation = (Array.isArray(figureReservationData)
+                ? figureReservationData[0]
+                : figureReservationData) as
+                { allowed: boolean; used: number; remaining: number; effective_limit: number } | null;
+
+              if (figureReservationError || !figureReservation?.allowed) {
+                figureCreditsAvailable = false;
+                console.log("[VISUAL-INTELLIGENCE] Visual credit reservation denied; saving chapter without generated figures");
+              } else {
+                reservedFigureCredits = figuresToGenerate.length;
+              }
+            }
+          }
+
+          // Generate ALL images in parallel to save time.
+          const imageResults = !figureCreditsAvailable ? [] : await Promise.allSettled(
             figuresToGenerate.map(async (fig) => {
               const imagePrompt = buildFigureImagePrompt({
                 description: fig.description,
@@ -5675,6 +5710,20 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
               console.log(`[GENERATE-CHAPTER] Figure ${fig.num} uploaded to storage and inserted inline`);
             } catch (uploadErr) {
               console.error(`[GENERATE-CHAPTER] Upload error for Figure ${fig.num}:`, uploadErr);
+            }
+          }
+          // Only successfully rendered figures consume credits. Failed provider
+          // calls, empty responses and storage failures are refunded.
+          if (reservedFigureCredits > rendered) {
+            const unusedFigureCredits = reservedFigureCredits - rendered;
+            const { error: figureReleaseError } = await supabase.rpc("release_billing_usage", {
+              _user_id: user.id,
+              _month: billingMonth,
+              _metric: "visual_credits",
+              _units: unusedFigureCredits,
+            });
+            if (figureReleaseError) {
+              console.error("[VISUAL-INTELLIGENCE] Failed to refund unused figure credits:", figureReleaseError);
             }
           }
           console.log(`[VISUAL-INTELLIGENCE] ${rendered}/${figures.length} figures rendered`);
