@@ -259,7 +259,7 @@ interface RateLimitConsumption {
  * the product.
  */
 export async function enforceDurableRateLimit(
-  admin: SupabaseClient,
+  admin: { rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }> },
   opts: RateLimitOptions,
 ): Promise<Response | null> {
   try {
@@ -272,13 +272,13 @@ export async function enforceDurableRateLimit(
 
     if (error) {
       console.error(`[rate-limit] consume_rate_limit failed for ${opts.name}`, error);
-      return null;
+      return json({ error: "Rate-limit service unavailable. Please retry later.", code: "rate_limit_unavailable" }, 503);
     }
 
     const row = (Array.isArray(data) ? data[0] : data) as RateLimitConsumption | null;
-    if (!row) {
+    if (!row || typeof row.allowed !== "boolean") {
       console.error(`[rate-limit] consume_rate_limit returned no row for ${opts.name}`);
-      return null;
+      return json({ error: "Rate-limit service unavailable. Please retry later.", code: "rate_limit_unavailable" }, 503);
     }
 
     if (!row.allowed) {
@@ -287,7 +287,7 @@ export async function enforceDurableRateLimit(
     return null;
   } catch (e) {
     console.error(`[rate-limit] consume_rate_limit threw for ${opts.name}`, e);
-    return null;
+    return json({ error: "Rate-limit service unavailable. Please retry later.", code: "rate_limit_unavailable" }, 503);
   }
 }
 

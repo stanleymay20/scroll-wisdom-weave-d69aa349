@@ -43,6 +43,10 @@ for (const entry of entries.filter((e) => e.isDirectory()).sort((a, b) => a.name
     continue; // no entrypoint (shared helpers, fixtures)
   }
 
+  if (/(?<![A-Za-z0-9_$])checkRateLimit\s*\(/.test(source)) {
+    failures.push(`${name}: uses process-local checkRateLimit for a metered endpoint.`);
+  }
+
   // \b would also match inside enforceDurableRateLimit, which ends in the same
   // letters; require the identifier to start at a non-identifier character.
   if (!/(?<![A-Za-z0-9_$])enforceRateLimit\s*[({]/.test(source)) continue;
