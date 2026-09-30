@@ -351,6 +351,34 @@ export default function Pricing() {
               })}
             </div>
 
+            {entitlements.tier !== "free" && (
+              <Card className="mt-10 mb-6 max-w-3xl mx-auto border-primary/30 bg-primary/5">
+                <CardContent className="p-6 flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+                  <div>
+                    <div className="flex items-center gap-2 mb-2">
+                      <Badge variant="secondary">Active creator subscription</Badge>
+                    </div>
+                    <h2 className="text-xl font-display font-semibold text-foreground">
+                      {CREATOR_SUBSCRIPTION_TIERS[entitlements.tier].name}
+                    </h2>
+                    <p className="text-sm text-muted-foreground mt-1">
+                      Your existing Creator subscription remains active. New paid upgrades stay closed while the payment lifecycle is under GA validation.
+                    </p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    onClick={handleManageSubscription}
+                    disabled={portalLoading}
+                    className="shrink-0"
+                  >
+                    {portalLoading
+                      ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Opening...</>
+                      : "Manage subscription"}
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
             {FEATURES.enableSubscriptionCheckout && (
               <>
             {/* Creator tiers (Phase 4.0) */}
