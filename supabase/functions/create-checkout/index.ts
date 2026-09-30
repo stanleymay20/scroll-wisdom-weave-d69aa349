@@ -176,10 +176,13 @@ serve(async (req) => {
       status: "open",
       limit: 100,
     });
-    const reusableSession = openSessions.data.find((candidate: Stripe.Checkout.Session) =>
+    const publicOpenSessions = openSessions.data.filter((candidate: Stripe.Checkout.Session) =>
       candidate.mode === "subscription"
       && candidate.metadata?.userId === user.id
-      && candidate.metadata?.tier === tier
+      && isPublicCheckoutTier(candidate.metadata?.tier)
+    );
+    const reusableSession = publicOpenSessions.find((candidate: Stripe.Checkout.Session) =>
+      candidate.metadata?.tier === tier
       && typeof candidate.url === "string"
       && candidate.url.length > 0
     );
@@ -188,6 +191,19 @@ serve(async (req) => {
       return new Response(JSON.stringify({ url: reusableSession.url, reused: true }), {
         headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
         status: 200,
+      });
+    }
+
+    const otherOpenPlan = publicOpenSessions[0];
+    if (otherOpenPlan) {
+      return new Response(JSON.stringify({
+        error: "Another ScrollLibrary plan checkout is already in progress. Finish or let that checkout expire before choosing a different plan.",
+        code: "checkout_in_progress",
+        existing_tier: otherOpenPlan.metadata?.tier ?? null,
+        requested_tier: tier,
+      }), {
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+        status: 409,
       });
     }
 
