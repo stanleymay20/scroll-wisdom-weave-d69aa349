@@ -128,6 +128,20 @@ for (let i = 0; i < 1000; i += 1) {
 }
 
 const nextAvailable = nextAvailableItem === null ? null : makeIsbn(publisherPrefix, nextAvailableItem);
+const remainingUnassigned = publisher.allocation_size - seenIsbns.size;
+
+const control = ledger.control ?? {};
+if (control.assignment_count !== seenIsbns.size) {
+  fail(`control.assignment_count mismatch: expected ${seenIsbns.size}, got ${control.assignment_count}`);
+}
+if (control.remaining_unassigned_count !== remainingUnassigned) {
+  fail(`control.remaining_unassigned_count mismatch: expected ${remainingUnassigned}, got ${control.remaining_unassigned_count}`);
+}
+if (normalize(control.next_unassigned_candidate) !== (nextAvailable ?? '')) {
+  fail(`control.next_unassigned_candidate mismatch: expected ${nextAvailable ?? 'NONE'}, got ${control.next_unassigned_candidate ?? 'NONE'}`);
+}
+
 console.log(`ISBN_LEDGER_PASS: ${assignments.length} assignment(s), ${seenIsbns.size} unique ISBN(s)`);
 console.log(`ISBN_LEDGER_RANGE: ${publisher.first_isbn} .. ${publisher.last_isbn}`);
+console.log(`ISBN_LEDGER_REMAINING: ${remainingUnassigned}`);
 console.log(`ISBN_LEDGER_NEXT_AVAILABLE: ${nextAvailable ?? 'NONE'}`);
