@@ -33,18 +33,21 @@ This lets an administrator generate Academic qualification samples while every o
 
 ## Qualification order
 
-Modes are evaluated in this release order:
+All generated modes are benchmarked against the same near-10 publication doctrine. Specialized modes remain fail-closed behind their release allow-list; Standard Text is the baseline path and must satisfy the same empirical quality benchmark even though it is not a specialized-mode feature flag.
 
-1. Academic
-2. Technical
-3. Reference
-4. Professional
-5. Bestseller
-6. Workbook
-7. Illustrated
-8. Children
-9. Comic
-10. Fiction
+Qualification order:
+
+1. Standard Text
+2. Academic
+3. Technical
+4. Reference
+5. Professional
+6. Bestseller
+7. Workbook
+8. Illustrated
+9. Children
+10. Comic
+11. Fiction
 
 Passing a later type never qualifies an earlier or adjacent type.
 
@@ -52,14 +55,15 @@ Passing a later type never qualifies an earlier or adjacent type.
 
 | Mode | Complete samples | Passing human-reviewed samples |
 | --- | ---: | ---: |
-| Academic | 3 | 2 |
-| Technical | 3 | 2 |
-| Reference | 3 | 2 |
-| Professional | 3 | 2 |
-| Bestseller | 3 | 2 |
-| Workbook | 3 | 2 |
-| Illustrated | 3 | 2 |
-| Children | 3 | 2 |
+| Standard Text | 5 | 3 |
+| Academic | 5 | 3 |
+| Technical | 5 | 3 |
+| Reference | 5 | 3 |
+| Professional | 5 | 3 |
+| Bestseller | 5 | 3 |
+| Workbook | 5 | 3 |
+| Illustrated | 5 | 3 |
+| Children | 5 | 3 |
 | Comic | 5 | 3 |
 | Fiction | 5 | 3 |
 
@@ -74,14 +78,17 @@ A sample must satisfy all of the following:
 - Chapter-attempt failure rate stays at or below the type policy limit.
 - Regeneration/revision rate stays at or below the type policy limit.
 - Chief Editor certification is eligible.
-- Chief Editor overall score is at least **85/100**.
+- Chief Editor overall score is at least **95/100**.
 - Deterministic publishability status is `ready`.
-- Publishability score is at least **92/100**.
+- Publishability score is at least **98/100**.
 - Publishability has **zero blockers and zero warnings**.
 - Current-state Editorial, QA, Structural, Rights, and Production attestations pass.
 - Evidence attestations pass for evidence-governed modes.
 - The canonical Contract 6 book-type validator passes every generated chapter.
-- Required human reviews score at least **8.5/10** with zero critical issues.
+- Required human reviews average at least **9.5/10**, every rubric dimension is at least **9.0/10**, and there are zero critical issues.
+- Chapter-attempt failure rate is at most **2%**.
+- Regeneration/revision rate is at most **5%**.
+- No critical defect may be averaged away by a high composite score.
 
 Technical additionally requires a current, content-hash-bound passing code audit for every code-bearing chapter.
 
@@ -91,7 +98,7 @@ Illustrated, Children, and Comic additionally require current rights and product
 - Children: at least **4 rendered images per chapter**.
 - Comic: at least **4 panel images per chapter** and images for at least **80% of detected panels**.
 
-Comic and Fiction use a stricter maximum chapter-attempt failure rate of **3%** and require five complete samples.
+Every mode now uses the same maximum **2%** chapter-attempt failure rate and **5%** regeneration rate. Visual and technical modes retain their additional specialized gates.
 
 ## Reliability telemetry
 
@@ -124,7 +131,7 @@ Each dimension is scored from 0 to 10:
 - `readerValue` — usefulness, engagement, comprehension, and fitness for the target reader.
 - `editorialPolish` — prose, pacing, clarity, formatting, and readiness for professional publication.
 
-The qualification collector computes the arithmetic mean. Any critical issue blocks the sample regardless of the average.
+The qualification collector computes the arithmetic mean and preserves the weakest dimension. A sample passes human review only when the mean is at least 9.5/10, the weakest dimension is at least 9.0/10, and there are zero critical issues. Any critical issue blocks the sample regardless of the average.
 
 Example review file:
 
@@ -136,11 +143,11 @@ Example review file:
         "reviewer": "Independent Reviewer Name",
         "criticalIssues": 0,
         "dimensions": {
-          "contentIntegrity": 9.0,
-          "coherence": 8.8,
-          "typeFidelity": 9.2,
-          "readerValue": 8.7,
-          "editorialPolish": 8.9
+          "contentIntegrity": 9.8,
+          "coherence": 9.6,
+          "typeFidelity": 9.7,
+          "readerValue": 9.5,
+          "editorialPolish": 9.6
         }
       }
     }
@@ -163,6 +170,8 @@ bun run qualification:collect -- \
   --book <book-uuid-1> \
   --book <book-uuid-2> \
   --book <book-uuid-3> \
+  --book <book-uuid-4> \
+  --book <book-uuid-5> \
   --reviews qualification/reviews/academic.json \
   --output provider-qualification-evidence.json
 ```
@@ -187,9 +196,9 @@ The workflow always attempts to upload `provider-qualification-evidence.json` fo
 
 ## Release procedure
 
-A successful qualification workflow is necessary but does **not** automatically release a type.
+A successful qualification workflow is necessary but does **not** automatically release a specialized type. Standard Text remains the GA baseline path, but its empirical campaign is still required as a continuous quality benchmark and must meet the same near-10 sample doctrine.
 
-After the evidence artifact is reviewed:
+After a specialized-mode evidence artifact is reviewed:
 
 1. Add only the passed type to the server `GA_QUALIFIED_BOOK_TYPES` allow-list.
 2. Add the same type to `VITE_QUALIFIED_BOOK_TYPES`.
@@ -207,3 +216,19 @@ Never put an unqualified mode into a public allow-list merely to generate test d
 At introduction of this contract, **no specialized mode is qualified by default**.
 
 The hardened architecture is evidence that a campaign is worth running; it is not evidence that a mode has passed the campaign. Fresh full-book samples generated after the reliability telemetry is deployed are required.
+
+
+## Near-10 doctrine
+
+“≈10/10” is an operational release standard, not a claim that automated generation is infallible. It means ScrollLibrary refuses to certify a generated book while any **known critical defect** remains.
+
+The universal contract therefore treats the following as fail-closed defects:
+
+- fabricated or unsupported material factual claims;
+- stale time-sensitive action guidance;
+- unverifiable laws, thresholds, statistics, acquisitions, valuations, or named real-world events;
+- categorical prescriptions presented as universal fact when scope or exceptions matter;
+- reader-visible TODO/TBD text, raw figure-generation instructions, or repeated generation notices;
+- unresolved contradictions, incomplete chapters, broken code, missing required visuals, rights failures, or production defects.
+
+For evidence-governed nonfiction, deterministic QA and the current-state evidence attestation are complementary: deterministic QA detects suspicious claim patterns and missing local evidence, while reference verification must bind traceable evidence to the current manuscript state. Neither can override a failure in the other.

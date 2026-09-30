@@ -10,6 +10,7 @@
  */
 
 export type QualifiableBookType =
+  | "text"
   | "academic"
   | "technical"
   | "reference"
@@ -38,6 +39,7 @@ export interface QualificationPolicy {
   requiresVisualAssetGate: boolean;
   requiresSpecializedGate: boolean;
   humanReviewMinimum: number;
+  humanReviewMinimumDimension: number;
 }
 
 export interface ProviderQualificationSample {
@@ -80,6 +82,7 @@ export interface ProviderQualificationSample {
   humanReview?: {
     reviewer: string;
     score: number; // 0-10
+    minimumDimension: number; // weakest rubric dimension, 0-10
     criticalIssues: number;
   };
 }
@@ -105,19 +108,32 @@ export interface BookTypeQualificationResult {
 }
 
 const BASE_POLICY = {
-  minimumEditorialScore: 85,
-  minimumPublishabilityScore: 92,
-  maximumChapterFailureRate: 0.05,
-  maximumRegenerationRate: 0.15,
-  humanReviewMinimum: 8.5,
+  // ≈10/10 means no critical defect may be averaged away by attractive prose.
+  minimumEditorialScore: 95,
+  minimumPublishabilityScore: 98,
+  maximumChapterFailureRate: 0.02,
+  maximumRegenerationRate: 0.05,
+  humanReviewMinimum: 9.5,
+  humanReviewMinimumDimension: 9.0,
 } as const;
 
 export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPolicy> = {
+  text: {
+    bookType: "text",
+    releaseOrder: 1,
+    minimumSamples: 5,
+    minimumHumanReviewedSamples: 3,
+    ...BASE_POLICY,
+    requiresEvidenceGate: false,
+    requiresTechnicalCodeCoverage: false,
+    requiresVisualAssetGate: false,
+    requiresSpecializedGate: true,
+  },
   academic: {
     bookType: "academic",
-    releaseOrder: 1,
-    minimumSamples: 3,
-    minimumHumanReviewedSamples: 2,
+    releaseOrder: 2,
+    minimumSamples: 5,
+    minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
     requiresEvidenceGate: true,
     requiresTechnicalCodeCoverage: false,
@@ -126,9 +142,9 @@ export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPo
   },
   technical: {
     bookType: "technical",
-    releaseOrder: 2,
-    minimumSamples: 3,
-    minimumHumanReviewedSamples: 2,
+    releaseOrder: 3,
+    minimumSamples: 5,
+    minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
     requiresEvidenceGate: true,
     requiresTechnicalCodeCoverage: true,
@@ -137,9 +153,9 @@ export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPo
   },
   reference: {
     bookType: "reference",
-    releaseOrder: 3,
-    minimumSamples: 3,
-    minimumHumanReviewedSamples: 2,
+    releaseOrder: 4,
+    minimumSamples: 5,
+    minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
     requiresEvidenceGate: true,
     requiresTechnicalCodeCoverage: false,
@@ -148,9 +164,9 @@ export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPo
   },
   professional: {
     bookType: "professional",
-    releaseOrder: 4,
-    minimumSamples: 3,
-    minimumHumanReviewedSamples: 2,
+    releaseOrder: 5,
+    minimumSamples: 5,
+    minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
     requiresEvidenceGate: true,
     requiresTechnicalCodeCoverage: false,
@@ -159,9 +175,9 @@ export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPo
   },
   bestseller: {
     bookType: "bestseller",
-    releaseOrder: 5,
-    minimumSamples: 3,
-    minimumHumanReviewedSamples: 2,
+    releaseOrder: 6,
+    minimumSamples: 5,
+    minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
     requiresEvidenceGate: false,
     requiresTechnicalCodeCoverage: false,
@@ -170,9 +186,9 @@ export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPo
   },
   workbook: {
     bookType: "workbook",
-    releaseOrder: 6,
-    minimumSamples: 3,
-    minimumHumanReviewedSamples: 2,
+    releaseOrder: 7,
+    minimumSamples: 5,
+    minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
     requiresEvidenceGate: false,
     requiresTechnicalCodeCoverage: false,
@@ -181,9 +197,9 @@ export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPo
   },
   illustrated: {
     bookType: "illustrated",
-    releaseOrder: 7,
-    minimumSamples: 3,
-    minimumHumanReviewedSamples: 2,
+    releaseOrder: 8,
+    minimumSamples: 5,
+    minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
     requiresEvidenceGate: false,
     requiresTechnicalCodeCoverage: false,
@@ -192,11 +208,11 @@ export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPo
   },
   children: {
     bookType: "children",
-    releaseOrder: 8,
-    minimumSamples: 3,
-    minimumHumanReviewedSamples: 2,
+    releaseOrder: 9,
+    minimumSamples: 5,
+    minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
-    maximumRegenerationRate: 0.20,
+    maximumRegenerationRate: 0.05,
     requiresEvidenceGate: false,
     requiresTechnicalCodeCoverage: false,
     requiresVisualAssetGate: true,
@@ -204,12 +220,12 @@ export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPo
   },
   comic: {
     bookType: "comic",
-    releaseOrder: 9,
+    releaseOrder: 10,
     minimumSamples: 5,
     minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
-    maximumChapterFailureRate: 0.03,
-    maximumRegenerationRate: 0.20,
+    maximumChapterFailureRate: 0.02,
+    maximumRegenerationRate: 0.05,
     requiresEvidenceGate: false,
     requiresTechnicalCodeCoverage: false,
     requiresVisualAssetGate: true,
@@ -217,12 +233,12 @@ export const QUALIFICATION_POLICIES: Record<QualifiableBookType, QualificationPo
   },
   fiction: {
     bookType: "fiction",
-    releaseOrder: 10,
+    releaseOrder: 11,
     minimumSamples: 5,
     minimumHumanReviewedSamples: 3,
     ...BASE_POLICY,
-    maximumChapterFailureRate: 0.03,
-    maximumRegenerationRate: 0.20,
+    maximumChapterFailureRate: 0.02,
+    maximumRegenerationRate: 0.05,
     requiresEvidenceGate: false,
     requiresTechnicalCodeCoverage: false,
     requiresVisualAssetGate: false,
@@ -349,6 +365,17 @@ export function evaluateQualificationSample(
       );
     }
     if (
+      !Number.isFinite(sample.humanReview.minimumDimension)
+      || sample.humanReview.minimumDimension < 0
+      || sample.humanReview.minimumDimension > 10
+    ) {
+      blockers.push("human review minimum dimension must be between 0 and 10");
+    } else if (sample.humanReview.minimumDimension < policy.humanReviewMinimumDimension) {
+      blockers.push(
+        `weakest human-review dimension ${sample.humanReview.minimumDimension.toFixed(1)} < ${policy.humanReviewMinimumDimension.toFixed(1)}`,
+      );
+    }
+    if (
       !Number.isInteger(sample.humanReview.criticalIssues)
       || sample.humanReview.criticalIssues < 0
     ) {
@@ -384,6 +411,9 @@ export function evaluateBookTypeQualification(
       && Number.isFinite(review.score)
       && review.score >= policy.humanReviewMinimum
       && review.score <= 10
+      && Number.isFinite(review.minimumDimension)
+      && review.minimumDimension >= policy.humanReviewMinimumDimension
+      && review.minimumDimension <= 10
       && review.criticalIssues === 0;
   }).length;
 

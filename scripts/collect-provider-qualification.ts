@@ -343,28 +343,29 @@ for (const bookId of bookIds) {
       ].filter(Boolean).join(" | ") || undefined,
     },
     humanReview: review.humanReview
-      ? {
-          reviewer: review.humanReview.reviewer,
-          criticalIssues: numeric(review.humanReview.criticalIssues),
-          score: (() => {
-            const dimensions = review.humanReview!.dimensions;
-            const values = [
-              numeric(dimensions?.contentIntegrity),
-              numeric(dimensions?.coherence),
-              numeric(dimensions?.typeFidelity),
-              numeric(dimensions?.readerValue),
-              numeric(dimensions?.editorialPolish),
-            ];
-            return values.reduce((sum, value) => sum + value, 0) / values.length;
-          })(),
-        }
+      ? (() => {
+          const dimensions = review.humanReview!.dimensions;
+          const values = [
+            numeric(dimensions?.contentIntegrity),
+            numeric(dimensions?.coherence),
+            numeric(dimensions?.typeFidelity),
+            numeric(dimensions?.readerValue),
+            numeric(dimensions?.editorialPolish),
+          ];
+          return {
+            reviewer: review.humanReview!.reviewer,
+            criticalIssues: numeric(review.humanReview!.criticalIssues),
+            score: values.reduce((sum, value) => sum + value, 0) / values.length,
+            minimumDimension: Math.min(...values),
+          };
+        })()
       : undefined,
   });
 }
 
 const result = evaluateBookTypeQualification(bookType, samples);
 const output = {
-  schemaVersion: 1,
+  schemaVersion: 2,
   generatedAt: new Date().toISOString(),
   bookType,
   policy: QUALIFICATION_POLICIES[bookType],

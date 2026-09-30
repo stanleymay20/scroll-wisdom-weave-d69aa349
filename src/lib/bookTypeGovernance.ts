@@ -141,8 +141,34 @@ export interface ContentValidationResult {
   bookType: BookType;
 }
 
+const UNIVERSAL_PUBLICATION_REQUIREMENTS = [
+  'Never invent or guess factual claims, quotations, statistics, company events, laws, dates, thresholds, or citations.',
+  'Material factual claims must be traceable to evidence; uncertainty must be explicit rather than silently filled in.',
+  'Time-sensitive claims must be checked against the book evidence cutoff and identify the relevant date or period.',
+  'Distinguish binding rules from market convention, author recommendation, and illustrative examples.',
+  'No reader-visible drafting instructions, TODO/TBD markers, raw figure prompts, verification notes, or repeated AI-generation notices.',
+  'No unresolved contradictions across chapters, duplicated filler, or claims that change without explanation.',
+  'If a fact cannot be verified, narrow it, label uncertainty, or omit it — never fabricate precision.',
+] as const;
+
+const RAW_AUTHORING_DIRECTIVE_RE =
+  /(?:^|\n)\s*(?:(?:figure|diagram|chart)(?:\s+\d+)?\s*:\s*(?:a|an|create|generate|illustrate|depict|show)\b|\[(?:insert|add)\s+(?:figure|diagram|chart|image)[^\]]*\]|(?:TODO|TBD)\s*:|AI-Assisted Content Notice)/i;
+const EXPLICIT_STALE_DEADLINE_RE =
+  /\bDeadline\s*:\s*[^\n]{0,120}?\b(20\d{2})\b/gi;
+
 function countWords(content: string): number {
   return content.trim() ? content.trim().split(/\s+/).length : 0;
+}
+
+function staleDeadlineYears(content: string): number[] {
+  const currentYear = new Date().getUTCFullYear();
+  EXPLICIT_STALE_DEADLINE_RE.lastIndex = 0;
+  const years: number[] = [];
+  for (const match of content.matchAll(EXPLICIT_STALE_DEADLINE_RE)) {
+    const year = Number(match[1]);
+    if (Number.isInteger(year) && year < currentYear) years.push(year);
+  }
+  return [...new Set(years)].sort((a, b) => a - b);
 }
 
 export function validateContentAgainstBookType(
@@ -155,6 +181,25 @@ export function validateContentAgainstBookType(
   const warnings: string[] = [];
   if (!contract) {
     return { valid: false, violations: [{ code: 'INVALID_BOOK_TYPE', message: `Unknown book type: ${bookType}`, severity: 'critical' }], warnings, bookType };
+  }
+
+  if (RAW_AUTHORING_DIRECTIVE_RE.test(content)) {
+    violations.push({
+      code: 'READER_VISIBLE_AUTHORING_DIRECTIVE',
+      message: 'Reader-visible drafting, figure-generation, TODO/TBD, or repeated AI notice text must not ship.',
+      severity: 'critical',
+      suggestedFix: 'Render the asset or remove the authoring instruction before publication.',
+    });
+  }
+
+  const staleYears = staleDeadlineYears(content);
+  if (staleYears.length > 0) {
+    violations.push({
+      code: 'STALE_ACTION_DEADLINE',
+      message: `Action guidance contains expired explicit deadline year(s): ${staleYears.join(', ')}.`,
+      severity: 'critical',
+      suggestedFix: 'Use current verified dates or convert the guidance to a relative timeline.',
+    });
   }
 
   if (options?.checkWordCount && contract.wordLimits) {
@@ -230,7 +275,7 @@ export function validateRegenerationRequest(request: RegenerationRequest): { all
 export function getBookTypePromptContract(bookType: BookType): string {
   const contract = BOOK_TYPE_CONTRACTS[bookType];
   if (!contract) return '';
-  return `\n=== BOOK TYPE CONTRACT ${bookType.toUpperCase()} / BTG-1.0 ===\nMANDATORY:\n${contract.mandatory.map(item => `- ${item}`).join('\n')}\n\nFORBIDDEN:\n${contract.forbidden.map(item => `- ${item}`).join('\n')}\n\nSTRUCTURE:\n${contract.chapterStructure.map((item, index) => `${index + 1}. ${item}`).join('\n')}${contract.wordLimits ? `\n\nWORD RANGE: ${contract.wordLimits.min}-${contract.wordLimits.max}` : ''}\n=== END BOOK TYPE CONTRACT ===\n`;
+  return `\n=== BOOK TYPE CONTRACT ${bookType.toUpperCase()} / BTG-1.0 ===\nUNIVERSAL PUBLICATION STANDARD — ZERO CRITICAL DEFECTS:\n${UNIVERSAL_PUBLICATION_REQUIREMENTS.map(item => `- ${item}`).join('\n')}\n\nMANDATORY:\n${contract.mandatory.map(item => `- ${item}`).join('\n')}\n\nFORBIDDEN:\n${contract.forbidden.map(item => `- ${item}`).join('\n')}\n\nSTRUCTURE:\n${contract.chapterStructure.map((item, index) => `${index + 1}. ${item}`).join('\n')}${contract.wordLimits ? `\n\nWORD RANGE: ${contract.wordLimits.min}-${contract.wordLimits.max}` : ''}\n=== END BOOK TYPE CONTRACT ===\n`;
 }
 
 export function detectCrossTypeViolation(

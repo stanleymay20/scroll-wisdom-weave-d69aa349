@@ -33,6 +33,7 @@ export interface QAIssue {
     | "structure"      // chapters, headings, tables
     | "rendering"      // LaTeX, code truncation, figures, unicode
     | "citations"      // references / claims
+    | "truth"          // factual integrity, freshness, prescriptive overclaims
     | "generation"     // incomplete/mismatched generation state
     | "technical"      // executable/code quality evidence
     | "export";        // export-specific (images, formats)
@@ -184,6 +185,7 @@ function detectGenerationIssues(
         hint: "Verify, rewrite, or remove the unsupported claim before publication.",
       });
     }
+
   }
 
   return issues;
@@ -344,6 +346,68 @@ function detectCitationGaps(content: string, chapter: number): QAIssue[] {
   return [];
 }
 
+// --- Truth / freshness integrity ---------------------------------------------
+
+const RAW_AUTHORING_DIRECTIVE_RE =
+  /(?:^|\n)\s*(?:(?:figure|diagram|chart)(?:\s+\d+)?\s*:\s*(?:a|an|create|generate|illustrate|depict|show)\b|\[(?:insert|add)\s+(?:figure|diagram|chart|image)[^\]]*\]|(?:TODO|TBD)\s*:|AI-Assisted Content Notice)/i;
+
+const ABSOLUTE_PRESCRIPTIVE_RE =
+  /\b(?:the only viable choice|is non-negotiable|are non-negotiable|must always|can never|always required|never acceptable)\b/i;
+
+const MATERIAL_CLAIM_CUE_RE =
+  /\b(?:according to|reported|study|studies|data from|statistics?|research|survey|law|regulation|statute|mandatory|threshold|fine|salary|valuation|acquired|acquisition|founded|raised|revenue|gdp|population|market share|vacanc(?:y|ies)|investment)\b/i;
+
+const LEGAL_REQUIREMENT_RE =
+  /(?:\b(?:law|regulation|statute|act|directive|gdpr|dsgvo|bdsg)\b[^.\n]{0,120}\b(?:requires?|mandatory|must)\b|\b(?:required by law|legally required|statutorily required)\b)/i;
+
+const QUANTIFIED_CLAIM_RE =
+  /(?:[$€£]\s?\d|\b\d+(?:\.\d+)?\s?%|\b(?:19|20)\d{2}\b|\b\d{1,3}(?:,\d{3})+\b)/;
+
+const LOCAL_EVIDENCE_RE =
+  /(?:\[(?:\d{1,3}|@[a-z][\w-]*)\]|\([A-Z][^()\n,]{0,100}(?:,|\s)\s*(?:19|20)\d{2}[a-z]?\)|https?:\/\/\S+)/i;
+
+const EXPLICIT_DEADLINE_RE =
+  /\bDeadline\s*:\s*[^\n]{0,160}?\b(20\d{2})\b/gi;
+
+function stripCodeAndReferenceBlocks(content: string): string {
+  return content
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/^\s*#{1,6}\s+(?:References|Bibliography|Works Cited|Sources)\s*$[\s\S]*$/im, "");
+}
+
+function detectTruthIntegrityIssues(content: string, chapter: number, requiresEvidence: boolean): QAIssue[] {
+  if (!content) return [];
+  const issues: QAIssue[] = [];
+  if (RAW_AUTHORING_DIRECTIVE_RE.test(content)) {
+    issues.push({ severity: "blocker", code: "reader_visible_authoring_directive", category: "truth", chapter, message: "Chapter " + chapter + ": reader-visible drafting/figure-generation/TODO text remains in the manuscript.", hint: "Render the requested asset or remove the drafting instruction before certification." });
+  }
+  const currentYear = new Date().getUTCFullYear();
+  const staleYears = new Set<number>();
+  EXPLICIT_DEADLINE_RE.lastIndex = 0;
+  for (const match of content.matchAll(EXPLICIT_DEADLINE_RE)) { const year = Number(match[1]); if (Number.isInteger(year) && year < currentYear) staleYears.add(year); }
+  if (staleYears.size > 0) {
+    issues.push({ severity: "blocker", code: "stale_action_deadline", category: "truth", chapter, message: "Chapter " + chapter + ": action guidance contains expired explicit deadline year(s): " + [...staleYears].sort().join(", ") + ".", hint: "Convert fixed historical deadlines to current or relative guidance and re-verify time-sensitive facts." });
+  }
+  if (!requiresEvidence) return issues;
+  const prose = stripCodeAndReferenceBlocks(content);
+  if (ABSOLUTE_PRESCRIPTIVE_RE.test(prose)) {
+    issues.push({ severity: "blocker", code: "unsupported_absolute_prescription", category: "truth", chapter, message: "Chapter " + chapter + ": categorical advice is presented as universal fact.", hint: "Distinguish law, market convention, author recommendation, and illustrative examples; qualify scope and exceptions." });
+  }
+  const paragraphs = prose.split(/\n\s*\n/).map((p) => p.trim()).filter(Boolean);
+  let uncited = 0;
+  for (const paragraph of paragraphs) {
+    if (/^#{1,6}\s/.test(paragraph)) continue;
+    const material =
+      (MATERIAL_CLAIM_CUE_RE.test(paragraph) && QUANTIFIED_CLAIM_RE.test(paragraph))
+      || /\b(?:acquired|acquisition)\b/i.test(paragraph)
+      || LEGAL_REQUIREMENT_RE.test(paragraph);
+    if (!material || LOCAL_EVIDENCE_RE.test(paragraph)) continue;
+    uncited++;
+    if (uncited <= 5) issues.push({ severity: "blocker", code: "uncited_material_claim", category: "truth", chapter, message: "Chapter " + chapter + ": material factual/legal/statistical claim lacks local traceable evidence.", hint: "Attach a verifiable citation/source to the claim, narrow it, label uncertainty, or remove it." });
+  }
+  return issues;
+}
+
 // --- Orchestrator ------------------------------------------------------------
 
 function toQAIssue(i: ContentIssue, category: QAIssue["category"]): QAIssue {
@@ -365,7 +429,7 @@ function fromExportIssue(i: ExportIssue): QAIssue {
 
 export function auditBookForPublishability(
   chapters: QAChapterInput[],
-  options: { hasCover: boolean; bookType?: string | null; expectedChapterCount?: number | null } = { hasCover: false },
+  options: { hasCover: boolean; bookType?: string | null; expectedChapterCount?: number | null; requiresEvidence?: boolean } = { hasCover: false },
 ): QAReport {
   const issues: QAIssue[] = [];
 
@@ -379,6 +443,7 @@ export function auditBookForPublishability(
     }
     issues.push(...detectRenderingIssues(ch.content ?? "", ch.chapter_number));
     issues.push(...detectCitationGaps(ch.content ?? "", ch.chapter_number));
+    issues.push(...detectTruthIntegrityIssues(ch.content ?? "", ch.chapter_number, options.requiresEvidence === true));
 
     for (const codeIssue of detectDeterministicCodeIssues(ch.content ?? "")) {
       issues.push({
