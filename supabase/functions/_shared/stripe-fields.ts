@@ -65,3 +65,22 @@ export function invoiceSubscriptionId(invoice: InvoiceLike | null | undefined): 
   if (!ref) return null;
   return typeof ref === "string" ? ref : ref.id ?? null;
 }
+
+
+/**
+ * Generation-plan access is granted only when Stripe says the subscription is
+ * actually active (including an explicit trial). Payment-pending, past-due,
+ * paused and unpaid states never unlock metered features.
+ */
+export function subscriptionStatusGrantsAccess(status: string | null | undefined): boolean {
+  return status === "active" || status === "trialing";
+}
+
+/**
+ * A non-terminal subscription in a billing domain blocks creation of another
+ * Checkout subscription in that same domain. This prevents double billing
+ * while still allowing a genuinely ended subscription to be replaced.
+ */
+export function subscriptionStatusBlocksNewCheckout(status: string | null | undefined): boolean {
+  return status !== "canceled" && status !== "incomplete_expired";
+}
