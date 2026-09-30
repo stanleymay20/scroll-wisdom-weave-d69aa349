@@ -81,7 +81,7 @@ export const BOOK_TYPE_CONTRACTS: Record<BookType, BookTypeContract> = {
     mandatory: ['Simple language', 'Short sentences', 'Visual-first storytelling', 'Clear lesson/message'],
     forbidden: ['Uncontextualized graphic violence', 'Adult sexual themes', 'Dense academic language', 'Long complex paragraphs'],
     chapterStructure: ['Scene Setup', 'Story Beat with Illustration', 'Character Action', 'Lesson / Message'],
-    wordLimits: { min: 100, max: 500 },
+    wordLimits: { min: 800, max: 1500 },
     requiresCitations: false, requiresImages: true, requiresCode: false, requiresInteractivity: false,
     validationChecks: ['simple_language', 'short_sentences', 'has_images', 'age_appropriate'],
   },

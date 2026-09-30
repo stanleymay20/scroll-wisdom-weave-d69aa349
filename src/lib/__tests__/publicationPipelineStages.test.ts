@@ -108,6 +108,8 @@ function happyPathHandler(fn: string): unknown {
       };
     case "proofread-chapter":
       return { success: true, changed: true, applied: 3 };
+    case "audit-code":
+      return { passed: true, result: { chapterScore: 9, riskLevel: "low" } };
     case "qa-publishability-audit":
       return { report: { status: "ready", blockerCount: 0, score: 96 } };
     case "certify-production-render":
@@ -304,5 +306,31 @@ describe("publication pipeline stages", () => {
     expect(result.ready).toBe(false);
     expect(namesOf()).not.toContain("proofread-chapter");
     expect(result.blockers.join(" ")).toMatch(/chapters are generated/i);
+  });
+
+  it("audits final stored code after proofreading and before publishability QA", async () => {
+    const evidence = await import("@/lib/publicationEvidence");
+    const codeChapters = [
+      {
+        ...CHAPTERS[0],
+        content: "Intro\n\n\x60\x60\x60python\nprint('ok')\n\x60\x60\x60",
+      },
+      CHAPTERS[1],
+    ];
+    vi.mocked(evidence.loadEvidenceChapters).mockResolvedValue(codeChapters as never);
+
+    await runPipeline();
+
+    const names = namesOf();
+    const codeAudit = names.indexOf("audit-code");
+    const lastProofread = names.lastIndexOf("proofread-chapter");
+    const qa = names.indexOf("qa-publishability-audit");
+
+    expect(codeAudit).toBeGreaterThan(lastProofread);
+    expect(codeAudit).toBeLessThan(qa);
+    expect(invokeCalls.filter((call) => call.fn === "audit-code")).toHaveLength(1);
+    expect(invokeCalls.find((call) => call.fn === "audit-code")?.body.chapterId).toBe("ch-1");
+
+    vi.mocked(evidence.loadEvidenceChapters).mockResolvedValue(CHAPTERS as never);
   });
 });

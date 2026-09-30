@@ -258,7 +258,7 @@ Deno.serve(async (req) => {
     const filename = `publication-certificate-${(work?.title ?? "untitled")
       .toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "").slice(0, 60)}-v${pub.version}.pdf`;
 
-    return new Response(bytes, {
+    return new Response(new Uint8Array(bytes).buffer, {
       status: 200,
       headers: {
         ...corsHeaders,

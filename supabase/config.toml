@@ -6,6 +6,9 @@ verify_jwt = false
 [functions.generate-chapter]
 verify_jwt = false
 
+[functions.generation-worker]
+verify_jwt = false
+
 [functions.generate-cover]
 verify_jwt = false
 
@@ -170,16 +173,21 @@ verify_jwt = false
 [functions.ai-publishing-bridge]
 verify_jwt = false
 
+# Authenticated first-party telemetry bridge. Bearer validation is handled
+# internally with requireUser(); outbound requests are HMAC-signed.
+[functions.relay-growth-event]
+verify_jwt = false
+
 # OAuth 2.1 identity provider for authenticated MCP clients.
-# Production enablement remains deployment-gated: verify ES256/RS256 signing
-# and the production Auth Site URL before pushing this configuration live.
+# Production enablement requires verified asymmetric signing and the canonical
+# ScrollLibrary Auth Site URL; the connector itself remains capability-bounded.
 [auth.oauth_server]
 enabled = true
 authorization_url_path = "/oauth/consent"
 allow_dynamic_registration = true
 
-# MCP OAuth discovery and token validation are performed inside the function
-# by @supabase/server middleware. Gateway JWT verification must remain off so
-# unauthenticated clients can reach RFC 9728 protected-resource metadata.
+# MCP OAuth discovery and token validation occur inside the function through
+# @supabase/server middleware. Gateway verification stays off so RFC 9728
+# protected-resource metadata remains reachable before authentication.
 [functions.mcp]
 verify_jwt = false

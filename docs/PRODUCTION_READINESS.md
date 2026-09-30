@@ -11,7 +11,7 @@ ScrollLibrary is eligible for a GA decision only when every required control bel
 | Browser journeys | CI `e2e` against deterministic local services | Staging smoke run for auth, checkout, generation, export, account deletion, and administrative authorization |
 | Supply-chain security | CI audits the locked production dependency graph, scans committed secrets, and runs `CodeQL` | Enable GitHub Dependency Graph/Dependabot and review any platform security alerts; development-tool advisories remain visible for scheduled upgrade work |
 | Performance regression | `build` enforces bundle budgets | Staging Web Vitals and load-test report |
-| Artifact provenance | `dist/release.json` and commit-addressed CI artifact. Every build, including a hosted rebuild, serves `/release.json` with `commit` and `commitSource`; only the CI artifact also lists per-file digests | Deployment record containing commit SHA, artifact digest, environment, actor, and timestamp |
+| Artifact provenance | `dist/release.json` and commit-addressed CI artifact. Every build, including a hosted rebuild, serves `/release.json` with `commit`, `commitSource`, and a deterministic `sourceFingerprint`; only the CI artifact also lists per-file digests | Deployment record containing commit SHA when available, source fingerprint, artifact digest, environment, actor, and timestamp |
 | Recovery | Not safely automatable from source control | Successful backup restore rehearsal and rollback exercise |
 
 ## Promotion policy
@@ -21,12 +21,20 @@ ScrollLibrary is eligible for a GA decision only when every required control bel
 3. Apply migrations to staging and run database advisors. Resolve all security findings and material performance findings.
 4. Execute the staging critical-journey checklist and record evidence against the commit in the release issue.
 5. Obtain release-owner approval, then promote the same artifact digest to production.
-6. Verify `/release.json` reports the intended commit and run production read-only smoke tests. A `commitSource` of `unavailable` means the build could not identify itself: treat the commit as unknown, not as current.
+6. Verify `/release.json` against the exact-head CI release manifest and run production read-only smoke tests. Prefer an exact `commit` match. When hosted infrastructure strips Git metadata and `commitSource` is `unavailable`, the deployment is acceptable only when `sourceFingerprint` exactly matches the CI manifest for the intended commit; otherwise treat the deployed source as unknown.
 7. Roll back immediately if authentication, authorization, checkout, publication, export, or deletion verification fails.
 
 Dependency exceptions live in `security/audit-exceptions.json`, are advisory-specific, and expire automatically. A new advisory always fails CI; renewal requires an explicit code review and updated risk rationale.
 
 The lint warning ceiling is pinned to the current legacy baseline. Any added warning fails CI; the ceiling must only move downward as warnings are repaired.
+
+## Hosted-build provenance
+
+Lovable-hosted Vite builds do not reliably expose a Git commit SHA or a readable `.git` directory. ScrollLibrary therefore emits a deterministic SHA-256 `sourceFingerprint` over the production-affecting repository inputs in both CI and every hosted build.
+
+A source fingerprint is evidence of source equivalence, not a replacement for a Git commit. GA evidence for a hosted rebuild must record the intended Git commit and prove that production's `sourceFingerprint` equals the fingerprint in that commit's CI release artifact. A missing or mismatched fingerprint is a release blocker.
+
+The `GA Production Verification` workflow performs this comparison against `https://scrolllibrary.org/release.json` and also requires a successful exact-head Stripe test-mode lifecycle before the release can be certified.
 
 ## Critical staging journeys
 

@@ -79,7 +79,7 @@ serve(async (req) => {
     }
 
     if (userTier !== "premium" && userTier !== "prophet_tier") {
-      return new Response(JSON.stringify({ error: "Cinematic video requires Premium or Institutional plan" }), {
+      return new Response(JSON.stringify({ error: "Cinematic video requires Pro or Teams plan" }), {
         status: 403, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
@@ -108,7 +108,7 @@ serve(async (req) => {
 
       if ((count ?? 0) >= videoQuota) {
         return new Response(JSON.stringify({
-          error: `Monthly cinematic video limit reached (${videoQuota}). ${userTier === "premium" ? "Upgrade to Institutional for more." : "Limit resets next month."}`,
+          error: `Monthly cinematic video limit reached (${videoQuota}). ${userTier === "premium" ? "Upgrade to Teams for more." : "Limit resets next month."}`,
         }), { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } });
       }
     }
@@ -122,7 +122,7 @@ serve(async (req) => {
         .eq("user_id", userId)
         .gte("created_at", `${currentMonth}-01T00:00:00Z`);
 
-      // Rough cost estimate: each op ~$0.03 avg, Premium revenue $19, Institutional $79
+      // Rough cost estimate: each op ~$0.03 avg, Pro revenue $19, Teams $79
       const estimatedCost = (totalOps ?? 0) * 0.03;
       const revenueThreshold = userTier === "prophet_tier" ? 79 * 0.6 : 19 * 0.6;
 

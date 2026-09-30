@@ -13,6 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  RELEASE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   BUN_VERSION: 1.2.23
   DENO_VERSION: 2.9.6
   SUPABASE_CLI_VERSION: 2.111.0
@@ -23,6 +24,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -34,6 +37,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -45,6 +50,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -56,6 +63,8 @@ jobs:
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -68,6 +77,8 @@ jobs:
     timeout-minutes: 25
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - name: Install pinned Supabase CLI
         uses: supabase/setup-cli@v3.0.0
         with:
@@ -113,6 +124,8 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
       - name: Apply and behaviorally verify Lovable publication-attestation authority delta
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-lovable-attestation-authority.sql
+      - name: Assert business books require factual publication evidence
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-business-evidence-policy.sql
       - name: Apply and verify Lovable ISBN governance RPC delta
         run: |
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-lovable-isbn-governance-rpcs.sql
@@ -129,8 +142,12 @@ jobs:
           psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-isbn-independent-review.sql
       - name: Assert atomic book-generation quota reservation contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-book-generation-quota-db-security.sql
+      - name: Assert expired workers and stale revisions cannot overwrite chapters
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-generated-chapter-fencing.sql
       - name: Assert durable rate limit and stale-job sweeper contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-rate-limit-and-sweeper-db-security.sql
+      - name: Assert internal SECURITY DEFINER RPCs stay server-owned
+        run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-ga-internal-rpc-privileges.sql
       - name: Assert Germany publication-compliance security contract
         run: psql "postgresql://postgres:postgres@127.0.0.1:54322/postgres" -v ON_ERROR_STOP=1 -f scripts/test-de-publication-compliance.sql
       - name: Fail on PostgreSQL function and schema errors
@@ -141,6 +158,8 @@ jobs:
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -149,14 +168,14 @@ jobs:
       - uses: denoland/setup-deno@v2
         with:
           deno-version: ${{ env.DENO_VERSION }}
-      - name: Install frozen Edge dependency graph
+      - name: Verify frozen Edge dependency lock
         shell: bash
         run: |
           set -euo pipefail
           cd supabase/functions
           mapfile -d '' entries < <(find . -type f -name '*.ts' -print0 | sort -z)
           test "${#entries[@]}" -gt 0
-          deno install --config deno.json --entrypoint --frozen "${entries[@]}"
+          deno install --config deno.json --entrypoint --lockfile-only --frozen "${entries[@]}"
       - name: Type-check shared Edge boundary and error tracking
         run: |
           deno check supabase/functions/_shared/error-tracking.ts
@@ -191,6 +210,7 @@ jobs:
         run: |
           deno check supabase/functions/generate-book/index.ts
           deno check supabase/functions/generate-chapter/index.ts
+          deno check supabase/functions/generation-worker/index.ts
           deno check supabase/functions/ai-publishing-bridge/index.ts
           deno check --config supabase/functions/mcp/deno.json supabase/functions/mcp/index.ts
           deno check supabase/functions/generate-cover/index.ts
@@ -261,8 +281,24 @@ jobs:
           deno test supabase/functions/_shared/figure-data_test.ts
           deno test supabase/functions/_shared/figure-layout_test.ts
           deno test supabase/functions/_shared/figure-export_test.ts
+          deno test supabase/functions/_shared/qaPublishability_test.ts
+          deno test supabase/functions/_shared/outline-normalizer_test.ts
+          deno test supabase/functions/_shared/technical-code-quality_test.ts
+          deno test supabase/functions/_shared/fiction-context_test.ts
+          deno test supabase/functions/_shared/children-contract_test.ts
+          deno test supabase/functions/_shared/provider-qualification_test.ts
+          deno test supabase/functions/_shared/authority-validator_workbook_test.ts
           deno test supabase/functions/_shared/cron-auth_test.ts
           deno test supabase/functions/_shared/stripe-connect_test.ts
+      - name: Pin production Stripe webhook event contract
+        run: node scripts/check-stripe-webhook-event-contract.mjs
+      - name: Test GA financial release switches
+        run: deno test supabase/functions/_shared/ga-release-flags_test.ts
+      - name: Red-team direct generation handler boundaries
+        run: deno test -A --no-check --config supabase/functions/deno.json scripts/test-generation-boundaries.ts
+      - name: Test GA external-payment switch
+        run: deno test supabase/functions/_shared/ga-release-flags_test.ts
+
       - name: Test Stripe catalogue and API-shape compatibility
         run: |
           deno test supabase/functions/_shared/stripe-catalogue_test.ts
@@ -286,6 +322,8 @@ jobs:
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -295,7 +333,7 @@ jobs:
       - name: Upload commit-addressed release artifact
         uses: actions/upload-artifact@v7
         with:
-          name: web-release-${{ github.sha }}
+          name: web-release-${{ env.RELEASE_COMMIT_SHA }}
           path: dist/
           if-no-files-found: error
           retention-days: 30
@@ -308,6 +346,8 @@ jobs:
       VITE_SUPABASE_PUBLISHABLE_KEY: ${{ secrets.CI_SUPABASE_PUBLISHABLE_KEY || 'ci-public-placeholder' }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
       - uses: oven-sh/setup-bun@v2
         with:
           bun-version: ${{ env.BUN_VERSION }}
@@ -331,6 +371,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
         with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
           fetch-depth: 0
       - uses: oven-sh/setup-bun@v2
         with:
@@ -346,10 +387,16 @@ jobs:
         run: bun run audit:function-reachability
       - name: Enforce proposal-only MCP OAuth capability boundary
         run: bun scripts/check-mcp-oauth-capability-boundary.mjs
+      - name: Enforce generated-book qualification release wiring
+        run: bun run audit:provider-qualification-gates
+      - name: Compile qualification evidence collector
+        run: bun build scripts/collect-provider-qualification.ts --target=node --outdir=/tmp/provider-qualification-build
       - name: Reject Deno test files no workflow runs
         run: bun run audit:deno-tests
       - name: Reject email-based Stripe customer ownership
         run: bun scripts/check-billing-customer-identity.mjs
+      - name: Pin public billing package and duplicate-subscription guard
+        run: bun scripts/check-billing-package-contract.mjs
       - name: Reject browser publication authority
         run: bun scripts/check-browser-publication-authority.mjs
       - name: Reject high or critical production dependency vulnerabilities

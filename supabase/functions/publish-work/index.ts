@@ -6,6 +6,7 @@ import { hasCapability, denyResponse } from "../_shared/permissions.ts";
 import { logAuthorshipEvent } from "../_shared/authorshipGuard.ts";
 import { runPublicationGuard } from "../_shared/layout/index.ts";
 import { newScrollIdentifier } from "../_shared/scroll-identity.ts";
+import { publicationMintEnabled } from "../_shared/ga-release-flags.ts";
 
 const Body = z.object({
   work_id: z.string().uuid(),
@@ -38,6 +39,13 @@ async function latestGatePassed(sc: Service, bookId: string, scopeHash: string, 
 Deno.serve(async (req) => {
   const pre = preflight(req); if (pre) return pre;
   try {
+    if (!publicationMintEnabled()) {
+      return json({
+        error: "publication_disabled",
+        code: "GA_PUBLICATION_MINT_DISABLED",
+        reason: "Canonical publication and ISBN minting are outside the current GA launch scope.",
+      }, 503);
+    }
     const auth = await requireUser(req); if (auth instanceof Response) return auth;
     const body = await validateBody(req, Body); if (body instanceof Response) return body;
 

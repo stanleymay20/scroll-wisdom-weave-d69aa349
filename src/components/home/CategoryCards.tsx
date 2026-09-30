@@ -1,25 +1,18 @@
 import { motion } from "framer-motion";
 import { Link } from "react-router-dom";
-import { Upload, Sparkles, Database } from "lucide-react";
+import { Sparkles, Database } from "lucide-react";
 
 const cards = [
   {
-    title: "My Library",
-    description: "Your personal collection of uploaded books and generated study guides, with reading progress and mastery tracking.",
+    title: "Your Library",
+    description: "Keep your created books together, continue reading, and return to the same project as it develops.",
     icon: Database,
     to: "/library",
     gradient: "from-blue-500 to-blue-700",
   },
   {
-    title: "Upload a Book",
-    description: "Upload PDF or EPUB textbooks. We parse chapters, enable highlights, notes, and generate quizzes automatically.",
-    icon: Upload,
-    to: "/upload",
-    gradient: "from-sky-400 to-cyan-600",
-  },
-  {
-    title: "Generate Study Guide",
-    description: "Enter any topic and get a structured book with chapters, summaries, quizzes, and a mastery certificate.",
+    title: "Create a Book",
+    description: "Start with a topic and build a structured multi-chapter book in one workspace, with learning tools available when you need them.",
     icon: Sparkles,
     to: "/generate",
     gradient: "from-indigo-500 to-purple-600",
@@ -30,7 +23,7 @@ export function CategoryCards() {
   return (
     <section className="py-12 bg-background">
       <div className="container mx-auto px-4 max-w-6xl">
-        <div className="grid md:grid-cols-3 gap-5">
+        <div className="grid md:grid-cols-2 gap-5 max-w-4xl mx-auto">
           {cards.map((card, i) => (
             <motion.div
               key={card.title}

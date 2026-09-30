@@ -12,7 +12,8 @@
     "@babel/plugin-transform-modules-systemjs": ">7.29.3 <8",
     "nanoid": ">=3.3.16 <4",
     "postcss": ">8.5.11 <9",
-    "browserslist": ">4.28.6 <5"
+    "browserslist": ">4.28.6 <5",
+    "undici": "7.29.1"
   },
   "scripts": {
     "dev": "vite",
@@ -35,7 +36,9 @@
     "audit:contracts": "bun scripts/check-contract-parity.mjs",
     "audit:dependencies": "bun scripts/check-dependency-audit.mjs",
     "audit:bundle": "bun scripts/check-bundle-budget.mjs",
-    "ci": "bun run typecheck && bun run lint && bun run test && bun run audit:contracts && bun run audit:edge-auth && bun run audit:function-reachability && bun run audit:deno-tests && bun run build:release && bun run audit:secrets && bun run audit:dependencies"
+    "ci": "bun run typecheck && bun run lint && bun run test && bun run audit:contracts && bun run audit:edge-auth && bun run audit:function-reachability && bun run audit:deno-tests && bun run build:release && bun run audit:secrets && bun run audit:dependencies",
+    "qualification:collect": "bun scripts/collect-provider-qualification.ts",
+    "audit:provider-qualification-gates": "node scripts/check-provider-qualification-gates.mjs"
   },
   "dependencies": {
     "@hookform/resolvers": "^3.10.0",

@@ -10,6 +10,7 @@ import { CollaborationPanel } from "@/components/books/CollaborationPanel";
 import { CustomCoverUploadButton } from "@/components/books/CustomCoverUploadButton";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { supabase } from "@/integrations/supabase/client";
+import { FEATURES } from "@/lib/config";
 
 interface BookData {
   id: string;
@@ -90,7 +91,7 @@ export function BookDetailHeader({
               <p className="text-sm text-muted-foreground text-center">No cover yet</p>
             </div>
           )}
-          {isOwner && !book.current_publication_id && (
+          {FEATURES.enableCustomCover && isOwner && !book.current_publication_id && (
             <div className="absolute inset-x-0 bottom-0 p-3 bg-background/70 backdrop-blur-sm border-t border-border/50">
               <div className="flex flex-col gap-2">
                 <input
@@ -175,14 +176,16 @@ export function BookDetailHeader({
           <Button variant="gold-outline" size="lg" onClick={onSaveToLibrary}>
             <Bookmark className={`h-5 w-5 mr-2 ${isSaved ? "fill-current" : ""}`} />{isSaved ? t('book.saved') : t('book.saveToLibrary')}
           </Button>
-          <ExportDialog
-            bookId={book.id} title={book.title}
-            hasGeneratedChapters={chapters.some(ch => ch.is_generated)}
-            coverImageUrl={book.cover_image_url} authorName={book.author_ai_agent || undefined}
-            bookType={book.book_type || 'text'}
-            chapterContents={chapters.filter(ch => ch.is_generated).map(ch => ch.content || '')}
-            chapters={chapters.filter(ch => ch.is_generated).map(ch => ({ chapter_number: ch.chapter_number, content: ch.content }))}
-          />
+          {FEATURES.enableExports && (
+            <ExportDialog
+              bookId={book.id} title={book.title}
+              hasGeneratedChapters={chapters.some(ch => ch.is_generated)}
+              coverImageUrl={book.cover_image_url} authorName={book.author_ai_agent || undefined}
+              bookType={book.book_type || 'text'}
+              chapterContents={chapters.filter(ch => ch.is_generated).map(ch => ch.content || '')}
+              chapters={chapters.filter(ch => ch.is_generated).map(ch => ({ chapter_number: ch.chapter_number, content: ch.content }))}
+            />
+          )}
           <ShareDialog title={book.title} bookId={book.id} description={book.description || undefined} />
           <CollaborationPanel bookId={book.id} userId={book.user_id} />
           <ReportContentDialog contentType="book" contentId={book.id} contentTitle={book.title} />

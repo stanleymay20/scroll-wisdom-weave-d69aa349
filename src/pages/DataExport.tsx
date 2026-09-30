@@ -1,9 +1,9 @@
 /**
  * /account/data-export — GDPR Subject Access Request
  *
- * One-click export of every piece of user-owned data: profile, library,
- * highlights, bookmarks, reading sessions, SRS cards, competency profile,
- * concept states, quiz attempts, certificates, audit log entries.
+ * One-click self-service portability package: account/profile, library,
+ * reading and learning evidence, certificates, commerce, and creator records.
+ * Security credentials and anti-abuse-only signals stay out of browser downloads.
  *
  * Calls the `export-user-data` edge function which assembles a JSON dump
  * server-side using the service role (so RLS policies don't truncate it).
@@ -71,9 +71,9 @@ export default function DataExport() {
             Export your data
           </h1>
           <p className="text-sm text-muted-foreground max-w-xl">
-            Download a complete machine-readable copy of everything we hold about you —
-            your profile, library, reading sessions, SRS cards, mastery scores, certificates,
-            and audit history. One JSON file. No questions asked.
+            Download a machine-readable portability package with your account, library,
+            reading and learning records, certificates, purchases, subscriptions, and creator data.
+            One JSON file, prepared from the authoritative server-side records.
           </p>
         </motion.div>
 
@@ -87,11 +87,11 @@ export default function DataExport() {
                 <h2 className="text-base font-semibold text-foreground">What's included</h2>
                 <ul className="text-sm text-muted-foreground space-y-1 list-disc pl-4">
                   <li>Profile, settings, and learning preferences</li>
-                  <li>Library, bookmarks, highlights, and reading sessions</li>
+                  <li>Library, bookmarks, highlights, reading sessions, and per-chapter progress</li>
                   <li>Spaced-repetition cards (FSRS state)</li>
                   <li>Quiz attempts, learning progress, and competency profile</li>
                   <li>Concept-graph mastery (per book)</li>
-                  <li>Certificates issued and audit-log entries you initiated</li>
+                  <li>Certificates, purchases, subscriptions, creator records, and audit entries you initiated</li>
                 </ul>
               </div>
             </div>
@@ -119,7 +119,8 @@ export default function DataExport() {
             <p>
               <strong className="text-foreground">Your rights.</strong> Under the GDPR you may request
               access to (Art. 15), portability of (Art. 20), and erasure of (Art. 17) your personal data.
-              Use the button above for access &amp; portability. To erase, visit{' '}
+              Use the button above for self-service portability. For a broader Article 15 access review,
+              email privacy@scrolllibrary.org. To erase, visit{' '}
               <a href="/account/delete" className="text-primary hover:underline">
                 Delete account
               </a>
@@ -127,7 +128,7 @@ export default function DataExport() {
             </p>
             <p>
               For requests we can&apos;t fulfill self-serve, contact{' '}
-              <a href="/contact" className="text-primary hover:underline">privacy@scrolllibrary</a>.
+              <a href="mailto:privacy@scrolllibrary.org" className="text-primary hover:underline">privacy@scrolllibrary.org</a>.
               We respond within 30 days.
             </p>
           </CardContent>

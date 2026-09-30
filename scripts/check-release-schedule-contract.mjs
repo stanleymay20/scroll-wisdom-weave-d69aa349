@@ -4,6 +4,7 @@ const page = readFileSync("src/pages/BookPublishSettings.tsx", "utf8");
 const worker = readFileSync("supabase/functions/materialize-release-schedules/index.ts", "utf8");
 const migration = readFileSync("supabase/migrations/20260920180000_schedule_release_materialization.sql", "utf8");
 const entitlementRls = readFileSync("supabase/migrations/20260923123000_release_schedule_entitlement_rls.sql", "utf8");
+const gaWriteLock = readFileSync("supabase/migrations/20260929121000_ga_disable_browser_release_schedule_writes.sql", "utf8");
 const lifecycle = readFileSync("scripts/test-release-materialization.sql", "utf8");
 
 const failures = [];
@@ -39,6 +40,10 @@ for (const policy of [
 requireText(entitlementRls, "AS RESTRICTIVE", "restrictive RLS composition");
 requireText(entitlementRls, "public.get_user_entitlements", "canonical entitlement evaluation");
 requireText(entitlementRls, "can_schedule_releases", "paid scheduling entitlement");
+requireText(gaWriteLock, "REVOKE INSERT, UPDATE, DELETE", "GA browser scheduling write revocation");
+requireText(gaWriteLock, "FROM PUBLIC, anon, authenticated", "GA browser scheduling role boundary");
+requireText(gaWriteLock, "GRANT ALL ON TABLE public.release_schedules TO service_role", "service-owned schedule authority");
+requireText(gaWriteLock, "GRANT ALL ON TABLE public.release_schedule_items TO service_role", "service-owned schedule item authority");
 
 requireText(lifecycle, "canonical release materialization cron job is missing or misconfigured", "cron registration assertion");
 requireText(lifecycle, "second pass should find nothing", "materializer idempotency assertion");

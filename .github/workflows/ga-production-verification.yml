@@ -1,0 +1,225 @@
+name: GA Production Verification
+
+on:
+  workflow_dispatch:
+    inputs:
+      release_ref:
+        description: Git ref that production is expected to serve
+        required: true
+        default: main
+      site_url:
+        description: Production site origin
+        required: true
+        default: https://scrolllibrary.org
+      functions_url:
+        description: Production Supabase Edge Functions origin
+        required: true
+        default: https://lrricdforqfkaaciammv.supabase.co/functions/v1
+
+permissions:
+  contents: read
+  actions: read
+
+env:
+  SITE_URL: ${{ inputs.site_url }}
+  FUNCTIONS_URL: ${{ inputs.functions_url }}
+
+jobs:
+  verify-production:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout release candidate
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.release_ref }}
+          fetch-depth: 1
+
+      - name: Resolve exact release source identity
+        id: source
+        shell: bash
+        run: |
+          set -euo pipefail
+          release_sha="$(git rev-parse HEAD)"
+          fingerprint="$(node --input-type=module -e "import { computeSourceFingerprint } from './scripts/source-fingerprint.mjs'; process.stdout.write(computeSourceFingerprint().value)")"
+          file_count="$(node --input-type=module -e "import { computeSourceFingerprint } from './scripts/source-fingerprint.mjs'; process.stdout.write(String(computeSourceFingerprint().files))")"
+          {
+            echo "release_sha=$release_sha"
+            echo "fingerprint=$fingerprint"
+            echo "file_count=$file_count"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Fetch live release identity
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail --silent --show-error --location --retry 3 \
+            -H 'Cache-Control: no-cache' \
+            "$SITE_URL/release.json?ga_run=$GITHUB_RUN_ID" \
+            -o live-release.json
+          cat live-release.json
+
+      - name: Prove production source equals release candidate
+        env:
+          RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
+          EXPECTED_FINGERPRINT: ${{ steps.source.outputs.fingerprint }}
+          EXPECTED_FILE_COUNT: ${{ steps.source.outputs.file_count }}
+        run: |
+          node --input-type=module <<'NODE'
+          import { readFileSync } from "node:fs";
+
+          const live = JSON.parse(readFileSync("live-release.json", "utf8"));
+          const fail = (message) => {
+            console.error("::error::" + message);
+            process.exitCode = 1;
+          };
+
+          if (live.sourceFingerprint !== process.env.EXPECTED_FINGERPRINT) {
+            fail(`Production source fingerprint mismatch. expected=${process.env.EXPECTED_FINGERPRINT} actual=${live.sourceFingerprint ?? "missing"}`);
+          }
+          if (Number(live.sourceFingerprintFiles) !== Number(process.env.EXPECTED_FILE_COUNT)) {
+            fail(`Production source fingerprint file count mismatch. expected=${process.env.EXPECTED_FILE_COUNT} actual=${live.sourceFingerprintFiles ?? "missing"}`);
+          }
+          if (live.commit !== process.env.RELEASE_SHA) {
+            fail(`Production names a different commit. expected=${process.env.RELEASE_SHA} actual=${live.commit}`);
+          }
+          if (!live.buildTime || Number.isNaN(Date.parse(live.buildTime))) {
+            fail("Production release.json has no valid buildTime.");
+          }
+
+          if (!process.exitCode) {
+            console.log(`Production source matches release ${process.env.RELEASE_SHA} via ${live.commit ? "commit + fingerprint" : "source fingerprint"}.`);
+          }
+          NODE
+
+      - name: Require exact-head release workflows
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$RELEASE_SHA&per_page=100" > runs.json
+
+          required=(
+            "CI"
+            "GA Real E2E"
+            "CodeQL"
+            "EPUB Conformance"
+            "Admin Financial Boundary"
+            "Strict Null Ratchet"
+          )
+
+          for workflow in "${required[@]}"; do
+            conclusion="$(jq -r --arg name "$workflow" '
+              [.workflow_runs[] | select(.name == $name and .head_sha == env.RELEASE_SHA and .event == "push")]
+              | sort_by(.created_at) | last | .conclusion // "missing"
+            ' runs.json)"
+            if [ "$conclusion" != "success" ]; then
+              echo "::error::$workflow is not successful for exact release head $RELEASE_SHA (found: $conclusion)"
+              exit 1
+            fi
+            echo "$workflow: success"
+          done
+
+      - name: Prove production payment-write posture
+        id: payment_gate
+        shell: bash
+        run: |
+          set -euo pipefail
+          body_file="$(mktemp)"
+          code="$(curl --silent --show-error --output "$body_file" --write-out '%{http_code}' \
+            --request POST \
+            --header 'Content-Type: application/json' \
+            --data '{}' \
+            "$FUNCTIONS_URL/create-checkout" || true)"
+          body="$(cat "$body_file")"
+          echo "create-checkout probe: HTTP $code $body"
+          gate_code="$(printf '%s' "$body" | jq -r '.code // empty' 2>/dev/null || true)"
+          if [ "$code" = "503" ] && [ "$gate_code" = "ga_payments_disabled" ]; then
+            echo "disabled=true" >> "$GITHUB_OUTPUT"
+            echo "Production payment writes are fail-closed."
+          else
+            echo "disabled=false" >> "$GITHUB_OUTPUT"
+            echo "Production payment writes are open; exact-head Stripe lifecycle proof is required."
+          fi
+
+      - name: Require Stripe lifecycle to have run, not skipped when payments are open
+        if: steps.payment_gate.outputs.disabled != 'true'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          stripe_run_id="$(jq -r '
+            [.workflow_runs[]
+              | select(.name == "Stripe Test-Mode Lifecycle"
+                       and .head_sha == env.RELEASE_SHA
+                       and .event == "push")]
+            | sort_by(.created_at) | last | .id // empty
+          ' runs.json)"
+
+          if [ -z "$stripe_run_id" ]; then
+            echo "::error::No Stripe Test-Mode Lifecycle push run exists for exact release head $RELEASE_SHA."
+            exit 1
+          fi
+
+          gh api "repos/$GITHUB_REPOSITORY/actions/runs/$stripe_run_id/jobs?per_page=100" > stripe-jobs.json
+          lifecycle="$(jq -r '[.jobs[] | select(.name == "lifecycle")] | last | .conclusion // "missing"' stripe-jobs.json)"
+          if [ "$lifecycle" != "success" ]; then
+            echo "::error::Stripe lifecycle was not proven for $RELEASE_SHA (lifecycle conclusion: $lifecycle). Configure STRIPE_TEST_SECRET_KEY and rerun the exact-head Stripe workflow."
+            exit 1
+          fi
+          echo "Stripe lifecycle: success"
+
+      - name: Production public smoke
+        shell: bash
+        run: |
+          set -euo pipefail
+          for path in / /privacy /terms /help /docs/mastery-model; do
+            code="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' --retry 2 "$SITE_URL$path")"
+            if [ "$code" != "200" ]; then
+              echo "::error::$SITE_URL$path returned HTTP $code"
+              exit 1
+            fi
+            echo "$path: HTTP 200"
+          done
+
+      - name: Record GA production evidence
+        env:
+          RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
+          EXPECTED_FINGERPRINT: ${{ steps.source.outputs.fingerprint }}
+          PAYMENT_WRITES_DISABLED: ${{ steps.payment_gate.outputs.disabled }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --input-type=module <<'NODE'
+          import { readFileSync, writeFileSync } from "node:fs";
+
+          const paymentsDisabled = process.env.PAYMENT_WRITES_DISABLED === "true";
+
+          const evidence = {
+            schemaVersion: 1,
+            verifiedAt: new Date().toISOString(),
+            workflowRunId: process.env.GITHUB_RUN_ID,
+            repository: process.env.GITHUB_REPOSITORY,
+            releaseSha: process.env.RELEASE_SHA,
+            expectedSourceFingerprint: process.env.EXPECTED_FINGERPRINT,
+            production: JSON.parse(readFileSync("live-release.json", "utf8")),
+            paymentWrites: paymentsDisabled ? "disabled" : "enabled",
+            stripeLifecycle: paymentsDisabled ? "not_required_while_disabled" : "success",
+            result: "GA_PRODUCTION_VERIFICATION_PASS",
+          };
+
+          writeFileSync("ga-production-evidence.json", JSON.stringify(evidence, null, 2) + "\n");
+          NODE
+          cat ga-production-evidence.json
+
+      - name: Upload GA evidence
+        uses: actions/upload-artifact@v7
+        with:
+          name: ga-production-evidence-${{ steps.source.outputs.release_sha }}
+          path: ga-production-evidence.json
+          if-no-files-found: error
+          retention-days: 90

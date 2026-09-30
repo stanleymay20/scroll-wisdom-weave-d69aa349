@@ -135,7 +135,7 @@ const SavedDecksTab = forwardRef<HTMLDivElement, SavedDecksTabProps>(({
                     {formatDate(deck.created_at)}
                   </span>
                   <Badge variant={deck.tier === 'premium' ? 'default' : 'secondary'} className="text-[10px]">
-                    {deck.tier === 'premium' ? '⭐ Premium' : 'Basic'}
+                    {deck.tier === 'premium' ? '⭐ Pro' : 'Basic'}
                   </Badge>
                 </div>
               </div>

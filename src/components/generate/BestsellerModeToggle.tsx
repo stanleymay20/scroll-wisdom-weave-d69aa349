@@ -73,7 +73,7 @@ export function BestsellerModeToggle({
                   className="bg-muted text-muted-foreground border-border text-xs"
                 >
                   <Lock className="h-3 w-3 mr-1" />
-                  Premium
+                  Pro
                 </Badge>
               )}
             </div>

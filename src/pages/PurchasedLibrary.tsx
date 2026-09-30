@@ -56,16 +56,16 @@ export default function PurchasedLibrary() {
 
   return (
     <div className="min-h-screen bg-background">
-      <SEO title="My library" description="Books you've purchased" noindex />
+      <SEO title="My library" description="Books you've claimed or purchased" noindex />
       <div className="container mx-auto max-w-4xl px-4 py-10">
         <h1 className="text-3xl font-bold">My library</h1>
-        <p className="text-muted-foreground mt-1">Books you've purchased from the store.</p>
+        <p className="text-muted-foreground mt-1">Books you've claimed or purchased through ScrollLibrary.</p>
         <div className="mt-8 space-y-4">
           {loading ? <p>Loading…</p> :
            rows.length === 0 ? (
             <Card className="p-8 text-center">
               <p className="text-muted-foreground">No purchases yet.</p>
-              <Link to="/store"><Button className="mt-4">Browse the store</Button></Link>
+              <Link to="/explore"><Button className="mt-4">Browse published books</Button></Link>
             </Card>
           ) : rows.map((r) => (
             <Card key={r.id} className="p-4 flex items-center gap-4">

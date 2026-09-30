@@ -82,12 +82,9 @@ export interface AuthedRequest {
 
 export interface RequireUserOptions {
   /**
-   * External OAuth clients receive ordinary Supabase user access tokens with a
-   * client_id claim. They are denied by default because most ScrollLibrary Edge
-   * Functions carry privileged server-side mutation authority.
-   *
-   * Set this true only for an endpoint that deliberately implements its own
-   * narrower OAuth capability boundary (currently ai-publishing-bridge).
+   * External OAuth clients receive ordinary verified Supabase user tokens with
+   * a client_id claim. They are denied by default because most ScrollLibrary
+   * Edge Functions carry privileged server-side mutation authority.
    */
   allowExternalOAuthClient?: boolean;
 }
@@ -158,8 +155,8 @@ export async function requireUser(
     return unauthorized();
   }
 
-  // getUser() verifies token authenticity but does not expose every JWT claim.
-  // Decode only after successful verification so client_id cannot be spoofed.
+  // getUser() verifies authenticity but does not expose every JWT claim.
+  // Decode client_id only after successful verification so it cannot be spoofed.
   clientId = clientId ?? decodeJwtStringClaim(token, "client_id");
   const isExternalOAuthClient = clientId !== null;
 
@@ -313,7 +310,7 @@ interface RateLimitConsumption {
  * the product.
  */
 export async function enforceDurableRateLimit(
-  admin: SupabaseClient,
+  admin: { rpc: (name: string, args: Record<string, unknown>) => PromiseLike<{ data: unknown; error: unknown }> },
   opts: RateLimitOptions,
 ): Promise<Response | null> {
   try {
@@ -326,13 +323,13 @@ export async function enforceDurableRateLimit(
 
     if (error) {
       console.error(`[rate-limit] consume_rate_limit failed for ${opts.name}`, error);
-      return null;
+      return json({ error: "Rate-limit service unavailable. Please retry later.", code: "rate_limit_unavailable" }, 503);
     }
 
     const row = (Array.isArray(data) ? data[0] : data) as RateLimitConsumption | null;
-    if (!row) {
+    if (!row || typeof row.allowed !== "boolean") {
       console.error(`[rate-limit] consume_rate_limit returned no row for ${opts.name}`);
-      return null;
+      return json({ error: "Rate-limit service unavailable. Please retry later.", code: "rate_limit_unavailable" }, 503);
     }
 
     if (!row.allowed) {
@@ -341,7 +338,7 @@ export async function enforceDurableRateLimit(
     return null;
   } catch (e) {
     console.error(`[rate-limit] consume_rate_limit threw for ${opts.name}`, e);
-    return null;
+    return json({ error: "Rate-limit service unavailable. Please retry later.", code: "rate_limit_unavailable" }, 503);
   }
 }
 

@@ -36,6 +36,7 @@ import { BookDetailHeader } from "@/components/books/BookDetailHeader";
 import { CustomCoverUploadButton } from "@/components/books/CustomCoverUploadButton";
 import { BookOwnerControls } from "@/components/books/BookOwnerControls";
 import { ChapterList } from "@/components/books/ChapterList";
+import { FEATURES } from "@/lib/config";
 
 interface ChapterData {
   id: string;
@@ -151,68 +152,113 @@ export default function BookDetail() {
 
   const handleGenerateAllChapters = async () => {
     if (!book) return;
-    const ungeneratedChapters = chapters.filter(ch => !ch.is_generated);
-    if (ungeneratedChapters.length === 0) {
-      toast({ title: "Draft already generated", description: "Starting publication-quality verification." });
-      return;
-    }
 
     setIsGeneratingAll(true);
-    setGenerationProgress({ current: 0, total: ungeneratedChapters.length });
-    let failedChapters = 0;
+    try {
+      const { data: job, error: jobError } = await supabase
+        .from("generation_jobs")
+        .select("id, status, current_chapter, total_chapters, error_code, error_message, metadata")
+        .eq("book_id", book.id)
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
 
-    for (let i = 0; i < ungeneratedChapters.length; i++) {
-      const chapter = ungeneratedChapters[i];
-      setGeneratingChapterId(chapter.id);
-      setGenerationProgress({ current: i + 1, total: ungeneratedChapters.length });
-      try {
-        const keyTopicsMatch = chapter.content?.match(/### Key Topics\n([\s\S]*?)(?:\n\n|\*Full chapter)/);
-        const keyTopics = keyTopicsMatch ? keyTopicsMatch[1].split('\n').filter(t => t.startsWith('-')).map(t => t.replace('- ', '')) : [];
-        const shouldEnableAcademicMode = book.book_type === 'text' && isAcademicCategory(book.category);
-        const response = await supabase.functions.invoke('generate-chapter', {
-          body: {
-            chapterId: chapter.id,
-            bookTitle: book.title,
-            chapterTitle: chapter.title,
-            chapterNumber: chapter.chapter_number,
-            keyTopics,
-            category: book.category,
-            language: book.language || 'en',
-            bookType: book.book_type || 'text',
-            academicMode: shouldEnableAcademicMode,
-            citationStyle: 'APA',
-          }
-        });
-        if (response.error || response.data?.error) throw new Error(response.error?.message || response.data?.error);
-        setChapters(prev => prev.map(ch => ch.id === chapter.id ? { ...ch, is_generated: true, word_count: response.data.wordCount } : ch));
-      } catch (error) {
-        failedChapters++;
-        console.error(`Error generating chapter ${chapter.chapter_number}:`, error);
+      if (jobError) throw jobError;
+      if (!job?.id) {
+        throw new Error("No resumable generation job exists for this book.");
+      }
+
+      setGenerationProgress({
+        current: Number(job.current_chapter || 0),
+        total: Number(job.total_chapters || book.total_chapters || chapters.length || 0),
+      });
+
+      const kickoff = await supabase.functions.invoke("generation-worker", {
+        body: { jobId: job.id },
+      });
+      if (kickoff.error) throw new Error(kickoff.error.message);
+      if (kickoff.data?.error && kickoff.data?.state !== "busy") {
+        throw new Error(kickoff.data.error);
+      }
+
+      let terminalState: "quality_review" | "partial" | "failed" | "timeout" = "timeout";
+      let terminalMessage = "";
+
+      // The worker continues server-side after this tab disappears. Polling is
+      // only for UX/progress; it is never the generation engine.
+      for (let attempt = 0; attempt < 160; attempt++) {
+        const { data: progressJob, error: progressError } = await supabase
+          .from("generation_jobs")
+          .select("status, current_chapter, total_chapters, error_code, error_message, metadata")
+          .eq("id", job.id)
+          .single();
+        if (progressError) throw progressError;
+
+        const current = Number(progressJob.current_chapter || 0);
+        const total = Number(progressJob.total_chapters || book.total_chapters || chapters.length || 0);
+        setGenerationProgress({ current, total });
+
+        const metadata =
+          progressJob.metadata && typeof progressJob.metadata === "object"
+            ? progressJob.metadata as Record<string, unknown>
+            : {};
+        const phase = typeof metadata.phase === "string" ? metadata.phase : "";
+
+        if (phase === "quality_review" || (total > 0 && current >= total)) {
+          terminalState = "quality_review";
+          break;
+        }
+        if (progressJob.status === "failed") {
+          terminalState = "failed";
+          terminalMessage = progressJob.error_message || progressJob.error_code || "Generation failed.";
+          break;
+        }
+        if (progressJob.status === "partial") {
+          terminalState = "partial";
+          terminalMessage = progressJob.error_message || progressJob.error_code || "Generation paused.";
+          break;
+        }
+
+        await new Promise((resolve) => setTimeout(resolve, 3000));
+      }
+
+      const { data: refreshedChapters, error: chaptersError } = await supabase
+        .from("chapters")
+        .select("*")
+        .eq("book_id", book.id)
+        .order("chapter_number", { ascending: true });
+      if (chaptersError) throw chaptersError;
+      if (refreshedChapters) setChapters(refreshedChapters as ChapterData[]);
+
+      if (terminalState === "quality_review") {
         toast({
-          title: `${t('book.failedToGenerateChapter')} ${chapter.chapter_number}`,
-          description: error instanceof Error ? error.message : t('common.unknownError'),
+          title: "Draft generation complete",
+          description: "All chapters are durable. Publication-quality verification can now run.",
+        });
+      } else if (terminalState === "partial" || terminalState === "failed") {
+        toast({
+          title: "Draft generation paused",
+          description: terminalMessage || "The server kept all completed chapters. Tap Generate All again to resume.",
           variant: "destructive",
         });
+      } else {
+        toast({
+          title: "Generation continues in the background",
+          description: "You can leave this page safely. Reopen the book later to see the latest progress.",
+        });
       }
-    }
-
-    setIsGeneratingAll(false);
-    setGeneratingChapterId(null);
-    setGenerationProgress({ current: 0, total: 0 });
-
-    if (failedChapters > 0) {
+    } catch (error) {
+      console.error("Server generation worker error:", error);
       toast({
-        title: "Draft generation incomplete",
-        description: `${failedChapters} chapter${failedChapters === 1 ? "" : "s"} failed. The book will remain blocked until every chapter and quality gate passes.`,
+        title: "Could not resume generation",
+        description: error instanceof Error ? error.message : t("common.unknownError"),
         variant: "destructive",
       });
-      return;
+    } finally {
+      setIsGeneratingAll(false);
+      setGeneratingChapterId(null);
+      setGenerationProgress({ current: 0, total: 0 });
     }
-
-    toast({
-      title: "Draft generation complete",
-      description: "Starting independent editorial, evidence, and publishability verification.",
-    });
   };
 
   const handleGenerateCover = async () => {
@@ -381,7 +427,7 @@ export default function BookDetail() {
                   progressPercent={Math.round((chapters.filter(ch => ch.is_generated).length / Math.max(chapters.length, 1)) * 100)} className="mt-6" />
               )}
 
-              {isOwner && hasGeneratedChapters && (
+              {FEATURES.enableEditorialPipeline && isOwner && hasGeneratedChapters && (
                 <>
                   <ChiefEditorPanel bookId={book.id} chapters={chapterMapForPanels} className="mt-6" />
                   <CodeAuditPanel bookId={book.id} chapters={chapterMapForPanels} className="mt-6" />
@@ -393,7 +439,7 @@ export default function BookDetail() {
           )}
 
           {/* Mobile Panels */}
-          {isMobile && isOwner && hasGeneratedChapters && (
+          {FEATURES.enableEditorialPipeline && isMobile && isOwner && hasGeneratedChapters && (
             <div className="px-4 mt-4 space-y-4">
               <ChiefEditorPanel bookId={book.id} chapters={chapterMapForPanels} />
               <CodeAuditPanel bookId={book.id} chapters={chapterMapForPanels} />
@@ -401,7 +447,7 @@ export default function BookDetail() {
           )}
 
           {/* Mobile Cover Controls */}
-          {isMobile && isOwner && !book.current_publication_id && (
+          {FEATURES.enableCustomCover && isMobile && isOwner && !book.current_publication_id && (
             <div className="px-4 mt-4 space-y-2">
               <div className="flex gap-2">
                 <Select value={coverTheme} onValueChange={setCoverTheme}>
@@ -426,10 +472,12 @@ export default function BookDetail() {
           {/* Mobile Export/Report */}
           {isMobile && (
             <div className="px-4 mt-4 flex flex-wrap gap-2">
-              <ExportDialog bookId={book.id} title={book.title} hasGeneratedChapters={hasGeneratedChapters}
-                coverImageUrl={book.cover_image_url} authorName={book.author_ai_agent || undefined}
-                bookType={book.book_type || 'text'} chapterContents={chapters.filter(ch => ch.is_generated).map(ch => ch.content || '')}
-                chapters={chapters.filter(ch => ch.is_generated).map(ch => ({ chapter_number: ch.chapter_number, content: ch.content }))} />
+              {FEATURES.enableExports && (
+                <ExportDialog bookId={book.id} title={book.title} hasGeneratedChapters={hasGeneratedChapters}
+                  coverImageUrl={book.cover_image_url} authorName={book.author_ai_agent || undefined}
+                  bookType={book.book_type || 'text'} chapterContents={chapters.filter(ch => ch.is_generated).map(ch => ch.content || '')}
+                  chapters={chapters.filter(ch => ch.is_generated).map(ch => ({ chapter_number: ch.chapter_number, content: ch.content }))} />
+              )}
               <ReportContentDialog contentType="book" contentId={book.id} contentTitle={book.title} />
             </div>
           )}

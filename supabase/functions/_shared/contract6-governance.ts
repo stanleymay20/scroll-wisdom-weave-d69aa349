@@ -56,7 +56,7 @@ export const EDGE_BOOK_TYPE_SPECS: Record<GovernedBookType, EdgeBookTypeSpec> = 
     mandatory: ['Simple language', 'Short sentences', 'Visual-first storytelling', 'Clear lesson/message'],
     forbidden: ['Uncontextualized graphic violence', 'Adult sexual themes', 'Dense academic language', 'Long complex paragraphs'],
     structure: ['Scene Setup', 'Story Beat with Illustration', 'Character Action', 'Lesson / Message'],
-    wordLimits: { min: 100, max: 500 },
+    wordLimits: { min: 800, max: 1500 },
   },
   technical: {
     displayName: 'Technical / Hands-On Guide', identity: 'Engineer · Instructor',

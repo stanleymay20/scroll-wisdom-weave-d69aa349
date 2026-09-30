@@ -101,7 +101,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const currentSlideAudioRef = useRef<number>(-1);
     
-    // Premium TTS settings
+    // Pro TTS settings
     const isPremiumUser = tier === 'premium' || tier === 'prophet_tier';
     const [useElevenLabs, setUseElevenLabs] = useState(isPremiumUser);
     const [elevenLabsVoice, setElevenLabsVoice] = useState<string>('sam');
@@ -180,8 +180,8 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
         if (error) throw error;
         if (data?.requiresUpgrade) {
           toast({
-            title: 'Premium Feature',
-            description: 'ElevenLabs TTS requires Premium or Prophet tier.',
+            title: 'Pro Feature',
+            description: 'ElevenLabs TTS requires Pro or Teams plan.',
           });
           // Fall back to browser TTS
           playBrowserTTS(narration);
@@ -420,7 +420,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                     />
                   </div>
                   
-                  {/* ElevenLabs toggle (premium only) */}
+                  {/* ElevenLabs toggle (Pro/Teams plans) */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="elevenlabs" className="text-sm">
@@ -429,7 +429,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                       {isPremiumUser ? (
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary border-primary/30">
                           <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-                          Premium
+                          Pro
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0">
@@ -467,7 +467,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                   
                   {!isPremiumUser && (
                     <p className="text-xs text-muted-foreground">
-                      Upgrade to Premium for high-quality ElevenLabs voices.
+                      Upgrade to Pro for high-quality ElevenLabs voices.
                     </p>
                   )}
                 </div>

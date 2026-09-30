@@ -130,11 +130,8 @@ export default function Settings() {
     navigate("/account/delete");
   };
 
-  const handleExportData = async () => {
-    toast({
-      title: t('settings.dataExport'),
-      description: t('settings.dataExportDesc'),
-    });
+  const handleExportData = () => {
+    navigate("/account/data-export");
   };
 
   // Helper to update a single setting
@@ -280,8 +277,8 @@ export default function Settings() {
                           {t('settings.manageBilling')}
                         </Button>
                         <p className="text-xs text-muted-foreground">
-                          Use "Manage Billing" above to cancel your subscription, update payment method, or change your plan. 
-                          Cancellation takes effect at the end of your current billing period.
+                          Use "Manage Billing" above to cancel your subscription or update its payment method.
+                          To prevent duplicate recurring charges, starting a different plan is blocked while an existing plan remains live.
                         </p>
                       </div>
                     )}

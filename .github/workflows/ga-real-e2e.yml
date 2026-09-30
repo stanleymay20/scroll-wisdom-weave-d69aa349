@@ -13,6 +13,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
+  RELEASE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   BUN_VERSION: 1.2.23
   SUPABASE_CLI_VERSION: 2.111.0
   E2E_USER_ONE_EMAIL: ga-e2e-one@example.test
@@ -26,6 +27,8 @@ jobs:
     timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - uses: oven-sh/setup-bun@v2
         with:
@@ -83,6 +86,12 @@ jobs:
 
       - name: Seed reader ownership fixtures in disposable database
         run: psql "$E2E_DATABASE_URL" -v ON_ERROR_STOP=1 -f scripts/seed-ga-reader-fixtures.sql
+
+      - name: Exercise self-service data export lifecycle
+        run: bun scripts/test-data-export-e2e.mjs
+
+      - name: Exercise authoritative mastery certificate lifecycle
+        run: bun scripts/test-mastery-certificate-e2e.mjs
 
       - name: Install cross-browser Playwright runtimes
         run: bunx playwright install --with-deps chromium firefox webkit

@@ -15,6 +15,7 @@ export type PublicationStage =
   | "repairing"
   | "evidence-verification"
   | "proofreading"
+  | "technical-code-audit"
   | "publishability-qa"
   | "production-render"
   | "certified"
@@ -426,6 +427,75 @@ export interface ProofreadingSummary {
   failed: number;
 }
 
+interface TechnicalCodeAuditResponse {
+  passed?: boolean;
+  error?: string;
+  codeBlockCount?: number;
+  result?: {
+    chapterScore?: number;
+    riskLevel?: string;
+  };
+}
+
+function chapterContainsCode(content: string | null | undefined): boolean {
+  if (!content) return false;
+  return /\[CODE_BLOCK\][\s\S]*?\[\/CODE_BLOCK\]/i.test(content)
+    || /```[\w+.-]*\s*\n[\s\S]*?```/.test(content);
+}
+
+async function runTechnicalCodeAudits(
+  chapters: EvidenceChapter[],
+  onStage: PublicationPipelineOptions["onStage"],
+): Promise<string[]> {
+  const codeChapters = chapters.filter(
+    (chapter) => chapter.is_generated && chapterContainsCode(chapter.content),
+  );
+  if (codeChapters.length === 0) return [];
+
+  const blockers: string[] = [];
+  for (let index = 0; index < codeChapters.length; index++) {
+    const chapter = codeChapters[index];
+    report(
+      onStage,
+      "technical-code-audit",
+      `Technical review ${index + 1}/${codeChapters.length}: auditing chapter ${chapter.chapter_number} code against the final stored manuscript…`,
+    );
+
+    const { data, error } = await supabase.functions.invoke("audit-code", {
+      body: {
+        chapterId: chapter.id,
+        chapterTitle: chapter.title,
+        chapterNumber: chapter.chapter_number,
+      },
+    });
+
+    if (error) {
+      blockers.push(
+        `Chapter ${chapter.chapter_number} code audit failed to run: ${error.message}`,
+      );
+      continue;
+    }
+
+    const result = (data || {}) as TechnicalCodeAuditResponse;
+    if (result.error) {
+      blockers.push(
+        `Chapter ${chapter.chapter_number} code audit failed: ${result.error}`,
+      );
+      continue;
+    }
+
+    if (result.passed !== true) {
+      const score = result.result?.chapterScore;
+      const risk = result.result?.riskLevel;
+      blockers.push(
+        `Chapter ${chapter.chapter_number} code audit did not pass${score != null ? ` (${score}/10` : ""}${risk ? `${score != null ? ", " : " ("}risk ${risk}` : ""}${score != null || risk ? ")" : ""}.`,
+      );
+    }
+  }
+
+  return blockers;
+}
+
 /**
  * Run the copy editor over every chapter of a book.
  *
@@ -592,6 +662,12 @@ export async function runPublicationQualityPipeline({
   report(onStage, "proofreading", "Copy editor is correcting spelling, grammar and punctuation…");
   const proofreading = await runProofreadingPass(bookId, onStage);
 
+  // Proofreading may change the chapter bytes even though protected code spans
+  // stay intact. Reload first so the content-bound STO audit hashes the exact
+  // manuscript that publishability QA and the production renderer will inspect.
+  chapters = await loadEvidenceChapters(bookId);
+  const technicalCodeBlockers = await runTechnicalCodeAudits(chapters, onStage);
+
   report(onStage, "publishability-qa", "Running deterministic publishability and rendering-risk checks…");
   const { data: qaData, error: qaError } = await supabase.functions.invoke(
     "qa-publishability-audit",
@@ -617,6 +693,7 @@ export async function runPublicationQualityPipeline({
   const blockers = [
     ...finalEditorialBlockers(audit, repairDiagnostics),
     ...finalEvidenceBlockers(evidence, chapters.length),
+    ...technicalCodeBlockers,
     ...qaBlockers,
     ...productionBlockers(production),
   ];

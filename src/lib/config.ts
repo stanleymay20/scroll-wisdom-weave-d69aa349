@@ -28,11 +28,23 @@ export type ExportFormat = typeof EXPORT_FORMATS[number];
 // PMF MODE: Feature flags
 // Only Generate → Read → Quiz → Certificate
 // ===========================================
-export const PMF_MODE = false; // All features enabled
+export const PMF_MODE = true; // GA launch scope: core Generate → Read → Quiz → Certificate
+
+function explicitClientFlag(value: string | undefined): boolean {
+  const normalized = String(value || "").trim().toLowerCase();
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
+// Specialized book generation is released independently from the broader post-GA
+// surface. This lets one empirically qualified mode open without implicitly
+// enabling payments, exports, study tooling, or other PMF-disabled features.
+export const SPECIALIZED_AUTHORING_ENABLED = explicitClientFlag(
+  import.meta.env.VITE_SPECIALIZED_AUTHORING_ENABLED,
+);
 
 export const FEATURES = {
   enableTTS: true,
-  enableAICovers: true,
+  enableAICovers: !PMF_MODE,
   enableBatchGeneration: false,
   enableElevenLabsTTS: false,
   // PMF-disabled features
@@ -43,9 +55,24 @@ export const FEATURES = {
   enableLearningDecks: !PMF_MODE,
   enableCodePlayground: !PMF_MODE,
   enableVoiceConversation: !PMF_MODE,
+  enableInteractiveQA: !PMF_MODE,
   enableDeepResearch: !PMF_MODE,
   enableSkillRadar: !PMF_MODE,
   enableComicMode: !PMF_MODE,
   enableChapterVideo: !PMF_MODE,
-  enableKnowledgeGraph: true,
+  enableKnowledgeGraph: !PMF_MODE,
+  enableStudyMusic: !PMF_MODE,
+  // External financial writes stay closed until the exact-head Stripe sandbox
+  // lifecycle has passed and production is deliberately opened.
+  enablePaidCheckout: !PMF_MODE,
+  enableSubscriptionCheckout: !PMF_MODE,
+  enableStripeConnect: !PMF_MODE,
+  enableSpecializedAuthoring: SPECIALIZED_AUTHORING_ENABLED,
+  enableAdvancedAuthoring: !PMF_MODE,
+  enableChapterRegeneration: !PMF_MODE,
+  enableCustomCover: !PMF_MODE,
+  enableExports: !PMF_MODE,
+  enableEditorialPipeline: !PMF_MODE,
+  enableReleaseScheduling: !PMF_MODE,
+  enableCanonicalPublication: !PMF_MODE,
 };

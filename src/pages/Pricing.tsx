@@ -9,10 +9,9 @@ import { Badge } from "@/components/ui/badge";
 import { Check, Sparkles, Zap, BookOpen, Download, Volume2, Shield, Loader2, Building2 } from "lucide-react";
 import { supabase } from "@/integrations/supabase/client";
 import { useSubscription } from "@/contexts/SubscriptionContext";
-import { SUBSCRIPTION_TIERS, SubscriptionTier, CREATOR_SUBSCRIPTION_TIERS, CreatorTier } from "@/lib/subscription";
-import { useCreatorEntitlements } from "@/hooks/useCreatorEntitlements";
+import { SUBSCRIPTION_TIERS, SubscriptionTier } from "@/lib/subscription";
 import { useToast } from "@/hooks/use-toast";
-import { useLanguage } from "@/contexts/LanguageContext";
+import { FEATURES } from "@/lib/config";
 
 import { SEO } from "@/components/SEO";
 interface PlanConfig {
@@ -29,7 +28,7 @@ interface PlanConfig {
 const plans: PlanConfig[] = [
   {
     name: "Free",
-    description: "Try ScrollLibrary — no credit card needed",
+    description: "Start your first book — no credit card needed",
     price: "$0",
     period: "forever",
     icon: BookOpen,
@@ -37,17 +36,17 @@ const plans: PlanConfig[] = [
     features: [
       { text: "1 book per month (up to 4,000 words/ch)", included: true },
       { text: "5 min text-to-speech", included: true },
-      { text: "5 min voice interaction", included: true },
-      { text: "Basic PDF export", included: true },
+      { text: "Voice AI after GA validation", included: false },
+      { text: "PDF export after GA validation", included: FEATURES.enableExports },
       { text: "1 quiz & 1 certificate per book", included: true },
-      { text: "AI-generated covers", included: false },
-      { text: "AI image generation", included: false },
-      { text: "Cinematic video", included: false },
+      { text: "AI-generated covers after provider validation", included: false },
+      { text: "AI image generation after provider validation", included: false },
+      { text: "Cinematic video after GA", included: false },
     ],
   },
   {
-    name: "Student",
-    description: "For learners who need more content",
+    name: SUBSCRIPTION_TIERS.student.name,
+    description: "For authors creating books regularly",
     price: `$${SUBSCRIPTION_TIERS.student.monthlyPrice}`,
     period: "/month",
     icon: Zap,
@@ -55,17 +54,17 @@ const plans: PlanConfig[] = [
     features: [
       { text: "Up to 10 books per month", included: true },
       { text: "Up to 4,000 words per chapter", included: true },
-      { text: "30 min TTS & voice interaction", included: true },
-      { text: "20 AI images per month", included: true },
-      { text: "PDF, EPUB, DOCX exports", included: true },
-      { text: "AI-generated covers", included: true },
+      { text: "30 min text-to-speech", included: true },
+      { text: "AI images after provider validation", included: false },
+      { text: "PDF, EPUB, DOCX exports after GA validation", included: FEATURES.enableExports },
+      { text: "AI-generated covers after provider validation", included: false },
       { text: "Unlimited quizzes & certificates", included: true },
-      { text: "Cinematic video", included: false },
+      { text: "Cinematic video after GA", included: false },
     ],
   },
   {
-    name: "Premium",
-    description: "Full power for professionals & educators",
+    name: SUBSCRIPTION_TIERS.premium.name,
+    description: "For serious authors and publishing-ready projects",
     price: `$${SUBSCRIPTION_TIERS.premium.monthlyPrice}`,
     period: "/month",
     icon: Sparkles,
@@ -74,29 +73,29 @@ const plans: PlanConfig[] = [
     features: [
       { text: "Up to 30 books per month", included: true },
       { text: "Up to 6,000 words per chapter", included: true },
-      { text: "60 min TTS · 2 hrs voice interaction", included: true },
-      { text: "100 AI images per month", included: true },
-      { text: "All exports (PDF, EPUB, DOCX, KDP)", included: true },
-      { text: "Cinematic video generation", included: true },
+      { text: "60 min text-to-speech", included: true },
+      { text: "AI images after provider validation", included: false },
+      { text: "PDF, EPUB & DOCX exports after GA validation", included: FEATURES.enableExports },
+      { text: "Cinematic video after GA", included: false },
       { text: "Commercial publishing rights", included: true },
       { text: "Priority support", included: true },
     ],
   },
   {
-    name: "Institutional",
-    description: "For universities & organizations",
+    name: SUBSCRIPTION_TIERS.prophet_tier.name,
+    description: "For publishers, universities & organizations",
     price: `$${SUBSCRIPTION_TIERS.prophet_tier.monthlyPrice}`,
     period: "/month",
     icon: Building2,
     tierKey: "prophet_tier",
     features: [
-      { text: "Unlimited books & AI images", included: true },
-      { text: "Unlimited TTS & voice interaction", included: true },
-      { text: "ElevenLabs premium voices", included: true },
-      { text: "Cinematic video generation", included: true },
-      { text: "Batch generation", included: true },
-      { text: "AI research assistant", included: true },
-      { text: "All exports (incl. KDP-ready PDF)", included: true },
+      { text: "Expanded book generation allowance", included: true },
+      { text: "Expanded text-to-speech allowance", included: true },
+      { text: "Premium voice providers after validation", included: false },
+      { text: "Cinematic video after GA", included: false },
+      { text: "Batch generation after GA", included: false },
+      { text: "AI research assistant after provider validation", included: false },
+      { text: "PDF, EPUB & DOCX exports after GA validation", included: FEATURES.enableExports },
       { text: "Dedicated support", included: true },
     ],
   },
@@ -104,13 +103,14 @@ const plans: PlanConfig[] = [
 
 export default function Pricing() {
   const { user, tier, isSubscribed, checkSubscription } = useSubscription();
-  const { entitlements, refresh: refreshEntitlements } = useCreatorEntitlements();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
   const [portalLoading, setPortalLoading] = useState(false);
   const [searchParams, setSearchParams] = useSearchParams();
   const navigate = useNavigate();
   const { toast } = useToast();
-  const { t } = useLanguage();
+  const visiblePlans = FEATURES.enableSubscriptionCheckout
+    ? plans
+    : plans.filter((plan) => plan.tierKey === "free");
 
   // Handle post-checkout redirect. The query string is not entitlement
   // authority: verify with the server before claiming activation.
@@ -133,7 +133,6 @@ export default function Pricing() {
         }
 
         await checkSubscription(true);
-        await refreshEntitlements();
         setSearchParams({}, { replace: true });
       })();
     } else if (searchParams.get("canceled") === "true") {
@@ -144,7 +143,7 @@ export default function Pricing() {
       });
       setSearchParams({}, { replace: true });
     }
-  }, [searchParams, checkSubscription, refreshEntitlements, setSearchParams, toast]);
+  }, [searchParams, checkSubscription, setSearchParams, toast]);
 
   const handleSelectPlan = async (planTierKey: SubscriptionTier) => {
     if (!user) {
@@ -154,6 +153,14 @@ export default function Pricing() {
 
     if (planTierKey === "free") {
       navigate("/generate");
+      return;
+    }
+
+    if (!FEATURES.enableSubscriptionCheckout) {
+      toast({
+        title: "Paid upgrades are temporarily unavailable",
+        description: "The free GA experience remains available while the payment lifecycle completes validation.",
+      });
       return;
     }
 
@@ -177,30 +184,6 @@ export default function Pricing() {
       toast({
         title: "Error",
         description: error.message || "Unable to start checkout. Please try again.",
-        variant: "destructive",
-      });
-    } finally {
-      setCheckoutLoading(null);
-    }
-  };
-
-  const handleCreatorCheckout = async (creatorTier: CreatorTier) => {
-    if (!user) {
-      navigate("/auth", { state: { redirectTo: "/pricing#creator" } });
-      return;
-    }
-    const cfg = CREATOR_SUBSCRIPTION_TIERS[creatorTier];
-    setCheckoutLoading(`creator:${creatorTier}`);
-    try {
-      const { data, error } = await supabase.functions.invoke("create-checkout", {
-        body: { priceId: cfg.price_id, tier: creatorTier },
-      });
-      if (error) throw error;
-      if (data?.url) window.open(data.url, "_blank");
-    } catch (e: any) {
-      toast({
-        title: "Checkout error",
-        description: e.message || "Unable to start Creator checkout. Please try again.",
         variant: "destructive",
       });
     } finally {
@@ -235,7 +218,7 @@ export default function Pricing() {
     <div className="min-h-screen flex flex-col">
       <SEO
         title="Pricing | ScrollLibrary"
-        description="Simple plans for learners, students, and institutions. Generate AI-powered books, earn verified mastery certificates, and access institutional reporting."
+        description="Free GA access for creating, reading, assessing, and listing AI-native books on ScrollLibrary. Paid upgrades and external publishing remain gated until validation."
         canonical="/pricing"
       />
       <Navbar />
@@ -249,17 +232,19 @@ export default function Pricing() {
             {/* Header */}
             <div className="text-center mb-16">
               <h1 className="text-4xl md:text-5xl font-display font-bold text-foreground mb-4">
-                Plans & Pricing
+                Create with one simple plan ladder
               </h1>
-              <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                Start free. Scale as you grow.
+              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+                The current GA experience is free. When paid plans open, ScrollLibrary will use one clear ladder: Free, Creator, Pro, and Teams. Exports, paid sales, and external publishing remain gated until their own validation gates pass.
               </p>
             </div>
 
             {/* Plans Grid */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto mb-16">
-              {plans.map((plan, index) => {
+            <div className={`grid gap-6 mx-auto mb-16 ${visiblePlans.length === 1 ? "max-w-md grid-cols-1" : "max-w-6xl sm:grid-cols-2 lg:grid-cols-4"}`}>
+              {visiblePlans.map((plan, index) => {
                 const isCurrent = isCurrentPlan(plan.tierKey);
+                const isPaidChoice = plan.tierKey !== "free";
+                const manageExisting = isSubscribed && isPaidChoice && !isCurrent;
                 
                 return (
                   <motion.div
@@ -313,15 +298,23 @@ export default function Pricing() {
                           variant={plan.popular ? "default" : "outline"}
                           className="w-full mt-4"
                           size="sm"
-                          onClick={() => handleSelectPlan(plan.tierKey)}
-                          disabled={isCurrent || !!checkoutLoading}
+                          onClick={() => manageExisting ? handleManageSubscription() : handleSelectPlan(plan.tierKey)}
+                          disabled={
+                            isCurrent
+                            || !!checkoutLoading
+                            || (manageExisting ? portalLoading : (isPaidChoice && !FEATURES.enableSubscriptionCheckout))
+                          }
                         >
                           {checkoutLoading === plan.tierKey ? (
                             <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Processing...</>
                           ) : isCurrent ? (
                             "Current Plan"
+                          ) : manageExisting ? (
+                            portalLoading ? "Opening billing..." : "Manage current plan"
                           ) : plan.tierKey === "free" ? (
                             "Get Started Free"
+                          ) : !FEATURES.enableSubscriptionCheckout ? (
+                            "Available after payment validation"
                           ) : (
                             `Upgrade to ${plan.name}`
                           )}
@@ -333,116 +326,20 @@ export default function Pricing() {
               })}
             </div>
 
-            {/* Creator tiers (Phase 4.0) */}
-            <div id="creator" className="mt-20 mb-16 scroll-mt-24">
-              <div className="text-center mb-10">
-                <Badge className="mb-3">For Creators</Badge>
-                <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-3">
-                  Sell your work, your way
+            {!FEATURES.enableSubscriptionCheckout && (
+              <div id="billing" className="mb-16 scroll-mt-24 rounded-2xl border border-border bg-muted/30 p-6 md:p-8 text-center">
+                <Badge variant="secondary" className="mb-3">GA boundary</Badge>
+                <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-3">
+                  Paid plans are not open yet
                 </h2>
-                <p className="text-muted-foreground max-w-xl mx-auto">
-                  Free creators can list on the marketplace. Upgrade to publish directly to Gumroad, Shopify, Substack, Patreon &amp; Etsy — and keep 100% of platform-side revenue.
+                <p className="text-muted-foreground max-w-2xl mx-auto mb-5">
+                  Use the Free GA plan today. Creator, Pro, and Teams will appear only after the payment lifecycle passes its validation gates.
                 </p>
+                <Button variant="outline" disabled>
+                  Available after payment validation
+                </Button>
               </div>
-
-              <div className="grid sm:grid-cols-3 gap-6 max-w-5xl mx-auto">
-                {([
-                  {
-                    key: "free" as const,
-                    name: "Free", price: "€0", period: "forever",
-                    features: [
-                      "Public marketplace listing",
-                      "Basic analytics",
-                      "+10% marketplace rev-share surcharge",
-                      "No external publishing",
-                      "No release scheduling",
-                    ],
-                  },
-                  {
-                    key: "creator" as const,
-                    name: CREATOR_SUBSCRIPTION_TIERS.creator.name,
-                    price: `€${CREATOR_SUBSCRIPTION_TIERS.creator.monthlyPrice}`,
-                    period: "/month",
-                    popular: true,
-                    features: [
-                      "Everything in Free",
-                      "Publish to Gumroad, Shopify, Substack, Patreon, Etsy",
-                      "Release schedules + follower broadcasts",
-                      "Unlimited collections",
-                      "0% marketplace surcharge",
-                      "Full analytics",
-                    ],
-                  },
-                  {
-                    key: "creator_pro" as const,
-                    name: CREATOR_SUBSCRIPTION_TIERS.creator_pro.name,
-                    price: `€${CREATOR_SUBSCRIPTION_TIERS.creator_pro.monthlyPrice}`,
-                    period: "/month",
-                    features: [
-                      "Everything in Creator",
-                      "Priority generation queue",
-                      "Advanced analytics",
-                      "+50 monthly generation bonus",
-                      "Best for publishing businesses",
-                    ],
-                  },
-                ]).map((p) => {
-                  const isCurrent = entitlements.tier === p.key;
-                  const inGrace = isCurrent && (entitlements as any).payment_status === "grace_period";
-                  const loadingKey = `creator:${p.key}`;
-                  const isLoading = checkoutLoading === loadingKey;
-                  return (
-                    <Card key={p.name} className={`p-6 h-full flex flex-col ${p.popular ? "border-primary/50 shadow-lg shadow-primary/10" : ""} ${isCurrent ? "ring-2 ring-primary" : ""}`}>
-                      <div className="flex items-center gap-2 mb-3 min-h-[24px] flex-wrap">
-                        {p.popular && <Badge>Most Popular</Badge>}
-                        {isCurrent && <Badge variant="secondary">Your plan</Badge>}
-                        {inGrace && <Badge variant="destructive">Payment retry</Badge>}
-                      </div>
-                      <h3 className="text-xl font-display font-semibold">{p.name}</h3>
-                      <div className="mt-2">
-                        <span className="text-3xl font-bold text-foreground">{p.price}</span>
-                        <span className="text-muted-foreground text-sm">{p.period}</span>
-                      </div>
-                      <ul className="mt-4 space-y-2 text-sm flex-1">
-                        {p.features.map((f) => (
-                          <li key={f} className="flex items-start gap-2">
-                            <Check className="h-4 w-4 text-primary mt-0.5 flex-shrink-0" />
-                            <span className="text-foreground">{f}</span>
-                          </li>
-                        ))}
-                      </ul>
-                      {p.key === "free" ? (
-                        <Button variant="outline" size="sm" className="w-full mt-5" disabled>
-                          {isCurrent ? "Current" : "Default"}
-                        </Button>
-                      ) : isCurrent ? (
-                        <Button
-                          variant="outline"
-                          size="sm"
-                          className="w-full mt-5"
-                          onClick={handleManageSubscription}
-                          disabled={portalLoading}
-                        >
-                          {portalLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Opening...</> : "Manage subscription"}
-                        </Button>
-                      ) : (
-                        <Button
-                          variant={p.popular ? "default" : "outline"}
-                          size="sm"
-                          className="w-full mt-5"
-                          onClick={() => handleCreatorCheckout(p.key as CreatorTier)}
-                          disabled={isLoading}
-                        >
-                          {isLoading ? <><Loader2 className="h-4 w-4 mr-2 animate-spin" />Redirecting...</> : `Upgrade to ${p.name}`}
-                        </Button>
-                      )}
-                    </Card>
-                  );
-                })}
-
-              </div>
-            </div>
-
+            )}
 
             {/* Manage Subscription */}
             {isSubscribed && (
@@ -461,21 +358,38 @@ export default function Pricing() {
               </div>
             )}
 
-            {/* Trust */}
-            <div className="flex flex-wrap justify-center gap-8 text-muted-foreground border-t border-border/50 pt-8">
-              <div className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
-                <span className="text-sm">Secure payments via Stripe</span>
+            {/* Trust / GA boundary */}
+            {FEATURES.enableSubscriptionCheckout ? (
+              <div className="flex flex-wrap justify-center gap-8 text-muted-foreground border-t border-border/50 pt-8">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  <span className="text-sm">Secure payments via Stripe</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Download className="h-5 w-5 text-primary" />
+                  <span className="text-sm">Instant access</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Volume2 className="h-5 w-5 text-primary" />
+                  <span className="text-sm">Cancel anytime</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Download className="h-5 w-5 text-primary" />
-                <span className="text-sm">Instant access</span>
+            ) : (
+              <div className="flex flex-wrap justify-center gap-8 text-muted-foreground border-t border-border/50 pt-8">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  <span className="text-sm">GA access requires no payment</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Download className="h-5 w-5 text-primary" />
+                  <span className="text-sm">Exports remain gated</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check className="h-5 w-5 text-primary" />
+                  <span className="text-sm">Free marketplace listing is available</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Volume2 className="h-5 w-5 text-primary" />
-                <span className="text-sm">Cancel anytime</span>
-              </div>
-            </div>
+            )}
           </motion.div>
         </div>
       </main>

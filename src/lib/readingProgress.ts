@@ -31,7 +31,7 @@ export async function saveReadingProgress(opts: {
         source: opts.source ?? "sample",
         last_read_at: new Date().toISOString(),
       },
-      { onConflict: "user_id,book_id" },
+      { onConflict: "user_id,book_id,chapter_id" },
     );
   } catch { /* swallow */ }
 }
@@ -44,6 +44,8 @@ export async function getReadingProgress(book_id: string): Promise<ReadingProgre
     .select("*")
     .eq("user_id", user.id)
     .eq("book_id", book_id)
+    .order("last_read_at", { ascending: false })
+    .limit(1)
     .maybeSingle();
   return (data as ReadingProgressRow) ?? null;
 }
@@ -57,6 +59,15 @@ export async function listContinueReading(limit = 8): Promise<ReadingProgressRow
     .eq("user_id", user.id)
     .lt("percent", 100)
     .order("last_read_at", { ascending: false })
-    .limit(limit);
-  return (data as ReadingProgressRow[]) ?? [];
+    .limit(Math.max(limit * 12, limit));
+
+  // Reading progress is chapter-authoritative for certification. Continue
+  // Reading is book-authoritative, so keep only the most-recent chapter row
+  // for each book and preserve the existing one-card-per-book UX.
+  const latestByBook = new Map<string, ReadingProgressRow>();
+  for (const row of (data as ReadingProgressRow[] | null) ?? []) {
+    if (!latestByBook.has(row.book_id)) latestByBook.set(row.book_id, row);
+    if (latestByBook.size >= limit) break;
+  }
+  return [...latestByBook.values()];
 }

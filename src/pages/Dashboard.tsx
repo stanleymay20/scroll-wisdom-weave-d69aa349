@@ -18,6 +18,7 @@ import { apiCache } from "@/lib/cache";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { ReadingProgressDashboard, NextActionCard } from "@/components/dashboard";
+import { FEATURES } from "@/lib/config";
 
 interface DashboardStats {
   totalBooks: number;
@@ -208,13 +209,13 @@ export default function Dashboard() {
             <div className="flex flex-col md:flex-row md:items-center md:justify-between mb-8">
               <div>
                 <h1 className="text-3xl font-display font-bold text-gradient-gold mb-2">
-                  Welcome back, {profile?.full_name?.split(" ")[0] || "Reader"}
+                  Welcome back, {profile?.full_name?.split(" ")[0] || "Creator"}
                 </h1>
-                <p className="text-muted-foreground">Here's your reading journey at a glance</p>
+                <p className="text-muted-foreground">Your books, reading, and publishing journey in one place</p>
               </div>
               <Button variant="hero" className="mt-4 md:mt-0" onClick={() => navigate("/generate")}>
                 <Plus className="h-4 w-4 mr-2" />
-                Generate New Book
+                Create New Book
               </Button>
             </div>
 
@@ -233,10 +234,12 @@ export default function Dashboard() {
                    <Brain className="h-4 w-4" />
                    Mastery
                  </TabsTrigger>
-                 <TabsTrigger value="cognition" className="gap-2" onClick={() => navigate('/cognition')}>
-                   <TrendingUp className="h-4 w-4" />
-                   Cognitive Trend
-                 </TabsTrigger>
+                 {FEATURES.enableAdvancedAuthoring && (
+                   <TabsTrigger value="cognition" className="gap-2" onClick={() => navigate('/cognition')}>
+                     <TrendingUp className="h-4 w-4" />
+                     Cognitive Trend
+                   </TabsTrigger>
+                 )}
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
@@ -280,10 +283,10 @@ export default function Dashboard() {
                         {recentBooks.length === 0 ? (
                           <div className="text-center py-8">
                             <BookOpen className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
-                            <p className="text-muted-foreground mb-4">No books yet. Start your journey!</p>
+                            <p className="text-muted-foreground mb-4">No books yet. Start with your first project.</p>
                             <Button onClick={() => navigate("/generate")}>
                               <Sparkles className="h-4 w-4 mr-2" />
-                              Generate Your First Book
+                              Create Your First Book
                             </Button>
                           </div>
                         ) : (
@@ -335,45 +338,45 @@ export default function Dashboard() {
                     </Card>
                   </div>
 
-                  {/* Quick Actions */}
+                  {/* Your workspace */}
                   <div className="space-y-6">
-                    {/* Primary CTA — marketplace-first publishing */}
+                    {/* Primary CTA — one GA publishing path */}
                     <Card className="bg-gradient-to-br from-primary/10 via-card to-card border-primary/30">
                       <CardContent className="p-5">
                         <div className="flex items-center gap-2 text-xs font-medium text-primary uppercase tracking-wide">
-                          <Sparkles className="h-3.5 w-3.5" /> Sell your book
+                          <Sparkles className="h-3.5 w-3.5" /> Publish your work
                         </div>
                         <h3 className="font-semibold text-foreground mt-2 text-lg leading-tight">
-                          Publish on ScrollLibrary
+                          Publish your book
                         </h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Set a price, hit publish. Checkout, delivery, and payouts handled for you — no Amazon, no OAuth.
+                          Prepare your book for readers and publish a free public ScrollLibrary listing. Paid sales stay closed until validation.
                         </p>
                         <Button variant="hero" className="w-full mt-4" onClick={() => navigate("/sell")}>
-                          Publish on ScrollLibrary
+                          Publish
                         </Button>
                         <button
                           type="button"
                           onClick={() => navigate("/sell")}
                           className="w-full text-xs text-muted-foreground hover:text-foreground mt-2 underline-offset-2 hover:underline"
                         >
-                          Get paid in minutes →
+                          Open publishing workspace →
                         </button>
                       </CardContent>
                     </Card>
 
                     <Card className="bg-gradient-card border-border/50">
                       <CardHeader>
-                        <CardTitle className="text-lg">Quick Actions</CardTitle>
+                        <CardTitle className="text-lg">Your workspace</CardTitle>
                       </CardHeader>
                       <CardContent className="space-y-3">
                         <Button variant="outline" className="w-full justify-start" onClick={() => navigate("/generate")}>
                           <Sparkles className="h-4 w-4 mr-2" />
-                          Generate New Book
+                          Create New Book
                         </Button>
                         <Button variant="outline" className="w-full justify-start" onClick={() => navigate("/explore")}>
                           <Library className="h-4 w-4 mr-2" />
-                          Explore Library
+                          Explore Books
                         </Button>
                         <Button variant="outline" className="w-full justify-start" onClick={() => navigate("/library")}>
                           <BookOpen className="h-4 w-4 mr-2" />

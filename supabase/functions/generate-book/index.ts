@@ -2,6 +2,9 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { requireUser, serviceClient } from "../_shared/http.ts";
 import { ErrorCode, errorResponse } from "../_shared/error-codes.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled, qualificationBookTypeEnabled } from "../_shared/ga-release-flags.ts";
+import { normalizeGeneratedOutline, type NormalizedOutlineChapter } from "../_shared/outline-normalizer.ts";
+import { buildFictionOutlineInstructions, sanitizeFictionContract } from "../_shared/fiction-context.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -135,11 +138,26 @@ serve(async (req) => {
     // Parse request body
     const body = await req.json();
     const {
-      title: rawTitle, description: rawDescription, category, numChapters, language = "en", customCover,
+      title: rawTitle, description: rawDescription, category, numChapters, wordCount = 4000, language = "en", customCover,
       bookType = "text", extendedBookType = null,
-      enableReferences = false, academicMode = false, bestsellerMode = true,
+      enableReferences = false, academicMode = false, deepResearch = false, bestsellerMode = false,
+      citationStyle = "APA",
       authorMode = "ai", authorDisplayName: rawAuthorName = null, penName: rawPenName = null,
       transformationPrompt: rawTransformationPrompt = null,
+      workbookDensity = null,
+      comicStyleId = null,
+      paletteHint: rawPaletteHint = null,
+      lineWeightHint = null,
+      characterSheet = null,
+      layoutTemplate = null,
+      textInImage = true,
+      scenesPerPanel = 1,
+      comicSubType = null,
+      comicSubTypeConfig = null,
+      characterSheetConfig = null,
+      comicLearningConfig = null,
+      fictionConfig = null,
+      styleProfile = null,
     } = body;
 
     // ── Server-side input validation ──────────────────────
@@ -153,6 +171,48 @@ serve(async (req) => {
     const authorDisplayName = sanitize(rawAuthorName, 100);
     const penName = sanitize(rawPenName, 100);
     const transformationPrompt = sanitize(rawTransformationPrompt, 3000);
+    const paletteHint = sanitize(rawPaletteHint, 300);
+
+    const safeJsonObject = (value: unknown, maxChars: number, label: string): Record<string, unknown> => {
+      if (value == null) return {};
+      if (typeof value !== "object" || Array.isArray(value)) {
+        throw new Error(label + " must be an object");
+      }
+      const serialized = JSON.stringify(value);
+      if (serialized.length > maxChars) {
+        throw new Error(label + " is too large");
+      }
+      return JSON.parse(serialized) as Record<string, unknown>;
+    };
+
+    const safeFictionConfig = sanitizeFictionContract(fictionConfig);
+    const safeStyleProfile = safeJsonObject(styleProfile, 12000, "Style profile");
+    const safeComicSubTypeConfig = safeJsonObject(comicSubTypeConfig, 16000, "Comic subtype config");
+    const safeCharacterSheetConfig = safeJsonObject(characterSheetConfig, 24000, "Character sheet config");
+    const safeComicLearningConfig = safeJsonObject(comicLearningConfig, 16000, "Comic learning config");
+
+    if (!advancedAuthoringEnabled()) {
+      const requestedExtendedType = typeof extendedBookType === "string" ? extendedBookType : null;
+      const requestedBookType = typeof bookType === "string" ? bookType : "text";
+      const advancedRequested = Boolean(customCover)
+        || enableReferences === true
+        || academicMode === true
+        || deepResearch === true
+        || bestsellerMode === true
+        || transformationPrompt.length > 0
+        || requestedBookType !== "text"
+        || (requestedExtendedType !== null && requestedExtendedType !== "text");
+
+      if (advancedRequested) {
+        return new Response(JSON.stringify({
+          error: "This advanced authoring mode is outside the current GA launch scope.",
+          code: "GA_ADVANCED_AUTHORING_DISABLED",
+        }), {
+          status: 422,
+          headers: { ...corsHeaders, "Content-Type": "application/json" },
+        });
+      }
+    }
 
     if (!title || title.length < 1) {
       return errorResponse(ErrorCode.GENERATION_INVALID_INPUT, "Title is required.", corsHeaders);
@@ -170,6 +230,12 @@ serve(async (req) => {
       });
     }
 
+    if (typeof wordCount !== "number" || !Number.isInteger(wordCount) || wordCount < 500 || wordCount > 16000) {
+      return new Response(JSON.stringify({ error: "Invalid target chapter word count." }), {
+        status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const VALID_LANGUAGES = ['en', 'fr', 'de', 'es', 'ar', 'sw', 'pt'];
     if (!VALID_LANGUAGES.includes(language)) {
       return new Response(JSON.stringify({ error: "Invalid language." }), {
@@ -182,6 +248,14 @@ serve(async (req) => {
     const safeBookType = VALID_BOOK_TYPES.includes(bookType) ? bookType : 'text';
 
     const effectiveBookType = safeExtendedBookType || safeBookType;
+    const requestedModes = [effectiveBookType, ...(academicMode === true ? ["academic"] : []), ...(bestsellerMode === true ? ["bestseller"] : [])];
+    if (requestedModes.some(mode => !advancedBookTypeEnabled(mode)
+        && !(isAdmin && qualificationBookTypeEnabled(mode)))) {
+      return new Response(JSON.stringify({ error: "This book mode is not qualified for public release.", code: "GA_BOOK_TYPE_NOT_QUALIFIED" }), {
+        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const isAcademicType = ["academic", "technical", "reference", "professional"].includes(effectiveBookType);
     const effectiveChapters = Math.min(numChapters, limits.maxChapters);
     const languageName = LANG_MAP[language] || "English";
@@ -212,6 +286,8 @@ serve(async (req) => {
     } else if (effectiveBookType === "technical" || effectiveBookType === "academic") {
       const academicLabel = effectiveBookType === "technical" ? "TECHNICAL GUIDE" : "ACADEMIC TEXTBOOK";
       typeInstr = `${academicLabel}. Use literal descriptive titles, learning objectives, technical tone. NO metaphorical titles (e.g. "Journey", "Wizard"). Use "Chapter X: [Topic]" format.`;
+    } else if (effectiveBookType === "fiction") {
+      typeInstr = buildFictionOutlineInstructions(safeFictionConfig);
     } else if (effectiveBookType === "text") {
       typeInstr = "STANDARD TEXT. Clear, informative chapter titles. Adapt structure to the subject matter. No forced bestseller hooks unless naturally appropriate.";
     } else if (effectiveBookType === "bestseller" || bestsellerMode) {
@@ -223,8 +299,12 @@ serve(async (req) => {
     const refInstr = (enableReferences || academicMode || isAcademicType)
       ? `Include "references" array per chapter: {"author","title","year","type"}.` : "";
 
-    const bestsellerBoost = (bestsellerMode && !isAcademicType && effectiveBookType !== "comic" && effectiveBookType !== "workbook")
-      ? "BESTSELLER MODE: Provocative titles, hooks, named principles, transformation promises." : "";
+    const bestsellerBoost = (
+      bestsellerMode
+      && ["text", "illustrated", "bestseller"].includes(effectiveBookType)
+    )
+      ? "BESTSELLER MODE: Provocative titles, hooks, named principles, transformation promises."
+      : "";
 
     // Build transformation instructions if provided
     const transformInstr = transformationPrompt 
@@ -341,23 +421,27 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     const outlineData = await outlineResponse.json();
     const outlineContent = outlineData.choices?.[0]?.message?.content;
 
-    let bookOutline;
+    let parsedOutline: unknown = {};
     try {
-      const jsonMatch = outlineContent.match(/\{[\s\S]*\}/);
-      bookOutline = jsonMatch ? JSON.parse(jsonMatch[0]) : null;
-      if (!bookOutline) throw new Error("No JSON");
+      const jsonMatch = typeof outlineContent === "string"
+        ? outlineContent.match(/\{[\s\S]*\}/)
+        : null;
+      parsedOutline = jsonMatch ? JSON.parse(jsonMatch[0]) : {};
     } catch {
-      console.error("[GENERATE-BOOK] Parse fallback");
-      bookOutline = {
-        bookTitle: title,
-        bookDescription: description || "A comprehensive exploration of the topic",
-        chapters: Array.from({ length: effectiveChapters }, (_, i) => ({
-          chapterNumber: i + 1, title: `Chapter ${i + 1}`,
-          description: "Content pending generation", keyTopics: ["Topic 1", "Topic 2", "Topic 3"],
-        })),
-      };
+      console.error("[GENERATE-BOOK] Outline parse failed; deterministic normalizer will fill the requested structure");
+      parsedOutline = {};
     }
 
+    const bookOutline = normalizeGeneratedOutline(
+      parsedOutline,
+      effectiveChapters,
+      title,
+      description || "A comprehensive exploration of the topic",
+    );
+
+    console.log(
+      `[GENERATE-BOOK] Outline normalized to exactly ${bookOutline.chapters.length}/${effectiveChapters} chapters`,
+    );
     console.log("[GENERATE-BOOK] Outline ready, saving...");
 
     // Save book
@@ -370,6 +454,33 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       cover_image_url: customCover || null,
       creator_id: user.id, user_id: user.id,
       language, book_type: effectiveBookType,
+      workbook_density: effectiveBookType === "workbook"
+        ? (["low", "medium", "high"].includes(String(workbookDensity)) ? String(workbookDensity) : "medium")
+        : null,
+      comic_style_id: effectiveBookType === "comic" ? sanitize(comicStyleId, 64) || "children_book" : null,
+      palette_hint: effectiveBookType === "comic" ? paletteHint || null : null,
+      line_weight_hint: effectiveBookType === "comic" && ["thin", "medium", "bold"].includes(String(lineWeightHint))
+        ? String(lineWeightHint)
+        : null,
+      character_sheet: effectiveBookType === "comic"
+        ? (Object.keys(safeCharacterSheetConfig).length > 0
+            ? safeCharacterSheetConfig
+            : (sanitize(characterSheet, 4000) ? { description: sanitize(characterSheet, 4000) } : {}))
+        : {},
+      layout_template: effectiveBookType === "comic" && Number.isInteger(layoutTemplate)
+        ? Math.min(6, Math.max(3, Number(layoutTemplate)))
+        : 5,
+      text_in_image: effectiveBookType === "comic" ? Boolean(textInImage) : true,
+      scenes_per_panel: effectiveBookType === "comic" && Number.isInteger(scenesPerPanel)
+        ? Math.min(3, Math.max(1, Number(scenesPerPanel)))
+        : 1,
+      comic_sub_type: effectiveBookType === "comic" ? sanitize(comicSubType, 64) || "entertainment" : null,
+      comic_sub_type_config: effectiveBookType === "comic" ? safeComicSubTypeConfig : {},
+      character_sheet_config: effectiveBookType === "comic" ? safeCharacterSheetConfig : {},
+      comic_learning_config: effectiveBookType === "comic" ? safeComicLearningConfig : {},
+      fiction_config: effectiveBookType === "fiction" ? safeFictionConfig : {},
+      style_profile: safeStyleProfile,
+      target_chapter_words: wordCount,
     }).select().single();
 
     if (bookError) {
@@ -386,7 +497,15 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       status: 'generating',
       current_chapter: 0,
       total_chapters: effectiveChapters,
-      metadata: { bookType: effectiveBookType, model: generationModel, language },
+      metadata: {
+        bookType: effectiveBookType,
+        model: generationModel,
+        language,
+        contractVersion: 2,
+        targetChapterWords: wordCount,
+        phase: "drafting",
+        orchestrator: "server_worker",
+      },
     }).select('id').single();
 
     if (genJobError || !genJob?.id) {
@@ -400,12 +519,19 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     console.log(`[GENERATE-BOOK] Job ${jobId.slice(0, 8)}... created`);
 
     // Save chapters
-    const chaptersToInsert = bookOutline.chapters.map((ch: any) => ({
+    const chaptersToInsert = bookOutline.chapters.map((ch: NormalizedOutlineChapter) => ({
       book_id: book.id,
       chapter_number: ch.chapterNumber,
       title: ch.title,
       content: `## ${ch.title}\n\n${ch.description}\n\n### Key Topics\n${(ch.keyTopics || []).map((t: string) => `- ${t}`).join("\n")}\n\n*Full chapter content is being generated...*`,
-      word_count: 0, is_generated: false,
+      word_count: 0,
+      is_generated: false,
+      academic_mode: academicMode === true || isAcademicType,
+      citation_style: sanitize(citationStyle, 32) || "APA",
+      generation_outline: {
+        description: ch.description || "",
+        keyTopics: Array.isArray(ch.keyTopics) ? ch.keyTopics.slice(0, 12) : [],
+      },
     }));
 
     const { error: chaptersError } = await sc.from("chapters").insert(chaptersToInsert);
@@ -451,9 +577,52 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
 
     console.log(`[GENERATE-BOOK] Done. Daily: ${reservation.books_used}/${dailyLimit === -1 ? "unlimited" : dailyLimit}`);
 
+    // Initial full-book drafting is server-owned. Dispatch only after the book,
+    // chapters, job, and library linkage are durably committed. One worker
+    // invocation generates one leased chapter and dispatches the next step.
+    let backgroundGenerationStarted = false;
+    const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
+    const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
+    if (SUPABASE_URL && SUPABASE_SERVICE_ROLE_KEY) {
+      const dispatch = fetch(SUPABASE_URL + "/functions/v1/generation-worker", {
+        method: "POST",
+        headers: {
+          Authorization: "Bearer " + SUPABASE_SERVICE_ROLE_KEY,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ jobId }),
+      }).then(async (workerResponse) => {
+        if (!workerResponse.ok) {
+          console.error(
+            "[GENERATE-BOOK] Background worker dispatch failed:",
+            workerResponse.status,
+            await workerResponse.text(),
+          );
+        }
+      }).catch((workerError) => {
+        console.error("[GENERATE-BOOK] Background worker dispatch exception:", workerError);
+      });
+
+      const edgeRuntime = (
+        globalThis as typeof globalThis & {
+          EdgeRuntime?: { waitUntil: (promise: Promise<unknown>) => void };
+        }
+      ).EdgeRuntime;
+      if (edgeRuntime?.waitUntil) {
+        edgeRuntime.waitUntil(dispatch);
+        backgroundGenerationStarted = true;
+      } else {
+        console.warn("[GENERATE-BOOK] EdgeRuntime.waitUntil unavailable; book remains resumable by generation-worker");
+      }
+    }
+
     return new Response(JSON.stringify({
-      success: true, message: "Book created successfully",
-      bookId: book.id, jobId, outline: bookOutline,
+      success: true,
+      message: "Book created successfully",
+      bookId: book.id,
+      jobId,
+      outline: bookOutline,
+      backgroundGenerationStarted,
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
 
   } catch (error) {

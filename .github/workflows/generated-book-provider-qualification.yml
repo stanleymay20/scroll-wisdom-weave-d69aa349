@@ -1,0 +1,108 @@
+name: Generated Book Provider Qualification
+
+on:
+  workflow_dispatch:
+    inputs:
+      book_type:
+        description: Specialized authoring mode under qualification
+        required: true
+        type: choice
+        options:
+          - academic
+          - technical
+          - reference
+          - professional
+          - bestseller
+          - workbook
+          - illustrated
+          - children
+          - comic
+          - fiction
+      book_ids:
+        description: Comma- or newline-separated qualification book UUIDs
+        required: true
+        type: string
+      supabase_url:
+        description: Supabase project URL for the controlled qualification environment
+        required: true
+        type: string
+      reviews_path:
+        description: Optional repository path to the human-review JSON
+        required: false
+        default: ""
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  qualify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: 1.2.23
+
+      - run: bun install --frozen-lockfile
+
+      - name: Collect current-state qualification evidence
+        id: collect
+        continue-on-error: true
+        env:
+          BOOK_TYPE: ${{ inputs.book_type }}
+          BOOK_IDS: ${{ inputs.book_ids }}
+          REVIEWS_PATH: ${{ inputs.reviews_path }}
+          QUALIFICATION_SUPABASE_URL: ${{ inputs.supabase_url }}
+          QUALIFICATION_SUPABASE_SECRET_KEY: ${{ secrets.QUALIFICATION_SUPABASE_SECRET_KEY }}
+          QUALIFICATION_SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.QUALIFICATION_SUPABASE_SERVICE_ROLE_KEY }}
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          args=(--type "$BOOK_TYPE" --output provider-qualification-evidence.json)
+          normalized="$(printf '%s\n' "$BOOK_IDS" | tr ',' '\n')"
+          found=0
+
+          while IFS= read -r raw; do
+            book_id="$(printf '%s' "$raw" | xargs)"
+            [ -z "$book_id" ] && continue
+            if [[ ! "$book_id" =~ ^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[1-5][0-9a-fA-F]{3}-[89aAbB][0-9a-fA-F]{3}-[0-9a-fA-F]{12}$ ]]; then
+              echo "::error::Invalid book UUID: $book_id"
+              exit 64
+            fi
+            args+=(--book "$book_id")
+            found=$((found + 1))
+          done <<< "$normalized"
+
+          if [ "$found" -eq 0 ]; then
+            echo "::error::No valid qualification book IDs were supplied."
+            exit 64
+          fi
+
+          if [ -n "$REVIEWS_PATH" ]; then
+            if [ ! -f "$REVIEWS_PATH" ]; then
+              echo "::error::Human-review file not found: $REVIEWS_PATH"
+              exit 66
+            fi
+            args+=(--reviews "$REVIEWS_PATH")
+          fi
+
+          bun scripts/collect-provider-qualification.ts "${args[@]}"
+
+      - name: Upload qualification evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: generated-book-qualification-${{ inputs.book_type }}-${{ github.run_id }}
+          path: provider-qualification-evidence.json
+          if-no-files-found: warn
+          retention-days: 90
+
+      - name: Enforce qualification verdict
+        if: steps.collect.outcome != 'success'
+        run: |
+          echo "::error::The qualification campaign did not meet its release contract. Inspect the uploaded evidence artifact."
+          exit 1

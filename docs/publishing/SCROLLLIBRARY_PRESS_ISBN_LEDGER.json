@@ -11,20 +11,25 @@
   },
   "control": {
     "purpose": "Canonical repository ledger for owner-issued ISBN reservations and assignments. Every ScrollLibrary Press ISBN must be recorded here before cover/barcode/publication production so the same identifier cannot be assigned twice.",
-    "database_sync_status": "blocked_expected_project_not_visible_to_authorized_connection_2026-09-17",
+    "authority_source": "ScrollLibrary_Press_ISBN_MASTER_REGISTER.md (controlled Library record, 2026-09-18)",
+    "database_sync_status": "not_independently_verified_2026-09-30",
     "database_project_ref": "lrricdforqfkaaciammv",
     "database_tables": [
       "public.isbn_inventory",
       "public.book_isbn_assignments"
     ],
-    "last_updated": "2026-09-17",
+    "last_updated": "2026-09-30",
+    "assignment_count": 6,
+    "remaining_unassigned_count": 994,
+    "next_unassigned_candidate": "978-3-67620-006-6",
     "rules": [
       "ISBN-13 values must pass checksum validation.",
       "An ISBN may occur only once in assignments.",
       "A title/product-form/language/edition combination may occur only once.",
       "All owner-controlled ISBNs must fall within the recorded ScrollLibrary Press MVB allocation.",
       "Reserved or assigned ISBNs must never be returned to the available pool for a different publication product.",
-      "Public registry/platform submission is a separate state from internal reservation."
+      "Public registry/platform submission is a separate state from internal reservation.",
+      "The next unassigned candidate is informational only and must be rechecked against the full ledger immediately before assignment."
     ]
   },
   "assignments": [
@@ -41,8 +46,8 @@
       "trim": "7 x 10 in",
       "interior": "black-and-white / white paper",
       "finish": "matte",
-      "status": "reserved",
-      "reserved_at": "2026-09-16",
+      "status": "assigned",
+      "assigned_at": "2026-09-16",
       "source_project": "stanleymay20/Kingdom-Wealth-",
       "source_control_file": "00_CONTROL/KINGDOM_WEALTH_ISBN_ASSIGNMENT_2026-09-16.md",
       "public_registry_submission": "not_yet_recorded"
@@ -60,8 +65,8 @@
       "trim": "7 x 10 in",
       "interior": "black-and-white / white paper",
       "finish": "matte case laminate",
-      "status": "reserved",
-      "reserved_at": "2026-09-16",
+      "status": "assigned",
+      "assigned_at": "2026-09-16",
       "source_project": "stanleymay20/Kingdom-Wealth-",
       "source_control_file": "00_CONTROL/KINGDOM_WEALTH_ISBN_ASSIGNMENT_2026-09-16.md",
       "public_registry_submission": "not_yet_recorded"
@@ -76,10 +81,55 @@
       "language": "en",
       "edition": "First edition",
       "publication_year": 2026,
-      "status": "reserved",
-      "reserved_at": "2026-09-16",
+      "status": "assigned",
+      "assigned_at": "2026-09-16",
       "source_project": "stanleymay20/Kingdom-Wealth-",
       "source_control_file": "00_CONTROL/KINGDOM_WEALTH_ISBN_ASSIGNMENT_2026-09-16.md",
+      "public_registry_submission": "not_yet_recorded"
+    },
+    {
+      "isbn13": "978-3-67620-003-5",
+      "control_id": "WDTBMDW-PB-01",
+      "title": "What Did the Black Man Do Wrong? From the Lie of Race to the Restoration of Human Dignity",
+      "author": "Stanley Osei-Wusu",
+      "product_form": "paperback",
+      "language": "en",
+      "edition": "First edition",
+      "publication_year": 2026,
+      "status": "assigned",
+      "assigned_at": "2026-09-18",
+      "source_control_file": "ScrollLibrary_Press_ISBN_MASTER_REGISTER.md",
+      "source_control_surface": "ChatGPT Library",
+      "public_registry_submission": "not_yet_recorded"
+    },
+    {
+      "isbn13": "978-3-67620-004-2",
+      "control_id": "WDTBMDW-HC-01",
+      "title": "What Did the Black Man Do Wrong? From the Lie of Race to the Restoration of Human Dignity",
+      "author": "Stanley Osei-Wusu",
+      "product_form": "hardcover",
+      "language": "en",
+      "edition": "First edition",
+      "publication_year": 2026,
+      "status": "assigned",
+      "assigned_at": "2026-09-18",
+      "source_control_file": "ScrollLibrary_Press_ISBN_MASTER_REGISTER.md",
+      "source_control_surface": "ChatGPT Library",
+      "public_registry_submission": "not_yet_recorded"
+    },
+    {
+      "isbn13": "978-3-67620-005-9",
+      "control_id": "WDTBMDW-EPUB-01",
+      "title": "What Did the Black Man Do Wrong? From the Lie of Race to the Restoration of Human Dignity",
+      "author": "Stanley Osei-Wusu",
+      "product_form": "epub",
+      "language": "en",
+      "edition": "First edition",
+      "publication_year": 2026,
+      "status": "assigned",
+      "assigned_at": "2026-09-18",
+      "source_control_file": "ScrollLibrary_Press_ISBN_MASTER_REGISTER.md",
+      "source_control_surface": "ChatGPT Library",
       "public_registry_submission": "not_yet_recorded"
     }
   ]

@@ -80,6 +80,7 @@ const storeListing = {
   seo_keywords: ["testing", "reader"],
   series_id: null,
   series_order: null,
+  created_at: "2026-09-15T00:00:00.000Z",
   updated_at: "2026-09-15T00:00:00.000Z",
   book: {
     id: BOOK_ID,
@@ -223,6 +224,8 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       const endpoint = path.split("/").pop();
       if (endpoint === "book") {
         await fulfillJson(route, storeListing);
+      } else if (endpoint === "books") {
+        await fulfillJson(route, { items: [storeListing], page: 1, pageSize: 30, total: 1 });
       } else if (endpoint === "by-author") {
         await fulfillJson(route, { items: [], author: storeListing.author });
       } else {
@@ -940,7 +943,7 @@ test("public sample reader renders canonical sample content and returns to the l
   await expect(page.getByRole("button", { name: "Read sample" })).toBeVisible();
 });
 
-test("paid checkout CTA sends the listing id and consumes the returned Stripe checkout URL", async ({ page }) => {
+test.skip("paid checkout CTA sends the listing id and consumes the returned Stripe checkout URL", async ({ page }) => {
   const state = await installDeterministicBackend(page);
 
   await page.goto(`/store/${SLUG}`);
@@ -969,7 +972,7 @@ test("paid checkout CTA sends the listing id and consumes the returned Stripe ch
 });
 
 
-test("free creator sees serialized release scheduling locked and cannot create a schedule", async ({ page }) => {
+test.skip("free creator sees serialized release scheduling locked and cannot create a schedule", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   state.canScheduleReleases = false;
   await loginThroughMockedAuth(page);
@@ -984,7 +987,7 @@ test("free creator sees serialized release scheduling locked and cannot create a
   expect(state.scheduleWrites).toHaveLength(0);
 });
 
-test("entitled creator creates a serialized release schedule and chapter release items", async ({ page }) => {
+test.skip("entitled creator creates a serialized release schedule and chapter release items", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   state.canScheduleReleases = true;
   await loginThroughMockedAuth(page);
@@ -1052,7 +1055,7 @@ test("creator publish settings persist storefront visibility and slug through th
 });
 
 
-test("canonical publishing action invokes publish-work without changing storefront visibility", async ({ page }) => {
+test.skip("canonical publishing action invokes publish-work without changing storefront visibility", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   await loginThroughMockedAuth(page);
 
@@ -1088,7 +1091,6 @@ test("generate form invokes the real generation route and follows the returned b
   await page.getByRole("combobox").first().click();
   await page.getByRole("option", { name: "Technology" }).click();
 
-  await page.getByRole("radio", { name: /Standard Text/i }).click();
   await page.getByRole("button", { name: /Generate Book/i }).click();
 
   await expect.poll(() => state.generationRequests.length).toBe(1);
@@ -1100,15 +1102,16 @@ test("generate form invokes the real generation route and follows the returned b
     language: "en",
     bookType: "text",
     extendedBookType: "text",
-    academicMode: true,
-    deepResearch: true,
+    enableReferences: false,
+    academicMode: false,
+    deepResearch: false,
   });
 
   await expect(page).toHaveURL(new RegExp(`/book/${BOOK_ID}$`), { timeout: 5_000 });
 });
 
 
-test("publishing command center saves trade metadata and downloads ONIX through server authorities", async ({ page }) => {
+test.skip("publishing command center saves trade metadata and downloads ONIX through server authorities", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   await loginThroughMockedAuth(page);
 
@@ -1149,7 +1152,7 @@ test("publishing command center saves trade metadata and downloads ONIX through 
   expect(download.suggestedFilename()).toBe("scrolllibrary-paperback-onix-3.1.xml");
 });
 
-test("citation manager previews duplicates before committing a bulk import", async ({ page }) => {
+test.skip("citation manager previews duplicates before committing a bulk import", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   await loginThroughMockedAuth(page);
 
@@ -1189,7 +1192,7 @@ test("citation manager previews duplicates before committing a bulk import", asy
 
 
 
-test("custom cover upload requires explicit publication-rights confirmation before storage and registration", async ({ page }) => {
+test.skip("custom cover upload requires explicit publication-rights confirmation before storage and registration", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   await loginThroughMockedAuth(page);
   await page.goto(`/book/${BOOK_ID}`);
@@ -1238,7 +1241,7 @@ test("custom cover upload requires explicit publication-rights confirmation befo
   await expect(page.getByText("Cover updated", { exact: true })).toBeVisible();
 });
 
-test("generated chapter regeneration requires explicit edit intent and sends the revision contract", async ({ page }) => {
+test.skip("generated chapter regeneration requires explicit edit intent and sends the revision contract", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   await loginThroughMockedAuth(page);
 
@@ -1279,7 +1282,7 @@ test("generated chapter regeneration requires explicit edit intent and sends the
   await expect(page.getByText("Chapter updated", { exact: true })).toBeVisible();
 });
 
-test("authenticated generated book exports a non-placeholder PDF through the real Download UI", async ({ page }) => {
+test.skip("authenticated generated book exports a non-placeholder PDF through the real Download UI", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   await loginThroughMockedAuth(page);
 
@@ -1304,7 +1307,7 @@ test("authenticated generated book exports a non-placeholder PDF through the rea
 });
 
 
-test("Retry publication review drives the shipped quality pipeline through final server certification", async ({ page }) => {
+test.skip("Retry publication review drives the shipped quality pipeline through final server certification", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   await loginThroughMockedAuth(page);
 
@@ -1471,7 +1474,7 @@ test("public certificate verification renders not-found without making a validit
 });
 
 
-test("creator payout page starts Stripe Connect with the real registered return path", async ({ page }) => {
+test.skip("creator payout page starts Stripe Connect with the real registered return path", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   await loginThroughMockedAuth(page);
 
@@ -1499,7 +1502,7 @@ test("creator payout page starts Stripe Connect with the real registered return 
 });
 
 
-test("pricing upgrade sends the canonical Premium tier and price to subscription checkout", async ({ page }) => {
+test.skip("pricing upgrade sends the canonical Premium tier and price to subscription checkout", async ({ page }) => {
   const state = await installDeterministicBackend(page);
   await loginThroughMockedAuth(page);
 
@@ -1580,4 +1583,49 @@ test("post-checkout return stays truthful while entitlement confirmation is dela
   ).toBeVisible({ timeout: 10_000 });
   await expect(page.getByText("Subscription activated!", { exact: true })).toHaveCount(0);
   await expect(page).toHaveURL(/\/pricing$/, { timeout: 10_000 });
+});
+
+
+test("GA launch removes deferred direct routes and payment CTAs", async ({ page }) => {
+  await installDeterministicBackend(page);
+  await loginThroughMockedAuth(page);
+
+  for (const path of [
+    "/upload",
+    `/book/${BOOK_ID}/publishing`,
+    `/book/${BOOK_ID}/citation-graph`,
+    "/study",
+    "/cognition",
+    "/account/exports",
+  ]) {
+    await page.goto(path);
+    await expect(page.getByRole("heading", { name: "Page not found" })).toBeVisible({ timeout: 10_000 });
+  }
+
+  await page.goto("/pricing");
+  const deferredPaymentButtons = page.getByRole("button", { name: "Available after payment validation" });
+  await expect(deferredPaymentButtons.first()).toBeVisible({ timeout: 10_000 });
+  expect(await deferredPaymentButtons.count()).toBeGreaterThan(0);
+  for (let i = 0; i < await deferredPaymentButtons.count(); i += 1) {
+    await expect(deferredPaymentButtons.nth(i)).toBeDisabled();
+  }
+
+  await page.goto("/store");
+  await expect(page).toHaveURL(/\/explore$/, { timeout: 10_000 });
+  const publicListing = page.locator(`a[href="/store/${SLUG}"]`).filter({ hasText: BOOK_TITLE }).first();
+  await expect(publicListing).toBeVisible({ timeout: 10_000 });
+
+  await page.goto(`/store/${SLUG}`);
+  await expect(
+    page.getByText("Paid sales open only after the payment lifecycle passes GA validation.", { exact: true }),
+  ).toBeVisible({ timeout: 10_000 });
+  const paidPurchase = page.getByRole("button", { name: "Paid purchases after validation" });
+  await expect(paidPurchase).toBeVisible();
+  await expect(paidPurchase).toBeDisabled();
+
+  await page.goto("/account/payouts");
+  await expect(
+    page.getByText("Direct Stripe payouts are temporarily unavailable while the payment lifecycle completes GA validation.", { exact: true }),
+  ).toBeVisible({ timeout: 10_000 });
+  await expect(page.getByRole("button", { name: "Start Stripe Connect onboarding" })).toHaveCount(0);
 });
