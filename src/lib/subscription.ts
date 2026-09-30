@@ -30,7 +30,7 @@ export const SUBSCRIPTION_TIERS = {
       exportFormats: ['pdf'],
       audioCredits: 5,
       ttsMinutes: 5, // compatibility: one standard narration minute ~= one audio credit
-      interactiveVoiceMinutes: 0,
+      interactiveVoiceMinutes: 1.5,
       visualCredits: 0,
       aiImageQuota: 0, // compatibility alias for standard image credits
       aiCovers: false,
@@ -60,7 +60,7 @@ export const SUBSCRIPTION_TIERS = {
       exportFormats: ['pdf', 'epub', 'docx'],
       audioCredits: 15,
       ttsMinutes: 15,
-      interactiveVoiceMinutes: 0,
+      interactiveVoiceMinutes: 5,
       visualCredits: 10,
       aiImageQuota: 10,
       aiCovers: true,
