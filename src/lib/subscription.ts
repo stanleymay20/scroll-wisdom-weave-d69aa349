@@ -24,7 +24,7 @@ export const SUBSCRIPTION_TIERS = {
     }
   },
   student: {
-    name: 'Student',
+    name: 'Creator',
     price_id: 'price_1SdFbTJYFIBeCvefKzHWUrcb',
     product_id: 'prod_TaQSrotoUkTuPC',
     monthlyPrice: 9,
@@ -45,7 +45,7 @@ export const SUBSCRIPTION_TIERS = {
     }
   },
   premium: {
-    name: 'Premium',
+    name: 'Pro',
     price_id: 'price_1SdFddJYFIBeCvefJr1ZY92E',
     product_id: 'prod_TaQU3ILEUpbXOT',
     monthlyPrice: 19,
@@ -66,7 +66,7 @@ export const SUBSCRIPTION_TIERS = {
     }
   },
   prophet_tier: {
-    name: 'Institutional',
+    name: 'Teams',
     price_id: 'price_1T2eR8JYFIBeCvefx02IXTz6',
     product_id: 'prod_U0fmlf14TPlMKj',
     monthlyPrice: 79,
@@ -97,29 +97,24 @@ export type SubscriptionTier = keyof typeof SUBSCRIPTION_TIERS;
 // plan (Premium, Student...) AND a Creator subscription concurrently.
 export const CREATOR_SUBSCRIPTION_TIERS = {
   creator: {
-    name: 'Creator',
+    name: 'Publisher',
     price_id: 'price_1TalITJYFIBeCvefdkr4LeL7',
     product_id: 'prod_UZv8Eine5sKy0j',
     monthlyPrice: 19,
     currency: 'EUR',
     features: [
-      'External publishing (Gumroad, Shopify, KDP)',
-      'Release scheduling',
-      'Unlimited collections',
       '0% marketplace surcharge',
+      'Release scheduling when the release gate is enabled',
     ],
   },
   creator_pro: {
-    name: 'Creator Pro',
+    name: 'Publisher Pro',
     price_id: 'price_1TalIUJYFIBeCvefHU67sm3O',
     product_id: 'prod_UZv8yPrOGDBuWE',
     monthlyPrice: 49,
     currency: 'EUR',
     features: [
-      'Everything in Creator',
-      'Priority generation queue',
-      '+50 monthly generation bonus',
-      'Early access to new platforms',
+      'Everything in Publisher',
     ],
   },
 } as const;
