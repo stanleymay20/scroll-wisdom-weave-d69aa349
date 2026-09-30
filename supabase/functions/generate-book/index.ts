@@ -578,7 +578,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       error_message: null,
     }).eq("id", jobId);
 
-    console.log(`[GENERATE-BOOK] Done. Daily: ${reservation.books_used}/${dailyLimit === -1 ? "unlimited" : dailyLimit}`);
+    console.log(`[GENERATE-BOOK] Done. Monthly projects: ${reservation.used}/${bookLimit === -1 ? "unlimited" : bookLimit}`);
 
     // Initial full-book drafting is server-owned. Dispatch only after the book,
     // chapters, job, and library linkage are durably committed. One worker
