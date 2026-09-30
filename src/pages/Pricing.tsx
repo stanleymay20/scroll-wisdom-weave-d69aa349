@@ -112,6 +112,9 @@ export default function Pricing() {
   const navigate = useNavigate();
   const { toast } = useToast();
   const { t } = useLanguage();
+  const visiblePlans = FEATURES.enableSubscriptionCheckout
+    ? plans
+    : plans.filter((plan) => plan.tierKey === "free");
 
   // Handle post-checkout redirect. The query string is not entitlement
   // authority: verify with the server before claiming activation.
@@ -251,7 +254,7 @@ export default function Pricing() {
     <div className="min-h-screen flex flex-col">
       <SEO
         title="Pricing | ScrollLibrary"
-        description="Plans for authors, creators, and teams. Create structured AI-native books today; advanced publishing capabilities remain gated until GA validation."
+        description="Free GA access for creating, reading, assessing, and listing AI-native books on ScrollLibrary. Paid upgrades and external publishing remain gated until validation."
         canonical="/pricing"
       />
       <Navbar />
@@ -265,16 +268,16 @@ export default function Pricing() {
             {/* Header */}
             <div className="text-center mb-16">
               <h1 className="text-4xl md:text-5xl font-display font-bold text-foreground mb-4">
-                Publishing plans
+                Create and publish in GA
               </h1>
-              <p className="text-muted-foreground text-lg max-w-xl mx-auto">
-                Start creating free. More capacity and advanced publishing tools unlock only as their GA validation gates pass.
+              <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
+                The current GA experience is free. Create, read, assess, and list books on ScrollLibrary while paid upgrades, exports, paid sales, and external publishing remain closed until their validation gates pass.
               </p>
             </div>
 
             {/* Plans Grid */}
             <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto mb-16">
-              {plans.map((plan, index) => {
+              {visiblePlans.map((plan, index) => {
                 const isCurrent = isCurrentPlan(plan.tierKey);
                 
                 return (
@@ -351,15 +354,31 @@ export default function Pricing() {
               })}
             </div>
 
+            {!FEATURES.enableSubscriptionCheckout && (
+              <div className="mb-16 rounded-2xl border border-border bg-muted/30 p-6 md:p-8 text-center">
+                <Badge variant="secondary" className="mb-3">GA boundary</Badge>
+                <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-3">
+                  Paid plans are not open yet
+                </h2>
+                <p className="text-muted-foreground max-w-2xl mx-auto mb-5">
+                  Use the Free GA plan today. Paid generation tiers and marketplace creator subscriptions will appear only after the payment lifecycle passes its validation gates.
+                </p>
+                <Button variant="outline" disabled>
+                  Available after payment validation
+                </Button>
+              </div>
+            )}
+
             {/* Creator tiers (Phase 4.0) */}
-            <div id="creator" className="mt-20 mb-16 scroll-mt-24">
+            {FEATURES.enableSubscriptionCheckout && (
+              <div id="creator" className="mt-20 mb-16 scroll-mt-24">
               <div className="text-center mb-10">
-                <Badge className="mb-3">For Creators</Badge>
+                <Badge className="mb-3">Marketplace add-ons</Badge>
                 <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-3">
-                  Publish and sell, your way
+                  Add marketplace publishing capacity
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto">
-                  List books on the ScrollLibrary marketplace now. External publishing integrations remain gated until their provider E2E checks pass.
+                  Optional creator subscriptions extend marketplace publishing features. External provider integrations remain gated until their own E2E checks pass.
                 </p>
               </div>
 
@@ -460,8 +479,8 @@ export default function Pricing() {
                 })}
 
               </div>
-            </div>
-
+              </div>
+            )}
 
             {/* Manage Subscription */}
             {isSubscribed && (
@@ -480,21 +499,38 @@ export default function Pricing() {
               </div>
             )}
 
-            {/* Trust */}
-            <div className="flex flex-wrap justify-center gap-8 text-muted-foreground border-t border-border/50 pt-8">
-              <div className="flex items-center gap-2">
-                <Shield className="h-5 w-5 text-primary" />
-                <span className="text-sm">Secure payments via Stripe</span>
+            {/* Trust / GA boundary */}
+            {FEATURES.enableSubscriptionCheckout ? (
+              <div className="flex flex-wrap justify-center gap-8 text-muted-foreground border-t border-border/50 pt-8">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  <span className="text-sm">Secure payments via Stripe</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Download className="h-5 w-5 text-primary" />
+                  <span className="text-sm">Instant access</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Volume2 className="h-5 w-5 text-primary" />
+                  <span className="text-sm">Cancel anytime</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Download className="h-5 w-5 text-primary" />
-                <span className="text-sm">Instant access</span>
+            ) : (
+              <div className="flex flex-wrap justify-center gap-8 text-muted-foreground border-t border-border/50 pt-8">
+                <div className="flex items-center gap-2">
+                  <Shield className="h-5 w-5 text-primary" />
+                  <span className="text-sm">GA access requires no payment</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Download className="h-5 w-5 text-primary" />
+                  <span className="text-sm">Exports remain gated</span>
+                </div>
+                <div className="flex items-center gap-2">
+                  <Check className="h-5 w-5 text-primary" />
+                  <span className="text-sm">Free marketplace listing is available</span>
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <Volume2 className="h-5 w-5 text-primary" />
-                <span className="text-sm">Cancel anytime</span>
-              </div>
-            </div>
+            )}
           </motion.div>
         </div>
       </main>
