@@ -13,6 +13,18 @@ export function externalPaymentWritesEnabled(value?: string | null): boolean {
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
 
+/**
+ * Publisher add-on subscriptions are a separate paid surface from generation
+ * plans and stay fail-closed until their advertised capabilities are qualified.
+ */
+export function publisherSubscriptionsEnabled(value?: string | null): boolean {
+  const normalized = String(
+    value === undefined ? Deno.env.get("GA_PUBLISHER_SUBSCRIPTIONS_ENABLED") ?? "" : value ?? "",
+  ).trim().toLowerCase();
+
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}
+
 
 export function advancedAuthoringEnabled(value?: string | null): boolean {
   const normalized = String(
