@@ -145,6 +145,20 @@ serve(async (req) => {
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+    const stripePrice = await stripe.prices.retrieve(priceId);
+    if (!stripePrice.active
+        || stripePrice.type !== "one_time"
+        || stripePrice.unit_amount !== spec.amountCents
+        || String(stripePrice.currency).toLowerCase() !== spec.currency) {
+      return new Response(JSON.stringify({
+        error: "Billing catalogue verification failed.",
+        code: "billing_catalogue_mismatch",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
+
     const customerId = await ensureBillingCustomer(
       admin,
       stripe,
