@@ -2,28 +2,15 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { encode as base64Encode } from "https://deno.land/std@0.190.0/encoding/base64.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
+import { BILLING_PLAN_LIMITS, billingPlanFor } from "../_shared/billing-plans.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-/** TTS monthly limits by plan tier (in minutes) — aligned with subscription.ts */
-const TIER_TTS_LIMITS: Record<string, number> = {
-  free: 5,
-  student: 30,
-  premium: 60,
-  prophet_tier: 300,
-};
-
 const OPENAI_VOICES = ["alloy", "echo", "fable", "onyx", "nova", "shimmer"] as const;
 type OpenAIVoice = typeof OPENAI_VOICES[number];
-
-type TtsReservation = {
-  allowed: boolean;
-  minutes_used: number;
-  remaining_minutes: number;
-};
 
 serve(async (req) => {
   console.log("[TTS] Request received");
@@ -135,28 +122,35 @@ serve(async (req) => {
       .maybeSingle();
     const isAdmin = !!roleData;
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("plan")
-      .or(`user_id.eq.${userId},id.eq.${userId}`)
+    const { data: subscription } = await supabase
+      .from("subscriptions")
+      .select("tier,status")
+      .eq("user_id", userId)
       .maybeSingle();
 
-    const userPlan = profile?.plan || "free";
-    const monthlyLimit = isAdmin ? -1 : (TIER_TTS_LIMITS[userPlan] ?? TIER_TTS_LIMITS.free);
+    const userPlan = billingPlanFor(
+      (subscription?.status === "active" || subscription?.status === "trialing")
+        ? subscription.tier
+        : "free",
+    );
+    const audioCreditLimit = BILLING_PLAN_LIMITS[userPlan].audioCreditsPerMonth;
+    // One standard narration minute consumes one audio credit. Internally the
+    // shared pool is stored in "audio units" where 60 units = 1 credit.
+    const requestedAudioUnits = estimatedMinutes * 60;
+    const audioUnitLimit = isAdmin ? -1 : audioCreditLimit * 60;
 
     if (isAdmin) {
-      console.log("[TTS] Admin user - unlimited quota, usage still tracked");
+      console.log("[TTS] Admin user - unlimited audio pool, usage still tracked");
     }
 
-    // Atomic reservation closes both single-request overshoot and concurrent
-    // request races. Browser roles cannot execute this RPC directly.
     const { data: reservationData, error: reservationError } = await supabase.rpc(
-      "reserve_tts_minutes",
+      "reserve_billing_usage",
       {
         _user_id: userId,
         _month: currentMonth,
-        _minutes: estimatedMinutes,
-        _limit: monthlyLimit,
+        _metric: "audio_units",
+        _units: requestedAudioUnits,
+        _base_limit: audioUnitLimit,
       },
     );
 
@@ -168,7 +162,8 @@ serve(async (req) => {
       );
     }
 
-    const reservation = (Array.isArray(reservationData) ? reservationData[0] : reservationData) as TtsReservation | null;
+    const reservation = (Array.isArray(reservationData) ? reservationData[0] : reservationData) as
+      { allowed: boolean; used: number; remaining: number; effective_limit: number } | null;
 
     if (!reservation) {
       console.error("[TTS] Quota reservation returned no result");
@@ -179,11 +174,14 @@ serve(async (req) => {
     }
 
     if (!reservation.allowed) {
-      console.log(`[TTS] Monthly limit would be exceeded: ${reservation.minutes_used}/${monthlyLimit} min (${userPlan})`);
+      console.log(`[TTS] Audio pool would be exceeded: ${reservation.used}/${reservation.effective_limit} units (${userPlan})`);
       const gate = gateDenied("AUDIO_LIMIT_REACHED", {
-        message: `This request exceeds your remaining audio allowance (${monthlyLimit} min for ${userPlan}). Upgrade to keep listening.`,
+        message: `This request exceeds your remaining audio credits (${audioCreditLimit} credits on ${BILLING_PLAN_LIMITS[userPlan].publicName}).`,
         currentPlan: userPlan,
-        usage: { audioMinutesUsed: reservation.minutes_used, audioMinutesLimit: monthlyLimit },
+        usage: {
+          audioMinutesUsed: reservation.used / 60,
+          audioMinutesLimit: reservation.effective_limit / 60,
+        },
       });
       await recordGateEvent(supabase, {
         user_id: userId,
@@ -192,10 +190,10 @@ serve(async (req) => {
         allowed: false,
         plan: userPlan,
         usage_snapshot: {
-          used: reservation.minutes_used,
-          limit: monthlyLimit,
-          requested: estimatedMinutes,
-          remaining: reservation.remaining_minutes,
+          usedAudioUnits: reservation.used,
+          limitAudioUnits: reservation.effective_limit,
+          requestedAudioUnits,
+          remainingAudioUnits: reservation.remaining,
         },
       });
       return gateResponse(gate, corsHeaders);
@@ -205,10 +203,11 @@ serve(async (req) => {
     refundReservation = async () => {
       if (!reservationActive) return;
       reservationActive = false;
-      const { error: releaseError } = await supabase.rpc("release_tts_minutes", {
+      const { error: releaseError } = await supabase.rpc("release_billing_usage", {
         _user_id: userId,
         _month: currentMonth,
-        _minutes: estimatedMinutes,
+        _metric: "audio_units",
+        _units: requestedAudioUnits,
       });
       if (releaseError) {
         console.error("[TTS] Failed to refund quota reservation:", releaseError);
@@ -324,7 +323,7 @@ serve(async (req) => {
 
     // Successful provider generation consumes the reservation. There is no
     // second direct tts_usage write here; the database reservation is canonical.
-    console.log(`[TTS] Success. Usage: ${reservation.minutes_used}/${monthlyLimit} min`);
+    console.log(`[TTS] Success. Audio usage: ${reservation.used}/${reservation.effective_limit} units`);
 
     return new Response(
       JSON.stringify({
@@ -335,8 +334,10 @@ serve(async (req) => {
         method: "openai-tts",
         charCount: cleanedText.length,
         minutesUsed: estimatedMinutes,
-        totalMinutesUsed: reservation.minutes_used,
-        remainingMinutes: reservation.remaining_minutes,
+        totalMinutesUsed: reservation.used / 60,
+        remainingMinutes: reservation.remaining / 60,
+        audioCreditsUsed: reservation.used / 60,
+        audioCreditsRemaining: reservation.remaining < 0 ? -1 : reservation.remaining / 60,
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } },
     );
