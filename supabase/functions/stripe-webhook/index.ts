@@ -5,7 +5,11 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { correlationId, logFinancialEvent, logFraudSignal, evaluateSeverity } from "../_shared/observability.ts";
 import { resolveUserIdForBillingCustomer } from "../_shared/billing-customer.ts";
 import { creatorTierForProduct, planTierForProduct, resolveStripeCatalogue } from "../_shared/stripe-catalogue.ts";
-import { invoiceSubscriptionId, subscriptionPeriod } from "../_shared/stripe-fields.ts";
+import {
+  invoiceSubscriptionId,
+  subscriptionPeriod,
+  subscriptionStatusGrantsAccess,
+} from "../_shared/stripe-fields.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -165,7 +169,7 @@ serve(async (req) => {
     const getPlanTierFromProductId = (productId: string | null | undefined): PaidPlan | null =>
       planTierForProduct(catalogue, productId);
     const hasPlanAccess = (status: Stripe.Subscription.Status): boolean =>
-      status === "active" || status === "trialing";
+      subscriptionStatusGrantsAccess(status);
 
     // Phase 4.1 — Creator-tier product mapping (separate from generation plans).
     type CreatorTier = "free" | "creator" | "creator_pro";
