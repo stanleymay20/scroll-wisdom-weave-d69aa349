@@ -65,3 +65,21 @@ export function invoiceSubscriptionId(invoice: InvoiceLike | null | undefined): 
   if (!ref) return null;
   return typeof ref === "string" ? ref : ref.id ?? null;
 }
+
+
+/**
+ * Generation-plan access is granted only when Stripe reports a subscription
+ * as active or explicitly trialing. Pending, delinquent, paused and terminal
+ * states never unlock metered generation features.
+ */
+export function subscriptionStatusGrantsAccess(status: string | null | undefined): boolean {
+  return status === "active" || status === "trialing";
+}
+
+/**
+ * Only terminal subscriptions allow a replacement Checkout subscription in
+ * the same billing domain. Unknown states fail closed to prevent double billing.
+ */
+export function subscriptionStatusBlocksNewCheckout(status: string | null | undefined): boolean {
+  return status !== "canceled" && status !== "incomplete_expired";
+}
