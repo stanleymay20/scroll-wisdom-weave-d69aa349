@@ -18,6 +18,7 @@ import { apiCache } from "@/lib/cache";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { ReadingProgressDashboard, NextActionCard } from "@/components/dashboard";
+import { FEATURES } from "@/lib/config";
 
 interface DashboardStats {
   totalBooks: number;
@@ -233,10 +234,12 @@ export default function Dashboard() {
                    <Brain className="h-4 w-4" />
                    Mastery
                  </TabsTrigger>
-                 <TabsTrigger value="cognition" className="gap-2" onClick={() => navigate('/cognition')}>
-                   <TrendingUp className="h-4 w-4" />
-                   Cognitive Trend
-                 </TabsTrigger>
+                 {FEATURES.enableAdvancedAuthoring && (
+                   <TabsTrigger value="cognition" className="gap-2" onClick={() => navigate('/cognition')}>
+                     <TrendingUp className="h-4 w-4" />
+                     Cognitive Trend
+                   </TabsTrigger>
+                 )}
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">

@@ -808,7 +808,8 @@ function StepPublish({
               onCheckedChange={(c) => onChange({ ...value, is_public: c })} />
           </div>
 
-          {/* Advanced */}
+          {/* Advanced publishing controls stay hidden during PMF validation. */}
+          {!PMF_MODE && (
           <div>
             <button type="button"
               className="text-sm text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
@@ -835,6 +836,8 @@ function StepPublish({
               </div>
             )}
           </div>
+
+          )}
 
           {/* Entitlement upsell */}
           {!PMF_MODE && !entitlementLoading && !canPublishExternal && entitlementTier === "free" && (
