@@ -231,20 +231,23 @@ export default function Sell() {
         next = { ...next, step: 1 as Step };
       }
 
-      // Payout profile (best-effort) — fetched before final setDraft so we can
-      // step-guard step 3+ when display_name exists but payout is incomplete.
+      // Payout setup is outside the PMF/GA free-listing flow. Preserve the
+      // implementation for paid mode, but do not fetch or require payout data
+      // while paid checkout is fail-closed.
       let payout: any = null;
-      try {
-        const { data: pd } = await supabase.functions.invoke("creator-payout-profile", { method: "GET" });
-        if (pd && (pd as any).profile) payout = (pd as any).profile;
-      } catch { /* ignore */ }
+      if (!PMF_MODE) {
+        try {
+          const { data: pd } = await supabase.functions.invoke("creator-payout-profile", { method: "GET" });
+          if (pd && (pd as any).profile) payout = (pd as any).profile;
+        } catch { /* ignore */ }
+      }
       setPayoutProfile(payout);
 
-      // If user is past payout (step 3+) but payout is incomplete, drop to step 2
-      // so they can finish onboarding before hitting publish-time failures.
-      const payoutComplete = !!(payout?.payout_email && payout?.country_code);
-      if (hasUrlStep && urlStep >= 3 && !payoutComplete) {
-        next = { ...next, step: 2 as Step };
+      if (!PMF_MODE) {
+        const payoutComplete = !!(payout?.payout_email && payout?.country_code);
+        if (hasUrlStep && urlStep >= 3 && !payoutComplete) {
+          next = { ...next, step: 2 as Step };
+        }
       }
 
       setDraft(next);
@@ -541,7 +544,7 @@ function StepWelcome({ onStart, entitlementTier }: { onStart: () => void; entitl
         </Button>
         <div className="mt-3 flex justify-center">
           <a href="/sell/analytics" className="text-xs text-muted-foreground hover:text-foreground underline underline-offset-2">
-            View marketplace analytics →
+            {PMF_MODE ? "View storefront analytics →" : "View marketplace analytics →"}
           </a>
         </div>
         {entitlementTier !== "free" && (
