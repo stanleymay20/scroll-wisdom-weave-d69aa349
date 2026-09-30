@@ -18,6 +18,7 @@ import { apiCache } from "@/lib/cache";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { cn } from "@/lib/utils";
 import { ReadingProgressDashboard, NextActionCard } from "@/components/dashboard";
+import { FEATURES } from "@/lib/config";
 
 interface DashboardStats {
   totalBooks: number;
@@ -233,10 +234,12 @@ export default function Dashboard() {
                    <Brain className="h-4 w-4" />
                    Mastery
                  </TabsTrigger>
-                 <TabsTrigger value="cognition" className="gap-2" onClick={() => navigate('/cognition')}>
-                   <TrendingUp className="h-4 w-4" />
-                   Cognitive Trend
-                 </TabsTrigger>
+                 {FEATURES.enableAdvancedAuthoring && (
+                   <TabsTrigger value="cognition" className="gap-2" onClick={() => navigate('/cognition')}>
+                     <TrendingUp className="h-4 w-4" />
+                     Cognitive Trend
+                   </TabsTrigger>
+                 )}
               </TabsList>
 
               <TabsContent value="overview" className="space-y-6">
@@ -341,16 +344,16 @@ export default function Dashboard() {
                     <Card className="bg-gradient-to-br from-primary/10 via-card to-card border-primary/30">
                       <CardContent className="p-5">
                         <div className="flex items-center gap-2 text-xs font-medium text-primary uppercase tracking-wide">
-                          <Sparkles className="h-3.5 w-3.5" /> Publish your work
+                          <Sparkles className="h-3.5 w-3.5" /> Publishing
                         </div>
                         <h3 className="font-semibold text-foreground mt-2 text-lg leading-tight">
-                          Publish & Sell
+                          Publish to ScrollLibrary
                         </h3>
                         <p className="text-sm text-muted-foreground mt-1">
-                          Prepare your book for readers, set a price, and publish to the ScrollLibrary marketplace when it is ready.
+                          List your book free on the ScrollLibrary storefront during GA validation. Paid checkout and external publishing remain gated.
                         </p>
                         <Button variant="hero" className="w-full mt-4" onClick={() => navigate("/sell")}>
-                          Publish & Sell
+                          Open Publishing
                         </Button>
                         <button
                           type="button"
