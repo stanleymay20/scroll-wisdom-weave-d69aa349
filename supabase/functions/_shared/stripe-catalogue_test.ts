@@ -1,6 +1,8 @@
 import { assert, assertEquals, assertThrows } from "https://deno.land/std@0.224.0/assert/mod.ts";
 import {
   BILLABLE_TIERS,
+  billingDomainForProduct,
+  billingDomainForTier,
   clientPriceMatchesTier,
   creatorTierForProduct,
   LIVE_CATALOGUE,
@@ -105,4 +107,16 @@ Deno.test("under a test override the live client still names its tier, and only 
   assert(clientPriceMatchesTier(test, "premium", "price_test_premium"));
   assertEquals(clientPriceMatchesTier(test, "premium", LIVE_CATALOGUE.prices.student), false);
   assertEquals(clientPriceMatchesTier(test, "premium", "price_test_student"), false);
+});
+
+
+Deno.test("generation and publisher tiers have distinct recurring-charge domains", () => {
+  assertEquals(billingDomainForTier("student"), "generation");
+  assertEquals(billingDomainForTier("premium"), "generation");
+  assertEquals(billingDomainForTier("prophet_tier"), "generation");
+  assertEquals(billingDomainForTier("creator"), "publisher");
+  assertEquals(billingDomainForTier("creator_pro"), "publisher");
+  assertEquals(billingDomainForProduct(LIVE_CATALOGUE, "prod_TaQU3ILEUpbXOT"), "generation");
+  assertEquals(billingDomainForProduct(LIVE_CATALOGUE, "prod_UZv8Eine5sKy0j"), "publisher");
+  assertEquals(billingDomainForProduct(LIVE_CATALOGUE, "prod_unknown"), null);
 });
