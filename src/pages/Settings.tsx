@@ -277,8 +277,8 @@ export default function Settings() {
                           {t('settings.manageBilling')}
                         </Button>
                         <p className="text-xs text-muted-foreground">
-                          Use "Manage Billing" above to cancel your subscription, update payment method, or change your plan. 
-                          Cancellation takes effect at the end of your current billing period.
+                          Use "Manage Billing" above to cancel your subscription, update your payment method, or view invoices.
+                          Cancellation takes effect at the end of your current billing period; a replacement plan can be selected after the current subscription ends.
                         </p>
                       </div>
                     )}
