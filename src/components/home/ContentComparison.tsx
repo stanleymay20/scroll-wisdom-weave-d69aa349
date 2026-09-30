@@ -24,7 +24,7 @@ const WORKFLOW = [
     icon: ShieldCheck,
     title: "Advanced features fail closed",
     description:
-      "Publishing, export, payment, and specialized authoring capabilities stay hidden until their GA validation gates pass.",
+      "Canonical and external publishing, exports, paid checkout, and specialized authoring capabilities stay closed until their GA validation gates pass.",
   },
 ];
 

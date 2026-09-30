@@ -7,8 +7,8 @@ const steps = [
   { number: "1", title: "Idea", description: "Describe the book you want to create. ScrollLibrary helps shape the direction and structure.", icon: Lightbulb },
   { number: "2", title: "Create", description: "Build a structured manuscript with the GA authoring workflow and keep the project in one workspace.", icon: PenLine },
   { number: "3", title: "Review", description: "Read the work, assess understanding, and refine the project using the capabilities available in the current GA scope.", icon: ShieldCheck },
-  { number: "4", title: "Publish", description: "Advanced exports and controlled publishing workflows become available only after their GA validation gates pass.", icon: Send },
-  { number: "5", title: "Grow", description: "As validated publishing workflows open, extend the same project toward distribution, audience, and future releases.", icon: TrendingUp },
+  { number: "4", title: "Publish", description: "List a validated book on ScrollLibrary for free. External distribution, paid sales, and canonical publishing stay closed until their GA gates pass.", icon: Send },
+  { number: "5", title: "Grow", description: "Share the public ScrollLibrary listing and track core marketplace activity. Broader distribution and audience automation open only after validation.", icon: TrendingUp },
 ];
 
 export function HowItWorks() {
