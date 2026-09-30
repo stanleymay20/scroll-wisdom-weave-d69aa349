@@ -9,6 +9,7 @@ import {
   planTierForProduct,
   resolveStripeCatalogue,
 } from "../_shared/stripe-catalogue.ts";
+import { subscriptionStatusBlocksNewCheckout } from "../_shared/stripe-fields.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -138,16 +139,8 @@ serve(async (req) => {
       status: "all",
       limit: 100,
     });
-    const blockingStatuses = new Set([
-      "active",
-      "trialing",
-      "past_due",
-      "unpaid",
-      "incomplete",
-      "paused",
-    ]);
     const existingPlanSubscription = subscriptions.data.find((subscription: Stripe.Subscription) => {
-      if (!blockingStatuses.has(subscription.status)) return false;
+      if (!subscriptionStatusBlocksNewCheckout(subscription.status)) return false;
       const productId = String(subscription.items.data[0]?.price?.product ?? "");
       return planTierForProduct(catalogue, productId) !== null;
     });
