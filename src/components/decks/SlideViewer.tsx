@@ -420,7 +420,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                     />
                   </div>
                   
-                  {/* ElevenLabs toggle (premium only) */}
+                  {/* ElevenLabs toggle (Pro/Teams plans) */}
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-2">
                       <Label htmlFor="elevenlabs" className="text-sm">
@@ -429,7 +429,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                       {isPremiumUser ? (
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-primary/10 text-primary border-primary/30">
                           <Sparkles className="h-2.5 w-2.5 mr-0.5" />
-                          Premium
+                          Pro
                         </Badge>
                       ) : (
                         <Badge variant="outline" className="text-[10px] px-1.5 py-0">
