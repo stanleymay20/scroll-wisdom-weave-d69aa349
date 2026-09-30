@@ -2,7 +2,7 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { requireUser, serviceClient } from "../_shared/http.ts";
 import { ErrorCode, errorResponse } from "../_shared/error-codes.ts";
 import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate.ts";
-import { advancedAuthoringEnabled } from "../_shared/ga-release-flags.ts";
+import { advancedAuthoringEnabled, advancedBookTypeEnabled, qualificationBookTypeEnabled } from "../_shared/ga-release-flags.ts";
 import { normalizeGeneratedOutline, type NormalizedOutlineChapter } from "../_shared/outline-normalizer.ts";
 import { buildFictionOutlineInstructions, sanitizeFictionContract } from "../_shared/fiction-context.ts";
 
@@ -248,6 +248,14 @@ serve(async (req) => {
     const safeBookType = VALID_BOOK_TYPES.includes(bookType) ? bookType : 'text';
 
     const effectiveBookType = safeExtendedBookType || safeBookType;
+    const requestedModes = [effectiveBookType, ...(academicMode === true ? ["academic"] : []), ...(bestsellerMode === true ? ["bestseller"] : [])];
+    if (requestedModes.some(mode => !advancedBookTypeEnabled(mode)
+        && !(isAdmin && qualificationBookTypeEnabled(mode)))) {
+      return new Response(JSON.stringify({ error: "This book mode is not qualified for public release.", code: "GA_BOOK_TYPE_NOT_QUALIFIED" }), {
+        status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
     const isAcademicType = ["academic", "technical", "reference", "professional"].includes(effectiveBookType);
     const effectiveChapters = Math.min(numChapters, limits.maxChapters);
     const languageName = LANG_MAP[language] || "English";

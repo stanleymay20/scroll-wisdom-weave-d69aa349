@@ -80,7 +80,7 @@ jobs:
           if (Number(live.sourceFingerprintFiles) !== Number(process.env.EXPECTED_FILE_COUNT)) {
             fail(`Production source fingerprint file count mismatch. expected=${process.env.EXPECTED_FILE_COUNT} actual=${live.sourceFingerprintFiles ?? "missing"}`);
           }
-          if (live.commit != null && live.commit !== process.env.RELEASE_SHA) {
+          if (live.commit !== process.env.RELEASE_SHA) {
             fail(`Production names a different commit. expected=${process.env.RELEASE_SHA} actual=${live.commit}`);
           }
           if (!live.buildTime || Number.isNaN(Date.parse(live.buildTime))) {
@@ -107,7 +107,7 @@ jobs:
             "CodeQL"
             "EPUB Conformance"
             "Admin Financial Boundary"
-            "Interactive Voice Security"
+            "Strict Null Ratchet"
           )
 
           for workflow in "${required[@]}"; do

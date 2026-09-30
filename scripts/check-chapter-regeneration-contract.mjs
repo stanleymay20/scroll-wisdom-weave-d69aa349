@@ -62,9 +62,11 @@ requireText(
 );
 requireText(
   edge,
-  ".update(updateData)",
-  "standard chapter update write",
+  "await saveGeneratedChapter(updateData)",
+  "standard chapter fenced write",
 );
+
+requireText(edge, 'rpc("save_generated_chapter_fenced"', "transactional chapter writer");
 
 if (failures.length) {
   console.error("Chapter regeneration contract failed:");

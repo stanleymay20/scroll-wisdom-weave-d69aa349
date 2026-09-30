@@ -24,6 +24,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
+  RELEASE_COMMIT_SHA: ${{ github.event.pull_request.head.sha || github.sha }}
   BUN_VERSION: 1.2.23
   SUPABASE_CLI_VERSION: 2.111.0
   # Allowed return origin in create-checkout, customer-portal and
@@ -62,6 +63,8 @@ jobs:
       STRIPE_SECRET_KEY: ${{ secrets.STRIPE_TEST_SECRET_KEY }}
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
 
       - name: Refuse anything but a test-mode key
         run: |

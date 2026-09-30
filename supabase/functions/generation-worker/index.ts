@@ -148,6 +148,16 @@ serve(async (req) => {
         .eq("is_generated", true);
       if (countError) throw countError;
 
+      if (generatedCount !== job.total_chapters) {
+        await supabase.rpc("finish_generation_job_step", {
+          _job_id: jobId, _worker_token: workerToken,
+          _current_chapter: generatedCount || 0, _status: "partial",
+          _error_code: "CHAPTER_COUNT_MISMATCH",
+          _error_message: "Stored chapters do not match the expected book. Contact support with the job ID.",
+        });
+        return json({ error: "Stored chapters do not match the expected book.", code: "CHAPTER_COUNT_MISMATCH", jobId, state: "partial" }, 409);
+      }
+
       await releaseLease();
       const metadata = {
         ...(job.metadata || {}),
@@ -158,7 +168,7 @@ serve(async (req) => {
         .from("generation_jobs")
         .update({
           status: "generating",
-          current_chapter: generatedCount || job.total_chapters,
+          current_chapter: generatedCount,
           metadata,
           error_code: null,
           error_message: null,

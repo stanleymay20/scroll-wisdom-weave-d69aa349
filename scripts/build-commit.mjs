@@ -73,18 +73,34 @@ export function commitFromGitDirectory(root = process.cwd()) {
 }
 
 /**
- * @returns {{ commit: string | null, source: "GITHUB_SHA" | "VITE_BUILD_ID" | "git" | "unavailable" }}
+ * @returns {{ commit: string | null, source: "RELEASE_COMMIT_SHA" | "GITHUB_SHA" | "VITE_BUILD_ID" | "git" | "unavailable" }}
  */
 export function resolveBuildCommit(env = process.env, root = process.cwd()) {
+  const release = env.RELEASE_COMMIT_SHA?.trim().toLowerCase();
+  if (release && SHA.test(release)) return { commit: release, source: "RELEASE_COMMIT_SHA" };
+
   const fromCi = env.GITHUB_SHA?.trim().toLowerCase();
   if (fromCi && SHA.test(fromCi)) return { commit: fromCi, source: "GITHUB_SHA" };
 
   // VITE_BUILD_ID predates this file and may hold any label, not only a SHA.
   const declared = env.VITE_BUILD_ID?.trim();
-  if (declared) return { commit: declared, source: "VITE_BUILD_ID" };
+  if (declared && SHA.test(declared.toLowerCase())) return { commit: declared.toLowerCase(), source: "VITE_BUILD_ID" };
 
   const fromGit = commitFromGitDirectory(root);
   if (fromGit) return { commit: fromGit, source: "git" };
 
   return { commit: null, source: "unavailable" };
+}
+
+/** Production identity must name the checked-out commit, never an arbitrary label. */
+export function requireReleaseCommit(env = process.env, root = process.cwd()) {
+  const identity = resolveBuildCommit(env, root);
+  if (!identity.commit || !SHA.test(identity.commit)) {
+    throw new Error("Production build requires an exact 40-character commit SHA. Supply GITHUB_SHA or VITE_BUILD_ID from the trusted checkout.");
+  }
+  const checkout = commitFromGitDirectory(root);
+  if (checkout && identity.commit !== checkout) {
+    throw new Error("Declared release SHA does not match the checked-out commit.");
+  }
+  return identity;
 }
