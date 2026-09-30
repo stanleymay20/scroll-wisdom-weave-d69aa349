@@ -17,6 +17,7 @@
 export type PlanTier = "student" | "premium" | "prophet_tier";
 export type CreatorTier = "creator" | "creator_pro";
 export type BillableTier = PlanTier | CreatorTier;
+export type BillingDomain = "generation" | "publisher";
 
 export const PLAN_TIERS: readonly PlanTier[] = ["student", "premium", "prophet_tier"];
 export const CREATOR_TIERS: readonly CreatorTier[] = ["creator", "creator_pro"];
@@ -113,8 +114,28 @@ export function resolveStripeCatalogue(env: EnvReader = (name) => Deno.env.get(n
   return parseCatalogueOverride(raw);
 }
 
+export function billingDomainForTier(tier: BillableTier): BillingDomain {
+  return (PLAN_TIERS as readonly string[]).includes(tier) ? "generation" : "publisher";
+}
+
+export function tierForProduct(
+  catalogue: StripeCatalogue,
+  productId: string | null | undefined,
+): BillableTier | null {
+  if (!productId) return null;
+  return catalogue.products[productId] ?? null;
+}
+
+export function billingDomainForProduct(
+  catalogue: StripeCatalogue,
+  productId: string | null | undefined,
+): BillingDomain | null {
+  const tier = tierForProduct(catalogue, productId);
+  return tier ? billingDomainForTier(tier) : null;
+}
+
 export function planTierForProduct(catalogue: StripeCatalogue, productId: string | null | undefined): PlanTier | null {
-  const tier = productId ? catalogue.products[productId] : undefined;
+  const tier = tierForProduct(catalogue, productId);
   return tier && (PLAN_TIERS as readonly string[]).includes(tier) ? tier as PlanTier : null;
 }
 
