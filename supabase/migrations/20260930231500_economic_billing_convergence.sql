@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS public.billing_usage_monthly (
   books_used integer NOT NULL DEFAULT 0 CHECK (books_used >= 0),
   ai_text_words_used bigint NOT NULL DEFAULT 0 CHECK (ai_text_words_used >= 0),
   visual_credits_used integer NOT NULL DEFAULT 0 CHECK (visual_credits_used >= 0),
+  audio_units_used bigint NOT NULL DEFAULT 0 CHECK (audio_units_used >= 0),
   extra_ai_text_words bigint NOT NULL DEFAULT 0 CHECK (extra_ai_text_words >= 0),
   extra_visual_credits integer NOT NULL DEFAULT 0 CHECK (extra_visual_credits >= 0),
   extra_audio_credits integer NOT NULL DEFAULT 0 CHECK (extra_audio_credits >= 0),
@@ -58,7 +59,7 @@ DECLARE
 BEGIN
   IF _user_id IS NULL THEN RAISE EXCEPTION 'user_id_required'; END IF;
   IF _month IS NULL OR _month !~ '^\d{4}-\d{2}$' THEN RAISE EXCEPTION 'invalid_month'; END IF;
-  IF _metric NOT IN ('books','ai_text_words','visual_credits') THEN RAISE EXCEPTION 'invalid_metric'; END IF;
+  IF _metric NOT IN ('books','ai_text_words','visual_credits','audio_units') THEN RAISE EXCEPTION 'invalid_metric'; END IF;
   IF _units IS NULL OR _units <= 0 THEN RAISE EXCEPTION 'invalid_units'; END IF;
   IF _base_limit IS NULL OR _base_limit = 0 OR _base_limit < -1 THEN RAISE EXCEPTION 'invalid_limit'; END IF;
 
@@ -75,11 +76,13 @@ BEGIN
       WHEN 'books' THEN b.books_used::bigint
       WHEN 'ai_text_words' THEN b.ai_text_words_used
       WHEN 'visual_credits' THEN b.visual_credits_used::bigint
+      WHEN 'audio_units' THEN b.audio_units_used
     END,
     CASE _metric
       WHEN 'books' THEN 0::bigint
       WHEN 'ai_text_words' THEN b.extra_ai_text_words
       WHEN 'visual_credits' THEN b.extra_visual_credits::bigint
+      WHEN 'audio_units' THEN b.extra_audio_credits::bigint * 60
     END
   INTO v_used, v_extra
   FROM public.billing_usage_monthly b
@@ -102,6 +105,7 @@ BEGIN
     books_used = CASE WHEN _metric = 'books' THEN v_next::integer ELSE books_used END,
     ai_text_words_used = CASE WHEN _metric = 'ai_text_words' THEN v_next ELSE ai_text_words_used END,
     visual_credits_used = CASE WHEN _metric = 'visual_credits' THEN v_next::integer ELSE visual_credits_used END,
+    audio_units_used = CASE WHEN _metric = 'audio_units' THEN v_next ELSE audio_units_used END,
     updated_at = now()
   WHERE user_id = _user_id AND month = _month;
 
@@ -129,7 +133,7 @@ DECLARE
 BEGIN
   IF _user_id IS NULL THEN RAISE EXCEPTION 'user_id_required'; END IF;
   IF _month IS NULL OR _month !~ '^\d{4}-\d{2}$' THEN RAISE EXCEPTION 'invalid_month'; END IF;
-  IF _metric NOT IN ('books','ai_text_words','visual_credits') THEN RAISE EXCEPTION 'invalid_metric'; END IF;
+  IF _metric NOT IN ('books','ai_text_words','visual_credits','audio_units') THEN RAISE EXCEPTION 'invalid_metric'; END IF;
   IF _units IS NULL OR _units <= 0 THEN RAISE EXCEPTION 'invalid_units'; END IF;
 
   PERFORM pg_advisory_xact_lock(
@@ -146,11 +150,16 @@ BEGIN
     SET ai_text_words_used = GREATEST(ai_text_words_used - _units, 0), updated_at = now()
     WHERE user_id = _user_id AND month = _month
     RETURNING ai_text_words_used INTO v_remaining;
-  ELSE
+  ELSIF _metric = 'visual_credits' THEN
     UPDATE public.billing_usage_monthly
     SET visual_credits_used = GREATEST(visual_credits_used - _units::integer, 0), updated_at = now()
     WHERE user_id = _user_id AND month = _month
     RETURNING visual_credits_used INTO v_remaining;
+  ELSE
+    UPDATE public.billing_usage_monthly
+    SET audio_units_used = GREATEST(audio_units_used - _units, 0), updated_at = now()
+    WHERE user_id = _user_id AND month = _month
+    RETURNING audio_units_used INTO v_remaining;
   END IF;
 
   RETURN COALESCE(v_remaining, 0);
@@ -223,6 +232,8 @@ BEGIN
     'books_used', COALESCE(v_row.books_used, 0),
     'ai_text_words_used', COALESCE(v_row.ai_text_words_used, 0),
     'visual_credits_used', COALESCE(v_row.visual_credits_used, 0),
+    'audio_units_used', COALESCE(v_row.audio_units_used, 0),
+    'audio_credits_used', COALESCE(v_row.audio_units_used, 0)::numeric / 60,
     'extra_ai_text_words', COALESCE(v_row.extra_ai_text_words, 0),
     'extra_visual_credits', COALESCE(v_row.extra_visual_credits, 0),
     'extra_audio_credits', COALESCE(v_row.extra_audio_credits, 0),
