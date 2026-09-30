@@ -65,7 +65,7 @@ const plans: PlanConfig[] = [
     ],
   },
   {
-    name: "Creator Pro",
+    name: "Pro",
     description: "For serious authors and publishing-ready projects",
     price: `$${SUBSCRIPTION_TIERS.premium.monthlyPrice}`,
     period: "/month",
@@ -197,10 +197,10 @@ export default function Pricing() {
   };
 
   const handleCreatorCheckout = async (creatorTier: CreatorTier) => {
-    if (!FEATURES.enableSubscriptionCheckout) {
+    if (!FEATURES.enableSubscriptionCheckout || !FEATURES.enablePublisherSubscriptions) {
       toast({
-        title: "Paid Creator plans are temporarily unavailable",
-        description: "Free marketplace listing remains available during GA validation.",
+        title: "Publisher add-ons are not available yet",
+        description: "Free marketplace listing remains available while publisher capabilities complete validation.",
       });
       return;
     }
@@ -369,16 +369,16 @@ export default function Pricing() {
               </div>
             )}
 
-            {/* Creator tiers (Phase 4.0) */}
-            {FEATURES.enableSubscriptionCheckout && (
+            {/* Publisher add-ons remain a separate, fail-closed commercial surface. */}
+            {FEATURES.enableSubscriptionCheckout && FEATURES.enablePublisherSubscriptions && (
               <div id="creator" className="mt-20 mb-16 scroll-mt-24">
               <div className="text-center mb-10">
                 <Badge className="mb-3">Marketplace add-ons</Badge>
                 <h2 className="text-3xl md:text-4xl font-display font-bold text-foreground mb-3">
-                  Add marketplace publishing capacity
+                  Add publisher capabilities
                 </h2>
                 <p className="text-muted-foreground max-w-xl mx-auto">
-                  Optional creator subscriptions extend marketplace publishing features. External provider integrations remain gated until their own E2E checks pass.
+                  Optional publisher subscriptions extend verified marketplace capabilities. External provider integrations remain gated until their own E2E checks pass.
                 </p>
               </div>
 
@@ -403,9 +403,8 @@ export default function Pricing() {
                     popular: true,
                     features: [
                       "Everything in Free",
-                      "Unlimited collections",
                       "0% marketplace surcharge",
-                      "Core marketplace analytics",
+                      "Release scheduling when enabled",
                     ],
                   },
                   {
@@ -414,10 +413,7 @@ export default function Pricing() {
                     price: `€${CREATOR_SUBSCRIPTION_TIERS.creator_pro.monthlyPrice}`,
                     period: "/month",
                     features: [
-                      "Everything in Creator",
-                      "Priority generation queue",
-                      "+50 monthly generation bonus",
-                      "Best for publishing businesses",
+                      "Everything in Publisher",
                     ],
                   },
                 ]).map((p) => {
