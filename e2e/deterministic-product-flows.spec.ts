@@ -1607,9 +1607,15 @@ test("GA launch removes deferred direct routes and payment CTAs", async ({ page 
     await expect(deferredPaymentButtons.nth(i)).toBeDisabled();
   }
 
+  await page.goto("/store");
+  await expect(page).toHaveURL(/\/explore$/, { timeout: 10_000 });
+
   await page.goto(`/store/${SLUG}`);
-  const paidPurchase = page.getByRole("button", { name: "Paid purchases temporarily unavailable" });
-  await expect(paidPurchase).toBeVisible({ timeout: 10_000 });
+  await expect(
+    page.getByText("Paid sales open only after the payment lifecycle passes GA validation.", { exact: true }),
+  ).toBeVisible({ timeout: 10_000 });
+  const paidPurchase = page.getByRole("button", { name: "Paid purchases after validation" });
+  await expect(paidPurchase).toBeVisible();
   await expect(paidPurchase).toBeDisabled();
 
   await page.goto("/account/payouts");
