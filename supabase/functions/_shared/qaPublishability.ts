@@ -354,13 +354,16 @@ const ABSOLUTE_PRESCRIPTIVE_RE =
   /\b(?:the only viable choice|is non-negotiable|are non-negotiable|must always|can never|always required|never acceptable)\b/i;
 
 const MATERIAL_CLAIM_CUE_RE =
-  /\b(?:according to|reported|study|studies|data from|statistics?|research|survey|law|regulation|statute|requires?|mandatory|threshold|fine|salary|valuation|acquired|acquisition|founded|raised|revenue|gdp|population|market share|vacanc(?:y|ies)|investment)\b/i;
+  /\b(?:according to|reported|study|studies|data from|statistics?|research|survey|law|regulation|statute|mandatory|threshold|fine|salary|valuation|acquired|acquisition|founded|raised|revenue|gdp|population|market share|vacanc(?:y|ies)|investment)\b/i;
+
+const LEGAL_REQUIREMENT_RE =
+  /(?:\b(?:law|regulation|statute|act|directive|gdpr|dsgvo|bdsg)\b[^.\n]{0,120}\b(?:requires?|mandatory|must)\b|\b(?:required by law|legally required|statutorily required)\b)/i;
 
 const QUANTIFIED_CLAIM_RE =
   /(?:[$€£]\s?\d|\b\d+(?:\.\d+)?\s?%|\b(?:19|20)\d{2}\b|\b\d{1,3}(?:,\d{3})+\b)/;
 
 const LOCAL_EVIDENCE_RE =
-  /(?:\[(?:\d{1,3}|@[a-z][\w-]*)\]|\([A-Z][A-Za-z’.-]+(?:\s+et\s+al\.)?,?\s*(?:19|20)\d{2}[a-z]?\)|https?:\/\/\S+)/i;
+  /(?:\[(?:\d{1,3}|@[a-z][\w-]*)\]|\([A-Z][^()\n,]{0,100}(?:,|\s)\s*(?:19|20)\d{2}[a-z]?\)|https?:\/\/\S+)/i;
 
 const EXPLICIT_DEADLINE_RE =
   /\bDeadline\s*:\s*[^\n]{0,160}?\b(20\d{2})\b/gi;
@@ -393,7 +396,10 @@ function detectTruthIntegrityIssues(content: string, chapter: number, requiresEv
   let uncited = 0;
   for (const paragraph of paragraphs) {
     if (/^#{1,6}\s/.test(paragraph)) continue;
-    const material = MATERIAL_CLAIM_CUE_RE.test(paragraph) && (QUANTIFIED_CLAIM_RE.test(paragraph) || /\b(?:acquired|requires?|mandatory|law|regulation|statute)\b/i.test(paragraph));
+    const material =
+      (MATERIAL_CLAIM_CUE_RE.test(paragraph) && QUANTIFIED_CLAIM_RE.test(paragraph))
+      || /\b(?:acquired|acquisition)\b/i.test(paragraph)
+      || LEGAL_REQUIREMENT_RE.test(paragraph);
     if (!material || LOCAL_EVIDENCE_RE.test(paragraph)) continue;
     uncited++;
     if (uncited <= 5) issues.push({ severity: "blocker", code: "uncited_material_claim", category: "truth", chapter, message: "Chapter " + chapter + ": material factual/legal/statistical claim lacks local traceable evidence.", hint: "Attach a verifiable citation/source to the claim, narrow it, label uncertainty, or remove it." });
