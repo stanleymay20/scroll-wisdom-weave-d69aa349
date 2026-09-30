@@ -80,6 +80,7 @@ const storeListing = {
   seo_keywords: ["testing", "reader"],
   series_id: null,
   series_order: null,
+  created_at: "2026-09-15T00:00:00.000Z",
   updated_at: "2026-09-15T00:00:00.000Z",
   book: {
     id: BOOK_ID,
@@ -223,6 +224,8 @@ async function installDeterministicBackend(page: Page): Promise<MockState> {
       const endpoint = path.split("/").pop();
       if (endpoint === "book") {
         await fulfillJson(route, storeListing);
+      } else if (endpoint === "books") {
+        await fulfillJson(route, { items: [storeListing], page: 1, pageSize: 30, total: 1 });
       } else if (endpoint === "by-author") {
         await fulfillJson(route, { items: [], author: storeListing.author });
       } else {
@@ -1609,6 +1612,8 @@ test("GA launch removes deferred direct routes and payment CTAs", async ({ page 
 
   await page.goto("/store");
   await expect(page).toHaveURL(/\/explore$/, { timeout: 10_000 });
+  const publicListing = page.locator(`a[href="/store/${SLUG}"]`).filter({ hasText: BOOK_TITLE }).first();
+  await expect(publicListing).toBeVisible({ timeout: 10_000 });
 
   await page.goto(`/store/${SLUG}`);
   await expect(
