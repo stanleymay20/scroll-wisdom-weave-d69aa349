@@ -24,7 +24,7 @@ export const SUBSCRIPTION_TIERS = {
     }
   },
   student: {
-    name: 'Student',
+    name: 'Creator',
     price_id: 'price_1SdFbTJYFIBeCvefKzHWUrcb',
     product_id: 'prod_TaQSrotoUkTuPC',
     monthlyPrice: 9,
@@ -45,7 +45,7 @@ export const SUBSCRIPTION_TIERS = {
     }
   },
   premium: {
-    name: 'Premium',
+    name: 'Pro',
     price_id: 'price_1SdFddJYFIBeCvefJr1ZY92E',
     product_id: 'prod_TaQU3ILEUpbXOT',
     monthlyPrice: 19,
@@ -66,7 +66,7 @@ export const SUBSCRIPTION_TIERS = {
     }
   },
   prophet_tier: {
-    name: 'Institutional',
+    name: 'Teams',
     price_id: 'price_1T2eR8JYFIBeCvefx02IXTz6',
     product_id: 'prod_U0fmlf14TPlMKj',
     monthlyPrice: 79,
@@ -92,12 +92,13 @@ export const SUBSCRIPTION_TIERS = {
 
 export type SubscriptionTier = keyof typeof SUBSCRIPTION_TIERS;
 
-// Phase 4.1 — Creator-tier subscriptions (publishing capabilities, separate from generation plans).
-// These are gated by creator_entitlements in the DB. A user can hold both a generation
-// plan (Premium, Student...) AND a Creator subscription concurrently.
+// Legacy publisher-tier subscriptions. These remain mapped for Stripe
+// reconciliation only; new public checkout uses the single generation-plan
+// ladder above (Free → Creator → Pro → Teams). Do not expose these as new paid
+// packages without a separately validated publisher add-on product decision.
 export const CREATOR_SUBSCRIPTION_TIERS = {
   creator: {
-    name: 'Creator',
+    name: 'Legacy Publisher',
     price_id: 'price_1TalITJYFIBeCvefdkr4LeL7',
     product_id: 'prod_UZv8Eine5sKy0j',
     monthlyPrice: 19,
@@ -110,7 +111,7 @@ export const CREATOR_SUBSCRIPTION_TIERS = {
     ],
   },
   creator_pro: {
-    name: 'Creator Pro',
+    name: 'Legacy Publisher Pro',
     price_id: 'price_1TalIUJYFIBeCvefHU67sm3O',
     product_id: 'prod_UZv8yPrOGDBuWE',
     monthlyPrice: 49,
