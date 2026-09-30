@@ -5,7 +5,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.45.0";
 import { correlationId, logFinancialEvent, logFraudSignal, evaluateSeverity } from "../_shared/observability.ts";
 import { resolveUserIdForBillingCustomer } from "../_shared/billing-customer.ts";
 import { creatorTierForProduct, planTierForProduct, resolveStripeCatalogue } from "../_shared/stripe-catalogue.ts";
-import { invoiceSubscriptionId, subscriptionPeriod } from "../_shared/stripe-fields.ts";
+import { invoiceSubscriptionId, subscriptionPeriod, subscriptionStatusGrantsAccess } from "../_shared/stripe-fields.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -679,8 +679,9 @@ serve(async (req) => {
 
             if (userId) {
               if (planTier) {
-                await updateProfilePlan(userId, planTier);
-                await syncPlanSubscription(userId, subscription, planTier);
+                const effectivePlan: ValidPlan = subscriptionStatusGrantsAccess(subscription.status) ? planTier : "free";
+                await updateProfilePlan(userId, effectivePlan);
+                await syncPlanSubscription(userId, subscription, effectivePlan);
               }
               await syncCreatorEntitlement(userId, subscription);
               await logFinancialEvent(supabase, {
@@ -830,8 +831,9 @@ serve(async (req) => {
             }
             if (userId) {
               if (planTier) {
-                await updateProfilePlan(userId, planTier);
-                await syncPlanSubscription(userId, subscription, planTier);
+                const effectivePlan: ValidPlan = subscriptionStatusGrantsAccess(subscription.status) ? planTier : "free";
+                await updateProfilePlan(userId, effectivePlan);
+                await syncPlanSubscription(userId, subscription, effectivePlan);
               }
               await syncCreatorEntitlement(userId, subscription);
             }
@@ -852,7 +854,7 @@ serve(async (req) => {
           }
           if (userId) {
             if (planTier) {
-              const effectivePlan: ValidPlan = subscription.status === "active" ? planTier : "free";
+              const effectivePlan: ValidPlan = subscriptionStatusGrantsAccess(subscription.status) ? planTier : "free";
               await updateProfilePlan(userId, effectivePlan);
               await syncPlanSubscription(userId, subscription, effectivePlan);
             }
@@ -899,14 +901,22 @@ serve(async (req) => {
             }
           } catch (_) { /* best-effort identity/log enrichment */ }
 
-          // Phase 4.1 — move creator entitlement into 7-day grace period on payment failure.
+          // Reconcile both authority domains immediately. Generation-plan
+          // features fail closed on payment failure; publisher entitlements use
+          // their explicit seven-day grace-period policy.
           const failedSubscription = invoiceSubscriptionId(invoice);
           if (userId && failedSubscription) {
             try {
               const subscription = await stripe.subscriptions.retrieve(failedSubscription);
+              const productId = subscription.items.data[0]?.price?.product as string;
+              const planTier = getPlanTierFromProductId(productId);
+              if (planTier) {
+                await updateProfilePlan(userId, "free");
+                await syncPlanSubscription(userId, subscription, "free");
+              }
               await syncCreatorEntitlement(userId, subscription);
             } catch (e) {
-              logStep("Grace period sync failed", { error: e instanceof Error ? e.message : String(e) });
+              logStep("Payment-failure entitlement sync failed", { error: e instanceof Error ? e.message : String(e) });
             }
           }
 
