@@ -71,7 +71,7 @@ serve(async (req) => {
           limit: 100,
         });
 
-        const accessSubscriptions = subscriptions.data.filter((subscription) =>
+        const accessSubscriptions = subscriptions.data.filter((subscription: Stripe.Subscription) =>
           subscription.status === "active" || subscription.status === "trialing"
         );
 
