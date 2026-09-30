@@ -483,8 +483,8 @@ export default function Pricing() {
               </div>
             )}
 
+            {/* Payment trust signals are relevant only when checkout is enabled. */}
             {FEATURES.enableSubscriptionCheckout && (
-            {/* Trust */}
             <div className="flex flex-wrap justify-center gap-8 text-muted-foreground border-t border-border/50 pt-8">
               <div className="flex items-center gap-2">
                 <Shield className="h-5 w-5 text-primary" />
