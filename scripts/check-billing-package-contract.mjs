@@ -1,5 +1,7 @@
 import { readFileSync } from "node:fs";
 
+// Source-only by design: this contract runs in ordinary CI even when Stripe test secrets are unavailable.
+
 const subscription = readFileSync("src/lib/subscription.ts", "utf8");
 const pricing = readFileSync("src/pages/Pricing.tsx", "utf8");
 const checkout = readFileSync("supabase/functions/create-checkout/index.ts", "utf8");
