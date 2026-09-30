@@ -782,7 +782,7 @@ export default function Generate() {
                       </SelectContent>
                     </Select>
                     {tier === "prophet_tier" && (
-                      <p className="text-xs text-primary">Institutional tier — maximum word count enabled</p>
+                      <p className="text-xs text-primary">Teams plan — maximum word count enabled</p>
                     )}
                   </div>
                 )}
@@ -870,7 +870,7 @@ export default function Generate() {
                     />
                   </div>
 
-                  {/* Bestseller Mode Toggle - Premium Feature */}
+                  {/* Bestseller Mode Toggle - Pro Feature */}
                   <BestsellerModeToggle
                     enabled={bestsellerMode}
                     onToggle={setBestsellerMode}
