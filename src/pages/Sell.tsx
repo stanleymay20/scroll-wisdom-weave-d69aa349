@@ -809,8 +809,8 @@ function StepPublish({
               onCheckedChange={(c) => onChange({ ...value, is_public: c })} />
           </div>
 
+          {/* Advanced publishing controls stay hidden during PMF validation. */}
           {!PMF_MODE && (
-          {/* Advanced */}
           <div>
             <button type="button"
               className="text-sm text-muted-foreground hover:text-foreground underline-offset-2 hover:underline"
