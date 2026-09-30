@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { captureChapterScopeHash, recordBoundAttestation, scopeStabilityError } from "../_shared/publicationScope.ts";
+import { isHighRiskFactualSentence } from "../_shared/factual-claim-risk.ts";
 
 const cors = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version" };
 const log = (s: string, d?: any) => console.log(`[VERIFY-REF] ${s}${d ? ` - ${JSON.stringify(d)}` : ''}`);
@@ -96,28 +97,39 @@ function kwSupport(para: string, cit: { title: string; abstract?: string; keywor
   return { score: sc, level: sc >= 80 ? 'strong' : sc >= 65 ? 'moderate' : sc >= 40 ? 'weak' : 'ornamental' };
 }
 
-// Updated claim extraction with sentence-level citation scoping (Fix: over-attribution)
+// Claim extraction prioritizes facts that can materially damage trust if wrong.
+// High-risk claims are evaluated first so a single acquisition, valuation,
+// legal threshold, date, percentage, or monetary assertion cannot be hidden by
+// a chapter with many lower-risk descriptive sentences.
 function extractClaims(content: string, max = 25) {
   const paras = content.split(/\n\n+/).map(p => p.trim()).filter(p => p.length > 30);
   const claims: any[] = []; let id = 0;
-  for (let pi = 0; pi < paras.length && claims.length < max * 3; pi++) {
+  for (let pi = 0; pi < paras.length && claims.length < max * 4; pi++) {
     for (const s of paras[pi].split(/(?<=[.!?])\s+/).filter(s => s.length > 20 && s.length < 500)) {
       if (/^(this|the)\s+(chapter|section)/i.test(s) || s.startsWith('#')) continue;
-      if (!/\b(is|are|was|were|show|demonstrate|indicate|suggest|find|found|reveal|confirm|cause|affect|predict)\b/i.test(s)) continue;
+      const highRisk = isHighRiskFactualSentence(s);
+      const ordinaryClaim = /\b(is|are|was|were|show|demonstrate|indicate|suggest|find|found|reveal|confirm|cause|affect|predict)\b/i.test(s);
+      if (!highRisk && !ordinaryClaim) continue;
+
       const lo = s.toLowerCase();
-      let type: string = 'descriptive';
-      if (EMP_IND.some(i => lo.includes(i))) type = 'empirical';
-      else if (/\b(theory|framework|model|hypothesis|posits|proposes|argues|paradigm)\b/i.test(lo)) type = 'theoretical';
-      // Fix: Extract sentence-level citation keys FIRST, fallback to paragraph-level
+      let type: string = highRisk ? 'high_risk' : 'descriptive';
+      if (!highRisk && EMP_IND.some(i => lo.includes(i))) type = 'empirical';
+      else if (!highRisk && /\b(theory|framework|model|hypothesis|posits|proposes|argues|paradigm)\b/i.test(lo)) type = 'theoretical';
+
+      // Extract sentence-level citation keys first; only fall back to the
+      // paragraph when the prose clearly scopes a citation across sentences.
       let cks = extractCitKeys(s);
-      if (cks.length === 0) {
-        // Fallback: check paragraph-level but mark as paragraph-scoped
-        cks = extractCitKeys(paras[pi]);
-      }
-      claims.push({ id: `c${id++}`, text: s, type, pi, cks: [...new Set(cks)] });
+      if (cks.length === 0) cks = extractCitKeys(paras[pi]);
+
+      claims.push({ id: `c${id++}`, text: s, type, pi, cks: [...new Set(cks)], highRisk });
     }
   }
-  const sorted = [...claims.filter(c => c.type === 'empirical'), ...claims.filter(c => c.type === 'theoretical'), ...claims.filter(c => c.type === 'descriptive')];
+  const sorted = [
+    ...claims.filter(c => c.type === 'high_risk'),
+    ...claims.filter(c => c.type === 'empirical'),
+    ...claims.filter(c => c.type === 'theoretical'),
+    ...claims.filter(c => c.type === 'descriptive'),
+  ];
   return sorted.slice(0, max);
 }
 
@@ -349,7 +361,7 @@ serve(async (req) => {
 
 
 
-    const emptyResp = { totalClaims: 0, analyzedClaims: 0, strong: 0, partial: 0, weak: 0, contradiction: 0, avgSupportScore: 0, unsupportedEmpiricalClaims: 0, contradictions: 0, strongPct: 0, uncitedClaimsPct: 0, analysisComplete: false, verdictLabel: 'Analysis Incomplete' };
+    const emptyResp = { totalClaims: 0, analyzedClaims: 0, strong: 0, partial: 0, weak: 0, contradiction: 0, avgSupportScore: 0, unsupportedEmpiricalClaims: 0, highRiskUncited: 0, contradictions: 0, strongPct: 0, uncitedClaimsPct: 0, analysisComplete: false, verdictLabel: 'Analysis Incomplete' };
     const emptyCoherence = { totalClaimsAnalyzed: 0, conflicts: [], conflictCount: 0, criticalConflicts: 0, coherenceScore: 100, coherenceVerdict: 'Analysis Incomplete', analysisComplete: false };
 
     if (!Array.isArray(references) || !references.length) {
@@ -445,9 +457,10 @@ serve(async (req) => {
       const ta = verdicts.length, avg = ta > 0 ? Math.round(verdicts.reduce((s, v) => s + VS[v.v], 0) / ta) : 0;
       const uemp = claims.filter(c => c.type === 'empirical' && !c.cks.length).length + verdicts.filter(v => { const c = cited.find((cc: any) => cc.id === v.id); return c?.type === 'empirical' && (v.v === 'weak' || v.v === 'contradiction'); }).length;
       const ucPct = claims.length > 0 ? Math.round((uncited.length / claims.length) * 100) : 0;
+      const highRiskUncited = claims.filter(c => c.type === 'high_risk' && !c.cks.length).length;
       const manualReview = verdicts.filter(v => v.revalidated && !v.confirmed).length;
-      let vl = 'Analysis Incomplete'; if (ta > 0) { if (cV > 0 || avg < 50) vl = 'Academically Unsafe'; else if (avg < 65 || uemp > 0) vl = 'Requires Revision'; else vl = 'Conceptually Sound'; }
-      claimReport = { totalClaims: claims.length, analyzedClaims: ta, strong: sV, partial: pV, weak: wV, contradiction: cV, avgSupportScore: avg, unsupportedEmpiricalClaims: uemp, contradictions: cV, strongPct: ta > 0 ? Math.round((sV / ta) * 100) : 0, uncitedClaimsPct: ucPct, analysisComplete: true, verdictLabel: vl, manualReviewRequired: manualReview };
+      let vl = 'Analysis Incomplete'; if (ta > 0) { if (cV > 0 || avg < 70 || highRiskUncited > 0) vl = 'Academically Unsafe'; else if (avg < 85 || uemp > 0 || ucPct > 0) vl = 'Requires Revision'; else vl = 'Conceptually Sound'; }
+      claimReport = { totalClaims: claims.length, analyzedClaims: ta, strong: sV, partial: pV, weak: wV, contradiction: cV, avgSupportScore: avg, unsupportedEmpiricalClaims: uemp, highRiskUncited, contradictions: cV, strongPct: ta > 0 ? Math.round((sV / ta) * 100) : 0, uncitedClaimsPct: ucPct, analysisComplete: true, verdictLabel: vl, manualReviewRequired: manualReview };
       log("Phase 5 done", { avg, contradictions: cV, manualReview, verdict: vl });
     }
 
@@ -490,15 +503,17 @@ serve(async (req) => {
     // Hard failures
     const hf: string[] = [];
     if (doiF > 0) hf.push(`${doiF} DOI(s) failed`);
-    if (metrics.suspiciousPct >= 5) hf.push(`${metrics.suspiciousPct}% suspicious`);
-    if (ornPct >= 10) hf.push(`${ornPct}% ornamental`);
-    if (semAvg < 50) hf.push(`Semantic ${semAvg}/100 < 50`);
+    if (metrics.suspiciousPct > 0) hf.push(`${metrics.suspiciousPct}% suspicious`);
+    if (ornPct >= 5) hf.push(`${ornPct}% ornamental`);
+    if (semAvg < 65) hf.push(`Semantic ${semAvg}/100 < 65`);
     if (empUnsup > 0) hf.push(`${empUnsup} empirical unsupported`);
+    if ((claimReport.highRiskUncited || 0) > 0) hf.push(`${claimReport.highRiskUncited} high-risk factual claim(s) uncited`);
     if (claimReport.contradictions > 0) hf.push(`${claimReport.contradictions} contradiction(s) (revalidated)`);
-    if (claimReport.avgSupportScore > 0 && claimReport.avgSupportScore < 60) hf.push(`Claim score ${claimReport.avgSupportScore}/100 < 60`);
-    if (claimReport.uncitedClaimsPct >= 5) hf.push(`${claimReport.uncitedClaimsPct}% uncited claims`);
+    if (claimReport.analyzedClaims > 0 && claimReport.avgSupportScore < 85) hf.push(`Claim score ${claimReport.avgSupportScore}/100 < 85`);
+    if (claimReport.uncitedClaimsPct > 0) hf.push(`${claimReport.uncitedClaimsPct}% uncited claims`);
+    if ((claimReport.manualReviewRequired || 0) > 0) hf.push(`${claimReport.manualReviewRequired} claim(s) require manual review`);
     if (coherenceReport.criticalConflicts > 0) hf.push(`${coherenceReport.criticalConflicts} critical epistemic conflict(s)`);
-    if (coherenceReport.coherenceScore < 50) hf.push(`Epistemic coherence ${coherenceReport.coherenceScore}/100 < 50`);
+    if (coherenceReport.coherenceScore < 90) hf.push(`Epistemic coherence ${coherenceReport.coherenceScore}/100 < 90`);
 
     // ===========================================
     // IMMUTABLE AUDIT ARTIFACT
@@ -506,7 +521,7 @@ serve(async (req) => {
     // ===========================================
     const auditTimestamp = new Date().toISOString();
     const auditModelUsed = "google/gemini-2.5-flash-lite";
-    const promptVersionUsed = "scrollverified-2026-v3.0";
+    const promptVersionUsed = "scrollverified-2026-v4.0";
     
     // Build deterministic content for hash
     const artifactPayload = JSON.stringify({
@@ -529,7 +544,7 @@ serve(async (req) => {
     const chapterHash = chapterHashArray.map(b => b.toString(16).padStart(2, '0')).join('').slice(0, 12);
 
     const auditArtifact = {
-      schemaVersion: "3.1",
+      schemaVersion: "4.0",
       standard: "ScrollVerified™ 2026 — Institutional Epistemic Integrity Certified",
       artifactId: hashHex,
       generatedAt: auditTimestamp,
