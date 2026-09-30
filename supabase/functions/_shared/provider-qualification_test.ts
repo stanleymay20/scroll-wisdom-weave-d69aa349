@@ -16,7 +16,7 @@ function passingSample(
   index = 1,
   human = true,
 ): ProviderQualificationSample {
-  const evidenceRequired = ["academic", "technical", "reference", "professional"].includes(bookType);
+  const evidenceRequired = ["academic", "technical", "reference", "professional", "bestseller", "illustrated"].includes(bookType);
   const visual = ["illustrated", "children", "comic"].includes(bookType);
   const technical = bookType === "technical";
 
@@ -30,15 +30,15 @@ function passingSample(
       generatedChapters: 12,
       chapterAttempts: 14,
       chapterFailures: 0,
-      regenerationPasses: 1,
+      regenerationPasses: 0,
     },
     editorial: {
       certificationEligible: true,
-      overallScore: 91,
+      overallScore: 97,
     },
     publishability: {
       status: "ready",
-      score: 98,
+      score: 100,
       blockerCount: 0,
       warningCount: 0,
     },
@@ -57,7 +57,7 @@ function passingSample(
       visualAssetGatePassed: visual ? true : undefined,
     },
     humanReview: human
-      ? { reviewer: "independent-reviewer", score: 9.1, criticalIssues: 0 }
+      ? { reviewer: "independent-reviewer", score: 9.7, minimumDimension: 9.4, criticalIssues: 0 }
       : undefined,
   };
 }
@@ -138,6 +138,7 @@ Deno.test("fiction requires five samples and three independent human reviews", (
 
 Deno.test("qualification release order preserves the staged reopening plan", () => {
   assertEquals(qualificationReleaseOrder(), [
+    "text",
     "academic",
     "technical",
     "reference",
@@ -154,7 +155,7 @@ Deno.test("qualification release order preserves the staged reopening plan", () 
 
 Deno.test("human review cannot pass with an out-of-range score", () => {
   const sample = passingSample("academic");
-  sample.humanReview = { reviewer: "reviewer", score: 11, criticalIssues: 0 };
+  sample.humanReview = { reviewer: "reviewer", score: 11, minimumDimension: 9.5, criticalIssues: 0 };
 
   const result = evaluateQualificationSample(sample);
   assertEquals(result.passed, false);
@@ -163,9 +164,33 @@ Deno.test("human review cannot pass with an out-of-range score", () => {
 
 Deno.test("human review critical issue count must be non-negative", () => {
   const sample = passingSample("academic");
-  sample.humanReview = { reviewer: "reviewer", score: 9, criticalIssues: -1 };
+  sample.humanReview = { reviewer: "reviewer", score: 9.7, minimumDimension: 9.5, criticalIssues: -1 };
 
   const result = evaluateQualificationSample(sample);
   assertEquals(result.passed, false);
   assert(result.blockers.some((blocker) => blocker.includes("non-negative integer")));
+});
+
+
+Deno.test("near-10 qualification rejects a strong average with one weak review dimension", () => {
+  const sample = passingSample("professional");
+  sample.humanReview = {
+    reviewer: "reviewer",
+    score: 9.6,
+    minimumDimension: 8.8,
+    criticalIssues: 0,
+  };
+
+  const result = evaluateQualificationSample(sample);
+  assertEquals(result.passed, false);
+  assert(result.blockers.some((blocker) => blocker.includes("weakest human-review dimension")));
+});
+
+Deno.test("standard text is empirically qualified rather than treated as an untested fallback", () => {
+  const samples = Array.from({ length: 5 }, (_, index) =>
+    passingSample("text", index + 1, index < 3)
+  );
+  const result = evaluateBookTypeQualification("text", samples);
+  assertEquals(result.qualified, true);
+  assertEquals(result.humanReviewedSamples, 3);
 });
