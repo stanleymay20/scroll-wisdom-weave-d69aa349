@@ -170,6 +170,8 @@ bun run qualification:collect -- \
   --book <book-uuid-1> \
   --book <book-uuid-2> \
   --book <book-uuid-3> \
+  --book <book-uuid-4> \
+  --book <book-uuid-5> \
   --reviews qualification/reviews/academic.json \
   --output provider-qualification-evidence.json
 ```
@@ -194,9 +196,9 @@ The workflow always attempts to upload `provider-qualification-evidence.json` fo
 
 ## Release procedure
 
-A successful qualification workflow is necessary but does **not** automatically release a type.
+A successful qualification workflow is necessary but does **not** automatically release a specialized type. Standard Text remains the GA baseline path, but its empirical campaign is still required as a continuous quality benchmark and must meet the same near-10 sample doctrine.
 
-After the evidence artifact is reviewed:
+After a specialized-mode evidence artifact is reviewed:
 
 1. Add only the passed type to the server `GA_QUALIFIED_BOOK_TYPES` allow-list.
 2. Add the same type to `VITE_QUALIFIED_BOOK_TYPES`.
