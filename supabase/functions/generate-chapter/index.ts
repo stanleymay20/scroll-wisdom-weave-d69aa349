@@ -9,6 +9,7 @@ import { secretsMatch } from "../_shared/cron-auth.ts";
 import { buildFictionContinuityContext, sanitizeFictionContract } from "../_shared/fiction-context.ts";
 import { buildChildrenSystemPrompt } from "../_shared/children-contract.ts";
 import { validateWorkbookStructure as validateWorkbookContract } from "../_shared/authority-validator.ts";
+import { BILLING_PLAN_LIMITS, billingPlanFor } from "../_shared/billing-plans.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -47,7 +48,6 @@ const getModelForPlan = (plan: string): string => {
   switch (plan) {
     case "prophet_tier":
     case "premium":
-      return "google/gemini-2.5-pro";
     case "student":
       return "google/gemini-2.5-flash";
     case "free":
@@ -856,13 +856,6 @@ function getRandomSkeleton(bookType: string, chapterNumber: number): string {
 // ===========================================
 // AUTHORITY-GRADE CONFIGURATION
 // ===========================================
-
-const TIER_WORD_LIMITS = {
-  free: 4000,
-  student: 8000,
-  premium: 12000,
-  prophet_tier: 16000,
-};
 
 const DOMAIN_MIN_SOURCES: Record<string, number> = {
   medicine: 5,
@@ -1966,6 +1959,26 @@ serve(async (req) => {
   }
   
 
+  let textReservation: {
+    client: ReturnType<typeof createClient>;
+    userId: string;
+    month: string;
+    units: number;
+  } | null = null;
+
+  const refundTextReservation = async () => {
+    if (!textReservation) return;
+    const reservation = textReservation;
+    textReservation = null;
+    const { error } = await reservation.client.rpc("release_billing_usage", {
+      _user_id: reservation.userId,
+      _month: reservation.month,
+      _metric: "ai_text_words",
+      _units: reservation.units,
+    });
+    if (error) console.error("[GENERATE-CHAPTER] Failed to refund AI text reservation:", error);
+  };
+
   try {
     const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
     const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
@@ -2141,14 +2154,15 @@ serve(async (req) => {
       .eq("user_id", user.id)
       .maybeSingle();
 
-    // Only use tier if subscription is active, otherwise fall back to free
-    const userPlan = (subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free";
-    // Model routing respects subscription tier — admin bypass is for limits only, not model upgrade.
-    // Chief Editor (publication-quality) rewrites use a server-selected tier-based model with a
-    // higher floor so final polishing is never done by Flash Lite. Never client-selectable.
+    // Only use tier if subscription is active, otherwise fall back to free.
+    const userPlan = billingPlanFor(
+      (subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free",
+    );
+    // Routine drafting uses the cost-efficient model. Chief Editor rewrites keep
+    // their server-owned quality floor and can still use Pro on eligible tiers.
     const baseModel = getModelForPlan(userPlan);
     const generationModel = isChiefEditorRewrite ? getRewriteModelForPlan(userPlan) : baseModel;
-    const maxWordCount = TIER_WORD_LIMITS[userPlan as keyof typeof TIER_WORD_LIMITS] || TIER_WORD_LIMITS.free;
+    const maxWordCount = BILLING_PLAN_LIMITS[userPlan].maxWordsPerChapter;
     console.log(`[GENERATE-CHAPTER] Plan: ${userPlan} | Model: ${generationModel}${isChiefEditorRewrite && generationModel !== baseModel ? ` (chief-editor rewrite floor, base ${baseModel})` : ''} | Admin: ${isAdmin}`);
 
     // ===========================================
@@ -4670,6 +4684,59 @@ BEGIN:`;
       console.log(`[GENERATE-CHAPTER] Edit intent injected (${editIntentPrompt.length} chars)`);
     }
 
+    // Reserve the chapter's planned output before the paid provider call. Book
+    // project allowance and AI-text allowance are independent economics.
+    const billingMonth = new Date().toISOString().slice(0, 7);
+    const requestedTextWords = Math.max(500, effectiveWordCount);
+    const textLimit = isAdmin ? -1 : BILLING_PLAN_LIMITS[userPlan].aiTextWordsPerMonth;
+    const { data: textReservationData, error: textReservationError } = await supabase.rpc(
+      "reserve_billing_usage",
+      {
+        _user_id: user.id,
+        _month: billingMonth,
+        _metric: "ai_text_words",
+        _units: requestedTextWords,
+        _base_limit: textLimit,
+      },
+    );
+
+    if (textReservationError) {
+      console.error("[GENERATE-CHAPTER] AI text reservation failed:", textReservationError);
+      return new Response(JSON.stringify({
+        error: "Unable to verify your AI text allowance right now. Please try again.",
+        code: "AI_TEXT_METER_UNAVAILABLE",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    const textUsage = (Array.isArray(textReservationData) ? textReservationData[0] : textReservationData) as
+      { allowed: boolean; used: number; remaining: number; effective_limit: number } | null;
+
+    if (!textUsage?.allowed) {
+      return new Response(JSON.stringify({
+        error: `This chapter would exceed your ${BILLING_PLAN_LIMITS[userPlan].publicName} AI text allowance.`,
+        code: "AI_TEXT_LIMIT_REACHED",
+        usage: {
+          used: textUsage?.used ?? 0,
+          limit: textUsage?.effective_limit ?? textLimit,
+          remaining: textUsage?.remaining ?? 0,
+          requested: requestedTextWords,
+        },
+      }), {
+        status: 402,
+        headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
+
+    textReservation = {
+      client: supabase,
+      userId: user.id,
+      month: billingMonth,
+      units: requestedTextWords,
+    };
+
     // Retry logic for transient gateway errors (502, 503, 504) and rate limits (429)
     // Model fallback chain for 429 rate limits
     const FALLBACK_MODELS = [
@@ -4716,6 +4783,7 @@ BEGIN:`;
 
       // Credit exhaustion — terminate immediately, never retry. Surface 402 to client.
       if (response.status === 402) {
+        await refundTextReservation();
         return new Response(
           JSON.stringify({ error: "Payment required, please add AI credits to continue.", code: "ai_credits_exhausted" }),
           { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } },
@@ -5665,6 +5733,7 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
       // Qualification callers must meet the same content contract.
       {
         console.log(`[CONTRACT 6] BLOCKING content for book type: ${effectiveBookType}`);
+        await refundTextReservation();
         return new Response(JSON.stringify({
           error: `CONTRACT 6 VIOLATION: ${criticalViolation.message}`,
           code: criticalViolation.code,
@@ -5691,6 +5760,7 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
       // For non-admin users, log warning but allow (soft enforcement initially)
       if (!isAdmin && pedagogicalValidation.score < 50) {
         // Only hard-block if less than 50% compliance
+        await refundTextReservation();
         return new Response(JSON.stringify({
           error: `PEDAGOGICAL SCHEMA VIOLATION: Chapter requires 7 mandatory sections. Found ${pedagogicalValidation.sectionsFound}. Missing: ${pedagogicalValidation.missingSections.join(', ')}`,
           code: 'PEDAGOGICAL_SCHEMA_VIOLATION',
@@ -5704,6 +5774,53 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
     }
     
     const actualWordCount = finalContent.split(/\s+/).filter((w: string) => w.length > 0).length;
+
+    // Settle the reservation to actual output before saving the chapter.
+    if (textReservation) {
+      if (actualWordCount < textReservation.units) {
+        const releaseUnits = textReservation.units - actualWordCount;
+        const { error: settleError } = await supabase.rpc("release_billing_usage", {
+          _user_id: user.id,
+          _month: billingMonth,
+          _metric: "ai_text_words",
+          _units: releaseUnits,
+        });
+        if (settleError) {
+          console.error("[GENERATE-CHAPTER] Failed to settle unused AI text reservation:", settleError);
+          await refundTextReservation();
+          return new Response(JSON.stringify({
+            error: "Unable to settle AI text usage safely. Please try again.",
+            code: "AI_TEXT_METER_SETTLEMENT_FAILED",
+          }), {
+            status: 503,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        textReservation.units = actualWordCount;
+      } else if (actualWordCount > textReservation.units) {
+        const extraUnits = actualWordCount - textReservation.units;
+        const { data: extraData, error: extraError } = await supabase.rpc("reserve_billing_usage", {
+          _user_id: user.id,
+          _month: billingMonth,
+          _metric: "ai_text_words",
+          _units: extraUnits,
+          _base_limit: textLimit,
+        });
+        const extraUsage = (Array.isArray(extraData) ? extraData[0] : extraData) as
+          { allowed: boolean } | null;
+        if (extraError || !extraUsage?.allowed) {
+          await refundTextReservation();
+          return new Response(JSON.stringify({
+            error: "Generated output exceeded your remaining AI text allowance and was not saved.",
+            code: "AI_TEXT_LIMIT_REACHED",
+          }), {
+            status: 402,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+        textReservation.units = actualWordCount;
+      }
+    }
 
     const updateData: any = {
       content: finalContent,
@@ -5829,6 +5946,9 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
     }
 
 
+    // Successful persistence consumes the settled reservation.
+    textReservation = null;
+
     return new Response(JSON.stringify({
       success: true,
       wordCount: actualWordCount,
@@ -5855,6 +5975,7 @@ Quality: Textbook-grade. Optimized for both screen and print. Accessible to dive
     }), { headers: { ...corsHeaders, "Content-Type": "application/json" } });
     
   } catch (error) {
+    await refundTextReservation();
     console.error("[GENERATE-CHAPTER] Error:", error);
     return new Response(JSON.stringify({ 
       error: error instanceof Error ? error.message : "Unknown error",
