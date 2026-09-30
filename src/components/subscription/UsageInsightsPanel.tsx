@@ -1,15 +1,14 @@
 /**
- * UsageInsightsPanel — Settings → Billing usage card.
- * Reads from the secure get_user_usage_snapshot RPC via useUsageSnapshot.
- * No client-derived limits — the source of truth is server.
+ * Settings → Billing usage card for the sustainable billing catalogue.
  */
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Loader2, RefreshCw, BookOpen, Mic, Sparkles } from "lucide-react";
+import { Loader2, RefreshCw, BookOpen, Mic, Sparkles, Image as ImageIcon, Type } from "lucide-react";
 import { useUsageSnapshot } from "@/hooks/useUsageSnapshot";
 import { useNavigate } from "react-router-dom";
+import { SUBSCRIPTION_TIERS } from "@/lib/subscription";
 
 interface RowProps {
   icon: typeof BookOpen;
@@ -17,12 +16,15 @@ interface RowProps {
   used: number;
   limit: number | null | undefined;
   unit?: string;
+  format?: (value: number) => string;
 }
 
-function UsageRow({ icon: Icon, label, used, limit, unit }: RowProps) {
+function UsageRow({ icon: Icon, label, used, limit, unit, format }: RowProps) {
   const isUnlimited = limit === null || limit === undefined || limit < 0;
   const pct = isUnlimited ? 0 : Math.min(100, Math.round(((used || 0) / Math.max(1, limit)) * 100));
   const exhausted = !isUnlimited && used >= (limit ?? 0);
+  const render = format ?? ((value: number) => String(Math.round(value * 100) / 100));
+
   return (
     <div className="space-y-1.5">
       <div className="flex items-center justify-between text-sm">
@@ -30,16 +32,19 @@ function UsageRow({ icon: Icon, label, used, limit, unit }: RowProps) {
           <Icon className="h-4 w-4 text-primary" />
           {label}
         </span>
-        <span className={`font-mono text-xs ${exhausted ? "text-destructive" : "text-muted-foreground"}`}>
-          {used}
-          {isUnlimited ? " / ∞" : ` / ${limit}`}
-          {unit ? ` ${unit}` : ""}
+        <span className={"font-mono text-xs " + (exhausted ? "text-destructive" : "text-muted-foreground")}>
+          {render(used)}
+          {isUnlimited ? " / ∞" : " / " + render(limit ?? 0)}
+          {unit ? " " + unit : ""}
         </span>
       </div>
       {!isUnlimited && <Progress value={pct} className="h-1.5" />}
     </div>
   );
 }
+
+const compact = (value: number) =>
+  new Intl.NumberFormat(undefined, { notation: "compact", maximumFractionDigits: 1 }).format(value);
 
 export function UsageInsightsPanel() {
   const { snapshot, loading, error, refresh } = useUsageSnapshot();
@@ -50,16 +55,14 @@ export function UsageInsightsPanel() {
       <CardHeader className="flex flex-row items-center justify-between pb-2">
         <CardTitle className="flex items-center gap-2 text-base">
           <Sparkles className="h-4 w-4 text-primary" />
-          This Month's Usage
+          This Month&apos;s Usage
         </CardTitle>
         <Button variant="ghost" size="sm" onClick={refresh} disabled={loading}>
           {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <RefreshCw className="h-3.5 w-3.5" />}
         </Button>
       </CardHeader>
       <CardContent className="space-y-4">
-        {error && (
-          <p className="text-xs text-destructive">Couldn't load usage: {error}</p>
-        )}
+        {error && <p className="text-xs text-destructive">Couldn&apos;t load usage: {error}</p>}
         {!snapshot && !error && (
           <div className="flex items-center gap-2 text-sm text-muted-foreground">
             <Loader2 className="h-3.5 w-3.5 animate-spin" /> Loading…
@@ -69,21 +72,37 @@ export function UsageInsightsPanel() {
           <>
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>Period: {snapshot.month}</span>
-              <Badge variant="secondary" className="capitalize">{snapshot.plan}</Badge>
+              <Badge variant="secondary">{SUBSCRIPTION_TIERS[snapshot.plan].name}</Badge>
             </div>
             <UsageRow
               icon={BookOpen}
-              label="Books generated"
+              label="Book projects"
               used={snapshot.booksThisMonth}
               limit={snapshot.booksLimit}
             />
             <UsageRow
-              icon={Mic}
-              label="Audio listening"
-              used={snapshot.ttsMinutesUsed}
-              limit={snapshot.ttsMinutesLimit}
-              unit="min"
+              icon={Type}
+              label="AI-generated text"
+              used={snapshot.aiTextWordsUsed}
+              limit={snapshot.aiTextWordsLimit}
+              unit="words"
+              format={compact}
             />
+            <UsageRow
+              icon={ImageIcon}
+              label="Visual credits"
+              used={snapshot.visualCreditsUsed}
+              limit={snapshot.visualCreditsLimit}
+            />
+            <UsageRow
+              icon={Mic}
+              label="Audio credits"
+              used={snapshot.audioCreditsUsed}
+              limit={snapshot.audioCreditsLimit}
+            />
+            <p className="text-[11px] leading-relaxed text-muted-foreground">
+              Standard narration uses 1 audio credit per minute. Interactive voice consumes the same pooled budget at a higher weighted rate.
+            </p>
             <div className="flex items-center justify-end pt-2">
               <Button size="sm" variant="outline" onClick={() => navigate("/pricing")}>
                 See plan options
