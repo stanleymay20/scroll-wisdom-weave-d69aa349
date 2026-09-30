@@ -351,6 +351,8 @@ export default function Pricing() {
               })}
             </div>
 
+            {FEATURES.enableSubscriptionCheckout && (
+              <>
             {/* Creator tiers (Phase 4.0) */}
             <div id="creator" className="mt-20 mb-16 scroll-mt-24">
               <div className="text-center mb-10">
@@ -461,7 +463,8 @@ export default function Pricing() {
 
               </div>
             </div>
-
+              </>
+            )}
 
             {/* Manage Subscription */}
             {isSubscribed && (
@@ -480,6 +483,7 @@ export default function Pricing() {
               </div>
             )}
 
+            {FEATURES.enableSubscriptionCheckout && (
             {/* Trust */}
             <div className="flex flex-wrap justify-center gap-8 text-muted-foreground border-t border-border/50 pt-8">
               <div className="flex items-center gap-2">
@@ -495,6 +499,8 @@ export default function Pricing() {
                 <span className="text-sm">Cancel anytime</span>
               </div>
             </div>
+            )}
+
           </motion.div>
         </div>
       </main>
