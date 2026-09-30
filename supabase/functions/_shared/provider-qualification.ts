@@ -411,6 +411,9 @@ export function evaluateBookTypeQualification(
       && Number.isFinite(review.score)
       && review.score >= policy.humanReviewMinimum
       && review.score <= 10
+      && Number.isFinite(review.minimumDimension)
+      && review.minimumDimension >= policy.humanReviewMinimumDimension
+      && review.minimumDimension <= 10
       && review.criticalIssues === 0;
   }).length;
 
