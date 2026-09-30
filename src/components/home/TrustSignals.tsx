@@ -1,14 +1,51 @@
 import { motion } from "framer-motion";
 import { Check } from "lucide-react";
+import { useLanguage } from "@/contexts/LanguageContext";
+import type { Language } from "@/lib/i18n";
 
-const signals = [
-  "Structured multi-chapter book creation",
-  "Books stay together in your library",
-  "Reading and learning stay connected",
-  "Advanced features fail closed until GA validation",
-];
+const signalsByLanguage: Record<Language, string[]> = {
+  en: [
+    "Structured multi-chapter book creation",
+    "Books stay together in your library",
+    "Reading and learning stay connected",
+    "Advanced features fail closed until GA validation",
+  ],
+  fr: [
+    "Création structurée de livres en plusieurs chapitres",
+    "Vos livres restent réunis dans votre bibliothèque",
+    "Lecture et apprentissage restent connectés",
+    "Les fonctions avancées restent fermées jusqu’à la validation GA",
+  ],
+  de: [
+    "Strukturierte Erstellung mehrteiliger Bücher",
+    "Bücher bleiben gemeinsam in deiner Bibliothek",
+    "Lesen und Lernen bleiben verbunden",
+    "Erweiterte Funktionen bleiben bis zur GA-Validierung deaktiviert",
+  ],
+  es: [
+    "Creación estructurada de libros de varios capítulos",
+    "Tus libros permanecen juntos en tu biblioteca",
+    "La lectura y el aprendizaje permanecen conectados",
+    "Las funciones avanzadas permanecen cerradas hasta la validación GA",
+  ],
+  ar: [
+    "إنشاء منظم لكتب متعددة الفصول",
+    "تبقى كتبك معًا في مكتبتك",
+    "تظل القراءة والتعلّم مترابطين",
+    "تظل الميزات المتقدمة مغلقة حتى اجتياز التحقق للإطلاق العام",
+  ],
+  sw: [
+    "Uundaji uliopangiliwa wa vitabu vya sura nyingi",
+    "Vitabu vyako hubaki pamoja kwenye maktaba yako",
+    "Kusoma na kujifunza hubaki vimeunganishwa",
+    "Vipengele vya juu hubaki vimefungwa hadi uthibitishaji wa GA",
+  ],
+};
 
 export function TrustSignals() {
+  const { language } = useLanguage();
+  const signals = signalsByLanguage[language] ?? signalsByLanguage.en;
+
   return (
     <section className="py-10 border-y border-border bg-muted/20">
       <div className="container mx-auto px-4">
