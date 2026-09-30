@@ -276,7 +276,7 @@ export default function Pricing() {
             </div>
 
             {/* Plans Grid */}
-            <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto mb-16">
+            <div className={`grid gap-6 mx-auto mb-16 ${visiblePlans.length === 1 ? "max-w-md grid-cols-1" : "max-w-6xl sm:grid-cols-2 lg:grid-cols-4"}`}>
               {visiblePlans.map((plan, index) => {
                 const isCurrent = isCurrentPlan(plan.tierKey);
                 
@@ -355,7 +355,7 @@ export default function Pricing() {
             </div>
 
             {!FEATURES.enableSubscriptionCheckout && (
-              <div className="mb-16 rounded-2xl border border-border bg-muted/30 p-6 md:p-8 text-center">
+              <div id="creator" className="mb-16 scroll-mt-24 rounded-2xl border border-border bg-muted/30 p-6 md:p-8 text-center">
                 <Badge variant="secondary" className="mb-3">GA boundary</Badge>
                 <h2 className="text-2xl md:text-3xl font-display font-bold text-foreground mb-3">
                   Paid plans are not open yet
