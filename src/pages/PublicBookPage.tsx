@@ -110,7 +110,7 @@ export default function PublicBookPage() {
 
 
   if (loading) return <ResponsiveShell><div className="container mx-auto max-w-5xl p-8"><Skeleton className="h-96 w-full" /></div></ResponsiveShell>;
-  if (!data || !data.book) return <ResponsiveShell><div className="container mx-auto max-w-5xl p-8"><h1 className="text-2xl font-bold">Not found</h1><Link to="/store" className="text-primary">Back to store</Link></div></ResponsiveShell>;
+  if (!data || !data.book) return <ResponsiveShell><div className="container mx-auto max-w-5xl p-8"><h1 className="text-2xl font-bold">Not found</h1><Link to="/explore" className="text-primary">Back to Explore</Link></div></ResponsiveShell>;
 
 
   const cover = data.cover_override_url || data.book.cover_image_url || "";
@@ -151,7 +151,7 @@ export default function PublicBookPage() {
       keywords: data.seo_keywords.length > 0 ? data.seo_keywords.join(", ") : undefined,
       dateModified: data.updated_at || undefined,
       mainEntityOfPage: canonicalUrl,
-      offers: data.price_cents > 0 ? {
+      offers: FEATURES.enablePaidCheckout && data.price_cents > 0 ? {
         "@type": "Offer",
         url: canonicalUrl,
         price: (data.price_cents / 100).toFixed(2),
@@ -166,8 +166,8 @@ export default function PublicBookPage() {
         {
           "@type": "ListItem",
           position: 1,
-          name: "Store",
-          item: "https://scrolllibrary.org/store",
+          name: "Explore",
+          item: "https://scrolllibrary.org/explore",
         },
         {
           "@type": "ListItem",
@@ -281,7 +281,13 @@ export default function PublicBookPage() {
                 By <Link to={`/authors/${author.slug}`} className="text-primary hover:underline">{author.display_name}</Link>
               </p>
             )}
-            <div className="mt-6 text-2xl font-semibold">{price}</div>
+            {data.price_cents > 0 && !FEATURES.enablePaidCheckout ? (
+              <p className="mt-6 text-sm text-muted-foreground">
+                Paid sales open only after the payment lifecycle passes GA validation.
+              </p>
+            ) : (
+              <div className="mt-6 text-2xl font-semibold">{price}</div>
+            )}
             <SocialProofBadges listingId={data.id} variant="row" className="mt-3" />
             <div className="mt-4 flex flex-wrap gap-3">
               <Button onClick={() => { trackStorefrontEvent(data.id, "cta_click", { cta: "read_sample" }); navigate(`/store/${data.slug}/read`); }}>
@@ -295,7 +301,7 @@ export default function PublicBookPage() {
                 {checkoutBusy
                   ? "Starting checkout…"
                   : data.price_cents > 0 && !FEATURES.enablePaidCheckout
-                    ? "Paid purchases temporarily unavailable"
+                    ? "Paid purchases after validation"
                     : data.price_cents > 0
                       ? `Buy for ${price}`
                       : "Get free copy"}
