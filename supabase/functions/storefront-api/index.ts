@@ -61,6 +61,7 @@ function shapeListing(row: any) {
     seo_keywords: row.seo_keywords ?? [],
     series_id: row.series_id,
     series_order: row.series_order,
+    created_at: row.created_at,
     updated_at: row.updated_at,
     book: b
       ? {
