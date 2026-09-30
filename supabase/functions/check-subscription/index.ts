@@ -3,7 +3,7 @@ import Stripe from "https://esm.sh/stripe@18.5.0";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { getBillingCustomerId } from "../_shared/billing-customer.ts";
 import { planTierForProduct, resolveStripeCatalogue } from "../_shared/stripe-catalogue.ts";
-import { subscriptionPeriod } from "../_shared/stripe-fields.ts";
+import { subscriptionPeriod, subscriptionStatusGrantsAccess } from "../_shared/stripe-fields.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -72,7 +72,7 @@ serve(async (req) => {
         });
 
         const accessSubscriptions = subscriptions.data.filter((subscription: Stripe.Subscription) =>
-          subscription.status === "active" || subscription.status === "trialing"
+          subscriptionStatusGrantsAccess(subscription.status)
         );
 
         for (const subscription of accessSubscriptions) {
