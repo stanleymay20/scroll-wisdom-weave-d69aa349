@@ -101,7 +101,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
     const audioRef = useRef<HTMLAudioElement | null>(null);
     const currentSlideAudioRef = useRef<number>(-1);
     
-    // Premium TTS settings
+    // Pro TTS settings
     const isPremiumUser = tier === 'premium' || tier === 'prophet_tier';
     const [useElevenLabs, setUseElevenLabs] = useState(isPremiumUser);
     const [elevenLabsVoice, setElevenLabsVoice] = useState<string>('sam');
@@ -180,8 +180,8 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
         if (error) throw error;
         if (data?.requiresUpgrade) {
           toast({
-            title: 'Premium Feature',
-            description: 'ElevenLabs TTS requires Premium or Prophet tier.',
+            title: 'Pro Feature',
+            description: 'ElevenLabs TTS requires Pro or Teams plan.',
           });
           // Fall back to browser TTS
           playBrowserTTS(narration);
@@ -467,7 +467,7 @@ const SlideViewer = forwardRef<HTMLDivElement, SlideViewerProps>(
                   
                   {!isPremiumUser && (
                     <p className="text-xs text-muted-foreground">
-                      Upgrade to Premium for high-quality ElevenLabs voices.
+                      Upgrade to Pro for high-quality ElevenLabs voices.
                     </p>
                   )}
                 </div>
