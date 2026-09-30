@@ -1,6 +1,8 @@
 name: GA Production Verification
 
 on:
+  push:
+    branches: [main]
   workflow_dispatch:
     inputs:
       release_ref:
@@ -21,18 +23,18 @@ permissions:
   actions: read
 
 env:
-  SITE_URL: ${{ inputs.site_url }}
-  FUNCTIONS_URL: ${{ inputs.functions_url }}
+  SITE_URL: ${{ github.event.inputs.site_url || 'https://scrolllibrary.org' }}
+  FUNCTIONS_URL: ${{ github.event.inputs.functions_url || 'https://lrricdforqfkaaciammv.supabase.co/functions/v1' }}
 
 jobs:
   verify-production:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - name: Checkout release candidate
         uses: actions/checkout@v7
         with:
-          ref: ${{ inputs.release_ref }}
+          ref: ${{ github.event.inputs.release_ref || github.sha }}
           fetch-depth: 1
 
       - name: Resolve exact release source identity
@@ -49,15 +51,37 @@ jobs:
             echo "file_count=$file_count"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Fetch live release identity
+      - name: Wait for live deployment identity
+        env:
+          EXPECTED_FINGERPRINT: ${{ steps.source.outputs.fingerprint }}
         shell: bash
         run: |
           set -euo pipefail
-          curl --fail --silent --show-error --location --retry 3 \
-            -H 'Cache-Control: no-cache' \
-            "$SITE_URL/release.json?ga_run=$GITHUB_RUN_ID" \
-            -o live-release.json
-          cat live-release.json
+          matched=false
+          for attempt in $(seq 1 36); do
+            if curl --fail --silent --show-error --location --retry 2 \
+              -H 'Cache-Control: no-cache' \
+              "$SITE_URL/release.json?ga_run=$GITHUB_RUN_ID&attempt=$attempt" \
+              -o live-release.json; then
+              live_fingerprint="$(jq -r '.sourceFingerprint // empty' live-release.json)"
+              if [ "$live_fingerprint" = "$EXPECTED_FINGERPRINT" ]; then
+                matched=true
+                echo "Production is serving the expected source fingerprint."
+                cat live-release.json
+                break
+              fi
+              echo "Attempt $attempt: deployment still serves fingerprint ${live_fingerprint:-missing}; waiting for $EXPECTED_FINGERPRINT."
+            else
+              echo "Attempt $attempt: release identity is temporarily unavailable; waiting for deployment."
+            fi
+            sleep 10
+          done
+
+          if [ "$matched" != "true" ]; then
+            echo "::error::Production did not converge to the expected release fingerprint within 6 minutes."
+            [ -f live-release.json ] && cat live-release.json || true
+            exit 1
+          fi
 
       - name: Prove production source equals release candidate
         env:
@@ -92,14 +116,13 @@ jobs:
           }
           NODE
 
-      - name: Require exact-head release workflows
+      - name: Wait for exact-head release workflows
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_SHA: ${{ steps.source.outputs.release_sha }}
         shell: bash
         run: |
           set -euo pipefail
-          gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$RELEASE_SHA&per_page=100" > runs.json
 
           required=(
             "CI"
@@ -108,18 +131,35 @@ jobs:
             "EPUB Conformance"
             "Admin Financial Boundary"
             "Strict Null Ratchet"
+            "Interactive Voice Security"
           )
 
-          for workflow in "${required[@]}"; do
-            conclusion="$(jq -r --arg name "$workflow" '
-              [.workflow_runs[] | select(.name == $name and .head_sha == env.RELEASE_SHA and .event == "push")]
-              | sort_by(.created_at) | last | .conclusion // "missing"
-            ' runs.json)"
-            if [ "$conclusion" != "success" ]; then
-              echo "::error::$workflow is not successful for exact release head $RELEASE_SHA (found: $conclusion)"
+          deadline=$((SECONDS + 900))
+          while true; do
+            gh api "repos/$GITHUB_REPOSITORY/actions/runs?head_sha=$RELEASE_SHA&per_page=100" > runs.json
+            pending=false
+
+            for workflow in "${required[@]}"; do
+              conclusion="$(jq -r --arg name "$workflow" '
+                [.workflow_runs[] | select(.name == $name and .head_sha == env.RELEASE_SHA and .event == "push")]
+                | sort_by(.created_at) | last | .conclusion // "pending"
+              ' runs.json)"
+
+              case "$conclusion" in
+                success) echo "$workflow: success" ;;
+                failure|cancelled|timed_out|action_required|stale)
+                  echo "::error::$workflow failed for exact release head $RELEASE_SHA (conclusion: $conclusion)"
+                  exit 1 ;;
+                *) echo "$workflow: $conclusion"; pending=true ;;
+              esac
+            done
+
+            if [ "$pending" = "false" ]; then break; fi
+            if [ "$SECONDS" -ge "$deadline" ]; then
+              echo "::error::Timed out waiting for exact-head release workflows for $RELEASE_SHA."
               exit 1
             fi
-            echo "$workflow: success"
+            sleep 15
           done
 
       - name: Prove production payment-write posture
@@ -177,7 +217,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          for path in / /privacy /terms /help /docs/mastery-model; do
+          for path in / /about /pricing /explore /store /privacy /terms /help /contact /docs/mastery-model /docs/verification /docs/how-certification-works; do
             code="$(curl --silent --show-error --location --output /dev/null --write-out '%{http_code}' --retry 2 "$SITE_URL$path")"
             if [ "$code" != "200" ]; then
               echo "::error::$SITE_URL$path returned HTTP $code"
