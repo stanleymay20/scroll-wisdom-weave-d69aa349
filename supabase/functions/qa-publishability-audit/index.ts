@@ -98,6 +98,12 @@ Deno.serve(async (req) => {
     if (scopeLoadError) return json({ error: scopeLoadError }, 409);
     const auditScopeHash = scopeAfter as string;
 
+    const { data: requiresEvidence, error: evidencePolicyErr } = await sc.rpc(
+      "book_requires_publication_evidence",
+      { p_book_id: bookId },
+    );
+    if (evidencePolicyErr) return serverError(evidencePolicyErr);
+
     let report = auditBookForPublishability(
       (chapters ?? []).map((c) => ({
         chapter_number: c.chapter_number,
@@ -110,6 +116,7 @@ Deno.serve(async (req) => {
         hasCover: !!book.cover_image_url,
         bookType: book.book_type,
         expectedChapterCount: book.total_chapters,
+        requiresEvidence: requiresEvidence === true,
       },
     );
 
