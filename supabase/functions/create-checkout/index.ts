@@ -146,7 +146,7 @@ serve(async (req) => {
       "incomplete",
       "paused",
     ]);
-    const existingPlanSubscription = subscriptions.data.find((subscription) => {
+    const existingPlanSubscription = subscriptions.data.find((subscription: Stripe.Subscription) => {
       if (!blockingStatuses.has(subscription.status)) return false;
       const productId = String(subscription.items.data[0]?.price?.product ?? "");
       return planTierForProduct(catalogue, productId) !== null;
@@ -176,7 +176,7 @@ serve(async (req) => {
       status: "open",
       limit: 100,
     });
-    const reusableSession = openSessions.data.find((candidate) =>
+    const reusableSession = openSessions.data.find((candidate: Stripe.Checkout.Session) =>
       candidate.mode === "subscription"
       && candidate.metadata?.userId === user.id
       && candidate.metadata?.tier === tier
