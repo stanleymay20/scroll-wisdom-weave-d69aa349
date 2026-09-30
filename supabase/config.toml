@@ -177,3 +177,16 @@ verify_jwt = false
 # internally with requireUser(); outbound requests are HMAC-signed.
 [functions.relay-growth-event]
 verify_jwt = false
+
+# OAuth 2.1 identity provider for authenticated MCP clients.
+# Production enablement remains deployment-gated: verify signing configuration
+# and the production Auth Site URL before pushing this configuration live.
+[auth.oauth_server]
+enabled = true
+authorization_url_path = "/oauth/consent"
+allow_dynamic_registration = true
+
+# MCP OAuth discovery and token validation happen inside the function. Gateway
+# JWT verification stays off so clients can reach protected-resource metadata.
+[functions.mcp]
+verify_jwt = false
