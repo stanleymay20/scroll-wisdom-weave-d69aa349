@@ -1,10 +1,15 @@
 import { readFileSync } from "node:fs";
 
-// Source-only by design: this contract runs in ordinary CI even when Stripe test secrets are unavailable.
-
+// Source-only billing architecture contract. Runs in ordinary CI without Stripe secrets.
 const subscription = readFileSync("src/lib/subscription.ts", "utf8");
 const pricing = readFileSync("src/pages/Pricing.tsx", "utf8");
 const checkout = readFileSync("supabase/functions/create-checkout/index.ts", "utf8");
+const catalogue = readFileSync("supabase/functions/_shared/stripe-catalogue.ts", "utf8");
+const serverPlans = readFileSync("supabase/functions/_shared/billing-plans.ts", "utf8");
+const generation = readFileSync("supabase/functions/generate-chapter/index.ts", "utf8");
+const images = readFileSync("supabase/functions/generate-image/index.ts", "utf8");
+const tts = readFileSync("supabase/functions/text-to-speech/index.ts", "utf8");
+const migration = readFileSync("supabase/migrations/20260930231500_economic_billing_convergence.sql", "utf8");
 const checkSubscription = readFileSync("supabase/functions/check-subscription/index.ts", "utf8");
 const webhook = readFileSync("supabase/functions/stripe-webhook/index.ts", "utf8");
 const stripeFields = readFileSync("supabase/functions/_shared/stripe-fields.ts", "utf8");
@@ -12,48 +17,90 @@ const stripeFieldsTests = readFileSync("supabase/functions/_shared/stripe-fields
 
 const requireText = (source, text, label) => {
   if (!source.includes(text)) {
-    console.error(`Billing package contract missing: ${label}`);
+    console.error("Billing package contract missing: " + label);
     process.exit(1);
   }
 };
 
 const rejectText = (source, text, label) => {
   if (source.includes(text)) {
-    console.error(`Billing package contract regression: ${label}`);
+    console.error("Billing package contract regression: " + label);
     process.exit(1);
   }
 };
 
-// Public package identity: one ladder, no duplicate Creator/Creator Pro family.
-requireText(subscription, "name: 'Creator'", "Creator public plan");
-requireText(subscription, "name: 'Pro'", "Pro public plan");
-requireText(subscription, "name: 'Teams'", "Teams public plan");
-requireText(pricing, "SUBSCRIPTION_TIERS.student.name", "Creator pricing card");
-requireText(pricing, "SUBSCRIPTION_TIERS.premium.name", "Pro pricing card");
-requireText(pricing, "SUBSCRIPTION_TIERS.prophet_tier.name", "Teams pricing card");
-rejectText(pricing, "CREATOR_SUBSCRIPTION_TIERS", "legacy publisher tiers exposed on pricing");
-rejectText(pricing, "handleCreatorCheckout", "legacy publisher checkout exposed on pricing");
-rejectText(pricing, "Marketplace add-ons", "second paid package family exposed on pricing");
+// One public ladder with economically bounded list prices.
+for (const [needle, label] of [
+  ["name: 'Creator'", "Creator public plan"],
+  ["monthlyPrice: 19", "Creator $19 monthly"],
+  ["annualPrice: 190", "Creator $190 annual"],
+  ["name: 'Pro'", "Pro public plan"],
+  ["monthlyPrice: 69", "Pro $69 monthly"],
+  ["annualPrice: 690", "Pro $690 annual"],
+  ["name: 'Teams'", "Teams public plan"],
+  ["monthlyPrice: 199", "Teams $199 monthly"],
+  ["annualPrice: 1990", "Teams $1990 annual"],
+  ["PUBLISHING_SERVICE_PACKAGES", "separate publishing-service catalogue"],
+  ["USAGE_ADDONS", "separate usage-add-on catalogue"],
+]) requireText(subscription, needle, label);
 
-// Server authority: only generation tiers may start a new public checkout.
-requireText(checkout, "isPublicCheckoutTier(tier)", "server-side public-tier allow-list");
-requireText(checkout, 'code: "tier_not_publicly_sold"', "retired-tier rejection");
+requireText(pricing, "One plan ladder. Clear usage. Publishing only when you publish.", "single pricing story");
+requireText(pricing, "ScrollLibrary Press publishing services", "publishing services section");
+requireText(pricing, "Usage add-ons", "usage add-on section");
+requireText(pricing, "Marketplace fees", "transparent marketplace fees");
+rejectText(pricing, "CREATOR_SUBSCRIPTION_TIERS", "legacy publisher tiers exposed on pricing");
+rejectText(pricing, "Commercial publishing rights", "commercial rights sold as a plan privilege");
+
+// Frontend and server limits must carry the same canonical numbers.
+for (const [needle, label] of [
+  ["aiTextWordsPerMonth: 25_000", "Free text pool"],
+  ["aiTextWordsPerMonth: 250_000", "Creator text pool"],
+  ["aiTextWordsPerMonth: 1_000_000", "Pro text pool"],
+  ["aiTextWordsPerMonth: 2_500_000", "Teams text pool"],
+  ["visualCreditsPerMonth: 200", "Teams visual pool"],
+  ["audioCreditsPerMonth: 180", "Teams audio pool"],
+  ["marketplaceFeeBps: 1_500", "Free marketplace fee"],
+  ["marketplaceFeeBps: 1_000", "Creator marketplace fee"],
+  ["marketplaceFeeBps: 500", "Pro marketplace fee"],
+  ["marketplaceFeeBps: 300", "Teams marketplace fee"],
+]) requireText(serverPlans, needle, label);
+
+// New public checkout must be server-owned and fail closed if new Stripe prices
+// are not provisioned. Historical prices are reconciliation only.
+requireText(checkout, "isPublicCheckoutTier(tier)", "server public-tier allow-list");
+requireText(checkout, "isBillingInterval(billingInterval)", "monthly/annual interval validation");
+requireText(checkout, "publicCheckoutPrice(catalogue, tier, billingInterval)", "server-owned price resolution");
+requireText(checkout, 'code: "billing_catalogue_not_provisioned"', "unprovisioned catalogue fails closed");
+requireText(catalogue, "STRIPE_PRICE_CREATOR_MONTHLY", "new Creator price environment");
+requireText(catalogue, "STRIPE_PRICE_PRO_MONTHLY", "new Pro price environment");
+requireText(catalogue, "STRIPE_PRICE_TEAMS_MONTHLY", "new Teams price environment");
+requireText(catalogue, "reconciliation-only", "legacy prices documented as reconciliation-only");
 requireText(checkout, 'status: "all"', "existing subscription scan");
 requireText(checkout, 'code: sameTier ? "existing_plan_subscription" : "plan_change_required"', "duplicate subscription rejection");
 requireText(checkout, 'status: "open"', "open Checkout Session reuse");
 requireText(checkout, 'code: "checkout_in_progress"', "single open plan checkout invariant");
 requireText(checkout, "planTierForProduct(catalogue, productId)", "same-domain subscription detection");
 
-// Paid plan access must follow one shared Stripe status policy, not redirects or
-// duplicated literals that can drift across checkout, webhook and verification.
+// Compute must be metered on server-owned, race-safe reservations.
+requireText(migration, "CREATE TABLE IF NOT EXISTS public.billing_usage_monthly", "monthly usage authority");
+requireText(migration, "pg_advisory_xact_lock", "atomic usage locking");
+requireText(migration, "reserve_billing_usage", "generic usage reservation");
+requireText(migration, "get_user_marketplace_fee_bps", "single marketplace fee policy");
+requireText(migration, "SELECT 0", "legacy surcharge neutralized");
+requireText(generation, '"ai_text_words"', "chapter text uses AI text meter");
+requireText(generation, '"visual_credits"', "chapter figures use visual meter");
+requireText(images, '"visual_credits"', "image generation uses visual meter");
+requireText(tts, '"audio_units"', "TTS uses pooled audio meter");
+
+// Paid plan access continues to follow the shared Stripe status policy.
 requireText(stripeFields, "subscriptionStatusGrantsAccess", "shared access-status helper");
 requireText(stripeFields, 'status === "active" || status === "trialing"', "access-bearing Stripe states");
 requireText(stripeFields, "subscriptionStatusBlocksNewCheckout", "shared replacement-checkout helper");
 requireText(stripeFieldsTests, "subscription access is granted only for active or trialing states", "access-status tests");
 requireText(stripeFieldsTests, "only terminal subscription states allow a replacement checkout", "replacement-checkout tests");
-requireText(checkout, "subscriptionStatusBlocksNewCheckout(subscription.status)", "checkout uses shared status policy");
-requireText(webhook, "subscriptionStatusGrantsAccess(status)", "webhook uses shared access policy");
-requireText(checkSubscription, "subscriptionStatusGrantsAccess(subscription.status)", "subscription verification uses shared access policy");
+requireText(checkout, "subscriptionStatusBlocksNewCheckout(subscription.status)", "checkout shared status policy");
+requireText(webhook, "subscriptionStatusGrantsAccess(status)", "webhook shared access policy");
+requireText(checkSubscription, "subscriptionStatusGrantsAccess(subscription.status)", "subscription verification shared access policy");
 requireText(webhook, "Failed renewal is entitlement-significant for both billing domains.", "failed-renewal convergence");
 
-console.log("Billing package contract: PASS (Free → Creator → Pro → Teams; duplicate recurring checkout fenced)");
+console.log("Billing package contract: PASS (economic Free -> Creator -> Pro -> Teams; usage metered; checkout fail-closed)");
