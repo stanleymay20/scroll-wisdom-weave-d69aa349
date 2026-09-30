@@ -886,10 +886,10 @@ export const translations: Record<Language, Record<string, string>> = {
     'hero.freeStart': 'Free to start — no credit card required',
 
     // Final CTA
-    'finalCta.title': 'Prove what you actually understand',
-    'finalCta.subtitle': 'ScrollLibrary is a cognitive mastery certification platform. Upload a book, take Bloom-weighted assessments, and earn cryptographically verified learning records.',
-    'finalCta.upload': 'Start Mastery Demo',
-    'finalCta.generate': 'View Mastery Model',
+    'finalCta.title': 'Start with the book you want to create',
+    'finalCta.subtitle': 'Create a structured AI-native book in one workspace. Read it, assess understanding, and keep advanced publishing capabilities safely gated until they are GA-validated.',
+    'finalCta.upload': 'Create a Book',
+    'finalCta.generate': 'Explore Books',
   },
   
   fr: {
