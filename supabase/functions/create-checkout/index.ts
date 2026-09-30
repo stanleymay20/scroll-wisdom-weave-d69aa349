@@ -4,6 +4,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.57.2";
 import { ensureBillingCustomer } from "../_shared/billing-customer.ts";
 import { externalPaymentWritesEnabled } from "../_shared/ga-release-flags.ts";
 import {
+  expectedPublicPlanAmountCents,
   isBillingInterval,
   isPublicCheckoutTier,
   planTierForProduct,
@@ -124,6 +125,41 @@ serve(async (req) => {
     }
 
     const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
+
+    // Configuration is not trusted merely because it looks like a price ID.
+    // Resolve the object and prove product, amount, currency and interval before
+    // a Checkout Session can ever be created.
+    const stripePrice = await stripe.prices.retrieve(priceId);
+    const priceProductId = typeof stripePrice.product === "string"
+      ? stripePrice.product
+      : stripePrice.product?.id ?? "";
+    const expectedInterval = billingInterval === "annual" ? "year" : "month";
+    const expectedAmount = expectedPublicPlanAmountCents(tier, billingInterval);
+    const configuredTier = planTierForProduct(catalogue, priceProductId);
+
+    if (!stripePrice.active
+        || stripePrice.type !== "recurring"
+        || stripePrice.unit_amount !== expectedAmount
+        || String(stripePrice.currency).toLowerCase() !== "usd"
+        || stripePrice.recurring?.interval !== expectedInterval
+        || stripePrice.recurring?.interval_count !== 1
+        || configuredTier !== tier) {
+      logStep("Stripe catalogue verification failed", {
+        tier,
+        billingInterval,
+        priceId,
+        priceProductId,
+        configuredTier,
+      });
+      return new Response(JSON.stringify({
+        error: "Billing catalogue verification failed.",
+        code: "billing_catalogue_mismatch",
+      }), {
+        status: 503,
+        headers: { ...corsHeaders, "Content-Type": "application/json", "Cache-Control": "no-store" },
+      });
+    }
+
     const customerId = await ensureBillingCustomer(
       serviceClient,
       stripe,
