@@ -294,6 +294,16 @@ async function subscribe(user, tier, label) {
   const started = await callFunction("create-checkout", user, { tier });
   check(started.status === 200 && /^https:\/\/checkout\.stripe\.com\//.test(started.body.url ?? ""),
     `create-checkout did not return a Stripe Checkout URL for ${tier}`, started);
+
+  const retry = await callFunction("create-checkout", user, { tier });
+  check(retry.status === 200 && retry.body.reused === true && retry.body.url === started.body.url,
+    "same-tier retry did not reuse the open Checkout Session", retry);
+
+  const alternateTier = tier === "student" ? "premium" : "student";
+  const conflicting = await callFunction("create-checkout", user, { tier: alternateTier });
+  check(conflicting.status === 409 && conflicting.body.code === "checkout_in_progress",
+    "a second plan Checkout Session was allowed before the first completed", conflicting);
+
   await payOnHostedCheckout(started.body.url, `${APP_ORIGIN}/pricing?success=true`, label);
   const customer = await waitFor(`billing customer for ${label}`, () => billingCustomerOf(user.id), { timeoutMs: 30_000 });
   ourStripeIds.add(customer);
