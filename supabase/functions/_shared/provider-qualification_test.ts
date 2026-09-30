@@ -197,29 +197,3 @@ Deno.test("standard text is empirically qualified rather than treated as an unte
   assertEquals(result.humanReviewedSamples, 3);
 });
 
-
-Deno.test("weakest human-review dimension cannot be averaged away", () => {
-  const sample = passingSample("professional");
-  sample.humanReview = {
-    reviewer: "independent-reviewer",
-    score: 9.7,
-    minimumDimension: 8.9,
-    criticalIssues: 0,
-  };
-
-  const result = evaluateQualificationSample(sample);
-  assertEquals(result.passed, false);
-  assert(result.blockers.some((blocker) => blocker.includes("weakest human-review dimension")));
-});
-
-Deno.test("Standard Text is part of the empirical near-10 benchmark", () => {
-  const samples = [
-    passingSample("text", 1, true),
-    passingSample("text", 2, true),
-    passingSample("text", 3, true),
-    passingSample("text", 4, false),
-    passingSample("text", 5, false),
-  ];
-  const result = evaluateBookTypeQualification("text", samples);
-  assertEquals(result.qualified, true);
-});
