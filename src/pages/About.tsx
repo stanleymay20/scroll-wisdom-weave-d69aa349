@@ -19,7 +19,7 @@ export default function About() {
     {
       icon: Book,
       title: "Comprehensive Subject Coverage",
-      description: "Generate or upload books across technology, science, business, finance, health, psychology, and many other academic and professional fields."
+      description: "Generate structured books across technology, science, business, finance, health, psychology, and many other academic and professional fields."
     },
     {
       icon: Sparkles,
@@ -110,7 +110,7 @@ export default function About() {
                     </li>
                     <li className="flex items-start gap-3">
                       <GraduationCap className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
-                      <span className="text-muted-foreground">A structured learning system for academic texts, professional manuals, and workbooks</span>
+                      <span className="text-muted-foreground">A structured reading and learning system that keeps chapters, quizzes, progress, and learning records connected to the book</span>
                     </li>
                     <li className="flex items-start gap-3">
                       <Lightbulb className="h-5 w-5 text-primary mt-0.5 flex-shrink-0" />
@@ -170,9 +170,8 @@ export default function About() {
                 </p>
                 <p className="text-lg text-muted-foreground leading-relaxed">
                   We believe in democratizing access to structured, high-quality knowledge. Our AI system 
-                  generates well-organized study materials and processes uploaded textbooks into interactive 
-                  learning experiences — complete with progress tracking, adaptive quizzes, and verifiable 
-                  learning records.
+                  generates well-organized books and keeps reading and learning around the same project — 
+                  complete with progress tracking, adaptive quizzes, and verifiable learning records.
                 </p>
               </div>
             </motion.div>
@@ -209,9 +208,9 @@ export default function About() {
                   <div>
                     <h3 className="text-lg font-semibold text-foreground mb-2">Reference Generation</h3>
                     <p className="text-muted-foreground leading-relaxed">
-                      When Academic Mode is enabled, our system generates citations and references based on 
-                      training data and research patterns. While we strive for accuracy, users should verify 
-                      critical references independently, especially for academic submissions or professional use.
+                      Some generated books may include citations or references. AI-generated references can be 
+                      incomplete or incorrect, so users should verify critical sources independently, especially 
+                      for academic submissions or professional use.
                     </p>
                   </div>
                   
