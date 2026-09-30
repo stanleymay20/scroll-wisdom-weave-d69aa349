@@ -73,6 +73,21 @@ const GENERATION_STUB_RE =
   /(?:Full chapter content is being generated|Content pending generation|generation pending|chapter content pending)/i;
 const UNRESOLVED_EDITORIAL_RE =
   /\[(?:requires verification|citation needed|source needed|verify(?: this)?(?: claim| source)?|fact[- ]?check(?: needed)?)\]/i;
+const RAW_AUTHORING_DIRECTIVE_RE =
+  /(?:^|\n)\s*(?:(?:figure|diagram|chart)(?:\s+\d+)?\s*:\s*(?:a|an|create|generate|illustrate|depict|show)\b|\[(?:insert|add)\s+(?:figure|diagram|chart|image)[^\]]*\]|(?:TODO|TBD)\s*:|AI-Assisted Content Notice)/i;
+const EXPLICIT_STALE_DEADLINE_RE =
+  /\bDeadline\s*:\s*[^\n]{0,120}?\b(20\d{2})\b/gi;
+
+function staleDeadlineYears(content: string): number[] {
+  const currentYear = new Date().getUTCFullYear();
+  EXPLICIT_STALE_DEADLINE_RE.lastIndex = 0;
+  const years: number[] = [];
+  for (const match of content.matchAll(EXPLICIT_STALE_DEADLINE_RE)) {
+    const year = Number(match[1]);
+    if (Number.isInteger(year) && year < currentYear) years.push(year);
+  }
+  return [...new Set(years)].sort((a, b) => a - b);
+}
 
 function detectGenerationIssues(
   chapters: QAChapterInput[],
@@ -183,6 +198,29 @@ function detectGenerationIssues(
         chapter: chapter.chapter_number,
         message: `Chapter ${chapter.chapter_number} contains an unresolved verification/editorial marker.`,
         hint: "Verify, rewrite, or remove the unsupported claim before publication.",
+      });
+    }
+
+    if (RAW_AUTHORING_DIRECTIVE_RE.test(content)) {
+      issues.push({
+        severity: "blocker",
+        code: "reader_visible_authoring_directive",
+        category: "content",
+        chapter: chapter.chapter_number,
+        message: `Chapter ${chapter.chapter_number} contains reader-visible drafting/figure/TODO/AI-notice text.`,
+        hint: "Render the asset or remove the authoring instruction; keep a single publication disclosure in front matter if needed.",
+      });
+    }
+
+    const expiredDeadlineYears = staleDeadlineYears(content);
+    if (expiredDeadlineYears.length > 0) {
+      issues.push({
+        severity: "blocker",
+        code: "stale_action_deadline",
+        category: "content",
+        chapter: chapter.chapter_number,
+        message: `Chapter ${chapter.chapter_number} contains expired action deadline year(s): ${expiredDeadlineYears.join(", ")}.`,
+        hint: "Replace obsolete dated action instructions with current verified dates or relative timelines.",
       });
     }
   }
