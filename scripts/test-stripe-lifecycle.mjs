@@ -7,7 +7,7 @@
  * This does, against a disposable local Supabase stack and Stripe's real test
  * mode, with webhooks delivered by the Stripe CLI:
  *
- *   P03  subscribe (plan + creator tier) → webhook → entitlement →
+ *   P03  subscribe → webhook → entitlement → duplicate-subscription guard →
  *        check-subscription → billing portal → cancel → revoked
  *   P14  buy a book → webhook → purchase + sale ledger → buyer can read it
  *   P15  partial refund → exact reversal → duplicate delivery changes nothing
@@ -319,6 +319,18 @@ await journey("P03", "Subscribe → entitlement → check-subscription → porta
   check(status.body.subscribed === true && status.body.tier === "premium" && status.body.subscription_end,
     "check-subscription does not report the paid subscription", status.body);
 
+  const duplicate = await callFunction("create-checkout", user, { tier: "premium" });
+  check(duplicate.status === 409 && duplicate.body.code === "existing_plan_subscription",
+    "same-plan checkout did not fail closed against a duplicate recurring charge", duplicate);
+
+  const crossTier = await callFunction("create-checkout", user, { tier: "student" });
+  check(crossTier.status === 409 && crossTier.body.code === "plan_change_required",
+    "cross-tier checkout did not require management of the existing subscription", crossTier);
+
+  const retiredPublisher = await callFunction("create-checkout", user, { tier: "creator" });
+  check(retiredPublisher.status === 400 && retiredPublisher.body.code === "tier_not_publicly_sold",
+    "legacy publisher tier is still publicly sellable", retiredPublisher);
+
   const portal = await callFunction("customer-portal", user, {});
   check(portal.status === 200 && /^https:\/\/billing\.stripe\.com\//.test(portal.body.url ?? ""),
     "customer-portal did not return a Stripe billing portal URL", portal);
@@ -332,18 +344,6 @@ await journey("P03", "Subscribe → entitlement → check-subscription → porta
   check(after.body.subscribed === false, "check-subscription still reports a cancelled subscription", after.body);
 
   return { customer, subscription: sub.stripe_subscription_id, period_end: sub.current_period_end };
-});
-
-await journey("P03b", "Creator subscription → creator entitlement with a period end", async () => {
-  const user = await createUser("creator-sub");
-  await subscribe(user, "creator", "p03b-creator");
-  const entitlement = await waitFor("creator entitlement from the webhook", async () => {
-    const { data } = await admin.from("creator_entitlements").select("tier,payment_status,current_period_end")
-      .eq("user_id", user.id).maybeSingle();
-    return data?.tier === "creator" ? data : null;
-  });
-  check(entitlement.current_period_end, "creator entitlement stored without a period end", entitlement);
-  return entitlement;
 });
 
 // ---------------------------------------------------------------------------
