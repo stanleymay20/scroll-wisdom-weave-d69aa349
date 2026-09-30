@@ -110,12 +110,6 @@ const Index = () => {
           <HowItWorks />
         </Suspense>
         <Suspense fallback={<SectionSkeleton />}>
-          <WhyDifferent />
-        </Suspense>
-        <Suspense fallback={<SectionSkeleton />}>
-          <PlatformClarification />
-        </Suspense>
-        <Suspense fallback={<SectionSkeleton />}>
           <FAQSection />
         </Suspense>
         <Suspense fallback={<SectionSkeleton />}>
