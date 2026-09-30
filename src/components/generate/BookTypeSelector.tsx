@@ -8,6 +8,7 @@ import {
 import { useLanguage } from "@/contexts/LanguageContext";
 import { Badge } from "@/components/ui/badge";
 import { FEATURES } from "@/lib/config";
+import { isBookTypeReleasedForClient } from "@/lib/bookTypeRelease";
 
 /**
  * Book Type Selector
@@ -40,7 +41,6 @@ interface BookTypeOption {
   icon: React.ComponentType<{ className?: string }>;
   hint: string;
   badge?: string;
-  featureFlag?: boolean;
 }
 
 const ALL_BOOK_TYPES: BookTypeOption[] = [
@@ -79,7 +79,6 @@ const ALL_BOOK_TYPES: BookTypeOption[] = [
     description: "Interactive templates (max 1800 words)",
     icon: FileEdit,
     hint: "Mostly interactive elements, minimal prose",
-    featureFlag: FEATURES.enableWorkbooks,
   },
   {
     value: "comic",
@@ -88,7 +87,6 @@ const ALL_BOOK_TYPES: BookTypeOption[] = [
     icon: ImageIcon,
     hint: "Panel-based layout with dialogue",
     badge: "Visual",
-    featureFlag: FEATURES.enableComics,
   },
   {
     value: "children",
@@ -97,7 +95,6 @@ const ALL_BOOK_TYPES: BookTypeOption[] = [
     icon: Baby,
     hint: "Short sentences, high image ratio",
     badge: "Visual",
-    featureFlag: FEATURES.enableIllustrated,
   },
   {
     value: "fiction",
@@ -123,8 +120,12 @@ const ALL_BOOK_TYPES: BookTypeOption[] = [
   },
 ];
 
-// Filter by feature flags
-const BOOK_TYPES = ALL_BOOK_TYPES.filter(t => t.featureFlag !== false);
+// Release requires both the ordinary feature flag and empirical provider
+// qualification. The server repeats this check authoritatively; this prevents
+// the UI from advertising a mode that the backend will correctly reject.
+const BOOK_TYPES = ALL_BOOK_TYPES.filter((type) =>
+  isBookTypeReleasedForClient(type.value, FEATURES.enableSpecializedAuthoring)
+);
 
 
 export function BookTypeSelector({
