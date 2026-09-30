@@ -14,7 +14,7 @@ const REGULATORY_RE =
   /(?:§\s*\d+|\b(?:law|act|regulation|directive|statute|ordinance|gdpr|ai act|data act|nis2|cyber resilience act|blue card|minimum wage|share capital|legal requirement|mandatory|required by law|prohibited|fine|penalty|threshold)\b)/i;
 
 const QUANTIFIED_RE =
-  /(?:[$€£]\s?\d|\b\d+(?:[.,]\d+)?\s*%\b|\b20\d{2}\b|\b\d+(?:[.,]\d+)?\s*(?:million|billion|trillion|thousand|employees?|vacancies|users?|customers?|days?|months?|years?)\b)/i;
+  /(?:[$€£]\s?\d|\b\d+(?:[.,]\d+)?\s*%|\b20\d{2}\b|\b\d+(?:[.,]\d+)?\s*(?:million|billion|trillion|thousand|employees?|vacancies|users?|customers?|days?|months?|years?)\b)/i;
 
 export function isHighRiskFactualSentence(sentence: string): boolean {
   const text = sentence.trim();
