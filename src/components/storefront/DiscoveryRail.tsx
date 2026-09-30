@@ -81,7 +81,7 @@ export function DiscoveryRail({ title, items, loading, emptyHint, source, onItem
                     <Badge variant="secondary" className="text-[9px] sm:text-[10px] px-1.5 py-0">{l.book?.category ?? "General"}</Badge>
                     {(l.price_cents === 0 || FEATURES.enablePaidCheckout) && (
                       <span className="text-[11px] sm:text-xs font-semibold ml-auto">
-                        {l.price_cents > 0 ? `${(l.price_cents / 100).toFixed(2)}` : "Free"}
+                        {l.price_cents > 0 ? "$" + (l.price_cents / 100).toFixed(2) : "Free"}
                       </span>
                     )}
                   </div>
