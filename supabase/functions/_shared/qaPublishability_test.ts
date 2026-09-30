@@ -141,3 +141,28 @@ Deno.test("near-10 QA accepts a locally evidenced material claim", () => {
 
   assert(!issueCodes(report).has("uncited_material_claim"));
 });
+
+
+Deno.test("near-10 QA does not treat ordinary requires prose as an external factual claim", () => {
+  const report = auditBookForPublishability([{
+    chapter_number: 1,
+    title: "Implementation",
+    content: "Successful implementation requires executive sponsorship and clear ownership.",
+    is_generated: true,
+    word_count: 8,
+  }], { hasCover: true, bookType: "professional", expectedChapterCount: 1, requiresEvidence: true });
+
+  assert(!issueCodes(report).has("uncited_material_claim"));
+});
+
+Deno.test("near-10 QA recognizes standard multi-author citations as local evidence", () => {
+  const report = auditBookForPublishability([{
+    chapter_number: 1,
+    title: "Evidence",
+    content: "Research reported a 24% improvement in 2025 (Smith & Jones, 2025).\n\n## References\nSmith, A., & Jones, B. (2025). Example study.",
+    is_generated: true,
+    word_count: 18,
+  }], { hasCover: true, bookType: "professional", expectedChapterCount: 1, requiresEvidence: true });
+
+  assert(!issueCodes(report).has("uncited_material_claim"));
+});
