@@ -13,10 +13,11 @@ interface MobileBookCardProps {
   /** If provided, shows Resume Reading button */
   lastReadChapter?: number | null;
   progressPercent?: number | null;
+  href?: string;
 }
 
 export const MobileBookCard = React.forwardRef<HTMLAnchorElement, MobileBookCardProps>(
-  ({ id, title, coverImageUrl, bookType, lastReadChapter, progressPercent }, ref) => {
+  ({ id, title, coverImageUrl, bookType, lastReadChapter, progressPercent, href }, ref) => {
     const navigate = useNavigate();
     
     // Determine tag based on book type
@@ -36,7 +37,7 @@ export const MobileBookCard = React.forwardRef<HTMLAnchorElement, MobileBookCard
     };
 
     return (
-      <Link ref={ref} to={`/book/${id}`} className="block group">
+      <Link ref={ref} to={href ?? `/book/${id}`} className="block group">
         <div className="relative">
           {/* Cover Image */}
           <div className="aspect-[3/4] rounded-xl overflow-hidden bg-muted shadow-md group-active:scale-[0.98] transition-transform duration-150">

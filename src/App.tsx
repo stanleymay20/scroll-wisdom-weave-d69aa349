@@ -2,7 +2,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { Toaster as Sonner } from "@/components/ui/sonner";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { BrowserRouter, Routes, Route } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate } from "react-router-dom";
 import { LanguageProvider } from "@/contexts/LanguageContext";
 import { SubscriptionProvider } from "@/contexts/SubscriptionContext";
 import { SettingsProvider } from "@/contexts/SettingsContext";
@@ -241,7 +241,14 @@ const App = () => (
                         {FEATURES.enableAdvancedAuthoring && <Route path="/book/:bookId/ai-handoffs" element={withRecovery('AiHandoffs', <ProtectedRoute><AiHandoffs /></ProtectedRoute>)} />}
 
                         {/* Storefront (public) */}
-                        <Route path="/store" element={withRecovery('Storefront', <Storefront />)} />
+                        <Route
+                          path="/store"
+                          element={
+                            FEATURES.enablePaidCheckout
+                              ? withRecovery('Storefront', <Storefront />)
+                              : <Navigate to="/explore" replace />
+                          }
+                        />
                         <Route path="/store/:slug" element={withRecovery('PublicBookPage', <PublicBookPage />)} />
                         <Route path="/store/:slug/read" element={withRecovery('PublicSampleReader', <PublicSampleReader />)} />
                         <Route path="/authors/:slug" element={withRecovery('AuthorProfile', <AuthorProfilePage />)} />

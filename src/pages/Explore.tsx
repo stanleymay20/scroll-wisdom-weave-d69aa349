@@ -8,7 +8,7 @@
  */
 
 import { useState, useEffect, useCallback, useMemo } from "react";
-import { useSearchParams, useNavigate } from "react-router-dom";
+import { useSearchParams } from "react-router-dom";
 import { motion } from "framer-motion";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { usePullToRefresh } from "@/hooks/usePullToRefresh";
@@ -29,8 +29,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Search, X, ArrowUpDown, SlidersHorizontal } from "lucide-react";
-import { supabase } from "@/integrations/supabase/client";
+import { Search, X, ArrowUpDown } from "lucide-react";
+import { storefrontApi, type StoreListing } from "@/lib/storefrontApi";
 import { useLanguage } from "@/contexts/LanguageContext";
 import { apiCache } from "@/lib/cache";
 import { usePagePerformance } from "@/lib/performance";
@@ -59,13 +59,28 @@ const CATEGORIES = [
 
 interface Book {
   id: string;
+  slug: string;
   title: string;
   description: string | null;
   category: string;
   cover_image_url: string | null;
   total_chapters: number | null;
-  book_type: string;
+  book_type?: string;
   created_at?: string;
+}
+
+function listingToBook(listing: StoreListing): Book | null {
+  if (!listing.book) return null;
+  return {
+    id: listing.book.id,
+    slug: listing.slug,
+    title: listing.book.title,
+    description: listing.blurb || listing.amazon_description || listing.book.description,
+    category: listing.book.category,
+    cover_image_url: listing.cover_override_url || listing.book.cover_image_url,
+    total_chapters: listing.book.total_chapters,
+    created_at: listing.created_at,
+  };
 }
 
 type SortOption = 'newest' | 'oldest' | 'title_asc' | 'title_desc' | 'chapters';
@@ -229,6 +244,7 @@ function MobileExploreContent({
               coverImageUrl={book.cover_image_url || undefined}
               category={book.category}
               bookType={book.book_type}
+              href={`/store/${book.slug}`}
             />
           ))}
         </div>
@@ -276,35 +292,42 @@ export default function Explore() {
     }
   }, [isLoading]);
 
-  // CONTRACT 4: Cache-first data fetching with instant skeleton
+  // CONTRACT 4: Cache-first data fetching with instant skeleton.
+  // Public discovery is listing-authoritative so every book published through
+  // the GA Publish flow is reachable here even when books.is_published is false.
   const fetchBooks = useCallback(async () => {
-    const cacheKey = 'explore:books:published';
-    
-    // INSTANT: Try cache first for immediate display (non-blocking)
+    const cacheKey = "explore:public-listings:v1";
+
+    // INSTANT: Try cache first for immediate display (non-blocking).
     const cached = apiCache.get<Book[]>(cacheKey);
     if (cached && cached.length > 0) {
       setBooks(cached);
       setIsLoading(false);
     }
-    
-    // BACKGROUND: Fetch fresh data without blocking UI
-    try {
-      const { data, error } = await supabase
-        .from("books")
-        .select("id, title, description, category, cover_image_url, total_chapters, book_type, created_at")
-        .eq("is_published", true)
-        .order("created_at", { ascending: false })
-        .limit(isMobile ? 30 : 100);
 
-      if (error) throw error;
-      
-      const newBooks = data || [];
+    // BACKGROUND: Fetch canonical public listings without blocking the skeleton.
+    try {
+      const pageSize = isMobile ? 30 : 60;
+      const first = await storefrontApi.listBooks({ page: 1, pageSize, sort: "newest" });
+      let listings = first.items;
+
+      // Preserve roughly the previous desktop catalogue depth while the
+      // storefront endpoint keeps a bounded page size.
+      if (!isMobile && first.total > pageSize) {
+        const second = await storefrontApi.listBooks({ page: 2, pageSize, sort: "newest" });
+        listings = [...listings, ...second.items].slice(0, 100);
+      }
+
+      const newBooks = listings
+        .map(listingToBook)
+        .filter((book): book is Book => book !== null);
+
       setBooks(newBooks);
       setIsLoading(false);
       apiCache.set(cacheKey, newBooks, 2 * 60 * 1000); // 2 min cache
     } catch (error) {
-      console.error("Error fetching books:", error);
-      // CONTRACT 4: Graceful degradation - keep cached data if fetch fails
+      console.error("Error fetching public listings:", error);
+      // CONTRACT 4: Graceful degradation - keep cached data if fetch fails.
       setIsLoading(false);
     }
   }, [isMobile]);
@@ -490,6 +513,7 @@ export default function Explore() {
                   coverImageUrl={book.cover_image_url || undefined}
                   totalChapters={book.total_chapters || 0}
                   index={index}
+                  href={`/store/${book.slug}`}
                 />
               ))}
             </div>

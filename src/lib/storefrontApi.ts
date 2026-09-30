@@ -37,6 +37,7 @@ export interface StoreListing {
   seo_keywords: string[];
   series_id: string | null;
   series_order: number | null;
+  created_at: string;
   updated_at: string;
   book: StoreBook | null;
   publication?: StorePublicationMetadata | null;
