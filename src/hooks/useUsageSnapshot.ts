@@ -20,6 +20,10 @@ export interface UsageSnapshot {
   visualCreditsLimit: number;
   audioCreditsUsed: number;
   audioCreditsLimit: number;
+  /** @deprecated Compatibility alias: standard narration minutes equal audio credits. */
+  ttsMinutesUsed: number;
+  /** @deprecated Compatibility alias: standard narration minutes equal audio credits. */
+  ttsMinutesLimit: number;
   generatedAt: string;
 }
 
@@ -62,6 +66,8 @@ export function useUsageSnapshot() {
         visualCreditsLimit: features.visualCredits + extraVisual,
         audioCreditsUsed: Number(d.audio_credits_used ?? 0),
         audioCreditsLimit: features.audioCredits + extraAudio,
+        ttsMinutesUsed: Number(d.audio_credits_used ?? 0),
+        ttsMinutesLimit: features.audioCredits + extraAudio,
         generatedAt: String(d.generated_at ?? new Date().toISOString()),
       });
     } catch (e: unknown) {
