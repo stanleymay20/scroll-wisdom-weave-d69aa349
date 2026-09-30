@@ -219,7 +219,6 @@ Deno.serve(
               destructiveHint: false,
               openWorldHint: false,
             },
-            securitySchemes: OAUTH_SECURITY,
             _meta: { ...OAUTH_META, "openai/profile": true },
           },
           async () => {
@@ -273,7 +272,6 @@ Deno.serve(
               destructiveHint: false,
               openWorldHint: false,
             },
-            securitySchemes: OAUTH_SECURITY,
             _meta: OAUTH_META,
           },
           async ({ limit }) => {
@@ -317,7 +315,6 @@ Deno.serve(
               destructiveHint: false,
               openWorldHint: false,
             },
-            securitySchemes: OAUTH_SECURITY,
             _meta: OAUTH_META,
           },
           async ({ book_id, chapter_id }) => {
@@ -356,7 +353,6 @@ Deno.serve(
               destructiveHint: false,
               openWorldHint: false,
             },
-            securitySchemes: OAUTH_SECURITY,
             _meta: OAUTH_META,
           },
           async ({ book_id, status, limit, offset }) => {
@@ -387,7 +383,6 @@ Deno.serve(
               destructiveHint: false,
               openWorldHint: false,
             },
-            securitySchemes: OAUTH_SECURITY,
             _meta: OAUTH_META,
           },
           async ({ proposal_id }) => {
@@ -424,7 +419,6 @@ Deno.serve(
               destructiveHint: false,
               openWorldHint: false,
             },
-            securitySchemes: OAUTH_SECURITY,
             _meta: OAUTH_META,
           },
           async ({
