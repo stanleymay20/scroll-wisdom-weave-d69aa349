@@ -74,7 +74,7 @@ const STEP_LABELS: Record<Step, string> = {
   3: "Publish",
   4: "Launch",
 };
-const PAID_SALES_ENABLED = FEATURES.enablePaidCheckout;
+const PAID_SALES_ENABLED = FEATURES.enableMarketplace;
 const ACTIVE_STEPS: Step[] = PAID_SALES_ENABLED ? [0, 1, 2, 3, 4] : [0, 1, 3, 4];
 const TOTAL_STEPS = ACTIVE_STEPS.length;
 const DRAFT_KEY = "sell_wizard_draft_v1";
