@@ -40,7 +40,28 @@ type PayoutReservation = {
 type BalanceRow = {
   currency?: string;
   payable_cents?: number;
+  reserved_cents?: number;
 };
+
+type CandidateRow = {
+  creator_user_id?: string;
+};
+
+type StripeTransferError = {
+  type?: string;
+  code?: string;
+  statusCode?: number;
+};
+
+function isDefinitiveTransferRejection(error: unknown): boolean {
+  const candidate = error as StripeTransferError;
+  return [
+    "StripeInvalidRequestError",
+    "StripeAuthenticationError",
+    "StripePermissionError",
+    "StripeCardError",
+  ].includes(candidate?.type ?? "");
+}
 
 serve(async (req) => {
   const originGate = adminOriginGuard(req);
@@ -89,14 +110,23 @@ serve(async (req) => {
     if (body.creator_user_id) {
       creatorIds = [body.creator_user_id];
     } else {
-      const { data: profiles, error: profileError } = await sc
-        .from("creator_payout_profiles")
-        .select("user_id")
-        .eq("payout_method", "stripe_connect")
-        .eq("stripe_connect_status", "verified")
-        .limit(limit);
-      if (profileError) return serverError(profileError);
-      creatorIds = (profiles ?? []).map((row) => String(row.user_id));
+      // Ask the database for actual payout work, rather than repeatedly
+      // scanning the first page of verified profiles. The candidate RPC also
+      // includes active reservations whose payable balance is now zero, so a
+      // Stripe-success/DB-acknowledgement failure is retried automatically.
+      const { data: candidates, error: candidateError } = await sc.rpc(
+        "list_creator_payout_candidates",
+        {
+          _minimum_cents: minimumCents,
+          _limit: limit,
+        },
+      );
+      if (candidateError) return serverError(candidateError, "payout_candidate_query_failed");
+      creatorIds = [...new Set(
+        ((candidates ?? []) as CandidateRow[])
+          .map((row) => String(row.creator_user_id ?? ""))
+          .filter((value) => value.length > 0),
+      )];
     }
 
     const results: Array<Record<string, unknown>> = [];
@@ -120,7 +150,10 @@ serve(async (req) => {
           continue;
         }
         currencies = ((balanceRows ?? []) as BalanceRow[])
-          .filter((row) => Number(row.payable_cents ?? 0) >= minimumCents)
+          .filter((row) =>
+            Number(row.reserved_cents ?? 0) > 0
+            || Number(row.payable_cents ?? 0) >= minimumCents
+          )
           .map((row) => String(row.currency ?? "").toLowerCase())
           .filter((currency) => currency.length === 3);
       }
@@ -237,14 +270,21 @@ serve(async (req) => {
           const stripeSucceededButDbFailed = message.startsWith(
             "Stripe transfer succeeded but acknowledgement failed:",
           );
+          const definitiveRejection =
+            !stripeSucceededButDbFailed && isDefinitiveTransferRejection(error);
 
-          if (!stripeSucceededButDbFailed) {
-            const stripeError = error as { code?: string; type?: string };
+          // Transport errors, Stripe 5xx/API errors, timeouts, and local
+          // acknowledgement failures are ambiguous: Stripe may already have
+          // created the transfer. Preserve the active reservation so the next
+          // invocation retries the SAME idempotency key. Only an explicit
+          // Stripe rejection may release the ledger allocation.
+          if (definitiveRejection) {
+            const stripeError = error as StripeTransferError;
             const { error: failError } = await sc.rpc(
               "mark_creator_payout_failed",
               {
                 _payout_transfer_id: reservation.payout_transfer_id,
-                _failure_code: stripeError.code ?? stripeError.type ?? "stripe_transfer_failed",
+                _failure_code: stripeError.code ?? stripeError.type ?? "stripe_transfer_rejected",
                 _failure_message: message,
               },
             );
@@ -265,11 +305,14 @@ serve(async (req) => {
             }
           }
 
+          const ambiguous = !definitiveRejection;
           await logFinancialEvent(sc, {
             event_type: stripeSucceededButDbFailed
               ? "creator_payout_acknowledgement_failed"
-              : "creator_payout_transfer_failed",
-            severity: stripeSucceededButDbFailed ? "critical" : "error",
+              : ambiguous
+                ? "creator_payout_transfer_ambiguous"
+                : "creator_payout_transfer_rejected",
+            severity: ambiguous ? "critical" : "error",
             actor: "admin",
             correlation_id: corr,
             user_id: creatorUserId,
@@ -278,10 +321,13 @@ serve(async (req) => {
               amount_cents: reservation.amount_cents,
               currency: reservation.currency,
               error: message,
+              reservation_preserved: ambiguous,
             },
             dead_letter_reason: stripeSucceededButDbFailed
               ? "stripe_moved_money_db_ack_failed"
-              : "stripe_transfer_failed",
+              : ambiguous
+                ? "stripe_transfer_outcome_ambiguous"
+                : "stripe_transfer_rejected",
           });
 
           results.push({
@@ -292,7 +338,8 @@ serve(async (req) => {
             payout_transfer_id: reservation.payout_transfer_id,
             amount_cents: reservation.amount_cents,
             error: message,
-            recoverable_idempotently: stripeSucceededButDbFailed,
+            recoverable_idempotently: ambiguous,
+            reservation_preserved: ambiguous,
           });
         }
       }
