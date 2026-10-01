@@ -5,24 +5,19 @@ import { gateDenied, gateResponse, recordGateEvent } from "../_shared/usage-gate
 import { advancedAuthoringEnabled, advancedBookTypeEnabled, qualificationBookTypeEnabled } from "../_shared/ga-release-flags.ts";
 import { normalizeGeneratedOutline, type NormalizedOutlineChapter } from "../_shared/outline-normalizer.ts";
 import { buildFictionOutlineInstructions, sanitizeFictionContract } from "../_shared/fiction-context.ts";
+import { BILLING_PLAN_LIMITS, billingPlanFor } from "../_shared/billing-plans.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version",
 };
 
-type BookReservation = {
+type BillingReservation = {
   allowed: boolean;
-  books_used: number;
-  remaining_books: number;
+  used: number;
+  remaining: number;
+  effective_limit: number;
 };
-
-const TIER_LIMITS = {
-  free: { booksPerDay: 1, maxChapters: 5, booksPerMonth: 1 },
-  student: { booksPerDay: 3, maxChapters: 30, booksPerMonth: 10 },   // Aligned with subscription.ts
-  premium: { booksPerDay: 10, maxChapters: 50, booksPerMonth: 30 },  // Aligned with subscription.ts
-  prophet_tier: { booksPerDay: 20, maxChapters: 100, booksPerMonth: 100 }, // Capped for sustainability
-} as const;
 
 // Trial period ended — all limits now enforced based on subscription tier
 
@@ -31,7 +26,6 @@ const getModelForPlan = (plan: string): string => {
   switch (plan) {
     case "prophet_tier":
     case "premium":
-      return "google/gemini-2.5-pro";
     case "student":
       return "google/gemini-2.5-flash";
     case "free":
@@ -91,16 +85,15 @@ serve(async (req) => {
       .eq("user_id", user.id).maybeSingle();
 
     // Only use tier if subscription is active
-    const userPlan = ((subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free") as keyof typeof TIER_LIMITS;
+    const userPlan = billingPlanFor(
+      (subscription?.status === 'active' && subscription?.tier) ? subscription.tier : "free",
+    );
 
-    // Model routing respects subscription tier — admin bypass is for limits only
-    const effectivePlan: keyof typeof TIER_LIMITS = isAdmin ? "prophet_tier" : userPlan;
-    const limits = TIER_LIMITS[effectivePlan] || TIER_LIMITS.free;
-
-    // Admins are never blocked, but their usage is still tracked (-1 = unlimited),
-    // matching the TTS reservation contract.
-    const dailyLimit = isAdmin ? -1 : limits.booksPerDay;
-    const today = new Date().toISOString().split("T")[0];
+    // Admin bypass affects limits only. Normal drafting still follows the
+    // cost-efficient routing policy above.
+    const effectivePlan = isAdmin ? "prophet_tier" : userPlan;
+    const limits = BILLING_PLAN_LIMITS[effectivePlan];
+    const currentMonth = new Date().toISOString().slice(0, 7);
 
     // Burst limiting: max 5 book generations per hour per user.
     //
@@ -235,6 +228,14 @@ serve(async (req) => {
         status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" },
       });
     }
+    if (!isAdmin && wordCount > limits.maxWordsPerChapter) {
+      return new Response(JSON.stringify({
+        error: `Your ${limits.publicName} plan supports up to ${limits.maxWordsPerChapter.toLocaleString()} words per chapter.`,
+        code: "PLAN_WORD_LIMIT",
+      }), {
+        status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" },
+      });
+    }
 
     const VALID_LANGUAGES = ['en', 'fr', 'de', 'es', 'ar', 'sw', 'pt'];
     if (!VALID_LANGUAGES.includes(language)) {
@@ -257,7 +258,7 @@ serve(async (req) => {
     }
 
     const isAcademicType = ["academic", "technical", "reference", "professional"].includes(effectiveBookType);
-    const effectiveChapters = Math.min(numChapters, limits.maxChapters);
+    const effectiveChapters = Math.min(numChapters, limits.maxChaptersPerBook);
     const languageName = LANG_MAP[language] || "English";
 
     // Resolve author name
@@ -318,54 +319,55 @@ For each chapter provide: chapterNumber, title, description (2-3 sentences), key
 
 Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumber":1,"title":"","description":"","keyTopics":[]}]}`;
 
-    // ── Atomic quota reservation ──────────────────────────
-    // Reserved AFTER validation and BEFORE the first paid model call, so a
-    // rejected request never consumes a slot and a concurrent request can never
-    // observe a stale count. Browser roles cannot execute this RPC directly.
+    // ── Atomic monthly project reservation ─────────────────
+    // A "book" is a project allowance, not the compute meter. AI text is metered
+    // separately at chapter generation time.
+    const bookLimit = isAdmin ? -1 : limits.booksPerMonth;
     const { data: reservationData, error: reservationError } = await sc.rpc(
-      "reserve_book_generation",
+      "reserve_billing_usage",
       {
         _user_id: user.id,
-        _day: today,
-        _books: 1,
-        _limit: dailyLimit,
+        _month: currentMonth,
+        _metric: "books",
+        _units: 1,
+        _base_limit: bookLimit,
       },
     );
 
     if (reservationError) {
-      console.error("[GENERATE-BOOK] Quota reservation failed:", reservationError);
+      console.error("[GENERATE-BOOK] Monthly project reservation failed:", reservationError);
       return errorResponse(
         ErrorCode.GENERATION_FAILED,
-        "Unable to verify your generation allowance right now. Please try again.",
+        "Unable to verify your monthly project allowance right now. Please try again.",
         corsHeaders,
       );
     }
 
-    const reservation = (Array.isArray(reservationData) ? reservationData[0] : reservationData) as BookReservation | null;
-
+    const reservation = (Array.isArray(reservationData) ? reservationData[0] : reservationData) as BillingReservation | null;
     if (!reservation) {
-      console.error("[GENERATE-BOOK] Quota reservation returned no result");
       return errorResponse(
         ErrorCode.GENERATION_FAILED,
-        "Unable to verify your generation allowance right now. Please try again.",
+        "Unable to verify your monthly project allowance right now. Please try again.",
         corsHeaders,
       );
     }
 
     if (!reservation.allowed) {
-      console.log(`[GENERATE-BOOK] Daily limit reached: ${reservation.books_used}/${dailyLimit} (${userPlan})`);
       const gate = gateDenied("BOOK_LIMIT_REACHED", {
-        message: `You've reached your ${userPlan === 'free' ? 'monthly' : 'daily'} book generation limit (${limits.booksPerDay} for ${userPlan}). Upgrade to keep creating.`,
+        message: `You've reached the ${limits.booksPerMonth}-book monthly project allowance for ${limits.publicName}.`,
         currentPlan: userPlan,
-        usage: { booksGenerated: reservation.books_used, booksLimit: limits.booksPerDay },
+        usage: { booksGenerated: reservation.used, booksLimit: limits.booksPerMonth },
       });
       await recordGateEvent(sc, {
-        user_id: user.id, feature: "generate_book", reason: gate.reason, allowed: false,
+        user_id: user.id,
+        feature: "generate_book",
+        reason: gate.reason,
+        allowed: false,
         plan: userPlan,
         usage_snapshot: {
-          used: reservation.books_used,
-          limit: limits.booksPerDay,
-          remaining: reservation.remaining_books,
+          used: reservation.used,
+          limit: limits.booksPerMonth,
+          remaining: reservation.remaining,
         },
       });
       return gateResponse(gate, corsHeaders);
@@ -375,17 +377,18 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
     refundReservation = async () => {
       if (!reservationActive) return;
       reservationActive = false;
-      const { error: releaseError } = await sc.rpc("release_book_generation", {
+      const { error: releaseError } = await sc.rpc("release_billing_usage", {
         _user_id: user.id,
-        _day: today,
-        _books: 1,
+        _month: currentMonth,
+        _metric: "books",
+        _units: 1,
       });
       if (releaseError) {
-        console.error("[GENERATE-BOOK] Failed to refund quota reservation:", releaseError);
+        console.error("[GENERATE-BOOK] Failed to refund monthly project reservation:", releaseError);
       }
     };
 
-    console.log(`[GENERATE-BOOK] Reserved 1 slot — ${reservation.books_used}/${dailyLimit === -1 ? "unlimited" : dailyLimit}`);
+    console.log(`[GENERATE-BOOK] Reserved monthly project — ${reservation.used}/${bookLimit === -1 ? "unlimited" : bookLimit}`);
 
     const outlineResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -575,7 +578,7 @@ Respond as JSON: {"bookTitle":"","bookDescription":"","chapters":[{"chapterNumbe
       error_message: null,
     }).eq("id", jobId);
 
-    console.log(`[GENERATE-BOOK] Done. Daily: ${reservation.books_used}/${dailyLimit === -1 ? "unlimited" : dailyLimit}`);
+    console.log(`[GENERATE-BOOK] Done. Monthly projects: ${reservation.used}/${bookLimit === -1 ? "unlimited" : bookLimit}`);
 
     // Initial full-book drafting is server-owned. Dispatch only after the book,
     // chapters, job, and library linkage are durably committed. One worker
