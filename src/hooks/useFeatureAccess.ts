@@ -92,10 +92,9 @@ export function useFeatureAccess() {
         if (entitlements.hasCommercialRights) {
           return { hasAccess: true };
         }
-        return { 
+        return {
           hasAccess: false,
-          reason: 'Commercial publishing rights require Pro tier or higher',
-          upgradeRequired: 'premium'
+          reason: 'Commercial-use rights are not sold as a subscription entitlement. Check source rights and applicable terms.',
         };
 
       case 'exportPdf':
