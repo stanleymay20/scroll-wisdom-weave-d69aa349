@@ -1,13 +1,12 @@
-export const INTERACTIVE_VOICE_LIMIT_MINUTES: Record<string, number> = {
-  free: 5,
-  student: 30,
-  premium: 120,
-  prophet_tier: 300,
-};
+import { BILLING_PLAN_LIMITS, billingPlanFor } from "./billing-plans.ts";
 
 const WEBM_BYTES_PER_SECOND = 8_000; // recorder is fixed at 64 kbps
 const SPEECH_CHARS_PER_MINUTE = 750;
 const MIN_CONVERSATION_SECONDS = 15;
+// Interactive voice is intentionally more expensive than passive narration.
+// 1 second of interactive voice consumes 3 audio units; 60 audio units = 1
+// standard narration credit.
+const INTERACTIVE_AUDIO_UNIT_MULTIPLIER = 3;
 
 export type InteractiveVoiceReservation = {
   allowed: boolean;
@@ -20,9 +19,7 @@ export type InteractiveVoiceReservation = {
 };
 
 export function normalizeVoicePlan(plan: unknown): string {
-  return typeof plan === "string" && plan in INTERACTIVE_VOICE_LIMIT_MINUTES
-    ? plan
-    : "free";
+  return billingPlanFor(plan);
 }
 
 export function estimateWebmSeconds(byteLength: number): number {
@@ -43,12 +40,21 @@ export function estimateConversationSeconds(text: string): number {
 
 // deno-lint-ignore no-explicit-any
 async function resolvePlanAndAdmin(supabase: any, userId: string) {
-  const [{ data: roleData, error: roleError }, { data: profile, error: profileError }] = await Promise.all([
+  const [
+    { data: roleData, error: roleError },
+    { data: subscription, error: subscriptionError },
+    { data: profile, error: profileError },
+  ] = await Promise.all([
     supabase
       .from("user_roles")
       .select("role")
       .eq("user_id", userId)
       .eq("role", "admin")
+      .maybeSingle(),
+    supabase
+      .from("subscriptions")
+      .select("tier,status")
+      .eq("user_id", userId)
       .maybeSingle(),
     supabase
       .from("profiles")
@@ -58,10 +64,15 @@ async function resolvePlanAndAdmin(supabase: any, userId: string) {
   ]);
 
   if (roleError) throw new Error(`voice_admin_resolution_failed:${roleError.message}`);
+  if (subscriptionError) throw new Error(`voice_subscription_resolution_failed:${subscriptionError.message}`);
   if (profileError) throw new Error(`voice_plan_resolution_failed:${profileError.message}`);
 
   const isAdmin = !!roleData;
-  const plan = normalizeVoicePlan(profile?.plan);
+  const subscribedPlan =
+    subscription?.status === "active" || subscription?.status === "trialing"
+      ? subscription?.tier
+      : null;
+  const plan = billingPlanFor(subscribedPlan ?? profile?.plan);
   return { isAdmin, plan };
 }
 
@@ -77,29 +88,39 @@ export async function reserveInteractiveVoiceSeconds(
   }
 
   const { isAdmin, plan } = await resolvePlanAndAdmin(supabase, userId);
-  const limitMinutes = INTERACTIVE_VOICE_LIMIT_MINUTES[plan] ?? INTERACTIVE_VOICE_LIMIT_MINUTES.free;
-  const limitSeconds = isAdmin ? -1 : limitMinutes * 60;
+  const audioCredits = BILLING_PLAN_LIMITS[plan].audioCreditsPerMonth;
+  const baseAudioUnits = isAdmin ? -1 : audioCredits * 60;
+  const requestedAudioUnits = requestedSeconds * INTERACTIVE_AUDIO_UNIT_MULTIPLIER;
   const month = new Date().toISOString().slice(0, 7);
 
-  const { data, error } = await supabase.rpc("reserve_interactive_voice_seconds", {
+  const { data, error } = await supabase.rpc("reserve_billing_usage", {
     _user_id: userId,
     _month: month,
-    _seconds: requestedSeconds,
-    _limit_seconds: limitSeconds,
+    _metric: "audio_units",
+    _units: requestedAudioUnits,
+    _base_limit: baseAudioUnits,
   });
 
   if (error) throw new Error(`voice_quota_reservation_failed:${error.message}`);
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) throw new Error("voice_quota_reservation_empty");
 
+  const effectiveAudioUnitLimit = Number(row.effective_limit ?? baseAudioUnits);
+  const usedAudioUnits = Number(row.used ?? 0);
+  const remainingAudioUnits = Number(row.remaining ?? 0);
+
   return {
     allowed: !!row.allowed,
     plan,
     isAdmin,
     requestedSeconds,
-    secondsUsed: Number(row.seconds_used ?? 0),
-    remainingSeconds: Number(row.remaining_seconds ?? 0),
-    limitSeconds,
+    secondsUsed: Math.floor(usedAudioUnits / INTERACTIVE_AUDIO_UNIT_MULTIPLIER),
+    remainingSeconds: remainingAudioUnits < 0
+      ? -1
+      : Math.floor(remainingAudioUnits / INTERACTIVE_AUDIO_UNIT_MULTIPLIER),
+    limitSeconds: effectiveAudioUnitLimit < 0
+      ? -1
+      : Math.floor(effectiveAudioUnitLimit / INTERACTIVE_AUDIO_UNIT_MULTIPLIER),
   };
 }
 
@@ -111,10 +132,11 @@ export async function releaseInteractiveVoiceSeconds(
 ): Promise<void> {
   if (!userId || !Number.isInteger(seconds) || seconds <= 0) return;
   const month = new Date().toISOString().slice(0, 7);
-  const { error } = await supabase.rpc("release_interactive_voice_seconds", {
+  const { error } = await supabase.rpc("release_billing_usage", {
     _user_id: userId,
     _month: month,
-    _seconds: seconds,
+    _metric: "audio_units",
+    _units: seconds * INTERACTIVE_AUDIO_UNIT_MULTIPLIER,
   });
   if (error) throw new Error(`voice_quota_release_failed:${error.message}`);
 }
