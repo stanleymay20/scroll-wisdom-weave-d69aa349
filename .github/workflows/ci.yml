@@ -200,6 +200,9 @@ jobs:
           deno check supabase/functions/stripe-webhook/index.ts
           deno check supabase/functions/stripe-connect-onboarding/index.ts
           deno check supabase/functions/create-book-checkout/index.ts
+          deno check supabase/functions/admin-refund-purchase/index.ts
+          deno check supabase/functions/settle-creator-payouts/index.ts
+          deno check supabase/functions/creator-earnings-summary/index.ts
           deno check supabase/functions/admin-force-stripe-resync/index.ts
       - name: Type-check authority and metered usage Edge Functions
         run: |
