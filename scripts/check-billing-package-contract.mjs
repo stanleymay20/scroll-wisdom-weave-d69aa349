@@ -4,6 +4,9 @@ import { readFileSync } from "node:fs";
 const subscription = readFileSync("src/lib/subscription.ts", "utf8");
 const pricing = readFileSync("src/pages/Pricing.tsx", "utf8");
 const clientConfig = readFileSync("src/lib/config.ts", "utf8");
+const seller = readFileSync("src/pages/Sell.tsx", "utf8");
+const ownerControls = readFileSync("src/components/books/BookOwnerControls.tsx", "utf8");
+const bookCheckout = readFileSync("supabase/functions/create-book-checkout/index.ts", "utf8");
 const checkout = readFileSync("supabase/functions/create-checkout/index.ts", "utf8");
 const orderCheckout = readFileSync("supabase/functions/create-billing-order-checkout/index.ts", "utf8");
 const orderCatalogue = readFileSync("supabase/functions/_shared/billing-order-catalogue.ts", "utf8");
@@ -61,6 +64,9 @@ requireText(clientConfig, "enablePaidCheckout: COMMERCIAL_GA_ENABLED", "commerci
 requireText(clientConfig, "enableExports: COMMERCIAL_GA_ENABLED", "commercial export browser gate");
 requireText(clientConfig, "enableCanonicalPublication: COMMERCIAL_GA_ENABLED", "commercial publication browser gate");
 requireText(clientConfig, "enableSpecializedAuthoring: SPECIALIZED_AUTHORING_ENABLED", "specialized qualification remains independent");
+requireText(seller, "PAID_SALES_ENABLED = FEATURES.enablePaidCheckout", "seller wizard follows commercial checkout gate");
+rejectText(seller, "PMF_MODE", "seller wizard still coupled to PMF mode");
+requireText(ownerControls, "isBookTypeReleasedForClient", "book-type mutation uses provider qualification helper");
 
 // Frontend and server limits must carry the same canonical numbers.
 for (const [needle, label] of [
@@ -102,12 +108,15 @@ requireText(checkout, "planTierForProduct(catalogue, productId)", "same-domain s
 for (const [source, label] of [
   [checkout, "subscription checkout"],
   [orderCheckout, "one-time checkout"],
+  [bookCheckout, "storefront book checkout"],
 ]) {
   requireText(source, "automatic_tax: { enabled: true }", label + " automatic tax");
   requireText(source, "tax_id_collection: { enabled: true", label + " tax ID collection");
   requireText(source, 'billing_address_collection: "auto"', label + " billing address collection");
   requireText(source, 'customer_update: { address: "auto", name: "auto" }', label + " customer address persistence");
 }
+requireText(webhook, "session.amount_subtotal", "tax-aware fulfillment compares pre-tax subtotal");
+requireText(webhook, "preTaxRefundAmount", "tax-inclusive refunds are mapped back to pre-tax ledger amounts");
 
 // Compute must be metered on server-owned, race-safe reservations.
 requireText(migration, "CREATE TABLE IF NOT EXISTS public.billing_usage_monthly", "monthly usage authority");
