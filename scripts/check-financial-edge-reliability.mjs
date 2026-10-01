@@ -4,6 +4,7 @@ const checkout = readFileSync("supabase/functions/create-book-checkout/index.ts"
 const webhook = readFileSync("supabase/functions/stripe-webhook/index.ts", "utf8");
 const replay = readFileSync("supabase/functions/admin-webhook-replay/index.ts", "utf8");
 const adminRefund = readFileSync("supabase/functions/admin-refund-purchase/index.ts", "utf8");
+const payoutSettlement = readFileSync("supabase/functions/settle-creator-payouts/index.ts", "utf8");
 const adminCors = readFileSync("supabase/functions/_shared/admin-cors.ts", "utf8");
 const claimMigration = readFileSync(
   "supabase/migrations/20260923030500_stripe_webhook_claim_terminal_hardening.sql",
@@ -145,6 +146,47 @@ requireText(
   adminRefund,
   "idempotencyKey:",
   "Stripe refund idempotency option",
+);
+requireText(
+  adminRefund,
+  "stripeRefundAmount",
+  "tax-inclusive Stripe refund amount",
+);
+requireText(
+  adminRefund,
+  "remainingStripeCash",
+  "final-refund tax rounding convergence",
+);
+requireText(
+  adminRefund,
+  "_refund_amount_cents: refundAmount",
+  "creator ledger remains pre-tax on admin refunds",
+);
+
+requireText(
+  payoutSettlement,
+  "reserve_creator_payout",
+  "creator payout atomic reservation",
+);
+requireText(
+  payoutSettlement,
+  "stripe.transfers.create",
+  "Stripe Connect transfer execution",
+);
+requireText(
+  payoutSettlement,
+  "idempotencyKey: reservation.idempotency_key",
+  "creator payout Stripe idempotency",
+);
+requireText(
+  payoutSettlement,
+  "mark_creator_payout_transferred",
+  "creator payout acknowledgement",
+);
+requireText(
+  payoutSettlement,
+  "marketplacePayoutsEnabled()",
+  "creator payout independent GA gate",
 );
 requireText(
   adminRefund,
