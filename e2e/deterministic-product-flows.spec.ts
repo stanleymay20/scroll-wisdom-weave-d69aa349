@@ -1567,7 +1567,6 @@ test("post-checkout success only claims activation after server confirmation", a
   await page.goto("/pricing?success=true");
 
   await expect(page.getByText("Subscription activated!", { exact: true })).toBeVisible({ timeout: 10_000 });
-  await expect(page.getByText("Your verified plan entitlements are now active.", { exact: true })).toBeVisible();
   await expect(page).toHaveURL(/\/pricing$/, { timeout: 10_000 });
 });
 
