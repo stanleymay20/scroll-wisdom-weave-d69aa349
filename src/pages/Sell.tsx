@@ -1064,7 +1064,7 @@ function EducationCards({ tier }: { tier: string }) {
     { icon: ShieldCheck, title: "GA boundary", body: "Paid checkout, payouts, release scheduling, and external distribution reopen only after their release gates pass." },
   ] : [
     { icon: DollarSign, title: "How creators earn", body: "Set any price. We process payments and credit your ledger after the platform fee." },
-    { icon: ShieldCheck, title: "Platform fee", body: "ScrollLibrary keeps 10% of each sale on Free, less on Creator plans. No hidden costs." },
+    { icon: ShieldCheck, title: "Platform fee", body: "ScrollLibrary keeps 15% on Free, 10% on Creator, 5% on Pro, and 3% on Teams when paid marketplace sales are enabled. No hidden surcharge." },
     { icon: Globe, title: "GA storefront scope", body: "Publish to the ScrollLibrary storefront now. Third-party publishing integrations return after provider E2E validation." },
   ];
   return (

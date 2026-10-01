@@ -118,3 +118,13 @@ export function marketplacePaymentsEnabled(value?: string | null): boolean {
 
   return normalized === "true" || normalized === "1" || normalized === "yes";
 }
+
+
+/** Stripe transfers to verified creator Connect accounts stay separately fail-closed. */
+export function marketplacePayoutsEnabled(value?: string | null): boolean {
+  const normalized = String(
+    value === undefined ? Deno.env.get("GA_MARKETPLACE_PAYOUTS_ENABLED") ?? "" : value ?? "",
+  ).trim().toLowerCase();
+
+  return normalized === "true" || normalized === "1" || normalized === "yes";
+}

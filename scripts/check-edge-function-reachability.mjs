@@ -62,6 +62,7 @@ const externalEntrypoints = new Map([
   ["gumroad-oauth-callback", "Gumroad OAuth callback"],
   ["shopify-oauth-callback", "Shopify OAuth callback"],
   ["materialize-release-schedules", "scheduler/operational fallback endpoint"],
+  ["settle-creator-payouts", "admin-triggered creator payout settlement endpoint"],
   ["resolve-scroll-id", "public ScrollLibrary identifier-resolution API"],
 ]);
 

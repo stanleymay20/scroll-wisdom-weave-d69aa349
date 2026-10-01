@@ -79,6 +79,7 @@ until provider qualification evidence passes.
 ```
 GA_PAYMENTS_ENABLED=true
 GA_MARKETPLACE_PAYMENTS_ENABLED=false
+GA_MARKETPLACE_PAYOUTS_ENABLED=false
 GA_PUBLISHING_SERVICES_BILLING_ENABLED=true
 GA_PUBLICATION_MINT_ENABLED=true
 
@@ -104,6 +105,20 @@ STRIPE_PRICE_PUBLISH_ASSISTED_LAUNCH=price_1ULkFIJYFIBeCvefbGw8qpDf
 ```
 
 Do not open specialized generation merely because commercial GA is open.
+
+## Checkout consent gate
+
+All new economic-v1 subscriptions, billing orders, and paid marketplace book checkouts
+require Stripe Checkout's Terms checkbox and carry
+`commercialConsentVersion=eu-digital-v1`. Fulfillment fails closed when that version is
+present but Stripe does not report `consent.terms_of_service=accepted`.
+
+Before opening paid writes, configure the connected Stripe account's public business
+profile with the real ScrollLibrary merchant identity and a valid Terms of Service URL.
+Stripe requires that public Terms URL before a Checkout Session can require Terms consent.
+The custom acceptance text requests immediate digital performance and acknowledges the
+withdrawal consequence described in the Terms. Legal wording and merchant identity still
+require merchant/legal review; code must not invent them.
 
 ## Tax launch gate
 
@@ -136,22 +151,32 @@ Do not turn on commercial browser flags until:
 7. Set `VITE_COMMERCIAL_GA_ENABLED=true` and redeploy from exact main.
 8. Verify production pricing, checkout, entitlements, exports, publishing, refunds,
    and Teams.
-9. Complete creator payout settlement/reversal lifecycle, then enable both marketplace
-   switches and verify paid storefront sales end to end.
+9. Verify creator payout settlement against a real test Connect account, then enable
+   `GA_MARKETPLACE_PAYMENTS_ENABLED=true`, `GA_MARKETPLACE_PAYOUTS_ENABLED=true`,
+   and `VITE_MARKETPLACE_GA_ENABLED=true`; verify paid storefront sales and payout
+   settlement end to end.
 10. Release specialized book types only after provider qualification evidence.
 
 
 ## Creator marketplace payout gate
 
-As of the 2026-10-01 audit, Stripe Connect onboarding and creator earnings ledgers
-exist, but no production code creates creator transfers/payouts from the earnings
-ledger. Therefore third-party paid book sales must remain closed with:
+The repository now contains an append-only payout settlement authority and an
+admin-triggered `settle-creator-payouts` worker. It atomically reserves matured,
+unreversed creator earnings, reuses an active reservation on retry, sends an
+idempotent Stripe Connect transfer, and records transfer acknowledgement separately
+from the immutable earnings ledger. Failed transfers do not consume ledger entries.
+
+Keep third-party paid book sales closed in production until the new migration and
+Edge Function are deployed and one real Connect transfer/retry/refund lifecycle has
+been proven:
 
 ```
 VITE_MARKETPLACE_GA_ENABLED=false
 GA_MARKETPLACE_PAYMENTS_ENABLED=false
+GA_MARKETPLACE_PAYOUTS_ENABLED=false
 ```
 
-Do not open this gate until the seller-of-record model, Stripe transfer strategy,
-refund/chargeback reversals, payout idempotency, reserves/holds, and reconciliation
-have all been implemented and verified.
+After production validation, all three marketplace switches may open together.
+The 14-day earnings maturity window remains the default reserve against ordinary
+refunds; later refunds and chargebacks create negative ledger entries that reduce
+future payable balances rather than rewriting paid history.

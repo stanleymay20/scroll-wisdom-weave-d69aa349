@@ -840,6 +840,13 @@ serve(async (req) => {
       });
     };
 
+    const requireCommercialConsent = (session: Stripe.Checkout.Session) => {
+      if (session.metadata?.commercialConsentVersion !== "eu-digital-v1") return;
+      if (session.consent?.terms_of_service !== "accepted") {
+        throw new Error("Commercial checkout is missing required Terms/digital-performance consent");
+      }
+    };
+
     let processedOk = true;
     let processError: string | null = null;
 
@@ -849,6 +856,7 @@ serve(async (req) => {
           const session = event.data.object as Stripe.Checkout.Session;
 
           if (session.mode === "payment" && session.metadata?.kind === "book_purchase") {
+            requireCommercialConsent(session);
             // checkout.session.completed can precede settlement for delayed
             // payment methods. Only grant the book after Stripe says "paid".
             if (session.payment_status === "paid") {
@@ -863,6 +871,7 @@ serve(async (req) => {
           }
 
           if (session.mode === "payment" && session.metadata?.kind === "billing_order") {
+            requireCommercialConsent(session);
             if (session.payment_status === "paid") {
               await settleBillingOrder(session, "checkout_completed");
             } else {
@@ -875,6 +884,7 @@ serve(async (req) => {
           }
 
           if (session.mode === "subscription" && session.subscription) {
+            requireCommercialConsent(session);
             const subscription = await stripe.subscriptions.retrieve(session.subscription as string);
             const productId = subscription.items.data[0]?.price?.product as string;
             const planTier = getPlanTierFromProductId(productId);
@@ -918,8 +928,10 @@ serve(async (req) => {
         case "checkout.session.async_payment_succeeded": {
           const session = event.data.object as Stripe.Checkout.Session;
           if (session.mode === "payment" && session.metadata?.kind === "book_purchase") {
+            requireCommercialConsent(session);
             await settleBookPurchase(session, "checkout_async_succeeded");
           } else if (session.mode === "payment" && session.metadata?.kind === "billing_order") {
+            requireCommercialConsent(session);
             await settleBillingOrder(session, "checkout_async_succeeded");
           }
           break;

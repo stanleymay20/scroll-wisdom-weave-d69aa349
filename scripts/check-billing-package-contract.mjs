@@ -7,6 +7,7 @@ const clientConfig = readFileSync("src/lib/config.ts", "utf8");
 const seller = readFileSync("src/pages/Sell.tsx", "utf8");
 const ownerControls = readFileSync("src/components/books/BookOwnerControls.tsx", "utf8");
 const bookCheckout = readFileSync("supabase/functions/create-book-checkout/index.ts", "utf8");
+const payoutSettlement = readFileSync("supabase/functions/settle-creator-payouts/index.ts", "utf8");
 const checkout = readFileSync("supabase/functions/create-checkout/index.ts", "utf8");
 const orderCheckout = readFileSync("supabase/functions/create-billing-order-checkout/index.ts", "utf8");
 const orderCatalogue = readFileSync("supabase/functions/_shared/billing-order-catalogue.ts", "utf8");
@@ -67,6 +68,9 @@ requireText(clientConfig, "enableSpecializedAuthoring: SPECIALIZED_AUTHORING_ENA
 requireText(clientConfig, "VITE_MARKETPLACE_GA_ENABLED", "independent creator marketplace browser switch");
 requireText(clientConfig, "enableMarketplace: MARKETPLACE_GA_ENABLED", "marketplace UI gate");
 requireText(bookCheckout, "marketplacePaymentsEnabled()", "server marketplace payment gate");
+requireText(payoutSettlement, "marketplacePayoutsEnabled()", "independent server marketplace payout gate");
+requireText(payoutSettlement, "reserve_creator_payout", "marketplace payout database reservation");
+requireText(payoutSettlement, "list_creator_payout_candidates", "marketplace payout retry-aware candidate authority");
 requireText(seller, "PAID_SALES_ENABLED = FEATURES.enableMarketplace", "seller wizard follows marketplace payout-ready gate");
 rejectText(seller, "PMF_MODE", "seller wizard still coupled to PMF mode");
 requireText(ownerControls, "isBookTypeReleasedForClient", "book-type mutation uses provider qualification helper");
@@ -120,6 +124,20 @@ for (const [source, label] of [
 }
 requireText(webhook, "session.amount_subtotal", "tax-aware fulfillment compares pre-tax subtotal");
 requireText(webhook, "preTaxRefundAmount", "tax-inclusive refunds are mapped back to pre-tax ledger amounts");
+
+// Every new paid economic-v1 checkout must capture explicit Terms consent and
+// fulfillment must fail closed if the versioned consent evidence is absent.
+for (const [source, label] of [
+  [checkout, "subscription checkout"],
+  [orderCheckout, "one-time checkout"],
+  [bookCheckout, "storefront book checkout"],
+]) {
+  requireText(source, 'consent_collection: { terms_of_service: "required" }', label + " required terms consent");
+  requireText(source, 'commercialConsentVersion: "eu-digital-v1"', label + " versioned consent marker");
+  requireText(source, "terms_of_service_acceptance", label + " digital-performance consent text");
+}
+requireText(webhook, 'session.metadata?.commercialConsentVersion !== "eu-digital-v1"', "historical sessions are not retroactively reclassified");
+requireText(webhook, 'session.consent?.terms_of_service !== "accepted"', "versioned checkout fulfillment verifies Stripe consent");
 
 // Compute must be metered on server-owned, race-safe reservations.
 requireText(migration, "CREATE TABLE IF NOT EXISTS public.billing_usage_monthly", "monthly usage authority");
