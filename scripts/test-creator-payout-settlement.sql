@@ -20,6 +20,7 @@ DECLARE
   v_retry_id uuid;
   v_balance record;
   v_alloc_count integer;
+  v_candidate_count integer;
 BEGIN
   INSERT INTO public.creator_payout_profiles (
     user_id,payout_method,stripe_connect_account_id,stripe_connect_status,country_code
@@ -54,6 +55,15 @@ BEGIN
   WHERE payout_transfer_id = v_first_id;
   IF v_alloc_count <> 2 THEN
     RAISE EXCEPTION 'expected two ledger allocations, got %', v_alloc_count;
+  END IF;
+
+  SELECT count(*) INTO v_candidate_count
+  FROM public.list_creator_payout_candidates(100,25)
+  WHERE creator_user_id = v_creator
+    AND currency = 'usd'
+    AND reserved_cents = 6800;
+  IF v_candidate_count <> 1 THEN
+    RAISE EXCEPTION 'active reservation was not returned as a retry candidate';
   END IF;
 
   v_second := public.reserve_creator_payout(v_creator,'usd',100);
@@ -117,6 +127,9 @@ BEGIN
     RAISE EXCEPTION 'unverified creator was payout-eligible: %', v_unverified;
   END IF;
 
+  IF has_function_privilege('authenticated','public.list_creator_payout_candidates(integer,integer)','EXECUTE') THEN
+    RAISE EXCEPTION 'authenticated can execute list_creator_payout_candidates';
+  END IF;
   IF has_function_privilege('authenticated','public.reserve_creator_payout(uuid,text,integer)','EXECUTE') THEN
     RAISE EXCEPTION 'authenticated can execute reserve_creator_payout';
   END IF;
