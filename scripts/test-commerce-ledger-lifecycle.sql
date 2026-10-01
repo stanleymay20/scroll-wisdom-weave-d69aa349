@@ -55,8 +55,8 @@ BEGIN
   )
   RETURNING id INTO v_listing;
 
-  -- No creator_entitlements row means the canonical free-creator economics:
-  -- 15% platform fee + 10% free-tier revenue-share surcharge.
+  -- No paid plan means the canonical Free economics:
+  -- one transparent 15% ScrollLibrary service fee and no stacked surcharge.
   INSERT INTO public.book_purchases (
     listing_id, book_id, buyer_user_id, buyer_email,
     amount_cents, currency, status, purchased_at,
@@ -77,8 +77,8 @@ BEGIN
   IF (v_result->>'fee_bps')::integer <> 1500 THEN
     RAISE EXCEPTION 'unexpected base platform fee bps: %', v_result;
   END IF;
-  IF (v_result->>'surcharge_bps')::integer <> 1000 THEN
-    RAISE EXCEPTION 'unexpected free creator surcharge bps: %', v_result;
+  IF (v_result->>'surcharge_bps')::integer <> 0 THEN
+    RAISE EXCEPTION 'unexpected stacked surcharge bps: %', v_result;
   END IF;
 
   SELECT * INTO STRICT v_sale
@@ -86,10 +86,10 @@ BEGIN
   WHERE purchase_id = v_purchase AND entry_type = 'sale';
 
   IF v_sale.gross_cents <> 10000
-     OR v_sale.platform_fee_cents <> 2500
-     OR v_sale.creator_net_cents <> 7500
-     OR v_sale.rev_share_surcharge_bps <> 1000
-     OR v_sale.rev_share_surcharge_cents <> 1000 THEN
+     OR v_sale.platform_fee_cents <> 1500
+     OR v_sale.creator_net_cents <> 8500
+     OR v_sale.rev_share_surcharge_bps <> 0
+     OR v_sale.rev_share_surcharge_cents <> 0 THEN
     RAISE EXCEPTION
       'sale ledger arithmetic wrong: gross=%, fee=%, net=%, surcharge_bps=%, surcharge_cents=%',
       v_sale.gross_cents,
@@ -136,9 +136,9 @@ BEGIN
   WHERE source_event_id = 're_partial_1';
 
   IF v_refund.gross_cents <> -3333
-     OR v_refund.platform_fee_cents <> -833
-     OR v_refund.creator_net_cents <> -2500
-     OR v_refund.rev_share_surcharge_cents <> -333 THEN
+     OR v_refund.platform_fee_cents <> -500
+     OR v_refund.creator_net_cents <> -2833
+     OR v_refund.rev_share_surcharge_cents <> 0 THEN
     RAISE EXCEPTION
       'first partial refund arithmetic wrong: gross=%, fee=%, net=%, surcharge=%',
       v_refund.gross_cents,
