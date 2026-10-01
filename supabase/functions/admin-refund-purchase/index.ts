@@ -94,7 +94,7 @@ serve(async (req) => {
 
       const { data: existingRequest, error: existingRequestError } = await sc
         .from("refund_requests")
-        .select("id,status,amount_cents,stripe_refund_id,error_message")
+        .select("id,status,amount_cents,stripe_refund_id,error_message,metadata")
         .eq("purchase_id", purchase.id)
         .eq("idempotency_key", idempotencyKey)
         .maybeSingle();
@@ -163,7 +163,7 @@ serve(async (req) => {
             idempotency_key: idempotencyKey,
             metadata: { note: parsed.note ?? null },
           })
-          .select("id,status,amount_cents,stripe_refund_id,error_message")
+          .select("id,status,amount_cents,stripe_refund_id,error_message,metadata")
           .single();
 
         if (insertError) {
@@ -172,7 +172,7 @@ serve(async (req) => {
           if (insertError.code !== "23505") return serverError(insertError);
           const { data: winner, error: winnerError } = await sc
             .from("refund_requests")
-            .select("id,status,amount_cents,stripe_refund_id,error_message")
+            .select("id,status,amount_cents,stripe_refund_id,error_message,metadata")
             .eq("purchase_id", purchase.id)
             .eq("idempotency_key", idempotencyKey)
             .maybeSingle();
@@ -217,44 +217,71 @@ serve(async (req) => {
       const stripe = new Stripe(stripeKey, { apiVersion: "2025-08-27.basil" });
 
       // The purchase ledger is deliberately pre-tax. Stripe refunds move cash,
-      // so taxed purchases must refund the proportional tax as well. The final
-      // pre-tax refund receives the exact remaining Stripe cash to eliminate
-      // one-cent rounding drift across earlier partial refunds.
+      // so taxed purchases must refund the proportional tax as well. Persist
+      // the Stripe cash amount BEFORE the external call: if Stripe moves money
+      // but the response/refund-ID write is lost, the same logical request can
+      // retry the same idempotency key with byte-for-byte stable parameters.
+      const requestMetadata =
+        requestRow.metadata && typeof requestRow.metadata === "object" && !Array.isArray(requestRow.metadata)
+          ? requestRow.metadata as Record<string, unknown>
+          : {};
+      const storedStripeRefundAmount = Number(
+        requestMetadata.stripe_refund_amount_cents ?? Number.NaN,
+      );
+
       let stripeRefundAmount = refundAmount;
       if (!requestRow.stripe_refund_id) {
-        const paymentIntent = await stripe.paymentIntents.retrieve(
-          purchase.stripe_payment_intent,
-          { expand: ["latest_charge"] },
-        );
-        let charge: Stripe.Charge | null = null;
-        if (typeof paymentIntent.latest_charge === "string") {
-          charge = await stripe.charges.retrieve(paymentIntent.latest_charge);
-        } else if (paymentIntent.latest_charge && !("deleted" in paymentIntent.latest_charge)) {
-          charge = paymentIntent.latest_charge as Stripe.Charge;
-        }
+        if (Number.isInteger(storedStripeRefundAmount) && storedStripeRefundAmount > 0) {
+          stripeRefundAmount = storedStripeRefundAmount;
+        } else {
+          const paymentIntent = await stripe.paymentIntents.retrieve(
+            purchase.stripe_payment_intent,
+            { expand: ["latest_charge"] },
+          );
+          let charge: Stripe.Charge | null = null;
+          if (typeof paymentIntent.latest_charge === "string") {
+            charge = await stripe.charges.retrieve(paymentIntent.latest_charge);
+          } else if (paymentIntent.latest_charge && !("deleted" in paymentIntent.latest_charge)) {
+            charge = paymentIntent.latest_charge as Stripe.Charge;
+          }
 
-        if (!charge || charge.status !== "succeeded") {
-          return serverError(new Error("Unable to resolve succeeded Stripe charge for refund"));
-        }
+          if (!charge || charge.status !== "succeeded") {
+            return serverError(new Error("Unable to resolve succeeded Stripe charge for refund"));
+          }
 
-        const originalSubtotal = Number(purchase.amount_cents ?? 0);
-        const remainingStripeCash = Math.max(
-          0,
-          Number(charge.amount ?? 0) - Number(charge.amount_refunded ?? 0),
-        );
-        if (!Number.isInteger(originalSubtotal) || originalSubtotal <= 0 || remainingStripeCash <= 0) {
-          return badRequest("No refundable Stripe balance remains");
-        }
+          const originalSubtotal = Number(purchase.amount_cents ?? 0);
+          const remainingStripeCash = Math.max(
+            0,
+            Number(charge.amount ?? 0) - Number(charge.amount_refunded ?? 0),
+          );
+          if (!Number.isInteger(originalSubtotal) || originalSubtotal <= 0 || remainingStripeCash <= 0) {
+            return badRequest("No refundable Stripe balance remains");
+          }
 
-        stripeRefundAmount = refundAmount === remainingBefore
-          ? remainingStripeCash
-          : Math.max(
-              1,
-              Math.min(
-                remainingStripeCash,
-                Math.round(refundAmount * Number(charge.amount ?? 0) / originalSubtotal),
-              ),
+          stripeRefundAmount = refundAmount === remainingBefore
+            ? remainingStripeCash
+            : Math.max(
+                1,
+                Math.min(
+                  remainingStripeCash,
+                  Math.round(refundAmount * Number(charge.amount ?? 0) / originalSubtotal),
+                ),
+              );
+
+          const stableMetadata = {
+            ...requestMetadata,
+            stripe_refund_amount_cents: stripeRefundAmount,
+          };
+          const { error: stableAmountError } = await sc
+            .from("refund_requests")
+            .update({ metadata: stableMetadata })
+            .eq("id", requestRow.id);
+          if (stableAmountError) {
+            return serverError(
+              new Error(`Unable to persist stable Stripe refund amount: ${stableAmountError.message}`),
             );
+          }
+        }
       }
 
       let refund: Stripe.Refund;
