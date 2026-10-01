@@ -64,7 +64,10 @@ requireText(clientConfig, "enablePaidCheckout: COMMERCIAL_GA_ENABLED", "commerci
 requireText(clientConfig, "enableExports: COMMERCIAL_GA_ENABLED", "commercial export browser gate");
 requireText(clientConfig, "enableCanonicalPublication: COMMERCIAL_GA_ENABLED", "commercial publication browser gate");
 requireText(clientConfig, "enableSpecializedAuthoring: SPECIALIZED_AUTHORING_ENABLED", "specialized qualification remains independent");
-requireText(seller, "PAID_SALES_ENABLED = FEATURES.enablePaidCheckout", "seller wizard follows commercial checkout gate");
+requireText(clientConfig, "VITE_MARKETPLACE_GA_ENABLED", "independent creator marketplace browser switch");
+requireText(clientConfig, "enableMarketplace: MARKETPLACE_GA_ENABLED", "marketplace UI gate");
+requireText(bookCheckout, "marketplacePaymentsEnabled()", "server marketplace payment gate");
+requireText(seller, "PAID_SALES_ENABLED = FEATURES.enableMarketplace", "seller wizard follows marketplace payout-ready gate");
 rejectText(seller, "PMF_MODE", "seller wizard still coupled to PMF mode");
 requireText(ownerControls, "isBookTypeReleasedForClient", "book-type mutation uses provider qualification helper");
 
