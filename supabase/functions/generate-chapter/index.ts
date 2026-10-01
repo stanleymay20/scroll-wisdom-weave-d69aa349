@@ -1968,7 +1968,11 @@ serve(async (req) => {
   
 
   let textReservation: {
-    client: ReturnType<typeof createClient>;
+    // Supabase createClient is intentionally schema-untyped in this Edge Function.
+    // ReturnType<typeof createClient> collapses rpc() to a never/undefined schema
+    // signature under Deno 2.9, so keep the existing runtime client untyped here.
+    // deno-lint-ignore no-explicit-any
+    client: any;
     userId: string;
     month: string;
     units: number;
