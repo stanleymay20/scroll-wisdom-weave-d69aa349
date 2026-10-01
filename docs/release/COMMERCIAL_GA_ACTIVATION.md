@@ -6,9 +6,13 @@ This document is the production activation contract for ScrollLibrary's commerci
 
 Commercial GA is independent from specialized book-type qualification.
 
-Commercial GA may open subscriptions, usage packs, exports, creator commerce,
-ScrollLibrary Press publishing services, release scheduling, canonical publication,
-and organization/Teams workflows.
+Commercial GA may open subscriptions, usage packs, exports, ScrollLibrary Press
+publishing services, release scheduling, canonical publication, and organization/Teams
+workflows.
+
+Creator marketplace commerce is a separate release domain because it additionally
+requires verified seller payout settlement. General commercial GA must never imply
+third-party paid book sales are open.
 
 Specialized authoring modes remain fail-closed until they pass the empirical provider
 qualification contract and appear in both the server and client allow-lists.
@@ -54,7 +58,12 @@ a downstream, format-specific, validation-gated publishing transaction.
 
 ```
 VITE_COMMERCIAL_GA_ENABLED=true
+VITE_MARKETPLACE_GA_ENABLED=false
 ```
+
+Set `VITE_MARKETPLACE_GA_ENABLED=true` only after Stripe Connect onboarding,
+transfer/payout settlement, refund reversal, and seller payout reconciliation have
+passed production lifecycle validation.
 
 Specialized authoring remains independent:
 
@@ -69,6 +78,7 @@ until provider qualification evidence passes.
 
 ```
 GA_PAYMENTS_ENABLED=true
+GA_MARKETPLACE_PAYMENTS_ENABLED=false
 GA_PUBLISHING_SERVICES_BILLING_ENABLED=true
 GA_PUBLICATION_MINT_ENABLED=true
 
@@ -122,8 +132,26 @@ Do not turn on commercial browser flags until:
 3. Install Stripe catalogue environment variables.
 4. Configure/verify merchant tax registrations.
 5. Run live-catalogue checkout in a non-charge test path and webhook read-back.
-6. Set server GA payment/publication switches.
+6. Set server GA payment/publication switches; keep marketplace payment switch false.
 7. Set `VITE_COMMERCIAL_GA_ENABLED=true` and redeploy from exact main.
 8. Verify production pricing, checkout, entitlements, exports, publishing, refunds,
-   storefront/creator commerce, and Teams.
-9. Release specialized book types only after provider qualification evidence.
+   and Teams.
+9. Complete creator payout settlement/reversal lifecycle, then enable both marketplace
+   switches and verify paid storefront sales end to end.
+10. Release specialized book types only after provider qualification evidence.
+
+
+## Creator marketplace payout gate
+
+As of the 2026-10-01 audit, Stripe Connect onboarding and creator earnings ledgers
+exist, but no production code creates creator transfers/payouts from the earnings
+ledger. Therefore third-party paid book sales must remain closed with:
+
+```
+VITE_MARKETPLACE_GA_ENABLED=false
+GA_MARKETPLACE_PAYMENTS_ENABLED=false
+```
+
+Do not open this gate until the seller-of-record model, Stripe transfer strategy,
+refund/chargeback reversals, payout idempotency, reserves/holds, and reconciliation
+have all been implemented and verified.
